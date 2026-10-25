@@ -16,5 +16,7 @@
   "haveAccount": "すでにアカウントをお持ちですか？",
   "createOne": "作成する",
   "signInLink": "ログイン",
-  "casdoor": "Casdoor でログイン"
+  "casdoor": "Casdoor でログイン",
+  "linkCasdoor": "Casdoor アカウントを連携",
+  "linkHelp": "ログイン中のアカウントを明示的に連携します。同じメールアドレスでも自動統合されません。"
 }

@@ -24,7 +24,9 @@
     "haveAccount": "¿Ya tienes una cuenta?",
     "createOne": "Crear una",
     "signInLink": "Iniciar sesión",
-    "casdoor": "Acceder con Casdoor"
+    "casdoor": "Acceder con Casdoor",
+    "linkCasdoor": "Vincular cuenta de Casdoor",
+    "linkHelp": "Vincula explícitamente tu cuenta actual. Un correo coincidente nunca fusiona cuentas automáticamente."
   },
   "common": {
     "language": "Idioma",

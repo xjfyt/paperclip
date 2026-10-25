@@ -1,3 +1,4 @@
+import { casdoorCapabilities, readCasdoorConfig } from "./auth/casdoor.js";
 import { voiceSessionRoutes, voiceWebhookRoutes } from "./routes/voice-sessions.js";
 import { eq } from "drizzle-orm";
 import { chatEndpoints } from "@paperclipai/db";
@@ -649,6 +650,8 @@ export async function createApp(
   // REPLACES whatever actor the request otherwise resolved to, and only on
   // the one endpoint it authorizes (see the middleware for the contract).
   app.use(cloudControlMiddleware());
+  const oidcCapabilities = casdoorCapabilities(readCasdoorConfig());
+  app.get("/api/instance/auth-capabilities", (_req, res) => { res.json(oidcCapabilities); });
   app.use("/api/auth", authRoutes(db));
   if (opts.betterAuthHandler) {
     app.all("/api/auth/{*authPath}", opts.betterAuthHandler);

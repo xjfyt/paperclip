@@ -24,7 +24,9 @@
     "haveAccount": "Already have an account?",
     "createOne": "Create one",
     "signInLink": "Sign in",
-    "casdoor": "Sign in with Casdoor"
+    "casdoor": "Sign in with Casdoor",
+    "linkCasdoor": "Link Casdoor account",
+    "linkHelp": "Explicitly link your signed-in account. Matching email addresses never automatically merge accounts."
   },
   "common": {
     "language": "Language",

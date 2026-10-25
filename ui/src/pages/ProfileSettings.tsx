@@ -1,3 +1,4 @@
+import { useTranslation } from "@/i18n";
 import { useEffect, useId, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Camera, LoaderCircle, Save, Trash2, UserRoundPen } from "lucide-react";
@@ -21,6 +22,12 @@ function deriveInitials(name: string) {
 }
 
 export function ProfileSettings() {
+  const { t } = useTranslation();
+  const capabilities = useQuery({ queryKey: ["auth-capabilities"], queryFn: authApi.capabilities });
+  const linkCasdoor = useMutation({
+    mutationFn: () => authApi.signInCasdoor(window.location.pathname, true),
+    onSuccess: url => window.location.assign(url),
+  });
   const { setBreadcrumbs } = useBreadcrumbs();
   const { selectedCompanyId, selectedCompany } = useCompany();
   const queryClient = useQueryClient();
@@ -157,6 +164,13 @@ export function ProfileSettings() {
         </div>
       ) : null}
 
+      {capabilities.data?.providers.some(provider => provider.id === "casdoor") && (
+        <div className="space-y-2">
+          <Button variant="outline" disabled={linkCasdoor.isPending} onClick={() => linkCasdoor.mutate()}>{t("auth.linkCasdoor")}</Button>
+          <p className="text-sm text-muted-foreground">{t("auth.linkHelp")}</p>
+          {linkCasdoor.error && <p role="alert">{t("auth.failed")}</p>}
+        </div>
+      )}
       <section className="space-y-8">
         <Card className="block relative overflow-hidden rounded-(--rad-28) border-border/70">
           <div className="absolute inset-x-0 top-0 h-32 bg-(image:--gradient-extract-26)" />

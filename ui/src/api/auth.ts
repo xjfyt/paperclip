@@ -1,3 +1,4 @@
+import { oidcNavigationUrl, safeOidcReturnPath } from "../lib/oidc-navigation";
 import {
   authSessionSchema,
   currentUserProfileSchema,
@@ -20,6 +21,8 @@ type AuthErrorBody =
 export interface SignOutResult {
   success?: boolean;
   redirectTo?: string;
+  url?: string;
+  redirect?: boolean;
 }
 
 export class AuthApiError extends Error {
@@ -152,6 +155,19 @@ async function authPatch<T>(path: string, body: Record<string, unknown>, parse: 
 }
 
 export const authApi = {
+  capabilities: async (): Promise<{ password: boolean; providers: Array<{ id: string; name: string }> }> => {
+    const response = await fetch("/api/instance/auth-capabilities", { credentials: "include" });
+    if (!response.ok) throw new Error("Unable to load authentication capabilities");
+    return response.json();
+  },
+  signInCasdoor: async (callbackURL: string, link = false): Promise<string> => {
+    const result = await authPost(link ? "/link-social" : "/sign-in/social", {
+      provider: "casdoor", callbackURL: safeOidcReturnPath(callbackURL), disableRedirect: true,
+    });
+    const url = oidcNavigationUrl((result as { url?: unknown } | null)?.url);
+    if (!url) throw new Error("Invalid authentication redirect");
+    return url;
+  },
   getSession: async (): Promise<AuthSession | null> => {
     const res = await fetch("/api/auth/get-session", {
       credentials: "include",
@@ -203,6 +219,8 @@ export const authApi = {
     const result = payload as Record<string, unknown>;
     return {
       ...(typeof result.success === "boolean" ? { success: result.success } : {}),
+      ...(oidcNavigationUrl(result.url) ? { url: oidcNavigationUrl(result.url)! } : {}),
+      ...(typeof result.redirect === "boolean" ? { redirect: result.redirect } : {}),
       ...(typeof result.redirectTo === "string" ? { redirectTo: result.redirectTo } : {}),
     };
   },

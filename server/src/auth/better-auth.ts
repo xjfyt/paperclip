@@ -1,3 +1,4 @@
+import { casdoorPlugin, readCasdoorConfig } from "./casdoor.js";
 import type { Request, RequestHandler } from "express";
 import type { IncomingHttpHeaders } from "node:http";
 import { betterAuth, type Auth } from "better-auth";
@@ -257,6 +258,7 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
     publicUrl,
   });
 
+  const oidc = readCasdoorConfig();
   const authConfig = {
     baseURL: baseUrl,
     secret,
@@ -271,7 +273,7 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
       },
     }),
     emailAndPassword: {
-      enabled: true,
+      enabled: oidc?.loginPolicy !== "sso-only",
       requireEmailVerification: false,
       disableSignUp: config.authDisableSignUp,
     },
@@ -281,28 +283,19 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
       override: process.env.PAPERCLIP_AUTH_RATE_LIMIT_ENABLED,
     }),
     advanced: buildBetterAuthAdvancedOptions({ disableSecureCookies }),
-    // Registered only for a managed workspace instance: the plugin is what makes
-    // `Open workspace` password-independent, and a control-plane instance that
-    // was never handed a workspace key must not expose the exchange at all.
-    ...(resolveWorkspaceHandoffIdentity(config)
-      ? {
-          plugins: [
-            workspaceLoginHandoffPlugin({
-              db,
-              // Re-resolved per exchange so a hot restart cannot keep validating
-              // against an origin the control plane has since republished.
-              resolveExpectedIdentity: () =>
-                resolveWorkspaceHandoffIdentity(config) ?? {
-                  key: null,
-                  instanceId: null,
-                  executionWorkspaceId: null,
-                  companyId: null,
-                  origin: null,
-                },
-            }),
-          ],
-        }
-      : {}),
+    account: {
+      storeStateStrategy: "database" as const,
+      accountLinking: { enabled: true, disableImplicitLinking: true, allowUnlinkingAll: false },
+    },
+    plugins: [
+      ...(oidc ? [casdoorPlugin(oidc)] : []),
+      ...(resolveWorkspaceHandoffIdentity(config) ? [workspaceLoginHandoffPlugin({
+        db,
+        resolveExpectedIdentity: () => resolveWorkspaceHandoffIdentity(config) ?? {
+          key: null, instanceId: null, executionWorkspaceId: null, companyId: null, origin: null,
+        },
+      })] : []),
+    ],
   };
 
   if (!baseUrl) {

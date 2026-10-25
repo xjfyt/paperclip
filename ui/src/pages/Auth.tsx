@@ -80,6 +80,15 @@ export function AuthPage() {
     },
   });
 
+  const capabilities = useQuery({
+    queryKey: ["auth-capabilities"], queryFn: authApi.capabilities,
+    enabled: !!healthQuery.data && !healthQuery.data.cloud, retry: false,
+  });
+  const sso = useMutation({
+    mutationFn: () => authApi.signInCasdoor(nextPath),
+    onSuccess: (url) => window.location.assign(url),
+    onError: () => setError(t("auth.failed")),
+  });
   const canSubmit =
     email.trim().length > 0 &&
     password.trim().length > 0 &&
@@ -124,7 +133,11 @@ export function AuthPage() {
               : t("auth.signUpHelp")}
           </p>
 
-          <form
+          {capabilities.data?.providers.some(provider => provider.id === "casdoor") && (
+            <Button className="mt-6 w-full" disabled={sso.isPending} onClick={() => sso.mutate()}>{t("auth.casdoor")}</Button>
+          )}
+          {capabilities.error && <p role="alert">{t("auth.unavailable")}</p>}
+          {capabilities.data?.password !== false && <form
             className="mt-6 space-y-4"
             method="post"
             action={mode === "sign_up" ? "/api/auth/sign-up/email" : "/api/auth/sign-in/email"}
@@ -206,9 +219,9 @@ export function AuthPage() {
                   ? t("auth.signIn")
                   : t("auth.createAccount")}
             </Button>
-          </form>
+          </form>}
 
-          <div className="mt-5 text-sm text-muted-foreground">
+          {capabilities.data?.password !== false && <div className="mt-5 text-sm text-muted-foreground">
             {mode === "sign_in" ? t("auth.needAccount") : t("auth.haveAccount")}{" "}
             <button
               type="button"
@@ -220,7 +233,8 @@ export function AuthPage() {
             >
               {mode === "sign_in" ? t("auth.createOne") : t("auth.signInLink")}
             </button>
-          </div>
+          </div>}
+          {!capabilities.data?.password && error && <p role="alert">{error}</p>}
         </div>
       </div>
 
