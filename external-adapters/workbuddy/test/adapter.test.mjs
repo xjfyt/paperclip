@@ -26,3 +26,9 @@ test("lost creation response keeps the same request key across new run IDs", asy
   await execute(second, async (_url, init) => { keyTwo = JSON.parse(init.body).requestKey; return Response.json({ id: "job", remoteState: "unknown", dispatchState: "indeterminate" }); });
   assert.equal(keyOne, keyTwo);
 });
+test("provider completion with stale report diagnostics is not a successful run", async () => {
+  for (const extra of [{ report: "old report", lastCode: "artifact_http_401" }, { report: "", lastCode: null }]) {
+    const result = await execute(ctx(), async () => Response.json({ id: "job", dispatchState: "created", remoteState: "completed", ...extra }));
+    assert.equal(result.exitCode, 1); assert.equal(result.resultJson.businessCompleted, false);
+  }
+});

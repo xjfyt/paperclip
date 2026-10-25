@@ -11,13 +11,13 @@ export function authorizationUrl(clientId: string, redirectUri: string, state: s
 }
 export function parseToken(value: unknown): WorkBuddyToken {
   const token = value as Partial<WorkBuddyToken> | null;
-  if (!token || typeof token.access_token !== "string" || !token.access_token || token.token_type !== "Bearer" || !Number.isFinite(token.expires_in) || token.expires_in! <= 0 || typeof token.open_id !== "string" || typeof token.scope !== "string") throw new WorkBuddyProtocolError("invalid_token_response", true);
+  if (!token || typeof token.access_token !== "string" || !token.access_token || token.access_token.length > 65536 || token.token_type !== "Bearer" || !Number.isSafeInteger(token.expires_in) || token.expires_in! <= 0 || typeof token.open_id !== "string" || !token.open_id.trim() || token.open_id.length > 512 || typeof token.scope !== "string" || token.scope.length > 4096 || (token.refresh_token !== undefined && (typeof token.refresh_token !== "string" || !token.refresh_token || token.refresh_token.length > 65536)) || !Number.isFinite(new Date(Date.now() + token.expires_in! * 1000).getTime())) throw new WorkBuddyProtocolError("invalid_token_response", true);
   return token as WorkBuddyToken;
 }
 export function parseTask(value: unknown): WorkBuddyTask {
   const task = value as Partial<WorkBuddyTask> | null;
-  if (!task || typeof task.task_id !== "string" || !task.task_id || typeof task.status !== "string") throw new WorkBuddyProtocolError("invalid_task_response", true);
-  return task as WorkBuddyTask;
+  if (!task || typeof task.task_id !== "string" || !task.task_id || task.task_id.length > 200 || typeof task.status !== "string" || !task.status || task.status.length > 100 || (task.link !== undefined && task.link !== null && (typeof task.link !== "string" || task.link.length > 4096)) || (task.token !== undefined && task.token !== null && (typeof task.token !== "string" || task.token.length > 65536))) throw new WorkBuddyProtocolError("invalid_task_response", true);
+  return { task_id: task.task_id, status: task.status, ...(typeof task.link === "string" ? { link: task.link } : {}), ...(typeof task.token === "string" ? { token: task.token } : {}), ...(typeof task.name === "string" ? { name: task.name.slice(0, 500) } : {}), ...(typeof task.expire_at === "number" ? { expire_at: task.expire_at } : {}) };
 }
 export async function boundedJson(response: Response, max = 1048576): Promise<unknown> {
   const reader = response.body?.getReader(); let size = 0; const chunks: Uint8Array[] = [];
@@ -120,4 +120,35 @@ export async function runWorkBuddyAcp(input: { link: string; token: string; task
     const result = await rpc("session/prompt", { sessionId: input.taskId, prompt: [{ type: "text", text: input.prompt }] });
     return { stopReason: typeof result.stopReason === "string" ? result.stopReason : "unknown", permissionDenied, businessCompleted: false as const };
   } finally { controller.abort(); await reader.cancel().catch(() => {}); await reading; }
+}
+
+/** Read-only recovery of the provider's overview artifact. A documented /acp
+ * sandbox URL is required; gateway session URLs are not guessed into hosts. */
+export async function fetchWorkBuddyReport(input: { link: string; token: string; taskId: string; allowedHosts?: string[] }, transport: typeof fetch = fetch) {
+  const acp = trustedAcpUrl(input.link, input.allowedHosts);
+  if (acp.pathname !== "/acp" || acp.search) throw new WorkBuddyProtocolError("artifact_endpoint_unverified", false);
+  const records = new Map<string, { text: string; updatedAt: number }>();
+  for (let page = 0; page < 10; page++) {
+    const url = new URL("/api/session/artifacts", acp.origin);
+    url.search = new URLSearchParams({ sessionId: input.taskId, type: "overview", limit: "100", offset: String(page * 100) }).toString();
+    let response: Response;
+    try { response = await transport(url, { headers: { authorization: `Bearer ${input.token}` }, redirect: "error", signal: AbortSignal.timeout(15000) }); }
+    catch { throw new WorkBuddyProtocolError("artifact_read_failed", false); }
+    if (!response.ok) throw new WorkBuddyProtocolError(`artifact_http_${response.status}`, false);
+    const payload = await boundedJson(response) as { code?: number; data?: { sessionId?: string; artifacts?: Array<{ sessionId?: string; event?: string; artifact?: { type?: string; uri?: string; text?: string; updatedAt?: number } }>; pagination?: { hasMore?: boolean } } };
+    if (payload.code !== 0 || payload.data?.sessionId !== input.taskId || !Array.isArray(payload.data.artifacts) || payload.data.artifacts.length > 100) throw new WorkBuddyProtocolError("artifact_identity_or_receipt_invalid", false);
+    for (const entry of payload.data.artifacts) {
+      const artifact = entry.artifact;
+      if (entry.sessionId !== input.taskId || artifact?.type !== "overview" || typeof artifact.uri !== "string" || !/^agent:\/\/\/[A-Za-z0-9_./-]{1,500}$/.test(artifact.uri) || artifact.uri.includes("..")) throw new WorkBuddyProtocolError("artifact_identity_or_receipt_invalid", false);
+      if (entry.event === "deleted") { records.delete(artifact.uri); continue; }
+      if (!["created", "updated"].includes(entry.event ?? "") || typeof artifact.text !== "string" || Buffer.byteLength(artifact.text) > 1048576) throw new WorkBuddyProtocolError("artifact_content_invalid", false);
+      records.set(artifact.uri, { text: artifact.text.split(input.token).join("[REDACTED]"), updatedAt: Number.isFinite(artifact.updatedAt) ? artifact.updatedAt! : 0 });
+    }
+    if (typeof payload.data.pagination?.hasMore !== "boolean") throw new WorkBuddyProtocolError("artifact_pagination_unverified", false);
+    if (!payload.data.pagination.hasMore) {
+      const ordered = [...records.entries()].sort((a, b) => b[1].updatedAt - a[1].updatedAt);
+      return { report: ordered[0]?.[1].text ?? "", artifactRefs: ordered.map(([uri]) => uri) };
+    }
+  }
+  throw new WorkBuddyProtocolError("artifact_pagination_budget_exceeded", false);
 }

@@ -2,10 +2,10 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { and, eq, gt, sql } from "drizzle-orm";
 import { mimouseWorkbuddyConnections as connections, mimouseWorkbuddyJobs as jobs, mimouseWorkbuddyTurns as turns, type Db } from "@paperclipai/db";
 import { secretService } from "../secrets.js";
-import { authorizationUrl, parseToken, runWorkBuddyAcp, workBuddyClient, WorkBuddyProtocolError, type WorkBuddyToken } from "./protocol.js";
+import { authorizationUrl, fetchWorkBuddyReport, parseToken, runWorkBuddyAcp, workBuddyClient, WorkBuddyProtocolError, type WorkBuddyToken } from "./protocol.js";
 const digest = (text: string) => createHash("sha256").update(text).digest("hex");
 interface Actor { userId?: string; agentId?: string; responsibleUserId?: string | null }
-export function workbuddyService(db: Db, deps: { client?: ReturnType<typeof workBuddyClient>; token?: (companyId: string, connectionId: string) => Promise<string>; acp?: typeof runWorkBuddyAcp } = {}) {
+export function workbuddyService(db: Db, deps: { client?: ReturnType<typeof workBuddyClient>; token?: (companyId: string, connectionId: string) => Promise<string>; acp?: typeof runWorkBuddyAcp; report?: typeof fetchWorkBuddyReport } = {}) {
   const client = deps.client ?? workBuddyClient();
   async function connection(companyId: string, id: string, actor: Actor) {
     const [row] = await db.select().from(connections).where(and(eq(connections.companyId, companyId), eq(connections.id, id)));
@@ -113,9 +113,20 @@ export function workbuddyService(db: Db, deps: { client?: ReturnType<typeof work
     refreshJob: async (companyId: string, id: string, actor: Actor) => {
       const { row, account } = await job(companyId, id, actor);
       if (!row.providerJobId) return row;
-      const task = await client.get(await accessToken(account), row.providerJobId);
+      const access = await accessToken(account);
+      const task = await client.get(access, row.providerJobId);
       if (task.task_id !== row.providerJobId) throw new WorkBuddyProtocolError("provider_task_identity_mismatch", false);
-      const [saved] = await db.update(jobs).set({ remoteState: task.status, updatedAt: new Date() }).where(eq(jobs.id, row.id)).returning(); return saved;
+      let recovered: { report: string; artifactRefs: string[] } | undefined; let lastCode: string | null = null;
+      if (task.status === "completed" && task.link && task.token) {
+        try {
+          recovered = await (deps.report ?? fetchWorkBuddyReport)({ link: task.link, token: task.token, taskId: task.task_id, allowedHosts: (process.env.PAPERCLIP_WORKBUDDY_ACP_HOSTS ?? "acp.workbuddy.cn").split(",").map(host => host.trim()).filter(Boolean) });
+          recovered.report = recovered.report.split(access).join("[REDACTED]");
+          if (!recovered.report.trim()) lastCode = "completed_report_missing";
+        } catch (error) { lastCode = error instanceof WorkBuddyProtocolError ? error.code : "report_read_failed"; }
+      } else if (task.status === "completed" && !row.report.trim()) lastCode = "completed_report_unavailable";
+      const current = await connection(companyId, row.connectionId, actor);
+      if (current.status !== "connected") throw new WorkBuddyProtocolError("connection_no_longer_active", false);
+      const [saved] = await db.update(jobs).set({ remoteState: task.status, ...(recovered ? recovered : {}), lastCode, updatedAt: new Date() }).where(and(eq(jobs.id, row.id), eq(jobs.companyId, companyId))).returning(); return saved;
     },
     promptJob: async (companyId: string, id: string, actor: Actor, requestKey: string, prompt: string) => {
       const { row, account } = await job(companyId, id, actor);

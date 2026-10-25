@@ -41,7 +41,7 @@ export async function execute(ctx, transport = fetch) {
     const sessionParams = { ...stableSession, jobId: job.id };
     // A remote create receipt is not a report, and an ended prompt is not a
     // completed business task. No strong cancellation claim is made.
-    const complete = job.remoteState === "completed" && typeof job.report === "string" && job.report.trim();
+    const complete = job.remoteState === "completed" && job.lastCode == null && typeof job.report === "string" && job.report.trim();
     await ctx.onLog("stdout", JSON.stringify({ providerJobId: job.providerJobId ?? null, remoteState: job.remoteState, dispatchState: job.dispatchState }) + "\n");
     return { exitCode: complete ? 0 : 1, signal: null, timedOut: false, sessionParams, sessionDisplayId: job.providerJobId ?? job.id, provider: "workbuddy", costStatus: "unpriced", costUsd: null,
       summary: complete ? job.report : "Remote task remains pending or requires reconciliation; resume queries this same durable job.",

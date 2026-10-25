@@ -46,3 +46,18 @@ test("WorkBuddy OAuth state binds company/user/session and stores tokens only in
     await db.$client.end({ timeout: 1 });
   }
 });
+
+test("completed WorkBuddy report is recovered read-only and retained across a service restart", async ({ request }) => {
+  const company = await (await request.post("/api/companies", { data: { name: `workbuddy report ${Date.now()}` } })).json();
+  const db = createDb("postgres://paperclip:paperclip@127.0.0.1:54329/paperclip");
+  try {
+    const [connection] = await db.insert(connections).values({ companyId: company.id, ownerUserId: "owner", status: "connected" }).returning();
+    const [job] = await db.insert(jobs).values({ companyId: company.id, connectionId: connection.id, requestKey: randomUUID(), promptHash: "fixture", providerJobId: "provider-task", dispatchState: "created", remoteState: "working" }).returning();
+    let creates = 0, reportReads = 0;
+    const deps = { token: async () => "private-access", client: { exchange: async () => { throw Error("unused"); }, create: async () => { creates++; throw Error("must not create"); }, get: async () => ({ task_id: "provider-task", status: "completed", link: "https://sandbox.example/acp", token: "private-ticket" }) }, report: async () => { reportReads++; return { report: "调研报告 private-access", artifactRefs: ["agent:///artifacts/report.md"] }; } };
+    const result = await workbuddyService(db, deps).refreshJob(company.id, job.id, { userId: "owner" });
+    expect(result.remoteState).toBe("completed"); expect(result.report).toBe("调研报告 [REDACTED]"); expect(result.artifactRefs).toEqual(["agent:///artifacts/report.md"]);
+    expect((await workbuddyService(db, deps).refreshJob(company.id, job.id, { userId: "owner" })).report).toBe(result.report);
+    expect(creates).toBe(0); expect(reportReads).toBe(2); expect(JSON.stringify(result)).not.toContain("private-ticket");
+  } finally { await db.$client.end({ timeout: 1 }); }
+});

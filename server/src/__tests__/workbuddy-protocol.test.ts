@@ -50,3 +50,22 @@ describe("WorkBuddy official protocol", () => {
     expect(requests.find(item => item.id === "permission").result.outcome.outcome).toBe("cancelled"); expect(text).toEqual(["报告"]);
   });
 });
+
+import { fetchWorkBuddyReport } from "../services/workbuddy/protocol.js";
+describe("WorkBuddy read-only report recovery", () => {
+  it("uses the overview API without replaying a prompt or leaking the ticket", async () => {
+    const transport = vi.fn().mockResolvedValue(Response.json({ code: 0, data: { sessionId: "task", artifacts: [{ sessionId: "task", event: "created", artifact: { type: "overview", uri: "agent:///artifacts/report.md", text: "报告 ticket-secret", updatedAt: 1 } }], pagination: { hasMore: false } } }));
+    const result = await fetchWorkBuddyReport({ link: "https://sandbox.example/acp", token: "ticket-secret", taskId: "task", allowedHosts: ["sandbox.example"] }, transport);
+    expect(result).toEqual({ report: "报告 [REDACTED]", artifactRefs: ["agent:///artifacts/report.md"] });
+    const [url, options] = transport.mock.calls[0]; expect(url.pathname).toBe("/api/session/artifacts"); expect(url.searchParams.get("sessionId")).toBe("task"); expect(options.method).toBeUndefined(); expect(options.redirect).toBe("error");
+  });
+  it("does not guess an artifact endpoint for gateway session URLs", async () => {
+    const transport = vi.fn(); await expect(fetchWorkBuddyReport({ link: "https://acp.workbuddy.cn/sessions/task", token: "ticket", taskId: "task" }, transport)).rejects.toMatchObject({ code: "artifact_endpoint_unverified" }); expect(transport).not.toHaveBeenCalled();
+  });
+  it("rejects cross-session records and unbounded pagination", async () => {
+    const input = { link: "https://sandbox.example/acp", token: "ticket", taskId: "task", allowedHosts: ["sandbox.example"] };
+    await expect(fetchWorkBuddyReport(input, vi.fn().mockResolvedValue(Response.json({ code: 0, data: { sessionId: "other", artifacts: [] } })))).rejects.toThrow("artifact_identity");
+    const transport = vi.fn().mockImplementation(async () => Response.json({ code: 0, data: { sessionId: "task", artifacts: [], pagination: { hasMore: true } } }));
+    await expect(fetchWorkBuddyReport(input, transport)).rejects.toThrow("pagination_budget"); expect(transport).toHaveBeenCalledTimes(10);
+  });
+});
