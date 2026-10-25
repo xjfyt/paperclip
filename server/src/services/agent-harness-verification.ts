@@ -1,3 +1,4 @@
+import { workbuddyService } from "./workbuddy/service.js";
 import { and, eq } from "drizzle-orm";
 import { agents, companies, type Db } from "@paperclipai/db";
 import type { AdapterEnvironmentTestResult } from "@paperclipai/adapter-utils";
@@ -35,6 +36,16 @@ export function agentHarnessVerificationService(db: Db, manager: PluginWorkerMan
     }
     const [company] = await db.select().from(companies).where(eq(companies.id, agent.companyId));
     const responsibleUserId = agent.lifecycleOperation?.responsibleUserId ?? company.defaultResponsibleUserId;
+    if (agent.adapterType === "workbuddy") {
+      // Cloud-task credentials stay in the private integration vault. Do not
+      // bind the owner's token into a generic Agent environment or pretend a
+      // local CLI/version check proves remote authentication.
+      const connectionId = agent.adapterConfig.connectionId;
+      if (process.env.PAPERCLIP_WORKBUDDY_ENABLED !== "true" || typeof connectionId !== "string" || !(process.env.PAPERCLIP_AGENT_JWT_SECRET?.trim() || process.env.BETTER_AUTH_SECRET?.trim())) throw Object.assign(new Error("WorkBuddy connection and run-token signing must be configured"), { code: "harness_test_failed" });
+      try { await workbuddyService(db).verifyForAgent(agent.companyId, connectionId, agent.id); }
+      catch { throw Object.assign(new Error("WorkBuddy owner grant or read-only account verification failed"), { code: "harness_test_failed" }); }
+      return "complete";
+    }
     const context = { consumerType: "agent" as const, consumerId: agent.id, actorType: "system" as const,
       actorId: "agent-lifecycle", responsibleUserId };
     let binding = agent.runtimeConfig.aiConnection ? aiRuntimeConnectionBindingSchema.parse(agent.runtimeConfig.aiConnection) : undefined;

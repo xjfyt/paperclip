@@ -1,7 +1,7 @@
 import { Router, type Request } from "express";
 import { z } from "zod";
 import { and, desc, eq, inArray } from "drizzle-orm";
-import { agents, mimouseWorkbuddyJobs as jobs, mimouseWorkbuddyConnections as connections, type Db } from "@paperclipai/db";
+import { companies, agents, mimouseWorkbuddyJobs as jobs, mimouseWorkbuddyConnections as connections, type Db } from "@paperclipai/db";
 import { assertBoard, assertCompanyAccess, getActorInfo } from "./authz.js";
 import { forbidden, unprocessable } from "../errors.js";
 import { validate } from "../middleware/validate.js";
@@ -45,7 +45,10 @@ export function workbuddyRoutes(db: Db) {
     enabled(); const { companyId, userId } = actor(req);
     if (!req.actor.sessionId || typeof req.query.state !== "string" || typeof req.query.code !== "string" || req.query.state.length > 256 || req.query.code.length > 4096) throw unprocessable("Invalid OAuth callback");
     const result = await safe(() => service.callback(companyId, userId, req.actor.sessionId!, String(req.query.state), String(req.query.code)));
-    await audit(req, "workbuddy.connected", result.id); res.redirect("/integrations/workbuddy");
+    await audit(req, "workbuddy.connected", result.id);
+    const [company] = await db.select({ prefix: companies.issuePrefix }).from(companies).where(eq(companies.id, companyId));
+    if (!company) throw unprocessable("The authorized company is no longer available");
+    res.redirect(`/${encodeURIComponent(company.prefix.toUpperCase())}/integrations/workbuddy`);
   });
   router.post(`${root}/connections/:id/disconnect`, async (req, res) => {
     const { companyId, userId } = actor(req); const result = await safe(() => service.disconnect(companyId, String(req.params.id), userId));

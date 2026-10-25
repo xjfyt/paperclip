@@ -1,11 +1,11 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { and, eq, gt, sql } from "drizzle-orm";
 import { mimouseWorkbuddyConnections as connections, mimouseWorkbuddyJobs as jobs, mimouseWorkbuddyTurns as turns, type Db } from "@paperclipai/db";
-import { secretService } from "../secrets.js";
+import { openWorkbuddyCredential, sealWorkbuddyCredential, workbuddyCredentialIdentity } from "./credentials.js";
 import { authorizationUrl, fetchWorkBuddyReport, parseToken, runWorkBuddyAcp, workBuddyClient, WorkBuddyProtocolError, type WorkBuddyToken } from "./protocol.js";
 const digest = (text: string) => createHash("sha256").update(text).digest("hex");
 interface Actor { userId?: string; agentId?: string; responsibleUserId?: string | null }
-export function workbuddyService(db: Db, deps: { client?: ReturnType<typeof workBuddyClient>; token?: (companyId: string, connectionId: string) => Promise<string>; acp?: typeof runWorkBuddyAcp; report?: typeof fetchWorkBuddyReport } = {}) {
+export function workbuddyService(db: Db, deps: { client?: Pick<ReturnType<typeof workBuddyClient>, "exchange" | "create" | "get"> & Partial<Pick<ReturnType<typeof workBuddyClient>, "checkAccess">>; token?: (companyId: string, connectionId: string) => Promise<string>; acp?: typeof runWorkBuddyAcp; report?: typeof fetchWorkBuddyReport } = {}) {
   const client = deps.client ?? workBuddyClient();
   async function connection(companyId: string, id: string, actor: Actor) {
     const [row] = await db.select().from(connections).where(and(eq(connections.companyId, companyId), eq(connections.id, id)));
@@ -23,9 +23,7 @@ export function workbuddyService(db: Db, deps: { client?: ReturnType<typeof work
   async function accessToken(row: typeof connections.$inferSelect): Promise<string> {
     if (row.status !== "connected") throw new WorkBuddyProtocolError("connection_not_ready", false);
     if (deps.token) return deps.token(row.companyId, row.id);
-    if (!row.tokenSecretRef) throw new WorkBuddyProtocolError("connection_token_missing", false);
-    const secrets = secretService(db);
-    const existing = parseToken(JSON.parse(await secrets.resolveSecretValue(row.companyId, row.tokenSecretRef, row.tokenVersion)));
+    const existing = await openWorkbuddyCredential(row);
     if (row.expiresAt && row.expiresAt.getTime() > Date.now() + 30000) return existing.access_token;
     const app = appConfig(); if (!existing.refresh_token) throw new WorkBuddyProtocolError("reauthorization_required", false);
     const lease = randomUUID();
@@ -34,9 +32,10 @@ export function workbuddyService(db: Db, deps: { client?: ReturnType<typeof work
     try {
       const refreshed = await client.exchange({ grant_type: "refresh_token", refresh_token: existing.refresh_token, client_id: app.clientId, client_secret: app.clientSecret });
       if (refreshed.open_id !== existing.open_id) throw new WorkBuddyProtocolError("provider_identity_changed", true);
+      if (!["user.task.readable", "user.task.invokable"].every(scope => refreshed.scope.split(/\s+/).includes(scope))) throw new WorkBuddyProtocolError("refresh_scopes_reduced", true);
       const stored = { ...refreshed, refresh_token: refreshed.refresh_token ?? existing.refresh_token };
-      await secrets.rotate(row.tokenSecretRef, { value: JSON.stringify(stored), expectedLatestVersion: row.tokenVersion }, { userId: row.ownerUserId });
-      const saved = await db.update(connections).set({ status: "connected", refreshLease: null, tokenVersion: row.tokenVersion + 1, expiresAt: new Date(Date.now() + refreshed.expires_in * 1000), scopes: refreshed.scope.split(/\s+/) }).where(and(eq(connections.id, row.id), eq(connections.refreshLease, lease), eq(connections.status, "refreshing"))).returning();
+      const tokenMaterial = await sealWorkbuddyCredential(row, stored, row.tokenVersion + 1);
+      const saved = await db.update(connections).set({ status: "connected", refreshLease: null, tokenMaterial, tokenVersion: row.tokenVersion + 1, expiresAt: new Date(Date.now() + refreshed.expires_in * 1000), scopes: refreshed.scope.split(/\s+/) }).where(and(eq(connections.id, row.id), eq(connections.refreshLease, lease), eq(connections.status, "refreshing"))).returning();
       if (!saved.length) throw new WorkBuddyProtocolError("connection_revoked_during_refresh", true);
       return refreshed.access_token;
     } catch {
@@ -47,10 +46,20 @@ export function workbuddyService(db: Db, deps: { client?: ReturnType<typeof work
   async function job(companyId: string, id: string, actor: Actor) {
     const [row] = await db.select().from(jobs).where(and(eq(jobs.companyId, companyId), eq(jobs.id, id)));
     if (!row) throw new WorkBuddyProtocolError("job_not_found", false);
-    const account = await connection(companyId, row.connectionId, actor); return { row, account };
+    const account = await connection(companyId, row.connectionId, actor);
+    if (!row.credentialIdentity || row.credentialIdentity !== account.credentialIdentity) throw new WorkBuddyProtocolError("credential_scope_migration_required", false);
+    return { row, account };
   }
   return {
-    listConnections: (companyId: string, ownerUserId: string) => db.select({ id: connections.id, status: connections.status, expiresAt: connections.expiresAt, scopes: connections.scopes, lastCode: connections.lastCode }).from(connections).where(and(eq(connections.companyId, companyId), eq(connections.ownerUserId, ownerUserId))),
+    verifyForAgent: async (companyId: string, connectionId: string, agentId: string) => {
+      const [row] = await db.select().from(connections).where(and(eq(connections.companyId, companyId), eq(connections.id, connectionId)));
+      if (!row || !row.allowedAgentIds.includes(agentId)) throw new WorkBuddyProtocolError("connection_access_denied", false);
+      if (!row.credentialIdentity || !["user.task.readable", "user.task.invokable"].every(scope => row.scopes.includes(scope))) throw new WorkBuddyProtocolError("reauthorization_required", false);
+      if (!client.checkAccess) throw new WorkBuddyProtocolError("readonly_probe_unavailable", false);
+      await client.checkAccess(await accessToken(row));
+      return { ownerBound: true, taskReadVerified: true };
+    },
+    listConnections: (companyId: string, ownerUserId: string) => db.select({ id: connections.id, status: connections.status, expiresAt: connections.expiresAt, scopes: connections.scopes, allowedAgentIds: connections.allowedAgentIds, lastCode: connections.lastCode }).from(connections).where(and(eq(connections.companyId, companyId), eq(connections.ownerUserId, ownerUserId))),
     begin: async (companyId: string, userId: string, sessionId: string) => {
       const app = appConfig(); const state = randomBytes(32).toString("base64url");
       const redirectUri = `${app.base}/api/companies/${companyId}/integrations/workbuddy/callback`;
@@ -66,12 +75,13 @@ export function workbuddyService(db: Db, deps: { client?: ReturnType<typeof work
       try {
         const tokens = await client.exchange({ grant_type: "authorization_code", client_id: app.clientId, client_secret: app.clientSecret, code, redirect_uri: row.oauthRedirectUri });
         if (!["user.task.readable", "user.task.invokable"].every(scope => tokens.scope.split(/\s+/).includes(scope))) throw new WorkBuddyProtocolError("missing_required_scopes", false);
-        if (row.tokenSecretRef) {
-          const previous = parseToken(JSON.parse(await secretService(db).resolveSecretValue(companyId, row.tokenSecretRef, row.tokenVersion)));
+        if (row.tokenMaterial) {
+          const previous = await openWorkbuddyCredential(row);
           if (previous.open_id !== tokens.open_id) throw new WorkBuddyProtocolError("provider_identity_changed", true);
         }
-        const secret = await secretService(db).create(companyId, { name: `workbuddy-${row.id}-${randomUUID()}`, provider: "local_encrypted", value: JSON.stringify(tokens), description: "WorkBuddy OAuth; do not expose token values" }, { userId });
-        const saved = await db.update(connections).set({ tokenSecretRef: secret.id, tokenVersion: secret.latestVersion, expiresAt: new Date(Date.now() + tokens.expires_in * 1000), scopes: tokens.scope.split(/\s+/), status: "connected", refreshLease: null, lastCode: null }).where(and(eq(connections.id, row.id), eq(connections.refreshLease, lease), eq(connections.status, "exchanging"))).returning();
+        const version = row.tokenVersion + 1;
+        const tokenMaterial = await sealWorkbuddyCredential(row, tokens, version);
+        const saved = await db.update(connections).set({ tokenSecretRef: null, tokenMaterial, credentialIdentity: workbuddyCredentialIdentity(tokens), tokenVersion: version, expiresAt: new Date(Date.now() + tokens.expires_in * 1000), scopes: tokens.scope.split(/\s+/), status: "connected", refreshLease: null, lastCode: null }).where(and(eq(connections.id, row.id), eq(connections.refreshLease, lease), eq(connections.status, "exchanging"))).returning();
         if (!saved.length) throw new WorkBuddyProtocolError("connection_revoked_during_exchange", true);
         return { id: row.id, status: "connected" };
       } catch {
@@ -86,16 +96,19 @@ export function workbuddyService(db: Db, deps: { client?: ReturnType<typeof work
     },
     createJob: async (companyId: string, connectionId: string, actor: Actor, requestKey: string, prompt: string, runId?: string) => {
       const account = await connection(companyId, connectionId, actor);
+      if (!account.credentialIdentity) throw new WorkBuddyProtocolError("reauthorization_required", false);
       const promptHash = digest(prompt);
       const [prior] = await db.select().from(jobs).where(and(eq(jobs.companyId, companyId), eq(jobs.connectionId, connectionId), eq(jobs.requestKey, requestKey)));
       if (prior) {
+        if (prior.credentialIdentity !== account.credentialIdentity) throw new WorkBuddyProtocolError("credential_scope_migration_required", false);
         if (prior.promptHash !== promptHash) throw new WorkBuddyProtocolError("request_key_payload_mismatch", false);
         return { ...prior, dispatchState: prior.dispatchState === "dispatching" ? "indeterminate" : prior.dispatchState };
       }
       const token = await accessToken(account);
-      const [created] = await db.insert(jobs).values({ companyId, connectionId, requestKey, promptHash, ...(runId ? { runId } : {}) }).onConflictDoNothing().returning();
+      const [created] = await db.insert(jobs).values({ companyId, connectionId, requestKey, promptHash, credentialIdentity: account.credentialIdentity, ...(runId ? { runId } : {}) }).onConflictDoNothing().returning();
       if (!created) {
         const [existing] = await db.select().from(jobs).where(and(eq(jobs.companyId, companyId), eq(jobs.connectionId, connectionId), eq(jobs.requestKey, requestKey)));
+        if (existing.credentialIdentity !== account.credentialIdentity) throw new WorkBuddyProtocolError("credential_scope_migration_required", false);
         if (existing.promptHash !== promptHash) throw new WorkBuddyProtocolError("request_key_payload_mismatch", false);
         // Dispatching may represent a crashed process. Never create again.
         return { ...existing, dispatchState: existing.dispatchState === "dispatching" ? "indeterminate" : existing.dispatchState };

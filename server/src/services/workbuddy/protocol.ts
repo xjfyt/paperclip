@@ -35,6 +35,11 @@ export function workBuddyClient(transport: typeof fetch = fetch) {
   return {
     exchange: async (form: Record<string, string>) => parseToken(await request("/token", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams(form) }, true)),
     create: async (accessToken: string, prompt: string, name?: string) => parseTask(await request("/tasks", { method: "POST", headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json" }, body: JSON.stringify({ prompt, ...(name ? { name } : {}) }) }, true)),
+    checkAccess: async (accessToken: string) => {
+      const value = await request("/tasks?page=1&size=1", { headers: { authorization: `Bearer ${accessToken}` } }, false) as { tasks?: unknown[]; total?: number };
+      if (!value || !Array.isArray(value.tasks) || value.tasks.length > 1 || typeof value.total !== "number" || !Number.isFinite(value.total) || value.total < 0) throw new WorkBuddyProtocolError("invalid_task_access_receipt", false);
+      return { taskReadVerified: true as const }; // Never return other task names or contents.
+    },
     get: async (accessToken: string, taskId: string) => parseTask(await request(`/tasks/${encodeURIComponent(taskId)}`, { headers: { authorization: `Bearer ${accessToken}` } }, false)),
   };
 }

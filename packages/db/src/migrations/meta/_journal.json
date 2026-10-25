@@ -2353,6 +2353,13 @@
       "when": 1792949341717,
       "tag": "0337_mimouse_run_failure_outbox",
       "breakpoints": true
+    },
+    {
+      "idx": 338,
+      "version": "7",
+      "when": 1792954757294,
+      "tag": "0338_mimouse_private_workbuddy_credentials",
+      "breakpoints": true
     }
   ]
 }

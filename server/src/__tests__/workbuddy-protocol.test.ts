@@ -69,3 +69,8 @@ describe("WorkBuddy read-only report recovery", () => {
     await expect(fetchWorkBuddyReport(input, transport)).rejects.toThrow("pagination_budget"); expect(transport).toHaveBeenCalledTimes(10);
   });
 });
+it("checks cloud account access using only a minimal read and does not return task data", async () => {
+  const transport = vi.fn().mockResolvedValue(Response.json({ tasks: [{ task_id: "private-task", name: "private title" }], total: 1 }));
+  expect(await workBuddyClient(transport).checkAccess("fixture-token")).toEqual({ taskReadVerified: true });
+  expect(String(transport.mock.calls[0][0])).toBe("https://www.workbuddy.cn/openapi/v2/tasks?page=1&size=1"); expect(transport.mock.calls[0][1].method).toBeUndefined();
+});

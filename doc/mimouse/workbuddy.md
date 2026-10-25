@@ -6,9 +6,9 @@
 
 默认关闭。配置 `PAPERCLIP_WORKBUDDY_ENABLED=true`、`PAPERCLIP_WORKBUDDY_CLIENT_ID`、`PAPERCLIP_WORKBUDDY_CLIENT_SECRET` 和 `PAPERCLIP_AUTH_PUBLIC_BASE_URL`。生产必须 HTTPS。应用在供应商控制台登记 `/api/companies/<companyId>/integrations/workbuddy/callback`，取得官方应用审核和 scopes：`user.task.readable user.task.invokable`。不要把应用秘密放进 Agent 配置或仓库。
 
-用户登录后自行连接。state 单次原子消费，绑定公司、用户、发起浏览器会话，10 分钟过期；刷新令牌使用数据库 CAS 锁，结果未知停止自动刷新并要求重新授权。令牌只进入既有加密秘密存储，业务表只存引用和版本。重授权与刷新必须保持供应商 open_id 一致，防止旧任务误切换到另一个账号。
+用户登录后自行连接。state 单次原子消费，绑定公司、用户、发起浏览器会话，10 分钟过期；刷新令牌使用数据库 CAS 锁，结果未知停止自动刷新并要求重新授权。令牌使用既有 AES-GCM 提供者和实例主密钥加密，但密文仅保存在个人连接专用字段，不注册为普通公司 secret，不能通过通用 Agent 环境绑定读取。密文同时绑定公司、连接、所有者、版本和供应商身份摘要。重授权与刷新必须保持供应商 open_id 一致，防止旧任务误切换到另一个账号。
 
-连接默认仅所有者可用。所有者可通过 `POST .../connections/:id/agents` 明确授权本公司 Agent（`confirm:true, agentIds:[...]`）；调用仍须真实 Agent JWT、run ID、代表的责任用户与连接所有者相同。不能仅凭 Agent ID 读取他人连接。当前设置页尚未提供授权 Agent 的表单。
+连接默认仅所有者可用。所有者可通过 `POST .../connections/:id/agents` 明确授权本公司 Agent（`confirm:true, agentIds:[...]`）；调用仍须真实 Agent JWT、run ID、代表的责任用户与连接所有者相同。不能仅凭 Agent ID 读取他人连接。设置页提供 Agent 列表、明确授权勾选与保存操作，并按当前公司及登录用户隔离缓存与草稿。
 
 ## 执行、重试与权限
 
@@ -22,8 +22,14 @@
 
 ## 验证与缺口
 
-已执行协议夹具、独立适配器单测和真实本地 PostgreSQL/HTTP 集成测试，包含未知创建不重复、OAuth state 会话绑定、加密秘密存储不泄漏及报告跨服务实例恢复。这些不是官方租户联调。真实应用授权、实际额度、账号限流、SSE 长连接断线、真实任务完成与业务验收尚未验证。刷新并发、Agent 授权 API 的更完整集成矩阵仍需补充。
+已执行协议夹具、独立适配器单测和真实本地 PostgreSQL/HTTP 集成测试，包含未知创建不重复、OAuth state 会话绑定、加密秘密存储不泄漏及报告跨服务实例恢复。这些不是官方租户联调。真实应用授权、实际额度、账号限流、SSE 长连接断线、真实任务完成与业务验收尚未验证。刷新并发已通过真实隔离数据库验证：同一私有凭据只有一个刷新租约，迟到或不匹配结果不能替换新版本；此测试不等于供应商生产限流验证。
 
-关闭开关停止新执行；先核对远端仍在运行的任务，再回退应用。保留迁移 0335 和台账，不能通过删除台账清除未知结果。
+关闭开关停止新执行；先核对远端仍在运行的任务，再回退应用。保留迁移 0335、0338 和台账，不能通过删除台账清除未知结果。
 
 参考：[官方 OpenAPI](https://open.workbuddy.cn/docs/openapi)、[第三方应用](https://open.workbuddy.cn/docs/third-party-app)。
+
+## 生命周期诊断与旧版本升级
+
+配置 Agent 的 connectionId 后，由连接所有者在页面明确授权此 Agent，再重试上游 Agent 生命周期验证。服务端要求 WorkBuddy 开关、既有 Agent JWT 签名配置和有效的个人授权；诊断仅请求一页任务列表确认只读访问，不创建收费任务，也不将任务内容写入诊断结果。后续实际执行仍重新检查责任用户、run JWT 和授权，不以一次诊断代替长期权限。适配器独立环境诊断保持 warning，不伪造已认证。
+
+迁移 0338 会停用旧原型中被连接引用的普通公司 secret，并将旧连接设为 reauthorization_required、清空 Agent 授权。必须由本人重新 OAuth 授权，再明确授权 Agent。旧版本加密历史仍保留，未绑定新身份的旧任务不能自动恢复或重新创建，需人工核对远端台账。本地停用不是供应商 token 撤销；如旧凭据曾被复用，需在供应商侧撤销。回退应用时保持集成关闭，不恢复旧泛用密钥绑定。
