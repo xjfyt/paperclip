@@ -1,3 +1,6 @@
+import { authApi } from "@/api/auth";
+import { queryKeys } from "@/lib/queryKeys";
+import { MimouseCodingRepair } from "./MimouseCodingRepair";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "@/lib/router";
@@ -8,16 +11,22 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 interface Delivery { id: string; issueId: string; headSha: string; operationState: string; mrIid: number | null; pipelineId: number | null; gate: { readyForReleaseCandidate: boolean; blockers: string[] } }
 export function MimouseCoding() {
-  const { selectedCompanyId } = useCompany();
-  return selectedCompanyId ? <CodingCompany companyId={selectedCompanyId} key={selectedCompanyId} /> : null;
+  const { selectedCompanyId } = useCompany(); const { t } = useTranslation();
+  const session = useQuery({ queryKey: queryKeys.auth.session, queryFn: () => authApi.getSession(), retry: false });
+  if (!selectedCompanyId) return null;
+  if (session.isPending) return <p>{t("common.loading")}</p>;
+  if (session.isError) return <p role="alert">{t("coding.error")}</p>;
+  const userId = session.data?.user?.id ?? session.data?.session?.userId ?? "local-board";
+  return <CodingCompany companyId={selectedCompanyId} userId={userId} key={`${selectedCompanyId}:${userId}`} />;
 }
-function CodingCompany({ companyId }: { companyId: string }) {
-  const { t } = useTranslation(); const [search] = useSearchParams(); const client = useQueryClient(); const root = `/companies/${companyId}/coding`; const key = ["mimouse-coding", companyId];
+function CodingCompany({ companyId, userId }: { companyId: string; userId: string }) {
+  const { t } = useTranslation(); const [search] = useSearchParams(); const client = useQueryClient(); const root = `/companies/${companyId}/coding`; const key = ["mimouse-coding", companyId, userId];
   const query = useQuery({ queryKey: key, queryFn: () => api.get<{ deliveries: Delivery[]; publishEnabled: boolean }>(root) });
   const [form, setForm] = useState({ issueId: search.get("issueId") ?? "", workspaceId: search.get("workspaceId") ?? "", gitlabOrigin: "", projectId: "", secretRef: "", baseSha: "", headSha: "", targetBranch: "main" });
   const [confirmation, setConfirmation] = useState<{ id: string; headSha: string; action: string } | null>(null);
   const [evidence, setEvidence] = useState("[]");
   const mutation = useMutation({ mutationFn: (action: () => Promise<unknown>) => action(), onSuccess: async () => { await client.invalidateQueries({ queryKey: key }); setConfirmation(null); } });
+  if (query.isError) return <p role="alert">{t("coding.error")}</p>;
   return <div className="max-w-4xl space-y-5">
     <h1 className="text-xl font-semibold">{t("coding.title")}</h1><p>{t("coding.boundary")}</p>
     {(query.error || mutation.error) && <p role="alert">{t("coding.error")}</p>}
@@ -28,6 +37,7 @@ function CodingCompany({ companyId }: { companyId: string }) {
     </form>
     {query.data?.deliveries.filter(row => !form.issueId || row.issueId === form.issueId).map(row => <section key={row.id} className="rounded-lg border border-border p-4 space-y-3">
       <p className="font-mono text-sm break-all">{row.headSha}</p><p>{t("coding.operationState")}: {row.operationState}</p>
+      <MimouseCodingRepair key={`${row.id}:${row.headSha}`} companyId={companyId} userId={userId} issueId={row.issueId} deliveryId={row.id} headSha={row.headSha} />
       <p>{row.gate.readyForReleaseCandidate ? t("coding.candidate") : t("coding.notReady")}</p>
       {row.gate.blockers.map(blocker => <p key={blocker} className="text-sm">{t(`coding.${blocker}`, { defaultValue: blocker })}</p>)}
       <div className="flex flex-wrap gap-2">
