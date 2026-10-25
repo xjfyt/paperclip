@@ -8,7 +8,9 @@ import { sendNotification, type NotificationSnapshot, type ChannelSecret, type D
 
 export const NOTIFICATION_TOPIC = "mimouse-notifications";
 export const CONNECTED_NOTIFICATION_EVENTS = ["approval.requested", "run.failed", "coding.mr_ready", "coding.ci_failed", "coding.artifact_ready", "budget.threshold_reached"] as const;
-type Transaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
+// Accounting services expose their existing transaction as Db; require only
+// the shared query surface, not an unsafe cast to Drizzle transaction internals.
+type Transaction = Pick<Parameters<Parameters<Db["transaction"]>[0]>[0], "select" | "insert">;
 interface EventInput { companyId: string; eventId: string; type: string; resourceId: string; title?: string; text?: string }
 interface Snapshot extends NotificationSnapshot { secretRef: string; secretVersion: number; targetKey: string; locale: string; renderVersion: number; renderEvent?: string; renderResourceId?: string; renderCompanyPrefix?: string; rendered?: boolean }
 interface DeliveryRow { id: string; company_id: string; endpoint_id: string; subscription_id: string; snapshot: Snapshot; lease: string; attempt: number; created_at: Date }

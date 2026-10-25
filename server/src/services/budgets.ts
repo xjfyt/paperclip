@@ -475,9 +475,8 @@ export function budgetServiceInTransaction(db: Db, publications: ActivityPublica
       .then((rows) => rows[0] ?? null);
     // This service is called under the existing company accounting transaction.
     if (incident && process.env.PAPERCLIP_NOTIFICATIONS_ENABLED === "true") {
-      const tx = db as Parameters<typeof enqueueNotification>[0];
-      await enqueueNotification(tx, { companyId: policy.companyId, eventId: `budget:${incident.id}`, type: "budget.threshold_reached", resourceId: incident.id });
-      if (approval) await enqueueNotification(tx, { companyId: policy.companyId, eventId: `approval:${approval.id}`, type: "approval.requested", resourceId: approval.id });
+      await enqueueNotification(db, { companyId: policy.companyId, eventId: `budget:${incident.id}`, type: "budget.threshold_reached", resourceId: incident.id });
+      if (approval) await enqueueNotification(db, { companyId: policy.companyId, eventId: `approval:${approval.id}`, type: "approval.requested", resourceId: approval.id });
     }
     return incident ? { incident, created: true } : null;
   }
