@@ -2,7 +2,7 @@ import { enqueueNotification } from "../mimouse-notifications/outbox.js";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { executionWorkspaces, mimouseCodingDeliveries as deliveries, type Db } from "@paperclipai/db";
 import { secretService } from "../secrets.js";
 import { deliveryGate, gitlabClient, GitLabError, type CheckEvidence, type GitLabMergeRequest, type GitLabPipeline } from "./gitlab.js";
@@ -33,22 +33,25 @@ export function codingService(db: Db, deps: { client?: typeof gitlabClient } = {
     const [row] = await db.select().from(deliveries).where(and(eq(deliveries.companyId, companyId), eq(deliveries.id, id)));
     if (!row) throw new GitLabError("delivery_not_found"); return row;
   }
-  async function client(row: typeof deliveries.$inferSelect) {
+  async function client(row: typeof deliveries.$inferSelect, signal?: AbortSignal) {
     const value = await secretService(db).resolveSecretValue(row.companyId, row.secretRef, "latest");
     let token: string; try { token = JSON.parse(value).token; } catch { throw new GitLabError("invalid_gitlab_secret"); }
     if (!token) throw new GitLabError("invalid_gitlab_secret");
-    return (deps.client ?? gitlabClient)({ origin: row.gitlabOrigin, projectId: row.projectId, token, allowedOrigins: (process.env.PAPERCLIP_GITLAB_ALLOWED_ORIGINS ?? "").split(",").map(origin => origin.trim()).filter(Boolean) });
+    return (deps.client ?? gitlabClient)({ origin: row.gitlabOrigin, projectId: row.projectId, token, signal, allowedOrigins: (process.env.PAPERCLIP_GITLAB_ALLOWED_ORIGINS ?? "").split(",").map(origin => origin.trim()).filter(Boolean) });
   }
-  async function saveRemote(row: typeof deliveries.$inferSelect, mr: GitLabMergeRequest | null, pipeline: GitLabPipeline | null) {
+  async function saveRemote(row: typeof deliveries.$inferSelect, mr: GitLabMergeRequest | null, pipeline: GitLabPipeline | null, syncLease?: string) {
     const remoteEvidence = { mr, pipeline, checkedAt: new Date().toISOString() };
+    let observedReview = row.reviewedSha; let observedEvidence = row.evidence;
     await db.transaction(async tx => {
-      const saved = await tx.update(deliveries).set({ remoteEvidence, ...(mr ? { mrIid: mr.iid } : {}), ...(pipeline ? { pipelineId: pipeline.id } : {}), ...(mr && mr.sha !== row.headSha ? { reviewedSha: null, reviewerUserId: null } : {}), updatedAt: new Date() }).where(and(eq(deliveries.id, row.id), eq(deliveries.headSha, row.headSha))).returning();
+      const saved = await tx.update(deliveries).set({ remoteEvidence, ...(syncLease ? { syncLease: null, syncLeaseExpiresAt: null, syncLastCode: null, nextSyncAt: mr && ["closed", "merged"].includes(mr.state) ? null : new Date(Date.now() + 60000) } : {}), ...(mr ? { mrIid: mr.iid } : {}), ...(pipeline ? { pipelineId: pipeline.id } : {}), ...(mr && mr.sha !== row.headSha ? { reviewedSha: null, reviewerUserId: null } : {}), updatedAt: new Date() }).where(and(eq(deliveries.id, row.id), eq(deliveries.headSha, row.headSha), ...(syncLease ? [eq(deliveries.syncLease, syncLease), gt(deliveries.syncLeaseExpiresAt, new Date())] : []))).returning();
+      if (syncLease && !saved.length) throw new GitLabError("sync_lease_lost", true);
+      observedReview = saved[0]?.reviewedSha ?? null; observedEvidence = saved[0]?.evidence ?? [];
       if (saved.length && process.env.PAPERCLIP_NOTIFICATIONS_ENABLED === "true") {
         if (mr?.state === "opened" && mr.sha === row.headSha) await enqueueNotification(tx, { companyId: row.companyId, eventId: `coding-mr:${row.id}:${mr.iid}:${mr.sha}`, type: "coding.mr_ready", resourceId: row.id });
         if (pipeline?.sha === row.headSha && pipeline.status === "failed") await enqueueNotification(tx, { companyId: row.companyId, eventId: `coding-ci:${row.id}:${pipeline.id}:${pipeline.sha}`, type: "coding.ci_failed", resourceId: row.id });
       }
     });
-    return { ...remoteEvidence, gate: deliveryGate({ headSha: row.headSha, reviewedSha: row.reviewedSha, mr, pipeline, evidence: row.evidence as unknown as CheckEvidence[] }) };
+    return { ...remoteEvidence, gate: deliveryGate({ headSha: row.headSha, reviewedSha: observedReview, mr, pipeline, evidence: observedEvidence as unknown as CheckEvidence[] }) };
   }
   return {
     load,
@@ -98,13 +101,31 @@ export function codingService(db: Db, deps: { client?: typeof gitlabClient } = {
         await saveRemote(row, mr, null); return mr;
       } catch { await db.update(deliveries).set({ operationState: "mr_indeterminate", operationLease: null }).where(and(eq(deliveries.id, id), eq(deliveries.operationLease, lease))); throw new GitLabError("mr_creation_requires_reconciliation", true); }
     },
-    sync: async (companyId: string, id: string) => {
-      const row = await load(companyId, id); const api = await client(row);
-      const mr = row.mrIid ? await api.mergeRequest(row.mrIid) : null;
-      const pipelines = await api.pipelines(row.headSha);
-      const latest = pipelines.filter(pipeline => pipeline.sha === row.headSha).sort((a, b) => b.id - a.id)[0];
-      const pipeline = latest ? await api.pipeline(latest.id) : null;
-      return saveRemote(row, mr, pipeline);
+    sync: async (companyId: string, id: string, options: { onlyWhenDue?: boolean } = {}) => {
+      const now = new Date(); const lease = randomUUID();
+      const [row] = await db.update(deliveries).set({ syncLease: lease, syncLeaseExpiresAt: new Date(now.getTime() + 90000) }).where(and(
+        eq(deliveries.companyId, companyId), eq(deliveries.id, id),
+        or(isNull(deliveries.syncLease), lte(deliveries.syncLeaseExpiresAt, now)),
+        ...(options.onlyWhenDue ? [eq(deliveries.operationState, "mr_created"), lte(deliveries.nextSyncAt, now)] : []),
+      )).returning();
+      if (!row) throw new GitLabError("sync_busy_or_not_due");
+      try {
+        // A single deadline bounds all read-only pagination, not just each page.
+        const api = await client(row, AbortSignal.timeout(30000));
+        const mr = row.mrIid ? await api.mergeRequest(row.mrIid) : null;
+        const pipelines = await api.pipelines(row.headSha);
+        const latest = pipelines.filter(pipeline => pipeline.sha === row.headSha).sort((a, b) => b.id - a.id)[0];
+        const pipeline = latest ? await api.pipeline(latest.id) : null;
+        return await saveRemote(row, mr, pipeline, lease);
+      } catch (error) {
+        const code = error instanceof GitLabError && /^[a-z0-9_]{1,80}$/.test(error.code) ? error.code : "sync_failed";
+        // Unknown latest evidence must not leave a cached green release gate.
+        // CAS prevents an expired worker from clearing a newer worker's result.
+        await db.update(deliveries).set({ syncLease: null, syncLeaseExpiresAt: null, syncLastCode: code,
+          nextSyncAt: new Date(Date.now() + 300000), remoteEvidence: { mr: null, pipeline: null, checkedAt: new Date().toISOString(), lastCode: code }, updatedAt: new Date(),
+        }).where(and(eq(deliveries.id, row.id), eq(deliveries.syncLease, lease)));
+        throw error;
+      }
     },
   };
 }

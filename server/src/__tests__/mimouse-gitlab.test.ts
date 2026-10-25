@@ -35,3 +35,16 @@ describe("GitLab receipt minimization", () => {
     await expect(client.createMergeRequest("work", "main", "Title")).rejects.toMatchObject({ uncertain: true });
   });
 });
+
+it("carries one overall abort deadline through every read-only pagination request", async () => {
+  const controller = new AbortController(); const signals: AbortSignal[] = [];
+  const transport = vi.fn(async (_url: unknown, init?: RequestInit) => {
+    const signal = init!.signal as AbortSignal; signals.push(signal);
+    if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+    controller.abort();
+    return Response.json([{ id: 1, sha, status: "success" }], { headers: { "x-next-page": "2" } });
+  });
+  const client = gitlabClient({ origin: "https://git.example", projectId: 1, token: "fixture", allowedOrigins: ["https://git.example"], signal: controller.signal }, transport);
+  await expect(client.pipelines(sha)).rejects.toMatchObject({ code: "gitlab_transport_unconfirmed" });
+  expect(transport).toHaveBeenCalledTimes(2); expect(signals.every(signal => signal.aborted)).toBe(true);
+});

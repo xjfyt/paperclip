@@ -36,12 +36,12 @@ export function gitlabOrigin(raw: string, allowedOrigins: readonly string[]): st
   if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password || url.pathname !== '/' || url.search || url.hash || !allowedOrigins.includes(url.origin)) throw new GitLabError("gitlab_origin_not_allowed");
   return url.origin;
 }
-export function gitlabClient(config: { origin: string; projectId: number; token: string; allowedOrigins: readonly string[] }, transport: typeof fetch = fetch) {
+export function gitlabClient(config: { origin: string; projectId: number; token: string; allowedOrigins: readonly string[]; signal?: AbortSignal }, transport: typeof fetch = fetch) {
   const origin = gitlabOrigin(config.origin, config.allowedOrigins);
   if (!Number.isSafeInteger(config.projectId) || config.projectId <= 0) throw new GitLabError("invalid_project_id");
   async function call<T>(path: string, method = "GET", body?: unknown, page = 1): Promise<T> {
     let response: Response;
-    try { response = await transport(`${origin}/api/v4${path}`, { method, headers: { "PRIVATE-TOKEN": config.token, ...(body ? { "content-type": "application/json" } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}), redirect: "error", signal: AbortSignal.timeout(15000) }); }
+    try { response = await transport(`${origin}/api/v4${path}`, { method, headers: { "PRIVATE-TOKEN": config.token, ...(body ? { "content-type": "application/json" } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}), redirect: "error", signal: config.signal ? AbortSignal.any([config.signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000) }); }
     catch { throw new GitLabError("gitlab_transport_unconfirmed", method !== "GET"); }
     if (!response.ok) throw new GitLabError(`gitlab_http_${response.status}`, method !== "GET" && response.status >= 500);
     const reader = response.body?.getReader(); const chunks: Uint8Array[] = []; let bytes = 0;

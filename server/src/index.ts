@@ -1,3 +1,4 @@
+import { startCodingPollWorker } from "./services/mimouse-coding/poller.js";
 import { startNotificationWorker } from "./services/mimouse-notifications/outbox.js";
 import { subscribeAllCompanyLiveEvents } from "./services/live-events.js";
 import { DELIVERY_QUEUES } from "./services/delivery-work-notifications.js";
@@ -1205,6 +1206,7 @@ async function startServerWithDatabaseTeardown(
     }
   };
   const mimouseNotificationWorker = startNotificationWorker(db);
+  const mimouseCodingPollWorker = startCodingPollWorker(db, () => !isWarmStandby() && !isIdleTaskDrainActive());
   const executionControlInterval = setInterval(sweepExecutionControl, EXECUTION_RECONCILIATION_INTERVAL_MS);
   executionControlInterval.unref?.();
   sweepExecutionControl();
@@ -1973,6 +1975,7 @@ async function startServerWithDatabaseTeardown(
     unsubscribeChatCompletions();
     await deliveryWork.stop();
     await mimouseNotificationWorker.stop();
+    await mimouseCodingPollWorker.stop();
     clearInterval(executionControlInterval);
     if (heartbeatSchedulerInterval) {
       clearInterval(heartbeatSchedulerInterval);
