@@ -155,6 +155,7 @@ export function Sidebar() {
               width; a nav row also keeps search reachable from the
               collapsed rail, where the old header icon was dropped entirely.
               Cmd/Ctrl+K remains the keyboard path (command palette). */}
+          <SidebarNavItem to="/notifications" label={t("notifications.title")} icon={Inbox} />
           <SidebarNavItem to="/search" label={t("navigation.search")} icon={Search} />
           <SidebarNavItem to="/dashboard" label={t("navigation.dashboard")} icon={LayoutDashboard} liveCount={liveRunCount} />
           <SidebarNavItem
