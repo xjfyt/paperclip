@@ -13,7 +13,11 @@ const outputDir = join(packageRoot, "dist");
 const source = join(packageRoot, "src", "peercred-native.c");
 const output = join(outputDir, "peercred-native.node");
 const nodePrefix = process.config.variables.node_prefix;
+// Respect explicit Node/node-gyp header locations in managed runtimes where
+// the executable and development headers are deliberately installed separately.
 const headerCandidates = [
+  process.env.npm_config_nodedir ? join(process.env.npm_config_nodedir, "include", "node") : "",
+  process.env.npm_config_devdir ? join(process.env.npm_config_devdir, process.versions.node, "include", "node") : "",
   typeof nodePrefix === "string" ? join(nodePrefix, "include", "node") : "",
   resolve(dirname(process.execPath), "..", "include", "node"),
   "/usr/include/node",
