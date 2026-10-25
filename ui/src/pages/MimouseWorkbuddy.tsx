@@ -5,7 +5,7 @@ import { useTranslation } from "@/i18n";
 import { api } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-interface WorkbuddyData { enabled: boolean; connections: Array<{ id: string; status: string }>; jobs: Array<{ id: string; providerJobId: string | null; dispatchState: string; remoteState: string; report: string; activeTurn: string | null }> }
+interface WorkbuddyData { enabled: boolean; connections: Array<{ id: string; status: string }>; jobs: Array<{ id: string; providerJobId: string | null; dispatchState: string; remoteState: string; report: string; lastCode: string | null; activeTurn: string | null }> }
 export function MimouseWorkbuddy() {
   const { selectedCompanyId } = useCompany();
   if (!selectedCompanyId) return null;
@@ -43,6 +43,7 @@ function WorkbuddyCompany({ companyId }: { companyId: string }) {
       <p className="font-mono text-sm">{job.providerJobId ?? job.id}</p>
       <p>{t(`workbuddy.state_${job.dispatchState}`, { defaultValue: job.dispatchState })} · {t(`workbuddy.state_${job.remoteState}`, { defaultValue: job.remoteState })}</p>
       <Button variant="outline" disabled={mutation.isPending} onClick={() => mutation.mutate(() => api.post(`${root}/jobs/${job.id}/refresh`, {}))}>{t("workbuddy.refresh")}</Button>
+      {job.lastCode && <p role="status" className="text-sm text-muted-foreground">{t("shell.lastIssue")}: {job.lastCode}</p>}
       {job.report && <pre className="whitespace-pre-wrap text-sm">{job.report}</pre>}
       <p className="text-sm text-muted-foreground">{t("workbuddy.roundBoundary")}</p>
     </section>)}

@@ -5,6 +5,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { i18n } from "../i18n";
 import { CommandPalette } from "./CommandPalette";
 import { queryKeys } from "../lib/queryKeys";
 
@@ -496,6 +497,25 @@ describe("CommandPalette", () => {
     act(() => {
       root.unmount();
     });
+  });
+
+  it("does not navigate on Enter while Chinese IME composition is active", () => {
+    const { root } = renderWithQueryClient(<CommandPalette />, container);
+    act(() => { document.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true })); });
+    const input = container.querySelector('input[aria-label="Command search"]')!;
+    const event = new KeyboardEvent("keydown", { key: "Enter", metaKey: true, isComposing: true, bubbles: true, cancelable: true });
+    act(() => { input.dispatchEvent(event); });
+    expect(event.defaultPrevented).toBe(true); expect(navigateState.navigate).not.toHaveBeenCalled();
+    act(() => { root.unmount(); });
+  });
+
+  it.each([["zh-CN", "创建新任务"], ["es", "Crear nueva tarea"], ["ja", "新しいタスクを作成"]])("renders command actions in %s", async (locale, text) => {
+    await i18n.changeLanguage(locale);
+    const { root } = renderWithQueryClient(<CommandPalette />, container);
+    try {
+      act(() => { document.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true })); });
+      expect(container.textContent).toContain(text);
+    } finally { act(() => { root.unmount(); }); await i18n.changeLanguage("en"); }
   });
 
 });

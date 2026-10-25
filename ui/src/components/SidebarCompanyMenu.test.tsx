@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { i18n } from "../i18n";
 import type { ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -198,6 +199,18 @@ describe("SidebarCompanyMenu", () => {
     });
     await flushReact();
   }
+
+  it.each([false, true])("localizes the actual company menu and preserves company names (production=%s)", async production => {
+    for (const [locale, create] of [["zh-CN", "创建组织"], ["es", "Crear organización"], ["ja", "組織を作成"]]) {
+      await i18n.changeLanguage(locale);
+      const { root, queryClient } = renderMenu({ health: { status: "ok" }, production });
+      try {
+        await flushReact(); await flushReact();
+        await openMenu(i18n.t(production ? "shell.openNamedCompany" : "shell.openNamedOrganization", { name: "Acme Labs" }));
+        expect(document.body.textContent).toContain(create); expect(document.body.textContent).toContain("Acme Labs");
+      } finally { act(() => root.unmount()); queryClient.clear(); await i18n.changeLanguage("en"); }
+    }
+  });
 
   // This menu is the one the app renders, so it is the only place a customer can
   // act on a failed company list. Saying "No companies" there states something
