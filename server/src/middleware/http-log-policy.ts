@@ -45,6 +45,13 @@ const SECRET_SENSITIVE_HTTP_PATHS = [
 ];
 const SECRET_SENSITIVE_HTTP_METHODS = new Set(["POST", "PUT", "PATCH"]);
 
+/** New integration requests may contain user prompts or malformed secret inputs. */
+export function isPrivateIntegrationHttpRequest(url: string | undefined): boolean {
+  if (!url) return false;
+  const pathname = normalizePath(url).replace(/^https?:\/\/[^/]*/i, "");
+  return /^\/api\/companies\/[^/]+\/(?:notifications|coding|integrations\/workbuddy)(?:\/|$)/i.test(pathname);
+}
+
 /** Free-form agent feedback must never be copied into HTTP diagnostics. */
 export function isPrivateAgentCommentaryHttpRequest(url: string | undefined): boolean {
   if (!url) return false;
@@ -87,6 +94,7 @@ export function isSecretSensitiveHttpRequest(
   method: string | undefined,
   url: string | undefined,
 ): boolean {
+  if (isPrivateIntegrationHttpRequest(url)) return true;
   if (isPrivateWebhookHttpRequest(method, url)) return true;
   if (url && normalizePath(url).startsWith("/mcp/files/")) return true;
   if (isPrivateAgentCommentaryHttpRequest(url)) return true;

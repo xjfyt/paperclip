@@ -120,8 +120,19 @@ export async function execute(ctx) {
     await queue;
     // A closed parent does not prove its process tree stopped. Do not advertise
     // strong cancellation or call onProviderStopped without group-stop evidence.
-    let groupStopped = process.platform !== "win32" && !!child.pid;
-    if (groupStopped) { try { process.kill(-child.pid, 0); groupStopped = false; } catch (error) { groupStopped = error.code === "ESRCH"; } }
+    const groupIsStopped = () => {
+      if (process.platform === "win32" || !child.pid) return false;
+      try { process.kill(-child.pid, 0); return false; } catch (error) { return error.code === "ESRCH"; }
+    };
+    let groupStopped = groupIsStopped();
+    if (child.pid && !groupStopped) {
+      signal("SIGTERM");
+      for (let attempt = 0; attempt < 20 && !groupStopped; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+        if (attempt === 9) signal("SIGKILL");
+        groupStopped = groupIsStopped();
+      }
+    }
     releaseLock = groupStopped || !child.pid;
     if (groupStopped) await ctx.onProviderStopped?.();
     const success = groupStopped && closed.exitCode === 0 && finalEvent && !finalEvent.is_error && !cancelled && !processError && !logError;
