@@ -1,3 +1,4 @@
+import { useTranslation } from "@/i18n";
 import { useState } from "react";
 import type { IssueBlockerAttention } from "@paperclipai/shared";
 import { cn } from "../lib/utils";
@@ -79,10 +80,21 @@ function blockedAttentionLabel(blockerAttention: IssueBlockerAttention | null | 
  * still rides on the accessible label.
  */
 export function StatusIcon({ status, externalConversationState, blockerAttention, onChange, className, glyphContainerClassName, showLabel, size = "md" }: StatusIconProps) {
+  const { t, i18n } = useTranslation();
+  const displayLabel = (value: string) => i18n.language === "en" ? statusLabel(value) : t(`statuses.${value}`, { defaultValue: statusLabel(value) });
   const [open, setOpen] = useState(false);
   const displayStatus = status === "in_review" && externalConversationState === "waiting" ? "idle" : status;
   const isCoveredBlocked = status === "blocked" && blockerAttention?.state === "covered";
-  const ariaLabel = status === "blocked" ? blockedAttentionLabel(blockerAttention) : statusLabel(displayStatus);
+  let ariaLabel = status === "blocked" ? blockedAttentionLabel(blockerAttention) : displayLabel(displayStatus);
+  if (status === "blocked" && i18n.language !== "en") {
+    ariaLabel = displayLabel("blocked");
+    if (blockerAttention && blockerAttention.state !== "none" && ["active_child", "active_dependency", "stalled_review", "attention_required"].includes(blockerAttention.reason ?? "")) {
+      const count = blockerAttention.reason === "stalled_review" ? blockerAttention.stalledBlockerCount : blockerAttention.reason === "attention_required" ? blockerAttention.attentionBlockerCount || blockerAttention.unresolvedBlockerCount : blockerAttention.coveredBlockerCount;
+      ariaLabel += " · " + t(`liveUi.blocked_${blockerAttention.reason}`, { count, covered: blockerAttention.coveredBlockerCount });
+      const id = blockerAttention.sampleStalledBlockerIdentifier ?? blockerAttention.sampleBlockerIdentifier;
+      if (id) ariaLabel += " · " + id;
+    }
+  }
   const glyphStatus = isCoveredBlocked ? "in_queue" : displayStatus;
 
   const glyphIcon = (
@@ -103,7 +115,7 @@ export function StatusIcon({ status, externalConversationState, blockerAttention
     return showLabel ? (
       <span className="inline-flex items-center gap-1.5">
         {glyph}
-        <span className="text-sm">{statusLabel(displayStatus)}</span>
+        <span className="text-sm">{displayLabel(displayStatus)}</span>
       </span>
     ) : (
       glyph
@@ -113,17 +125,17 @@ export function StatusIcon({ status, externalConversationState, blockerAttention
   const trigger = showLabel ? (
     <button
       type="button"
-      aria-label={`Change status (current: ${ariaLabel})`}
+      aria-label={t("liveUi.changeStatus", { status: ariaLabel })}
       className="inline-flex min-h-5 items-center gap-1.5 cursor-pointer hover:bg-accent/50 rounded px-1 -mx-1 py-0.5 transition-colors"
     >
       {glyph}
-      <span className="text-sm">{statusLabel(displayStatus)}</span>
+      <span className="text-sm">{displayLabel(displayStatus)}</span>
     </button>
   ) : (
     <button
       type="button"
       data-slot="icon-button"
-      aria-label={`Change status (current: ${ariaLabel})`}
+      aria-label={t("liveUi.changeStatus", { status: ariaLabel })}
       className="inline-flex cursor-pointer items-center justify-center rounded-sm focus-visible:outline-none focus-visible:ring-(length:--rad-3) focus-visible:ring-ring"
     >
       {glyph}
@@ -146,7 +158,7 @@ export function StatusIcon({ status, externalConversationState, blockerAttention
             }}
           >
             <StatusIcon status={s} size="lg" />
-            {statusLabel(s)}
+            {displayLabel(s)}
           </Button>
         ))}
       </PopoverContent>

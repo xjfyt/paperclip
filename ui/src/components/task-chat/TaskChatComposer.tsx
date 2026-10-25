@@ -1,3 +1,4 @@
+import { t as mimouseUiT, useTranslation as useMimouseUiTranslation } from "@/i18n";
 import { AgentAvatar } from "../AgentAvatar";
 import {
   useEffect,
@@ -412,6 +413,7 @@ export function TaskChatComposer({
   onRunnerGoalCommand,
   onRunnerGoalReassign,
 }: TaskChatComposerProps) {
+  useMimouseUiTranslation();
   const streamlined = useStreamlinedTaskChatPresentation();
   const stopControl = useComposerStop(onStop, stopPending);
   const [localBody, setBody] = useState(() => (draftKey ? loadDraft(draftKey) : ""));
@@ -640,7 +642,7 @@ export function TaskChatComposer({
   );
   const assigneeValue = creation ? currentAssigneeValue : pendingAssignee ?? currentAssigneeValue;
   const assigneeLabel =
-    reassignOptions?.find((o) => o.id === assigneeValue)?.label ?? "Unassigned";
+    reassignOptions?.find((o) => o.id === assigneeValue)?.label ?? mimouseUiT("liveUi.unassigned");
   const assigneeName =
     assigneeLabel === "Unassigned" ? "the agent" : assigneeLabel;
   const effectivePlaceholder = queuedEdit
@@ -1256,7 +1258,7 @@ export function TaskChatComposer({
           className="flex h-11 min-w-0 items-center gap-2 px-2.5"
           data-testid="task-chat-composer-context"
           role="group"
-          aria-label="Task project and worktrees"
+          aria-label={mimouseUiT("liveUi.taskProjectWorktrees")}
         >
           {creation.contextBar}
         </TaskChatComposerBar>
@@ -1516,7 +1518,7 @@ export function TaskChatComposer({
                 value={assigneeValue}
                 options={reassignOptions ?? []}
                 placeholder="Assignee"
-                mobileTitle="Select assignee"
+                mobileTitle={mimouseUiT("liveUi.selectAssignee")}
                 noneLabel="No assignee"
                 searchPlaceholder="Search assignees…"
                 emptyMessage="No matches."

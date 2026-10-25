@@ -1,3 +1,5 @@
+import { useTranslation } from "@/i18n";
+import { usePropertyLabels } from "@/i18n/property-labels";
 import { useEffect, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type MouseEvent, type ReactNode, type Ref } from "react";
 import { X } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -40,11 +42,14 @@ export function SidePanelTab({
   appearance = "default",
   className,
 }: SidePanelTabProps) {
-  const closeLabel = `Close ${label}`;
+  const { t } = useTranslation(); const labelText = usePropertyLabels();
+  const builtinLabels: Record<string, string> = { properties: "Properties", plans: "Plan", artifacts: "Artifacts", subtasks: "Subtasks", references: "References" };
+  const displayLabel = builtinLabels[id] === label ? labelText(label) : label;
+  const closeLabel = t("liveUi.closeLabel", { label: displayLabel });
   const wrapperRef = useRef<HTMLDivElement>(null);
   const labelRef = useRef<HTMLSpanElement>(null);
   const [labelIsTruncated, setLabelIsTruncated] = useState(false);
-  const sizingKey = `${appearance}:${label}:${icon ? "icon" : "no-icon"}:${status ? "status" : "no-status"}:${closable ? "closable" : "fixed"}`;
+  const sizingKey = `${appearance}:${displayLabel}:${icon ? "icon" : "no-icon"}:${status ? "status" : "no-status"}:${closable ? "closable" : "fixed"}`;
   const [stableWidth, setStableWidth] = useState<{ key: string; width: number } | null>(null);
   const hasStableWidth = stableWidth?.key === sizingKey;
 
@@ -67,7 +72,7 @@ export function SidePanelTab({
     const observer = new ResizeObserver(updateTruncation);
     observer.observe(labelElement);
     return () => observer.disconnect();
-  }, [label]);
+  }, [displayLabel]);
 
   return (
     <div
@@ -104,7 +109,7 @@ export function SidePanelTab({
             id={`side-panel-tab-${id}`}
             aria-controls={`side-panel-content-${id}`}
             aria-selected={active}
-            aria-label={ariaLabel ?? label}
+            aria-label={ariaLabel && ariaLabel !== label ? ariaLabel : displayLabel}
             tabIndex={active ? 0 : -1}
             disabled={disabled}
             onClick={onSelect}
@@ -135,7 +140,7 @@ export function SidePanelTab({
                 appearance === "default" && labelIsTruncated && "side-panel-tab-label-fade",
               )}
             >
-              {label}
+              {displayLabel}
             </span>
             {status ? (
               <span className={cn(
@@ -147,7 +152,7 @@ export function SidePanelTab({
             ) : null}
           </button>
         </TooltipTrigger>
-        {labelIsTruncated ? <TooltipContent side="bottom">{label}</TooltipContent> : null}
+        {labelIsTruncated ? <TooltipContent side="bottom">{displayLabel}</TooltipContent> : null}
       </Tooltip>
       {closable && onClose && (appearance === "streamlined-task" || active) ? (
         <button

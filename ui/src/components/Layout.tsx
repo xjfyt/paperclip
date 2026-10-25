@@ -1,3 +1,4 @@
+import { t as mimouseUiT, useTranslation as useMimouseUiTranslation } from "@/i18n";
 import { SetupWizardSidebarOutlet } from "./SetupWizard";
 import { ChatSetupSidebarProvider } from "@/context/ChatSetupSidebarContext";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
@@ -82,6 +83,7 @@ const RESERVED_APP_SUBPATHS = new Set([
 ]);
 
 export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
+  useMimouseUiTranslation();
   const {
     sidebarOpen,
     setSidebarOpen,
@@ -590,7 +592,7 @@ export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-(--z-200) focus:rounded-md focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        Skip to Main Content
+        {mimouseUiT("liveUi.skipContent")}
       </a>
       <WorktreeBanner />
       <DevRestartBanner devServer={health?.devServer} />

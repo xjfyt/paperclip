@@ -1,3 +1,4 @@
+import { usePropertyLabels } from "@/i18n/property-labels";
 import type { CSSProperties, ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "../../lib/utils";
@@ -17,6 +18,7 @@ export function PropertySection({
   first?: boolean;
   streamlined?: boolean;
 }) {
+  const labelText = usePropertyLabels();
   return (
     <div className={className} data-property-section="true">
       {title ? (
@@ -28,7 +30,7 @@ export function PropertySection({
             first ? "pt-0" : "pt-3",
           )}
         >
-          {title}
+          {labelText(title)}
         </div>
       ) : null}
       <div className="space-y-0.5">{children}</div>
@@ -46,6 +48,8 @@ export function PropertyRow({
   /** Opt-in wrapping for chip-collection rows only (§5). Default rows stay one line. */
   wrap?: boolean;
 }) {
+  const labelText = usePropertyLabels();
+  const displayLabel = typeof label === "string" ? labelText(label) : label;
   return (
     <div
       className={cn(
@@ -60,9 +64,9 @@ export function PropertyRow({
           wrap && "mt-0.5",
         )}
         data-property-label={typeof label === "string" ? label : undefined}
-        title={typeof label === "string" ? label : undefined}
+        title={typeof displayLabel === "string" ? displayLabel : undefined}
       >
-        {label}
+        {displayLabel}
       </span>
       <div
         className={cn(

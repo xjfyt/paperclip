@@ -1,3 +1,4 @@
+import { t as mimouseUiT, useTranslation as useMimouseUiTranslation } from "@/i18n";
 import { useEffect, useRef, useState } from "react";
 import type { IssueWorkMode } from "@paperclipai/shared";
 import { Check, ClipboardList, MessageCircleQuestion, Lock, Paperclip, Plus, Target, X, type LucideIcon } from "lucide-react";
@@ -32,6 +33,7 @@ interface ComposerAddMenuProps {
 export function ComposerAddMenu({
   mode, onModeChange, onAttachFile, attachDisabled, onGoal, privacy, disabled, mobile: mobileProp, triggerTestId, menuTestId,
 }: ComposerAddMenuProps) {
+  useMimouseUiTranslation();
   const [open, setOpen] = useState(false);
   const mobileViewportStyle = useMobileEntityPickerViewportStyle();
   const goalFocusRef = useRef(false);
@@ -54,7 +56,7 @@ export function ComposerAddMenu({
       { id: "composer-add-ask", label: "Ask mode", detail: "Answer without changes", Icon: MessageCircleQuestion, select: () => onModeChange(mode === "ask" ? "standard" : "ask"), selected: mode === "ask" },
     ] : []),
   ];
-  const trigger = <button type="button" aria-label="Add to composer" aria-keyshortcuts={onModeChange ? "Meta+Period Control+Period Shift+Tab" : undefined}
+  const trigger = <button type="button" aria-label={mimouseUiT("liveUi.addComposer")} aria-keyshortcuts={onModeChange ? "Meta+Period Control+Period Shift+Tab" : undefined}
     disabled={disabled} data-testid={triggerTestId}
     className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50">
     <Plus className="size-4" aria-hidden />

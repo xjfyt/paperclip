@@ -1,3 +1,4 @@
+import { t as mimouseUiT, useTranslation as useMimouseUiTranslation } from "@/i18n";
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type Ref } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Check, ChevronDown, Plus, RotateCcw, Search, X, Zap } from "lucide-react";
@@ -85,6 +86,7 @@ export function ComposerRunSettingsPicker({
   settings, onSettingsChange, onAssigneeChange, disabled = false, mobile: mobileProp, triggerRef, modelOptionsOverride, renderAssigneeIdentity,
   initialOpen = false, initialView = "settings", initialModelSearch = "", initialAssigneeSearch = "",
 }: Props) {
+  useMimouseUiTranslation();
   const [open, setOpen] = useState(initialOpen);
   const [view, setView] = useState<"settings" | "agents" | "models">(initialView);
   const [modelSearch, setModelSearch] = useState(initialModelSearch);
@@ -186,14 +188,14 @@ export function ComposerRunSettingsPicker({
     rememberComposerEffort(companyId, null);
     onSettingsChange(DEFAULT_COMPOSER_RUN_SETTINGS);
   };
-  const closeButton = mobile ? <DialogClose asChild><button type="button" aria-label="Close picker" className="grid size-8 place-items-center rounded-md text-muted-foreground hover:bg-accent"><X className="size-4" /></button></DialogClose> : null;
+  const closeButton = mobile ? <DialogClose asChild><button type="button" aria-label={mimouseUiT("liveUi.closePicker")} className="grid size-8 place-items-center rounded-md text-muted-foreground hover:bg-accent"><X className="size-4" /></button></DialogClose> : null;
   const Trigger = mobile ? DialogTrigger : PopoverTrigger;
   const triggers = <div data-testid="task-chat-composer-selection" className="flex min-w-0 max-w-full items-center rounded-full bg-muted text-xs font-medium">
-    <Trigger asChild><button ref={triggerRef} type="button" disabled={disabled} aria-label="Select assignee" data-testid="task-chat-composer-assignee"
+    <Trigger asChild><button ref={triggerRef} type="button" disabled={disabled} aria-label={mimouseUiT("liveUi.selectAssignee")} data-testid="task-chat-composer-assignee"
       onClick={() => { setView("agents"); setHighlightedAssignee(0); }}
       className="flex h-8 min-w-0 max-w-full items-center gap-1.5 rounded-full px-2.5 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50">
-      {renderAssigneeIdentity?.(assigneeValue, agent?.name ?? "Unassigned", "trigger")}
-      <span data-testid="task-chat-composer-assignee-label" className="min-w-0 truncate">{assigneeOptions.find((item) => item.id === assigneeValue)?.label ?? "Unassigned"}</span>
+      {renderAssigneeIdentity?.(assigneeValue, agent?.name ?? mimouseUiT("liveUi.unassigned"), "trigger")}
+      <span data-testid="task-chat-composer-assignee-label" className="min-w-0 truncate">{assigneeOptions.find((item) => item.id === assigneeValue)?.label ?? mimouseUiT("liveUi.unassigned")}</span>
       {!modelSupported ? <ChevronDown className="size-3 shrink-0 text-muted-foreground" aria-hidden /> : null}
     </button></Trigger>
     {modelSupported ? <>
@@ -211,8 +213,8 @@ export function ComposerRunSettingsPicker({
     <div className="flex items-center gap-2">
       <button type="button" aria-label="Choose assignee" onClick={() => setView("agents")}
         className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1 text-left hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-        {renderAssigneeIdentity?.(assigneeValue, agent?.name ?? "Unassigned", "option") ?? <span className="grid size-6 shrink-0 place-items-center rounded-md bg-secondary text-xs font-semibold text-secondary-foreground">{agent?.name.slice(0, 1) ?? "?"}</span>}
-        <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{agent?.name ?? options.find((item) => item.id === assigneeValue)?.label ?? "Unassigned"}</span><span className="block truncate text-xs text-muted-foreground">{harnessLabel(agent)}</span></span>
+        {renderAssigneeIdentity?.(assigneeValue, agent?.name ?? mimouseUiT("liveUi.unassigned"), "option") ?? <span className="grid size-6 shrink-0 place-items-center rounded-md bg-secondary text-xs font-semibold text-secondary-foreground">{agent?.name.slice(0, 1) ?? "?"}</span>}
+        <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{agent?.name ?? options.find((item) => item.id === assigneeValue)?.label ?? mimouseUiT("liveUi.unassigned")}</span><span className="block truncate text-xs text-muted-foreground">{harnessLabel(agent)}</span></span>
         <ChevronDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />
       </button>
       {!choices.length && modelSupported ? <button type="button" aria-label="Reset to agent default" title="Reset to agent default" disabled={!changed} onClick={reset} className="grid size-8 place-items-center rounded-md text-muted-foreground hover:bg-accent disabled:opacity-40"><RotateCcw className="size-4" /></button> : null}
@@ -262,6 +264,6 @@ export function ComposerRunSettingsPicker({
 
   const onOpenChange = (next: boolean) => { setOpen(next); if (!next) { setView("settings"); setModelSearch(""); setAssigneeSearch(""); } };
   // The desktop portal needs its own scroll lock inside the new-task dialog.
-  return mobile ? <Dialog open={open} onOpenChange={onOpenChange}>{triggers}<DialogContent aria-describedby={undefined} showCloseButton={false} style={mobileViewportStyle} className="composer-mobile-dialog gap-0 overflow-hidden p-0" data-testid="composer-mobile-dialog"><DialogTitle className="sr-only">{view === "agents" ? "Select assignee" : "Select model and effort"}</DialogTitle><AnimatedBody>{body}</AnimatedBody></DialogContent></Dialog>
+  return mobile ? <Dialog open={open} onOpenChange={onOpenChange}>{triggers}<DialogContent aria-describedby={undefined} showCloseButton={false} style={mobileViewportStyle} className="composer-mobile-dialog gap-0 overflow-hidden p-0" data-testid="composer-mobile-dialog"><DialogTitle className="sr-only">{view === "agents" ? mimouseUiT("liveUi.selectAssignee") : mimouseUiT("liveUi.selectModelEffort")}</DialogTitle><AnimatedBody>{body}</AnimatedBody></DialogContent></Dialog>
     : <Popover modal open={open} onOpenChange={onOpenChange}><PopoverAnchor asChild>{triggers}</PopoverAnchor><PopoverContent side="top" align="end" sideOffset={8} className="w-80 max-w-full p-0 shadow-sm" data-testid="composer-model-popover"><AnimatedBody>{body}</AnimatedBody></PopoverContent></Popover>;
 }
