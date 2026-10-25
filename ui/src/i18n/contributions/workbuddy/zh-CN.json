@@ -28,5 +28,13 @@
   "state_completed": "远端报告已完成",
   "state_failed": "失败",
   "state_archived": "已归档",
-  "state_deleted": "已删除"
+  "state_deleted": "已删除",
+  "agentAccess": "获授权的 Agent",
+  "agentAccessHelp": "仅允许所选 Agent 代表你使用此连接，这可能消耗 WorkBuddy 额度；仅有公司成员身份并不代表已获授权。",
+  "agentListError": "无法加载 Agent 列表，请核对列表后再保存修改。",
+  "confirmAgentAccess": "我确认授权所选 Agent",
+  "saveAgentAccess": "保存 Agent 权限",
+  "connectionId": "连接 ID",
+  "state_reauthorization_required": "需要重新授权",
+  "lifecycleHelp": "保存授权后，将此连接 ID 填入 Agent 配置，再重试其生命周期验证。"
 }

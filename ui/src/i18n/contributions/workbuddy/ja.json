@@ -28,5 +28,13 @@
   "state_completed": "リモートが完了を報告",
   "state_failed": "失敗",
   "state_archived": "アーカイブ済み",
-  "state_deleted": "削除済み"
+  "state_deleted": "削除済み",
+  "agentAccess": "許可された Agent",
+  "agentAccessHelp": "選択した Agent があなたの代理で実行する場合にのみ、この接続を使用できます。WorkBuddy のクレジットを消費する可能性があり、会社のメンバーであるだけでは許可されません。",
+  "agentListError": "Agent を読み込めませんでした。一覧を確認するまで変更を保存しないでください。",
+  "confirmAgentAccess": "選択した Agent へのアクセス許可を確認しました",
+  "saveAgentAccess": "Agent の権限を保存",
+  "connectionId": "接続 ID",
+  "state_reauthorization_required": "再認証が必要です",
+  "lifecycleHelp": "権限を保存した後、この接続 ID をエージェントに設定し、ライフサイクル検証を再試行してください。"
 }

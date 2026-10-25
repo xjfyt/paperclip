@@ -28,5 +28,13 @@
   "state_completed": "El proveedor informa finalización",
   "state_failed": "Fallido",
   "state_archived": "Archivado",
-  "state_deleted": "Eliminado"
+  "state_deleted": "Eliminado",
+  "agentAccess": "Agents autorizados",
+  "agentAccessHelp": "Solo los Agents seleccionados que actúen en tu nombre pueden usar esta conexión. Puede consumir créditos de WorkBuddy; pertenecer a la empresa no basta.",
+  "agentListError": "No se pudieron cargar los Agents. No guardes cambios hasta verificar la lista.",
+  "confirmAgentAccess": "Confirmo el acceso de los Agents seleccionados",
+  "saveAgentAccess": "Guardar permisos de los Agents",
+  "connectionId": "ID de conexión",
+  "state_reauthorization_required": "Se requiere una nueva autorización",
+  "lifecycleHelp": "Tras guardar los permisos, configura este ID de conexión en el agente y vuelve a intentar su verificación de ciclo de vida."
 }

@@ -28,5 +28,13 @@
   "state_completed": "Remote reports completion",
   "state_failed": "Failed",
   "state_archived": "Archived",
-  "state_deleted": "Deleted"
+  "state_deleted": "Deleted",
+  "agentAccess": "Authorized Agents",
+  "agentAccessHelp": "Only selected Agents acting on your behalf may use this connection. This may consume WorkBuddy credits; company membership alone is not permission.",
+  "agentListError": "Could not load Agents. Do not save changes until the list is verified.",
+  "confirmAgentAccess": "I confirm access for the selected Agents",
+  "saveAgentAccess": "Save Agent permissions",
+  "connectionId": "Connection ID",
+  "state_reauthorization_required": "Reauthorization required",
+  "lifecycleHelp": "After saving access, configure this connection ID on the Agent and retry its lifecycle verification."
 }
