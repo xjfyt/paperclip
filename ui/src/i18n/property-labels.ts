@@ -11,3 +11,9 @@ export function usePropertyLabels() {
   const { t } = useTranslation();
   return (label: string) => Object.hasOwn(keys, label) ? t(`propertyLabels.${keys[label]}`) : label;
 }
+
+const builtinPanelLabels: Record<string, string> = { properties: "Properties", plans: "Plan", artifacts: "Artifacts", subtasks: "Subtasks", references: "References" };
+export function useBuiltinPanelLabel() {
+  const labelText = usePropertyLabels();
+  return (id: string, label: string) => Object.hasOwn(builtinPanelLabels, id) && builtinPanelLabels[id] === label ? labelText(label) : label;
+}

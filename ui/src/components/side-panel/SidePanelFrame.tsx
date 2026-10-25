@@ -1,3 +1,4 @@
+import { systemLabel, useSystemLabels } from "@/i18n/system-labels";
 import type { CSSProperties, ReactNode } from "react";
 import { Maximize2, Minimize2, PanelRightClose, PanelRightOpen, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -39,10 +40,11 @@ export function SidePanelFrame({
   bodyClassName,
   style,
 }: SidePanelFrameProps) {
+  useSystemLabels();
   const handleScroll = useScrollbarWhileScrolling();
   return (
     <section
-      aria-label={label}
+      aria-label={label === "Side panel" ? systemLabel(label) : label}
       aria-hidden={!open}
       data-presentation={presentation}
       data-open={open ? "true" : "false"}
@@ -108,7 +110,8 @@ export function SidePanelToggleButton({
   shortcut?: string;
   className?: string;
 }) {
-  const label = "Toggle side panel";
+  useSystemLabels();
+  const label = systemLabel("Toggle side panel");
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -116,7 +119,7 @@ export function SidePanelToggleButton({
           type="button"
           variant="ghost"
           size="icon-sm"
-          aria-label={label}
+          aria-label={label === "Side panel" ? systemLabel(label) : label}
           aria-pressed={open}
           onClick={onToggle}
           className={cn(
@@ -146,6 +149,7 @@ export function SidePanelWindowControls({
   onToggle: () => void;
   closeControl?: "toggle" | "close";
 }) {
+  useSystemLabels();
   return (
     <>
       <Button
@@ -154,8 +158,8 @@ export function SidePanelWindowControls({
         size="icon-sm"
         className="h-(--side-panel-tab-height) w-(--side-panel-tab-height) text-muted-foreground hover:text-foreground focus-visible:text-foreground"
         onClick={() => onMaximizedChange(!maximized)}
-        aria-label={maximized ? "Restore side panel" : "Maximize side panel"}
-        title={maximized ? "Restore side panel" : "Maximize side panel"}
+        aria-label={systemLabel(maximized ? "Restore side panel" : "Maximize side panel")}
+        title={systemLabel(maximized ? "Restore side panel" : "Maximize side panel")}
       >
         {maximized ? <Minimize2 aria-hidden /> : <Maximize2 aria-hidden />}
       </Button>
@@ -166,8 +170,8 @@ export function SidePanelWindowControls({
           size="icon-sm"
           className="h-(--side-panel-tab-height) w-(--side-panel-tab-height) text-muted-foreground hover:text-foreground focus-visible:text-foreground"
           onClick={onToggle}
-          aria-label="Close side panel"
-          title="Close side panel"
+          aria-label={systemLabel("Close side panel")}
+          title={systemLabel("Close side panel")}
         >
           <X aria-hidden />
         </Button>

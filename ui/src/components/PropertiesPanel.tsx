@@ -1,3 +1,4 @@
+import { systemLabel, useSystemLabels } from "@/i18n/system-labels";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { usePanel } from "../context/PanelContext";
@@ -167,6 +168,7 @@ function ResizablePropertiesPanel({
   maximizeRequested,
   clearMaximizeRequest,
 }: ResizablePropertiesPanelProps) {
+  useSystemLabels();
   const defaultPaneWidth = taskDetailLayout
     ? TASK_DETAIL_DEFAULT_PANE_WIDTH
     : DEFAULT_PANE_WIDTH;
@@ -378,7 +380,7 @@ function ResizablePropertiesPanel({
           <div
             role="separator"
             aria-orientation="vertical"
-            aria-label="Resize panel"
+            aria-label={systemLabel("Resize panel")}
             data-dragging={dragging ? "" : undefined}
             className="group absolute inset-y-0 z-10 cursor-col-resize touch-none"
             style={{ left: -4, width: 8 }}

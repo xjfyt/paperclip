@@ -1,3 +1,4 @@
+import { t as actionT } from "@/i18n";
 import { useTranslation } from "@/i18n";
 import { usePrimaryAgentPresentation } from "@/components/primary-agent/PrimaryAgentPresentation";
 import { AgentAvatar } from "@/components/AgentAvatar";
@@ -140,6 +141,7 @@ function SidebarAgentItem({
   onToggleStar?: (agent: Agent, starred: boolean) => void;
   starPending?: boolean;
 }) {
+  useTranslation();
   const routeRef = agentRouteRef(agent);
   const href = activeTab ? `${agentUrl(agent)}/${activeTab}` : agentUrl(agent);
   const editHref = `${agentUrl(agent)}/configuration`;
@@ -230,7 +232,7 @@ function SidebarAgentItem({
                 ? "opacity-100"
                 : "pointer-events-none opacity-0 group-hover/agent:pointer-events-auto group-hover/agent:opacity-100 group-focus-within/agent:pointer-events-auto group-focus-within/agent:opacity-100",
             )}
-            aria-label={`Open actions for ${agent.name}`}
+            aria-label={actionT("browserQa.openActions", { name: agent.name })}
           >
             <MoreHorizontal className="h-3.5 w-3.5" />
           </Button>

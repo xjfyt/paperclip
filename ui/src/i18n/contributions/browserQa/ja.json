@@ -116,5 +116,22 @@
   "openTask": "{{id}} を開く",
   "createdWarning": "{{id}} を作成しましたがアップロード警告があります",
   "uploadFilesWarning": "{{count}} 個の待機ファイルを追加できませんでした。",
-  "uploadFileWarning": "{{count}} 個の待機ファイルを追加できませんでした。"
+  "uploadFileWarning": "{{count}} 個の待機ファイルを追加できませんでした。",
+  "restoreSidePanel": "サイドパネルを元に戻す",
+  "maximizeSidePanel": "サイドパネルを最大化",
+  "closeSidePanel": "サイドパネルを閉じる",
+  "toggleSidePanel": "サイドパネルを切り替え",
+  "resizePanel": "パネル幅を調整",
+  "sidePanel": "サイドパネル",
+  "openANewTab": "新しいタブを開く",
+  "shareFeedback": "フィードバックを送信",
+  "resizeSidebar": "サイドバー幅を調整",
+  "commandPalette": "コマンドパレット",
+  "searchForACommandToRun": "実行するコマンドを検索…",
+  "clearErrorAndReturnAgentToIdle": "エラーを解除しAgentを待機状態に戻す",
+  "chooseATab": "タブを選択",
+  "openTabs": "開いているタブ",
+  "close": "閉じる",
+  "openActions": "{{name}} の操作を開く",
+  "switchTabs": "タブを切り替え（{{count}} 件）"
 }

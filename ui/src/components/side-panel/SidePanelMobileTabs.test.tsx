@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act } from "react";
+import { i18n } from "@/i18n";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { SidePanelMobileTabs } from "./SidePanelMobileTabs";
@@ -64,4 +65,17 @@ describe("SidePanelMobileTabs", () => {
     expect(container.querySelector("output")?.textContent).toBe("properties");
     expect(document.activeElement).toBe(button("Properties"));
   });
+  it("restores focus to a custom-language add control without querying English aria text", async () => {
+    function SingleFixture() {
+      const controller = useSidePanelTabs({ initialState: { tabs: [{ id: "test", type: "view", label: "测试页", payload: {} }], activeTabId: "test" } });
+      return <SidePanelMobileTabs tabs={controller.tabs} activeTabId={controller.activeTabId} onActiveTabChange={controller.selectTab} onCloseTab={controller.closeTab} addControl={<button aria-label="添加标签">添加</button>} />;
+    }
+    try {
+      await act(async () => { await i18n.changeLanguage("zh-CN"); root.render(<SingleFixture />); });
+      await click(i18n.t("browserQa.switchTabs", { count: 1 }));
+      await act(async () => { button(i18n.t("liveUi.closeLabel", { label: "测试页" })).click(); await new Promise(resolve => setTimeout(resolve, 20)); });
+      expect(document.activeElement).toBe(button("添加标签"));
+    } finally { await act(async () => { await i18n.changeLanguage("en"); }); }
+  });
+
 });

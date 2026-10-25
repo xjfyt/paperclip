@@ -87,7 +87,22 @@ const keys: Record<string, string> = {
   "Teardown": "teardown",
   "Worktree cleanup": "worktreeCleanup",
   "nice": "nice",
-  "raw": "raw"
+  "raw": "raw",
+  "Restore side panel": "restoreSidePanel",
+  "Maximize side panel": "maximizeSidePanel",
+  "Close side panel": "closeSidePanel",
+  "Toggle side panel": "toggleSidePanel",
+  "Resize panel": "resizePanel",
+  "Side panel": "sidePanel",
+  "Open a new tab": "openANewTab",
+  "Share feedback": "shareFeedback",
+  "Resize sidebar": "resizeSidebar",
+  "Command Palette": "commandPalette",
+  "Search for a command to run...": "searchForACommandToRun",
+  "Clear error and return agent to idle": "clearErrorAndReturnAgentToIdle",
+  "Choose a tab": "chooseATab",
+  "Open tabs": "openTabs",
+  "Close": "close"
 };
 export function systemLabel(value: string): string { return Object.hasOwn(keys, value) ? t(`browserQa.${keys[value]}`) : value; }
 export function useSystemLabels() { useTranslation(); return systemLabel; }

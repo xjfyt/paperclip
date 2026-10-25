@@ -1,3 +1,4 @@
+import { t as actionT } from "@/i18n";
 import { systemLabel, useSystemLabels } from "@/i18n/system-labels";
 import { useCallback, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "@/lib/router";
@@ -118,7 +119,7 @@ export function ClearErrorButton({
       onClick={onClick}
       disabled={disabled}
       className="border-destructive/60 text-destructive hover:bg-destructive/10 hover:text-destructive dark:border-destructive/50"
-      aria-label="Clear error and return agent to idle"
+      aria-label={systemLabel("Clear error and return agent to idle")}
     >
       <CheckCircle2 className="h-3.5 w-3.5 sm:mr-1" />
       <span className="hidden sm:inline">{systemLabel('Clear error')}</span>
@@ -473,7 +474,7 @@ export function AgentActionButtons({
       {children}
       <Popover open={moreOpen} onOpenChange={setMoreOpen}>
         <PopoverTrigger asChild>
-          <Button variant="ghost" size="icon-xs" aria-label={`Open actions for ${agent.name}`}>
+          <Button variant="ghost" size="icon-xs" aria-label={actionT("browserQa.openActions", { name: agent.name })}>
             <MoreHorizontal className="h-4 w-4" />
           </Button>
         </PopoverTrigger>

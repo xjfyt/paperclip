@@ -116,5 +116,22 @@
   "openTask": "Open {{id}}",
   "createdWarning": "Created {{id}} with upload warnings",
   "uploadFilesWarning": "{{count}} staged files could not be added.",
-  "uploadFileWarning": "{{count}} staged file could not be added."
+  "uploadFileWarning": "{{count}} staged file could not be added.",
+  "restoreSidePanel": "Restore side panel",
+  "maximizeSidePanel": "Maximize side panel",
+  "closeSidePanel": "Close side panel",
+  "toggleSidePanel": "Toggle side panel",
+  "resizePanel": "Resize panel",
+  "sidePanel": "Side panel",
+  "openANewTab": "Open a new tab",
+  "shareFeedback": "Share feedback",
+  "resizeSidebar": "Resize sidebar",
+  "commandPalette": "Command Palette",
+  "searchForACommandToRun": "Search for a command to run...",
+  "clearErrorAndReturnAgentToIdle": "Clear error and return agent to idle",
+  "chooseATab": "Choose a tab",
+  "openTabs": "Open tabs",
+  "close": "Close",
+  "openActions": "Open actions for {{name}}",
+  "switchTabs": "Switch tabs, {{count}} open"
 }

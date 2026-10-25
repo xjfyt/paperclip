@@ -1,3 +1,4 @@
+import { systemLabel, useSystemLabels } from "@/i18n/system-labels";
 import {
   useEffect,
   useMemo,
@@ -134,6 +135,7 @@ export function SidePanelTabs({
   appearance = "default",
   className,
 }: SidePanelTabsProps) {
+  useSystemLabels();
   const [announcement, setAnnouncement] = useState("");
   const [showEndFade, setShowEndFade] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -310,12 +312,13 @@ export function SidePanelTabs({
       {addControl ? <div ref={addControlRef} className="shrink-0">{addControl}</div> : (onAddTab ? (
         <Button
           ref={addButtonRef}
+          data-side-panel-add-tab="true"
           type="button"
           variant="ghost"
           size="icon-sm"
           onClick={onAddTab}
-          aria-label={addLabel}
-          title={addLabel}
+          aria-label={addLabel === "Open a new tab" ? systemLabel(addLabel) : addLabel}
+          title={addLabel === "Open a new tab" ? systemLabel(addLabel) : addLabel}
           className={cn(
             "shrink-0 text-muted-foreground hover:text-foreground focus-visible:text-foreground",
             appearance === "streamlined-task"

@@ -1,5 +1,5 @@
 import { useTranslation } from "@/i18n";
-import { usePropertyLabels } from "@/i18n/property-labels";
+import { useBuiltinPanelLabel } from "@/i18n/property-labels";
 import { useEffect, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type MouseEvent, type ReactNode, type Ref } from "react";
 import { X } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -42,9 +42,8 @@ export function SidePanelTab({
   appearance = "default",
   className,
 }: SidePanelTabProps) {
-  const { t } = useTranslation(); const labelText = usePropertyLabels();
-  const builtinLabels: Record<string, string> = { properties: "Properties", plans: "Plan", artifacts: "Artifacts", subtasks: "Subtasks", references: "References" };
-  const displayLabel = builtinLabels[id] === label ? labelText(label) : label;
+  const { t } = useTranslation(); const labelText = useBuiltinPanelLabel();
+  const displayLabel = labelText(id, label);
   const closeLabel = t("liveUi.closeLabel", { label: displayLabel });
   const wrapperRef = useRef<HTMLDivElement>(null);
   const labelRef = useRef<HTMLSpanElement>(null);
