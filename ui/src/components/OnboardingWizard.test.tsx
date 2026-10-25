@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { act } from "react";
+import { i18n } from "../i18n";
 import type { LocalAiLoginStatus } from "@paperclipai/shared";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -443,6 +444,32 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       });
       await flushReact();
     }
+
+    it.each(["en", "zh-CN", "es", "ja"])("exposes first-run language selection and localized naming in %s", async locale => {
+      await i18n.changeLanguage(locale);
+      const { root } = await openStepOne();
+      try {
+        expect(document.body.textContent).toContain(i18n.t("onboarding.organizationQuestion"));
+        const selector = document.body.querySelector(`select[aria-label="${i18n.t("common.language")}"]`) as HTMLSelectElement;
+        expect(selector.value).toBe(locale); expect(document.body.textContent).toContain(i18n.t("onboarding.continue"));
+        expect(mockCompaniesApi.create).not.toHaveBeenCalled();
+      } finally { await act(async () => root.unmount()); await i18n.changeLanguage("en"); }
+    });
+
+    it("does not create an organization on composition Enter or composition Ctrl+Enter", async () => {
+      mockCompaniesApi.create.mockResolvedValue({ id: "company-new", issuePrefix: "INI" });
+      const { root } = await openStepOne();
+      try {
+        const input = document.body.querySelector("#onboarding-company-name") as HTMLInputElement;
+        await act(async () => {
+          input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, isComposing: true }));
+          input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, isComposing: true, ctrlKey: true }));
+        });
+        expect(mockCompaniesApi.create).not.toHaveBeenCalled();
+        await act(async () => input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+        await flushReact(); expect(mockCompaniesApi.create).toHaveBeenCalledTimes(1);
+      } finally { await act(async () => root.unmount()); }
+    });
 
     it("creates the organization on Continue and lands on the agent step, no mission", async () => {
       mockCompaniesApi.create.mockResolvedValue({ id: "company-new", issuePrefix: "INI" });
@@ -3113,6 +3140,14 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       async function settle() {
         for (let i = 0; i < 10; i++) await flushReact();
       }
+      it("does not initialize a local sign-in until a provider tile is explicitly chosen", async () => {
+        const { root } = await openStep4();
+        try {
+          await settle(); expect(managedApi.startLocalLogin).not.toHaveBeenCalled();
+          await pickSource(/Claude/); await settle(); expect(managedApi.startLocalLogin).toHaveBeenCalledTimes(1);
+        } finally { await act(async () => root.unmount()); }
+      });
+
       function button(label: string) {
         const found = [...document.body.querySelectorAll("button")].find(b => b.textContent?.trim() === label);
         expect(found, label).toBeTruthy();
