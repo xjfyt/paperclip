@@ -158,7 +158,9 @@ test("the automatic repair worker reserves and dispatches one durable routine de
 test("repair service and composite foreign key reject another company's delivery without a wakeup", async ({ request }) => {
   const f = await fixture(request);
   try {
-    const [other] = await f.db.insert(companies).values({ name: "Other isolated repair company", status: "paused" }).returning();
+    const otherResponse = await request.post("/api/companies", { data: { name: `Other isolated repair company ${randomUUID()}` } });
+    expect(otherResponse.ok()).toBe(true); const other = await otherResponse.json();
+    await f.db.update(companies).set({ status: "paused" }).where(eq(companies.id, other.id));
     await expect(f.repairs.configure(other.id, f.delivery.id, f.config, f.owner)).rejects.toThrow("delivery_not_found");
     await expect(f.repairs.reserve(other.id, f.delivery.id)).rejects.toThrow("delivery_not_found");
     const attempt = await f.repairs.reserve(f.company.id, f.delivery.id);
