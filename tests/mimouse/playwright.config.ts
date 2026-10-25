@@ -27,7 +27,9 @@ export default defineConfig({
   },
   webServer: {
     stdout: "pipe", stderr: "pipe",
-    command: "node --import tsx src/index.ts", cwd: path.resolve(import.meta.dirname, "../../server"),
+    // The server entry is compiled; workspace package exports still point at TS.
+    // A published/staged all-dist package requires a separate release smoke.
+    command: process.env.PAPERCLIP_MIMOUSE_TEST_COMPILED === "true" ? "node --import tsx dist/index.js" : "node --import tsx src/index.ts", cwd: path.resolve(import.meta.dirname, "../../server"),
     url: "http://127.0.0.1:3100/api/health", reuseExistingServer: false, timeout: 120000,
     env: { ...process.env, PAPERCLIP_HOME: fixtureHome, PAPERCLIP_CONFIG: fixtureConfig, PAPERCLIP_INSTANCE_ID: "default",
       DATABASE_URL: "", DATABASE_MIGRATION_URL: "", PAPERCLIP_DISABLE_CWD_ENV_FILE: "true",
