@@ -1,0 +1,1 @@
+{"name":"@mimouse/paperclip-workbuddy","version":"0.1.0","type":"module","license":"MIT","exports":{".":"./index.mjs"},"files":["index.mjs","README.md"],"engines":{"node":">=24.11.0"},"scripts":{"test":"node --test test/*.test.mjs"}}
