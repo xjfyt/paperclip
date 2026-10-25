@@ -1,3 +1,4 @@
+import { enqueueNotification } from "../mimouse-notifications/outbox.js";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { randomUUID } from "node:crypto";
@@ -40,7 +41,13 @@ export function codingService(db: Db, deps: { client?: typeof gitlabClient } = {
   }
   async function saveRemote(row: typeof deliveries.$inferSelect, mr: GitLabMergeRequest | null, pipeline: GitLabPipeline | null) {
     const remoteEvidence = { mr, pipeline, checkedAt: new Date().toISOString() };
-    await db.update(deliveries).set({ remoteEvidence, ...(mr ? { mrIid: mr.iid } : {}), ...(pipeline ? { pipelineId: pipeline.id } : {}), ...(mr && mr.sha !== row.headSha ? { reviewedSha: null, reviewerUserId: null } : {}), updatedAt: new Date() }).where(and(eq(deliveries.id, row.id), eq(deliveries.headSha, row.headSha)));
+    await db.transaction(async tx => {
+      const saved = await tx.update(deliveries).set({ remoteEvidence, ...(mr ? { mrIid: mr.iid } : {}), ...(pipeline ? { pipelineId: pipeline.id } : {}), ...(mr && mr.sha !== row.headSha ? { reviewedSha: null, reviewerUserId: null } : {}), updatedAt: new Date() }).where(and(eq(deliveries.id, row.id), eq(deliveries.headSha, row.headSha))).returning();
+      if (saved.length && process.env.PAPERCLIP_NOTIFICATIONS_ENABLED === "true") {
+        if (mr?.state === "opened" && mr.sha === row.headSha) await enqueueNotification(tx, { companyId: row.companyId, eventId: `coding-mr:${row.id}:${mr.iid}:${mr.sha}`, type: "coding.mr_ready", resourceId: row.id });
+        if (pipeline?.sha === row.headSha && pipeline.status === "failed") await enqueueNotification(tx, { companyId: row.companyId, eventId: `coding-ci:${row.id}:${pipeline.id}:${pipeline.sha}`, type: "coding.ci_failed", resourceId: row.id });
+      }
+    });
     return { ...remoteEvidence, gate: deliveryGate({ headSha: row.headSha, reviewedSha: row.reviewedSha, mr, pipeline, evidence: row.evidence as unknown as CheckEvidence[] }) };
   }
   return {

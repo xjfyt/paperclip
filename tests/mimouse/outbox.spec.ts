@@ -6,6 +6,13 @@ const require = createRequire(new URL("../../server/package.json", import.meta.u
 const { eq, sql } = await import(require.resolve("drizzle-orm"));
 import { enqueueNotification, notificationOutbox } from "../../server/src/services/mimouse-notifications/outbox.js";
 
+test.beforeEach(async () => {
+  // This suite intentionally exercises the global queue; pause leftovers from
+  // earlier runs in this isolated fixture database before creating fresh rows.
+  const db = createDb("postgres://paperclip:paperclip@127.0.0.1:54329/paperclip");
+  try { await db.update(endpoints).set({ enabled: false }); } finally { await db.$client.end({ timeout: 1 }); }
+});
+
 // This suite only targets the isolated local database booted by this config.
 // The injected sender never contacts any vendor.
 test("durable outbox: atomic enqueue, identity, leases and restart recovery", async ({ request }) => {
@@ -41,7 +48,11 @@ test("durable outbox: atomic enqueue, identity, leases and restart recovery", as
     await expect(db.insert(subscriptions).values({ companyId: other.id, endpointId: endpoint.id, eventType: "approval.requested" })).rejects.toThrow();
     const center = await request.get(`/api/companies/${company.id}/notifications`); expect(center.ok(), await center.text()).toBeTruthy();
     const body = await center.json(); expect(body.deliveries[0].state).toBe("indeterminate");
-    expect(JSON.stringify(body)).not.toContain("key=fixture"); expect(body.connectedEvents).toEqual(["approval.requested"]);
+    expect(JSON.stringify(body)).not.toContain("key=fixture"); expect(body.connectedEvents).toEqual(["approval.requested", "coding.mr_ready", "coding.ci_failed", "coding.artifact_ready", "budget.threshold_reached"]);
+    expect(saved[0].snapshot.renderVersion).toBe(2);
+    const toggle = await request.patch(`/api/companies/${company.id}/notifications/subscriptions/${subscription.id}`, { data: { enabled: false } });
+    expect(toggle.ok()).toBe(true);
+    expect((await toggle.json()).enabled).toBe(false);
   } finally { await db.$client.end({ timeout: 1 }); }
 });
 

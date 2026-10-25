@@ -1,14 +1,15 @@
+import { renderNotification, type NotificationEventType } from "./render.js";
 import { logger } from "../../middleware/logger.js";
 import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
-import { mimouseNotificationDeliveries as deliveries, mimouseNotificationEndpoints as endpoints, mimouseNotificationSubscriptions as subscriptions, signalDatabaseWork, subscribeDatabaseWork, type Db } from "@paperclipai/db";
+import { companies, mimouseNotificationDeliveries as deliveries, mimouseNotificationEndpoints as endpoints, mimouseNotificationSubscriptions as subscriptions, signalDatabaseWork, subscribeDatabaseWork, type Db } from "@paperclipai/db";
 import { secretService } from "../secrets.js";
 import { sendNotification, type NotificationSnapshot, type ChannelSecret, type DeliveryResult } from "./drivers.js";
 
 export const NOTIFICATION_TOPIC = "mimouse-notifications";
-export const CONNECTED_NOTIFICATION_EVENTS = ["approval.requested"] as const;
+export const CONNECTED_NOTIFICATION_EVENTS = ["approval.requested", "coding.mr_ready", "coding.ci_failed", "coding.artifact_ready", "budget.threshold_reached"] as const;
 type Transaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
-interface EventInput { companyId: string; eventId: string; type: string; resourceId: string; title: string; text: string }
+interface EventInput { companyId: string; eventId: string; type: string; resourceId: string; title?: string; text?: string }
 interface Snapshot extends NotificationSnapshot { secretRef: string; secretVersion: number; targetKey: string; locale: string; renderVersion: number }
 interface DeliveryRow { id: string; company_id: string; endpoint_id: string; subscription_id: string; snapshot: Snapshot; lease: string; attempt: number; created_at: Date }
 
@@ -19,15 +20,16 @@ export async function enqueueNotification(tx: Transaction, event: EventInput): P
     .innerJoin(endpoints, and(eq(endpoints.id, subscriptions.endpointId), eq(endpoints.companyId, subscriptions.companyId)))
     .where(and(eq(subscriptions.companyId, event.companyId), eq(subscriptions.eventType, event.type), eq(subscriptions.enabled, true), eq(endpoints.enabled, true)));
   if (!targets.length) return;
+  const [company] = await tx.select({ prefix: companies.issuePrefix }).from(companies).where(eq(companies.id, event.companyId));
+  if (!company) throw Error("notification_company_missing");
   await signalDatabaseWork(tx, NOTIFICATION_TOPIC);
   for (const { subscription, endpoint } of targets) {
-    const detailBase = process.env.PAPERCLIP_AUTH_PUBLIC_BASE_URL;
+    const rendered = renderNotification(event.type as NotificationEventType, event.resourceId, subscription.locale, company.prefix, process.env.PAPERCLIP_AUTH_PUBLIC_BASE_URL);
     const snapshot: Snapshot = {
       ...endpoint.config,
-      kind: endpoint.kind as NotificationSnapshot["kind"], title: event.title, text: event.text,
-      ...(detailBase ? { detailUrl: new URL(`/approvals/${event.resourceId}`, detailBase).href } : {}),
+      kind: endpoint.kind as NotificationSnapshot["kind"], ...rendered,
       secretRef: endpoint.secretRef, secretVersion: endpoint.secretVersion,
-      targetKey: endpoint.targetKey, locale: subscription.locale, renderVersion: 1,
+      targetKey: endpoint.targetKey, locale: subscription.locale, renderVersion: 2,
     };
     await tx.insert(deliveries).values({ companyId: event.companyId, eventId: event.eventId, subscriptionId: subscription.id, endpointId: endpoint.id, snapshot: snapshot as unknown as Record<string, unknown> }).onConflictDoNothing();
   }
@@ -110,7 +112,7 @@ export function notificationOutbox(db: Db, deps: {
 }
 
 export function startNotificationWorker(db: Db) {
-  if (process.env.PAPERCLIP_NOTIFICATIONS_ENABLED !== "true") return { stop: async () => {} };
+  if (process.env.PAPERCLIP_NOTIFICATIONS_ENABLED !== "true" || process.env.PAPERCLIP_NOTIFICATIONS_WORKER_ENABLED === "false") return { stop: async () => {} };
   const outbox = notificationOutbox(db); let running: Promise<unknown> | null = null; let stopped = false;
   const wake = () => { if (!stopped && !running) running = outbox.tick().catch(() => { logger.warn({ code: "notification_worker_tick_failed" }, "Notification worker will reconcile durable state"); }).finally(() => { running = null; }); };
   const unsubscribe = subscribeDatabaseWork(db, NOTIFICATION_TOPIC, event => { if (event === "settled") wake(); });

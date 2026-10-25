@@ -14,6 +14,7 @@ export default defineConfig({
     command: "node --import tsx src/index.ts", cwd: path.resolve(import.meta.dirname, "../../server"),
     url: "http://127.0.0.1:3100/api/health", reuseExistingServer: false, timeout: 120000,
     env: { ...process.env, PAPERCLIP_HOME: process.env.PAPERCLIP_MIMOUSE_TEST_HOME,
+      PAPERCLIP_NOTIFICATIONS_ENABLED: "true", PAPERCLIP_NOTIFICATIONS_WORKER_ENABLED: "false",
       PAPERCLIP_OPEN_ON_LISTEN: "false", PAPERCLIP_TELEMETRY_DISABLED: "1", DO_NOT_TRACK: "1",
       PAPERCLIP_BIND: "loopback", PAPERCLIP_DEPLOYMENT_MODE: "local_trusted", PAPERCLIP_UI_DEV_MIDDLEWARE: "false" },
   },

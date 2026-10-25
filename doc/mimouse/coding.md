@@ -14,7 +14,7 @@
 
 门禁同时要求：审阅 SHA、MR SHA、成功 pipeline SHA、全部成功测试证据 SHA 等于 headSha。旧提交成功不能用于新提交。上游 MR 发生新提交会使已有审阅失效。同步只保存必要的 MR/pipeline 字段，不存完整供应商响应、用户资料或变量。readyForReleaseCandidate 只是当次观测，生产发布始终未授权；发布前需重新同步，不能把缓存当作最新远端状态。
 
-测试证据当前由可信 board 提交，并非平台已自动执行，logRef 不能替代真实日志审阅。本地 fixture 确实执行失败测试、修复、再次测试与新 Git 提交，生成 SHA256 产物清单并校验符号链接不逃逸工作区；GitLab CI 回执为模拟。产物元数据包含平台、架构、签名状态，不把 unsigned 标为 signed。
+测试证据当前由可信 board 提交，并非平台已自动执行，logRef 不能替代真实日志审阅。本地 fixture 确实执行失败测试、修复、再次测试与新 Git 提交，生成 SHA256 产物清单并校验符号链接不逃逸工作区；GitLab CI 回执为模拟。产物元数据包含平台、架构、签名状态，不把 unsigned 标为 signed。新增 `POST .../coding/:id/artifacts` 在服务端核对工作区 HEAD 并读取实际文件生成清单；接口收到的构建标签不等于构建证明，因此 testStatus=not_run、signatureStatus=unknown，不允许客户端直接宣称签名已验证。清单写入和 artifact_ready 通知同事务；不上传文件。
 
 repairDecision 提供最多两轮、预算、时间和重复错误熔断策略，但尚未接入自动修复调度器；无自动定时 CI 轮询、跨平台 Runner 或产物服务上传。不得将纯策略测试描述成生产全自动交付。
 

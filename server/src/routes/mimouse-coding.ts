@@ -1,3 +1,5 @@
+import { artifactManifest } from "../services/mimouse-coding/artifacts.js";
+import { enqueueNotification } from "../services/mimouse-notifications/outbox.js";
 import { Router, type Request } from "express";
 import { z } from "zod";
 import { and, desc, eq } from "drizzle-orm";
@@ -13,6 +15,7 @@ const sha = z.string().regex(/^[a-f0-9]{40}$/);
 const createSchema = z.object({ issueId: z.string().uuid(), workspaceId: z.string().uuid(), gitlabOrigin: z.string().url(), projectId: z.number().int().positive(), secretRef: z.string().uuid(), baseSha: sha, headSha: sha, targetBranch: z.string().min(1).max(200) }).strict();
 const confirmSchema = z.object({ headSha: sha, confirm: z.literal(true), title: z.string().min(1).max(200).optional() }).strict();
 const evidenceSchema = z.object({ headSha: sha, checks: z.array(z.object({ commitSha: sha, command: z.string().min(1).max(2000), exitCode: z.number().int().nullable(), startedAt: z.string().datetime(), finishedAt: z.string().datetime(), logRef: z.string().min(1).max(2000), status: z.enum(["passed", "failed", "blocked", "not_run"]) }).strict()).max(100) }).strict();
+const artifactsSchema = z.object({ headSha: sha, version: z.string().min(1).max(100), artifacts: z.array(z.object({ path: z.string().min(1).max(1000), platform: z.enum(["windows", "macos", "linux"]), arch: z.enum(["x86_64", "arm64"]), buildJob: z.string().min(1).max(200) }).strict()).min(1).max(30) }).strict();
 export function mimouseCodingRoutes(db: Db) {
   const router = Router(); const service = codingService(db); const root = "/companies/:companyId/coding";
   function admin(req: Request) {
@@ -57,6 +60,21 @@ export function mimouseCodingRoutes(db: Db) {
     if (row.headSha !== input.headSha || input.checks.some(check => check.commitSha !== row.headSha)) throw unprocessable("Evidence must match the recorded commit");
     await db.update(deliveries).set({ evidence: input.checks, reviewedSha: null, reviewerUserId: null, updatedAt: new Date() }).where(and(eq(deliveries.id, row.id), eq(deliveries.headSha, input.headSha)));
     await audit(req, "coding.evidence.recorded", row.id); res.json({ recorded: true, reviewRequired: true });
+  });
+  router.post(`${root}/:id/artifacts`, validate(artifactsSchema), async (req, res) => {
+    const row = await load(req); const input = artifactsSchema.parse(req.body);
+    if (row.headSha !== input.headSha) throw unprocessable("Artifact SHA is stale");
+    const [workspace] = await db.select().from(executionWorkspaces).where(and(eq(executionWorkspaces.id, row.workspaceId), eq(executionWorkspaces.companyId, row.companyId)));
+    if (!workspace?.cwd || !workspace.repoUrl || workspace.status !== "active" || workspace.providerType !== "local_fs" || workspace.branchName !== row.sourceBranch) throw unprocessable("Active local workspace required");
+    await safe(() => verifyLocalCodingHead({ cwd: workspace.cwd!, repoUrl: workspace.repoUrl!, branchName: row.sourceBranch }, row.baseSha, row.headSha));
+    // These are local bytes, not a signed or independently verified build receipt.
+    const manifest = await safe(() => artifactManifest({ project: String(row.projectId), version: input.version, commitSha: row.headSha, root: workspace.cwd!, artifacts: input.artifacts.map(item => ({ ...item, signatureStatus: "unknown" as const, testStatus: "not_run" as const })) }));
+    await db.transaction(async tx => {
+      const changed = await tx.update(deliveries).set({ artifactManifest: manifest, updatedAt: new Date() }).where(and(eq(deliveries.id, row.id), eq(deliveries.headSha, input.headSha))).returning();
+      if (!changed.length) throw unprocessable("Delivery changed while hashing");
+      if (process.env.PAPERCLIP_NOTIFICATIONS_ENABLED === "true") await enqueueNotification(tx, { companyId: row.companyId, eventId: `coding-artifact:${row.id}:${row.headSha}`, type: "coding.artifact_ready", resourceId: row.id });
+    });
+    await audit(req, "coding.artifacts.recorded", row.id); res.json(manifest);
   });
   router.post(`${root}/:id/review`, validate(confirmSchema), async (req, res) => {
     const row = await load(req); const input = confirmSchema.parse(req.body); if (input.headSha !== row.headSha) throw unprocessable("Review SHA is stale");

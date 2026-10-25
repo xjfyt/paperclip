@@ -35,7 +35,7 @@ export function mimouseNotificationRoutes(db: Db) {
     const subscriptionRows = await db.select().from(subscriptions).where(eq(subscriptions.companyId, companyId));
     const deliveryRows = await db.select({ id: deliveries.id, eventId: deliveries.eventId, endpointId: deliveries.endpointId, state: deliveries.state, attempt: deliveries.attempt, lastCode: deliveries.lastCode, createdAt: deliveries.createdAt }).from(deliveries).where(eq(deliveries.companyId, companyId)).orderBy(desc(deliveries.createdAt)).limit(100);
     res.json({ enabled: process.env.PAPERCLIP_NOTIFICATIONS_ENABLED === "true", connectedEvents: CONNECTED_NOTIFICATION_EVENTS,
-      unconnectedEvents: ["run.failed", "coding.mr_ready", "coding.ci_failed", "coding.artifact_ready", "budget.threshold_reached"],
+      unconnectedEvents: ["run.failed"],
       verification: { implemented: true, contractTested: false, liveVerified: false, scenarioVerified: false },
       endpoints: channelRows.map(({ targetKey: _targetKey, ...row }) => row), subscriptions: subscriptionRows, deliveries: deliveryRows });
   });
@@ -67,6 +67,13 @@ export function mimouseNotificationRoutes(db: Db) {
     const [subscription] = await db.insert(subscriptions).values({ ...input, companyId }).onConflictDoUpdate({ target: [subscriptions.companyId, subscriptions.endpointId, subscriptions.eventType], set: { locale: input.locale, enabled: true } }).returning();
     const actor = getActorInfo(req); await logActivity(db, { companyId, actorType: actor.actorType, actorId: actor.actorId, action: "notification.subscribed", entityType: "notification_subscription", entityId: subscription.id, details: { eventType: input.eventType } });
     res.status(201).json(subscription);
+  });
+  router.patch(`${path}/subscriptions/:id`, validate(enabledSchema), async (req, res) => {
+    const companyId = String(req.params.companyId); companyAdmin(req, companyId);
+    const [subscription] = await db.update(subscriptions).set(enabledSchema.parse(req.body)).where(and(eq(subscriptions.companyId, companyId), eq(subscriptions.id, String(req.params.id)))).returning();
+    if (!subscription) throw notFound("Notification subscription not found");
+    const actor = getActorInfo(req); await logActivity(db, { companyId, actorType: actor.actorType, actorId: actor.actorId, action: "notification.subscription.toggled", entityType: "notification_subscription", entityId: subscription.id, details: { enabled: subscription.enabled } });
+    res.json({ id: subscription.id, enabled: subscription.enabled });
   });
   router.post(`${path}/endpoints/:id/test`, validate(testSchema), async (req, res) => {
     const companyId = String(req.params.companyId); companyAdmin(req, companyId); const input = testSchema.parse(req.body); const endpoint = await loadEndpoint(companyId, String(req.params.id));

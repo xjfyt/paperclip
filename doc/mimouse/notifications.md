@@ -4,7 +4,7 @@
 
 ## 开关与凭据
 
-`PAPERCLIP_NOTIFICATIONS_ENABLED=true` 启用 worker 与业务事件钩子，默认关闭。部署前先备份数据库并应用标准迁移。凭据使用已有公司秘密存储，值为 JSON；配置中填写秘密 ID 和固定版本。
+`PAPERCLIP_NOTIFICATIONS_ENABLED=true` 启用 worker 与业务事件钩子，默认关闭。`PAPERCLIP_NOTIFICATIONS_WORKER_ENABLED=false` 可暂停外部派发并继续事务入队，便于维护与无外发测试；恢复前先检查积压。部署前先备份数据库并应用标准迁移。凭据使用已有公司秘密存储，值为 JSON；配置中填写秘密 ID 和固定版本。
 
 - 企业微信/飞书/钉钉旧 Webhook：`url`，需要签名时增加 `signingSecret`。飞书与 Lark 使用各自域名；API 的 brand=lark 受支持，当前设置页仍只有飞书入口。
 - 钉钉应用机器人：JSON 的 `accessToken`，渠道配置 robotCode/target。
@@ -14,7 +14,7 @@
 
 ## 事件与投递语义
 
-当前只接入 `approval.requested`，与 approval 插入在同一事务。run.failed、三类 coding 事件、budget.threshold_reached 均显示未接入，不能订阅为已生效。仅发送资源摘要/引用，不发送完整业务 payload、代码或日志；不默认 @all。
+当前接入五类：`approval.requested`、`coding.mr_ready`、`coding.ci_failed`、`coding.artifact_ready`、`budget.threshold_reached`。审批、预算会计事务、编码远端回执或产物清单持久化与对应入队同事务提交。重复同步由事件唯一键去重。`run.failed` 尚未覆盖所有原生/旧运行终结路径，明确显示未接入，不能订阅为已生效。四语按订阅语言生成最小文案和公司前缀详情链接，renderVersion=2；已有投递保持原快照。仅发送资源摘要/引用，不发送完整业务 payload、代码或日志；不默认 @all。
 
 唯一键 company/event/subscription 防重复入队。数据库原子领取和 lease UUID 防迟到回写。过期 claimed 可以重领；过期 sending 变为 indeterminate，不自动重发。平台 accepted 不等于已读，也不代表业务审批完成。测试发送使用显式确认和稳定 requestId；结果未知时先核对外部平台，不重复点击创建新测试。
 
@@ -24,4 +24,4 @@
 
 五驱动有协议单测（签名输入、字节长度、业务码、模板字段、未知结果）；真实 HTTP/PostgreSQL 集成覆盖回滚、幂等、双 worker 竞争、过期领取、sending 恢复、迟到回执与跨公司外键。真实群、公众号权限和 token 刷新均未验收。设置页四语已构建与类型检查；云权限阻止 Chromium，浏览器测试未通过。
 
-尚未完成：全部六类事件接线、通知文案按订阅语言渲染、管理员对未知投递的对账/显式重试界面、完整订阅停用界面和配置修订 UX。此文不是完整通知能力验收报告。回滚先关闭开关和 worker，保留台账，再回退应用；不删新表清除未知状态。
+尚未完成：run.failed 全路径事务接线、管理员对未知投递的对账/显式重试界面、订阅停用界面（API 已有）和配置修订 UX。此文不是完整通知能力验收报告。回滚先关闭开关和 worker，保留台账，再回退应用；不删新表清除未知状态。
