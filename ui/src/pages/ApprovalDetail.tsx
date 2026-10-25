@@ -145,7 +145,7 @@ export function ApprovalDetail() {
   });
 
   if (isLoading) return <PageSkeleton variant="detail" />;
-  if (!approval) return <p className="text-sm text-muted-foreground">Approval not found.</p>;
+  if (!approval) return <p className="text-sm text-muted-foreground">{mimouseT("workflow.approvalNotFound")}</p>;
 
   const payload = approval.payload as Record<string, unknown>;
   const linkedAgentId = typeof payload.agentId === "string" ? payload.agentId : null;
@@ -184,10 +184,8 @@ export function ApprovalDetail() {
                 <Sparkles className="h-3 w-3 text-green-500 dark:text-green-200 absolute -right-2 -top-1 animate-pulse" />
               </div>
               <div>
-                <p className="text-sm text-green-800 dark:text-green-100 font-medium">Approval confirmed</p>
-                <p className="text-xs text-green-700 dark:text-green-200/90">
-                  Requesting agent was notified to review this approval and linked tasks.
-                </p>
+                <p className="text-sm text-green-800 dark:text-green-100 font-medium">{mimouseT("workflow.approvalConfirmed")}</p>
+                <p className="text-xs text-green-700 dark:text-green-200/90">{mimouseT("workflowHelp.approvalNotified")}</p>
               </div>
             </div>
             <Button
@@ -228,22 +226,20 @@ export function ApprovalDetail() {
             className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors mt-2"
             onClick={() => setShowRawPayload((v) => !v)}
           >
-            <ChevronRight className={`h-3 w-3 transition-transform ${showRawPayload ? "rotate-90" : ""}`} />
-            See full request
-          </button>
+            <ChevronRight className={`h-3 w-3 transition-transform ${showRawPayload ? "rotate-90" : ""}`} />{mimouseT("workflow.seeRequest")}</button>
           {showRawPayload && (
             <pre className="text-xs bg-muted/40 rounded-md p-3 overflow-x-auto">
               {JSON.stringify(payload, null, 2)}
             </pre>
           )}
           {approval.decisionNote && (
-            <p className="text-xs text-muted-foreground">Decision note: {approval.decisionNote}</p>
+            <p className="text-xs text-muted-foreground">{mimouseT("workflowHelp.decisionNote")} {approval.decisionNote}</p>
           )}
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
         {linkedIssues && linkedIssues.length > 0 && (
           <div className="pt-2 border-t border-border/60">
-            <p className="text-xs text-muted-foreground mb-1.5">Linked Tasks</p>
+            <p className="text-xs text-muted-foreground mb-1.5">{mimouseT("workflow.linkedTasks")}</p>
             <div className="space-y-1.5">
               {linkedIssues.map((issue) => (
                 <Link
@@ -258,9 +254,7 @@ export function ApprovalDetail() {
                 </Link>
               ))}
             </div>
-            <p className="text-(length:--text-micro) text-muted-foreground mt-2">
-              Linked tasks remain open until the requesting agent follows up and closes them.
-            </p>
+            <p className="text-(length:--text-micro) text-muted-foreground mt-2">{mimouseT("workflowHelp.linkedTasksOpen")}</p>
           </div>
         )}
         <div className="flex flex-wrap items-center gap-2">
@@ -299,9 +293,7 @@ export function ApprovalDetail() {
               variant="outline"
               onClick={() => resubmitMutation.mutate()}
               disabled={resubmitMutation.isPending}
-            >
-              Mark resubmitted
-            </Button>
+            >{mimouseT("workflow.resubmit")}</Button>
           )}
           {approval.status === "rejected" && approval.type === "hire_agent" && linkedAgentId && (
             <Button
@@ -313,9 +305,7 @@ export function ApprovalDetail() {
                 deleteAgentMutation.mutate(linkedAgentId);
               }}
               disabled={deleteAgentMutation.isPending}
-            >
-              Delete disapproved agent
-            </Button>
+            >{mimouseT("workflow.deleteDisapproved")}</Button>
           )}
         </div>
       </div>

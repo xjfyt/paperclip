@@ -78,7 +78,7 @@ export function Approvals() {
   ).length;
 
   if (!selectedCompanyId) {
-    return <p className="text-sm text-muted-foreground">Select an organization first.</p>;
+    return <p className="text-sm text-muted-foreground">{mimouseT("workflow.selectOrganizationFirst")}</p>;
   }
 
   if (isLoading) {

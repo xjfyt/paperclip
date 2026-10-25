@@ -777,9 +777,7 @@ export function RoutineDetail() {
       <a
         href="#routine-section"
         className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-20 focus:rounded focus:bg-background focus:px-3 focus:py-1.5 focus:text-sm"
-      >
-        Skip to section
-      </a>
+      >{mimouseT("workflow.skipSection")}</a>
 
       {/* The global shell owns routine navigation. This surface keeps one
           content scroll owner and a compact action header. */}
@@ -841,18 +839,14 @@ export function RoutineDetail() {
                 variant="ghost"
                 size="sm"
                 onClick={() => navigate(routineDetailHref(routine.id))}
-              >
-                Back to overview
-              </Button>
+              >{mimouseT("workflow.backOverview")}</Button>
             ) : (
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => navigate(routineDetailHref(routine.id, "history"))}
               >
-                <History className="h-3.5 w-3.5" />
-                History
-              </Button>
+                <History className="h-3.5 w-3.5" />{mimouseT("workflow.history")}</Button>
             )}
             {section === "overview" ? (
               overviewEditing ? (
@@ -864,14 +858,10 @@ export function RoutineDetail() {
                     setOverviewEditing(false);
                   }}
                 >
-                  <X className="h-3.5 w-3.5" />
-                  Cancel editing
-                </Button>
+                  <X className="h-3.5 w-3.5" />{mimouseT("workflow.cancelEditing")}</Button>
               ) : (
                 <Button variant="outline" size="sm" onClick={() => setOverviewEditing(true)}>
-                  <Pencil className="h-3.5 w-3.5" />
-                  Edit routine
-                </Button>
+                  <Pencil className="h-3.5 w-3.5" />{mimouseT("workflow.editRoutine")}</Button>
               )
             ) : null}
             <RunButton onClick={() => setRunVariablesOpen(true)} disabled={runRoutine.isPending} />

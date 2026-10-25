@@ -82,8 +82,7 @@ export function ApprovalCard({
                 <h3 className="text-base font-semibold leading-6 text-foreground">
                   {subject ?? kindLabel}
                 </h3>
-                <p className="text-xs leading-5 text-muted-foreground">
-                  Approval request created {timeAgo(approval.createdAt)}
+                <p className="text-xs leading-5 text-muted-foreground">{mimouseT("workflow.approvalCreated")}{timeAgo(approval.createdAt)}
                 </p>
               </div>
             </div>
@@ -107,7 +106,7 @@ export function ApprovalCard({
 
       {approval.decisionNote && (
         <div className="mt-4 rounded-lg border border-border/60 bg-muted/30 px-3.5 py-3 text-xs leading-5 text-muted-foreground">
-          <span className="font-medium text-foreground">Decision note.</span> {approval.decisionNote}
+          <span className="font-medium text-foreground">{mimouseT("workflowHelp.decisionNotePlaceholder")}</span> {approval.decisionNote}
         </div>
       )}
 
@@ -140,13 +139,9 @@ export function ApprovalCard({
               <Link
                 to={detailLink}
                 className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "h-auto px-2 text-xs text-muted-foreground")}
-              >
-                View details
-              </Link>
+              >{mimouseT("workflow.viewDetails")}</Link>
             ) : (
-              <Button variant="ghost" size="sm" className="h-auto px-2 text-xs text-muted-foreground" onClick={onOpen}>
-                View details
-              </Button>
+              <Button variant="ghost" size="sm" className="h-auto px-2 text-xs text-muted-foreground" onClick={onOpen}>{mimouseT("workflow.viewDetails")}</Button>
             )
           ) : null}
         </div>

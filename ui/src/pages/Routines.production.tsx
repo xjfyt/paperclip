@@ -810,14 +810,10 @@ export function Routines() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">{mimouseT("commonUi.routines")}</h1>
-          <p className="text-sm text-muted-foreground">
-            Recurring work definitions that materialize into auditable execution tasks.
-          </p>
+          <p className="text-sm text-muted-foreground">{mimouseT("workflowHelp.routinesHelp")}</p>
         </div>
         <Button onClick={openCreateRoutine}>
-          <Plus className="mr-2 h-4 w-4" />
-          Create routine
-        </Button>
+          <Plus className="mr-2 h-4 w-4" />{mimouseT("workflow.createRoutine")}</Button>
       </div>
 
       <Tabs value={activeTab} onValueChange={handleTabChange}>
@@ -910,9 +906,7 @@ export function Routines() {
               </Popover>
               {routineViewState.groupBy === "folder" && !hasRoutineFolders ? (
                 <Button variant="outline" size="sm" onClick={() => openCreateFolder()}>
-                  <Plus className="mr-2 h-3.5 w-3.5" />
-                  New folder
-                </Button>
+                  <Plus className="mr-2 h-3.5 w-3.5" />{mimouseT("workflow.newFolder")}</Button>
               ) : null}
               {showFolderRail ? (
                 <Button variant="ghost" size="sm" className="text-xs" onClick={() => setSelectMode((current) => !current)}>
@@ -962,9 +956,7 @@ export function Routines() {
           <div className="shrink-0 flex flex-wrap items-center justify-between gap-3 border-b border-border/60 px-5 py-3">
             <div>
               <p className="text-xs font-medium uppercase tracking-(--tracking-caps) text-muted-foreground">{mimouseT("commonUi.newRoutine")}</p>
-              <p className="text-sm text-muted-foreground">
-                Define the recurring work first. Default project and agent are optional for draft routines.
-              </p>
+              <p className="text-sm text-muted-foreground">{mimouseT("workflowHelp.routineDraft")}</p>
             </div>
             <Button
               variant="ghost"
@@ -1024,7 +1016,7 @@ export function Routines() {
                     placeholder={mimouseT("commonUi.responsible")}
                     noneLabel="No responsible"
                     searchPlaceholder="Search responsible..."
-                    emptyMessage="No responsible found."
+                    emptyMessage={mimouseT("workflow.noResponsibleFound")}
                     onChange={(assigneeAgentId) => {
                       if (assigneeAgentId) trackRecentAssignee(assigneeAgentId);
                       setDraft((current) => ({ ...current, assigneeAgentId }));
@@ -1070,7 +1062,7 @@ export function Routines() {
                     placeholder={mimouseT("commonUi.project")}
                     noneLabel="No project"
                     searchPlaceholder="Search projects..."
-                    emptyMessage="No projects found."
+                    emptyMessage={mimouseT("workflow.noProjects")}
                     onChange={(projectId) => {
                       if (projectId) trackRecentProject(projectId);
                       setDraft((current) => ({ ...current, projectId }));
@@ -1149,7 +1141,7 @@ export function Routines() {
                 <CollapsibleTrigger className="flex w-full items-center justify-between text-left">
                   <div>
                     <p className="text-sm font-medium">{mimouseT("commonUi.advancedDelivery")}</p>
-                    <p className="text-sm text-muted-foreground">Keep policy controls secondary to the work definition.</p>
+                    <p className="text-sm text-muted-foreground">{mimouseT("workflowHelp.policySecondary")}</p>
                   </div>
                   {advancedOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                 </CollapsibleTrigger>
@@ -1173,7 +1165,7 @@ export function Routines() {
                       <p className="text-xs text-muted-foreground">{concurrencyPolicyDescriptions[draft.concurrencyPolicy]}</p>
                     </div>
                     <div className="space-y-2">
-                      <p className="text-xs font-medium uppercase tracking-(--tracking-caps) text-muted-foreground">Catch-up</p>
+                      <p className="text-xs font-medium uppercase tracking-(--tracking-caps) text-muted-foreground">{mimouseT("workflow.catchUp")}</p>
                       <Select
                         value={draft.catchUpPolicy}
                         onValueChange={(catchUpPolicy) => setDraft((current) => ({ ...current, catchUpPolicy }))}
@@ -1196,9 +1188,7 @@ export function Routines() {
           </div>
 
           <div className="shrink-0 flex flex-col gap-3 border-t border-border/60 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="text-sm text-muted-foreground">
-              After creation, Paperclip takes you straight to trigger setup. Draft routines stay paused until you add a default agent.
-            </div>
+            <div className="text-sm text-muted-foreground">{mimouseT("workflowHelp.routineTriggerHelp")}</div>
             <div className="flex flex-col gap-2 sm:items-end">
               <Button
                 onClick={() => createRoutine.mutate()}
@@ -1250,7 +1240,7 @@ export function Routines() {
           <div className="min-w-0 flex-1">
           {routineViewState.groupBy === "folder" && hasRoutineFolders ? (
             <div className="mb-3 flex flex-wrap items-center gap-2">
-              {folderSelection === "all" ? <FolderIconHeader label="All routines" count={sortedRoutines.length} /> : (
+              {folderSelection === "all" ? <FolderIconHeader label={mimouseT("workflow.allRoutines")} count={sortedRoutines.length} /> : (
                 <div className="flex min-w-0 items-center gap-2 text-sm">
                   <FolderSwatch color={activeFolder?.color} />
                   <span className="truncate font-medium">{folderSelection === "unfiled" ? mimouseT("commonUi.unfiled") : activeFolder?.name ?? "Folder"}</span>
@@ -1295,9 +1285,7 @@ export function Routines() {
               {folderSelection !== "all" ? (
                 <div className="mt-3 flex justify-center">
                   <Button size="sm" onClick={openCreateRoutine}>
-                    <Plus className="mr-2 h-3.5 w-3.5" />
-                    New routine in this folder
-                  </Button>
+                    <Plus className="mr-2 h-3.5 w-3.5" />{mimouseT("workflow.newRoutineFolder")}</Button>
                 </div>
               ) : null}
             </div>
