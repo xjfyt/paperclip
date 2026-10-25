@@ -143,25 +143,25 @@ function FinanceSummaryCard({
         <MetricTile
           label={mimouseT("workflowHelp.debits")}
           value={formatCents(debitCents)}
-          subtitle={`${eventCount} total event${eventCount === 1 ? "" : "s"} in range`}
+          subtitle={mimouseT("costOps.eventCount", { count: eventCount })}
           icon={ArrowUpRight}
         />
         <MetricTile
           label={mimouseT("workflowHelp.credits")}
           value={formatCents(creditCents)}
-          subtitle="Refunds, offsets, and credit returns"
+          subtitle={mimouseT("costOps.refunds")}
           icon={ArrowDownLeft}
         />
         <MetricTile
           label={mimouseT("workflowHelp.net")}
           value={formatCents(netCents)}
-          subtitle="Debit minus credit for the selected period"
+          subtitle={mimouseT("costOps.netHelp")}
           icon={ReceiptText}
         />
         <MetricTile
           label={mimouseT("workflow.estimated")}
           value={formatCents(estimatedDebitCents)}
-          subtitle="Estimated debits that are not yet invoice-authoritative"
+          subtitle={mimouseT("costOps.estimatedHelp")}
           icon={Coins}
         />
       </CardContent>
@@ -591,7 +591,7 @@ export function Costs({
   }), [budgetPolicies]);
 
   if (!selectedCompanyId) {
-    return <EmptyState icon={DollarSign} message="Select an organization to view costs." />;
+    return <EmptyState icon={DollarSign} message={mimouseT("costOps.selectOrg")} />;
   }
 
   const showCustomPrompt = preset === "custom" && !customReady;
@@ -629,13 +629,15 @@ export function Costs({
             <div className="flex flex-wrap items-center gap-2 border border-border p-3">
               <input
                 type="date"
+                aria-label={mimouseT("costOps.fromDate")}
                 value={customFrom}
                 onChange={(event) => setCustomFrom(event.target.value)}
                 className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground"
               />
-              <span className="text-sm text-muted-foreground">to</span>
+              <span className="text-sm text-muted-foreground">{mimouseT("costOps.to")}</span>
               <input
                 type="date"
+                aria-label={mimouseT("costOps.toDate")}
                 value={customTo}
                 onChange={(event) => setCustomTo(event.target.value)}
                 className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground"
@@ -653,7 +655,7 @@ export function Costs({
               subtitle={subscriptions ? <div className="space-y-1">
                 <CostEstimateLabel eventCount={subscriptions.api.eventCount} estimatedEventCount={subscriptions.api.estimatedEventCount} />
                 <div><SubscriptionTokenUsage usage={subscriptions.api} /></div>
-              </div> : subscriptionError ? "API usage is unavailable" : "API usage is loading"}
+              </div> : subscriptionError ? mimouseT("costOps.apiUnavailable") : mimouseT("costOps.apiLoading")}
               icon={DollarSign}
             />
             <SubscriptionCostCard key={companyId} companyId={companyId} report={subscriptions} error={subscriptionError} onChanged={invalidateSubscriptions} />
@@ -662,14 +664,14 @@ export function Costs({
               value={activeBudgetIncidents.length > 0 ? String(activeBudgetIncidents.length) : (
                 spendData?.summary.budgetCents && spendData.summary.budgetCents > 0
                   ? preset === "mtd" ? `${spendData.summary.utilizationPercent}%` : formatCents(spendData.summary.budgetCents)
-                  : "Open"
+                  : mimouseT("costOps.open")
               )}
               subtitle={
                 activeBudgetIncidents.length > 0
-                  ? `${budgetData?.pausedAgentCount ?? 0} agents paused · ${budgetData?.pausedProjectCount ?? 0} projects paused`
+                  ? mimouseT("costOps.paused", { agents: budgetData?.pausedAgentCount ?? 0, projects: budgetData?.pausedProjectCount ?? 0 })
                   : spendData?.summary.budgetCents && spendData.summary.budgetCents > 0
-                    ? preset === "mtd" ? `${formatCents(spendData.summary.spendCents)} of ${formatCents(spendData.summary.budgetCents)} this month` : "Monthly limit"
-                    : "No monthly cap configured"
+                    ? preset === "mtd" ? mimouseT("costOps.monthSpend", { spend: formatCents(spendData.summary.spendCents), budget: formatCents(spendData.summary.budgetCents) }) : mimouseT("costOps.monthlyLimit")
+                    : mimouseT("costOps.noMonthlyCap")
               }
               icon={Coins}
             />
@@ -681,13 +683,13 @@ export function Costs({
                   <span className="block whitespace-nowrap">{formatCents(financeData.summary.debitCents)} debits</span>
                   <span className="block whitespace-nowrap">{formatCents(financeData.summary.creditCents)} credits</span>
                 </>
-              ) : "Financial data unavailable"}
+              ) : mimouseT("costOps.financeUnavailable")}
               icon={ReceiptText}
             />
             <MetricTile
               label={mimouseT("workflow.financeEvents")}
               value={financeData ? String(financeData.summary.eventCount) : "—"}
-              subtitle={financeData ? `${formatCents(financeData.summary.estimatedDebitCents)} estimated in range` : "Financial data unavailable"}
+              subtitle={financeData ? mimouseT("costOps.estimatedRange", { amount: formatCents(financeData.summary.estimatedDebitCents) }) : mimouseT("costOps.financeUnavailable")}
               icon={ArrowUpRight}
             />
           </div>
@@ -757,7 +759,7 @@ export function Costs({
                           const isExpanded = expandedAgents.has(row.agentId);
                           const hasBreakdown = modelRows.length > 0;
                           return (
-                            <div key={row.agentId ?? "services"} role="group" aria-label={`${row.agentName ?? row.agentId ?? "Paperclip services"} costs`} className="border border-border px-4 py-3">
+                            <div key={row.agentId ?? "services"} role="group" aria-label={mimouseT("costOps.agentCosts", { name: row.agentName ?? row.agentId ?? mimouseT("costOps.services") })} className="border border-border px-4 py-3">
                               <div
                                 className={cn("flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between", hasBreakdown ? "cursor-pointer select-none" : "")}
                                 onClick={() => hasBreakdown && toggleAgent(row.agentId)}
@@ -780,12 +782,7 @@ export function Costs({
                                   </div>
                                   {(row.apiRunCount > 0 || row.subscriptionRunCount > 0) ? (
                                     <div className="text-xs text-muted-foreground">
-                                      {"runs: "}
-                                      {row.apiRunCount > 0 ? `${row.apiRunCount} api` : "0 api"}
-                                      {" · "}
-                                      {row.subscriptionRunCount > 0
-                                        ? `${row.subscriptionRunCount} sub`
-                                        : "0 sub"}
+                                      {mimouseT("costOps.runs", { api: row.apiRunCount, subscription: row.subscriptionRunCount })}
                                     </div>
                                   ) : null}
                                 </div>
@@ -834,7 +831,7 @@ export function Costs({
                   </Card>
                   {userSpendError && (
                     <p role="status" className="text-sm text-muted-foreground">
-                      {userSpendData ? "User costs could not be refreshed. Showing the last loaded data." : "User costs could not be loaded. Please try again shortly."}
+                      {userSpendData ? mimouseT("costOps.userStale") : mimouseT("costOps.userFailed")}
                     </p>
                   )}
                   {userSpendData && <CostByUserTable report={userSpendData} />}
@@ -894,7 +891,7 @@ export function Costs({
                 />
               ) : (
                 <p role="status" className="text-sm text-muted-foreground">
-                  {financeLoading ? "Loading financial events…" : "Financial events could not be loaded. Please try again shortly."}
+                  {financeLoading ? mimouseT("costOps.financeLoading") : mimouseT("costOps.financeFailed")}
                 </p>
               )}
             </>
@@ -916,25 +913,25 @@ export function Costs({
                   <MetricTile
                     label={mimouseT("commonUi.activeIncidents")}
                     value={String(activeBudgetIncidents.length)}
-                    subtitle="Open soft or hard threshold crossings"
+                    subtitle={mimouseT("costOps.thresholds")}
                     icon={ReceiptText}
                   />
                   <MetricTile
                     label={mimouseT("workflow.pendingApprovals")}
                     value={String(budgetData?.pendingApprovalCount ?? 0)}
-                    subtitle="Budget override approvals awaiting board action"
+                    subtitle={mimouseT("costOps.awaitingBoard")}
                     icon={ArrowUpRight}
                   />
                   <MetricTile
                     label={mimouseT("workflow.pausedAgents")}
                     value={String(budgetData?.pausedAgentCount ?? 0)}
-                    subtitle="Agent heartbeats blocked by budget"
+                    subtitle={mimouseT("costOps.blockedAgents")}
                     icon={Coins}
                   />
                   <MetricTile
                     label={mimouseT("workflow.pausedProjects")}
                     value={String(budgetData?.pausedProjectCount ?? 0)}
-                    subtitle="Project execution blocked by budget"
+                    subtitle={mimouseT("costOps.blockedProjects")}
                     icon={DollarSign}
                   />
                 </CardContent>
@@ -972,13 +969,13 @@ export function Costs({
                   return (
                     <section key={scopeType} className="space-y-3">
                       <div>
-                        <h2 className="text-lg font-semibold capitalize">{scopeType === "company" ? "organization" : scopeType} budgets</h2>
+                        <h2 className="text-lg font-semibold capitalize">{mimouseT(`costOps.${scopeType}Budgets`)}</h2>
                         <p className="text-sm text-muted-foreground">
                           {scopeType === "company"
-                            ? "Organization-wide monthly policy."
+                            ? mimouseT("costOps.companyPolicy")
                             : scopeType === "agent"
-                              ? "Recurring monthly spend policies for individual agents."
-                              : "Lifetime spend policies for execution-bound projects."}
+                              ? mimouseT("costOps.agentPolicy")
+                              : mimouseT("costOps.projectPolicy")}
                         </p>
                       </div>
                       <div className="grid gap-4 xl:grid-cols-2">
@@ -1125,7 +1122,7 @@ export function Costs({
         </TabsContent>
 
         <TabsContent value="finance" className="mt-4 space-y-4">
-          {financeData?.summary.providerReportedCentsExact !== undefined && <p className="text-sm text-muted-foreground">Provider API cost reports: {formatCents(financeData.summary.providerReportedCents ?? 0)}. Report totals overlap invoices and run estimates and are shown separately from recorded charges.</p>}
+          {financeData?.summary.providerReportedCentsExact !== undefined && <p className="text-sm text-muted-foreground">{mimouseT("costOps.providerReports", { amount: formatCents(financeData.summary.providerReportedCents ?? 0) })}</p>}
 
           {showCustomPrompt ? (
             <p className="text-sm text-muted-foreground">{mimouseT("workflowHelp.selectDateRange")}</p>

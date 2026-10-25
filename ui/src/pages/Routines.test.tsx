@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { i18n } from "@/i18n";
 import type { AnchorHTMLAttributes, ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -1062,4 +1063,23 @@ describe("Routines page", () => {
       root.unmount();
     });
   });
+});
+
+
+it.each([["en", "Unknown folder"], ["zh-CN", "未知文件夹"], ["es", "Carpeta desconocida"], ["ja", "不明なフォルダー"]])("localizes routine system fallbacks in %s without translating folder names", async (locale, expected) => {
+  await i18n.changeLanguage(locale);
+  try {
+    const input = [createRoutine({ id: "r1", folderId: "missing" }), createRoutine({ id: "r2", folderId: "custom" })];
+    const groups = buildRoutineGroups(input, "folder", new Map(), new Map(), new Map([["custom", { name: "Customer folder" }]]));
+    expect(groups.find(group => group.key === "missing")?.label).toBe(expected);
+    expect(groups.find(group => group.key === "custom")?.label).toBe("Customer folder");
+    expect(groups.flatMap(group => group.items).map(item => item.id).sort()).toEqual(["r1", "r2"]);
+  } finally { await i18n.changeLanguage("en"); }
+});
+it("uses grammatical singular/plural counts while preserving automation policy codes", async () => {
+  await i18n.changeLanguage("en");
+  expect(i18n.t("routineOps.count", { count: 1 })).toBe("1 routine");
+  expect(i18n.t("routineOps.count", { count: 2 })).toBe("2 routines");
+  await i18n.changeLanguage("zh-CN");
+  try { expect(i18n.t("routineOps.policy_coalesce_if_active")).toBe("运行中合并后续触发"); } finally { await i18n.changeLanguage("en"); }
 });

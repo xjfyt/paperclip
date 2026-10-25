@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { i18n } from "@/i18n";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -84,10 +85,11 @@ describe("Shared Costs surfaces", () => {
     });
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     act(() => root?.unmount());
     container.remove();
     vi.clearAllMocks();
+    await i18n.changeLanguage("en");
   });
 
   it.each([0, 125])("shows $%s of known user spend while retaining an unpriced warning", async (costCents) => {
@@ -479,6 +481,19 @@ describe("Shared Costs surfaces", () => {
     expect([...container.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent)).toEqual(
       streamlined ? ["Overview", "Providers", "Billers", "Finance", "Decisions", "Fast responses"] : ["Overview", "Budgets", "Providers", "Billers", "Finance", "Decisions", "Fast responses"],
     );
+  });
+
+  it.each([["en", "No monthly cap configured"], ["zh-CN", "未配置月度上限"], ["es", "Sin límite mensual configurado"], ["ja", "月間上限が未設定です"]])("localizes budget overview explanations in %s without changing amounts", async (locale, expected) => {
+    await i18n.changeLanguage(locale);
+    for (const mock of Object.values(costsApiMocks)) mock.mockResolvedValue([]);
+    costsApiMocks.byUser.mockResolvedValue({ activeUserCount: 0, rows: [] });
+    const summary = { spendCents: 125, budgetCents: 0, pricingComplete: true };
+    costsApiMocks.summary.mockResolvedValue(summary);
+    costsApiMocks.financeSummary.mockResolvedValue({ netCents: 125, debitCents: 125, creditCents: 0, estimatedDebitCents: 0, eventCount: 1 });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } }); root = createRoot(container);
+    await act(async () => root.render(<MemoryRouter><QueryClientProvider client={queryClient}><Costs /></QueryClientProvider></MemoryRouter>));
+    await act(async () => vi.waitFor(() => expect(container.textContent).toContain(expected)));
+    expect(summary).toEqual({ spendCents: 125, budgetCents: 0, pricingComplete: true });
   });
 
 });
