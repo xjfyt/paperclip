@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { systemLabel, useSystemLabels } from "@/i18n/system-labels";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -79,7 +80,7 @@ export function AgentContextualSidebar({
       className="border-r border-border bg-background"
     >
       <nav
-        aria-label={`${resolvedName} navigation`}
+        aria-label={t("browserQa.navigation", { name: resolvedName })}
         data-slot="contextual-sidebar-nav"
         className={contextualSidebarStyles.nav}
       >

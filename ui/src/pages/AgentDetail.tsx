@@ -553,15 +553,15 @@ function parseStoredLogContent(content: string): RunLogChunk[] {
 function workspaceOperationPhaseLabel(phase: WorkspaceOperation["phase"]) {
   switch (phase) {
     case "worktree_prepare":
-      return "Worktree setup";
+      return systemLabel("Worktree setup");
     case "workspace_config_freshness":
-      return "Config freshness";
+      return systemLabel("Config freshness");
     case "workspace_provision":
-      return "Provision";
+      return systemLabel("Provision");
     case "workspace_teardown":
-      return "Teardown";
+      return systemLabel("Teardown");
     case "worktree_cleanup":
-      return "Worktree cleanup";
+      return systemLabel("Worktree cleanup");
     default:
       return phase;
   }
@@ -623,7 +623,7 @@ function WorkspaceOperationLogViewer({
         className="text-(length:--text-micro) text-muted-foreground underline underline-offset-2 hover:text-foreground"
         onClick={() => setOpen((value) => !value)}
       >
-        {open ? "Hide full log" : "Show full log"}
+        {open ? systemLabel("Hide full log") : systemLabel("Show full log")}
       </button>
       {open && (
         <div className="rounded-md border border-border bg-background/70 p-2">
@@ -679,7 +679,7 @@ function WorkspaceOperationsSection({
   return (
     <div className="rounded-lg border border-border bg-background/60 p-3 space-y-3">
       <div className="text-xs font-medium text-muted-foreground">
-        Workspace ({operations.length})
+        {mimouseT("browserQa.workspaceCount", { count: operations.length })}
       </div>
       <div className="space-y-3">
         {operations.map((operation) => {
@@ -691,7 +691,7 @@ function WorkspaceOperationsSection({
                 <WorkspaceOperationStatusBadge status={operation.status} />
                 <div className="text-(length:--text-micro) text-muted-foreground">
                   {relativeTime(operation.startedAt)}
-                  {operation.finishedAt && ` to ${relativeTime(operation.finishedAt)}`}
+                  {operation.finishedAt && mimouseT("browserQa.endingAt", { time: relativeTime(operation.finishedAt) })}
                 </div>
               </div>
               {operation.command && (
@@ -1059,13 +1059,13 @@ export function AgentDetail() {
     } else {
       crumbs.push({ label: agentName, href: agentDetailHref(canonicalAgentRef) });
       if (urlRunId) {
-        crumbs.push({ label: "Runs", href: agent?.id ? agentScopedAuditHref(agent.id, "runs") : undefined });
-        crumbs.push({ label: `Run ${urlRunId.slice(0, 8)}` });
+        crumbs.push({ label: systemLabel("Runs"), href: agent?.id ? agentScopedAuditHref(agent.id, "runs") : undefined });
+        crumbs.push({ label: mimouseT("browserQa.runId", { id: urlRunId.slice(0, 8) }) });
       } else {
         const item = AGENT_DETAIL_NAVIGATION
           .flatMap((section) => section.items)
           .find((candidate) => candidate.value === activeView);
-        crumbs.push({ label: item?.label ?? mimouseT("commonUi.overview") });
+        crumbs.push({ label: item?.label ? systemLabel(item.label) : mimouseT("commonUi.overview") });
       }
     }
     setBreadcrumbs(crumbs);
@@ -1656,7 +1656,7 @@ function LatestRunCard({
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
               </span>
             )}
-            <span>{isLive ? "Live Run" : "Latest Run"}</span>
+            <span>{isLive ? systemLabel("Live Run") : systemLabel("Latest Run")}</span>
             <span className="font-mono text-xs font-normal text-muted-foreground">
               &middot; {run.id.slice(0, 8)}
             </span>
@@ -1739,7 +1739,7 @@ export function AgentOverview({
   const configuredModel = asNonEmptyString(agent.adapterConfig?.model)
     ?? asNonEmptyString(agent.adapterConfig?.modelName)
     ?? asNonEmptyString(agent.runtimeConfig?.model)
-    ?? "Adapter default";
+    ?? systemLabel("Adapter default");
   const lastRun = runs[0] ?? null;
   const identity = useQuery({
     queryKey: [...queryKeys.agents.identity(agent.id), lastRun?.id, lastRun?.status],
@@ -1791,9 +1791,9 @@ export function AgentOverview({
           <div className="space-y-3">
             <SummaryRow label={mimouseT("workflow.adapter")}><span className="text-sm">{getAdapterDisplay(agent.adapterType === "paperclip_runner" && agent.adapterConfig.provider === "openai_dot" ? "openai_dot" : agent.adapterType).label}</span></SummaryRow>
             <SummaryRow label={mimouseT("workflow.model")}><span className="max-w-64 truncate text-sm font-mono">{configuredModel}</span></SummaryRow>
-            <SummaryRow label={mimouseT("workflow.session")}><span className="max-w-64 truncate text-sm font-mono">{runtimeState?.sessionDisplayId ?? runtimeState?.sessionId ?? "No session"}</span></SummaryRow>
+            <SummaryRow label={mimouseT("workflow.session")}><span className="max-w-64 truncate text-sm font-mono">{runtimeState?.sessionDisplayId ?? runtimeState?.sessionId ?? systemLabel("No session")}</span></SummaryRow>
             <SummaryRow label={mimouseT("workflow.lastRun")}>
-              <span className="text-sm">{lastRun ? `${lastRun.status} · ${relativeTime(lastRun.createdAt)}` : "No runs"}</span>
+              <span className="text-sm">{lastRun ? `${lastRun.status} · ${relativeTime(lastRun.createdAt)}` : systemLabel("No runs")}</span>
             </SummaryRow>
           </div>
         </section>
@@ -1864,7 +1864,7 @@ export function AgentOverview({
               to={agentScopedAuditHref(agent.id, section)}
               className="rounded-lg border border-border px-3 py-2 text-sm font-medium capitalize hover:bg-accent"
             >
-              {section}
+              {systemLabel(section.charAt(0).toUpperCase() + section.slice(1))}
             </Link>
           ))}
         </div>
@@ -2989,7 +2989,7 @@ export function PromptsTab({
                     aria-pressed={instructionMode === mode}
                     onClick={() => setInstructionMode(mode)}
                   >
-                    {mode}
+                    {systemLabel(mode)}
                   </Button>
                 ))}
               </div>
@@ -3641,7 +3641,7 @@ function RunDetail({ run: initialRun, agentRouteId, adapterType, adapterConfig }
                   disabled={rerunWithTrace.isPending}
                 >
                   <RotateCcw className="h-3.5 w-3.5 mr-1" />
-                  {rerunWithTrace.isPending ? "Starting…" : "Re-run with provider trace"}
+                  {rerunWithTrace.isPending ? systemLabel("Starting…") : systemLabel("Re-run with provider trace")}
                 </Button>
               ) : null}
             </div>
@@ -3875,7 +3875,7 @@ function RunDetail({ run: initialRun, agentRouteId, adapterType, adapterConfig }
       {/* Issues touched by this run */}
       {touchedIssues && touchedIssues.length > 0 && (
         <div className="space-y-2">
-          <span className="text-xs font-medium text-muted-foreground">Tasks Touched ({touchedIssues.length})</span>
+          <span className="text-xs font-medium text-muted-foreground">{mimouseT("browserQa.visitedTasks", { count: touchedIssues.length })}</span>
           <div className="border border-border rounded-lg divide-y divide-border">
             {touchedIssues.map((issue) => (
               <Link
@@ -4436,7 +4436,7 @@ export function LogViewer({ run, adapterType }: { run: HeartbeatRun; adapterType
 
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-muted-foreground">
-          Transcript ({transcript.length})
+          {mimouseT("browserQa.conversationCount", { count: transcript.length })}
         </span>
         <div className="flex items-center gap-2">
           <div className="inline-flex rounded-lg border border-border/70 bg-background/70 p-0.5">
@@ -4452,7 +4452,7 @@ export function LogViewer({ run, adapterType }: { run: HeartbeatRun; adapterType
                 )}
                 onClick={() => setTranscriptMode(mode)}
               >
-                {mode}
+                {systemLabel(mode)}
               </button>
             ))}
           </div>
@@ -4552,7 +4552,7 @@ export function LogViewer({ run, adapterType }: { run: HeartbeatRun; adapterType
 
       {events.length > 0 && (
         <div>
-          <div className="mb-2 text-xs font-medium text-muted-foreground">Events ({events.length})</div>
+          <div className="mb-2 text-xs font-medium text-muted-foreground">{mimouseT("browserQa.eventsCount", { count: events.length })}</div>
           <div className="bg-neutral-100 dark:bg-neutral-950 rounded-lg p-3 font-mono text-xs space-y-0.5">
             {events.map((evt) => {
               const color = evt.color

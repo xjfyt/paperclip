@@ -472,18 +472,18 @@ export function NewIssueDialog() {
       const prefix = (companies.find((company) => company.id === companyId)?.issuePrefix ?? "").trim();
       const issueRef = issue.identifier ?? issue.id;
       const openIssueAction = prefix
-        ? { label: `Open ${issueRef}`, href: `/${prefix}/issues/${issueRef}` }
+        ? { label: mimouseT("browserQa.openTask", { id: issueRef }), href: `/${prefix}/issues/${issueRef}` }
         : undefined;
       if (failures.length > 0) {
         pushToast({
-          title: `Created ${issueRef} with upload warnings`,
-          body: `${failures.length} staged ${failures.length === 1 ? "file" : "files"} could not be added.`,
+          title: mimouseT("browserQa.createdWarning", { id: issueRef }),
+          body: mimouseT(failures.length === 1 ? "browserQa.uploadFileWarning" : "browserQa.uploadFilesWarning", { count: failures.length }),
           tone: "warn",
           action: openIssueAction,
         });
       } else {
         pushToast({
-          title: `Created ${issueRef}`,
+          title: mimouseT("browserQa.createdTask", { id: issueRef }),
           tone: "success",
           action: openIssueAction,
         });
