@@ -1,0 +1,39 @@
+id,level,scope,status,evidence,remaining
+BASE-01,C1,固定上游与独立分支,passed,v2026.1023.0 1b4c803816e82b0265c8422e1a804327a7ed8c54,远端开发提交同步另行核验
+I18N-01,C1,四语资源结构与占位符,passed,compose-mimouse-locales --check,不等于全页面翻译覆盖
+I18N-02,C2,语言选择与数字日期格式,passed,ui/src/i18n 和格式化回归,实际字体布局未验收
+I18N-03,C2,全 UI 回归快照,passed,604键快照730文件8205项 73批全部通过,真实浏览器另计
+I18N-04,C2,命令面板中文输入法 Enter,passed,CommandPalette.test.tsx composition 测试,真实输入法浏览器待验收
+I18N-05,C3,四语浏览器关键路径,blocked,Chromium Unix socket EPERM,云平台浏览器执行能力
+AUTH-01,C2,OIDC 配置和签名令牌拒绝矩阵,passed,Casdoor 与 ID token 协议测试,实际 Casdoor 版本及 claims
+AUTH-02,C2,错误state重放与同邮箱不合并,passed,真实内存 OAuth 流测试,真实公司邀请与多用户会话
+AUTH-03,C3,Casdoor 登录绑定注销停用,blocked,未提供实际租户凭据和测试身份,本地退出不等于 IdP 停用传播
+QODER-01,C2,假CLI真实进程与取消解析,passed,external-adapters/qoder-cn/test 17项,真实CLI和账号额度
+QODER-02,C2,外部适配器真实loader,passed,server/src/adapters/mimouse-packages.test.ts,部署安装权限
+QODER-03,C4,实际编码任务,blocked,仅做官方CLI1.1.78的版本帮助与参数诊断 未登录调用模型,真实CLI及允许工作区
+WB-01,C2,OAuth与ACP协议,passed,workbuddy-protocol.test.ts,真实租户协议差异
+WB-02,C2,未知创建与重启不重复派发,passed,tests/mimouse/workbuddy.spec.ts,真实云任务
+WB-03,C2,报告只读恢复不重放prompt,passed,protocol与真实本地DB恢复测试,真实沙箱主机及overview产物
+WB-04,C3,WorkBuddy授权和收费任务,blocked,未提供已审核应用及用户授权,应用scopes和真实账号
+NOTIFY-01,C2,五个驱动签名与受理判断,passed,mimouse-notification-drivers.test.ts 14项,实际平台产品权限
+NOTIFY-02,C2,事务去重租约与发送中断,passed,tests/mimouse/outbox.spec.ts,真实外部送达与对账
+NOTIFY-03,C2,预算和编码事件联动,passed,budget-notification coding artifacts API用例,运行失败通过0337触发器测试事务回滚和去重
+NOTIFY-04,C1,订阅语言和最小正文,passed,render单测与日语预算真实DB用例,公众号模板配置需实际验收
+NOTIFY-05,C3,真实群及公众号模板发送,blocked,未指定测试收件人和凭据,明确目标和发送授权
+CODE-01,C2,固定SHA审阅与CI门禁,passed,策略及真实HTTP DB用例,GitLab响应为注入夹具
+CODE-02,C2,实际Git仓库失败修复再通过,passed,mimouse-coding-fixture.test.ts,非真实GitLab Runner
+CODE-03,C2,实际文件哈希及符号链接拒绝,passed,tests/mimouse/artifacts.spec.ts,未验证签名未上传
+CODE-04,C3,GitLab实际MR与Runner,blocked,未提供测试项目凭据,内网连通和分支权限
+CODE-05,C4,跨平台签名发布,not_run,首轮未接入真实构建矩阵,Windows macOS Linux架构签名与产物合同
+BUILD-01,C1,UI类型和生产构建,passed,UI typecheck build与token gates,大chunk警告保留
+BUILD-02,C1,Rust runner构建,passed,固定1.97.1构建,上游7条警告保留
+BUILD-03,C1,完整server类型,passed,tsc --noEmit --singleThreaded 完整检查通过,早期SIGKILL和事务类型错误已修正 不代替全仓构建
+DB-01,C2,新增迁移落地并启动实际服务,passed,0334至0339已应用 编译server入口20项HTTP和DB测试全部通过,生产备份升级演练未完成
+RELEASE-01,C4,全部需求生产验收,blocked,存在上述阻断项,不可宣称全功能完成
+QODER-04,C2,实际核心任务至CLI运行链路,passed,qoder-runtime.spec 安装适配器和真实Agent生命周期 heartbeat回执,假CLI 不证明真实账号或工具JWT
+WB-05,C2,私有令牌和刷新竞争,passed,0338专用密文及四项实际数据库测试,旧连接重新授权 实际租户仍待验证
+WB-06,C2,Agent只读就绪验证,passed,所有者授权与只读任务列表探针 不创建远端任务,真实应用授权与生命周期实连
+CODE-06,C1,自动CI轮询与有限修复调度,partial,0339持久游标 租约与失败退避 真实DB四项用例,自动修复调度仍未实现 纯repairDecision策略不能代替
+NOTIFY-06,C1,应用token自动刷新,not_implemented,当前仅支持固定版本accessToken,需外部刷新服务 不具备免维护生产能力
+I18N-06,C1,约定高频路径全部系统字符串,partial,604项四语资源 已接线主要标签与提示,动态对话框筛选和部分错误仍有英文 不等于全覆盖
+BUILD-04,C1,server编译及标准资源打包,passed,串行tsc生成JS和声明 标准资源复制及build-info成功,默认并行构建曾SIGKILL 不等于全工作区发布包验收

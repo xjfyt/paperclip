@@ -28,7 +28,7 @@ sso-only 在服务端关闭密码认证，不只隐藏按钮。先在 dual 测�
 
 ## 验证边界
 
-配置、真实 RSA 签名的 provider 流水线、PKCE/nonce、错误 issuer/audience/expiry/签名、缺失 token、错误/重复 state、相同邮箱不隐式合并：本地协议测试。公司访问另有既有 authz 回归。UI 类型/构建需随集成重跑；真实 Casdoor、双身份邀请、全局退出和停用均未实连。整个 server 类型检查在云环境被资源回收终止，不宣称全仓通过。
+配置、真实 RSA 签名的 provider 流水线、PKCE/nonce、错误 issuer/audience/expiry/签名、缺失 token、错误/重复 state、相同邮箱不隐式合并：本地协议测试。公司访问另有既有 authz 回归。UI 类型/构建需随集成重跑；真实 Casdoor、双身份邀请、全局退出和停用均未实连。完整 server 类型检查已通过（迁移内存盘缓存并修正事务类型后复验）；这不等于真实 IdP 或全仓构建验收。
 
 上游协议来源：https://github.com/better-auth/better-auth/tree/v1.7.2/packages/better-auth/src/plugins/generic-oauth
 Casdoor 联调：https://casdoor.ai/docs/how-to-connect/oidc-client/
