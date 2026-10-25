@@ -83,7 +83,11 @@ export function choosePrimaryRuntimeApiUrl(input: {
 export function collectReachableInterfaceHosts(input: {
   networkInterfacesMap?: NodeJS.Dict<os.NetworkInterfaceInfo[]>;
 } = {}): string[] {
-  const interfaces = input.networkInterfacesMap ?? os.networkInterfaces();
+  let interfaces = input.networkInterfacesMap;
+  if (!interfaces) {
+    try { interfaces = os.networkInterfaces(); }
+    catch { return []; } // Interface discovery is optional; configured/loopback URLs remain usable.
+  }
   const rankedHosts: Array<{ host: string; rank: number; index: number }> = [];
   const seen = new Set<string>();
   let index = 0;
