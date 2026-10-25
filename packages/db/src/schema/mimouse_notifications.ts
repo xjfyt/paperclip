@@ -46,6 +46,7 @@ export const mimouseNotificationDeliveries = pgTable("mimouse_notification_deliv
   subscription: foreignKey({ columns: [t.companyId, t.subscriptionId], foreignColumns: [mimouseNotificationSubscriptions.companyId, mimouseNotificationSubscriptions.id] }),
   endpoint: foreignKey({ columns: [t.companyId, t.endpointId], foreignColumns: [mimouseNotificationEndpoints.companyId, mimouseNotificationEndpoints.id] }),
   unique: uniqueIndex("mimouse_notification_delivery_unique").on(t.companyId, t.eventId, t.subscriptionId),
+  companyIdentity: uniqueIndex("mimouse_notification_delivery_company_identity").on(t.companyId, t.id),
   pending: index("mimouse_notification_delivery_pending").on(t.state, t.nextAttemptAt),
   stateCheck: check("mimouse_notification_delivery_state", sql`${t.state} IN ('pending','claimed','sending','accepted','rejected','retryable','indeterminate','paused')`),
 }));
@@ -84,4 +85,22 @@ export const mimouseNotificationRevisions = pgTable("mimouse_notification_revisi
   endpoint: foreignKey({ columns: [t.companyId, t.endpointId], foreignColumns: [mimouseNotificationEndpoints.companyId, mimouseNotificationEndpoints.id] }).onDelete("cascade"),
   version: uniqueIndex("mimouse_notification_revision_version").on(t.companyId, t.endpointId, t.configVersion),
   positive: check("mimouse_notification_revision_positive", sql`${t.configVersion}>0`),
+}));
+
+/** Operator observations never overwrite the transport result or replay a message. */
+export const mimouseNotificationReviews = pgTable("mimouse_notification_reviews", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  deliveryId: uuid("delivery_id").notNull(),
+  requestId: uuid("request_id").notNull(),
+  outcome: text("outcome").notNull(),
+  evidence: text("evidence").notNull(),
+  actorId: text("actor_id").notNull(),
+  observedState: text("observed_state").notNull(),
+  observedAttempt: integer("observed_attempt").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, t => ({
+  delivery: foreignKey({ columns: [t.companyId, t.deliveryId], foreignColumns: [mimouseNotificationDeliveries.companyId, mimouseNotificationDeliveries.id] }).onDelete("cascade"),
+  request: uniqueIndex("mimouse_notification_review_request").on(t.companyId, t.deliveryId, t.requestId),
+  shape: check("mimouse_notification_review_shape", sql`${t.outcome} IN ('accepted','not_accepted','unknown') AND ${t.observedAttempt}>=0 AND ${t.observedState} IN ('accepted','rejected','indeterminate')`),
 }));

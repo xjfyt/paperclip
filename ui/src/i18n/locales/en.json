@@ -534,7 +534,17 @@
     "edit": "Edit configuration",
     "history": "Configuration history",
     "configVersion": "Configuration version {{version}}",
-    "revisionWarning": "Editing version {{version}}. Saving pauses the channel. Older queued messages retain their original target and credentials; enabling resumes them without retargeting. Already-dispatched messages cannot be recalled."
+    "revisionWarning": "Editing version {{version}}. Saving pauses the channel. Older queued messages retain their original target and credentials; enabling resumes them without retargeting. Already-dispatched messages cannot be recalled.",
+    "reviewDelivery": "Record delivery observation",
+    "reviewDisclaimer": "Observations are an administrator’s report, not an automatic provider verification. They do not change the transport result or resend messages. Do not paste credentials or raw private logs.",
+    "observed_accepted": "Reported accepted",
+    "observed_not_accepted": "Reported not accepted",
+    "observed_unknown": "Still unknown",
+    "reviewError": "Could not record the observation. If the delivery changed, close and reopen it before retrying.",
+    "observation": "Observed outcome",
+    "reviewEvidence": "Brief evidence or provider-console reference (no secrets)",
+    "reviewConfirm": "I checked this delivery and understand that this saves evidence only.",
+    "saveObservation": "Save observation"
   },
   "onboarding": {
     "organizationQuestion": "What is the name of your organization?",

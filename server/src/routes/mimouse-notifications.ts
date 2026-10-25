@@ -1,3 +1,4 @@
+import { notificationReconciliation } from "../services/mimouse-notifications/reconciliation.js";
 import { notificationConfiguration } from "../services/mimouse-notifications/configuration.js";
 import { renderTemplateData } from "../services/mimouse-notifications/render.js";
 import { Router, type Request } from "express";
@@ -24,6 +25,7 @@ function companyAdmin(req: Request, companyId: string) {
 export function mimouseNotificationRoutes(db: Db) {
   const router = Router();
   const configuration = notificationConfiguration(db);
+  const reconciliation = notificationReconciliation(db);
   const path = "/companies/:companyId/notifications";
   const loadEndpoint = async (companyId: string, id: string) => {
     const [endpoint] = await db.select().from(endpoints).where(and(eq(endpoints.id, id), eq(endpoints.companyId, companyId)));
@@ -79,6 +81,17 @@ export function mimouseNotificationRoutes(db: Db) {
     if (!subscription) throw notFound("Notification subscription not found");
     const actor = getActorInfo(req); await logActivity(db, { companyId, actorType: actor.actorType, actorId: actor.actorId, action: "notification.subscription.toggled", entityType: "notification_subscription", entityId: subscription.id, details: { enabled: subscription.enabled } });
     res.json({ id: subscription.id, enabled: subscription.enabled });
+  });
+  router.get(`${path}/deliveries/:id/reviews`, async (req, res) => {
+    const companyId = String(req.params.companyId); companyAdmin(req, companyId);
+    res.json(await reconciliation.history(companyId, String(req.params.id)));
+  });
+  const reviewSchema = z.object({ requestId: z.string().uuid(), confirm: z.literal(true), outcome: z.enum(["accepted", "not_accepted", "unknown"]), evidence: z.string().trim().min(1).max(1000), expectedState: z.enum(["accepted", "rejected", "indeterminate"]), expectedAttempt: z.number().int().min(0) }).strict();
+  router.post(`${path}/deliveries/:id/reviews`, validate(reviewSchema), async (req, res) => {
+    const companyId = String(req.params.companyId); companyAdmin(req, companyId); const actor = getActorInfo(req);
+    const row = await reconciliation.record(companyId, String(req.params.id), reviewSchema.parse(req.body), actor.actorId);
+    await logActivity(db, { companyId, actorType: actor.actorType, actorId: actor.actorId, action: "notification.delivery.reviewed", entityType: "notification_delivery", entityId: row.deliveryId, details: { reviewId: row.id, outcome: row.outcome, transportStateUnchanged: true } });
+    res.status(200).json(row);
   });
   router.get(`${path}/deliveries/:id/preview`, async (req, res) => {
     const companyId = String(req.params.companyId); companyAdmin(req, companyId);

@@ -1,3 +1,4 @@
+import { MimouseNotificationReview } from "@/components/MimouseNotificationReview";
 import { useEffect as usePageEffect } from "react";
 import { useBreadcrumbs } from "@/context/BreadcrumbContext";
 import { useRef, useState } from "react";
@@ -21,6 +22,7 @@ function NotificationCompany({ companyId }: { companyId: string }) {
   const client = useQueryClient();
   const key = ["mimouse-notifications", companyId];
   const query = useQuery({ queryKey: key, queryFn: () => notificationApi.get(companyId), refetchInterval: 10000 });
+  const [reviewing, setReviewing] = useState<{ id: string; state: string; attempt: number } | null>(null);
   const [editing, setEditing] = useState<NotificationEndpoint | null>(null);
   const [historyId, setHistoryId] = useState<string | null>(null);
   const history = useQuery({ queryKey: [...key, "revisions", historyId], queryFn: () => notificationApi.history(companyId, historyId!), enabled: historyId !== null });
@@ -130,8 +132,10 @@ function NotificationCompany({ companyId }: { companyId: string }) {
         <label className="flex items-center gap-2"><input type="checkbox" checked={duplicateRisk} onChange={e => setDuplicateRisk(e.target.checked)} />{t("notifications.acceptDuplicateRisk")}</label>
         <div className="flex justify-between"><Button variant="outline" onClick={() => setRetrying(null)}>{t("common.cancel")}</Button><Button disabled={!reviewed || !duplicateRisk || mutation.isPending || !dispatchEnabled} onClick={() => mutation.mutate(() => notificationApi.retry(companyId, retrying.preview.id, retrying.requestId))}>{t("notifications.confirmRetry")}</Button></div>
       </section>}
+      {reviewing && <MimouseNotificationReview key={reviewing.id} companyId={companyId} delivery={reviewing} onClose={() => setReviewing(null)} />}
       <section className="space-y-2"><h2 className="font-medium">{t("notifications.deliveries")}</h2>
         {query.data.deliveries.map(delivery => <div key={delivery.id} className="space-y-1"><p className="font-mono text-sm">{delivery.id} · {t(`notifications.state_${delivery.state}`)} · {delivery.lastCode ?? "—"}</p>
+          {["accepted", "indeterminate", "rejected"].includes(delivery.state) && <Button variant="outline" onClick={() => { setRetrying(null); setReviewing(delivery); }}>{t("notifications.reviewDelivery")}</Button>}
           {["indeterminate", "rejected"].includes(delivery.state) && !["snapshot_render_failed", "unsupported_render_version"].includes(delivery.lastCode ?? "") && <Button variant="outline" disabled={mutation.isPending} onClick={async () => { const sequence = ++previewSequence.current; setRetrying(null); setReviewed(false); setDuplicateRisk(false); try { const preview = await notificationApi.preview(companyId, delivery.id); if (sequence !== previewSequence.current) return; setReviewed(false); setDuplicateRisk(false); setRetrying({ preview, requestId: crypto.randomUUID() }); } catch { if (sequence === previewSequence.current) mutation.mutate(() => Promise.reject(Error("preview_failed"))); } }}>{t("notifications.reviewRetry")}</Button>}
         </div>)}
       </section>

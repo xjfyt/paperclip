@@ -22,6 +22,8 @@
 - PATCH `/subscriptions/:id`：enabled，停用尚未进入 sending 的投递。
 - POST `/endpoints/:id/test`：requestId、expectedVersion、confirm=true、title、text；同请求键入队一次，不同步声称已送达。
 
+- GET `/deliveries/:id/reviews`：最近100条人工核对记录，不含秘密值。
+- POST `/deliveries/:id/reviews`：requestId、confirm=true、outcome（accepted/not_accepted/unknown）、evidence、expectedState、expectedAttempt；只保存人工依据，传输结果不变，同键幂等。
 - GET `/deliveries/:id/preview`：原目标、标题、正文、模板和凭据版本的脱敏快照；不返回 secret 引用或值。
 - POST `/deliveries/:id/retry`：requestId、confirmReviewedOutcome=true、acceptDuplicateRisk=true；仅对未知/拒绝投递，原记录保持不变，原目标与凭据版本不变。同 requestId 幂等。
 

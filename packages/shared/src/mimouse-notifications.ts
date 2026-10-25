@@ -11,3 +11,12 @@ export interface NotificationRevisionDto {
 export interface NotificationRevisionInput {
   expectedVersion: number; name: string; kind: string; config: Record<string, unknown>; secretRef: string; secretVersion: number;
 }
+
+export interface NotificationReviewInput {
+  requestId: string; confirm: true; outcome: "accepted" | "not_accepted" | "unknown"; evidence: string;
+  expectedState: "accepted" | "rejected" | "indeterminate"; expectedAttempt: number;
+}
+export interface NotificationReviewDto {
+  id: string; deliveryId: string; companyId: string; requestId: string; outcome: "accepted" | "not_accepted" | "unknown";
+  evidence: string; actorId: string; observedState: string; observedAttempt: number; createdAt: string;
+}

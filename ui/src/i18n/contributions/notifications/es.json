@@ -67,5 +67,15 @@
   "edit": "Editar configuración",
   "history": "Historial de configuración",
   "configVersion": "Versión de configuración {{version}}",
-  "revisionWarning": "Editando la versión {{version}}. Al guardar se pausa el canal. Los mensajes pendientes conservan su destino y credenciales originales; al activar se reanudan sin cambiar de destino. Los mensajes ya enviados no se pueden retirar."
+  "revisionWarning": "Editando la versión {{version}}. Al guardar se pausa el canal. Los mensajes pendientes conservan su destino y credenciales originales; al activar se reanudan sin cambiar de destino. Los mensajes ya enviados no se pueden retirar.",
+  "reviewDelivery": "Registrar observación",
+  "reviewDisclaimer": "Las observaciones son informes del administrador, no verificaciones automáticas del proveedor. No cambian el resultado del transporte ni reenvían mensajes. No pegue credenciales ni registros privados completos.",
+  "observed_accepted": "Aceptación notificada",
+  "observed_not_accepted": "No aceptación notificada",
+  "observed_unknown": "Aún sin confirmar",
+  "reviewError": "No se pudo guardar. Si la entrega cambió, cierre y vuelva a abrir antes de revisar.",
+  "observation": "Resultado observado",
+  "reviewEvidence": "Evidencia breve o referencia de la consola (sin secretos)",
+  "reviewConfirm": "He revisado esta entrega y entiendo que solo se guarda evidencia.",
+  "saveObservation": "Guardar observación"
 }

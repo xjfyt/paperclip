@@ -7,7 +7,7 @@ import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { i18n } from "../i18n";
 import { MimouseNotifications } from "./MimouseNotifications";
 const company = vi.hoisted(() => ({ selectedCompanyId: "company-a" }));
-const api = vi.hoisted(() => Object.fromEntries(["get", "create", "revise", "history", "toggle", "subscribe", "toggleSubscription", "preview", "retry", "test"].map(key => [key, vi.fn()])));
+const api = vi.hoisted(() => Object.fromEntries(["get", "create", "revise", "history", "review", "reviews", "toggle", "subscribe", "toggleSubscription", "preview", "retry", "test"].map(key => [key, vi.fn()])));
 vi.mock("@/context/CompanyContext", () => ({ useCompany: () => company }));
 vi.mock("@/api/mimouse-notifications", () => ({ notificationApi: api }));
 const data = () => ({ enabled: true, dispatchEnabled: true, connectedEvents: ["approval.requested", "run.failed", "coding.mr_ready", "coding.ci_failed", "coding.artifact_ready", "budget.threshold_reached"], unconnectedEvents: [], endpoints: [{ id: "endpoint-1", name: "Test channel", kind: "wecom_webhook", enabled: true, config: {}, secretRef: "11111111-1111-4111-8111-111111111111", secretVersion: 1, configVersion: 1 }], subscriptions: [{ id: "subscription-1", endpointId: "endpoint-1", eventType: "run.failed", locale: "en", enabled: true }], deliveries: [{ id: "delivery-1", endpointId: "endpoint-1", state: "indeterminate", attempt: 1, lastCode: "transport_unconfirmed", createdAt: "2026-10-25T00:00:00Z" }] });
@@ -20,7 +20,7 @@ async function fill(id: string, value: string) { await act(async () => { const i
 beforeEach(async () => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   company.selectedCompanyId = "company-a"; await i18n.changeLanguage("en"); vi.clearAllMocks();
-  for (const fn of Object.values(api)) fn.mockResolvedValue({}); api.get.mockImplementation(async () => data());
+  for (const fn of Object.values(api)) fn.mockResolvedValue({}); api.get.mockImplementation(async () => data()); api.reviews.mockResolvedValue([]);
   api.preview.mockResolvedValue({ id: "delivery-1", state: "indeterminate", endpointName: "Test channel", kind: "wecom_webhook", title: "Original title", text: "Original body", target: null, secretVersion: 1, locale: "en", templateData: null });
   host = document.createElement("div"); document.body.append(host); root = createRoot(host); client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity }, mutations: { retry: false } } }); client.setQueryData(["mimouse-notifications", "company-a"], data());
 });
@@ -90,4 +90,18 @@ it("opens revision history read-only and scopes the lookup to the selected compa
 });
 it.each([["en", "Edit configuration"], ["zh-CN", "编辑配置"], ["es", "Editar configuración"], ["ja", "設定を編集"]])("renders revision controls in %s", async (locale, label) => {
   await i18n.changeLanguage(locale); await mount(); await click(button(label)); expect(host.querySelector('[role="status"]')?.textContent).toContain("1");
+});
+
+
+it("records an observation only after explicit confirmation without retrying a delivery", async () => {
+  await mount(); await click(button("Record delivery observation"));
+  const save = button("Save observation") as HTMLButtonElement; expect(save.disabled).toBe(true);
+  await act(async () => { const input = host.querySelector("#delivery-review-evidence")!; Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(input, "Checked the provider console fixture"); input.dispatchEvent(new Event("input", { bubbles: true })); });
+  expect(save.disabled).toBe(true); await click(host.querySelector('input[type="checkbox"]')); expect(save.disabled).toBe(false); await click(save);
+  expect(api.review).toHaveBeenCalledWith("company-a", "delivery-1", expect.objectContaining({ confirm: true, outcome: "unknown", evidence: "Checked the provider console fixture", expectedState: "indeterminate", expectedAttempt: 1 }));
+  expect(api.retry).not.toHaveBeenCalled(); expect(api.test).not.toHaveBeenCalled(); expect(api.toggle).not.toHaveBeenCalled();
+});
+it("clears the selected observation when switching company", async () => {
+  await mount(); await click(button("Record delivery observation")); expect(host.querySelector("#delivery-review-evidence")).not.toBeNull();
+  company.selectedCompanyId = "company-b"; client.setQueryData(["mimouse-notifications", "company-b"], data()); await mount(); expect(host.querySelector("#delivery-review-evidence")).toBeNull(); expect(api.review).not.toHaveBeenCalled();
 });

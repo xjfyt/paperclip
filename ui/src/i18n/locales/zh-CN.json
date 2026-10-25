@@ -534,7 +534,17 @@
     "edit": "编辑配置",
     "history": "配置修订历史",
     "configVersion": "配置版本 {{version}}",
-    "revisionWarning": "正在编辑版本 {{version}}。保存会暂停渠道。旧队列消息保留原目标和凭据，重新启用会按原快照恢复，不会转投新目标；已发出的消息无法撤回。"
+    "revisionWarning": "正在编辑版本 {{version}}。保存会暂停渠道。旧队列消息保留原目标和凭据，重新启用会按原快照恢复，不会转投新目标；已发出的消息无法撤回。",
+    "reviewDelivery": "记录投递核对",
+    "reviewDisclaimer": "核对记录是管理员报告，不是自动供应商验证；不会改写传输结果或重新发送消息。请勿粘贴凭据或原始私密日志。",
+    "observed_accepted": "报告已受理",
+    "observed_not_accepted": "报告未受理",
+    "observed_unknown": "仍未确认",
+    "reviewError": "无法保存核对记录。如投递已变化，请关闭后重新打开再核对。",
+    "observation": "核对结果",
+    "reviewEvidence": "简要依据或供应商控制台记录编号（不含秘密）",
+    "reviewConfirm": "我已核对这条投递，确认此操作仅保存依据。",
+    "saveObservation": "保存核对记录"
   },
   "onboarding": {
     "organizationQuestion": "你的组织叫什么名字？",

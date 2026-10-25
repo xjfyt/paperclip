@@ -1,5 +1,5 @@
 import { api } from "./client";
-import type { NotificationEndpointDto, NotificationRevisionDto, NotificationRevisionInput } from "@paperclipai/shared";
+import type { NotificationEndpointDto, NotificationRevisionDto, NotificationRevisionInput, NotificationReviewInput, NotificationReviewDto } from "@paperclipai/shared";
 export type NotificationEndpoint = NotificationEndpointDto;
 export interface NotificationCenter {
   enabled: boolean; dispatchEnabled?: boolean; connectedEvents: string[]; unconnectedEvents: string[];
@@ -17,6 +17,8 @@ export const notificationApi = {
   toggle: (companyId: string, id: string, enabled: boolean, expectedVersion = 1) => api.patch(base(companyId) + `/endpoints/${id}`, { enabled, expectedVersion }),
   subscribe: (companyId: string, endpointId: string, eventType: string, locale: string) => api.post(base(companyId) + "/subscriptions", { endpointId, eventType, locale }),
   toggleSubscription: (companyId: string, id: string, enabled: boolean) => api.patch(base(companyId) + `/subscriptions/${id}`, { enabled }),
+  reviews: (companyId: string, id: string) => api.get<NotificationReviewDto[]>(base(companyId) + `/deliveries/${id}/reviews`),
+  review: (companyId: string, id: string, data: NotificationReviewInput) => api.post<NotificationReviewDto>(base(companyId) + `/deliveries/${id}/reviews`, data),
   preview: (companyId: string, id: string) => api.get<NotificationPreview>(base(companyId) + `/deliveries/${id}/preview`),
   retry: (companyId: string, id: string, requestId: string) => api.post(base(companyId) + `/deliveries/${id}/retry`, { requestId, confirmReviewedOutcome: true, acceptDuplicateRisk: true }),
   test: (companyId: string, id: string, data: { requestId: string; confirm: true; title: string; text: string; expectedVersion?: number }) => api.post(base(companyId) + `/endpoints/${id}/test`, data),

@@ -47,3 +47,14 @@ it.each(["member", "foreign-owner", "agent"])("denies %s notification history an
   expect((await request(server).post(path).send({ expectedVersion: 1, name: "Unauthorized change", kind: "wecom_webhook", config: {}, secretRef: "44444444-4444-4444-8444-444444444444", secretVersion: 1 })).status).toBe(403);
   expect(select).not.toHaveBeenCalled();
 });
+
+
+it.each(["member", "foreign-owner", "agent"])("denies %s delivery observations before resources", async role => {
+  const actor: Express.Request["actor"] = role === "agent"
+    ? { type: "agent", source: "agent_jwt", companyId, agentId: "33333333-3333-4333-8333-333333333333" }
+    : { type: "board", source: "session", userId: role, companyIds: [role === "member" ? companyId : "other"], memberships: [{ companyId: role === "member" ? companyId : "other", membershipRole: role === "member" ? "member" : "owner", status: "active" }] };
+  const { server, select } = app(actor); const path = `/companies/${companyId}/notifications/deliveries/33333333-3333-4333-8333-333333333333/reviews`;
+  expect((await request(server).get(path)).status).toBe(403);
+  expect((await request(server).post(path).send({ requestId: "44444444-4444-4444-8444-444444444444", confirm: true, outcome: "unknown", evidence: "Permission fixture", expectedState: "indeterminate", expectedAttempt: 1 })).status).toBe(403);
+  expect(select).not.toHaveBeenCalled();
+});

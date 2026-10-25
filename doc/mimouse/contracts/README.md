@@ -11,3 +11,7 @@
 ## 通知配置修订增量合同（0342）
 
 渠道configVersion从1开始，配置编辑以expectedVersion作CAS并自动暂停；历史仅含非秘密配置、秘密引用/版本和操作者。启用及测试同样核对expectedVersion，省略仅兼容v1。旧投递冻结快照永不被新配置改写。shared DTO、API客户端、迁移与四语界面同时更新；渠道kind变更须新建。
+
+## 投递核对增量合同（0343）
+
+人工观察与供应商传输结果分离。review绑定公司/投递/操作者/原state+attempt和requestId；同键不同内容或操作者拒绝。仅terminal或unknown状态允许记录，禁止改写发送状态、回执、快照或触发外部请求。UI明确显示“报告”，不提升C3/C4。
