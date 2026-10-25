@@ -1,12 +1,13 @@
+import { createFixtureDb } from "./fixture-db.js";
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { createRequire } from "node:module";
-import { createDb, agents, budgetPolicies, budgetIncidents, costEvents, companySecrets, mimouseNotificationEndpoints as endpoints, mimouseNotificationSubscriptions as subscriptions, mimouseNotificationDeliveries as deliveries } from "../../packages/db/src/index.js";
+import { agents, budgetPolicies, budgetIncidents, costEvents, companySecrets, mimouseNotificationEndpoints as endpoints, mimouseNotificationSubscriptions as subscriptions, mimouseNotificationDeliveries as deliveries } from "../../packages/db/src/index.js";
 const require = createRequire(new URL("../../server/package.json", import.meta.url));
 const { eq } = await import(require.resolve("drizzle-orm"));
 test("budget incident and localized outbox commit once under the accounting transaction", async ({ request }) => {
   const company = await (await request.post("/api/companies", { data: { name: `budget-notify ${Date.now()}` } })).json();
-  const db = createDb("postgres://paperclip:paperclip@127.0.0.1:54329/paperclip");
+  const db = await createFixtureDb();
   const previous = process.env.PAPERCLIP_NOTIFICATIONS_ENABLED; process.env.PAPERCLIP_NOTIFICATIONS_ENABLED = "true";
   try {
     const [agent] = await db.insert(agents).values({ companyId: company.id, name: "PRIVATE_AGENT_NAME", role: "engineer", status: "active", adapterType: "process", adapterConfig: {}, runtimeConfig: {}, permissions: {} }).returning();

@@ -1,7 +1,23 @@
 import { defineConfig } from "@playwright/test";
 import path from "node:path";
+import { existsSync, readFileSync } from "node:fs";
 
-if (!process.env.PAPERCLIP_MIMOUSE_TEST_HOME) throw new Error("Set an isolated PAPERCLIP_MIMOUSE_TEST_HOME; never use a real instance");
+const fixtureHome = process.env.PAPERCLIP_MIMOUSE_TEST_HOME;
+if (!fixtureHome || !path.isAbsolute(fixtureHome)) throw new Error("Set an absolute isolated PAPERCLIP_MIMOUSE_TEST_HOME; never use a real instance");
+const marker = path.join(fixtureHome, ".mimouse-test-fixture");
+if (!existsSync(marker) || readFileSync(marker, "utf8").trim() !== "paperclip-mimouse-disposable-fixture-v1") throw new Error("Explicit disposable fixture marker required before any server startup");
+const fixtureConfig = path.join(fixtureHome, "instances/default/config.json");
+if (existsSync(fixtureConfig) || existsSync(path.join(fixtureHome, "instances/default/.env"))) throw new Error("Fixture must not contain application config or dotenv files");
+// Test workers also import server services; give them the same isolated home
+// and disable inherited external credentials/configuration lookup paths.
+Object.assign(process.env, {
+  PAPERCLIP_HOME: fixtureHome, PAPERCLIP_CONFIG: fixtureConfig, PAPERCLIP_INSTANCE_ID: "default",
+  DATABASE_URL: "", DATABASE_MIGRATION_URL: "", PAPERCLIP_DISABLE_CWD_ENV_FILE: "true",
+  PAPERCLIP_SECRETS_MASTER_KEY: "", PAPERCLIP_SECRETS_MASTER_KEY_FILE: path.join(fixtureHome, "fixtures/master.key"),
+  PAPERCLIP_OIDC_ENABLED: "false", PAPERCLIP_WORKBUDDY_ENABLED: "false", PAPERCLIP_GITLAB_PUBLISH_ENABLED: "false",
+  PAPERCLIP_NOTIFICATIONS_ENABLED: "true", PAPERCLIP_NOTIFICATIONS_WORKER_ENABLED: "false",
+  PAPERCLIP_TELEMETRY_DISABLED: "1", DO_NOT_TRACK: "1",
+});
 export default defineConfig({
   testDir: ".", testMatch: "*.spec.ts", workers: 1, timeout: 60000,
   use: {
@@ -13,7 +29,9 @@ export default defineConfig({
     stdout: "pipe", stderr: "pipe",
     command: "node --import tsx src/index.ts", cwd: path.resolve(import.meta.dirname, "../../server"),
     url: "http://127.0.0.1:3100/api/health", reuseExistingServer: false, timeout: 120000,
-    env: { ...process.env, PAPERCLIP_HOME: process.env.PAPERCLIP_MIMOUSE_TEST_HOME,
+    env: { ...process.env, PAPERCLIP_HOME: fixtureHome, PAPERCLIP_CONFIG: fixtureConfig, PAPERCLIP_INSTANCE_ID: "default",
+      DATABASE_URL: "", DATABASE_MIGRATION_URL: "", PAPERCLIP_DISABLE_CWD_ENV_FILE: "true",
+      PAPERCLIP_OIDC_ENABLED: "false", PAPERCLIP_WORKBUDDY_ENABLED: "false", PAPERCLIP_GITLAB_PUBLISH_ENABLED: "false",
       PAPERCLIP_NOTIFICATIONS_ENABLED: "true", PAPERCLIP_NOTIFICATIONS_WORKER_ENABLED: "false",
       PAPERCLIP_OPEN_ON_LISTEN: "false", PAPERCLIP_TELEMETRY_DISABLED: "1", DO_NOT_TRACK: "1",
       PAPERCLIP_BIND: "loopback", PAPERCLIP_DEPLOYMENT_MODE: "local_trusted", PAPERCLIP_UI_DEV_MIDDLEWARE: "false" },

@@ -1,6 +1,7 @@
+import { createFixtureDb } from "./fixture-db.js";
 import { expect, test } from "@playwright/test";
 import { createRequire } from "node:module";
-import { createDb, projects, issues, executionWorkspaces, mimouseCodingDeliveries as deliveries, mimouseNotificationEndpoints as endpoints, mimouseNotificationSubscriptions as subscriptions, mimouseNotificationDeliveries as notices } from "../../packages/db/src/index.js";
+import { projects, issues, executionWorkspaces, mimouseCodingDeliveries as deliveries, mimouseNotificationEndpoints as endpoints, mimouseNotificationSubscriptions as subscriptions, mimouseNotificationDeliveries as notices } from "../../packages/db/src/index.js";
 import { secretService } from "../../server/src/services/secrets.js";
 import { codingService } from "../../server/src/services/mimouse-coding/service.js";
 import { GitLabError } from "../../server/src/services/mimouse-coding/gitlab.js";
@@ -9,7 +10,7 @@ const { eq } = await import(require.resolve("drizzle-orm"));
 test("durable SCM: unknown MR creation is not repeated; new SHA invalidates review", async ({ request }) => {
   const company = await (await request.post("/api/companies", { data: { name: `coding ${Date.now()}` } })).json();
   const issue = await (await request.post(`/api/companies/${company.id}/issues`, { data: { title: "Fixture coding delivery", status: "backlog" } })).json();
-  const db = createDb("postgres://paperclip:paperclip@127.0.0.1:54329/paperclip"); const head = "a".repeat(40);
+  const db = await createFixtureDb(); const head = "a".repeat(40);
   const previousEnabled = process.env.PAPERCLIP_NOTIFICATIONS_ENABLED; process.env.PAPERCLIP_NOTIFICATIONS_ENABLED = "true";
   try {
     const [project] = await db.insert(projects).values({ companyId: company.id, name: "SCM fixture" }).returning();

@@ -1,10 +1,11 @@
+import { createFixtureDb } from "./fixture-db.js";
 import { expect, test } from "@playwright/test";
 import { mkdtemp, writeFile, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
-import { createDb, projects, issues, executionWorkspaces, companySecrets, mimouseCodingDeliveries as deliveries, mimouseNotificationEndpoints as endpoints, mimouseNotificationSubscriptions as subscriptions, mimouseNotificationDeliveries as notices } from "../../packages/db/src/index.js";
+import { projects, issues, executionWorkspaces, companySecrets, mimouseCodingDeliveries as deliveries, mimouseNotificationEndpoints as endpoints, mimouseNotificationSubscriptions as subscriptions, mimouseNotificationDeliveries as notices } from "../../packages/db/src/index.js";
 const require = createRequire(new URL("../../server/package.json", import.meta.url));
 const { eq } = await import(require.resolve("drizzle-orm"));
 test("artifact API hashes local bytes without upgrading signature or release claims", async ({ request }) => {
@@ -14,7 +15,7 @@ test("artifact API hashes local bytes without upgrading signature or release cla
   await writeFile(path.join(root, "artifact.txt"), "fixture artifact bytes\n"); await writeFile(path.join(root, ".gitignore"), "escape\n"); git("add", "."); git("commit", "-m", "test: fixture"); const head = git("rev-parse", "HEAD");
   const company = await (await request.post("/api/companies", { data: { name: `artifacts ${Date.now()}` } })).json();
   const issue = await (await request.post(`/api/companies/${company.id}/issues`, { data: { title: "Artifact fixture", status: "backlog" } })).json();
-  const db = createDb("postgres://paperclip:paperclip@127.0.0.1:54329/paperclip");
+  const db = await createFixtureDb();
   try {
     const [project] = await db.insert(projects).values({ companyId: company.id, name: "Artifact fixture" }).returning();
     const [workspace] = await db.insert(executionWorkspaces).values({ companyId: company.id, projectId: project.id, sourceIssueId: issue.id, mode: "isolated", strategyType: "git_worktree", providerType: "local_fs", status: "active", name: "fixture", branchName: "paperclip/artifact-fixture", repoUrl: "https://git.example/group/repo.git", cwd: root }).returning();

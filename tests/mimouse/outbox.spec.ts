@@ -1,6 +1,7 @@
+import { createFixtureDb } from "./fixture-db.js";
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
-import { createDb, agents, heartbeatRuns, companySecrets, mimouseNotificationEndpoints as endpoints, mimouseNotificationSubscriptions as subscriptions, mimouseNotificationDeliveries as deliveries } from "../../packages/db/src/index.js";
+import { agents, heartbeatRuns, companySecrets, mimouseNotificationEndpoints as endpoints, mimouseNotificationSubscriptions as subscriptions, mimouseNotificationDeliveries as deliveries } from "../../packages/db/src/index.js";
 import { createRequire } from "node:module";
 const require = createRequire(new URL("../../server/package.json", import.meta.url));
 const { eq, sql } = await import(require.resolve("drizzle-orm"));
@@ -9,7 +10,7 @@ import { enqueueNotification, notificationOutbox } from "../../server/src/servic
 test.beforeEach(async () => {
   // This suite intentionally exercises the global queue; pause leftovers from
   // earlier runs in this isolated fixture database before creating fresh rows.
-  const db = createDb("postgres://paperclip:paperclip@127.0.0.1:54329/paperclip");
+  const db = await createFixtureDb();
   try { await db.update(endpoints).set({ enabled: false }); } finally { await db.$client.end({ timeout: 1 }); }
 });
 
@@ -17,7 +18,7 @@ test.beforeEach(async () => {
 // The injected sender never contacts any vendor.
 test("durable outbox: atomic enqueue, identity, leases and restart recovery", async ({ request }) => {
   const company = await (await request.post("/api/companies", { data: { name: `outbox fixture ${Date.now()}` } })).json();
-  const db = createDb("postgres://paperclip:paperclip@127.0.0.1:54329/paperclip");
+  const db = await createFixtureDb();
   try {
     const [secret] = await db.insert(companySecrets).values({ companyId: company.id, name: "fixture", key: `fixture-${randomUUID()}` }).returning();
     const [endpoint] = await db.insert(endpoints).values({ companyId: company.id, name: "fixture", kind: "wecom_webhook", config: {}, secretRef: secret.id, secretVersion: 1, targetKey: randomUUID(), enabled: true }).returning();
@@ -58,7 +59,7 @@ test("durable outbox: atomic enqueue, identity, leases and restart recovery", as
 
 test("worker delivers once, honors pauses and recovers pre-send claims", async ({ request }) => {
   const company = await (await request.post("/api/companies", { data: { name: `worker fixture ${Date.now()}` } })).json();
-  const db = createDb("postgres://paperclip:paperclip@127.0.0.1:54329/paperclip");
+  const db = await createFixtureDb();
   try {
     const [secret] = await db.insert(companySecrets).values({ companyId: company.id, name: "fixture", key: `fixture-${randomUUID()}` }).returning();
     const [endpoint] = await db.insert(endpoints).values({ companyId: company.id, name: "fixture", kind: "wecom_webhook", config: {}, secretRef: secret.id, secretVersion: 1, targetKey: randomUUID(), enabled: true }).returning();
@@ -81,7 +82,7 @@ test("worker delivers once, honors pauses and recovers pre-send claims", async (
 
 test("all persisted failed runs enqueue atomically without duplicate terminal notifications", async ({ request }) => {
   const company = await (await request.post("/api/companies", { data: { name: `failed-run fixture ${Date.now()}` } })).json();
-  const db = createDb("postgres://paperclip:paperclip@127.0.0.1:54329/paperclip");
+  const db = await createFixtureDb();
   try {
     const [agent] = await db.insert(agents).values({ companyId: company.id, name: "PRIVATE_AGENT_NAME", role: "engineer", status: "active", adapterType: "process" }).returning();
     const [secret] = await db.insert(companySecrets).values({ companyId: company.id, name: "fixture", key: randomUUID() }).returning();
@@ -109,12 +110,14 @@ test("all persisted failed runs enqueue atomically without duplicate terminal no
 
 test("explicit duplicate-risk retry preserves the unknown original and is idempotent", async ({ request }) => {
   const company = await (await request.post("/api/companies", { data: { name: `manual-retry fixture ${Date.now()}` } })).json();
-  const db = createDb("postgres://paperclip:paperclip@127.0.0.1:54329/paperclip");
+  const db = await createFixtureDb();
   try {
     const [secret] = await db.insert(companySecrets).values({ companyId: company.id, name: "fixture", key: randomUUID() }).returning();
     const [endpoint] = await db.insert(endpoints).values({ companyId: company.id, name: "fixture", kind: "wecom_webhook", config: {}, secretRef: secret.id, secretVersion: 1, targetKey: randomUUID(), enabled: true }).returning();
     const [subscription] = await db.insert(subscriptions).values({ companyId: company.id, endpointId: endpoint.id, eventType: "approval.requested" }).returning();
     const [original] = await db.insert(deliveries).values({ companyId: company.id, endpointId: endpoint.id, subscriptionId: subscription.id, eventId: randomUUID(), state: "indeterminate", snapshot: { kind: "wecom_webhook", title: "Fixture", text: "Fixture", secretRef: secret.id, secretVersion: 1, targetKey: endpoint.targetKey, renderVersion: 2 } }).returning();
+    const preview = await request.get(`/api/companies/${company.id}/notifications/deliveries/${original.id}/preview`);
+    expect(preview.ok()).toBe(true); const visible = await preview.json(); expect(visible.title).toBe("Fixture"); expect(visible.secretVersion).toBe(1); expect(JSON.stringify(visible)).not.toContain(secret.id);
     const url = `/api/companies/${company.id}/notifications/deliveries/${original.id}/retry`; const requestId = randomUUID();
     expect((await request.post(url, { data: { requestId, confirmReviewedOutcome: true } })).status()).toBe(400);
     const data = { requestId, confirmReviewedOutcome: true, acceptDuplicateRisk: true };
@@ -122,5 +125,40 @@ test("explicit duplicate-risk retry preserves the unknown original and is idempo
     const second = await request.post(url, { data }); expect((await second.json()).id).toBe(queued.id);
     const rows = await db.select().from(deliveries).where(eq(deliveries.companyId, company.id)); expect(rows).toHaveLength(2);
     expect(rows.find(row => row.id === original.id)?.state).toBe("indeterminate"); expect(rows.find(row => row.id === queued.id)?.snapshot).toEqual(original.snapshot);
+  } finally { await db.update(endpoints).set({ enabled: false }).where(eq(endpoints.companyId, company.id)); await db.$client.end({ timeout: 1 }); }
+});
+
+test("unknown rendering contracts fail closed before any provider call", async ({ request }) => {
+  const company = await (await request.post("/api/companies", { data: { name: `render-version fixture ${Date.now()}` } })).json();
+  const db = await createFixtureDb();
+  try {
+    const [secret] = await db.insert(companySecrets).values({ companyId: company.id, name: "fixture", key: randomUUID() }).returning();
+    const [endpoint] = await db.insert(endpoints).values({ companyId: company.id, name: "fixture", kind: "wecom_webhook", config: {}, secretRef: secret.id, secretVersion: 1, targetKey: randomUUID(), enabled: true }).returning();
+    const [subscription] = await db.insert(subscriptions).values({ companyId: company.id, endpointId: endpoint.id, eventType: "approval.requested" }).returning();
+    const [row] = await db.insert(deliveries).values({ companyId: company.id, endpointId: endpoint.id, subscriptionId: subscription.id, eventId: randomUUID(), snapshot: { renderVersion: 999 } }).returning();
+    let sideEffects = 0;
+    const worker = notificationOutbox(db, { resolveSecret: async () => { sideEffects++; return "{}"; }, send: async () => { sideEffects++; return { state: "accepted", code: "must_not_send" }; } });
+    expect(await worker.tick()).toBe(true); expect(sideEffects).toBe(0);
+    const [saved] = await db.select().from(deliveries).where(eq(deliveries.id, row.id)); expect(saved.state).toBe("rejected"); expect(saved.lastCode).toBe("unsupported_render_version");
+  } finally { await db.update(endpoints).set({ enabled: false }).where(eq(endpoints.companyId, company.id)); await db.$client.end({ timeout: 1 }); }
+});
+
+test("official-account template fields use event locale; bad templates do not roll back business work", async ({ request }) => {
+  const company = await (await request.post("/api/companies", { data: { name: `template fixture ${Date.now()}` } })).json();
+  const db = await createFixtureDb();
+  try {
+    const [secret] = await db.insert(companySecrets).values({ companyId: company.id, name: "fixture", key: randomUUID() }).returning();
+    const [endpoint] = await db.insert(endpoints).values({ companyId: company.id, name: "fixture", kind: "wechat_official_account", config: { target: "test-openid", templateId: "test-template", templateData: { first: { value: "{{title}}" }, keyword1: { value: "{{resourceId}}" } } }, secretRef: secret.id, secretVersion: 1, targetKey: randomUUID(), enabled: true }).returning();
+    await db.insert(subscriptions).values({ companyId: company.id, endpointId: endpoint.id, eventType: "approval.requested", locale: "ja" });
+    const resourceId = randomUUID();
+    await db.transaction(tx => enqueueNotification(tx, { companyId: company.id, eventId: "template-one", type: "approval.requested", resourceId }));
+    const [saved] = await db.select().from(deliveries).where(eq(deliveries.companyId, company.id));
+    expect(saved.snapshot.templateData).toEqual({ first: { value: "承認待ちの項目があります" }, keyword1: { value: resourceId } });
+    await db.update(endpoints).set({ config: { templateData: { first: { value: "{{secret}}" } } } }).where(eq(endpoints.id, endpoint.id));
+    await db.transaction(tx => enqueueNotification(tx, { companyId: company.id, eventId: "template-two", type: "approval.requested", resourceId }));
+    const rows = await db.select().from(deliveries).where(eq(deliveries.companyId, company.id)); expect(rows).toHaveLength(2);
+    expect(rows.find(row => row.eventId === "template-two")).toMatchObject({ state: "rejected", lastCode: "snapshot_render_failed" });
+    const failed = rows.find(row => row.eventId === "template-two")!;
+    expect((await request.post(`/api/companies/${company.id}/notifications/deliveries/${failed.id}/retry`, { data: { requestId: randomUUID(), confirmReviewedOutcome: true, acceptDuplicateRisk: true } })).status()).toBe(422);
   } finally { await db.update(endpoints).set({ enabled: false }).where(eq(endpoints.companyId, company.id)); await db.$client.end({ timeout: 1 }); }
 });
