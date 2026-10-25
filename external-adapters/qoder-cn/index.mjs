@@ -1,6 +1,6 @@
 import { spawn, execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { realpath, mkdir, open, unlink, mkdtemp, rm } from "node:fs/promises";
+import { realpath, mkdir, open, unlink, mkdtemp, rm, lstat } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import { createHash, randomUUID } from "node:crypto";
@@ -53,10 +53,14 @@ export async function execute(ctx, diagnostic = false) {
   const credentialFingerprint = providerToken ? createHash("sha256").update(providerToken).digest("hex") : null;
   const identity = sessionIdentity({ companyId: ctx.agent.companyId, agentId: ctx.agent.id, cwd, accountId: config.accountId, taskKey, credentialFingerprint });
   const configDir = path.join(config.configRoot, identity);
-  await mkdir(configDir, { recursive: true });
+  await mkdir(configDir, { recursive: true, mode: 0o700 });
+  const configStat = await lstat(configDir);
+  if (!configStat.isDirectory() || configStat.isSymbolicLink() || (configStat.mode & 0o077) !== 0 || (typeof process.getuid === "function" && configStat.uid !== process.getuid())) {
+    return failure("qoder_config_not_private", "Use an owner-only configuration directory without symlinks; existing permissions are not changed automatically.");
+  }
   const lockPath = path.join(configDir, "paperclip-run.lock");
   let lock;
-  try { lock = await open(lockPath, "wx"); await lock.writeFile(JSON.stringify({ runId: ctx.runId, createdAt: new Date().toISOString() })); }
+  try { lock = await open(lockPath, "wx", 0o600); await lock.writeFile(JSON.stringify({ runId: ctx.runId, createdAt: new Date().toISOString() })); }
   catch (error) { if (error.code === "EEXIST") return failure("qoder_session_busy", "Session is in use or has an unreconciled lock; verify previous provider termination before recovery."); throw error; }
   let releaseLock = true;
   try {

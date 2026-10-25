@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, writeFile, mkdir, readFile } from "node:fs/promises";
+import { mkdtemp, writeFile, mkdir, readFile, stat, symlink } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { commandArgs, execute, sessionIdentity, sessionCodec, createServerAdapter } from "../index.mjs";
@@ -98,4 +98,23 @@ test("changing a PAT fences session reuse even if its account label is unchanged
   const f = await fixture(`console.log(JSON.stringify({type:"result",session_id:"s",result:"ok"}));`); f.ctx.config.env = { QODERCN_PERSONAL_ACCESS_TOKEN: "fixture-one" };
   const first = await execute(f.ctx); f.ctx.runtime.sessionParams = first.sessionParams; f.ctx.config.env.QODERCN_PERSONAL_ACCESS_TOKEN = "fixture-two";
   assert.equal((await execute(f.ctx)).errorCode, "qoder_session_identity_mismatch"); assert.equal(f.spawned.length, 1);
+});
+
+test("new account configuration directories are owner-only", async () => {
+  const f = await fixture(`console.log(JSON.stringify({type:"result",session_id:"s",result:"ok"}));`);
+  const result = await execute(f.ctx); assert.equal(result.exitCode, 0);
+  const folder = path.join(f.ctx.config.configRoot, result.sessionParams.identity);
+  assert.equal((await stat(folder)).mode & 0o077, 0);
+});
+test("shared or symlinked account directories refuse dispatch without changing permissions", async () => {
+  for (const variant of ["shared", "symlink"]) {
+    const f = await fixture(`process.exit(99)`);
+    const identity = sessionIdentity({companyId:"company", agentId:"agent", cwd:f.root, accountId:"user", taskKey:"task"});
+    const folder = path.join(f.ctx.config.configRoot, identity);
+    await mkdir(f.ctx.config.configRoot, {recursive:true});
+    if (variant === "shared") await mkdir(folder, {mode:0o755});
+    else await symlink(f.root, folder);
+    assert.equal((await execute(f.ctx)).errorCode, "qoder_config_not_private"); assert.equal(f.spawned.length, 0);
+    if (variant === "shared") assert.notEqual((await stat(folder)).mode & 0o077, 0);
+  }
 });
