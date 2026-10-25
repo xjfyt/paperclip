@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
-import { createDb, companySecrets, mimouseNotificationEndpoints as endpoints, mimouseNotificationSubscriptions as subscriptions, mimouseNotificationDeliveries as deliveries } from "../../packages/db/src/index.js";
+import { createDb, agents, heartbeatRuns, companySecrets, mimouseNotificationEndpoints as endpoints, mimouseNotificationSubscriptions as subscriptions, mimouseNotificationDeliveries as deliveries } from "../../packages/db/src/index.js";
 import { createRequire } from "node:module";
 const require = createRequire(new URL("../../server/package.json", import.meta.url));
 const { eq, sql } = await import(require.resolve("drizzle-orm"));
@@ -48,7 +48,7 @@ test("durable outbox: atomic enqueue, identity, leases and restart recovery", as
     await expect(db.insert(subscriptions).values({ companyId: other.id, endpointId: endpoint.id, eventType: "approval.requested" })).rejects.toThrow();
     const center = await request.get(`/api/companies/${company.id}/notifications`); expect(center.ok(), await center.text()).toBeTruthy();
     const body = await center.json(); expect(body.deliveries[0].state).toBe("indeterminate");
-    expect(JSON.stringify(body)).not.toContain("key=fixture"); expect(body.connectedEvents).toEqual(["approval.requested", "coding.mr_ready", "coding.ci_failed", "coding.artifact_ready", "budget.threshold_reached"]);
+    expect(JSON.stringify(body)).not.toContain("key=fixture"); expect(body.connectedEvents).toEqual(["approval.requested", "run.failed", "coding.mr_ready", "coding.ci_failed", "coding.artifact_ready", "budget.threshold_reached"]);
     expect(saved[0].snapshot.renderVersion).toBe(2);
     const toggle = await request.patch(`/api/companies/${company.id}/notifications/subscriptions/${subscription.id}`, { data: { enabled: false } });
     expect(toggle.ok()).toBe(true);
@@ -77,4 +77,50 @@ test("worker delivers once, honors pauses and recovers pre-send claims", async (
     expect((await db.select().from(deliveries).where(eq(deliveries.eventId, event.eventId)))[0].state).toBe("accepted");
     expect(await outbox.tick()).toBe(false); expect(calls).toBe(1);
   } finally { await db.$client.end({ timeout: 1 }); }
+});
+
+test("all persisted failed runs enqueue atomically without duplicate terminal notifications", async ({ request }) => {
+  const company = await (await request.post("/api/companies", { data: { name: `failed-run fixture ${Date.now()}` } })).json();
+  const db = createDb("postgres://paperclip:paperclip@127.0.0.1:54329/paperclip");
+  try {
+    const [agent] = await db.insert(agents).values({ companyId: company.id, name: "PRIVATE_AGENT_NAME", role: "engineer", status: "active", adapterType: "process" }).returning();
+    const [secret] = await db.insert(companySecrets).values({ companyId: company.id, name: "fixture", key: randomUUID() }).returning();
+    const [endpoint] = await db.insert(endpoints).values({ companyId: company.id, name: "run fixture", kind: "wecom_webhook", config: {}, secretRef: secret.id, secretVersion: 1, targetKey: randomUUID(), enabled: true }).returning();
+    const [subscription] = await db.insert(subscriptions).values({ companyId: company.id, endpointId: endpoint.id, eventType: "run.failed", locale: "zh-CN" }).returning();
+    const [run] = await db.insert(heartbeatRuns).values({ companyId: company.id, agentId: agent.id, invocationSource: "assignment", status: "running", runtimeMode: "legacy" }).returning();
+    await expect(db.transaction(async tx => { await tx.update(heartbeatRuns).set({ status: "failed", error: "PRIVATE_ERROR" }).where(eq(heartbeatRuns.id, run.id)); throw Error("rollback"); })).rejects.toThrow("rollback");
+    expect(await db.select().from(deliveries).where(eq(deliveries.companyId, company.id))).toHaveLength(0);
+    await db.update(heartbeatRuns).set({ status: "failed", error: "PRIVATE_ERROR" }).where(eq(heartbeatRuns.id, run.id));
+    await db.update(heartbeatRuns).set({ status: "failed" }).where(eq(heartbeatRuns.id, run.id));
+    const rows = await db.select().from(deliveries).where(eq(deliveries.companyId, company.id)); expect(rows).toHaveLength(1);
+    expect(rows[0].snapshot.secretVersion).toBe(1); expect(rows[0].snapshot.rendered).toBe(false); expect(JSON.stringify(rows)).not.toContain("PRIVATE_ERROR");
+    let sent = 0;
+    const worker = notificationOutbox(db, { resolveSecret: async () => "{}", send: async snapshot => { sent++; expect(snapshot.title).toBe("Agent 运行失败"); expect(snapshot.text).toContain(run.id); return { state: "accepted", code: "accepted" }; } });
+    expect(await worker.tick()).toBe(true); expect(sent).toBe(1);
+    const [stored] = await db.select().from(deliveries).where(eq(deliveries.id, rows[0].id)); expect(stored.snapshot.rendered).toBe(true); expect(stored.state).toBe("accepted");
+    // Native failures use the same database boundary, not a separate callback.
+    await db.insert(heartbeatRuns).values({ companyId: company.id, agentId: agent.id, invocationSource: "assignment", status: "timed_out", runtimeMode: "native" });
+    expect(await db.select().from(deliveries).where(eq(deliveries.companyId, company.id))).toHaveLength(2);
+    await db.update(subscriptions).set({ enabled: false }).where(eq(subscriptions.id, subscription.id));
+    await db.insert(heartbeatRuns).values({ companyId: company.id, agentId: agent.id, invocationSource: "assignment", status: "failed", runtimeMode: "legacy" });
+    expect(await db.select().from(deliveries).where(eq(deliveries.companyId, company.id))).toHaveLength(2);
+  } finally { await db.update(endpoints).set({ enabled: false }).where(eq(endpoints.companyId, company.id)); await db.$client.end({ timeout: 1 }); }
+});
+
+test("explicit duplicate-risk retry preserves the unknown original and is idempotent", async ({ request }) => {
+  const company = await (await request.post("/api/companies", { data: { name: `manual-retry fixture ${Date.now()}` } })).json();
+  const db = createDb("postgres://paperclip:paperclip@127.0.0.1:54329/paperclip");
+  try {
+    const [secret] = await db.insert(companySecrets).values({ companyId: company.id, name: "fixture", key: randomUUID() }).returning();
+    const [endpoint] = await db.insert(endpoints).values({ companyId: company.id, name: "fixture", kind: "wecom_webhook", config: {}, secretRef: secret.id, secretVersion: 1, targetKey: randomUUID(), enabled: true }).returning();
+    const [subscription] = await db.insert(subscriptions).values({ companyId: company.id, endpointId: endpoint.id, eventType: "approval.requested" }).returning();
+    const [original] = await db.insert(deliveries).values({ companyId: company.id, endpointId: endpoint.id, subscriptionId: subscription.id, eventId: randomUUID(), state: "indeterminate", snapshot: { kind: "wecom_webhook", title: "Fixture", text: "Fixture", secretRef: secret.id, secretVersion: 1, targetKey: endpoint.targetKey, renderVersion: 2 } }).returning();
+    const url = `/api/companies/${company.id}/notifications/deliveries/${original.id}/retry`; const requestId = randomUUID();
+    expect((await request.post(url, { data: { requestId, confirmReviewedOutcome: true } })).status()).toBe(400);
+    const data = { requestId, confirmReviewedOutcome: true, acceptDuplicateRisk: true };
+    const first = await request.post(url, { data }); expect(first.status()).toBe(202); const queued = await first.json();
+    const second = await request.post(url, { data }); expect((await second.json()).id).toBe(queued.id);
+    const rows = await db.select().from(deliveries).where(eq(deliveries.companyId, company.id)); expect(rows).toHaveLength(2);
+    expect(rows.find(row => row.id === original.id)?.state).toBe("indeterminate"); expect(rows.find(row => row.id === queued.id)?.snapshot).toEqual(original.snapshot);
+  } finally { await db.update(endpoints).set({ enabled: false }).where(eq(endpoints.companyId, company.id)); await db.$client.end({ timeout: 1 }); }
 });

@@ -7,10 +7,10 @@ import { secretService } from "../secrets.js";
 import { sendNotification, type NotificationSnapshot, type ChannelSecret, type DeliveryResult } from "./drivers.js";
 
 export const NOTIFICATION_TOPIC = "mimouse-notifications";
-export const CONNECTED_NOTIFICATION_EVENTS = ["approval.requested", "coding.mr_ready", "coding.ci_failed", "coding.artifact_ready", "budget.threshold_reached"] as const;
+export const CONNECTED_NOTIFICATION_EVENTS = ["approval.requested", "run.failed", "coding.mr_ready", "coding.ci_failed", "coding.artifact_ready", "budget.threshold_reached"] as const;
 type Transaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
 interface EventInput { companyId: string; eventId: string; type: string; resourceId: string; title?: string; text?: string }
-interface Snapshot extends NotificationSnapshot { secretRef: string; secretVersion: number; targetKey: string; locale: string; renderVersion: number }
+interface Snapshot extends NotificationSnapshot { secretRef: string; secretVersion: number; targetKey: string; locale: string; renderVersion: number; renderEvent?: string; renderResourceId?: string; renderCompanyPrefix?: string; rendered?: boolean }
 interface DeliveryRow { id: string; company_id: string; endpoint_id: string; subscription_id: string; snapshot: Snapshot; lease: string; attempt: number; created_at: Date }
 
 /** Called inside the exact business transaction. Never run a provider request here. */
@@ -96,6 +96,24 @@ export function notificationOutbox(db: Db, deps: {
   }
   async function tick(): Promise<boolean> {
     await recover(); const row = await claim(); if (!row) return false;
+    if (![1, 2, 3].includes(row.snapshot.renderVersion)) {
+      await db.execute(sql`UPDATE mimouse_notification_deliveries SET state='rejected',last_code='unsupported_render_version',lease=NULL,lease_expires_at=NULL,updated_at=now() WHERE id=${row.id} AND lease=${row.lease} AND state='claimed'`);
+      return true;
+    }
+    if (row.snapshot.renderVersion === 3 && row.snapshot.rendered !== true) {
+      try {
+        if (row.snapshot.renderEvent !== "run.failed" || !row.snapshot.renderResourceId || !row.snapshot.renderCompanyPrefix) throw Error("unsupported_render_snapshot");
+        const rendered = renderNotification("run.failed", row.snapshot.renderResourceId, row.snapshot.locale, row.snapshot.renderCompanyPrefix, process.env.PAPERCLIP_AUTH_PUBLIC_BASE_URL);
+        const snapshot = { ...row.snapshot, ...rendered, rendered: true };
+        const changed = await db.execute(sql`UPDATE mimouse_notification_deliveries SET snapshot=${JSON.stringify(snapshot)}::jsonb,updated_at=now()
+          WHERE id=${row.id} AND lease=${row.lease} AND state='claimed' AND lease_expires_at>now() RETURNING id`);
+        if (!changed.length) return true;
+        row.snapshot = snapshot;
+      } catch {
+        await db.execute(sql`UPDATE mimouse_notification_deliveries SET state='rejected',last_code='snapshot_render_failed',lease=NULL,lease_expires_at=NULL,updated_at=now() WHERE id=${row.id} AND lease=${row.lease} AND state='claimed'`);
+        return true;
+      }
+    }
     let secret: ChannelSecret;
     try { secret = JSON.parse(await resolveSecret(row.company_id, row.snapshot.secretRef, row.snapshot.secretVersion)); }
     catch {

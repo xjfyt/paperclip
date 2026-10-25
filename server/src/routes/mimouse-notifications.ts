@@ -34,8 +34,8 @@ export function mimouseNotificationRoutes(db: Db) {
     const channelRows = await db.select().from(endpoints).where(eq(endpoints.companyId, companyId));
     const subscriptionRows = await db.select().from(subscriptions).where(eq(subscriptions.companyId, companyId));
     const deliveryRows = await db.select({ id: deliveries.id, eventId: deliveries.eventId, endpointId: deliveries.endpointId, state: deliveries.state, attempt: deliveries.attempt, lastCode: deliveries.lastCode, createdAt: deliveries.createdAt }).from(deliveries).where(eq(deliveries.companyId, companyId)).orderBy(desc(deliveries.createdAt)).limit(100);
-    res.json({ enabled: process.env.PAPERCLIP_NOTIFICATIONS_ENABLED === "true", connectedEvents: CONNECTED_NOTIFICATION_EVENTS,
-      unconnectedEvents: ["run.failed"],
+    res.json({ enabled: process.env.PAPERCLIP_NOTIFICATIONS_ENABLED === "true", dispatchEnabled: process.env.PAPERCLIP_NOTIFICATIONS_ENABLED === "true" && process.env.PAPERCLIP_NOTIFICATIONS_WORKER_ENABLED !== "false", connectedEvents: CONNECTED_NOTIFICATION_EVENTS,
+      unconnectedEvents: [],
       verification: { implemented: true, contractTested: false, liveVerified: false, scenarioVerified: false },
       endpoints: channelRows.map(({ targetKey: _targetKey, ...row }) => row), subscriptions: subscriptionRows, deliveries: deliveryRows });
   });
@@ -74,6 +74,24 @@ export function mimouseNotificationRoutes(db: Db) {
     if (!subscription) throw notFound("Notification subscription not found");
     const actor = getActorInfo(req); await logActivity(db, { companyId, actorType: actor.actorType, actorId: actor.actorId, action: "notification.subscription.toggled", entityType: "notification_subscription", entityId: subscription.id, details: { enabled: subscription.enabled } });
     res.json({ id: subscription.id, enabled: subscription.enabled });
+  });
+  router.post(`${path}/deliveries/:id/retry`, validate(z.object({ requestId: z.string().uuid(), confirmReviewedOutcome: z.literal(true), acceptDuplicateRisk: z.literal(true) }).strict()), async (req, res) => {
+    const companyId = String(req.params.companyId); companyAdmin(req, companyId);
+    const [original] = await db.select().from(deliveries).where(and(eq(deliveries.companyId, companyId), eq(deliveries.id, String(req.params.id))));
+    if (!original) throw notFound("Delivery not found");
+    if (!["indeterminate", "rejected"].includes(original.state)) throw unprocessable("Only reviewed unknown or rejected deliveries may be explicitly retried");
+    const endpoint = await loadEndpoint(companyId, original.endpointId);
+    const [subscription] = await db.select().from(subscriptions).where(and(eq(subscriptions.companyId, companyId), eq(subscriptions.id, original.subscriptionId)));
+    if (!endpoint.enabled || !subscription?.enabled) throw unprocessable("Endpoint and subscription must both be enabled");
+    const eventId = `manual-retry:${original.id}:${req.body.requestId}`;
+    const retried = await db.transaction(async tx => {
+      await signalDatabaseWork(tx, NOTIFICATION_TOPIC);
+      const [created] = await tx.insert(deliveries).values({ companyId, eventId, subscriptionId: original.subscriptionId, endpointId: original.endpointId, snapshot: original.snapshot }).onConflictDoNothing().returning();
+      if (created) return created;
+      const [existing] = await tx.select().from(deliveries).where(and(eq(deliveries.companyId, companyId), eq(deliveries.subscriptionId, original.subscriptionId), eq(deliveries.eventId, eventId))); return existing;
+    });
+    const actor = getActorInfo(req); await logActivity(db, { companyId, actorType: actor.actorType, actorId: actor.actorId, action: "notification.delivery.explicit_retry", entityType: "notification_delivery", entityId: retried.id, details: { originalDeliveryId: original.id, duplicateRiskAccepted: true } });
+    res.status(202).json({ id: retried.id, state: retried.state, originalDeliveryId: original.id, originalStateUnchanged: true });
   });
   router.post(`${path}/endpoints/:id/test`, validate(testSchema), async (req, res) => {
     const companyId = String(req.params.companyId); companyAdmin(req, companyId); const input = testSchema.parse(req.body); const endpoint = await loadEndpoint(companyId, String(req.params.id));
