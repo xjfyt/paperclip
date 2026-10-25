@@ -6,7 +6,7 @@
 
 `PAPERCLIP_NOTIFICATIONS_ENABLED=true` 启用 worker 与业务事件钩子，默认关闭。`PAPERCLIP_NOTIFICATIONS_WORKER_ENABLED=false` 可暂停外部派发并继续事务入队，便于维护与无外发测试；恢复前先检查积压。部署前先备份数据库并应用标准迁移。凭据使用已有公司秘密存储，值为 JSON；配置中填写秘密 ID 和固定版本。
 
-- 企业微信/飞书/钉钉旧 Webhook：`url`，需要签名时增加 `signingSecret`。飞书与 Lark 使用各自域名；API 的 brand=lark 受支持，当前设置页仍只有飞书入口。
+- 企业微信/飞书/钉钉旧 Webhook：`url`，需要签名时增加 `signingSecret`。飞书与 Lark 使用各自域名；设置页可明确选择飞书或 Lark。
 - 钉钉应用机器人：JSON 的 `accessToken`，渠道配置 robotCode/target。
 - 微信公众号：JSON 的 `accessToken`，渠道配置 target（OpenID）、templateId、templateData。
 
@@ -24,4 +24,6 @@
 
 五驱动有协议单测（签名输入、字节长度、业务码、模板字段、未知结果）；真实 HTTP/PostgreSQL 集成覆盖回滚、幂等、双 worker 竞争、过期领取、sending 恢复、迟到回执与跨公司外键。真实群、公众号权限和 token 刷新均未验收。设置页四语已构建与类型检查；云权限阻止 Chromium，浏览器测试未通过。
 
-尚未完成：管理员对未知投递的对账/显式重试界面（API 已有）、订阅停用界面（API 已有）和配置修订 UX。此文不是完整通知能力验收报告。回滚先关闭开关和 worker，保留台账，再回退应用；不删新表清除未知状态。
+设置页现已提供六类事件订阅的启用/暂停、派发开关状态、脱敏原快照预览及双重确认后的显式重试。切换公司会重置表单；迟到的预览响应不会替换当前已确认目标。配置修订 UX 和供应商对账自动化尚未完成。此文不是完整通知能力验收报告。回滚先关闭开关和 worker，保留台账，再回退应用；不删新表清除未知状态。
+
+公众号 templateData 支持单次展开 {{title}}、{{text}}、{{resourceId}}；未知占位符、畸形模板和超长值拒绝，不进行动态对象求值。模板渲染失败保留 rejected 投递，不回滚原业务操作；缺少有效渲染快照的投递不可显式重试，需先修正配置并重新核对业务事件。

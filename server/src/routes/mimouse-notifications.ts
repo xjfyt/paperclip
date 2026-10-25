@@ -1,3 +1,4 @@
+import { renderTemplateData } from "../services/mimouse-notifications/render.js";
 import { createHash } from "node:crypto";
 import { Router, type Request } from "express";
 import { and, desc, eq } from "drizzle-orm";
@@ -45,7 +46,7 @@ export function mimouseNotificationRoutes(db: Db) {
     try { secret = JSON.parse(await secretService(db).resolveSecretValue(companyId, input.secretRef, input.secretVersion)); }
     catch { throw unprocessable("Secret unavailable or invalid JSON for this company"); }
     let request: ReturnType<typeof buildNotificationRequest>;
-    try { request = buildNotificationRequest({ ...input.config, kind: input.kind, title: "Configuration validation", text: "No message is sent when saving." }, secret); }
+    try { request = buildNotificationRequest({ ...input.config, ...(input.config.templateData ? { templateData: renderTemplateData(input.config.templateData, { title: "Configuration validation", text: "No message is sent when saving." }, "resource-preview") } : {}), kind: input.kind, title: "Configuration validation", text: "No message is sent when saving." }, secret); }
     catch { throw unprocessable("Channel configuration is incomplete or invalid"); }
     // Credentials and signatures are excluded from target identity for app APIs;
     // complete Webhook URLs identify destinations but only the digest persists.
@@ -75,11 +76,22 @@ export function mimouseNotificationRoutes(db: Db) {
     const actor = getActorInfo(req); await logActivity(db, { companyId, actorType: actor.actorType, actorId: actor.actorId, action: "notification.subscription.toggled", entityType: "notification_subscription", entityId: subscription.id, details: { enabled: subscription.enabled } });
     res.json({ id: subscription.id, enabled: subscription.enabled });
   });
+  router.get(`${path}/deliveries/:id/preview`, async (req, res) => {
+    const companyId = String(req.params.companyId); companyAdmin(req, companyId);
+    const [row] = await db.select().from(deliveries).where(and(eq(deliveries.companyId, companyId), eq(deliveries.id, String(req.params.id))));
+    if (!row) throw notFound("Delivery not found"); const endpoint = await loadEndpoint(companyId, row.endpointId);
+    const snapshot = row.snapshot;
+    res.json({ id: row.id, state: row.state, endpointName: endpoint.name, kind: endpoint.kind,
+      title: typeof snapshot.title === "string" ? snapshot.title.slice(0, 1000) : "", text: typeof snapshot.text === "string" ? snapshot.text.slice(0, 5000) : "",
+      templateData: snapshot.kind === "wechat_official_account" ? snapshot.templateData ?? null : null,
+      target: typeof snapshot.target === "string" ? snapshot.target : null, secretVersion: snapshot.secretVersion, locale: snapshot.locale });
+  });
   router.post(`${path}/deliveries/:id/retry`, validate(z.object({ requestId: z.string().uuid(), confirmReviewedOutcome: z.literal(true), acceptDuplicateRisk: z.literal(true) }).strict()), async (req, res) => {
     const companyId = String(req.params.companyId); companyAdmin(req, companyId);
     const [original] = await db.select().from(deliveries).where(and(eq(deliveries.companyId, companyId), eq(deliveries.id, String(req.params.id))));
     if (!original) throw notFound("Delivery not found");
     if (!["indeterminate", "rejected"].includes(original.state)) throw unprocessable("Only reviewed unknown or rejected deliveries may be explicitly retried");
+    if (["snapshot_render_failed", "unsupported_render_version"].includes(original.lastCode ?? "")) throw unprocessable("Invalid render snapshots cannot be replayed; correct configuration before generating a new event");
     const endpoint = await loadEndpoint(companyId, original.endpointId);
     const [subscription] = await db.select().from(subscriptions).where(and(eq(subscriptions.companyId, companyId), eq(subscriptions.id, original.subscriptionId)));
     if (!endpoint.enabled || !subscription?.enabled) throw unprocessable("Endpoint and subscription must both be enabled");
@@ -100,7 +112,7 @@ export function mimouseNotificationRoutes(db: Db) {
       const [subscription] = await tx.insert(subscriptions).values({ companyId, endpointId: endpoint.id, eventType: "manual.test", locale: "en" }).onConflictDoUpdate({ target: [subscriptions.companyId, subscriptions.endpointId, subscriptions.eventType], set: { enabled: true } }).returning();
       await signalDatabaseWork(tx, NOTIFICATION_TOPIC);
       const [row] = await tx.insert(deliveries).values({ companyId, eventId: `manual-test:${input.requestId}`, subscriptionId: subscription.id, endpointId: endpoint.id,
-        snapshot: { ...endpoint.config, kind: endpoint.kind, title: input.title, text: input.text, secretRef: endpoint.secretRef, secretVersion: endpoint.secretVersion, targetKey: endpoint.targetKey, renderVersion: 1, locale: "en" } }).onConflictDoNothing().returning();
+        snapshot: { ...endpoint.config, ...(endpoint.config.templateData ? { templateData: renderTemplateData(endpoint.config.templateData, { title: input.title, text: input.text }, input.requestId) } : {}), kind: endpoint.kind, title: input.title, text: input.text, secretRef: endpoint.secretRef, secretVersion: endpoint.secretVersion, targetKey: endpoint.targetKey, renderVersion: 1, locale: "en" } }).onConflictDoNothing().returning();
       if (row) return row;
       const [existing] = await tx.select().from(deliveries).where(and(eq(deliveries.companyId, companyId), eq(deliveries.eventId, `manual-test:${input.requestId}`), eq(deliveries.subscriptionId, subscription.id)));
       return existing;

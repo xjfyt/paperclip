@@ -1,4 +1,4 @@
-import { renderNotification, type NotificationEventType } from "./render.js";
+import { renderNotification, renderTemplateData, type NotificationEventType } from "./render.js";
 import { logger } from "../../middleware/logger.js";
 import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
@@ -24,14 +24,25 @@ export async function enqueueNotification(tx: Transaction, event: EventInput): P
   if (!company) throw Error("notification_company_missing");
   await signalDatabaseWork(tx, NOTIFICATION_TOPIC);
   for (const { subscription, endpoint } of targets) {
-    const rendered = renderNotification(event.type as NotificationEventType, event.resourceId, subscription.locale, company.prefix, process.env.PAPERCLIP_AUTH_PUBLIC_BASE_URL);
+    let renderFailed = false;
+    let rendered: { title: string; text: string; detailUrl?: string };
+    let templateData: Record<string, { value: string }> | undefined;
+    try {
+      rendered = renderNotification(event.type as NotificationEventType, event.resourceId, subscription.locale, company.prefix, process.env.PAPERCLIP_AUTH_PUBLIC_BASE_URL);
+      templateData = renderTemplateData(endpoint.config.templateData, rendered, event.resourceId);
+    } catch {
+      // A malformed channel template must not block the business transaction.
+      // Keep a visible rejected delivery, not a successful or silently lost send.
+      renderFailed = true; rendered = { title: "Notification rendering failed", text: event.resourceId };
+    }
     const snapshot: Snapshot = {
       ...endpoint.config,
       kind: endpoint.kind as NotificationSnapshot["kind"], ...rendered,
+      ...(templateData ? { templateData } : {}),
       secretRef: endpoint.secretRef, secretVersion: endpoint.secretVersion,
       targetKey: endpoint.targetKey, locale: subscription.locale, renderVersion: 2,
     };
-    await tx.insert(deliveries).values({ companyId: event.companyId, eventId: event.eventId, subscriptionId: subscription.id, endpointId: endpoint.id, snapshot: snapshot as unknown as Record<string, unknown> }).onConflictDoNothing();
+    await tx.insert(deliveries).values({ companyId: event.companyId, eventId: event.eventId, subscriptionId: subscription.id, endpointId: endpoint.id, snapshot: snapshot as unknown as Record<string, unknown>, ...(renderFailed ? { state: "rejected", lastCode: "snapshot_render_failed" } : {}) }).onConflictDoNothing();
   }
 }
 export function retryDelay(attempt: number, retryAfterMs = 0, random = Math.random()): number {
@@ -104,7 +115,7 @@ export function notificationOutbox(db: Db, deps: {
       try {
         if (row.snapshot.renderEvent !== "run.failed" || !row.snapshot.renderResourceId || !row.snapshot.renderCompanyPrefix) throw Error("unsupported_render_snapshot");
         const rendered = renderNotification("run.failed", row.snapshot.renderResourceId, row.snapshot.locale, row.snapshot.renderCompanyPrefix, process.env.PAPERCLIP_AUTH_PUBLIC_BASE_URL);
-        const snapshot = { ...row.snapshot, ...rendered, rendered: true };
+        const snapshot = { ...row.snapshot, ...rendered, ...(row.snapshot.templateData ? { templateData: renderTemplateData(row.snapshot.templateData, rendered, row.snapshot.renderResourceId) } : {}), rendered: true };
         const changed = await db.execute(sql`UPDATE mimouse_notification_deliveries SET snapshot=${JSON.stringify(snapshot)}::jsonb,updated_at=now()
           WHERE id=${row.id} AND lease=${row.lease} AND state='claimed' AND lease_expires_at>now() RETURNING id`);
         if (!changed.length) return true;

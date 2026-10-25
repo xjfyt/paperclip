@@ -21,3 +21,21 @@ export function renderNotification(type: NotificationEventType, resourceId: stri
   }
   return { title, text: `${title}\n${resourceId}\n${notices[language]}`, ...(detailUrl ? { detailUrl } : {}) };
 }
+
+/** Expand only explicit, documented placeholders once. User text is never
+ * reinterpreted as another template, and no arbitrary object lookup is allowed. */
+export function renderTemplateData(raw: unknown, content: { title: string; text: string }, resourceId: string): Record<string, { value: string }> | undefined {
+  if (raw === undefined) return undefined;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw) || Object.keys(raw).length > 50) throw Error("invalid_template_fields");
+  const values: Record<string, string> = { title: content.title, text: content.text, resourceId };
+  return Object.fromEntries(Object.entries(raw).map(([key, field]) => {
+    if (!/^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(key) || !field || typeof field !== "object" || Array.isArray(field) || typeof (field as { value?: unknown }).value !== "string") throw Error("invalid_template_fields");
+    const source = (field as { value: string }).value;
+    if (/\{\{|\}\}/.test(source.replace(/\{\{[^{}]+\}\}/g, ""))) throw Error("invalid_template_placeholder");
+    const value = source.replace(/\{\{\s*([^{}]*?)\s*\}\}/g, (_match, name: string) => {
+      if (!Object.hasOwn(values, name)) throw Error("unsupported_template_placeholder"); return values[name];
+    });
+    if (value.length > 1000) throw Error("template_value_too_large");
+    return [key, { value }];
+  }));
+}
