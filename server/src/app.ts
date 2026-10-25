@@ -1,3 +1,4 @@
+import { mimouseNotificationRoutes } from "./routes/mimouse-notifications.js";
 import { casdoorCapabilities, readCasdoorConfig } from "./auth/casdoor.js";
 import { voiceSessionRoutes, voiceWebhookRoutes } from "./routes/voice-sessions.js";
 import { eq } from "drizzle-orm";
@@ -888,6 +889,7 @@ export async function createApp(
   api.use(resourceMembershipRoutes(db));
   api.use(primaryAgentRoutes(db));
   api.use(inboxDismissalRoutes(db));
+  api.use(mimouseNotificationRoutes(db));
   api.use(instanceSettingsRoutes(db, workerManager, opts.prepareIdleDatabaseBackup));
   if (opts.databaseBackupService) {
     api.use(instanceDatabaseBackupRoutes(opts.databaseBackupService));

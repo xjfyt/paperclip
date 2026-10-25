@@ -1,3 +1,4 @@
+import { startNotificationWorker } from "./services/mimouse-notifications/outbox.js";
 import { subscribeAllCompanyLiveEvents } from "./services/live-events.js";
 import { DELIVERY_QUEUES } from "./services/delivery-work-notifications.js";
 import type { createDeliveryWorkCoordinator } from "./services/delivery-work-coordinator.js";
@@ -1203,6 +1204,7 @@ async function startServerWithDatabaseTeardown(
         .finally(() => { executionControlSweepsInFlight.delete(queue); }));
     }
   };
+  const mimouseNotificationWorker = startNotificationWorker(db);
   const executionControlInterval = setInterval(sweepExecutionControl, EXECUTION_RECONCILIATION_INTERVAL_MS);
   executionControlInterval.unref?.();
   sweepExecutionControl();
@@ -1970,6 +1972,7 @@ async function startServerWithDatabaseTeardown(
     heartbeatSchedulerStopped = true;
     unsubscribeChatCompletions();
     await deliveryWork.stop();
+    await mimouseNotificationWorker.stop();
     clearInterval(executionControlInterval);
     if (heartbeatSchedulerInterval) {
       clearInterval(heartbeatSchedulerInterval);

@@ -1,0 +1,27 @@
+# 持久通知中心
+
+路径：公司侧栏「通知中心」；API `/api/companies/:companyId/notifications`。管理写面限公司 owner/admin 或实例管理员；Agent 不能配置渠道。渠道配置与公司秘密引用由服务端校验；返回不含完整 Webhook、访问令牌或供应商原始错误。保存只校验，不发送。
+
+## 开关与凭据
+
+`PAPERCLIP_NOTIFICATIONS_ENABLED=true` 启用 worker 与业务事件钩子，默认关闭。部署前先备份数据库并应用标准迁移。凭据使用已有公司秘密存储，值为 JSON；配置中填写秘密 ID 和固定版本。
+
+- 企业微信/飞书/钉钉旧 Webhook：`url`，需要签名时增加 `signingSecret`。飞书与 Lark 使用各自域名；API 的 brand=lark 受支持，当前设置页仍只有飞书入口。
+- 钉钉应用机器人：JSON 的 `accessToken`，渠道配置 robotCode/target。
+- 微信公众号：JSON 的 `accessToken`，渠道配置 target（OpenID）、templateId、templateData。
+
+后两者当前依赖外部安全刷新服务更新 token。自动 AppSecret 换 token/共享缓存尚未接入，不应作为长期免维护生产方案。固定版本在过期/撤销后明确拒绝，不偷偷换到最新版本。配置变更新建 endpoint，旧投递仍绑定原快照。停用阻止进入 sending 前的投递，不能撤回已进入外部发送阶段的消息。
+
+## 事件与投递语义
+
+当前只接入 `approval.requested`，与 approval 插入在同一事务。run.failed、三类 coding 事件、budget.threshold_reached 均显示未接入，不能订阅为已生效。仅发送资源摘要/引用，不发送完整业务 payload、代码或日志；不默认 @all。
+
+唯一键 company/event/subscription 防重复入队。数据库原子领取和 lease UUID 防迟到回写。过期 claimed 可以重领；过期 sending 变为 indeterminate，不自动重发。平台 accepted 不等于已读，也不代表业务审批完成。测试发送使用显式确认和稳定 requestId；结果未知时先核对外部平台，不重复点击创建新测试。
+
+共享目标间隔保存在数据库，通过事务 advisory lock 序列化：飞书默认 1 秒，其他渠道 3 秒，均为保守产品默认，不是声称所有产品有相同官方配额。429 按 Retry-After 和退避，最多 5 次/30 分钟；其他错误按 rejected/indeterminate 记录。业务错误码不盲目重试。超时、异常响应与 5xx 保持未知。
+
+## 验证与限制
+
+五驱动有协议单测（签名输入、字节长度、业务码、模板字段、未知结果）；真实 HTTP/PostgreSQL 集成覆盖回滚、幂等、双 worker 竞争、过期领取、sending 恢复、迟到回执与跨公司外键。真实群、公众号权限和 token 刷新均未验收。设置页四语已构建与类型检查；云权限阻止 Chromium，浏览器测试未通过。
+
+尚未完成：全部六类事件接线、通知文案按订阅语言渲染、管理员对未知投递的对账/显式重试界面、完整订阅停用界面和配置修订 UX。此文不是完整通知能力验收报告。回滚先关闭开关和 worker，保留台账，再回退应用；不删新表清除未知状态。

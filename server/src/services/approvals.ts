@@ -1,3 +1,4 @@
+import { enqueueNotification } from "./mimouse-notifications/outbox.js";
 import { approvalResolutionRecords, resolvableApprovalStatuses as resolvableStatuses } from "../lib/approval-records.js";
 import { budgetService } from "./budgets.js";
 import { notifyHireApproved } from "./hire-hook.js";
@@ -53,12 +54,19 @@ export function approvalRecords(db: Db) {
       return rows[0] ?? null;
     },
 
-    create: (companyId: string, data: Omit<typeof approvals.$inferInsert, "companyId">) =>
-      db
-        .insert(approvals)
-        .values({ ...data, companyId })
-        .returning()
-        .then((rows) => rows[0]),
+    create: async (companyId: string, data: Omit<typeof approvals.$inferInsert, "companyId">) => {
+      if (process.env.PAPERCLIP_NOTIFICATIONS_ENABLED !== "true") {
+        return db.insert(approvals).values({ ...data, companyId }).returning().then(rows => rows[0]);
+      }
+      return db.transaction(async tx => {
+        const [approval] = await tx.insert(approvals).values({ ...data, companyId }).returning();
+        if (approval.status === "pending") await enqueueNotification(tx, {
+          companyId, eventId: `approval:${approval.id}`, type: "approval.requested", resourceId: approval.id,
+          title: "Approval requested", text: `Approval ${approval.id} requires review in Paperclip.`,
+        });
+        return approval;
+      });
+    },
 
     // Cancel an open (pending/revision_requested) approval without a board
     // decision — e.g. when its paired agent is terminated during duplicate
