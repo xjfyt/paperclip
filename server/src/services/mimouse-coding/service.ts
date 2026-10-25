@@ -1,7 +1,7 @@
 import { enqueueNotification } from "../mimouse-notifications/outbox.js";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { and, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { executionWorkspaces, mimouseCodingDeliveries as deliveries, type Db } from "@paperclipai/db";
 import { secretService } from "../secrets.js";
@@ -100,6 +100,19 @@ export function codingService(db: Db, deps: { client?: typeof gitlabClient } = {
         await db.update(deliveries).set({ operationState: "mr_created", operationLease: null, mrIid: mr.iid }).where(and(eq(deliveries.id, id), eq(deliveries.operationLease, lease)));
         await saveRemote(row, mr, null); return mr;
       } catch { await db.update(deliveries).set({ operationState: "mr_indeterminate", operationLease: null }).where(and(eq(deliveries.id, id), eq(deliveries.operationLease, lease))); throw new GitLabError("mr_creation_requires_reconciliation", true); }
+    },
+    failureContext: async (companyId: string, id: string) => {
+      const row = await load(companyId, id); const remote = row.remoteEvidence;
+      const mr = remote.mr as GitLabMergeRequest | undefined; const pipeline = remote.pipeline as GitLabPipeline | undefined;
+      const checkedAt = typeof remote.checkedAt === "string" ? Date.parse(remote.checkedAt) : NaN;
+      if (row.syncLastCode || !mr || mr.state !== "opened" || mr.sha !== row.headSha || !pipeline || pipeline.sha !== row.headSha || pipeline.status !== "failed" || !Number.isFinite(checkedAt) || Date.now() - checkedAt > 60000 || checkedAt > Date.now() + 5000) throw new GitLabError("repair_evidence_stale_or_unverified");
+      const api = await client(row, AbortSignal.timeout(30000)); const jobs = (await api.jobs(pipeline.id)).filter(job => job.status === "failed");
+      if (!jobs.length || jobs.some(job => job.commitSha !== row.headSha || job.pipelineId !== pipeline.id)) throw new GitLabError("repair_job_evidence_unverified");
+      // Runner/timeout/permission failures require an operator, not code edits.
+      if (jobs.some(job => job.failureReason !== "script_failure")) throw new GitLabError("repair_environment_requires_operator");
+      const signature = jobs.map(job => [job.name, job.stage, job.failureReason]).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+      const fingerprint = createHash("sha256").update(JSON.stringify(["coding-failure-v1", row.headSha, signature])).digest("hex");
+      return { headSha: row.headSha, pipelineId: pipeline.id, fingerprint, jobs };
     },
     sync: async (companyId: string, id: string, options: { onlyWhenDue?: boolean } = {}) => {
       const now = new Date(); const lease = randomUUID();

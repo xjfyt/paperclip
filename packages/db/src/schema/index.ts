@@ -251,4 +251,4 @@ export { mimouseNotificationEndpoints, mimouseNotificationSubscriptions, mimouse
 
 export { mimouseWorkbuddyConnections, mimouseWorkbuddyJobs, mimouseWorkbuddyTurns } from "./mimouse_workbuddy.js";
 
-export { mimouseCodingDeliveries } from "./mimouse_coding.js";
+export { mimouseCodingDeliveries, mimouseCodingRepairAttempts } from "./mimouse_coding.js";

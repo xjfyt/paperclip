@@ -1,9 +1,11 @@
+import { codingRepairService } from "../services/mimouse-coding/repairs.js";
+import { repairSettingsSchema } from "../services/mimouse-coding/repair-policy.js";
 import { artifactManifest } from "../services/mimouse-coding/artifacts.js";
 import { enqueueNotification } from "../services/mimouse-notifications/outbox.js";
 import { Router, type Request } from "express";
 import { z } from "zod";
 import { and, desc, eq } from "drizzle-orm";
-import { companySecrets, executionWorkspaces, issues, mimouseCodingDeliveries as deliveries, type Db } from "@paperclipai/db";
+import { companySecrets, executionWorkspaces, issues, mimouseCodingDeliveries as deliveries, mimouseCodingRepairAttempts as repairAttempts, type Db } from "@paperclipai/db";
 import { assertBoard, assertCompanyAccess, getActorInfo } from "./authz.js";
 import { forbidden, notFound, unprocessable } from "../errors.js";
 import { validate } from "../middleware/validate.js";
@@ -33,6 +35,20 @@ export function mimouseCodingRoutes(db: Db) {
   }
   async function safe<T>(action: () => Promise<T>) { try { return await action(); } catch (error) { throw unprocessable(error instanceof GitLabError ? error.code : "coding_operation_failed", { uncertain: error instanceof GitLabError && error.uncertain }); } }
   async function audit(req: Request, action: string, id: string) { const actor = getActorInfo(req); await logActivity(db, { companyId: String(req.params.companyId), actorType: actor.actorType, actorId: actor.actorId, action, entityType: "coding_delivery", entityId: id, details: {} }); }
+  router.post(`${root}/:id/repair-settings`, validate(repairSettingsSchema), async (req, res) => {
+    const companyId = admin(req); const id = String(req.params.id);
+    if (req.actor.type !== "board" || req.actor.source !== "session" || !req.actor.userId) throw forbidden("A signed-in owner is required for repair authorization");
+    const ownerUserId = req.actor.userId; const row = await service.load(companyId, id); await issueAccess(req, companyId, row.issueId);
+    const result = await safe(() => codingRepairService(db).configure(companyId, id, req.body, ownerUserId));
+    await audit(req, req.body.enabled ? "coding.repair.authorized" : "coding.repair.disabled", id); res.json(result);
+  });
+  router.get(`${root}/:id/repairs`, async (req, res) => {
+    const companyId = admin(req); const row = await service.load(companyId, String(req.params.id)); await issueAccess(req, companyId, row.issueId);
+    const history = await db.select({ id: repairAttempts.id, attempt: repairAttempts.attempt, state: repairAttempts.state, pipelineId: repairAttempts.pipelineId, headSha: repairAttempts.headSha,
+      routineRunId: repairAttempts.routineRunId, issueId: repairAttempts.issueId, lastCode: repairAttempts.lastCode, createdAt: repairAttempts.createdAt }).from(repairAttempts)
+      .where(and(eq(repairAttempts.companyId, companyId), eq(repairAttempts.deliveryId, row.id))).orderBy(desc(repairAttempts.createdAt)).limit(10);
+    res.json({ operatorEnabled: process.env.PAPERCLIP_CODING_REPAIR_ENABLED === "true", status: row.repairStatus, lastCode: row.repairLastCode, policy: row.repairPolicy, attempts: history });
+  });
   router.get(root, async (req, res) => {
     const companyId = admin(req); const rows = await db.select().from(deliveries).where(eq(deliveries.companyId, companyId)).orderBy(desc(deliveries.updatedAt)).limit(100); const visible = [];
     for (const row of rows) {

@@ -30,3 +30,9 @@ describe("new integration route authorization boundary", () => {
     expect((await request(server).get(`/companies/${companyId}/${route}`)).status).toBe(403); expect(select).not.toHaveBeenCalled();
   });
 });
+
+it("local implicit board access cannot authorize paid background repairs", async () => {
+  const { server, select } = app({ type: "board", source: "local_implicit", userId: "local-board", companyIds: [companyId], isInstanceAdmin: true });
+  const response = await request(server).post(`/companies/${companyId}/coding/33333333-3333-4333-8333-333333333333/repair-settings`).send({ enabled: true, confirm: true, headSha: "a".repeat(40), routineId: "44444444-4444-4444-8444-444444444444", expectedRoutineRevisionId: "55555555-5555-4555-8555-555555555555", maxAttempts: 2, maxDurationMinutes: 15, maxCostCents: 100 });
+  expect(response.status).toBe(403); expect(select).not.toHaveBeenCalled();
+});

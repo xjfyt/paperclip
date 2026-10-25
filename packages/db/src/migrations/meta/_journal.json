@@ -2367,6 +2367,13 @@
       "when": 1792956922525,
       "tag": "0339_mimouse_coding_sync_cursor",
       "breakpoints": true
+    },
+    {
+      "idx": 340,
+      "version": "7",
+      "when": 1792958934046,
+      "tag": "0340_mimouse_coding_repair_ledger",
+      "breakpoints": true
     }
   ]
 }

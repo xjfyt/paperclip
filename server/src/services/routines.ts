@@ -1734,6 +1734,7 @@ export function routineService(
     executionWorkspacePreference?: string | null;
     executionWorkspaceSettings?: Record<string, unknown> | null;
     descriptionAppendix?: string | null;
+    expectedRevisionId?: string;
     nextRunAtOverride?: Date | null;
     actor?: Actor;
   }) {
@@ -1801,6 +1802,12 @@ export function routineService(
       await tx.execute(
         sql`select id from ${routines} where ${routines.id} = ${input.routine.id} and ${routines.companyId} = ${input.routine.companyId} for update`,
       );
+
+      if (input.expectedRevisionId) {
+        const [pinned] = await txDb.select({ revisionId: routines.latestRevisionId, status: routines.status }).from(routines)
+          .where(and(eq(routines.id, input.routine.id), eq(routines.companyId, input.routine.companyId)));
+        if (!pinned || pinned.revisionId !== input.expectedRevisionId || pinned.status !== "active") throw conflict("Routine revision changed or is no longer active");
+      }
 
       if (input.trigger && (input.source === "webhook" || input.source === "schedule")) {
         const currentTrigger = await txDb.select().from(routineTriggers).where(eq(routineTriggers.id, input.trigger.id)).then((rows) => rows[0]);
@@ -2888,7 +2895,7 @@ export function routineService(
       });
     },
 
-    runPipelineStageEntryRoutine: async (id: string, input: RunRoutine & { descriptionAppendix?: string | null }, actor?: Actor) => {
+    runPipelineStageEntryRoutine: async (id: string, input: RunRoutine & { descriptionAppendix?: string | null; expectedRevisionId?: string }, actor?: Actor) => {
       const routine = await getRoutineById(id);
       if (!routine) throw notFound("Routine not found");
       if (routine.status === "archived") throw conflict("Routine is archived");
@@ -2910,6 +2917,7 @@ export function routineService(
         executionWorkspaceSettings:
           (input.executionWorkspaceSettings as Record<string, unknown> | null | undefined) ?? null,
         descriptionAppendix: input.descriptionAppendix ?? null,
+        expectedRevisionId: input.expectedRevisionId,
         actor,
       });
     },

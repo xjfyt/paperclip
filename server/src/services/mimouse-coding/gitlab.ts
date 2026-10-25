@@ -1,6 +1,7 @@
 export class GitLabError extends Error { constructor(public code: string, public uncertain = false) { super(code); } }
 export interface GitLabMergeRequest { iid: number; sha: string; state: string; web_url?: string; source_branch?: string; target_branch?: string }
 export interface GitLabPipeline { id: number; sha: string; status: string; web_url?: string }
+export interface GitLabJobReceipt { id: number; name: string; stage: string; status: string; failureReason: string | null; commitSha: string; pipelineId: number; webUrl?: string }
 // Persist only the fields used by the release-candidate gate, never raw vendor payloads.
 function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new GitLabError("gitlab_invalid_receipt");
@@ -30,6 +31,14 @@ export function pipelineReceipt(value: unknown, origin: string): GitLabPipeline 
   const row = record(value);
   if (typeof row.status !== "string" || row.status.length > 40) throw new GitLabError("gitlab_invalid_receipt");
   return { id: positiveId(row.id), sha: shaValue(row.sha), status: row.status, web_url: safeWebUrl(row.web_url, origin) };
+}
+export function jobReceipt(value: unknown, origin: string, projectId: number, pipelineId: number): GitLabJobReceipt {
+  const row = record(value); const commit = record(row.commit); const pipeline = record(row.pipeline);
+  if (pipeline.id !== pipelineId || pipeline.project_id !== projectId || pipeline.sha !== commit.id) throw new GitLabError("gitlab_job_identity_mismatch");
+  for (const key of ["name", "stage", "status"] as const) if (typeof row[key] !== "string" || !(row[key] as string).trim() || (row[key] as string).length > 200) throw new GitLabError("gitlab_invalid_job_receipt");
+  if (row.failure_reason != null && (typeof row.failure_reason !== "string" || !/^[a-z0-9_]{1,80}$/.test(row.failure_reason))) throw new GitLabError("gitlab_invalid_job_receipt");
+  return { id: positiveId(row.id), name: row.name as string, stage: row.stage as string, status: row.status as string,
+    failureReason: row.failure_reason as string | null ?? null, commitSha: shaValue(commit.id), pipelineId, webUrl: safeWebUrl(row.web_url, origin) };
 }
 export function gitlabOrigin(raw: string, allowedOrigins: readonly string[]): string {
   let url: URL; try { url = new URL(raw); } catch { throw new GitLabError("invalid_gitlab_url"); }
@@ -75,7 +84,7 @@ export function gitlabClient(config: { origin: string; projectId: number; token:
     },
     pipeline: async (id: number) => pipelineReceipt(await call(`${project}/pipelines/${positiveId(id)}`), origin),
     pipelines: async (sha: string) => (await call<unknown[]>(`${project}/pipelines?sha=${encodeURIComponent(sha)}&per_page=100`)).map(row => pipelineReceipt(row, origin)),
-    jobs: (pipelineId: number) => call<Array<{ id: number; status: string; name: string; web_url?: string; commit?: { id?: string } }>>(`${project}/pipelines/${pipelineId}/jobs?per_page=100`),
+    jobs: async (pipelineId: number) => (await call<unknown[]>(`${project}/pipelines/${positiveId(pipelineId)}/jobs?per_page=100`)).map(row => jobReceipt(row, origin, config.projectId, pipelineId)),
   };
 }
 export interface CheckEvidence { commitSha: string; command: string; exitCode: number | null; startedAt: string; finishedAt: string; logRef: string; status: "passed" | "failed" | "blocked" | "not_run" }

@@ -1,3 +1,4 @@
+import { startCodingRepairWorker } from "./services/mimouse-coding/repair-worker.js";
 import { startCodingPollWorker } from "./services/mimouse-coding/poller.js";
 import { startNotificationWorker } from "./services/mimouse-notifications/outbox.js";
 import { subscribeAllCompanyLiveEvents } from "./services/live-events.js";
@@ -1206,6 +1207,7 @@ async function startServerWithDatabaseTeardown(
     }
   };
   const mimouseNotificationWorker = startNotificationWorker(db);
+  const mimouseCodingRepairWorker = startCodingRepairWorker(db, { heartbeat: accountingHeartbeat, pluginWorkerManager }, () => !isWarmStandby() && !isIdleTaskDrainActive());
   const mimouseCodingPollWorker = startCodingPollWorker(db, () => !isWarmStandby() && !isIdleTaskDrainActive());
   const executionControlInterval = setInterval(sweepExecutionControl, EXECUTION_RECONCILIATION_INTERVAL_MS);
   executionControlInterval.unref?.();
@@ -1976,6 +1978,7 @@ async function startServerWithDatabaseTeardown(
     await deliveryWork.stop();
     await mimouseNotificationWorker.stop();
     await mimouseCodingPollWorker.stop();
+    await mimouseCodingRepairWorker.stop();
     clearInterval(executionControlInterval);
     if (heartbeatSchedulerInterval) {
       clearInterval(heartbeatSchedulerInterval);

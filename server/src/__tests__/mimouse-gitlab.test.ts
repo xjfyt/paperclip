@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { deliveryGate, gitlabClient, gitlabOrigin, repairDecision, mergeRequestReceipt, pipelineReceipt } from "../services/mimouse-coding/gitlab.js";
+import { deliveryGate, gitlabClient, gitlabOrigin, repairDecision, mergeRequestReceipt, pipelineReceipt, jobReceipt } from "../services/mimouse-coding/gitlab.js";
 const sha = "a".repeat(40), other = "b".repeat(40);
 const valid = { headSha: sha, reviewedSha: sha, mr: { iid: 1, sha, state: "opened" }, pipeline: { id: 2, sha, status: "success" }, evidence: [{ commitSha: sha, command: "npm test", exitCode: 0, startedAt: "2026-10-25T00:00:00Z", finishedAt: "2026-10-25T00:01:00Z", logRef: "fixture/log", status: "passed" as const }] };
 describe("GitLab fixed-commit evidence", () => {
@@ -51,4 +51,11 @@ it("carries one overall abort deadline through every read-only pagination reques
 
 it.each([{ attempts: -1 }, { attempts: NaN }, { remainingBudgetCents: NaN }, { remainingBudgetCents: Infinity }, { elapsedMs: -1 }, { maxDurationMs: Infinity }, { fingerprint: "" }])("fails closed on invalid repair limit %j", invalid => {
   expect(repairDecision({ attempts: 0, remainingBudgetCents: 10, elapsedMs: 100, maxDurationMs: 1000, fingerprint: "one", previousFingerprint: null, environmentAvailable: true, ...invalid })).toEqual({ action: "human", reason: "invalid_repair_limits" });
+});
+
+it("projects failed jobs to fixed pipeline evidence without user details or tokenized links", () => {
+  const raw = { id: 7, name: "unit-test", stage: "test", status: "failed", failure_reason: "script_failure", commit: { id: sha, author_email: "private@example.test" }, pipeline: { id: 3, project_id: 1, sha }, web_url: "https://git.example/jobs/7?token=private", user: { name: "private" } };
+  const job = jobReceipt(raw, "https://git.example", 1, 3); expect(job.commitSha).toBe(sha); expect(job.webUrl).toBeUndefined(); expect(JSON.stringify(job)).not.toContain("private");
+  expect(() => jobReceipt(raw, "https://git.example", 2, 3)).toThrow("gitlab_job_identity_mismatch");
+  expect(() => jobReceipt({ ...raw, commit: { id: other } }, "https://git.example", 1, 3)).toThrow("gitlab_job_identity_mismatch");
 });
