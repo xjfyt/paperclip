@@ -1,3 +1,4 @@
+import { MimouseCodingLink } from "@/components/MimouseCodingLink";
 import { WorkspaceBaseRefRecoveryProvider } from "../components/WorkspaceBaseRefRecovery";
 import { isLockedIssueStub, LockedIssueChip } from "@/components/LockedIssueChip";
 import { canManageIssuePrivacy } from "../lib/issuePrivacy";
@@ -7565,6 +7566,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
 
   const pluginOutletsBlock = (
     <>
+      <MimouseCodingLink issueId={issue.id} workspaceId={issue.executionWorkspaceId} />
       <PluginSlotOutlet
         slotTypes={["toolbarButton", "contextMenuItem"]}
         entityType="issue"

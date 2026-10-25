@@ -1,4 +1,7 @@
 const BOARD_ROUTE_ROOTS = new Set([
+  "notifications",
+  "integrations",
+  "coding",
   "dashboard",
   "companies",
   "company",

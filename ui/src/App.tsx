@@ -1,3 +1,5 @@
+import { MimouseCoding } from "./pages/MimouseCoding";
+import { MimouseWorkbuddy } from "./pages/MimouseWorkbuddy";
 import { MimouseNotifications } from "./pages/MimouseNotifications";
 import { lazy, Suspense, type ReactNode } from "react";
 import type { ToolConnectionCredentialSource } from "@paperclipai/shared";
@@ -155,6 +157,8 @@ function boardRoutes(streamlinedUiEnabled: boolean, combinedInboxTasksEnabled: b
   return (
     <>
       <Route index element={<Navigate to="dashboard" replace />} />
+      <Route path="integrations/workbuddy" element={<MimouseWorkbuddy />} />
+      <Route path="coding" element={<MimouseCoding />} />
       <Route path="notifications" element={<MimouseNotifications />} />
       <Route path="dashboard" element={<Dashboard />} />
       <Route path="dashboard/live" element={<DashboardLive />} />
@@ -831,6 +835,8 @@ export function App() {
           <Route path="instance/settings" element={<LegacySettingsRedirect />} />
           <Route path="instance/settings/*" element={<LegacySettingsRedirect />} />
           <Route path="companies" element={<UnprefixedBoardRedirect />} />
+          <Route path="integrations/workbuddy" element={<UnprefixedBoardRedirect />} />
+          <Route path="coding" element={<UnprefixedBoardRedirect />} />
           <Route path="notifications" element={<UnprefixedBoardRedirect />} />
           <Route path="issues" element={<UnprefixedBoardRedirect />} />
           <Route path="tasks" element={<UnprefixedBoardRedirect />} />
