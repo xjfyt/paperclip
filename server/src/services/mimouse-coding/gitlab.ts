@@ -89,6 +89,13 @@ export function deliveryGate(input: { headSha: string; reviewedSha: string | nul
   return { readyForReleaseCandidate: blockers.length === 0, blockers, productionReleaseAuthorized: false as const };
 }
 export function repairDecision(input: { attempts: number; remainingBudgetCents: number; elapsedMs: number; maxDurationMs: number; fingerprint: string; previousFingerprint: string | null; environmentAvailable: boolean }) {
+  if (!Number.isSafeInteger(input.attempts) || input.attempts < 0 ||
+    !Number.isFinite(input.remainingBudgetCents) || input.remainingBudgetCents < 0 ||
+    !Number.isFinite(input.elapsedMs) || input.elapsedMs < 0 ||
+    !Number.isFinite(input.maxDurationMs) || input.maxDurationMs <= 0 ||
+    typeof input.fingerprint !== "string" || !input.fingerprint.trim()) {
+    return { action: "human" as const, reason: "invalid_repair_limits" };
+  }
   if (!input.environmentAvailable) return { action: "human" as const, reason: "environment_blocked" };
   if (input.attempts >= 2 || input.remainingBudgetCents <= 0 || input.elapsedMs >= input.maxDurationMs) return { action: "human" as const, reason: "repair_limit" };
   if (input.fingerprint === input.previousFingerprint) return { action: "human" as const, reason: "repeated_failure" };

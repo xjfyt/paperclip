@@ -48,3 +48,7 @@ it("carries one overall abort deadline through every read-only pagination reques
   await expect(client.pipelines(sha)).rejects.toMatchObject({ code: "gitlab_transport_unconfirmed" });
   expect(transport).toHaveBeenCalledTimes(2); expect(signals.every(signal => signal.aborted)).toBe(true);
 });
+
+it.each([{ attempts: -1 }, { attempts: NaN }, { remainingBudgetCents: NaN }, { remainingBudgetCents: Infinity }, { elapsedMs: -1 }, { maxDurationMs: Infinity }, { fingerprint: "" }])("fails closed on invalid repair limit %j", invalid => {
+  expect(repairDecision({ attempts: 0, remainingBudgetCents: 10, elapsedMs: 100, maxDurationMs: 1000, fingerprint: "one", previousFingerprint: null, environmentAvailable: true, ...invalid })).toEqual({ action: "human", reason: "invalid_repair_limits" });
+});
