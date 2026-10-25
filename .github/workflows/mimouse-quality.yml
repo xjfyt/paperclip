@@ -1,0 +1,37 @@
+name: MiMouse resource contracts
+
+on:
+  push:
+    branches: [mimouse]
+  pull_request:
+    branches: [mimouse]
+  workflow_dispatch:
+
+# No deployment, provider credentials, checkout writeback or paid model probes.
+permissions:
+  contents: read
+
+concurrency:
+  group: mimouse-resources-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  resources:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Reuse the exact action revisions pinned by the fixed upstream baseline.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.22.1
+      - name: Validate unique JSON keys and locale contracts
+        run: |
+          node --test scripts/mimouse-json.test.mjs
+          node scripts/compose-mimouse-locales.mjs --check
+      - name: Require deterministic committed generation
+        run: |
+          node scripts/compose-mimouse-locales.mjs
+          git diff --exit-code -- ui/src/i18n/locales
