@@ -11,7 +11,7 @@ function fixtureToken() {
   const body = `${encode({ alg: "RS256", kid: "one" })}.${encode({ iss: issuer, aud: "client", sub: "employee", email: "employee@example.test", email_verified: true, name: "Employee", exp: Math.floor(Date.now() / 1000) + 600, nonce })}`;
   return `${body}.${sign("RSA-SHA256", Buffer.from(body), privateKey).toString("base64url")}`;
 }
-function auth() {
+function auth(loginPolicy: "dual" | "sso-only" = "dual") {
   exchangeCount = 0;
   vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
     const url = input instanceof Request ? input.url : String(input);
@@ -24,7 +24,7 @@ function auth() {
     baseURL: "https://app.example/api/auth", secret: "test-only-casdoor-flow-secret-with-32-chars",
     emailAndPassword: { enabled: true },
     account: { storeStateStrategy: "database", accountLinking: { enabled: true, disableImplicitLinking: true, allowUnlinkingAll: false } },
-    plugins: [casdoorPlugin({ discoveryUrl: `${issuer}/discovery`, issuer, clientId: "client", clientSecret: "fixture", loginPolicy: "dual", allowedSubjects: [] })],
+    plugins: [casdoorPlugin({ discoveryUrl: `${issuer}/discovery`, issuer, clientId: "client", clientSecret: "fixture", loginPolicy, allowedSubjects: [] })],
   });
 }
 const cookieHeader = (response: Response) => response.headers.getSetCookie().map(value => value.split(";", 1)[0]).join("; ");
@@ -65,6 +65,30 @@ describe("Casdoor authorization-code flow", () => {
     const response = await instance.handler(new Request(`https://app.example/api/auth/callback/casdoor?code=fixture&state=${encodeURIComponent(start.state)}`, { headers: { cookie: start.cookies } }));
     expect(response.headers.get("location")).toContain("error");
     expect(cookieHeader(response)).not.toContain("session_token=");
+  });
+
+  it("explicitly links a legacy account but refuses unlinking its only usable SSO method", async () => {
+    // Email signup seeds a legacy credential row in this fixture only. Production
+    // sso-only disables password endpoints in better-auth.ts.
+    const instance = auth("sso-only");
+    const signUp = await instance.handler(new Request("https://app.example/api/auth/sign-up/email", {
+      method: "POST", headers: { "content-type": "application/json", origin: "https://app.example" },
+      body: JSON.stringify({ email: "employee@example.test", name: "Existing", password: "fixture-password-123456" }),
+    }));
+    expect(signUp.status).toBe(200); const localCookies = cookieHeader(signUp);
+    const link = await instance.handler(new Request("https://app.example/api/auth/link-social", {
+      method: "POST", headers: { "content-type": "application/json", origin: "https://app.example", cookie: localCookies },
+      body: JSON.stringify({ provider: "casdoor", callbackURL: "/", disableRedirect: true }),
+    }));
+    expect(link.status).toBe(200); const authorization = new URL((await link.json()).url); nonce = authorization.searchParams.get("nonce")!;
+    const cookies = [localCookies, cookieHeader(link)].filter(Boolean).join("; ");
+    const callback = await instance.handler(new Request(`https://app.example/api/auth/callback/casdoor?code=fixture&state=${encodeURIComponent(authorization.searchParams.get("state")!)}`, { headers: { cookie: cookies } }));
+    expect(callback.status).toBe(302); expect(callback.headers.get("location")).not.toContain("error");
+    const list = await instance.handler(new Request("https://app.example/api/auth/list-accounts", { headers: { cookie: localCookies } }));
+    expect(list.status).toBe(200); const accounts = await list.json(); expect(accounts.map((account: { providerId: string }) => account.providerId)).toEqual(expect.arrayContaining(["credential", "casdoor"]));
+    const unlink = await instance.handler(new Request("https://app.example/api/auth/unlink-account", { method: "POST", headers: { "content-type": "application/json", origin: "https://app.example", cookie: localCookies }, body: JSON.stringify({ providerId: "casdoor" }) }));
+    expect(unlink.status).toBe(403); expect((await unlink.json()).message).toContain("only enabled sign-in method");
+    const after = await instance.handler(new Request("https://app.example/api/auth/list-accounts", { headers: { cookie: localCookies } })); expect((await after.json()).some((account: { providerId: string }) => account.providerId === "casdoor")).toBe(true);
   });
 
 });

@@ -32,3 +32,7 @@ sso-only 在服务端关闭密码认证，不只隐藏按钮。先在 dual 测�
 
 上游协议来源：https://github.com/better-auth/better-auth/tree/v1.7.2/packages/better-auth/src/plugins/generic-oauth
 Casdoor 联调：https://casdoor.ai/docs/how-to-connect/oidc-client/
+
+## 仅 SSO 模式的解绑保护
+
+SSO-only 下，即使历史 credential 账号行仍存在，密码也不是可用回退方式。因此服务端在 Better Auth 的 unlink-account 前置钩子明确拒绝解绑 Casdoor；dual 模式继续沿用库的最后账号保护。内存 OAuth 流测试已覆盖旧密码账号显式绑定成功后拒绝解绑，而非只检查配置布尔值。

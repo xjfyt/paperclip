@@ -1,3 +1,4 @@
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import { genericOAuth } from "better-auth/plugins/generic-oauth";
 
 export interface CasdoorConfig {
@@ -95,6 +96,16 @@ export function casdoorPlugin(config: CasdoorConfig) {
   const init = plugin.init;
   return {
     ...plugin,
+    hooks: {
+      before: [{
+        matcher: (context: { path?: string }) => config.loginPolicy === "sso-only" && context.path === "/unlink-account",
+        handler: createAuthMiddleware(async context => {
+          // A legacy password account is not an available fallback in sso-only
+          // mode, even if Better Auth still counts that stored account row.
+          if (context.body?.providerId === "casdoor") throw new APIError("FORBIDDEN", { message: "Cannot unlink Casdoor while SSO is the only enabled sign-in method" });
+        }),
+      }],
+    },
     init: async (...args: Parameters<typeof init>) => {
       const result = await init(...args);
       const provider = result.context.socialProviders.find(item => item.id === "casdoor");
