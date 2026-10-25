@@ -1,27 +1,30 @@
 import { spawn, execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { realpath, mkdir, open, unlink } from "node:fs/promises";
+import { realpath, mkdir, open, unlink, mkdtemp, rm } from "node:fs/promises";
 import path from "node:path";
-import { createHash } from "node:crypto";
+import { tmpdir } from "node:os";
+import { createHash, randomUUID } from "node:crypto";
 import { parseEvent, resultAccounting } from "./parse.mjs";
 const exec = promisify(execFile);
+const pinnedSettings = JSON.stringify({ general: { enableAutoUpdate: false } });
 export const type = "qoder_cn";
 export const label = "Qoder CN";
 export const capabilities = Object.freeze({ localExecution: "contract_tested", remoteExecution: "unsupported", sessionResume: "contract_tested", confirmedCancellation: "unknown", toolApproval: "unsupported", workspaceRoundTrip: "unsupported", usageReporting: "contract_tested", liveVerified: false });
 const nonempty = value => typeof value === "string" && value.trim() ? value.trim() : null;
-export function sessionIdentity({ companyId, agentId, cwd, accountId, taskKey }) {
-  return createHash("sha256").update(JSON.stringify([companyId, agentId, cwd, accountId, taskKey])).digest("hex");
+export function sessionIdentity({ companyId, agentId, cwd, accountId, taskKey, credentialFingerprint = null }) {
+  return createHash("sha256").update(JSON.stringify([companyId, agentId, cwd, accountId, taskKey, credentialFingerprint])).digest("hex");
 }
-export function commandArgs(config, session, prompt) {
+export function commandArgs(config, session, prompt, diagnostic = false) {
   const maxTurns = config.maxTurns ?? 20;
   if (!Number.isInteger(maxTurns) || maxTurns < 1 || maxTurns > 100) throw Error("maxTurns must be 1..100");
-  const args = ["--output-format", "stream-json", "--max-turns", String(maxTurns), "--permission-mode", "default"];
+  const args = ["--settings", pinnedSettings, "--output-format", "stream-json", "--max-turns", String(maxTurns), "--permission-mode", "default"];
   if (session) args.push("--resume", session);
   if (nonempty(config.model)) args.push("--model", config.model);
   if (config.allowedTools !== undefined) {
     if (!Array.isArray(config.allowedTools) || config.allowedTools.some(tool => !nonempty(tool) || tool.startsWith("-"))) throw Error("allowedTools must be a list of tool names");
     args.push("--allowed-tools", config.allowedTools.join(","));
   }
+  if (diagnostic) args.push("--tools", "", "--strict-mcp-config", "--setting-sources", "", "--no-session-persistence", "--max-output-tokens", "64", "--max-model-request-retries", "0");
   // -- separates untrusted prompt text from options; never invoke a shell.
   args.push("-p", "--", prompt);
   return args;
@@ -34,17 +37,21 @@ export const sessionCodec = {
   serialize(raw) { return this.deserialize(raw); },
   getDisplayId(raw) { return nonempty(raw?.sessionId); },
 };
-export async function execute(ctx) {
+export async function execute(ctx, diagnostic = false) {
   const failure = (code, message) => ({ exitCode: 1, signal: null, timedOut: false, errorCode: code, errorMessage: message });
   const config = ctx.config;
   if (process.platform === "win32") return failure("qoder_platform_unverified", "Windows process-tree cancellation is not qualified; use a Linux worker.");
   if (ctx.executionTarget && ctx.executionTarget.kind !== "local" || ctx.executionTransport?.remoteExecution) return failure("qoder_remote_unsupported", "Qoder CN adapter only supports a local execution workspace.");
   if (ctx.signal?.aborted) return failure("qoder_cancelled_before_dispatch", "Cancelled before dispatch.");
+  const taskKey = nonempty(ctx.runtime.taskKey) || nonempty(ctx.context.taskId) || nonempty(ctx.context.issueId);
+  if (!taskKey) return failure("qoder_task_context_required", "A stable task identity is required for isolated session reuse.");
   const rawCwd = ctx.context.paperclipWorkspace?.cwd || config.cwd;
   if (!nonempty(rawCwd) || !path.isAbsolute(rawCwd)) return failure("qoder_workspace_required", "An absolute assigned workspace is required.");
   if (!nonempty(config.accountId) || !nonempty(config.configRoot) || !path.isAbsolute(config.configRoot)) return failure("qoder_identity_required", "Set accountId and an absolute configRoot for isolated identities.");
   const cwd = await realpath(rawCwd);
-  const identity = sessionIdentity({ companyId: ctx.agent.companyId, agentId: ctx.agent.id, cwd, accountId: config.accountId, taskKey: ctx.runtime.taskKey });
+  const providerToken = nonempty(config.env?.QODERCN_PERSONAL_ACCESS_TOKEN);
+  const credentialFingerprint = providerToken ? createHash("sha256").update(providerToken).digest("hex") : null;
+  const identity = sessionIdentity({ companyId: ctx.agent.companyId, agentId: ctx.agent.id, cwd, accountId: config.accountId, taskKey, credentialFingerprint });
   const configDir = path.join(config.configRoot, identity);
   await mkdir(configDir, { recursive: true });
   const lockPath = path.join(configDir, "paperclip-run.lock");
@@ -56,7 +63,7 @@ export async function execute(ctx) {
     const previous = sessionCodec.deserialize(ctx.runtime.sessionParams);
     if (previous && previous.identity !== identity) return failure("qoder_session_identity_mismatch", "Refusing to resume a session from another identity, task or workspace.");
     const prompt = nonempty(ctx.context.prompt) || nonempty(config.promptTemplate) || `Work on the assigned Paperclip task ${ctx.context.taskId ?? ctx.context.issueId ?? ""}. Follow its acceptance criteria. Report results; do not publish or change branches without explicit authorization.`;
-    const args = ["--config-dir", configDir, ...commandArgs(config, previous?.sessionId, prompt)];
+    const args = ["--config-dir", configDir, ...commandArgs(config, previous?.sessionId, prompt, diagnostic)];
     const env = {};
     for (const key of ["PATH", "HOME", "USERPROFILE", "SYSTEMROOT", "TEMP", "TMP", "TMPDIR", "LANG", "HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY"]) if (process.env[key]) env[key] = process.env[key];
     const configuredEnv = config.env && typeof config.env === "object" ? config.env : {};
@@ -149,13 +156,44 @@ export async function execute(ctx) {
 }
 export async function testEnvironment(ctx) {
   const checks = [];
+  if (ctx.executionTarget && ctx.executionTarget.kind !== "local") return { adapterType: type, status: "fail", testedAt: new Date().toISOString(), checks: [{ code: "qoder_remote_unsupported", level: "error", message: "Qoder CN readiness is only qualified for the local execution target." }] };
   try {
     const command = nonempty(ctx.config.executablePath) || "qodercn";
-    const version = await exec(command, ["--version"], { timeout: 10000, maxBuffer: 65536 });
-    const help = await exec(command, ["--help"], { timeout: 10000, maxBuffer: 65536 });
-    for (const flag of ["--output-format", "--config-dir", "--max-turns", "--resume"]) if (!help.stdout.includes(flag)) throw Error(`CLI missing ${flag}`);
+    const env = {};
+    for (const key of ["PATH", "HOME", "USERPROFILE", "SYSTEMROOT", "LANG", "TEMP", "TMP", "TMPDIR"]) if (process.env[key]) env[key] = process.env[key];
+    Object.assign(env, { CI: "1", NO_COLOR: "1", DO_NOT_TRACK: "1" });
+    const base = ["--settings", pinnedSettings];
+    if (nonempty(ctx.config.configRoot) && path.isAbsolute(ctx.config.configRoot)) base.unshift("--config-dir", path.join(ctx.config.configRoot, "diagnostics"));
+    const options = { timeout: 10000, maxBuffer: 65536, env };
+    const version = await exec(command, [...base, "--version"], options);
+    const help = await exec(command, [...base, "--help"], options);
+    for (const flag of ["--output-format", "--config-dir", "--settings", "--resume"]) if (!help.stdout.includes(flag)) throw Error(`CLI missing ${flag}`);
+    if (!help.stdout.includes("--max-turns")) {
+      // Official npm 1.1.78 hides this supported option from help. A deliberately
+      // invalid count exercises only argument validation, never a model query.
+      let boundedTurns = false;
+      try { await exec(command, [...base, "--max-turns", "paperclip-invalid-limit", "--help"], options); }
+      catch (error) { boundedTurns = error.code === 1 && /option ['"]--max-turns\b/.test(error.stderr ?? "") && /argument .* is invalid/.test(error.stderr ?? "") && /--max-turns must be a non-negative integer/.test(error.stderr ?? ""); }
+      if (!boundedTurns) throw Error("CLI max-turns contract not verified");
+    }
     checks.push({ code: "qoder_cli", level: "info", message: `CLI found: ${version.stdout.trim().slice(0, 80)}` });
-    checks.push({ code: "qoder_live_not_verified", level: "warn", message: "CLI availability does not verify account authentication, credits or a real task." });
+    if (ctx.config.allowHelloProbe === true) {
+      if (!nonempty(ctx.config.accountId)) throw Error("A stable account identity is required");
+      const scratch = await mkdtemp(path.join(tmpdir(), "paperclip-qoder-diagnostic-"));
+      let providerConfirmedStopped = false;
+      try {
+        const nonce = `PAPERCLIP_QODER_${randomUUID().replaceAll("-", "")}`;
+        const result = await execute({ runId: randomUUID(), agent: { id: "qoder-diagnostic", companyId: ctx.companyId },
+          runtime: { sessionParams: null, taskKey: `diagnostic:${nonce}` }, context: { prompt: `Reply with exactly ${nonce} and nothing else.` },
+          config: { ...ctx.config, cwd: scratch, configRoot: path.join(scratch, "config"), maxTurns: 1, timeoutSec: Math.min(60, Math.max(1, Number(ctx.config.helloProbeTimeoutSec ?? 30))) },
+          onLog: async () => {},
+        }, true);
+        providerConfirmedStopped = result.resultJson?.providerStopped === true;
+        if (result.exitCode !== 0 || result.summary?.trim() !== nonce || result.resultJson?.providerStopped !== true) throw Error("Diagnostic result not verified");
+        checks.push({ code: "qoder_hello_probe_passed", level: "info", message: "A bounded no-tool diagnostic response was verified. This is not business-task acceptance." });
+      } finally { if (providerConfirmedStopped) await rm(scratch, { recursive: true, force: true }); }
+    } else checks.push({ code: "qoder_hello_probe_opt_in_required", level: "warn", message: "Lifecycle activation requires allowHelloProbe=true. It permits a minimal model request that may consume credits; version/help alone do not verify authentication." });
+    checks.push({ code: "qoder_scenario_unverified", level: "warn", message: "Real workspace behavior, billing and provider cancellation still require scenario qualification." });
   } catch { checks.push({ code: "qoder_cli_unavailable", level: "error", message: "Qoder CN executable/version/help could not be verified." }); }
   return { adapterType: type, status: checks.some(check => check.level === "error") ? "fail" : "warn", checks, testedAt: new Date().toISOString() };
 }
@@ -168,6 +206,7 @@ export function createServerAdapter() {
       { key: "cwd", label: "Workspace", type: "text", required: true },
       { key: "maxTurns", label: "Maximum turns", type: "number", default: 20 },
       { key: "timeoutSec", label: "Timeout (seconds)", type: "number", default: 600 },
+      { key: "allowHelloProbe", label: "Allow a minimal paid readiness probe", type: "toggle", default: false, hint: "Lifecycle checks may repeat a one-turn no-tool model request. Required before activation; may consume Qoder credits." },
     ] }),
     agentConfigurationDoc: "Qoder CN local CLI. Configure isolated identity, bounded workspace and secret-backed QODERCN_PERSONAL_ACCESS_TOKEN. Remote execution, dynamic tool approval and live provider cancellation are not verified.",
   };

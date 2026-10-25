@@ -23,6 +23,7 @@ test("argv keeps prompts separate and never skips permissions", () => {
   assert.equal(args.at(-1), "--yolo; echo evil"); assert.equal(args.at(-2), "--");
   assert.ok(args.includes("--resume")); assert.ok(!args.includes("--continue"));
   assert.equal(args[args.indexOf("--permission-mode") + 1], "default");
+  assert.deepEqual(JSON.parse(args[args.indexOf("--settings") + 1]), { general: { enableAutoUpdate: false } });
 });
 test("identity fences company, account, workspace and task", () => {
   const value = { companyId: "c", agentId: "a", cwd: "/one", accountId: "u", taskKey: "t" };
@@ -65,7 +66,36 @@ test("missing terminal receipt cannot be success", async () => {
   const f = await fixture("console.log('just text')"); assert.notEqual((await execute(f.ctx)).exitCode, 0);
 });
 test("factory exposes config and test-environment protocol", async () => {
-  const f = await fixture(`console.log(process.argv.includes("--version")?"fixture 1":"--output-format --config-dir --max-turns --resume")`);
+  const f = await fixture(`console.log(process.argv.includes("--version")?"fixture 1":"--output-format --config-dir --settings --max-turns --resume")`);
   const module = createServerAdapter(); assert.equal(module.type, "qoder_cn"); assert.ok(module.getConfigSchema().fields.length);
   assert.equal((await module.testEnvironment({config:f.ctx.config})).status, "warn");
+});
+test("missing task identity refuses dispatch and issue context is a stable fallback", async () => {
+  const f = await fixture(`console.log(JSON.stringify({type:"result",session_id:"s",result:"ok"}));`);
+  f.ctx.runtime.taskKey = null;
+  assert.equal((await execute(f.ctx)).errorCode, "qoder_task_context_required"); assert.equal(f.spawned.length, 0);
+  f.ctx.context.issueId = "issue-one";
+  const first = await execute(f.ctx); assert.equal(first.exitCode, 0); f.ctx.runtime.sessionParams = first.sessionParams; f.ctx.context.issueId = "issue-two";
+  assert.equal((await execute(f.ctx)).errorCode, "qoder_session_identity_mismatch"); assert.equal(f.spawned.length, 1);
+});
+
+test("diagnostics recognize the official hidden turn limit without running a task", async () => {
+  const f = await fixture(`if(process.argv.includes("paperclip-invalid-limit")){console.error("error: option '--max-turns <count>' argument 'paperclip-invalid-limit' is invalid. --max-turns must be a non-negative integer (0 disables the limit)");process.exit(1)}console.log(process.argv.includes("--version")?"fixture 1":"--output-format --config-dir --settings --resume")`);
+  assert.equal((await createServerAdapter().testEnvironment({ config: f.ctx.config })).status, "warn"); assert.equal(f.spawned.length, 0);
+});
+test("timeout stops a real descendant process group before releasing its session", async () => {
+  const f = await fixture(`const {spawn}=await import("node:child_process");const {writeFileSync}=await import("node:fs");let stopping=false;const child=spawn(process.execPath,["-e","setInterval(()=>{},100)"],{stdio:"ignore"});child.on("exit",()=>{writeFileSync("child-stopped","yes");if(stopping)process.exit(0)});process.on("SIGTERM",()=>{stopping=true;if(child.exitCode!==null||child.signalCode!==null)process.exit(0)});setInterval(()=>{},100);`);
+  f.ctx.config.timeoutSec = .2; const result = await execute(f.ctx);
+  assert.equal(result.timedOut, true); assert.notEqual(result.exitCode, 0); assert.equal(result.resultJson.providerStopped, true); assert.equal(await readFile(path.join(f.root,"child-stopped"),"utf8"), "yes");
+});
+test("an opt-in hello probe earns readiness only after a bounded nonce response", async () => {
+  const f = await fixture(`if(process.argv.includes("--version")){console.log("fixture 1");process.exit(0)}if(process.argv.includes("--help")){console.log("--output-format --config-dir --settings --max-turns --resume");process.exit(0)}const nonce=process.argv.at(-1).match(/PAPERCLIP_QODER_[a-zA-Z0-9_]+/)[0];console.log(JSON.stringify({type:"result",result:nonce}));`);
+  const result = await createServerAdapter().testEnvironment({ companyId: "company", config: { ...f.ctx.config, allowHelloProbe: true } });
+  assert.ok(result.checks.some(check => check.code === "qoder_hello_probe_passed")); assert.equal(result.status, "warn");
+  const args = commandArgs({maxTurns:1}, null, "probe", true); assert.equal(args[args.indexOf("--tools")+1], ""); assert.ok(args.includes("--strict-mcp-config")); assert.ok(args.includes("--no-session-persistence"));
+});
+test("changing a PAT fences session reuse even if its account label is unchanged", async () => {
+  const f = await fixture(`console.log(JSON.stringify({type:"result",session_id:"s",result:"ok"}));`); f.ctx.config.env = { QODERCN_PERSONAL_ACCESS_TOKEN: "fixture-one" };
+  const first = await execute(f.ctx); f.ctx.runtime.sessionParams = first.sessionParams; f.ctx.config.env.QODERCN_PERSONAL_ACCESS_TOKEN = "fixture-two";
+  assert.equal((await execute(f.ctx)).errorCode, "qoder_session_identity_mismatch"); assert.equal(f.spawned.length, 1);
 });

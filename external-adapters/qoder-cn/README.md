@@ -13,3 +13,17 @@ Run `node --test external-adapters/qoder-cn/test/*.test.mjs` from the repository
 References verified 2026-10-25:
 - https://docs.qoder.cn/cli/cli-reference
 - https://docs.qoder.cn/cli/sdk/cost-usage
+
+## Runtime qualification (2026-10-25)
+
+The official npm compatibility package `@qodercn-ai/qoderclicn@1.1.78` was installed in an isolated cloud test directory. Its actual `--version`, `--help`, and argument-validation behavior were checked without logging in or sending a model request. This release hides `--max-turns` from help; diagnostics verify its rejecting parser using an intentionally invalid count plus `--help`, never by launching a task. Per-run settings disable automatic CLI updates; production should pin and requalify its chosen native or npm installation. This is CLI availability evidence, not account or model-task acceptance.
+
+A stable task key is mandatory (runtime taskKey, then explicit taskId/issueId fallback); otherwise execution refuses before dispatch. The fake-CLI suite includes an actual descendant process-group stop and session identity changes.
+
+Official installation source: https://docs.qoder.cn/cli/installation
+
+## Opt-in lifecycle hello probe
+
+`allowHelloProbe` defaults to false. Version/help diagnostics alone do not satisfy the host's authenticated lifecycle gate. An operator may explicitly enable a minimal model probe, which can consume credits and can be repeated by lifecycle retries. It uses a fresh scratch directory, one turn, bounded output, no tools, strict MCP, no external settings sources, no session persistence and an exact random nonce. Success requires both the expected response and confirmed process termination; unknown termination retains the scratch directory for reconciliation. Real model probing was not authorized or run in this development environment.
+
+The 15-test fake-CLI suite covers this contract and credential-fingerprint session isolation. An actual local Paperclip HTTP/DB test installs the package, creates an Agent and task, passes its lifecycle probe using a fake CLI, invokes a heartbeat and verifies the resulting successful run/receipt. It is C2 integration, not a real Qoder account task or full Agent tool/JWT acceptance.
