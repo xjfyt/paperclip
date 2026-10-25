@@ -53,3 +53,19 @@ export const mimouseNotificationRateLimits = pgTable("mimouse_notification_rate_
   targetKey: text("target_key").primaryKey(),
   nextAllowedAt: timestamp("next_allowed_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+
+// Private cache only: never exposed through generic secret bindings or settings responses.
+export const mimouseNotificationTokens = pgTable("mimouse_notification_tokens", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  secretRef: uuid("secret_ref").notNull().references(() => companySecrets.id, { onDelete: "cascade" }),
+  secretVersion: integer("secret_version").notNull(), kind: text("kind").notNull(), identity: text("identity").notNull(),
+  tokenMaterial: jsonb("token_material").$type<Record<string, unknown>>(), expiresAt: timestamp("expires_at", { withTimezone: true }),
+  revision: integer("revision").notNull().default(0), lease: uuid("lease"), leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+  nextRefreshAt: timestamp("next_refresh_at", { withTimezone: true }).notNull().defaultNow(), lastCode: text("last_code"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(), updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, t => ({
+  scope: uniqueIndex("mimouse_notification_token_scope").on(t.companyId, t.secretRef, t.secretVersion, t.kind),
+  shape: check("mimouse_notification_token_shape", sql`${t.secretVersion}>0 AND ${t.revision}>=0 AND ${t.kind} IN ('dingtalk_app','wechat_official_account') AND ((${t.tokenMaterial} IS NULL AND ${t.expiresAt} IS NULL) OR (${t.tokenMaterial} IS NOT NULL AND ${t.expiresAt} IS NOT NULL))`),
+}));

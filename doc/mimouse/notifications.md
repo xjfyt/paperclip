@@ -7,10 +7,10 @@
 `PAPERCLIP_NOTIFICATIONS_ENABLED=true` 启用 worker 与业务事件钩子，默认关闭。`PAPERCLIP_NOTIFICATIONS_WORKER_ENABLED=false` 可暂停外部派发并继续事务入队，便于维护与无外发测试；恢复前先检查积压。部署前先备份数据库并应用标准迁移。凭据使用已有公司秘密存储，值为 JSON；配置中填写秘密 ID 和固定版本。
 
 - 企业微信/飞书/钉钉旧 Webhook：`url`，需要签名时增加 `signingSecret`。飞书与 Lark 使用各自域名；设置页可明确选择飞书或 Lark。
-- 钉钉应用机器人：JSON 的 `accessToken`，渠道配置 robotCode/target。
-- 微信公众号：JSON 的 `accessToken`，渠道配置 target（OpenID）、templateId、templateData。
+- 钉钉应用机器人：公司秘密JSON可用`appKey`与`appSecret`，渠道配置robotCode/target；仍兼容显式`accessToken`。
+- 微信公众号：公司秘密JSON可用`appId`与`appSecret`，渠道配置target（OpenID）、templateId、templateData；仍兼容显式`accessToken`。
 
-后两者当前依赖外部安全刷新服务更新 token。自动 AppSecret 换 token/共享缓存尚未接入，不应作为长期免维护生产方案。固定版本在过期/撤销后明确拒绝，不偷偷换到最新版本。配置变更新建 endpoint，旧投递仍绑定原快照。停用阻止进入 sending 前的投递，不能撤回已进入外部发送阶段的消息。
+应用凭据模式已通过0341私有加密缓存按需获取/刷新令牌；显式accessToken模式仍由外部维护过期，不混用两种模式。保存渠道只做本地校验，不换令牌、不发送消息。固定凭据版本在撤销后拒绝，不偷偷换到最新版本。配置变更新建 endpoint，旧投递仍绑定原快照。停用阻止进入 sending 前的投递，不能撤回已进入外部发送阶段的消息。
 
 ## 事件与投递语义
 
@@ -27,3 +27,20 @@
 设置页现已提供六类事件订阅的启用/暂停、派发开关状态、脱敏原快照预览及双重确认后的显式重试。切换公司会重置表单；迟到的预览响应不会替换当前已确认目标。配置修订 UX 和供应商对账自动化尚未完成。此文不是完整通知能力验收报告。回滚先关闭开关和 worker，保留台账，再回退应用；不删新表清除未知状态。
 
 公众号 templateData 支持单次展开 {{title}}、{{text}}、{{resourceId}}；未知占位符、畸形模板和超长值拒绝，不进行动态对象求值。模板渲染失败保留 rejected 投递，不回滚原业务操作；缺少有效渲染快照的投递不可显式重试，需先修正配置并重新核对业务事件。
+
+
+## 应用令牌生命周期（0341）
+
+- 仅企业钉钉应用和微信公众号使用本功能；不是Casdoor登录或个人WorkBuddy OAuth，也不读取通讯录做健康探测。
+- 钉钉使用官方应用令牌POST契约appKey/appSecret、accessToken/expireIn。公众号使用稳定令牌POST契约，并固定force_refresh=false，避免主动使其他服务持有的令牌失效。
+- 有效期按实际响应计算，不假定固定两小时；必须为有效正整数，超过一天的异常值拒绝。剩余不超过30秒时等待再获取，不发送临近过期令牌。
+- 缓存按公司、秘密ID、明确版本与渠道种类分区，应用身份摘要固定。已有版本的内容突然改变会拒绝，轮换须创建新版本/渠道；旧积压不会转用新凭据。
+- token用现有AES-GCM提供器加密，密文绑定缓存ID、公司、秘密引用/版本、渠道、身份摘要、代次及过期时间。不进入通用Agent秘密绑定，也不在设置接口返回。
+- 多worker共享PostgreSQL租约，30秒租约与10秒请求超时。进程重启可复用缓存；过期租约可重领，迟到响应无法覆盖新代次。凭据停用或删除在刷新前后及实际投递前重新检查。
+- 失败发生在消息派发之前：429/暂时性网络故障可以有限重试，错误凭据拒绝。忙租约/冷却等待不消耗发送尝试，但仍受队列重试窗口约束；实际预检失败计入最多5次/30分钟策略。消息已开始发送后的未知结果保持indeterminate，不能通过刷新令牌自动重发。
+- 建议同一公司同一应用的渠道复用同一秘密ID/版本，避免多个重复凭据引用造成无谓的令牌获取；跨公司不共享令牌。
+- 缓存校验失败不静默忽略：先核对主密钥与数据库备份，或在授权后换用新秘密版本。不得删未知消息记录来恢复派发。
+
+本切片27项协议/加密单测与10项真实数据库用例通过；真实租户和送达仍未验收。微信文档链接由腾讯官方API目录确认；协议细节另外核对公开SDK源码，不能把这一交叉核对说成当前账号资格验证。
+
+参考：[腾讯公众号API目录](https://cloud.tencent.cn/document/product/1301/100187)、[WeChat SDK稳定令牌实现](https://github.com/silenceper/wechat/blob/v2/credential/default_access_token.go)、[DingTalk SDK令牌契约](https://github.com/DingTalk-Real-AI/dingtalk-channel-sdk-python/blob/main/SPEC.zh-CN.md)。

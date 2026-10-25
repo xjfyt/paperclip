@@ -247,7 +247,7 @@ export { aiSubscriptions, aiSubscriptionPrices, aiSubscriptionConnections } from
 
 export * from "./fast_responses.js";
 
-export { mimouseNotificationEndpoints, mimouseNotificationSubscriptions, mimouseNotificationDeliveries, mimouseNotificationRateLimits } from "./mimouse_notifications.js";
+export { mimouseNotificationEndpoints, mimouseNotificationSubscriptions, mimouseNotificationDeliveries, mimouseNotificationRateLimits, mimouseNotificationTokens } from "./mimouse_notifications.js";
 
 export { mimouseWorkbuddyConnections, mimouseWorkbuddyJobs, mimouseWorkbuddyTurns } from "./mimouse_workbuddy.js";
 

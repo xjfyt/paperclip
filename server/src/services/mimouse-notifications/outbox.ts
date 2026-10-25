@@ -1,3 +1,5 @@
+import { appCredential, NotificationTokenError } from "./app-credentials.js";
+import { notificationTokenCache } from "./token-cache.js";
 import { renderNotification, renderTemplateData, type NotificationEventType } from "./render.js";
 import { logger } from "../../middleware/logger.js";
 import { randomUUID } from "node:crypto";
@@ -56,9 +58,11 @@ export function canAutomaticallyRetry(attempt: number, createdAt: Date, now = Da
 
 export function notificationOutbox(db: Db, deps: {
   send?: typeof sendNotification;
+  tokenTransport?: typeof fetch;
   resolveSecret?: (company: string, id: string, version: number) => Promise<string>;
 } = {}) {
   const send = deps.send ?? sendNotification;
+  const tokenCache = notificationTokenCache(db, { transport: deps.tokenTransport });
   const resolveSecret = deps.resolveSecret ?? ((company, id, version) => secretService(db).resolveSecretValue(company, id, version));
   async function recover() {
     // Only pre-dispatch claims may be retried. Sending means outcome unknown.
@@ -131,6 +135,25 @@ export function notificationOutbox(db: Db, deps: {
     try { secret = JSON.parse(await resolveSecret(row.company_id, row.snapshot.secretRef, row.snapshot.secretVersion)); }
     catch {
       await db.execute(sql`UPDATE mimouse_notification_deliveries SET state='rejected',last_code='secret_unavailable',lease=NULL,lease_expires_at=NULL,updated_at=now() WHERE id=${row.id} AND lease=${row.lease} AND state='claimed'`);
+      return true;
+    }
+    try {
+      const credential = appCredential(row.snapshot.kind, secret);
+      if (credential) {
+        if (row.attempt > 0 && !canAutomaticallyRetry(row.attempt, new Date(row.created_at))) throw new NotificationTokenError("token_retry_window_exhausted");
+        secret = await tokenCache.resolve({ companyId: row.company_id, secretRef: row.snapshot.secretRef, secretVersion: row.snapshot.secretVersion, kind: row.snapshot.kind }, secret);
+        // A refresh may take time: recheck the frozen secret before sending, so
+        // disabling/removing it during the exchange cannot authorize a message.
+        const fresh = appCredential(row.snapshot.kind, JSON.parse(await resolveSecret(row.company_id, row.snapshot.secretRef, row.snapshot.secretVersion)));
+        if (fresh?.identity !== credential.identity) throw new NotificationTokenError("token_immutable_credential_changed");
+      }
+    } catch (error) {
+      const failure = error instanceof NotificationTokenError ? error : new NotificationTokenError("token_preflight_failed");
+      const attempt = row.attempt + (failure.busy ? 0 : 1);
+      const retry = failure.retryable && canAutomaticallyRetry(attempt, new Date(row.created_at));
+      await db.execute(sql`UPDATE mimouse_notification_deliveries SET state=${retry ? "retryable" : "rejected"},attempt=${attempt},last_code=${failure.code},
+        next_attempt_at=now()+${retry ? retryDelay(Math.max(1, attempt), failure.retryAfterMs) : 0}*interval '1 millisecond',lease=NULL,lease_expires_at=NULL,updated_at=now()
+        WHERE id=${row.id} AND lease=${row.lease} AND state='claimed' AND lease_expires_at>now()`);
       return true;
     }
     if (!await enterSending(row)) return true;

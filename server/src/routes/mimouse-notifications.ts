@@ -1,3 +1,4 @@
+import { validationSecret } from "../services/mimouse-notifications/app-credentials.js";
 import { renderTemplateData } from "../services/mimouse-notifications/render.js";
 import { createHash } from "node:crypto";
 import { Router, type Request } from "express";
@@ -46,7 +47,7 @@ export function mimouseNotificationRoutes(db: Db) {
     try { secret = JSON.parse(await secretService(db).resolveSecretValue(companyId, input.secretRef, input.secretVersion)); }
     catch { throw unprocessable("Secret unavailable or invalid JSON for this company"); }
     let request: ReturnType<typeof buildNotificationRequest>;
-    try { request = buildNotificationRequest({ ...input.config, ...(input.config.templateData ? { templateData: renderTemplateData(input.config.templateData, { title: "Configuration validation", text: "No message is sent when saving." }, "resource-preview") } : {}), kind: input.kind, title: "Configuration validation", text: "No message is sent when saving." }, secret); }
+    try { request = buildNotificationRequest({ ...input.config, ...(input.config.templateData ? { templateData: renderTemplateData(input.config.templateData, { title: "Configuration validation", text: "No message is sent when saving." }, "resource-preview") } : {}), kind: input.kind, title: "Configuration validation", text: "No message is sent when saving." }, validationSecret(input.kind, secret)); }
     catch { throw unprocessable("Channel configuration is incomplete or invalid"); }
     // Credentials and signatures are excluded from target identity for app APIs;
     // complete Webhook URLs identify destinations but only the digest persists.

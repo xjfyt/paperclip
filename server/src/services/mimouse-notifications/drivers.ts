@@ -12,7 +12,7 @@ export interface NotificationSnapshot {
   templateId?: string;
   templateData?: Record<string, { value: string }>;
 }
-export interface ChannelSecret { url?: string; signingSecret?: string; accessToken?: string }
+export interface ChannelSecret { url?: string; signingSecret?: string; accessToken?: string; appKey?: string; appId?: string; appSecret?: string }
 export type DeliveryResult = { state: "accepted" | "rejected" | "retryable" | "indeterminate"; code: string; receipt?: string; retryAfterMs?: number };
 export const feishuSignature = (secret: string, seconds: number) => createHmac("sha256", `${seconds}\n${secret}`).update("").digest("base64");
 export const dingtalkSignature = (secret: string, millis: number) => createHmac("sha256", secret).update(`${millis}\n${secret}`).digest("base64");
