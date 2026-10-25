@@ -1,3 +1,4 @@
+import { mimouseCodingRoutes } from "./routes/mimouse-coding.js";
 import { workbuddyRoutes } from "./routes/workbuddy.js";
 import { mimouseNotificationRoutes } from "./routes/mimouse-notifications.js";
 import { casdoorCapabilities, readCasdoorConfig } from "./auth/casdoor.js";
@@ -892,6 +893,7 @@ export async function createApp(
   api.use(inboxDismissalRoutes(db));
   api.use(mimouseNotificationRoutes(db));
   api.use(workbuddyRoutes(db));
+  api.use(mimouseCodingRoutes(db));
   api.use(instanceSettingsRoutes(db, workerManager, opts.prepareIdleDatabaseBackup));
   if (opts.databaseBackupService) {
     api.use(instanceDatabaseBackupRoutes(opts.databaseBackupService));
