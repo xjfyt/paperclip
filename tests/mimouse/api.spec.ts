@@ -14,3 +14,15 @@ test("actual HTTP/DB task lifecycle and safe auth capabilities", async ({ reques
   const updated = await request.patch(`/api/issues/${issue.id}`, { data: { status: "done" } });
   expect(updated.ok(), await updated.text()).toBeTruthy(); expect((await updated.json()).status).toBe("done");
 });
+
+test("actual server serves the production HTML and its referenced local JS/CSS assets", async ({ request }) => {
+  const page = await request.get("/"); expect(page.ok()).toBe(true); expect(page.headers()["content-type"]).toContain("text/html");
+  const html = await page.text(); expect(html).toContain("<title>Paperclip</title>");
+  const sources = [...html.matchAll(/<(?:script|link)\b[^>]*(?:src|href)="(\/assets\/[^"?#]+\.(?:js|css))"[^>]*>/g)].map(match => match[1]);
+  expect(sources.some(source => source.endsWith(".js"))).toBe(true); expect(sources.some(source => source.endsWith(".css"))).toBe(true);
+  for (const source of new Set(sources)) {
+    const asset = await request.get(source); expect(asset.ok(), source).toBe(true);
+    expect(asset.headers()["content-type"], source).not.toContain("text/html"); expect((await asset.body()).length, source).toBeGreaterThan(100);
+  }
+  // This verifies delivery, not browser execution, layout or accessibility.
+});
