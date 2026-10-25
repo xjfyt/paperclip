@@ -1,3 +1,4 @@
+import { useTranslation } from "@/i18n";
 import { AgentAvatar } from "./AgentAvatar";
 import {
   Component,
@@ -744,6 +745,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
   onSubmit,
   readOnly = false,
 }: MarkdownEditorProps, forwardedRef) {
+  const { t: editorT } = useTranslation();
   const editorValue = useMemo(() => prepareMarkdownForEditor(value), [value]);
   const { slashCommands: sharedSlashCommands } = useEditorAutocomplete();
   const slashCommands = useMemo(
@@ -1362,7 +1364,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
         </div>
         <textarea
           ref={fallbackTextareaRef}
-          aria-label={ariaLabel}
+          aria-label={ariaLabel ?? editorT("taskPanel.editableMarkdown")}
           value={value}
           placeholder={placeholder}
           readOnly={readOnly}
@@ -1520,8 +1522,8 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
         <MDXEditor
           ref={setEditorRef}
           translation={(key, fallback, interpolations = {}) =>
-            key === "contentArea.editableMarkdown" && ariaLabel
-              ? ariaLabel
+            key === "contentArea.editableMarkdown"
+              ? ariaLabel ?? editorT("taskPanel.editableMarkdown")
               : Object.entries(interpolations).reduce(
                   (text, [name, value]) => text.replaceAll(`{{${name}}}`, String(value)),
                   fallback,

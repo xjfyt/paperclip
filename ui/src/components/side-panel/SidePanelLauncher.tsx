@@ -1,3 +1,4 @@
+import { useTranslation } from "@/i18n";
 import { useState, type ReactNode } from "react";
 import { AlertCircle, Check, Loader2 } from "lucide-react";
 import {
@@ -35,9 +36,10 @@ function LauncherContent({
   emptyMessage,
   panel,
 }: Pick<SidePanelLauncherProps, "sections" | "onSelect" | "placeholder" | "emptyMessage"> & { panel: boolean }) {
+  const { t } = useTranslation();
   return (
     <Command className={cn(panel && "border border-border shadow-sm")}>
-      <CommandInput placeholder={placeholder} aria-label={placeholder} />
+      <CommandInput data-side-panel-launcher-search placeholder={placeholder} aria-label={placeholder} />
       <CommandList className={cn(panel && "max-h-none flex-1")}>
         <CommandEmpty>{emptyMessage}</CommandEmpty>
         {sections.map((section, sectionIndex) => (
@@ -47,7 +49,7 @@ function LauncherContent({
               {section.loading ? (
                 <div className="flex items-center gap-2 px-2 py-3 text-sm text-muted-foreground" role="status">
                   <Loader2 className="size-4 animate-spin" aria-hidden />
-                  Loading…
+                  {t("common.loading")}
                 </div>
               ) : null}
               {section.error ? (
@@ -74,7 +76,7 @@ function LauncherContent({
                       </span>
                     ) : null}
                   </span>
-                  {item.alreadyOpen ? <Check className="size-4 text-muted-foreground" aria-label="Already open" /> : null}
+                  {item.alreadyOpen ? <Check className="size-4 text-muted-foreground" aria-label={t("taskPanel.alreadyOpen")} /> : null}
                   {item.shortcut ? <CommandShortcut>{item.shortcut}</CommandShortcut> : null}
                 </CommandItem>
               ))}
@@ -93,12 +95,17 @@ export function SidePanelLauncher({
   trigger,
   open: controlledOpen,
   onOpenChange,
-  title = "Open a side panel tab",
-  description = "Choose a view or resource to open.",
-  placeholder = "Search tabs and resources…",
-  emptyMessage = "No matching tabs or resources.",
+  title: customTitle,
+  description: customDescription,
+  placeholder: customPlaceholder,
+  emptyMessage: customEmptyMessage,
   className,
 }: SidePanelLauncherProps) {
+  const { t } = useTranslation();
+  const title = customTitle ?? t("taskPanel.title");
+  const description = customDescription ?? t("taskPanel.description");
+  const placeholder = customPlaceholder ?? t("taskPanel.search");
+  const emptyMessage = customEmptyMessage ?? t("taskPanel.empty");
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const open = controlledOpen ?? uncontrolledOpen;
   const setOpen = onOpenChange ?? setUncontrolledOpen;

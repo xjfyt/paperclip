@@ -2,6 +2,7 @@
 
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
+import { i18n } from "@/i18n";
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { buildIssueReferenceHref, buildProjectMentionHref, buildRoutineMentionHref, buildSkillMentionHref } from "@paperclipai/shared";
 import {
@@ -69,7 +70,9 @@ vi.mock("@mdxeditor/editor", async () => {
       onError,
       className,
       suppressHtmlProcessing,
+      translation,
     }: {
+      translation?: (key: string, fallback: string) => string;
       markdown: string;
       placeholder?: string;
       onChange?: (value: string) => void;
@@ -161,6 +164,7 @@ vi.mock("@mdxeditor/editor", async () => {
       <div
         ref={editableRef}
         data-testid="mdx-editor"
+        aria-label={translation?.("contentArea.editableMarkdown", "editable markdown")}
         className={className}
         contentEditable
         suppressContentEditableWarning
@@ -1694,4 +1698,15 @@ describe("MarkdownEditor", () => {
       root.unmount();
     });
   });
+  it("localizes the editor accessibility label and preserves an explicit custom label", async () => {
+    const root = createRoot(container); await i18n.changeLanguage("zh-CN");
+    try {
+      await act(async () => root.render(<MarkdownEditor value="User content stays unchanged" onChange={() => {}} />));
+      expect(container.querySelector('[data-testid="mdx-editor"]')?.getAttribute("aria-label")).toBe("可编辑的 Markdown");
+      expect(container.textContent).toContain("User content stays unchanged");
+      await act(async () => root.render(<MarkdownEditor value="User content stays unchanged" ariaLabel="Customer editor" onChange={() => {}} />));
+      expect(container.querySelector('[data-testid="mdx-editor"]')?.getAttribute("aria-label")).toBe("Customer editor");
+    } finally { await act(async () => root.unmount()); await i18n.changeLanguage("en"); }
+  });
+
 });

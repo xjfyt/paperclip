@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { i18n } from "@/i18n";
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -149,11 +150,12 @@ describe("TaskSidePanel", () => {
     });
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     act(() => root.unmount());
     queryClient.clear();
     container.remove();
     vi.restoreAllMocks();
+    await i18n.changeLanguage("en");
   });
 
   async function render(node: ReactNode) {
@@ -664,4 +666,15 @@ describe("TaskSidePanel", () => {
       expect.objectContaining({ replace: false }),
     );
   });
+  it("translates the custom launcher trigger and keeps persisted tab identity stable", async () => {
+    await i18n.changeLanguage("zh-CN"); await render(panel());
+    const add = container.querySelector<HTMLButtonElement>('button[aria-label="打开新标签页"]');
+    expect(add).not.toBeNull(); await act(async () => add?.click());
+    expect(document.body.textContent).toContain("打开侧面板标签");
+    expect(document.body.textContent).toContain("属性");
+    await act(async () => { await i18n.changeLanguage("ja"); });
+    expect(container.querySelector('[data-side-panel-tab-target="properties"]')).not.toBeNull();
+    expect(document.body.textContent).toContain("サイドパネルのタブを開く");
+  });
+
 });

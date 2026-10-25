@@ -4,6 +4,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FileText } from "lucide-react";
+import { i18n } from "@/i18n";
 import { SidePanelLauncher } from "./SidePanelLauncher";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -26,9 +27,10 @@ describe("SidePanelLauncher", () => {
     root = createRoot(container);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     act(() => root.unmount());
     container.remove();
+    await i18n.changeLanguage("en");
   });
 
   it("renders grouped loading, failure, disabled, and already-open states", async () => {
@@ -62,4 +64,19 @@ describe("SidePanelLauncher", () => {
     await act(async () => option.click());
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: "plan" }));
   });
+  it("translates default launcher controls live without rewriting caller-owned resource titles", async () => {
+    await i18n.changeLanguage("zh-CN");
+    await act(async () => root.render(<SidePanelLauncher sections={[{ id: "docs", items: [{ id: "custom", label: "Properties", alreadyOpen: true }] }]} onSelect={() => {}} />));
+    expect(container.textContent).toContain("打开侧面板标签"); expect(container.textContent).toContain("Properties");
+    expect(container.querySelector('input[data-side-panel-launcher-search]')?.getAttribute("aria-label")).toBe("搜索标签与资源…");
+    expect(container.querySelector('[aria-label="已打开"]')).not.toBeNull();
+    await act(async () => { await i18n.changeLanguage("es"); });
+    expect(container.textContent).toContain("Abrir una pestaña del panel lateral"); expect(container.textContent).toContain("Properties");
+  });
+  it("retains explicit custom labels rather than translating arbitrary resource text", async () => {
+    await i18n.changeLanguage("ja");
+    await act(async () => root.render(<SidePanelLauncher title="Customer title" description="Customer description" placeholder="Customer search" emptyMessage="Customer empty" sections={[]} onSelect={() => {}} />));
+    expect(container.textContent).toContain("Customer title"); expect(container.querySelector("input")?.getAttribute("aria-label")).toBe("Customer search");
+  });
+
 });
