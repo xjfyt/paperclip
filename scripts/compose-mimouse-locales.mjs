@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { parseUniqueJson } from "./mimouse-json.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 const root = fileURLToPath(new URL("../ui/src/i18n/", import.meta.url));
@@ -12,7 +13,7 @@ const flatten = (value, prefix = "") => Object.entries(value).flatMap(([key, ite
   return flatten(item, full);
 });
 const compiled = Object.fromEntries(locales.map(locale => [locale, Object.fromEntries(domains.map(domain => [domain,
-  JSON.parse(fs.readFileSync(path.join(root, "contributions", domain, `${locale}.json`), "utf8")),
+  parseUniqueJson(fs.readFileSync(path.join(root, "contributions", domain, `${locale}.json`), "utf8")),
 ]))]));
 const reference = new Map(flatten(compiled.en));
 for (const locale of locales) {
