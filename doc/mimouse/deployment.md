@@ -58,3 +58,12 @@ HTTP 测试只接受绝对的专用 PAPERCLIP_MIMOUSE_TEST_HOME，且目录必�
 先关闭新执行入口和 GitLab 推送，暂停通知 worker，核对已派发云任务与未知外部操作；随后回退应用版本。保留新增表、状态和原加密密钥，不清空未知任务/投递来消除告警。SSO 恢复仅由运维通过原受控部署配置执行，不向普通用户暴露绕过入口；IdP 禁用用户不自动撤销已有 Paperclip 会话，需按原管理员工具处理成员、session 与个人 token。
 
 迁移 0338 是安全隔离迁移：旧 WorkBuddy 公司级 secret 被停用，旧连接需重新授权并重新选择允许使用的 Agent。保留历史密文与台账，不自动把旧 token 复制到新作用域，也不猜测旧任务的账号身份。回退时保持 WorkBuddy 关闭；本地停用不能代替供应商撤销。
+
+
+## 构建工具与头文件分离的宿主
+
+根目录工作区链接预检、数据库迁移检查、技能和团队目录生成/校验已改用现有tsx依赖的Node导入入口，不需要tsx CLI的额外Unix通信管道。依赖版本和锁文件不变。
+
+Linux Tailscale NAPI扩展构建支持npm_config_nodedir（Node开发安装根目录）或npm_config_devdir（node-gyp缓存根目录，自动追加当前Node版本/include/node）。只使用与实际运行时匹配的头文件；若仍缺失，构建应明确失败，不跳过本地扩展。开发环境已用24.22.1缓存实际编译并加载getPeerCredentials导出；未改变OS权限或网络配置。
+
+大仓库TypeScript原生编译在内存紧张时应与UI整套测试串行，并按包分批。已验证server使用GOMEMLIMIT=2500MiB、GOGC=20、GOMAXPROCS=2及--singleThreaded；其他包和根命令的完整结果以验证记录最终状态为准。

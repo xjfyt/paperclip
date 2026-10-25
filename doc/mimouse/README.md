@@ -8,6 +8,7 @@
 - [Casdoor 登录](casdoor.md)
 - [通知中心](notifications.md)
 - [WorkBuddy](workbuddy.md)
+- [适配器能力证据](adapter-capabilities.md)
 - [GitLab 编码交付](coding.md)
 - [四语覆盖与未完成项](i18n_remaining.md)
 - [实现缺口与后续验收](REMAINING.md)

@@ -58,4 +58,4 @@ worker 在数据库事务中预留尝试，调用现有 routineService.runPipeli
 - POST `/api/companies/:companyId/coding/:deliveryId/repair-settings`：`enabled`、`confirm:true`、`headSha`；启用额外提供 `routineId`、`expectedRoutineRevisionId`、`maxAttempts`、`maxDurationMinutes`、`maxCostCents`。
 - GET `/api/companies/:companyId/coding/:deliveryId/repairs`：读取脱敏策略、诊断与尝试记录。
 
-9 项真实隔离 PostgreSQL 测试覆盖并发、实际例行子任务创建、工作区/私有继承、限制熔断、版本锁定、未知唤醒不重发、撤销/到期/环境错误/费用边界及两次 worker tick 去重。唤醒为测试替身，未调用付费模型。
+10 项真实隔离 PostgreSQL 测试覆盖并发、实际例行子任务创建、工作区/私有继承、限制熔断、版本锁定、未知唤醒不重发、撤销/到期/环境错误/费用边界、两次 worker tick 去重及服务/数据库跨公司拒绝。唤醒为测试替身，未调用付费模型。
