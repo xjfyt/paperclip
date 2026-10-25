@@ -1,3 +1,5 @@
+import { useEffect as usePageEffect } from "react";
+import { useBreadcrumbs } from "@/context/BreadcrumbContext";
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "@/i18n";
@@ -8,6 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 const kinds = ["wecom_webhook", "feishu_webhook", "dingtalk_webhook_legacy", "dingtalk_app", "wechat_official_account"];
 export function MimouseNotifications() {
+  const { t: pageT, i18n: pageI18n } = useTranslation();
+  const { setBreadcrumbs } = useBreadcrumbs();
+  usePageEffect(() => { setBreadcrumbs([{ label: pageT("notifications.title") }]); }, [setBreadcrumbs, pageI18n.language, pageT]);
   const { t } = useTranslation(); const { selectedCompanyId } = useCompany();
   return selectedCompanyId ? <NotificationCompany key={selectedCompanyId} companyId={selectedCompanyId} /> : <p>{t("notifications.selectCompany")}</p>;
 }

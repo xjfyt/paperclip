@@ -15,8 +15,8 @@ it.each(["en", "zh-CN", "es", "ja"])("localizes visible properties, status actio
   expect(icon).toContain(i18n.t("liveUi.changeStatus", { status })); expect(icon).toContain(status);
   expect(timeAgo("2026-10-25T11:00:00Z")).toBe(locale === "en" ? "1h ago" : new Intl.RelativeTimeFormat(locale, { numeric: "auto", style: "short" }).format(-1, "hour"));
 });
-it("keeps user-defined property labels unchanged", async () => {
+it.each(["Customer workflow", "constructor", "toString", "__proto__"])("keeps user-defined property labels unchanged: %s", async label => {
   await i18n.changeLanguage("ja");
-  const output = renderToStaticMarkup(<PropertyRow label="Customer workflow">Customer content</PropertyRow>);
-  expect(output).toContain('data-property-label="Customer workflow"'); expect(output).toContain("Customer content"); expect(output).toContain("Customer workflow");
+  const output = renderToStaticMarkup(<PropertyRow label={label}>Customer content</PropertyRow>);
+  expect(output).toContain(`data-property-label="${label}"`); expect(output).toContain("Customer content"); expect(output).toContain(label);
 });

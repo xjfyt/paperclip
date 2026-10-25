@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { BreadcrumbProvider } from "@/context/BreadcrumbContext";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -14,7 +15,7 @@ vi.mock("@/context/CompanyContext", () => ({ useCompany: () => company })); vi.m
 let host: HTMLDivElement, root: Root, client: QueryClient;
 const data = { enabled: true, connections: [{ id: "connection-1", status: "connected", allowedAgentIds: [] }], jobs: [] };
 async function flush() { await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); }); }
-async function mount() { await act(async () => root.render(<QueryClientProvider client={client}><MimouseWorkbuddy /></QueryClientProvider>)); await flush(); }
+async function mount() { await act(async () => root.render(<BreadcrumbProvider><QueryClientProvider client={client}><MimouseWorkbuddy /></QueryClientProvider></BreadcrumbProvider>)); await flush(); }
 async function click(element: Element) { await act(async () => { element.dispatchEvent(new MouseEvent("click", { bubbles: true })); }); await flush(); }
 beforeEach(async () => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true; await i18n.changeLanguage("en"); vi.clearAllMocks(); company.selectedCompanyId = "company-a";

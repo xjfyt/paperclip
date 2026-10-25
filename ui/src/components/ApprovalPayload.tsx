@@ -1,3 +1,4 @@
+import { systemLabel, useSystemLabels } from "@/i18n/system-labels";
 import { UserPlus, Lightbulb, ShieldAlert, ShieldCheck } from "lucide-react";
 import { MarkdownBody } from "./MarkdownBody";
 import { formatCents } from "../lib/utils";
@@ -29,7 +30,7 @@ export function approvalSubject(payload?: Record<string, unknown> | null): strin
 
 /** Build a contextual label for an approval, e.g. "Hire Agent: Designer" */
 export function approvalLabel(type: string, payload?: Record<string, unknown> | null): string {
-  const base = typeLabel[type] ?? type;
+  const base = typeLabel[type] ? systemLabel(typeLabel[type]) : type;
   const subject = approvalSubject(payload);
   if (subject) {
     return `${base}: ${subject}`;
@@ -47,10 +48,11 @@ export const typeIcon: Record<string, typeof UserPlus> = {
 export const defaultTypeIcon = ShieldCheck;
 
 function PayloadField({ label, value }: { label: string; value: unknown }) {
+  useSystemLabels();
   if (!value) return null;
   return (
     <div className="flex items-center gap-2">
-      <span className="text-muted-foreground w-20 sm:w-24 shrink-0 text-xs">{label}</span>
+      <span className="text-muted-foreground w-20 sm:w-24 shrink-0 text-xs">{systemLabel(label)}</span>
       <span>{String(value)}</span>
     </div>
   );
@@ -171,6 +173,7 @@ function stripLeadingListMarker(value: string): string {
 }
 
 function BoardApprovalPayloadContent({ payload }: { payload: Record<string, unknown> }) {
+  useSystemLabels();
   const risks = Array.isArray(payload.risks)
     ? payload.risks
         .filter((value): value is string => typeof value === "string")
@@ -187,20 +190,20 @@ function BoardApprovalPayloadContent({ payload }: { payload: Record<string, unkn
     <div className="mt-4 space-y-3.5 text-sm">
       {title && (
         <div className="space-y-1">
-          <p className="text-(length:--text-micro) font-medium uppercase tracking-(--tracking-label) text-muted-foreground">Title</p>
+          <p className="text-(length:--text-micro) font-medium uppercase tracking-(--tracking-label) text-muted-foreground">{systemLabel('Title')}</p>
           <p className="font-medium leading-6 text-foreground">{title}</p>
         </div>
       )}
       {summary && (
         <div className="space-y-1">
-          <p className="text-(length:--text-micro) font-medium uppercase tracking-(--tracking-label) text-muted-foreground">Summary</p>
+          <p className="text-(length:--text-micro) font-medium uppercase tracking-(--tracking-label) text-muted-foreground">{systemLabel('Summary')}</p>
           <MarkdownBody className="leading-6 text-foreground/90">{summary}</MarkdownBody>
         </div>
       )}
       {recommendedAction && (
         <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3.5 py-3">
           <p className="text-(length:--text-micro) font-medium uppercase tracking-(--tracking-label) text-amber-700 dark:text-amber-300">
-            Recommended action
+            {systemLabel('Recommended action')}
           </p>
           <MarkdownBody className="mt-1 leading-6 text-foreground">{recommendedAction}</MarkdownBody>
         </div>
@@ -213,7 +216,7 @@ function BoardApprovalPayloadContent({ payload }: { payload: Record<string, unkn
       )}
       {risks.length > 0 && (
         <div className="space-y-1.5">
-          <p className="text-(length:--text-micro) font-medium uppercase tracking-(--tracking-label) text-muted-foreground">Risks</p>
+          <p className="text-(length:--text-micro) font-medium uppercase tracking-(--tracking-label) text-muted-foreground">{systemLabel('Risks')}</p>
           <ul className="space-y-1 text-sm text-muted-foreground">
             {risks.map((risk, index) => (
               <li key={`${index}-${risk}`} className="flex items-start gap-2">
@@ -227,7 +230,7 @@ function BoardApprovalPayloadContent({ payload }: { payload: Record<string, unkn
       {proposedComment && (
         <div className="space-y-1.5">
           <p className="text-(length:--text-micro) font-medium uppercase tracking-(--tracking-label) text-muted-foreground">
-            Proposed comment
+            {systemLabel('Proposed comment')}
           </p>
           <pre className="max-h-48 overflow-auto rounded-lg border border-border/60 bg-muted/50 px-3.5 py-3 font-mono text-xs leading-5 text-muted-foreground whitespace-pre-wrap">
             {proposedComment}
@@ -247,6 +250,7 @@ export function ApprovalPayloadRenderer({
   payload: Record<string, unknown>;
   hidePrimaryTitle?: boolean;
 }) {
+  useSystemLabels();
   if (type === "hire_agent") return <HireAgentPayload payload={payload} />;
   if (type === "budget_override_required") return <BudgetOverridePayload payload={payload} />;
   if (type === "request_board_approval") {

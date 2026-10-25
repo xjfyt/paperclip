@@ -1,3 +1,5 @@
+import { MimouseAdapterCapabilities } from "@/components/MimouseAdapterCapabilities";
+import { systemLabel } from "@/i18n/system-labels";
 import { t as mimouseT, useTranslation as useMimouseTranslation, i18n as mimouseI18n } from "@/i18n";
 import { PrimaryAgentIndicator, SetPrimaryAgentButton } from "@/components/primary-agent/PrimaryAgentPresentation";
 import { AiConnectionPoolRunDetails } from "@/components/ai-connections/AiConnectionPoolRunDetails";
@@ -1390,7 +1392,7 @@ export function AgentDetail() {
         </div>
       )}
 
-      {activeView !== "run-detail" && activeView !== "channels" && <h2 className="text-xl font-semibold">{activeView === "secrets" ? "Secrets & variables" : AGENT_DETAIL_NAVIGATION.flatMap(section => section.items).find(item => item.value === activeView)?.label}</h2>}
+      {activeView !== "run-detail" && activeView !== "channels" && <h2 className="text-xl font-semibold">{systemLabel(activeView === "secrets" ? "Secrets & variables" : AGENT_DETAIL_NAVIGATION.flatMap(section => section.items).find(item => item.value === activeView)?.label ?? "")}</h2>}
 
       {/* View content */}
       {activeView === "overview" && (
@@ -1804,6 +1806,8 @@ export function AgentOverview({
             <p className="text-sm text-muted-foreground">{mimouseT("workflow.noCapabilities")}</p>
           )}
         </section>
+
+        <MimouseAdapterCapabilities adapterType={agent.adapterType} />
 
         <section className="rounded-lg border border-border p-4" aria-labelledby="agent-skills-heading">
           <div className="mb-3 flex items-center justify-between gap-3">

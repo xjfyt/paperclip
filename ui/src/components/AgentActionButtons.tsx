@@ -1,3 +1,4 @@
+import { systemLabel, useSystemLabels } from "@/i18n/system-labels";
 import { useCallback, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "@/lib/router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -60,10 +61,11 @@ export function RunButton({
   label?: string;
   size?: "sm" | "default";
 }) {
+  useSystemLabels();
   return (
     <Button variant="outline" size={size} onClick={onClick} disabled={disabled}>
       <Play className="h-3.5 w-3.5 sm:mr-1" />
-      <span className="hidden sm:inline">{label}</span>
+      <span className="hidden sm:inline">{label === "Run now" ? systemLabel(label) : label}</span>
     </Button>
   );
 }
@@ -81,11 +83,12 @@ export function PauseResumeButton({
   disabled?: boolean;
   size?: "sm" | "default";
 }) {
+  useSystemLabels();
   if (isPaused) {
     return (
       <Button variant="outline" size={size} onClick={onResume} disabled={disabled}>
         <Play className="h-3.5 w-3.5 sm:mr-1" />
-        <span className="hidden sm:inline">Resume</span>
+        <span className="hidden sm:inline">{systemLabel('Resume')}</span>
       </Button>
     );
   }
@@ -93,7 +96,7 @@ export function PauseResumeButton({
   return (
     <Button variant="outline" size={size} onClick={onPause} disabled={disabled}>
       <Pause className="h-3.5 w-3.5 sm:mr-1" />
-      <span className="hidden sm:inline">Pause</span>
+      <span className="hidden sm:inline">{systemLabel('Pause')}</span>
     </Button>
   );
 }
@@ -107,6 +110,7 @@ export function ClearErrorButton({
   disabled?: boolean;
   size?: "sm" | "default";
 }) {
+  useSystemLabels();
   return (
     <Button
       variant="outline"
@@ -117,7 +121,7 @@ export function ClearErrorButton({
       aria-label="Clear error and return agent to idle"
     >
       <CheckCircle2 className="h-3.5 w-3.5 sm:mr-1" />
-      <span className="hidden sm:inline">Clear error</span>
+      <span className="hidden sm:inline">{systemLabel('Clear error')}</span>
     </Button>
   );
 }
@@ -213,6 +217,7 @@ export function AgentActionButtons({
   children?: React.ReactNode;
   className?: string;
 }) {
+  useSystemLabels();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { openNewIssue } = useDialogActions();
@@ -401,7 +406,7 @@ export function AgentActionButtons({
         title={workActionsDisabled ? workActionsDisabledReason : undefined}
       >
         <Plus className="h-3.5 w-3.5 sm:mr-1" />
-        <span className="hidden sm:inline">{assignLabel}</span>
+        <span className="hidden sm:inline">{assignLabel === "Assign Task" ? systemLabel(assignLabel) : assignLabel}</span>
       </Button>
       {showRun && <RunButton
         onClick={() => {
@@ -421,10 +426,10 @@ export function AgentActionButtons({
             providerTraceAction.mutate();
           }}
           disabled={assignAndRunDisabled}
-          title="Capture exact provider traffic for this run (expires after 24 hours)"
+          title={systemLabel("Capture exact provider traffic for this run (expires after 24 hours)")}
         >
           <Bug className="h-3.5 w-3.5 sm:mr-1" />
-          <span className="hidden sm:inline">Run with provider trace</span>
+          <span className="hidden sm:inline">{systemLabel('Run with provider trace')}</span>
         </Button>
       )}
       {isError ? (

@@ -1,3 +1,5 @@
+import { systemLabel, useSystemLabels } from "@/i18n/system-labels";
+import { t as browserT, i18n as browserI18n, useTranslation } from "@/i18n";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "@/lib/router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -294,7 +296,7 @@ function runFailureMessage(run: HeartbeatRun): string {
 }
 
 function approvalStatusLabel(status: Approval["status"]): string {
-  return status.replaceAll("_", " ");
+  return browserI18n.language === "en" ? status.replaceAll("_", " ") : browserT(`statuses.${status}`, { defaultValue: status.replaceAll("_", " ") });
 }
 
 function readIssueIdFromRun(run: HeartbeatRun): string | null {
@@ -381,6 +383,7 @@ export function FailedRunInboxRow({
   selected?: boolean;
   className?: string;
 }) {
+  useSystemLabels();
   const issueId = readIssueIdFromRun(run);
   const issue = issueId ? issueById.get(issueId) ?? null : null;
   const displayError = runFailureMessage(run);
@@ -403,7 +406,7 @@ export function FailedRunInboxRow({
                   "inline-flex h-4 w-4 items-center justify-center rounded-full transition-colors",
                   "hover:bg-blue-500/20",
                 )}
-                aria-label="Mark as read"
+                aria-label={systemLabel("Mark as read")}
               >
                 <span className={cn(
                   "block h-2 w-2 rounded-full transition-opacity duration-300",
@@ -469,7 +472,7 @@ export function FailedRunInboxRow({
               type="button"
               onClick={onDismiss}
               className="rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover:opacity-100"
-              aria-label="Dismiss"
+              aria-label={systemLabel("Dismiss")}
             >
               <X className="h-4 w-4" />
             </button>
@@ -493,7 +496,7 @@ export function FailedRunInboxRow({
             type="button"
             onClick={onDismiss}
             className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-            aria-label="Dismiss"
+            aria-label={systemLabel("Dismiss")}
           >
             <X className="h-4 w-4" />
           </button>
@@ -528,6 +531,7 @@ function ApprovalInboxRow({
   selected?: boolean;
   className?: string;
 }) {
+  useSystemLabels();
   const Icon = typeIcon[approval.type] ?? defaultTypeIcon;
   const label = approvalLabel(approval.type, approval.payload as Record<string, unknown> | null);
   const showResolutionButtons =
@@ -552,7 +556,7 @@ function ApprovalInboxRow({
                   "inline-flex h-4 w-4 items-center justify-center rounded-full transition-colors",
                   "hover:bg-blue-500/20",
                 )}
-                aria-label="Mark as read"
+                aria-label={systemLabel("Mark as read")}
               >
                 <span className={cn(
                   "block h-2 w-2 rounded-full transition-opacity duration-300",
@@ -583,8 +587,8 @@ function ApprovalInboxRow({
             </span>
             <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
               <span className="capitalize">{approvalStatusLabel(approval.status)}</span>
-              {requesterName ? <span>requested by {requesterName}</span> : null}
-              <span>updated {timeAgo(approval.updatedAt)}</span>
+              {requesterName ? <span>{browserT("browserQa.requestedBy", { name: requesterName })}</span> : null}
+              <span>{browserT("browserQa.updatedAt", { time: timeAgo(approval.updatedAt) })}</span>
             </span>
           </span>
         </Link>
@@ -601,7 +605,7 @@ function ApprovalInboxRow({
                   onClick={onApprove}
                   disabled={isPending}
                 >
-                  Approve
+                  {systemLabel("Approve")}
                 </Button>
                 <Button
                   variant="destructive"
@@ -610,7 +614,7 @@ function ApprovalInboxRow({
                   onClick={onReject}
                   disabled={isPending}
                 >
-                  Reject
+                  {systemLabel("Reject")}
                 </Button>
               </>
             ) : null}
@@ -625,7 +629,7 @@ function ApprovalInboxRow({
             onClick={onApprove}
             disabled={isPending}
           >
-            Approve
+            {systemLabel("Approve")}
           </Button>
           <Button
             variant="destructive"
@@ -634,7 +638,7 @@ function ApprovalInboxRow({
             onClick={onReject}
             disabled={isPending}
           >
-            Reject
+            {systemLabel("Reject")}
           </Button>
         </div>
       ) : null}
@@ -665,6 +669,7 @@ function JoinRequestInboxRow({
   selected?: boolean;
   className?: string;
 }) {
+  useSystemLabels();
   const label = formatJoinRequestInboxLabel(joinRequest);
   const showUnreadSlot = unreadState !== null;
   const showUnreadDot = unreadState === "visible" || unreadState === "fading";
@@ -685,7 +690,7 @@ function JoinRequestInboxRow({
                   "inline-flex h-4 w-4 items-center justify-center rounded-full transition-colors",
                   "hover:bg-blue-500/20",
                 )}
-                aria-label="Mark as read"
+                aria-label={systemLabel("Mark as read")}
               >
                 <span className={cn(
                   "block h-2 w-2 rounded-full transition-opacity duration-300",
@@ -724,7 +729,7 @@ function JoinRequestInboxRow({
             onClick={onApprove}
             disabled={isPending}
           >
-            Approve
+            {systemLabel("Approve")}
           </Button>
           <Button
             variant="destructive"
@@ -733,7 +738,7 @@ function JoinRequestInboxRow({
             onClick={onReject}
             disabled={isPending}
           >
-            Reject
+            {systemLabel("Reject")}
           </Button>
         </div>
       </div>
@@ -744,7 +749,7 @@ function JoinRequestInboxRow({
           onClick={onApprove}
           disabled={isPending}
         >
-          Approve
+          {systemLabel("Approve")}
         </Button>
         <Button
           variant="destructive"
@@ -753,7 +758,7 @@ function JoinRequestInboxRow({
           onClick={onReject}
           disabled={isPending}
         >
-          Reject
+          {systemLabel("Reject")}
         </Button>
       </div>
     </div>
@@ -824,6 +829,8 @@ function StreamlinedInbox({
   toolbarContext,
   surfaceLabel = "Inbox",
 }: InboxSurfaceProps) {
+  const { i18n } = useTranslation();
+  const displaySurfaceLabel = ["Inbox", "Tasks"].includes(surfaceLabel) ? (surfaceLabel === "Tasks" ? browserT("navigation.tasks", { defaultValue: "Tasks" }) : systemLabel(surfaceLabel)) : surfaceLabel;
   const streamlinedUiEnabled = true;
   const { selectedCompanyId } = useCompany();
   const { setBreadcrumbs } = useBreadcrumbs();
@@ -909,8 +916,8 @@ function StreamlinedInbox({
   });
 
   useEffect(() => {
-    setBreadcrumbs([{ label: surfaceLabel }]);
-  }, [setBreadcrumbs, surfaceLabel]);
+    setBreadcrumbs([{ label: displaySurfaceLabel }]);
+  }, [setBreadcrumbs, displaySurfaceLabel]);
 
   useEffect(() => {
     saveLastInboxTab(tab);
@@ -2427,16 +2434,16 @@ function StreamlinedInbox({
     <div className="space-y-6">
       <InboxCollectionToolbar
         streamlined={streamlinedUiEnabled}
-        ariaLabel={`${surfaceLabel} controls`}
+        ariaLabel={browserT("browserQa.controls", { name: displaySurfaceLabel })}
         context={toolbarContext ?? (
           <Tabs value={tab} onValueChange={(value) => navigate(`/inbox/${value}`)}>
             <PageTabBar
               items={[
-                { value: "mine", label: "Mine" },
-                { value: "recent", label: "Recent" },
-                { value: "unread", label: "Unread" },
-                { value: "blocked", label: "Blocked" },
-                { value: "all", label: "All" },
+                { value: "mine", label: systemLabel("Mine") },
+                { value: "recent", label: systemLabel("Recent") },
+                { value: "unread", label: systemLabel("Unread") },
+                { value: "blocked", label: systemLabel("Blocked") },
+                { value: "all", label: systemLabel("All") },
               ]}
             />
           </Tabs>
@@ -2446,7 +2453,7 @@ function StreamlinedInbox({
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               type="search"
-              placeholder={`Search ${surfaceLabel.toLowerCase()}…`}
+              placeholder={browserT("browserQa.search", { name: i18n.language === "en" ? displaySurfaceLabel.toLowerCase() : displaySurfaceLabel })}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => {
@@ -2497,7 +2504,7 @@ function StreamlinedInbox({
                     variant="outline"
                     size="icon"
                     className={cn("h-8 w-8 shrink-0", blockedGroupBy !== "none" && "bg-accent")}
-                    title="Group"
+                    title={systemLabel("Group")}
                   >
                     <Layers className="h-3.5 w-3.5" />
                   </Button>
@@ -2533,7 +2540,7 @@ function StreamlinedInbox({
                   }));
                 }}
                 onResetColumns={() => setIssueColumns(DEFAULT_INBOX_ISSUE_COLUMNS)}
-                title="Choose which columns stay visible"
+                title={systemLabel("Choose which columns stay visible")}
                 iconOnly
               />
               <Popover>
@@ -2543,7 +2550,7 @@ function StreamlinedInbox({
                     variant="outline"
                     size="icon"
                     className="h-8 w-8 shrink-0"
-                    title="Sort"
+                    title={systemLabel("Sort")}
                   >
                     <ArrowUpDown className="h-3.5 w-3.5" />
                   </Button>
@@ -2576,7 +2583,7 @@ function StreamlinedInbox({
                 size="icon"
                 className={cn("hidden h-8 w-8 shrink-0 sm:inline-flex", nestingEnabled && "bg-accent")}
                 onClick={toggleNesting}
-                title={nestingEnabled ? "Disable parent-child nesting" : "Enable parent-child nesting"}
+                title={systemLabel(nestingEnabled ? "Disable parent-child nesting" : "Enable parent-child nesting")}
               >
                 <ListTree className="h-3.5 w-3.5" />
               </Button>
@@ -2616,7 +2623,7 @@ function StreamlinedInbox({
                     variant="outline"
                     size="icon"
                     className={cn("h-8 w-8 shrink-0", groupBy !== "none" && "bg-accent")}
-                    title="Group"
+                    title={systemLabel("Group")}
                   >
                     <Layers className="h-3.5 w-3.5" />
                   </Button>
@@ -2658,7 +2665,7 @@ function StreamlinedInbox({
                   }));
                 }}
                 onResetColumns={() => setIssueColumns(DEFAULT_INBOX_ISSUE_COLUMNS)}
-                title="Choose which columns stay visible"
+                title={systemLabel("Choose which columns stay visible")}
                 iconOnly
                 rowPresentation={streamlinedUiEnabled ? "task" : "legacy"}
               />
@@ -3313,7 +3320,7 @@ function StreamlinedInbox({
                     type="button"
                     onClick={() => dismissAlert("alert:agent-errors")}
                     className="rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover/alert:opacity-100"
-                    aria-label="Dismiss"
+                    aria-label={systemLabel("Dismiss")}
                   >
                     <X className="h-3.5 w-3.5" />
                   </button>
@@ -3336,7 +3343,7 @@ function StreamlinedInbox({
                     type="button"
                     onClick={() => dismissAlert("alert:budget")}
                     className="rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover/alert:opacity-100"
-                    aria-label="Dismiss"
+                    aria-label={systemLabel("Dismiss")}
                   >
                     <X className="h-3.5 w-3.5" />
                   </button>

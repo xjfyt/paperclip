@@ -1,3 +1,4 @@
+import { systemLabel } from "@/i18n/system-labels";
 import { t as mimouseT, useTranslation as useMimouseTranslation, i18n as mimouseI18n } from "@/i18n";
 import { AgentIdentity } from "@/components/AgentIdentity";
 import { useEffect, useMemo, useState } from "react";
@@ -159,17 +160,17 @@ export function ApprovalDetail() {
       ? {
           label:
             (linkedIssues?.length ?? 0) > 1
-              ? "Review linked tasks"
-              : "Review linked task",
+              ? systemLabel("Review linked tasks")
+              : systemLabel("Review linked task"),
           to: `/issues/${primaryLinkedIssue.identifier ?? primaryLinkedIssue.id}`,
         }
       : linkedAgentId
         ? {
-            label: "Open hired agent",
+            label: systemLabel("Open hired agent"),
             to: `/agents/${linkedAgentId}`,
           }
         : {
-            label: "Back to approvals",
+            label: systemLabel("Back to approvals"),
             to: "/approvals",
           };
 
@@ -311,7 +312,7 @@ export function ApprovalDetail() {
       </div>
 
       <div className="border border-border rounded-lg p-4 space-y-3">
-        <h3 className="text-sm font-medium">Comments ({comments?.length ?? 0})</h3>
+        <h3 className="text-sm font-medium">{mimouseT("browserQa.comments", { count: comments?.length ?? 0 })}</h3>
         <div className="space-y-2">
           {(comments ?? []).map((comment: ApprovalComment) => (
             <div key={comment.id} className="border border-border/60 rounded-md p-3">
@@ -346,7 +347,7 @@ export function ApprovalDetail() {
             onClick={() => addCommentMutation.mutate()}
             disabled={!commentBody.trim() || addCommentMutation.isPending}
           >
-            {addCommentMutation.isPending ? "Posting…" : "Post comment"}
+            {addCommentMutation.isPending ? systemLabel("Posting…") : systemLabel("Post comment")}
           </Button>
         </div>
       </div>

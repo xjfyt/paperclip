@@ -9,5 +9,5 @@ const keys: Record<string, string> = {
 };
 export function usePropertyLabels() {
   const { t } = useTranslation();
-  return (label: string) => keys[label] ? t(`propertyLabels.${keys[label]}`) : label;
+  return (label: string) => Object.hasOwn(keys, label) ? t(`propertyLabels.${keys[label]}`) : label;
 }

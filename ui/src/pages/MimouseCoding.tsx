@@ -1,3 +1,5 @@
+import { useEffect as usePageEffect } from "react";
+import { useBreadcrumbs } from "@/context/BreadcrumbContext";
 import { authApi } from "@/api/auth";
 import { queryKeys } from "@/lib/queryKeys";
 import { MimouseCodingRepair } from "./MimouseCodingRepair";
@@ -11,6 +13,9 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 interface Delivery { id: string; issueId: string; headSha: string; operationState: string; mrIid: number | null; pipelineId: number | null; gate: { readyForReleaseCandidate: boolean; blockers: string[] } }
 export function MimouseCoding() {
+  const { t: pageT, i18n: pageI18n } = useTranslation();
+  const { setBreadcrumbs } = useBreadcrumbs();
+  usePageEffect(() => { setBreadcrumbs([{ label: pageT("coding.title") }]); }, [setBreadcrumbs, pageI18n.language, pageT]);
   const { selectedCompanyId } = useCompany(); const { t } = useTranslation();
   const session = useQuery({ queryKey: queryKeys.auth.session, queryFn: () => authApi.getSession(), retry: false });
   if (!selectedCompanyId) return null;

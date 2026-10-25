@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { BreadcrumbProvider } from "@/context/BreadcrumbContext";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -12,7 +13,7 @@ vi.mock("@/api/mimouse-notifications", () => ({ notificationApi: api }));
 const data = () => ({ enabled: true, dispatchEnabled: true, connectedEvents: ["approval.requested", "run.failed", "coding.mr_ready", "coding.ci_failed", "coding.artifact_ready", "budget.threshold_reached"], unconnectedEvents: [], endpoints: [{ id: "endpoint-1", name: "Test channel", kind: "wecom_webhook", enabled: true, config: {}, secretRef: "11111111-1111-4111-8111-111111111111", secretVersion: 1 }], subscriptions: [{ id: "subscription-1", endpointId: "endpoint-1", eventType: "run.failed", locale: "en", enabled: true }], deliveries: [{ id: "delivery-1", endpointId: "endpoint-1", state: "indeterminate", attempt: 1, lastCode: "transport_unconfirmed", createdAt: "2026-10-25T00:00:00Z" }] });
 let host: HTMLDivElement, root: Root, client: QueryClient;
 async function flush() { await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); }); }
-async function mount() { await act(async () => root.render(<QueryClientProvider client={client}><MimouseNotifications /></QueryClientProvider>)); await flush(); }
+async function mount() { await act(async () => root.render(<BreadcrumbProvider><QueryClientProvider client={client}><MimouseNotifications /></QueryClientProvider></BreadcrumbProvider>)); await flush(); }
 async function click(element: Element | null) { expect(element).not.toBeNull(); await act(async () => { element!.dispatchEvent(new MouseEvent("click", { bubbles: true })); }); await flush(); }
 function button(text: string) { return [...host.querySelectorAll("button")].find(item => item.textContent === text) ?? null; }
 async function fill(id: string, value: string) { await act(async () => { const input = host.querySelector(`#${id}`)!; const proto = input.tagName === "SELECT" ? HTMLSelectElement.prototype : HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(proto, "value")!.set!.call(input, value); input.dispatchEvent(new Event(input.tagName === "SELECT" ? "change" : "input", { bubbles: true })); }); }
@@ -55,4 +56,12 @@ it("ignores a late preview so acknowledgments cannot authorize a different deliv
   const checks = host.querySelectorAll('input[type="checkbox"]'); await click(checks[0]); await click(checks[1]);
   await act(async () => { releaseFirst({ id: "delivery-1", title: "First title", text: "First body", endpointName: "Test channel", secretVersion: 1 }); }); await flush();
   expect(host.textContent).toContain("Second body"); expect(host.textContent).not.toContain("First body"); await click(button("Confirm a new delivery")); expect(api.retry).toHaveBeenCalledWith("company-a", "delivery-2", expect.any(String));
+});
+
+it("owns the localized page title instead of retaining the previous route", async () => {
+  document.title = "Previous approval";
+  await i18n.changeLanguage("zh-CN"); await mount();
+  expect(document.title).toBe("通知中心 • Paperclip");
+  await act(async () => { await i18n.changeLanguage("es"); }); await flush();
+  expect(document.title).toBe("Notificaciones • Paperclip");
 });

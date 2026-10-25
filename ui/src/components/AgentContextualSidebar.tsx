@@ -1,3 +1,4 @@
+import { systemLabel, useSystemLabels } from "@/i18n/system-labels";
 import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
@@ -58,6 +59,7 @@ export function AgentContextualSidebar({
   agentName?: string;
   labels?: Partial<Record<AgentLocalDetailView, string>>;
 }) {
+  useSystemLabels();
   const { selectedCompanyId } = useCompany();
   const shouldResolveAgent = !agentId || !agentName;
   const { data: resolvedAgent } = useQuery({
@@ -83,7 +85,7 @@ export function AgentContextualSidebar({
       >
         {AGENT_DETAIL_NAVIGATION.map((section) => (
           <div
-            key={section.label}
+            key={systemLabel(section.label)}
             data-slot="contextual-sidebar-section"
             className={contextualSidebarStyles.section}
           >
@@ -91,7 +93,7 @@ export function AgentContextualSidebar({
               data-slot="contextual-sidebar-section-label"
               className={contextualSidebarStyles.sectionLabel}
             >
-              {section.label}
+              {systemLabel(section.label)}
             </p>
             <div data-slot="contextual-sidebar-group" className={contextualSidebarStyles.group}>
               {section.items
@@ -101,7 +103,7 @@ export function AgentContextualSidebar({
                     <SidebarNavItem
                       key={item.value}
                       to={href}
-                      label={labels?.[item.value] ?? item.label}
+                      label={labels?.[item.value] && labels[item.value] !== "Secrets & variables" ? labels[item.value]! : systemLabel(labels?.[item.value] ?? item.label)}
                       icon={localIcons[item.value]}
                     />
                   );
@@ -115,18 +117,18 @@ export function AgentContextualSidebar({
             data-slot="contextual-sidebar-section-label"
             className={contextualSidebarStyles.sectionLabel}
           >
-            Audit
+            {systemLabel("Audit")}
           </p>
           <div data-slot="contextual-sidebar-group" className={contextualSidebarStyles.group}>
             {resolvedId ? auditItems.map((item) => (
               <SidebarNavItem
                 key={item.section}
                 to={agentScopedAuditHref(resolvedId, item.section)}
-                label={item.label}
+                label={systemLabel(item.label)}
                 icon={item.icon}
               />
             )) : (
-              <p className="px-2 py-1.5 text-xs text-muted-foreground">Loading audit links…</p>
+              <p className="px-2 py-1.5 text-xs text-muted-foreground">{systemLabel("Loading audit links…")}</p>
             )}
           </div>
         </div>

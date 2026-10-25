@@ -1,3 +1,5 @@
+import { useEffect as usePageEffect } from "react";
+import { useBreadcrumbs } from "@/context/BreadcrumbContext";
 import { authApi } from "@/api/auth";
 import { queryKeys } from "@/lib/queryKeys";
 import { agentsApi } from "@/api/agents";
@@ -10,6 +12,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 interface WorkbuddyData { enabled: boolean; connections: Array<{ id: string; status: string; allowedAgentIds: string[] }>; jobs: Array<{ id: string; providerJobId: string | null; dispatchState: string; remoteState: string; report: string; lastCode: string | null; activeTurn: string | null }> }
 export function MimouseWorkbuddy() {
+  const { t: pageT, i18n: pageI18n } = useTranslation();
+  const { setBreadcrumbs } = useBreadcrumbs();
+  usePageEffect(() => { setBreadcrumbs([{ label: "WorkBuddy" }]); }, [setBreadcrumbs, pageI18n.language, pageT]);
   const { t } = useTranslation(); const { selectedCompanyId } = useCompany();
   const session = useQuery({ queryKey: queryKeys.auth.session, queryFn: () => authApi.getSession(), retry: false });
   if (!selectedCompanyId) return null;

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { BreadcrumbProvider } from "@/context/BreadcrumbContext";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -19,7 +20,7 @@ const data = { operatorEnabled: true, status: "awaiting_review", lastCode: null,
 let host: HTMLDivElement, root: Root, client: QueryClient;
 async function flush() { await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); }); }
 async function click(element: Element) { await act(async () => { element.dispatchEvent(new MouseEvent("click", { bubbles: true })); }); await flush(); }
-async function mount(userId = "owner-a", parent = false) { await act(async () => root.render(<QueryClientProvider client={client}>{parent ? <MimouseCoding /> : <MimouseCodingRepair {...props} userId={userId} />}</QueryClientProvider>)); await flush(); }
+async function mount(userId = "owner-a", parent = false) { await act(async () => root.render(<BreadcrumbProvider><QueryClientProvider client={client}>{parent ? <MimouseCoding /> : <MimouseCodingRepair {...props} userId={userId} />}</QueryClientProvider></BreadcrumbProvider>)); await flush(); }
 async function open() { const button = [...host.querySelectorAll("button")].find(item => item.textContent === i18n.t("codingRepair.manage"))!; await click(button); await flush(); }
 async function choose() { const select = host.querySelector("select")!; await act(async () => { select.value = routine.id; select.dispatchEvent(new Event("change", { bubbles: true })); }); await flush(); }
 const authorize = () => [...host.querySelectorAll("button")].find(item => item.textContent === i18n.t("codingRepair.enable"))!;

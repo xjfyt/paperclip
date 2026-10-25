@@ -1,3 +1,4 @@
+import { systemLabel } from "@/i18n/system-labels";
 import { t as mimouseUiT, useTranslation as useMimouseUiTranslation } from "@/i18n";
 import { AgentAvatar } from "../AgentAvatar";
 import {
@@ -300,19 +301,8 @@ function AssigneeIdentityAvatar({
 
 /** v7 per-mode placeholder copy; `{agent}` is the pending assignee's name. */
 function modePlaceholder(mode: IssueWorkMode, agentName: string, mobile: boolean): string {
-  if (mobile) {
-    if (mode === "planning") return `Plan with ${agentName}…`;
-    if (mode === "ask") return `Ask ${agentName}…`;
-    return `Message ${agentName}…`;
-  }
-  switch (mode) {
-    case "planning":
-      return `Plan with ${agentName} — shapes the plan doc, no code changes…`;
-    case "ask":
-      return `Ask ${agentName} a question — read-only, nothing runs…`;
-    default:
-      return `Message ${agentName} — describe what you want done…`;
-  }
+  const key = mode === "planning" ? "plan" : mode === "ask" ? "ask" : "message";
+  return mimouseUiT(`browserQa.${key}${mobile ? "Mobile" : ""}`, { agent: agentName });
 }
 
 type ComposerAttachment = {
@@ -1589,8 +1579,8 @@ export function TaskChatComposer({
               title={
                 showStop
                   ? stopControl.stopping
-                    ? "Stopping…"
-                    : "Stop response"
+                    ? systemLabel("Stopping…")
+                    : systemLabel("Stop response")
                   : queuedEdit
                     ? queuedEdit.stale
                       ? "Queue as new message"
@@ -1599,18 +1589,18 @@ export function TaskChatComposer({
                       ? "Waiting for upload to finish"
                       : uploadFailed
                         ? "Remove the failed attachment to send"
-                        : creation ? `${creation.submitLabel} (⌘+Enter)` : "Send (⌘+Enter)"
+                        : creation ? `${creation.submitLabel} (⌘+Enter)` : systemLabel("Send (⌘+Enter)")
               }
               aria-label={
                 showStop
                   ? stopControl.stopping
-                    ? "Stopping…"
-                    : "Stop"
+                    ? systemLabel("Stopping…")
+                    : systemLabel("Stop")
                   : queuedEdit
                     ? queuedEdit.stale
                       ? "Queue as new message"
                       : "Save queued message"
-                    : creation?.submitLabel ?? "Send"
+                    : creation?.submitLabel ?? systemLabel("Send")
               }
               aria-busy={submitting}
               className={cn(
