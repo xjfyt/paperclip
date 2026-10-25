@@ -4,7 +4,7 @@
 
 ## 部署及边界
 
-应用标准迁移 0336、0339。公司秘密值为 JSON `{ "token": "..." }`，界面仅填写秘密 ID。`PAPERCLIP_GITLAB_ALLOWED_ORIGINS` 为逗号分隔的管理员允许源，必须精确匹配，不跟随携带令牌的重定向。支持 GitLab CE 基础 API；高级审批与合成合并流水线不假定存在，版本查询受限则显示 unknown。
+应用标准迁移 0336、0339、0340。公司秘密值为 JSON `{ "token": "..." }`，界面仅填写秘密 ID。`PAPERCLIP_GITLAB_ALLOWED_ORIGINS` 为逗号分隔的管理员允许源，必须精确匹配，不跟随携带令牌的重定向。支持 GitLab CE 基础 API；高级审批与合成合并流水线不假定存在，版本查询受限则显示 unknown。
 
 默认不允许推送。确需由服务执行时，由操作者设置 `PAPERCLIP_GITLAB_PUBLISH_ENABLED=true`，并确认运行身份可访问指定仓库。工作分支默认仅 `paperclip/` 前缀，可用 `PAPERCLIP_GITLAB_WORK_BRANCH_PREFIXES` 明确调整；不得将默认分支或受保护分支作为源分支。每次 UI 操作再次确认固定 SHA，禁止 force、merge、tag。
 
@@ -16,7 +16,7 @@
 
 测试证据当前由可信 board 提交，并非平台已自动执行，logRef 不能替代真实日志审阅。本地 fixture 确实执行失败测试、修复、再次测试与新 Git 提交，生成 SHA256 产物清单并校验符号链接不逃逸工作区；GitLab CI 回执为模拟。产物元数据包含平台、架构、签名状态，不把 unsigned 标为 signed。新增 `POST .../coding/:id/artifacts` 在服务端核对工作区 HEAD 并读取实际文件生成清单；接口收到的构建标签不等于构建证明，因此 testStatus=not_run、signatureStatus=unknown，不允许客户端直接宣称签名已验证。清单写入和 artifact_ready 通知同事务；不上传文件。
 
-repairDecision 提供最多两轮、预算、时间和重复错误熔断策略，但尚未接入自动修复调度器；自动只读 CI 轮询已接入，跨平台 Runner 和产物服务上传仍未实现。不得将纯策略测试描述成生产全自动交付。
+有限修复已复用现有例行任务服务接入默认关闭的调度器，见下节。跨平台 Runner 和产物服务上传仍未实现；本地夹具不代表生产全自动交付。
 
 ## 运维与验证
 
@@ -32,4 +32,30 @@ PAPERCLIP_GITLAB_POLL_ENABLED 默认关闭。操作者明确启用后，worker �
 
 手动同步与 worker 共用九十秒 CAS 租约，所有分页共享三十秒外部读取截止时间。崩溃后过期租约可重领，因为这里只做供应商 GET；迟到结果不能覆盖新租约。写回时重新读取实际审阅/测试证据计算门禁。失败清空最新可信 MR/pipeline 证据并保留脱敏错误码，不把缓存绿色当成当前成功；权限/暂停在新一轮读取前检查。进程内计时器不是唯一游标。
 
-真实隔离 PostgreSQL 夹具验证双 worker 互斥、重启游标、旧租约迟到、失败退避与暂停；供应商为注入夹具，真实 GitLab 仍需联调。自动修复调度没有因此变成已完成。
+真实隔离 PostgreSQL 夹具验证双 worker 互斥、重启游标、旧租约迟到、失败退避与暂停；供应商为注入夹具，真实 GitLab 仍需联调。只读轮询和修复派发是两个独立开关，开启轮询不会开启修复。
+
+## 有限修复授权与调度
+
+`PAPERCLIP_CODING_REPAIR_ENABLED` 默认 false。0340 保存修复策略和不可重置的尝试记录；公司与交付使用复合外键，不能跨公司挂接。
+
+启用须由真实登录的公司负责人或管理员在编码交付界面明确确认；local_trusted 隐式身份不能授权后台修复。授权绑定当前 headSha、例行任务 ID/精确版本、负责用户及 Agent 配置摘要。修改版本、提交或 Agent 配置后旧授权不能继续派发。UI 选择模板后显示限制与确认项，不把勾选移交到新的模板版本。
+
+必要条件：
+- 公司和负责人仍有效，父任务及修复模板权限有效；模板 active、always_enqueue，并绑定相同父任务、项目和负责人。
+- 原始隔离本地工作区启用，当前仓库干净且 HEAD 等于固定提交；不得退回任意共享目录。
+- 本地适配器 Agent 就绪且空闲；项目启用硬预算与未知费用阻断，平台预算门禁同时生效。
+- 最新失败 pipeline 和失败 job 回执必须属于同一项目、pipeline 和固定 SHA。仅 script_failure 可自动进入修复；环境故障等交给人工，不伪装代码错误。
+
+单次授权允许 1–2 次尝试、1–60 分钟派发窗口及明确正整数费用上限（分）。同一失败指纹、已用尝试、未知费用、预算耗尽、过期或授权撤销都会停止新派发。指纹使用提交、阶段、job 名称及失败原因，不因流水线生成新的 job ID 就重置。
+
+worker 在数据库事务中预留尝试，调用现有 routineService.runPipelineStageEntryRoutine，并在例行任务事务锁内再次核验模板版本。子任务继承原隔离工作区和父任务私有边界。并发争抢不能产生两个相同 pipeline 的修复任务。
+
+派发结果未知时只读对账 routineRuns，不重复发起；迟到结果必须通过状态和租约 CAS。子任务完成后进入等待固定 SHA 审阅状态，不会自动 push、merge、tag 或发布。暂停只阻止后续派发，不能声称取消已开始的模型调用。
+
+重要限制：时间窗口限制的是新派发，不是对已经运行的供应商进程的强制截止；费用检查是派发前及累计账目门禁，不能保证单次供应商调用不超出剩余额度。真实供应商任务、费用及时性和远端终止仍需 C3/C4 验收。
+
+接口：
+- POST `/api/companies/:companyId/coding/:deliveryId/repair-settings`：`enabled`、`confirm:true`、`headSha`；启用额外提供 `routineId`、`expectedRoutineRevisionId`、`maxAttempts`、`maxDurationMinutes`、`maxCostCents`。
+- GET `/api/companies/:companyId/coding/:deliveryId/repairs`：读取脱敏策略、诊断与尝试记录。
+
+9 项真实隔离 PostgreSQL 测试覆盖并发、实际例行子任务创建、工作区/私有继承、限制熔断、版本锁定、未知唤醒不重发、撤销/到期/环境错误/费用边界及两次 worker tick 去重。唤醒为测试替身，未调用付费模型。

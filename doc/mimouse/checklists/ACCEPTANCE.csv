@@ -4,7 +4,7 @@ I18N-01,C1,四语资源结构与占位符,passed,compose-mimouse-locales --check
 I18N-02,C2,语言选择与数字日期格式,passed,ui/src/i18n 和格式化回归,实际字体布局未验收
 I18N-03,C2,全 UI 回归快照,passed,604键快照730文件8205项 73批全部通过,真实浏览器另计
 I18N-04,C2,命令面板中文输入法 Enter,passed,CommandPalette.test.tsx composition 测试,真实输入法浏览器待验收
-I18N-05,C3,四语浏览器关键路径,blocked,Chromium Unix socket EPERM,云平台浏览器执行能力
+I18N-05,C3,四语浏览器关键路径,partial,助手云桌面Chrome已验证引导任务详情审批及通知暂停,真实供应商登录及实际IME未全量验收
 AUTH-01,C2,OIDC 配置和签名令牌拒绝矩阵,passed,Casdoor 与 ID token 协议测试,实际 Casdoor 版本及 claims
 AUTH-02,C2,错误state重放与同邮箱不合并,passed,真实内存 OAuth 流测试,真实公司邀请与多用户会话
 AUTH-03,C3,Casdoor 登录绑定注销停用,blocked,未提供实际租户凭据和测试身份,本地退出不等于 IdP 停用传播
@@ -28,12 +28,12 @@ CODE-05,C4,跨平台签名发布,not_run,首轮未接入真实构建矩阵,Windo
 BUILD-01,C1,UI类型和生产构建,passed,UI typecheck build与token gates,大chunk警告保留
 BUILD-02,C1,Rust runner构建,passed,固定1.97.1构建,上游7条警告保留
 BUILD-03,C1,完整server类型,passed,tsc --noEmit --singleThreaded 完整检查通过,早期SIGKILL和事务类型错误已修正 不代替全仓构建
-DB-01,C2,新增迁移落地并启动实际服务,passed,0334至0339已应用 编译server入口20项HTTP和DB测试全部通过,生产备份升级演练未完成
+DB-01,C2,新增迁移落地并启动实际服务,passed,0334至0340已应用 最新源码入口29项HTTP和DB测试通过,生产备份升级演练未完成
 RELEASE-01,C4,全部需求生产验收,blocked,存在上述阻断项,不可宣称全功能完成
 QODER-04,C2,实际核心任务至CLI运行链路,passed,qoder-runtime.spec 安装适配器和真实Agent生命周期 heartbeat回执,假CLI 不证明真实账号或工具JWT
 WB-05,C2,私有令牌和刷新竞争,passed,0338专用密文及四项实际数据库测试,旧连接重新授权 实际租户仍待验证
 WB-06,C2,Agent只读就绪验证,passed,所有者授权与只读任务列表探针 不创建远端任务,真实应用授权与生命周期实连
-CODE-06,C1,自动CI轮询与有限修复调度,partial,0339持久游标 租约与失败退避 真实DB四项用例,自动修复调度仍未实现 纯repairDecision策略不能代替
+CODE-06,C1,自动CI轮询与有限修复调度,partial,0339轮询及0340有限修复调度已接入 9项修复真实DB用例,真实供应商闭环未验收 派发窗口不是运行中强制截止
 NOTIFY-06,C1,应用token自动刷新,not_implemented,当前仅支持固定版本accessToken,需外部刷新服务 不具备免维护生产能力
-I18N-06,C1,约定高频路径全部系统字符串,partial,604项四语资源 已接线主要标签与提示,动态对话框筛选和部分错误仍有英文 不等于全覆盖
+I18N-06,C1,约定高频路径全部系统字符串,partial,816项四语资源 已补首次引导任务属性和概览,动态对话框筛选和部分错误仍有英文 不等于全覆盖
 BUILD-04,C1,server编译及标准资源打包,passed,串行tsc生成JS和声明 标准资源复制及build-info成功,默认并行构建曾SIGKILL 不等于全工作区发布包验收

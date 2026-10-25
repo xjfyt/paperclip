@@ -9,7 +9,7 @@
 ## 升级顺序
 
 1. 固定应用版本，备份数据库、PAPERCLIP_HOME、加密密钥和部署环境配置。保存 adapter 包版本，不把密钥写入 Git。
-2. 阅读迁移差异；沿上游标准迁移命令应用 0334（通知）、0335（WorkBuddy）、0336（编码交付）、0337（运行失败事务出箱触发器）及 0338（WorkBuddy 私有凭据与旧连接重新授权）及 0339（编码同步租约与游标）。新增表与触发器不会补发历史运行；已经应用的迁移不得重写。正式升级前仍需在自己的数据库备份上演练。
+2. 阅读迁移差异；沿上游标准迁移命令应用 0334（通知）、0335（WorkBuddy）、0336（编码交付）、0337（运行失败事务出箱触发器）及 0338（WorkBuddy 私有凭据与旧连接重新授权）、0339（编码同步租约与游标）及 0340（有限修复授权与派发台账）。新增表与触发器不会补发历史运行；已经应用的迁移不得重写。正式升级前仍需在自己的数据库备份上演练。
 3. 通知、WorkBuddy、OIDC 和 GitLab 推送先保持关闭。启动服务并检查 `/api/health`、原密码登录、公司/任务和现有运行。
 4. Casdoor 先 dual，完成管理员恢复与两个测试用户的隔离后再改 sso-only。WorkBuddy OAuth 与 Casdoor 登录是独立连接。
 5. 通过上游外部适配器管理入口安装本仓库审核后的本地包。先环境诊断，后受控 fixture，不默认触发收费任务。
@@ -36,6 +36,7 @@ PAPERCLIP_NOTIFICATIONS_ENABLED=false
 PAPERCLIP_NOTIFICATIONS_WORKER_ENABLED=false
 PAPERCLIP_GITLAB_PUBLISH_ENABLED=false
 PAPERCLIP_GITLAB_POLL_ENABLED=false
+PAPERCLIP_CODING_REPAIR_ENABLED=false
 PAPERCLIP_GITLAB_ALLOWED_ORIGINS=https://gitlab.example.invalid
 PAPERCLIP_GITLAB_WORK_BRANCH_PREFIXES=paperclip/
 ```
@@ -48,9 +49,9 @@ PAPERCLIP_GITLAB_WORK_BRANCH_PREFIXES=paperclip/
 
 HTTP 测试只接受绝对的专用 PAPERCLIP_MIMOUSE_TEST_HOME，且目录必须预先包含 `.mimouse-test-fixture` 文件，内容为 `paperclip-mimouse-disposable-fixture-v1`。禁止指向真实实例；测试拒绝有 config.json/.env 的实例目录，并隔离继承的数据库 URL、配置路径与外部执行开关。所有直接 DB 写入前核验 PostgreSQL 实际 data_directory。
 
-不同命令会话的网络隔离，因此 HTTP 测试由 Playwright webServer 在同一执行环境启动服务。云浏览器无法直接访问该命令会话。提权启动器也在受限制的挂载处失败，不通过修改受限目录或关闭安全机制绕过。
+不同命令会话的网络隔离，因此 HTTP 测试由 Playwright webServer 在同一执行环境启动服务。云浏览器无法直接访问该命令会话；已在助手云桌面原生终端另起专用测试实例，让现有 Chrome 实际访问。必须使用独立 PAPERCLIP_HOME/数据库，不让两个进程共享一份数据库文件。提权启动器也在受限制的挂载处失败，不通过修改受限目录或关闭安全机制绕过。
 
-早期 server TypeScript 检查曾被 SIGKILL。已定位到依赖缓存占用 /tmp 内存盘，将构建缓存移到磁盘后完成全量检查，修正一处事务类型错误并复验通过。建议将 pnpm/Cargo/Rustup 缓存放磁盘、避免编译与启动多个 API 服务并发争用内存。完整 server tsc 通过不代表 pnpm typecheck / pnpm build 全仓脚本全部通过；模块构建证据分别记录。真实浏览器四语路径仍为 blocked，不得用 API 测试替代。
+早期 server TypeScript 检查曾被 SIGKILL。已定位到依赖缓存占用 /tmp 内存盘，将构建缓存移到磁盘后完成全量检查，修正一处事务类型错误并复验通过。建议将 pnpm/Cargo/Rustup 缓存放磁盘、避免编译与启动多个 API 服务并发争用内存。完整 server tsc 通过不代表 pnpm typecheck / pnpm build 全仓脚本全部通过；模块构建证据分别记录。真实 Chrome 已验证四语任务详情、首次引导、审批与暂停通知界面；剩余视觉和真实供应商路径见验收记录，不得用 API 测试替代。
 
 ## 回退
 
