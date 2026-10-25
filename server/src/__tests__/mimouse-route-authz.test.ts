@@ -36,3 +36,14 @@ it("local implicit board access cannot authorize paid background repairs", async
   const response = await request(server).post(`/companies/${companyId}/coding/33333333-3333-4333-8333-333333333333/repair-settings`).send({ enabled: true, confirm: true, headSha: "a".repeat(40), routineId: "44444444-4444-4444-8444-444444444444", expectedRoutineRevisionId: "55555555-5555-4555-8555-555555555555", maxAttempts: 2, maxDurationMinutes: 15, maxCostCents: 100 });
   expect(response.status).toBe(403); expect(select).not.toHaveBeenCalled();
 });
+
+
+it.each(["member", "foreign-owner", "agent"])("denies %s notification history and revision mutation before resources", async role => {
+  const actor: Express.Request["actor"] = role === "agent"
+    ? { type: "agent", source: "agent_jwt", companyId, agentId: "33333333-3333-4333-8333-333333333333" }
+    : { type: "board", source: "session", userId: role, companyIds: [role === "member" ? companyId : "other"], memberships: [{ companyId: role === "member" ? companyId : "other", membershipRole: role === "member" ? "member" : "owner", status: "active" }] };
+  const { server, select } = app(actor); const path = `/companies/${companyId}/notifications/endpoints/33333333-3333-4333-8333-333333333333/revisions`;
+  expect((await request(server).get(path)).status).toBe(403);
+  expect((await request(server).post(path).send({ expectedVersion: 1, name: "Unauthorized change", kind: "wecom_webhook", config: {}, secretRef: "44444444-4444-4444-8444-444444444444", secretVersion: 1 })).status).toBe(403);
+  expect(select).not.toHaveBeenCalled();
+});

@@ -2,7 +2,7 @@ id,level,scope,status,evidence,remaining
 BASE-01,C1,固定上游与独立分支,passed,v2026.1023.0 1b4c803816e82b0265c8422e1a804327a7ed8c54,远端开发提交同步另行核验
 I18N-01,C1,四语资源结构与占位符,passed,compose-mimouse-locales --check,不等于全页面翻译覆盖
 I18N-02,C2,语言选择与数字日期格式,passed,ui/src/i18n 和格式化回归,实际字体布局未验收
-I18N-03,C2,全 UI 回归快照,passed,959键快照734文件8247项 74批全部通过,真实浏览器另计
+I18N-03,C2,全 UI 回归快照,passed,976键快照734文件8248项 74批全部通过,真实浏览器另计
 I18N-04,C2,命令面板中文输入法 Enter,passed,CommandPalette.test.tsx composition 测试,真实输入法浏览器待验收
 I18N-05,C3,四语浏览器关键路径,partial,助手云桌面Chrome已验证引导任务详情审批及通知暂停,真实供应商登录及实际IME未全量验收
 AUTH-01,C2,OIDC 配置和签名令牌拒绝矩阵,passed,Casdoor 与 ID token 协议测试,实际 Casdoor 版本及 claims
@@ -28,15 +28,16 @@ CODE-05,C4,跨平台签名发布,not_run,首轮未接入真实构建矩阵,Windo
 BUILD-01,C1,UI类型和生产构建,passed,UI typecheck build与token gates,大chunk警告保留
 BUILD-02,C1,Rust runner构建,passed,固定1.97.1构建,上游7条警告保留
 BUILD-03,C1,完整server类型,passed,tsc --noEmit --singleThreaded 完整检查通过,早期SIGKILL和事务类型错误已修正 不代替全仓构建
-DB-01,C2,新增迁移落地并启动实际服务,passed,0334至0340已应用 最新编译入口30项HTTP和DB测试通过,生产备份升级演练未完成
+DB-01,C2,新增迁移落地并启动实际服务,passed,0334至0342已应用 源码入口44项 编译入口上一候选40项,生产备份升级演练未完成
 RELEASE-01,C4,全部需求生产验收,blocked,存在上述阻断项,不可宣称全功能完成
 QODER-04,C2,实际核心任务至CLI运行链路,passed,qoder-runtime.spec 安装适配器和真实Agent生命周期 heartbeat回执,假CLI 不证明真实账号或工具JWT
 WB-05,C2,私有令牌和刷新竞争,passed,0338专用密文及四项实际数据库测试,旧连接重新授权 实际租户仍待验证
 WB-06,C2,Agent只读就绪验证,passed,所有者授权与只读任务列表探针 不创建远端任务,真实应用授权与生命周期实连
 CODE-06,C1,自动CI轮询与有限修复调度,partial,0339轮询及0340有限修复调度已接入 10项修复真实DB用例,真实供应商闭环未验收 派发窗口不是运行中强制截止
 NOTIFY-06,C2,应用token自动刷新,passed,0341加密缓存租约及27单元10数据库测试,真实钉钉公众号凭据和提前失效仍需实连验收
-I18N-06,C1,约定高频路径全部系统字符串,partial,959项四语资源 已补收件箱审批Agent导航运行记录和创建提示,动态对话框筛选和部分错误仍有英文 不等于全覆盖
+I18N-06,C1,约定高频路径全部系统字符串,partial,980项四语资源 已补收件箱审批Agent导航运行记录和创建提示,动态对话框筛选和部分错误仍有英文 不等于全覆盖
 BUILD-04,C1,server编译及标准资源打包,passed,串行tsc生成JS和声明 标准资源复制及build-info成功,默认并行构建曾SIGKILL 不等于全工作区发布包验收
 ADAPTER-01,C2,七项能力证据展示,passed,10项测试及真实浏览器unknown状态检查,不等于当前账号C3C4验收
-BUILD-02,C1,所有工作区包分批构建与类型,passed,35个非根包分别通过 详见VERIFICATION,不等于默认根命令一次运行或发布安装包验收
+BUILD-05,C1,所有工作区包分批构建与类型,passed,35个非根包分别通过 详见VERIFICATION,不等于默认根命令一次运行或发布安装包验收
 CORE-01,C2,既有例行任务与适配器兼容,passed,真实数据库核心回归10文件223项无跳过,不等于全仓所有server测试
+NOTIFY-07,C2,渠道并发修订与历史快照,passed,4项真实DB用例和17项通知UI测试 旧目标不转投,云端Chrome完成本地假渠道改名和v1/v2历史核验 外发始终关闭

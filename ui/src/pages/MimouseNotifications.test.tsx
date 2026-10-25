@@ -7,10 +7,10 @@ import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { i18n } from "../i18n";
 import { MimouseNotifications } from "./MimouseNotifications";
 const company = vi.hoisted(() => ({ selectedCompanyId: "company-a" }));
-const api = vi.hoisted(() => Object.fromEntries(["get", "create", "toggle", "subscribe", "toggleSubscription", "preview", "retry", "test"].map(key => [key, vi.fn()])));
+const api = vi.hoisted(() => Object.fromEntries(["get", "create", "revise", "history", "toggle", "subscribe", "toggleSubscription", "preview", "retry", "test"].map(key => [key, vi.fn()])));
 vi.mock("@/context/CompanyContext", () => ({ useCompany: () => company }));
 vi.mock("@/api/mimouse-notifications", () => ({ notificationApi: api }));
-const data = () => ({ enabled: true, dispatchEnabled: true, connectedEvents: ["approval.requested", "run.failed", "coding.mr_ready", "coding.ci_failed", "coding.artifact_ready", "budget.threshold_reached"], unconnectedEvents: [], endpoints: [{ id: "endpoint-1", name: "Test channel", kind: "wecom_webhook", enabled: true, config: {}, secretRef: "11111111-1111-4111-8111-111111111111", secretVersion: 1 }], subscriptions: [{ id: "subscription-1", endpointId: "endpoint-1", eventType: "run.failed", locale: "en", enabled: true }], deliveries: [{ id: "delivery-1", endpointId: "endpoint-1", state: "indeterminate", attempt: 1, lastCode: "transport_unconfirmed", createdAt: "2026-10-25T00:00:00Z" }] });
+const data = () => ({ enabled: true, dispatchEnabled: true, connectedEvents: ["approval.requested", "run.failed", "coding.mr_ready", "coding.ci_failed", "coding.artifact_ready", "budget.threshold_reached"], unconnectedEvents: [], endpoints: [{ id: "endpoint-1", name: "Test channel", kind: "wecom_webhook", enabled: true, config: {}, secretRef: "11111111-1111-4111-8111-111111111111", secretVersion: 1, configVersion: 1 }], subscriptions: [{ id: "subscription-1", endpointId: "endpoint-1", eventType: "run.failed", locale: "en", enabled: true }], deliveries: [{ id: "delivery-1", endpointId: "endpoint-1", state: "indeterminate", attempt: 1, lastCode: "transport_unconfirmed", createdAt: "2026-10-25T00:00:00Z" }] });
 let host: HTMLDivElement, root: Root, client: QueryClient;
 async function flush() { await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); }); }
 async function mount() { await act(async () => root.render(<BreadcrumbProvider><QueryClientProvider client={client}><MimouseNotifications /></QueryClientProvider></BreadcrumbProvider>)); await flush(); }
@@ -64,4 +64,30 @@ it("owns the localized page title instead of retaining the previous route", asyn
   expect(document.title).toBe("通知中心 • Paperclip");
   await act(async () => { await i18n.changeLanguage("es"); }); await flush();
   expect(document.title).toBe("Notificaciones • Paperclip");
+});
+
+it("edits a fixed configuration revision without enabling or test-sending", async () => {
+  await mount(); await click(button("Edit configuration"));
+  expect((host.querySelector("#channel-kind") as HTMLSelectElement).disabled).toBe(true);
+  expect(host.textContent).toContain("Saving pauses the channel");
+  await fill("channel-name", "Updated channel");
+  await act(async () => { host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); }); await flush();
+  expect(api.revise).toHaveBeenCalledWith("company-a", "endpoint-1", expect.objectContaining({ expectedVersion: 1, name: "Updated channel", secretVersion: 1 }));
+  expect(api.create).not.toHaveBeenCalled(); expect(api.toggle).not.toHaveBeenCalled(); expect(api.test).not.toHaveBeenCalled();
+  expect((host.querySelector("#channel-name") as HTMLInputElement).value).toBe("");
+});
+it("retains an unsaved draft on revision conflict and allows cancelling", async () => {
+  api.revise.mockRejectedValueOnce(Error("configuration conflict")); await mount(); await click(button("Edit configuration")); await fill("channel-name", "Keep this draft");
+  await act(async () => { host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); }); await flush();
+  expect(host.querySelector('[role="alert"]')).not.toBeNull(); expect((host.querySelector("#channel-name") as HTMLInputElement).value).toBe("Keep this draft");
+  await click(button("Cancel")); expect((host.querySelector("#channel-name") as HTMLInputElement).value).toBe(""); expect(api.revise).toHaveBeenCalledTimes(1);
+});
+it("opens revision history read-only and scopes the lookup to the selected company", async () => {
+  api.history.mockResolvedValueOnce([{ id: "revision-1", companyId: "company-a", endpointId: "endpoint-1", configVersion: 1, actorId: "fixture-admin", createdAt: "2026-10-25T00:00:00Z", snapshot: { ...data().endpoints[0] } }]);
+  await mount(); await click(button("Configuration history"));
+  expect(api.history).toHaveBeenCalledWith("company-a", "endpoint-1"); expect(host.textContent).toContain("fixture-admin"); expect(api.test).not.toHaveBeenCalled();
+  company.selectedCompanyId = "company-b"; client.setQueryData(["mimouse-notifications", "company-b"], data()); await mount(); expect(host.textContent).not.toContain("fixture-admin");
+});
+it.each([["en", "Edit configuration"], ["zh-CN", "编辑配置"], ["es", "Editar configuración"], ["ja", "設定を編集"]])("renders revision controls in %s", async (locale, label) => {
+  await i18n.changeLanguage(locale); await mount(); await click(button(label)); expect(host.querySelector('[role="status"]')?.textContent).toContain("1");
 });

@@ -63,5 +63,9 @@
   "reviewedOutcome": "我已核对外部投递结果",
   "acceptDuplicateRisk": "我接受消息可能重复的风险",
   "confirmRetry": "确认创建新投递",
-  "reviewRetry": "核对后再重试"
+  "reviewRetry": "核对后再重试",
+  "edit": "编辑配置",
+  "history": "配置修订历史",
+  "configVersion": "配置版本 {{version}}",
+  "revisionWarning": "正在编辑版本 {{version}}。保存会暂停渠道。旧队列消息保留原目标和凭据，重新启用会按原快照恢复，不会转投新目标；已发出的消息无法撤回。"
 }

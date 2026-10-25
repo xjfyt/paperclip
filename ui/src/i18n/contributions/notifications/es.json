@@ -63,5 +63,9 @@
   "reviewedOutcome": "He comprobado el resultado del envío externo",
   "acceptDuplicateRisk": "Acepto el riesgo de duplicar el mensaje",
   "confirmRetry": "Confirmar un nuevo envío",
-  "reviewRetry": "Revisar antes de reintentar"
+  "reviewRetry": "Revisar antes de reintentar",
+  "edit": "Editar configuración",
+  "history": "Historial de configuración",
+  "configVersion": "Versión de configuración {{version}}",
+  "revisionWarning": "Editando la versión {{version}}. Al guardar se pausa el canal. Los mensajes pendientes conservan su destino y credenciales originales; al activar se reanudan sin cambiar de destino. Los mensajes ya enviados no se pueden retirar."
 }

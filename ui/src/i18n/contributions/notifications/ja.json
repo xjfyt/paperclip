@@ -63,5 +63,9 @@
   "reviewedOutcome": "外部での送信結果を確認しました",
   "acceptDuplicateRisk": "メッセージが重複するリスクを承知しました",
   "confirmRetry": "新しい送信を確定",
-  "reviewRetry": "再試行前に確認"
+  "reviewRetry": "再試行前に確認",
+  "edit": "設定を編集",
+  "history": "設定の変更履歴",
+  "configVersion": "設定バージョン {{version}}",
+  "revisionWarning": "バージョン {{version}} を編集中です。保存するとチャネルを一時停止します。待機中のメッセージは元の宛先と認証情報を保持し、再開しても新しい宛先へ転送しません。送信済みメッセージは取り消せません。"
 }

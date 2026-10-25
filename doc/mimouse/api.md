@@ -15,10 +15,12 @@
 
 - GET 根：已接线/未接线事件、渠道、订阅、最近 100 条脱敏投递。
 - POST `/endpoints`：kind、config、secretRef、secretVersion；只验证，创建为停用，不发送。
-- PATCH `/endpoints/:id`：enabled。
+- PATCH `/endpoints/:id`：enabled、expectedVersion（旧客户端默认1）；版本冲突409。
+- GET `/endpoints/:id/revisions`：最近100条非秘密配置历史、操作者及版本。
+- POST `/endpoints/:id/revisions`：expectedVersion与完整name/kind/config/secretRef/secretVersion；kind不可改变，成功新增版本且暂停，不修改旧投递快照。
 - POST `/subscriptions`：endpointId、eventType、locale；同渠道同事件幂等更新。
 - PATCH `/subscriptions/:id`：enabled，停用尚未进入 sending 的投递。
-- POST `/endpoints/:id/test`：requestId、confirm=true、title、text；同请求键入队一次，不同步声称已送达。
+- POST `/endpoints/:id/test`：requestId、expectedVersion、confirm=true、title、text；同请求键入队一次，不同步声称已送达。
 
 - GET `/deliveries/:id/preview`：原目标、标题、正文、模板和凭据版本的脱敏快照；不返回 secret 引用或值。
 - POST `/deliveries/:id/retry`：requestId、confirmReviewedOutcome=true、acceptDuplicateRisk=true；仅对未知/拒绝投递，原记录保持不变，原目标与凭据版本不变。同 requestId 幂等。

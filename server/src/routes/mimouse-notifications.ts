@@ -1,23 +1,20 @@
-import { validationSecret } from "../services/mimouse-notifications/app-credentials.js";
+import { notificationConfiguration } from "../services/mimouse-notifications/configuration.js";
 import { renderTemplateData } from "../services/mimouse-notifications/render.js";
-import { createHash } from "node:crypto";
 import { Router, type Request } from "express";
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { mimouseNotificationDeliveries as deliveries, mimouseNotificationEndpoints as endpoints, mimouseNotificationSubscriptions as subscriptions, signalDatabaseWork, type Db } from "@paperclipai/db";
 import { assertBoard, assertCompanyAccess, getActorInfo } from "./authz.js";
-import { forbidden, notFound, unprocessable } from "../errors.js";
+import { conflict, forbidden, notFound, unprocessable } from "../errors.js";
 import { validate } from "../middleware/validate.js";
-import { secretService } from "../services/secrets.js";
 import { logActivity } from "../services/activity-log.js";
-import { buildNotificationRequest, type ChannelSecret, type NotificationSnapshot } from "../services/mimouse-notifications/drivers.js";
 import { CONNECTED_NOTIFICATION_EVENTS, NOTIFICATION_TOPIC } from "../services/mimouse-notifications/outbox.js";
 const kinds = ["wecom_webhook", "feishu_webhook", "dingtalk_webhook_legacy", "dingtalk_app", "wechat_official_account"] as const;
 const configSchema = z.object({ brand: z.enum(["feishu", "lark"]).optional(), target: z.string().max(500).optional(), robotCode: z.string().max(200).optional(), templateId: z.string().max(200).optional(), templateData: z.record(z.string(), z.object({ value: z.string().max(1000) }).strict()).optional() }).strict();
 const endpointSchema = z.object({ name: z.string().min(1).max(120), kind: z.enum(kinds), config: configSchema, secretRef: z.string().uuid(), secretVersion: z.number().int().positive() }).strict();
 const subscriptionSchema = z.object({ endpointId: z.string().uuid(), eventType: z.enum(CONNECTED_NOTIFICATION_EVENTS), locale: z.enum(["en", "zh-CN", "es", "ja"]) }).strict();
 const enabledSchema = z.object({ enabled: z.boolean() }).strict();
-const testSchema = z.object({ requestId: z.string().uuid(), confirm: z.literal(true), title: z.string().min(1).max(120), text: z.string().min(1).max(1000) }).strict();
+const testSchema = z.object({ expectedVersion: z.number().int().positive().default(1), requestId: z.string().uuid(), confirm: z.literal(true), title: z.string().min(1).max(120), text: z.string().min(1).max(1000) }).strict();
 function companyAdmin(req: Request, companyId: string) {
   assertBoard(req); assertCompanyAccess(req, companyId);
   if (req.actor.source === "local_implicit" || req.actor.isInstanceAdmin) return;
@@ -26,6 +23,7 @@ function companyAdmin(req: Request, companyId: string) {
 }
 export function mimouseNotificationRoutes(db: Db) {
   const router = Router();
+  const configuration = notificationConfiguration(db);
   const path = "/companies/:companyId/notifications";
   const loadEndpoint = async (companyId: string, id: string) => {
     const [endpoint] = await db.select().from(endpoints).where(and(eq(endpoints.id, id), eq(endpoints.companyId, companyId)));
@@ -43,24 +41,29 @@ export function mimouseNotificationRoutes(db: Db) {
   });
   router.post(`${path}/endpoints`, validate(endpointSchema), async (req, res) => {
     const companyId = String(req.params.companyId); companyAdmin(req, companyId); const input = endpointSchema.parse(req.body);
-    let secret: ChannelSecret;
-    try { secret = JSON.parse(await secretService(db).resolveSecretValue(companyId, input.secretRef, input.secretVersion)); }
-    catch { throw unprocessable("Secret unavailable or invalid JSON for this company"); }
-    let request: ReturnType<typeof buildNotificationRequest>;
-    try { request = buildNotificationRequest({ ...input.config, ...(input.config.templateData ? { templateData: renderTemplateData(input.config.templateData, { title: "Configuration validation", text: "No message is sent when saving." }, "resource-preview") } : {}), kind: input.kind, title: "Configuration validation", text: "No message is sent when saving." }, validationSecret(input.kind, secret)); }
-    catch { throw unprocessable("Channel configuration is incomplete or invalid"); }
-    // Credentials and signatures are excluded from target identity for app APIs;
-    // complete Webhook URLs identify destinations but only the digest persists.
-    const identity = input.kind.endsWith("webhook") || input.kind === "dingtalk_webhook_legacy" ? secret.url : [input.kind, input.config.target, input.config.robotCode].join(":");
-    const targetKey = createHash("sha256").update(String(identity)).digest("hex");
-    const [endpoint] = await db.insert(endpoints).values({ ...input, companyId, targetKey, enabled: false }).returning();
+    const endpoint = await configuration.create(companyId, input, getActorInfo(req).actorId);
     const actor = getActorInfo(req);
     await logActivity(db, { companyId, actorType: actor.actorType, actorId: actor.actorId, action: "notification.endpoint.created", entityType: "notification_endpoint", entityId: endpoint.id, details: { kind: input.kind } });
-    res.status(201).json({ id: endpoint.id, enabled: false, configurationValid: Boolean(request), liveVerified: false });
+    res.status(201).json({ id: endpoint.id, enabled: false, configurationValid: true, configVersion: endpoint.configVersion, liveVerified: false });
   });
-  router.patch(`${path}/endpoints/:id`, validate(enabledSchema), async (req, res) => {
+  router.get(`${path}/endpoints/:id/revisions`, async (req, res) => {
+    const companyId = String(req.params.companyId); companyAdmin(req, companyId);
+    res.json(await configuration.history(companyId, String(req.params.id)));
+  });
+  const revisionSchema = endpointSchema.extend({ expectedVersion: z.number().int().positive() });
+  router.post(`${path}/endpoints/:id/revisions`, validate(revisionSchema), async (req, res) => {
+    const companyId = String(req.params.companyId); companyAdmin(req, companyId);
+    const { expectedVersion, ...input } = revisionSchema.parse(req.body); const actor = getActorInfo(req);
+    const endpoint = await configuration.revise(companyId, String(req.params.id), expectedVersion, input, actor.actorId);
+    await logActivity(db, { companyId, actorType: actor.actorType, actorId: actor.actorId, action: "notification.endpoint.revised", entityType: "notification_endpoint", entityId: endpoint.id, details: { previousVersion: expectedVersion, configVersion: endpoint.configVersion, enabled: false } });
+    res.json({ id: endpoint.id, configVersion: endpoint.configVersion, enabled: false, configurationValid: true, liveVerified: false });
+  });
+  const toggleSchema = enabledSchema.extend({ expectedVersion: z.number().int().positive().default(1) });
+  router.patch(`${path}/endpoints/:id`, validate(toggleSchema), async (req, res) => {
     const companyId = String(req.params.companyId); companyAdmin(req, companyId); await loadEndpoint(companyId, String(req.params.id));
-    const [endpoint] = await db.update(endpoints).set(enabledSchema.parse(req.body)).where(and(eq(endpoints.companyId, companyId), eq(endpoints.id, String(req.params.id)))).returning();
+    const input = toggleSchema.parse(req.body);
+    const [endpoint] = await db.update(endpoints).set({ enabled: input.enabled }).where(and(eq(endpoints.companyId, companyId), eq(endpoints.id, String(req.params.id)), eq(endpoints.configVersion, input.expectedVersion))).returning();
+    if (!endpoint) throw conflict("Notification configuration changed; reload before toggling");
     const actor = getActorInfo(req); await logActivity(db, { companyId, actorType: actor.actorType, actorId: actor.actorId, action: "notification.endpoint.toggled", entityType: "notification_endpoint", entityId: endpoint.id, details: { enabled: endpoint.enabled } });
     res.json({ id: endpoint.id, enabled: endpoint.enabled });
   });
@@ -85,7 +88,7 @@ export function mimouseNotificationRoutes(db: Db) {
     res.json({ id: row.id, state: row.state, endpointName: endpoint.name, kind: endpoint.kind,
       title: typeof snapshot.title === "string" ? snapshot.title.slice(0, 1000) : "", text: typeof snapshot.text === "string" ? snapshot.text.slice(0, 5000) : "",
       templateData: snapshot.kind === "wechat_official_account" ? snapshot.templateData ?? null : null,
-      target: typeof snapshot.target === "string" ? snapshot.target : null, secretVersion: snapshot.secretVersion, locale: snapshot.locale });
+      configVersion: snapshot.configVersion ?? null, target: typeof snapshot.target === "string" ? snapshot.target : null, secretVersion: snapshot.secretVersion, locale: snapshot.locale });
   });
   router.post(`${path}/deliveries/:id/retry`, validate(z.object({ requestId: z.string().uuid(), confirmReviewedOutcome: z.literal(true), acceptDuplicateRisk: z.literal(true) }).strict()), async (req, res) => {
     const companyId = String(req.params.companyId); companyAdmin(req, companyId);
@@ -108,12 +111,13 @@ export function mimouseNotificationRoutes(db: Db) {
   });
   router.post(`${path}/endpoints/:id/test`, validate(testSchema), async (req, res) => {
     const companyId = String(req.params.companyId); companyAdmin(req, companyId); const input = testSchema.parse(req.body); const endpoint = await loadEndpoint(companyId, String(req.params.id));
+    if (endpoint.configVersion !== input.expectedVersion) throw conflict("Notification configuration changed; reload before testing");
     if (!endpoint.enabled) throw unprocessable("Enable this endpoint before explicitly sending a test");
     const delivery = await db.transaction(async tx => {
       const [subscription] = await tx.insert(subscriptions).values({ companyId, endpointId: endpoint.id, eventType: "manual.test", locale: "en" }).onConflictDoUpdate({ target: [subscriptions.companyId, subscriptions.endpointId, subscriptions.eventType], set: { enabled: true } }).returning();
       await signalDatabaseWork(tx, NOTIFICATION_TOPIC);
       const [row] = await tx.insert(deliveries).values({ companyId, eventId: `manual-test:${input.requestId}`, subscriptionId: subscription.id, endpointId: endpoint.id,
-        snapshot: { ...endpoint.config, ...(endpoint.config.templateData ? { templateData: renderTemplateData(endpoint.config.templateData, { title: input.title, text: input.text }, input.requestId) } : {}), kind: endpoint.kind, title: input.title, text: input.text, secretRef: endpoint.secretRef, secretVersion: endpoint.secretVersion, targetKey: endpoint.targetKey, renderVersion: 1, locale: "en" } }).onConflictDoNothing().returning();
+        snapshot: { ...endpoint.config, configVersion: endpoint.configVersion, ...(endpoint.config.templateData ? { templateData: renderTemplateData(endpoint.config.templateData, { title: input.title, text: input.text }, input.requestId) } : {}), kind: endpoint.kind, title: input.title, text: input.text, secretRef: endpoint.secretRef, secretVersion: endpoint.secretVersion, targetKey: endpoint.targetKey, renderVersion: 1, locale: "en" } }).onConflictDoNothing().returning();
       if (row) return row;
       const [existing] = await tx.select().from(deliveries).where(and(eq(deliveries.companyId, companyId), eq(deliveries.eventId, `manual-test:${input.requestId}`), eq(deliveries.subscriptionId, subscription.id)));
       return existing;

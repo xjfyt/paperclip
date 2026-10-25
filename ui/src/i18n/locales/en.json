@@ -530,7 +530,11 @@
     "reviewedOutcome": "I checked the external delivery outcome",
     "acceptDuplicateRisk": "I accept the risk of a duplicate message",
     "confirmRetry": "Confirm a new delivery",
-    "reviewRetry": "Review before retrying"
+    "reviewRetry": "Review before retrying",
+    "edit": "Edit configuration",
+    "history": "Configuration history",
+    "configVersion": "Configuration version {{version}}",
+    "revisionWarning": "Editing version {{version}}. Saving pauses the channel. Older queued messages retain their original target and credentials; enabling resumes them without retargeting. Already-dispatched messages cannot be recalled."
   },
   "onboarding": {
     "organizationQuestion": "What is the name of your organization?",

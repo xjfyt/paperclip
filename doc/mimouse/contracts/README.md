@@ -7,3 +7,7 @@
 - 通知与远端任务都使用 PostgreSQL 持久状态；未知副作用不自动重发或重复创建。
 - 证据绑定公司、资源和受测 commit；CI head 与 reviewed head 不一致不能放行。
 - 新功能协议未经验证不得默认启用。每个模块单独维护验收状态和已知限制。
+
+## 通知配置修订增量合同（0342）
+
+渠道configVersion从1开始，配置编辑以expectedVersion作CAS并自动暂停；历史仅含非秘密配置、秘密引用/版本和操作者。启用及测试同样核对expectedVersion，省略仅兼容v1。旧投递冻结快照永不被新配置改写。shared DTO、API客户端、迁移与四语界面同时更新；渠道kind变更须新建。

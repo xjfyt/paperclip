@@ -21,6 +21,9 @@ function NotificationCompany({ companyId }: { companyId: string }) {
   const client = useQueryClient();
   const key = ["mimouse-notifications", companyId];
   const query = useQuery({ queryKey: key, queryFn: () => notificationApi.get(companyId), refetchInterval: 10000 });
+  const [editing, setEditing] = useState<NotificationEndpoint | null>(null);
+  const [historyId, setHistoryId] = useState<string | null>(null);
+  const history = useQuery({ queryKey: [...key, "revisions", historyId], queryFn: () => notificationApi.history(companyId, historyId!), enabled: historyId !== null });
   const [name, setName] = useState(""); const [kind, setKind] = useState(kinds[0]);
   const [secretRef, setSecretRef] = useState(""); const [version, setVersion] = useState("1");
   const [brand, setBrand] = useState("feishu");
@@ -32,6 +35,11 @@ function NotificationCompany({ companyId }: { companyId: string }) {
   const [testTitle, setTestTitle] = useState(""); const [testText, setTestText] = useState("");
   const mutation = useMutation({ mutationFn: async (action: () => Promise<unknown>) => action(), onSuccess: async () => { await client.invalidateQueries({ queryKey: key }); setTesting(null); setRetrying(null); } });
   const dispatchEnabled = query.data?.dispatchEnabled ?? query.data?.enabled ?? false;
+  function clearDraft() { setEditing(null); setName(""); setKind(kinds[0]); setSecretRef(""); setVersion("1"); setBrand("feishu"); setTarget(""); setRobotCode(""); setTemplateId(""); setFields("{}"); }
+  function edit(endpoint: NotificationEndpoint) {
+    setTesting(null); setEditing(endpoint); setName(endpoint.name); setKind(endpoint.kind); setSecretRef(endpoint.secretRef); setVersion(String(endpoint.secretVersion));
+    setBrand(endpoint.config.brand === "lark" ? "lark" : "feishu"); setTarget(String(endpoint.config.target ?? "")); setRobotCode(String(endpoint.config.robotCode ?? "")); setTemplateId(String(endpoint.config.templateId ?? "")); setFields(JSON.stringify(endpoint.config.templateData ?? {}, null, 2));
+  }
   return <div className="space-y-6 max-w-4xl">
     <h1 className="text-xl font-semibold">{t("notifications.title")}</h1>
     <p className="text-sm text-muted-foreground">{t("notifications.privacy")}</p>
@@ -43,16 +51,21 @@ function NotificationCompany({ companyId }: { companyId: string }) {
       <p className="text-sm">{t("notifications.notLive")}</p>
       <form className="space-y-3 rounded-lg border border-border p-4" onKeyDown={event => { if (event.key === "Enter" && event.nativeEvent.isComposing) event.preventDefault(); }} onSubmit={event => {
         event.preventDefault();
-        mutation.mutate(async () => notificationApi.create(companyId, { name, kind, secretRef, secretVersion: Number(version), config: {
+        mutation.mutate(async () => { const input = { name, kind, secretRef, secretVersion: Number(version), config: {
           ...(kind === "feishu_webhook" ? { brand } : {}),
           ...(kind === "dingtalk_app" ? { target, robotCode } : {}),
           ...(kind === "wechat_official_account" ? { target, templateId, templateData: JSON.parse(fields) } : {}),
-        } }));
+        } };
+          if (editing) await notificationApi.revise(companyId, editing.id, { ...input, expectedVersion: editing.configVersion });
+          else await notificationApi.create(companyId, input);
+          clearDraft();
+        });
       }}>
-        <h2 className="font-medium">{t("notifications.add")}</h2>
+        <h2 className="font-medium">{t(editing ? "notifications.edit" : "notifications.add")}</h2>
+        {editing && <p role="status">{t("notifications.revisionWarning", { version: editing.configVersion })}</p>}
         <Label htmlFor="channel-name">{t("notifications.name")}</Label><Input id="channel-name" value={name} onChange={e => setName(e.target.value)} required />
         <Label htmlFor="channel-kind">{t("notifications.kind")}</Label>
-        <select id="channel-kind" className="rounded-md border border-border bg-background p-2" value={kind} onChange={e => setKind(e.target.value)}>{kinds.map(value => <option key={value} value={value}>{t(`notifications.${value}`)}</option>)}</select>
+        <select disabled={editing !== null} id="channel-kind" className="rounded-md border border-border bg-background p-2" value={kind} onChange={e => setKind(e.target.value)}>{kinds.map(value => <option key={value} value={value}>{t(`notifications.${value}`)}</option>)}</select>
         {kind === "feishu_webhook" && <><Label htmlFor="channel-brand">{t("notifications.serviceRegion")}</Label><select id="channel-brand" className="rounded-md border border-border bg-background p-2" value={brand} onChange={e => setBrand(e.target.value)}><option value="feishu">Feishu</option><option value="lark">Lark</option></select></>}
         <Label htmlFor="channel-secret">{t("notifications.secretRef")}</Label><Input id="channel-secret" value={secretRef} onChange={e => setSecretRef(e.target.value)} required />
         <Label htmlFor="channel-version">{t("notifications.secretVersion")}</Label><Input id="channel-version" type="number" min={1} value={version} onChange={e => setVersion(e.target.value)} required />
@@ -60,14 +73,17 @@ function NotificationCompany({ companyId }: { companyId: string }) {
         {kind === "dingtalk_app" && <><Label htmlFor="channel-robot">{t("notifications.robotCode")}</Label><Input id="channel-robot" value={robotCode} onChange={e => setRobotCode(e.target.value)} required /></>}
         {kind === "wechat_official_account" && <><Label htmlFor="channel-template">{t("notifications.templateId")}</Label><Input id="channel-template" value={templateId} onChange={e => setTemplateId(e.target.value)} required /><Label htmlFor="channel-fields">{t("notifications.templateFields")}</Label><Input id="channel-fields" value={fields} onChange={e => setFields(e.target.value)} required /></>}
         <p className="text-sm text-muted-foreground">{t("notifications.saveHelp")}</p>
-        <div className="flex justify-end"><Button disabled={mutation.isPending}>{t("common.save")}</Button></div>
+        <div className="flex justify-between"><Button type="button" variant="outline" disabled={mutation.isPending} onClick={clearDraft}>{t("common.cancel")}</Button><Button disabled={mutation.isPending}>{t("common.save")}</Button></div>
       </form>
       <section className="space-y-3"><h2 className="font-medium">{t("notifications.channels")}</h2>
         {!query.data.endpoints.length && <p>{t("notifications.empty")}</p>}
         {query.data.endpoints.map(endpoint => <div key={endpoint.id} className="rounded-lg border border-border p-4 space-y-2">
           <h3>{endpoint.name} · {t(`notifications.${endpoint.kind === "feishu_webhook" && endpoint.config.brand === "lark" ? "lark_webhook" : endpoint.kind}`)}</h3>
+          <p>{t("notifications.configVersion", { version: endpoint.configVersion })}</p>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" disabled={mutation.isPending} onClick={() => mutation.mutate(() => notificationApi.toggle(companyId, endpoint.id, !endpoint.enabled))}>{endpoint.enabled ? t("notifications.pause") : t("notifications.enable")}</Button>
+            <Button variant="outline" disabled={mutation.isPending} onClick={() => edit(endpoint)}>{t("notifications.edit")}</Button>
+            <Button variant="outline" onClick={() => setHistoryId(endpoint.id)}>{t("notifications.history")}</Button>
+            <Button variant="outline" disabled={mutation.isPending} onClick={() => mutation.mutate(() => notificationApi.toggle(companyId, endpoint.id, !endpoint.enabled, endpoint.configVersion))}>{endpoint.enabled ? t("notifications.pause") : t("notifications.enable")}</Button>
             <Button variant="outline" disabled={!endpoint.enabled || !dispatchEnabled || mutation.isPending} onClick={() => { setTesting({ endpoint, requestId: crypto.randomUUID() }); setTestTitle(t("notifications.testTitle")); setTestText(t("notifications.testText")); }}>{t("notifications.test")}</Button>
           </div>
           <p className="text-sm text-muted-foreground">{t("notifications.subscriptionHelp")}</p>
@@ -85,12 +101,24 @@ function NotificationCompany({ companyId }: { companyId: string }) {
           </div>
         </div>)}
       </section>
+      {historyId && <section className="rounded-lg border border-border p-4 space-y-3" aria-label={t("notifications.history")}>
+        <h2>{t("notifications.history")}</h2>
+        {history.isLoading && <p>{t("common.loading")}</p>}
+        {history.error && <p role="alert">{t("notifications.loadError")}</p>}
+        {history.data?.map(revision => <div key={revision.id} className="space-y-2">
+          <h3>{t("notifications.configVersion", { version: revision.configVersion })} · {revision.snapshot.name}</h3>
+          <p>{revision.actorId} · {new Intl.DateTimeFormat(i18n.language, { dateStyle: "medium", timeStyle: "short" }).format(new Date(revision.createdAt))}</p>
+          <pre className="whitespace-pre-wrap break-words text-sm">{JSON.stringify(revision.snapshot.config, null, 2)}</pre>
+          <p>{t("notifications.secretRef")}: {revision.snapshot.secretRef} · {t("notifications.secretVersion")}: {revision.snapshot.secretVersion}</p>
+        </div>)}
+        <Button variant="outline" onClick={() => setHistoryId(null)}>{t("common.cancel")}</Button>
+      </section>}
       {testing && <section className="rounded-lg border border-border p-4 space-y-3">
         <h2>{t("notifications.confirmTarget", { name: testing.endpoint.name })}</h2>
         <p>{t("notifications.testWarning")}</p>
         <Label htmlFor="test-title">{t("notifications.messageTitle")}</Label><Input id="test-title" value={testTitle} onChange={e => setTestTitle(e.target.value)} />
         <Label htmlFor="test-text">{t("notifications.messageText")}</Label><Input id="test-text" value={testText} onChange={e => setTestText(e.target.value)} />
-        <div className="flex justify-between"><Button variant="outline" onClick={() => setTesting(null)}>{t("common.cancel")}</Button><Button disabled={mutation.isPending || !testTitle || !testText} onClick={() => mutation.mutate(() => notificationApi.test(companyId, testing.endpoint.id, { requestId: testing.requestId, confirm: true, title: testTitle, text: testText }))}>{t("notifications.confirmSend")}</Button></div>
+        <div className="flex justify-between"><Button variant="outline" onClick={() => setTesting(null)}>{t("common.cancel")}</Button><Button disabled={mutation.isPending || !testTitle || !testText} onClick={() => mutation.mutate(() => notificationApi.test(companyId, testing.endpoint.id, { expectedVersion: testing.endpoint.configVersion, requestId: testing.requestId, confirm: true, title: testTitle, text: testText }))}>{t("notifications.confirmSend")}</Button></div>
       </section>}
       {retrying && <section className="rounded-lg border border-border p-4 space-y-3">
         <h2>{t("notifications.retryTitle")}: {retrying.preview.endpointName}</h2>

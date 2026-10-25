@@ -13,6 +13,7 @@ export const mimouseNotificationEndpoints = pgTable("mimouse_notification_endpoi
   secretVersion: integer("secret_version").notNull(),
   targetKey: text("target_key").notNull(),
   enabled: boolean("enabled").notNull().default(false),
+  configVersion: integer("config_version").notNull().default(1),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, t => ({ companyIdentity: uniqueIndex("mimouse_notification_endpoint_company_identity").on(t.companyId, t.id), versionCheck: check("mimouse_notification_secret_version_positive", sql`${t.secretVersion} > 0`) }));
 
@@ -68,4 +69,19 @@ export const mimouseNotificationTokens = pgTable("mimouse_notification_tokens", 
 }, t => ({
   scope: uniqueIndex("mimouse_notification_token_scope").on(t.companyId, t.secretRef, t.secretVersion, t.kind),
   shape: check("mimouse_notification_token_shape", sql`${t.secretVersion}>0 AND ${t.revision}>=0 AND ${t.kind} IN ('dingtalk_app','wechat_official_account') AND ((${t.tokenMaterial} IS NULL AND ${t.expiresAt} IS NULL) OR (${t.tokenMaterial} IS NOT NULL AND ${t.expiresAt} IS NOT NULL))`),
+}));
+
+// Configuration history contains immutable references, never secret values.
+export const mimouseNotificationRevisions = pgTable("mimouse_notification_revisions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  endpointId: uuid("endpoint_id").notNull(),
+  configVersion: integer("config_version").notNull(),
+  snapshot: jsonb("snapshot").$type<Record<string, unknown>>().notNull(),
+  actorId: text("actor_id").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, t => ({
+  endpoint: foreignKey({ columns: [t.companyId, t.endpointId], foreignColumns: [mimouseNotificationEndpoints.companyId, mimouseNotificationEndpoints.id] }).onDelete("cascade"),
+  version: uniqueIndex("mimouse_notification_revision_version").on(t.companyId, t.endpointId, t.configVersion),
+  positive: check("mimouse_notification_revision_positive", sql`${t.configVersion}>0`),
 }));

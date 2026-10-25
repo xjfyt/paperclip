@@ -14,7 +14,7 @@ export const CONNECTED_NOTIFICATION_EVENTS = ["approval.requested", "run.failed"
 // the shared query surface, not an unsafe cast to Drizzle transaction internals.
 type Transaction = Pick<Parameters<Parameters<Db["transaction"]>[0]>[0], "select" | "insert">;
 interface EventInput { companyId: string; eventId: string; type: string; resourceId: string; title?: string; text?: string }
-interface Snapshot extends NotificationSnapshot { secretRef: string; secretVersion: number; targetKey: string; locale: string; renderVersion: number; renderEvent?: string; renderResourceId?: string; renderCompanyPrefix?: string; rendered?: boolean }
+interface Snapshot extends NotificationSnapshot { configVersion?: number; secretRef: string; secretVersion: number; targetKey: string; locale: string; renderVersion: number; renderEvent?: string; renderResourceId?: string; renderCompanyPrefix?: string; rendered?: boolean }
 interface DeliveryRow { id: string; company_id: string; endpoint_id: string; subscription_id: string; snapshot: Snapshot; lease: string; attempt: number; created_at: Date }
 
 /** Called inside the exact business transaction. Never run a provider request here. */
@@ -43,7 +43,7 @@ export async function enqueueNotification(tx: Transaction, event: EventInput): P
       ...endpoint.config,
       kind: endpoint.kind as NotificationSnapshot["kind"], ...rendered,
       ...(templateData ? { templateData } : {}),
-      secretRef: endpoint.secretRef, secretVersion: endpoint.secretVersion,
+      secretRef: endpoint.secretRef, secretVersion: endpoint.secretVersion, configVersion: endpoint.configVersion,
       targetKey: endpoint.targetKey, locale: subscription.locale, renderVersion: 2,
     };
     await tx.insert(deliveries).values({ companyId: event.companyId, eventId: event.eventId, subscriptionId: subscription.id, endpointId: endpoint.id, snapshot: snapshot as unknown as Record<string, unknown>, ...(renderFailed ? { state: "rejected", lastCode: "snapshot_render_failed" } : {}) }).onConflictDoNothing();
