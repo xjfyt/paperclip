@@ -1,0 +1,71 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { mkdtemp, writeFile, mkdir, readFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { commandArgs, execute, sessionIdentity, sessionCodec, createServerAdapter } from "../index.mjs";
+import { resultAccounting, parseEvent } from "../parse.mjs";
+
+async function fixture(script) {
+  const root = await mkdtemp(path.join(os.tmpdir(), "qoder-fixture-"));
+  const executable = path.join(root, "qodercn");
+  await writeFile(executable, `#!/usr/bin/env node\n${script}\n`, { mode: 0o755 });
+  const logs = [], spawned = [], stopped = [];
+  return { root, logs, spawned, stopped, ctx: {
+    runId: "run-one", agent: { companyId: "company", id: "agent", name: "Test" },
+    runtime: { sessionParams: null, taskKey: "task" }, context: { prompt: "请修复 fixture" },
+    config: { executablePath: executable, cwd: root, configRoot: path.join(root, "config"), accountId: "user", timeoutSec: 3 },
+    onLog: async (stream, chunk) => logs.push([stream, chunk]), onSpawn: async meta => spawned.push(meta), onProviderStopped: async () => stopped.push(true),
+  } };
+}
+test("argv keeps prompts separate and never skips permissions", () => {
+  const args = commandArgs({}, "session-one", "--yolo; echo evil");
+  assert.equal(args.at(-1), "--yolo; echo evil"); assert.equal(args.at(-2), "--");
+  assert.ok(args.includes("--resume")); assert.ok(!args.includes("--continue"));
+  assert.equal(args[args.indexOf("--permission-mode") + 1], "default");
+});
+test("identity fences company, account, workspace and task", () => {
+  const value = { companyId: "c", agentId: "a", cwd: "/one", accountId: "u", taskKey: "t" };
+  for (const key of Object.keys(value)) assert.notEqual(sessionIdentity(value), sessionIdentity({ ...value, [key]: "other" }));
+  assert.equal(sessionCodec.deserialize({ sessionId: "s", identity: "bad" }), null);
+});
+test("missing credits are unknown and cumulative credits never become USD", () => {
+  assert.equal(resultAccounting({}).costUsd, null); assert.equal(resultAccounting({}).creditsCumulative, undefined);
+  assert.equal(resultAccounting({ total_credits: 5 }).creditsCumulative, 5);
+  assert.equal(resultAccounting({ total_credits: 5 }).costStatus, "unpriced");
+  assert.equal(resultAccounting({ usage: { input_tokens: 10, output_tokens: 2 } }).usage, undefined);
+  assert.equal(parseEvent("bad json"), null);
+});
+test("real child streaming preserves Unicode, session and spawn receipt", async () => {
+  const f = await fixture(`console.log(JSON.stringify({type:"system",session_id:"s1"})); console.log(JSON.stringify({type:"result",session_id:"s1",result:"完成中文任务",total_credits:2}));`);
+  const result = await execute(f.ctx);
+  assert.equal(result.exitCode, 0); assert.equal(result.summary, "完成中文任务");
+  assert.equal(result.sessionParams.sessionId, "s1"); assert.equal(f.spawned.length, 1); assert.equal(f.stopped.length, 1);
+  assert.ok(f.logs.some(([,line]) => line.includes("完成中文任务")));
+});
+test("session reuse rejects a changed account before dispatch", async () => {
+  const f = await fixture(`console.log(JSON.stringify({type:"result",session_id:"s",result:"ok"}));`);
+  const first = await execute(f.ctx); f.ctx.runtime.sessionParams = first.sessionParams; f.ctx.config.accountId = "another";
+  const result = await execute(f.ctx); assert.equal(result.errorCode, "qoder_session_identity_mismatch"); assert.equal(f.spawned.length, 1);
+});
+test("pre-abort never dispatches", async () => {
+  const f = await fixture("process.exit(0)"); f.ctx.signal = AbortSignal.abort();
+  assert.equal((await execute(f.ctx)).errorCode, "qoder_cancelled_before_dispatch"); assert.equal(f.spawned.length, 0);
+});
+test("timeout terminates a real process and is never success", async () => {
+  const f = await fixture("setInterval(()=>{},100)"); f.ctx.config.timeoutSec = .1;
+  const result = await execute(f.ctx); assert.equal(result.timedOut, true); assert.notEqual(result.exitCode, 0); assert.equal(f.stopped.length, 1);
+});
+test("split stderr secrets are redacted before logging", async () => {
+  const f = await fixture(`process.stderr.write("test-sec"); setTimeout(()=>{process.stderr.write("ret\\n");console.log(JSON.stringify({type:"result",result:"ok"}));},20)`);
+  f.ctx.config.env = { QODERCN_PERSONAL_ACCESS_TOKEN: "test-secret" };
+  await execute(f.ctx); const text = f.logs.map(([,s])=>s).join(""); assert.ok(!text.includes("test-secret")); assert.ok(text.includes("[REDACTED]"));
+});
+test("missing terminal receipt cannot be success", async () => {
+  const f = await fixture("console.log('just text')"); assert.notEqual((await execute(f.ctx)).exitCode, 0);
+});
+test("factory exposes config and test-environment protocol", async () => {
+  const f = await fixture(`console.log(process.argv.includes("--version")?"fixture 1":"--output-format --config-dir --max-turns --resume")`);
+  const module = createServerAdapter(); assert.equal(module.type, "qoder_cn"); assert.ok(module.getConfigSchema().fields.length);
+  assert.equal((await module.testEnvironment({config:f.ctx.config})).status, "warn");
+});

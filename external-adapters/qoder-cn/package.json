@@ -1,0 +1,11 @@
+{
+  "name": "@mimouse/paperclip-qoder-cn",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "exports": { ".": "./index.mjs", "./server": "./index.mjs", "./ui-parser": "./ui-parser.mjs" },
+  "paperclip": { "adapterUiParser": "1.0.0" },
+  "files": ["*.mjs", "README.md"],
+  "scripts": { "test": "node --test test/*.test.mjs" },
+  "engines": { "node": ">=24.11.0" }
+}
