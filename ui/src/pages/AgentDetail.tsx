@@ -1,3 +1,4 @@
+import { t as mimouseT, useTranslation as useMimouseTranslation, i18n as mimouseI18n } from "@/i18n";
 import { PrimaryAgentIndicator, SetPrimaryAgentButton } from "@/components/primary-agent/PrimaryAgentPresentation";
 import { AiConnectionPoolRunDetails } from "@/components/ai-connections/AiConnectionPoolRunDetails";
 import { AgentConnectionInstructions } from "@/features/connections/ConnectionInstructions";
@@ -761,6 +762,7 @@ function WorkspaceOperationsSection({
 }
 
 export function AgentDetail() {
+  useMimouseTranslation();
   const { companyPrefix, agentId, tab: urlTab, runId: urlRunId } = useParams<{
     companyPrefix?: string;
     agentId: string;
@@ -1046,7 +1048,7 @@ export function AgentDetail() {
 
   useEffect(() => {
     const crumbs: { label: string; href?: string }[] = [
-      { label: "Agents", href: "/agents" },
+      { label: mimouseT("commonUi.agents"), href: "/agents" },
     ];
     const agentName = agent?.name ?? routeAgentRef ?? "Agent";
     if (activeView === "overview" && !urlRunId) {
@@ -1060,11 +1062,11 @@ export function AgentDetail() {
         const item = AGENT_DETAIL_NAVIGATION
           .flatMap((section) => section.items)
           .find((candidate) => candidate.value === activeView);
-        crumbs.push({ label: item?.label ?? "Overview" });
+        crumbs.push({ label: item?.label ?? mimouseT("commonUi.overview") });
       }
     }
     setBreadcrumbs(crumbs);
-  }, [setBreadcrumbs, agent, routeAgentRef, canonicalAgentRef, activeView, urlRunId]);
+  }, [setBreadcrumbs, agent, routeAgentRef, canonicalAgentRef, activeView, urlRunId, mimouseI18n.language]);
 
   useEffect(() => {
     closePanel();
@@ -1755,7 +1757,7 @@ export function AgentOverview({
           </div>
           <div className="space-y-3">
             <SummaryRow label="Role"><span className="text-sm">{roleLabels[agent.role] ?? agent.role}</span></SummaryRow>
-            <SummaryRow label="Title"><span className="text-sm">{agent.title ?? "Not set"}</span></SummaryRow>
+            <SummaryRow label={mimouseT("commonUi.title")}><span className="text-sm">{agent.title ?? "Not set"}</span></SummaryRow>
             <SummaryRow label="Reports to">
               {reportsToAgent ? (
                 <Link className="text-sm hover:underline" to={agentDetailHref(agentRouteRef(reportsToAgent))}>
@@ -1947,9 +1949,7 @@ export function AgentRevisionsTab({
                   variant="outline"
                   onClick={() => rollbackConfig.mutate(revision.id)}
                   disabled={rollbackConfig.isPending}
-                >
-                  Restore
-                </Button>
+                >{mimouseT("commonUi.restore")}</Button>
               </div>
               <p className="text-xs text-muted-foreground">
                 Changed: {revision.changedKeys.length > 0 ? revision.changedKeys.join(", ") : "no tracked changes"}
@@ -2912,9 +2912,7 @@ export function PromptsTab({
                     setNewFilePath("");
                     setShowNewFileInput(false);
                   }}
-                >
-                  Create
-                </Button>
+                >{mimouseT("commonUi.create")}</Button>
                 <Button
                   type="button"
                   size="sm"
@@ -2924,9 +2922,7 @@ export function PromptsTab({
                     setShowNewFileInput(false);
                     setNewFilePath("");
                   }}
-                >
-                  Cancel
-                </Button>
+                >{mimouseT("commonUi.cancel")}</Button>
               </div>
             </div>
           )}
@@ -3052,9 +3048,7 @@ export function PromptsTab({
                     }
                   }}
                   disabled={deleteFile.isPending}
-                >
-                  Delete
-                </Button>
+                >{mimouseT("commonUi.delete")}</Button>
               )}
             </div>
           </div>
@@ -3628,7 +3622,7 @@ function RunDetail({ run: initialRun, agentRouteId, adapterType, adapterConfig }
                   onClick={() => cancelRun.mutate()}
                   disabled={cancelRun.isPending}
                 >
-                  {cancelRun.isPending ? "Cancelling…" : "Cancel"}
+                  {cancelRun.isPending ? "Cancelling…" : mimouseT("commonUi.cancel")}
                 </Button>
               )}
               {canResumeLostRun && (
@@ -3640,7 +3634,7 @@ function RunDetail({ run: initialRun, agentRouteId, adapterType, adapterConfig }
                   disabled={resumeRun.isPending}
                 >
                   <RotateCcw className="h-3.5 w-3.5 mr-1" />
-                  {resumeRun.isPending ? "Resuming…" : "Resume"}
+                  {resumeRun.isPending ? "Resuming…" : mimouseT("commonUi.resume")}
                 </Button>
               )}
               {canRetryRun && !canResumeLostRun && (
@@ -4743,9 +4737,7 @@ export function KeysTab({ agentId, companyId }: { agentId: string; companyId?: s
             onClick={() => createKey.mutate()}
             disabled={createKey.isPending}
           >
-            <Plus className="h-3.5 w-3.5 mr-1" />
-            Create
-          </Button>
+            <Plus className="h-3.5 w-3.5 mr-1" />{mimouseT("commonUi.create")}</Button>
         </div>
       </div>
 
@@ -4766,8 +4758,7 @@ export function KeysTab({ agentId, companyId }: { agentId: string; companyId?: s
               <div key={key.id} className="flex items-center justify-between px-4 py-2.5">
                 <div>
                   <span className="text-sm font-medium">{key.name}</span>
-                  <span className="text-xs text-muted-foreground ml-3">
-                    Created {formatDate(key.createdAt)}
+                  <span className="text-xs text-muted-foreground ml-3">{mimouseT("commonUi.created")}{formatDate(key.createdAt)}
                   </span>
                 </div>
                 <Button

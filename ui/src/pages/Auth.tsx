@@ -94,7 +94,7 @@ export function AuthPage() {
     password.trim().length > 0 &&
     (mode === "sign_in" || (name.trim().length > 0 && password.trim().length >= 8));
 
-  if (healthQuery.isLoading || isSessionLoading || session) {
+  if (healthQuery.isLoading || isSessionLoading || session || (healthQuery.data && !healthQuery.data.cloud && capabilities.isPending)) {
     return (
       <div className="fixed inset-0 flex items-center justify-center">
         <PaperclipLoading className="min-h-0" />
@@ -103,7 +103,7 @@ export function AuthPage() {
   }
 
   // A health/session failure must not be mistaken for a self-hosted instance.
-  if (healthQuery.error || sessionError) {
+  if (healthQuery.error || sessionError || capabilities.error) {
     return <p role="alert" className="p-6 text-sm text-destructive">{t("auth.unavailable")}</p>;
   }
 

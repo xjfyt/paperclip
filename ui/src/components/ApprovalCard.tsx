@@ -1,3 +1,4 @@
+import { t as mimouseT, useTranslation as useMimouseTranslation } from "@/i18n";
 import { AgentIdentity } from "@/components/AgentIdentity";
 import { CheckCircle2, XCircle, Clock } from "lucide-react";
 import { Link } from "@/lib/router";
@@ -43,6 +44,7 @@ export function ApprovalCard({
   isPending?: boolean;
   pendingAction?: "approve" | "reject" | null;
 }) {
+  useMimouseTranslation();
   const payload = approval.payload as Record<string, unknown> | null;
   const Icon = typeIcon[approval.type] ?? defaultTypeIcon;
   const kindLabel = typeLabel[approval.type] ?? approval.type;
@@ -71,7 +73,7 @@ export function ApprovalCard({
                 </Badge>
                 {requesterAgent && (
                   <div className="inline-flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-                    <span>Requested by</span>
+                    <span>{mimouseT("commonUi.requestedBy")}</span>
                     <AgentIdentity agent={requesterAgent} size="sm" className="inline-flex" />
                   </div>
                 )}
@@ -120,7 +122,7 @@ export function ApprovalCard({
                   onClick={onApprove}
                   disabled={isPending}
                 >
-                  {pendingAction === "approve" ? "Approving..." : "Approve"}
+                  {pendingAction === "approve" ? "Approving..." : mimouseT("commonUi.approve")}
                 </Button>
                 <Button
                   variant="destructive"
@@ -128,7 +130,7 @@ export function ApprovalCard({
                   onClick={onReject}
                   disabled={isPending}
                 >
-                  {pendingAction === "reject" ? "Rejecting..." : "Reject"}
+                  {pendingAction === "reject" ? "Rejecting..." : mimouseT("commonUi.reject")}
                 </Button>
               </>
             )}

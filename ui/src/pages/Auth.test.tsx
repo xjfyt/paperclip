@@ -22,6 +22,8 @@ vi.mock("@/lib/cloud-sign-in", () => ({
 
 vi.mock("../api/auth", () => ({
   authApi: {
+    capabilities: async () => ({ password: true, providers: [] }),
+    signInCasdoor: async () => "https://id.example/authorize",
     getSession: () => getSessionMock(),
     signInEmail: (input: unknown) => signInEmailMock(input),
     signUpEmail: (input: unknown) => signUpEmailMock(input),

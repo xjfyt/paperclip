@@ -1,3 +1,4 @@
+import { t as mimouseT, useTranslation as useMimouseTranslation } from "@/i18n";
 import { useEffect, useMemo, useCallback, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useLocation, useNavigate, useSearchParams } from "@/lib/router";
@@ -90,6 +91,7 @@ export function buildIssuesSearchUrl(currentHref: string, search: string): strin
  * get the same Views control in their toolbar, so the switch reads as one page.
  */
 export function Issues() {
+  useMimouseTranslation();
   const { enabled: streamlinedUiEnabled } = useStreamlinedUiEnabled();
   const { enabled: combinedInboxTasksEnabled } = useCombinedInboxTasksEnabled();
   // The merged surface is Combined Inbox + Task List only. With the flag off, and always in
@@ -145,9 +147,9 @@ function StreamlinedTasks() {
         toolbarContext={(
           <div className="flex min-w-0 items-center gap-2">
             {viewsMenu}
-            <Button size="sm" variant="outline" aria-label="New Task" onClick={() => openNewIssue()}>
+            <Button size="sm" variant="outline" aria-label={mimouseT("commonUi.newTask")} onClick={() => openNewIssue()}>
               <Plus className="h-4 w-4 sm:mr-1" />
-              <span className="hidden sm:inline">New Task</span>
+              <span className="hidden sm:inline">{mimouseT("commonUi.newTask")}</span>
             </Button>
           </div>
         )}

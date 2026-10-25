@@ -1,3 +1,4 @@
+import { t as mimouseT, useTranslation as useMimouseTranslation, i18n as mimouseI18n } from "@/i18n";
 import { AgentIdentity } from "@/components/AgentIdentity";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "@/lib/router";
@@ -18,6 +19,7 @@ import type { ApprovalComment } from "@paperclipai/shared";
 import { MarkdownBody } from "../components/MarkdownBody";
 
 export function ApprovalDetail() {
+  useMimouseTranslation();
   const { approvalId } = useParams<{ approvalId: string }>();
   const { selectedCompanyId, setSelectedCompanyId } = useCompany();
   const { setBreadcrumbs } = useBreadcrumbs();
@@ -66,10 +68,10 @@ export function ApprovalDetail() {
 
   useEffect(() => {
     setBreadcrumbs([
-      { label: "Approvals", href: "/approvals" },
+      { label: mimouseT("commonUi.approvals"), href: "/approvals" },
       { label: approval?.id?.slice(0, 8) ?? approvalId ?? "Approval" },
     ]);
-  }, [setBreadcrumbs, approval, approvalId]);
+  }, [setBreadcrumbs, approval, approvalId, mimouseI18n.language]);
 
   const refresh = () => {
     if (!approvalId) return;
@@ -213,7 +215,7 @@ export function ApprovalDetail() {
         <div className="text-sm space-y-1">
           {approval.requestedByAgentId && (
             <div className="flex items-center gap-2">
-              <span className="text-muted-foreground text-xs">Requested by</span>
+              <span className="text-muted-foreground text-xs">{mimouseT("commonUi.requestedBy")}</span>
               <AgentIdentity
                 agent={agents?.find((agent) => agent.id === approval.requestedByAgentId) ?? { id: approval.requestedByAgentId, name: "Agent" }}
                 size="sm"
@@ -269,17 +271,13 @@ export function ApprovalDetail() {
                 className="bg-green-700 hover:bg-green-600 text-white"
                 onClick={() => approveMutation.mutate()}
                 disabled={approveMutation.isPending}
-              >
-                Approve
-              </Button>
+              >{mimouseT("commonUi.approve")}</Button>
               <Button
                 variant="destructive"
                 size="sm"
                 onClick={() => rejectMutation.mutate()}
                 disabled={rejectMutation.isPending}
-              >
-                Reject
-              </Button>
+              >{mimouseT("commonUi.reject")}</Button>
             </>
           )}
           {isBudgetApproval && approval.status === "pending" && (
@@ -293,9 +291,7 @@ export function ApprovalDetail() {
               variant="outline"
               onClick={() => revisionMutation.mutate()}
               disabled={revisionMutation.isPending}
-            >
-              Request revision
-            </Button>
+            >{mimouseT("commonUi.requestRevision")}</Button>
           )}
           {approval.status === "revision_requested" && (
             <Button
@@ -351,7 +347,7 @@ export function ApprovalDetail() {
         <Textarea
           value={commentBody}
           onChange={(e) => setCommentBody(e.target.value)}
-          placeholder="Add a comment..."
+          placeholder={mimouseT("commonUi.addComment")}
           rows={3}
         />
         <div className="flex justify-end">
