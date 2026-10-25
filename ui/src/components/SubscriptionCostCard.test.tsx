@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
+import { i18n } from "@/i18n";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SubscriptionCostReport } from "@paperclipai/shared";
-import { SubscriptionCostCard } from "./SubscriptionCostCard";
+import { SubscriptionCostCard, subscriptionMoney } from "./SubscriptionCostCard";
 
 const mocks = vi.hoisted(() => ({ update: vi.fn(), link: vi.fn() }));
 vi.mock("../api/subscriptions", () => ({ subscriptionsApi: mocks }));
@@ -32,7 +33,7 @@ describe("subscription costs", () => {
     client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
     mocks.update.mockResolvedValue({}); mocks.link.mockResolvedValue({}); changed.mockClear();
   });
-  afterEach(() => { act(() => root.unmount()); container.remove(); client.clear(); vi.clearAllMocks(); });
+  afterEach(async () => { act(() => root.unmount()); container.remove(); client.clear(); vi.clearAllMocks(); await i18n.changeLanguage("en"); });
   async function render(report?: SubscriptionCostReport, error?: unknown) {
     await act(async () => root.render(<QueryClientProvider client={client}><SubscriptionCostCard companyId="company" report={report} error={error} onChanged={changed} /></QueryClientProvider>));
   }
@@ -132,4 +133,16 @@ describe("subscription costs", () => {
     await click("Link accounts");
     await vi.waitFor(() => expect(mocks.link).toHaveBeenCalledWith("company", "account-1", "account-2", 0, 3));
   });
+  it.each([["en", "View details"], ["zh-CN", "查看详情"], ["es", "Ver detalles"], ["ja", "詳細を表示"]])("localizes subscription details in %s and leaves account names and currency unchanged", async (locale, label) => {
+    await i18n.changeLanguage(locale); const report = fixture(); report.accounts[0].price.currency = "EUR"; report.monthlyTotals[0].currency = "EUR";
+    await render(report); expect(container.textContent).toContain("EUR");
+    await click(label); expect(document.body.textContent).toContain("Alice’s Claude"); expect(document.body.textContent).toContain("Claude Max 5x");
+    expect(report.accounts[0].price.amountCents).toBe("10000"); expect(report.accounts[0].price.currency).toBe("EUR");
+    expect(subscriptionMoney("10000", "EUR")).toBe(new Intl.NumberFormat(locale, { style: "currency", currency: "EUR", currencyDisplay: "code" }).format(100));
+  });
+  it("does not invent USD totals for ended subscriptions in another currency", async () => {
+    const report = fixture(); report.accounts[0].price.currency = "EUR"; report.accounts[0].price.status = "ended"; report.activeCount = 0; report.monthlyTotals = [];
+    await render(report); expect(container.textContent).toContain("No active subscriptions"); expect(container.textContent).not.toContain("$0.00");
+  });
+
 });

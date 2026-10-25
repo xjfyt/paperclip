@@ -14,7 +14,7 @@
   "agentTasks": "Tareas en las que trabajó este Agent",
   "agentFiles": "Archivos producidos por este Agent",
   "tasksUnavailable": "No se pudieron cargar todas las tareas",
-  "total": "{{count}} en total",
+  "total": "{{total}} en total",
   "revision": "Revisión {{number}}",
   "open": "Abrir",
   "documents": "Documentos de la tarea",

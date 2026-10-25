@@ -14,7 +14,7 @@
   "agentTasks": "此 Agent 参与过的任务",
   "agentFiles": "此 Agent 生成的文件",
   "tasksUnavailable": "无法加载全部任务",
-  "total": "共 {{count}} 项",
+  "total": "共 {{total}} 项",
   "revision": "修订 {{number}}",
   "open": "打开",
   "documents": "任务文档",

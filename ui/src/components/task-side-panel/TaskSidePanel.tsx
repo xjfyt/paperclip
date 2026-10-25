@@ -584,7 +584,7 @@ export function TaskSidePanel({
       { id: "properties", label: t("taskPanel.properties"), icon: <SlidersHorizontal />, alreadyOpen: controller.tabs.some((tab) => tab.id === "properties") },
     ] : [
       { id: "properties", label: t("taskPanel.properties"), icon: <SlidersHorizontal />, alreadyOpen: controller.tabs.some((tab) => tab.id === "properties") },
-      ...(subtasksAvailable ? [{ id: "subtasks", label: taskLabel, description: tasksTab?.hasError ? t("taskPanel.tasksUnavailable") : t("taskPanel.total", { count: new Intl.NumberFormat(i18n.language).format(taskCount) }), icon: <ListTree />, alreadyOpen: controller.tabs.some((tab) => tab.id === "subtasks") }] : []),
+      ...(subtasksAvailable ? [{ id: "subtasks", label: taskLabel, description: tasksTab?.hasError ? t("taskPanel.tasksUnavailable") : t("taskPanel.total", { total: new Intl.NumberFormat(i18n.language).format(taskCount) }), icon: <ListTree />, alreadyOpen: controller.tabs.some((tab) => tab.id === "subtasks") }] : []),
       { id: "artifacts", label: t("taskPanel.artifacts"), icon: <Box />, alreadyOpen: controller.tabs.some((tab) => tab.id === "artifacts") },
     ];
     for (const [index, browser] of (browsersQuery.data ?? []).entries()) {
