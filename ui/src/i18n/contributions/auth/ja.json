@@ -1,0 +1,20 @@
+{
+  "failed": "認証に失敗しました",
+  "unavailable": "ログイン状態を確認できません。再読み込みしてください。",
+  "signInTitle": "Paperclip にログイン",
+  "signUpTitle": "Paperclip アカウントを作成",
+  "signInHelp": "メールアドレスとパスワードでこのインスタンスにログインします。",
+  "signUpHelp": "このインスタンスのアカウントを作成します。v1 ではメール確認は不要です。",
+  "required": "必須項目をすべて入力してください。",
+  "name": "名前",
+  "email": "メールアドレス",
+  "password": "パスワード",
+  "working": "処理中…",
+  "signIn": "ログイン",
+  "createAccount": "アカウントを作成",
+  "needAccount": "アカウントが必要ですか？",
+  "haveAccount": "すでにアカウントをお持ちですか？",
+  "createOne": "作成する",
+  "signInLink": "ログイン",
+  "casdoor": "Casdoor でログイン"
+}

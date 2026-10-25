@@ -1,0 +1,20 @@
+{
+  "failed": "身份验证失败",
+  "unavailable": "无法检查登录状态，请刷新重试。",
+  "signInTitle": "登录 Paperclip",
+  "signUpTitle": "创建 Paperclip 账号",
+  "signInHelp": "使用邮箱和密码登录此实例。",
+  "signUpHelp": "为此实例创建账号。v1 无需邮件确认。",
+  "required": "请填写所有必填项。",
+  "name": "姓名",
+  "email": "邮箱",
+  "password": "密码",
+  "working": "处理中…",
+  "signIn": "登录",
+  "createAccount": "创建账号",
+  "needAccount": "还没有账号？",
+  "haveAccount": "已有账号？",
+  "createOne": "立即创建",
+  "signInLink": "登录",
+  "casdoor": "使用 Casdoor 登录"
+}

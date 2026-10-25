@@ -1,0 +1,20 @@
+{
+  "failed": "Authentication failed",
+  "unavailable": "Unable to check sign-in. Refresh and try again.",
+  "signInTitle": "Sign in to Paperclip",
+  "signUpTitle": "Create your Paperclip account",
+  "signInHelp": "Use your email and password to access this instance.",
+  "signUpHelp": "Create an account for this instance. Email confirmation is not required in v1.",
+  "required": "Please fill in all required fields.",
+  "name": "Name",
+  "email": "Email",
+  "password": "Password",
+  "working": "Working…",
+  "signIn": "Sign In",
+  "createAccount": "Create Account",
+  "needAccount": "Need an account?",
+  "haveAccount": "Already have an account?",
+  "createOne": "Create one",
+  "signInLink": "Sign in",
+  "casdoor": "Sign in with Casdoor"
+}
