@@ -154,3 +154,18 @@ test("the automatic repair worker reserves and dispatches one durable routine de
     const view = await request.get(`/api/companies/${f.company.id}/coding/${f.delivery.id}/repairs`); expect(view.ok()).toBe(true); const body = await view.json(); expect(body.attempts).toHaveLength(1); expect(JSON.stringify(body)).not.toContain("fixture-not-live");
   } finally { await f.cleanup(); }
 });
+
+test("repair service and composite foreign key reject another company's delivery without a wakeup", async ({ request }) => {
+  const f = await fixture(request);
+  try {
+    const [other] = await f.db.insert(companies).values({ name: "Other isolated repair company", status: "paused" }).returning();
+    await expect(f.repairs.configure(other.id, f.delivery.id, f.config, f.owner)).rejects.toThrow("delivery_not_found");
+    await expect(f.repairs.reserve(other.id, f.delivery.id)).rejects.toThrow("delivery_not_found");
+    const attempt = await f.repairs.reserve(f.company.id, f.delivery.id);
+    expect(await f.repairs.dispatch(other.id, attempt.id)).toBeNull();
+    expect((await f.db.select().from(attempts).where(eq(attempts.id, attempt.id)))[0].state).toBe("reserved");
+    await expect(f.db.insert(attempts).values({ ...attempt, id: randomUUID(), companyId: other.id, attempt: 99, pipelineId: 9999, requestKey: randomUUID() })).rejects.toMatchObject({ cause: { code: "23503", constraint_name: "mimouse_repair_delivery_company_fk" } });
+    expect(f.state.wakeups).toBe(0);
+    expect(await f.db.select().from(attempts).where(eq(attempts.deliveryId, f.delivery.id))).toHaveLength(1);
+  } finally { await f.cleanup(); }
+});
