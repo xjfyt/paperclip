@@ -12,12 +12,12 @@ const witnessSchema = z.object({ schemaVersion: z.literal(1), testId: uuid, atte
   implementation: z.literal(PRIVATE_PROMPT_IMPLEMENTATION), providerConsumed: z.literal(false), stdinWritten: z.literal(false) }).strict();
 export interface PrivateComparisonEvidence {
   actor: PrivatePromptIdentity; promptId: string; input: ComparePrivatePromptTests;
-  dataset: typeof mimouseEvaluationDatasets.$inferSelect;
-  revisions: Array<typeof mimousePromptRevisions.$inferSelect>;
-  version: typeof companySkillVersions.$inferSelect;
+  dataset: Pick<typeof mimouseEvaluationDatasets.$inferSelect, "id" | "companyId" | "skillId" | "cases" | "datasetHash">;
+  revisions: Array<Pick<typeof mimousePromptRevisions.$inferSelect, "id" | "companyId" | "promptId" | "content" | "contentHash">>;
+  version: Pick<typeof companySkillVersions.$inferSelect, "id" | "companyId" | "companySkillId" | "fileInventory">;
   tests: PrivatePromptRow[];
-  runs: Array<typeof heartbeatRuns.$inferSelect>;
-  issues: Array<typeof issues.$inferSelect>;
+  runs: Array<Pick<typeof heartbeatRuns.$inferSelect, "id" | "companyId" | "agentId" | "issueId" | "scopeKind" | "wakeupRequestId" | "status" | "runtimeMode" | "retryOfRunId">>;
+  issues: Array<Pick<typeof issues.$inferSelect, "id" | "companyId" | "visibility" | "assigneeAgentId" | "responsibleUserId" | "originKind" | "originId" | "workMode" | "harnessKind">>;
   costs: Map<string, number | null>;
 }
 function requireEvidence(condition: unknown, code: string): asserts condition { if (!condition) throw Error(code); }
@@ -26,8 +26,9 @@ export async function comparePrivatePromptEvidence(e: PrivateComparisonEvidence)
   const input = comparePrivatePromptTestsSchema.parse(e.input), { actor, dataset, version } = e;
   requireEvidence(dataset.companyId === actor.companyId && dataset.id === input.datasetId &&
     version.companyId === actor.companyId && version.companySkillId === dataset.skillId, "private_comparison_resource_scope");
-  requireEvidence(privateConfigDigest(dataset.cases) === dataset.datasetHash, "private_comparison_dataset_integrity");
   requireEvidence(dataset.cases.length > 0 && dataset.cases.length <= 1000 && Buffer.byteLength(JSON.stringify(dataset.cases)) <= 1_000_000, "private_comparison_dataset_size");
+  requireEvidence(Buffer.byteLength(JSON.stringify(version.fileInventory)) <= 256000 && e.revisions.every(r => Buffer.byteLength(r.content) <= 128000), "private_comparison_resource_size");
+  requireEvidence(privateConfigDigest(dataset.cases) === dataset.datasetHash, "private_comparison_dataset_integrity");
   const caseMap = new Map(dataset.cases.map(c => [c.id, c]));
   requireEvidence(caseMap.size === dataset.cases.length, "private_comparison_duplicate_case");
   const revisionIds = [input.baselineRevisionId, input.candidateRevisionId];

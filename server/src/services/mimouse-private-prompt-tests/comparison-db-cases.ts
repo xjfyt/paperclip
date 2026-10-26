@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { expect } from "vitest";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { agents, authSessions, authUsers, companies, companyMemberships, companySkills, companySkillVersions, mimousePrompts,
   mimousePromptRevisions, mimouseEvaluationDatasets, heartbeatRuns, issues, agentWakeupRequests, costEvents, type Db } from "@paperclipai/db";
 import { mimousePrivatePromptTests as tests } from "@paperclipai/db/schema/mimouse_private_prompt_tests";
@@ -46,6 +46,35 @@ export async function verifyPrivateHistoricalComparison(db: Db) {
   const good = await compare(); expect(good.eligibleForHumanReview).toBe(true);
   expect(good.candidate.totalCostCents).toBe(0.125); expect(await state()).toEqual(before);
   expect(JSON.stringify(good)).not.toMatch(/SENTINEL|WRONG_TRIMMED|fixed-fixture/);
+  const fractional = [0.1, 0.2, 0.3].map((costCents, index) => ({ id: `0000000${index + 1}-aaaa-4aaa-8aaa-aaaaaaaaaaaa`,
+    companyId: actor.companyId, agentId: e.tests[1].agentId, issueId: e.tests[1].issueId, heartbeatRunId: e.tests[1].heartbeatRunId,
+    provider: "fixture", model: "fixture", costCents, billingType: "api", costStatus: "reported", occurredAt: now }));
+  await db.insert(costEvents).values([...fractional].reverse()); const ordered = await compare();
+  await db.delete(costEvents).where(inArray(costEvents.id, fractional.map(r => r.id)));
+  await db.insert(costEvents).values(fractional); expect((await compare()).reportHash).toBe(ordered.reportHash);
+  await db.delete(costEvents).where(inArray(costEvents.id, fractional.map(r => r.id)));
+  // Excess historical text is rejected before selecting/scoring its contents.
+  await db.update(mimouseEvaluationDatasets).set({ cases: [{ ...e.dataset.cases[0], input: "x".repeat(1_000_001) }] }).where(eq(mimouseEvaluationDatasets.id, e.dataset.id));
+  await expect(compare()).rejects.toMatchObject({ status: 422, message: "private_comparison_resource_size" });
+  await db.update(mimouseEvaluationDatasets).set({ cases: e.dataset.cases }).where(eq(mimouseEvaluationDatasets.id, e.dataset.id));
+  await db.update(companySkillVersions).set({ fileInventory: [{ path: "SKILL.md", kind: "skill", content: "x".repeat(256001) }] }).where(eq(companySkillVersions.id, e.version.id));
+  await expect(compare()).rejects.toMatchObject({ status: 422, message: "private_comparison_resource_size" });
+  await db.update(companySkillVersions).set({ fileInventory: e.version.fileInventory }).where(eq(companySkillVersions.id, e.version.id));
+  await db.update(tests).set({ privateResult: { summary: null, resultJson: { result: "x".repeat(160001) } } }).where(eq(tests.id, e.tests[1].id));
+  await expect(compare()).rejects.toMatchObject({ status: 422, message: "private_comparison_result_size" });
+  await db.update(tests).set({ privateResult: e.tests[1].privateResult }).where(eq(tests.id, e.tests[1].id));
+  // Each resource is individually under its cap; their combined request is not.
+  const extraRows = Array.from({ length: 16 }, () => ({ ...e.tests[0], id: randomUUID(), requestId: randomUUID(),
+    status: "failed" as const, issueId: null, wakeupRequestId: null, heartbeatRunId: null, attemptId: null, prepared: null, spawnedAt: null,
+    privateResult: { summary: null, resultJson: { result: "x".repeat(120000) } } }));
+  await db.insert(tests).values(extraRows);
+  await db.update(mimouseEvaluationDatasets).set({ cases: [{ ...e.dataset.cases[0], input: "x".repeat(900000) }] }).where(eq(mimouseEvaluationDatasets.id, e.dataset.id));
+  await db.update(companySkillVersions).set({ fileInventory: [{ path: "SKILL.md", kind: "skill", content: "x".repeat(250000) }] }).where(eq(companySkillVersions.id, e.version.id));
+  await expect(service.compare(actor, e.promptId, { ...e.input, testIds: [...e.input.testIds, ...extraRows.map(r => r.id)] }))
+    .rejects.toMatchObject({ status: 422, message: "private_comparison_resource_size" });
+  await db.delete(tests).where(inArray(tests.id, extraRows.map(r => r.id)));
+  await db.update(mimouseEvaluationDatasets).set({ cases: e.dataset.cases }).where(eq(mimouseEvaluationDatasets.id, e.dataset.id));
+  await db.update(companySkillVersions).set({ fileInventory: e.version.fileInventory }).where(eq(companySkillVersions.id, e.version.id));
   const configs: unknown[] = [];
   const observing = new Proxy(db, { get(target, key, receiver) {
     if (key !== "transaction") return Reflect.get(target, key, receiver);
