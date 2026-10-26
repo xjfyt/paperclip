@@ -1,10 +1,11 @@
 import { startCodingRepairWorker } from "./services/mimouse-coding/repair-worker.js";
+import { startWecomWorker } from "./services/mimouse-wecom/worker.js";
 import { startCodingPollWorker } from "./services/mimouse-coding/poller.js";
 import { startNotificationWorker } from "./services/mimouse-notifications/outbox.js";
 import { subscribeAllCompanyLiveEvents } from "./services/live-events.js";
 import { DELIVERY_QUEUES } from "./services/delivery-work-notifications.js";
 import type { createDeliveryWorkCoordinator } from "./services/delivery-work-coordinator.js";
-import { isIdleTaskDrainActive, beginIdleTrackedWork, trackIdleWork } from "./services/task-admission.js";
+import { isIdleTaskDrainActive, subscribeTaskDrainChanges, beginIdleTrackedWork, trackIdleWork } from "./services/task-admission.js";
 import { markIdleStartupComplete } from "./services/idle-local-work.js";
 import { clearIdleBackupWakeRequired, idleBackupWakeMarker, markIdleBackupWakeRequired, verifyIdleDatabaseBackup } from "./services/idle-database-backup.js";
 import { cloudWarmStandbyServerOptions } from "./middleware/cloud-warm-standby.js";
@@ -1213,6 +1214,12 @@ async function startServerWithDatabaseTeardown(
         .finally(() => { executionControlSweepsInFlight.delete(queue); }));
     }
   };
+  // Per-bot DB leases provide exclusivity; this gate is only process lifecycle admission.
+  const mimouseWecomWorker = startWecomWorker(db, () => !heartbeatSchedulerStopped && !isWarmStandby() && !isIdleTaskDrainActive());
+  const unsubscribeWecomTaskDrain = process.env.MIMOUSE_WECOM_WORKER_ENABLED === "true"
+    ? subscribeTaskDrainChanges(() => { void mimouseWecomWorker.reconcile(); })
+    : () => {};
+  if (process.env.MIMOUSE_WECOM_WORKER_ENABLED === "true") void mimouseWecomWorker.reconcile();
   const mimouseNotificationWorker = startNotificationWorker(db);
   const mimouseCodingRepairWorker = startCodingRepairWorker(db, { heartbeat: accountingHeartbeat, pluginWorkerManager }, () => !isWarmStandby() && !isIdleTaskDrainActive());
   const mimouseCodingPollWorker = startCodingPollWorker(db, () => !isWarmStandby() && !isIdleTaskDrainActive());
@@ -1979,8 +1986,12 @@ async function startServerWithDatabaseTeardown(
     signal: "SIGINT" | "SIGTERM",
     exitProcess: boolean,
   ) => {
-    await systemdNotify(["--stopping", `--status=Stopping after ${signal}`]);
     heartbeatSchedulerStopped = true;
+    void mimouseWecomWorker.reconcile(); // Abort sockets before any asynchronous shutdown work.
+    unsubscribeWecomTaskDrain();
+    await systemdNotify(["--stopping", `--status=Stopping after ${signal}`]);
+    const wecomDrain = await mimouseWecomWorker.stop();
+    if (!wecomDrain.drained) logger.warn({ event: "wecom_shutdown_drain_timeout" }, "WeCom shutdown drain incomplete");
     unsubscribeChatCompletions();
     await deliveryWork.stop();
     await mimouseNotificationWorker.stop();
