@@ -30,3 +30,16 @@ export interface FeedbackPromotionReceipt {
   requestId: string; feedbackId: string; issueId: string; actorUserId: string; createdAt: string;
   initialStatus: "backlog"; initialVisibility: "private"; agentDispatched: false;
 }
+
+/** Observed references are not verified trace/commit links or proof of reproduction. */
+export interface FeedbackEvidence {
+  feedbackId: string; sourceKind: FeedbackInboxItem["sourceKind"]; sourceInstance: string; externalId: string;
+  product: string; softwareVersion: string; commitSha: string | null; traceId: string | null; occurredAt: string;
+  fingerprint: string | null; excerpts: { line: number; text: string }[];
+  checklist: { versionReference: boolean; commitReference: boolean; traceReference: boolean; errorStackExcerpt: boolean;
+    reproduction: "not_performed"; expectedBehavior: "requires_review"; regressionTest: "requires_review" };
+}
+export interface FeedbackEvidencePage {
+  algorithmVersion: "redacted-error-stack-v1"; autoMerged: false; source: FeedbackEvidence; items: FeedbackEvidence[];
+  scanned: number; scanLimit: number; nextBeforeId: string | null;
+}

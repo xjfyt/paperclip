@@ -34,6 +34,10 @@ export function mimouseFeedbackRoutes(db: Db) {
     if (req.actor.type !== "board" || req.actor.source !== "session" || !req.actor.userId) throw forbidden("A signed-in human must confirm task creation");
     res.json(await feedbackPromotionService(db).promote(companyId, id(req), req.actor.userId, feedbackPromotionSchema.parse(req.body)));
   });
+  router.get(`${path}/:id/evidence`, async (req, res) => {
+    const companyId = admin(req), query = z.object({ beforeId: z.string().uuid().optional() }).strict().parse(req.query);
+    res.json(await service.evidence(companyId, id(req), query.beforeId));
+  });
   router.get(`${path}/:id`, async (req, res) => { const companyId = admin(req); res.json(await service.get(companyId, id(req))); });
   router.get(`${path}/:id/candidates`, async (req, res) => { const companyId = admin(req); res.json(await service.candidates(companyId, id(req))); });
   return router;

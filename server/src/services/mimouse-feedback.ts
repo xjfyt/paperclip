@@ -4,6 +4,7 @@ import { mimouseFeedbackInbox as inbox, type Db } from "@paperclipai/db";
 import { feedbackImportSchema, type FeedbackImportInput, type FeedbackInboxItem } from "@paperclipai/shared";
 import { conflict, notFound } from "../errors.js";
 import { createFeedbackRedactionState, sanitizeFeedbackText } from "./feedback-redaction.js";
+import { feedbackEvidence, feedbackEvidencePage, FEEDBACK_EVIDENCE_SCAN_LIMIT } from "./mimouse-feedback-evidence.js";
 const digest = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 // Remove URL credentials and query/fragment values before generic redaction.
 export function sanitizeImportedFeedbackText(text: string, redaction: ReturnType<typeof createFeedbackRedactionState>, field: string, max: number) {
@@ -57,6 +58,17 @@ export function feedbackInboxService(db: Db) {
       const page = rows.slice(0, limit); return { items: page.map(publicItem), nextBeforeId: rows.length > limit ? page.at(-1)!.id : null };
     },
     async get(companyId: string, id: string) { return publicItem(await load(companyId, id)); },
+    async evidence(companyId: string, id: string, beforeId?: string) {
+      const source = publicItem(await load(companyId, id));
+      if (!feedbackEvidence(source).fingerprint) return feedbackEvidencePage(source, [], null);
+      const before = beforeId ? await load(companyId, beforeId) : null;
+      // Cursor and every scanned row remain inside this company. No task/trace fetches.
+      const rows = await db.select().from(inbox).where(and(eq(inbox.companyId, companyId), eq(inbox.product, source.product), eq(inbox.softwareVersion, source.softwareVersion), ne(inbox.id, id),
+        before ? or(lt(inbox.createdAt, before.createdAt), and(eq(inbox.createdAt, before.createdAt), lt(inbox.id, before.id))) : undefined))
+        .orderBy(desc(inbox.createdAt), desc(inbox.id)).limit(FEEDBACK_EVIDENCE_SCAN_LIMIT + 1);
+      const page = rows.slice(0, FEEDBACK_EVIDENCE_SCAN_LIMIT);
+      return feedbackEvidencePage(source, page.map(publicItem), rows.length > FEEDBACK_EVIDENCE_SCAN_LIMIT ? page.at(-1)!.id : null);
+    },
     async candidates(companyId: string, id: string) {
       const row = await load(companyId, id);
       const matches = await db.select().from(inbox).where(and(eq(inbox.companyId, companyId), eq(inbox.candidateKey, row.candidateKey), ne(inbox.id, id)))
