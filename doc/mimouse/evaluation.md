@@ -1,0 +1,51 @@
+# P5 固定回归数据集与已有运行比较
+
+## 已实现边界
+
+- 公司管理员专属 `skill-evaluations` API 与四语界面；不是对上游普通技能权限的重新定义。
+- 从同公司、同技能、未删除的 `companySkillTestInputs` 加载正文，和人工提交的精确预期输出一起冻结。每集最多100条；无修改、删除 API。
+- 比较两个**已有且不同**的 `companySkillVersions`。请求只携带版本、数据集与测试运行 ID，不能携带输入正文、运行输出、评分或成本。
+- 服务加载同公司同技能、未删除/未替代的 `companySkillTestRuns`，复用 `paperclip-eval-kernel` 做纯记录矩阵评分。缺失、失败、输入不匹配、同用例重复运行都不能变成通过。重复运行不自动挑选“最好”结果，而是要求明确选择。
+- 比较相同代理配置快照与模板正文的哈希；缺失或不同执行上下文不形成可复核的孤立技能改善结论。不同模型/配置可展示结果，但不能通过此门槛。
+- 评分只有 `exact_text_v1`，不声称语义质量、开放式任务评分、模型评审或自动提示词优化。
+- 公司内 `requestId` + 请求哈希 + 事务级 advisory lock 提供持久幂等；同 ID 不同输入409。成功请求重试返回原记录，不受后来输入/账本变化影响。新报告引用冻结数据集，保存运行与成本证据快照、版本文件清单哈希，审计日志与记录同事务落库。
+- 列表按 UUID 游标分页，每页50条；证据选择器展示100版本/100输入/200最近运行，允许显式输入更早 ID。
+
+## 成本含义
+
+成本来源是同公司 `costEvents.issueId`，关联已有运行的 harness issue。上游 `company_skill_test_runs_company_issue_idx` 是 `(companyId, issueId)` 唯一索引，因此两条测试运行不能共享一个 harness issue。回归测试检查此约束。
+
+`recorded_issue_ledger_snapshot` 是**捕获时已记录的任务账本**，不是供应商最终账单，不代表费用已结算，也不提供事后预算强制停止。没有行、未定价记录、非法金额均为未知，不能当作零费用；订阅已包含的已记录行保留其金额。保留小数分；可选整数分费用上限在未知费用时阻塞。已知小计只累计成本完全已知的用例，不将部分未知用例假定为完整金额。晚到成本需要新的比较请求，原报告不会被改写。
+
+报告保留固定分母、通过/阻塞数、费用未知数、通过数变化、逐用例运行ID及输出哈希。只有完整证据、候选全部通过且不退步、满足可选记录费用上限才标记 `eligibleForHumanReview`；这**不是执行授权或提升成功**。
+
+## 提升/回滚的准确缺口
+
+当前 readiness 明确 `promotionSupported=false`、`rollbackSupported=false`、`atomic_version_snapshot_restore_not_implemented`。没有提升/回滚/执行 API，也不修改 `currentVersionId`。
+
+上游 `company-skills.ts` 已有：
+- 私有 `materializeVersionSnapshot`：在 `__versions__/skill/version` 创建不可变运行目录，校验完整文件清单、字节与可执行位；**并非**恢复可编辑 live skill 文件。
+- 私有 `withSkillFileMutation`：slug advisory lock、技能行锁与重读身份。
+- 公共 `updateFile`：单文件 CAS、内容与模式回滚、重新生成版本；多次调用不能构成整树原子恢复，不能处理额外文件删除与崩溃中断一致性。
+
+安全的后续切片必须在上游文件变更边界增加审计过的整树恢复入口：校验来源可编辑性与路径/符号链接/执行文件安全，验证目标完整清单，锁与 expected-current-version CAS，处理新增/删除/二进制/可执行位，协调元数据/技能版本/文件交换与失败补偿，覆盖进程中断恢复；人类会话和策略权限、过期报告、重复确认、并发编辑及失败恢复均需真实文件系统/数据库测试。不能仅设置版本指针来假装完成回滚。
+
+## 集成清单（父工作树负责共享文件）
+
+1. `packages/shared/src/index.ts`: `export * from "./mimouse-evaluation.js";`
+2. `packages/db/src/schema/index.ts`: `export * from "./mimouse_evaluation.js";`
+3. `server/package.json` dependencies: `"@paperclipai/paperclip-eval-kernel": "workspace:*"`。按仓库约定不提交锁文件。
+4. `server/src/app.ts`: 导入 `mimouseEvaluationRoutes`，在现有公司 API 路由附近 `api.use(mimouseEvaluationRoutes(db));`。
+5. `ui/src/App.tsx`: 导入 `MimouseEvaluation`；公司路由 `skill-evaluations` 渲染该页，非前缀路径交给 `UnprefixedBoardRedirect`。
+6. `ui/src/lib/company-routes.ts`: 添加 `"skill-evaluations"`；两套 Sidebar 添加路径 `/skill-evaluations`，标签 `t("evaluationUi.pageTitle")`，复用现有 `ListChecks` 图标。
+7. 从 `ui/src/i18n/contributions/evaluationUi/{en,zh-CN,es,ja}.json` 通过现有合并脚本生成四语 locales。
+8. 请求日志策略将 `skill-evaluations` 视为敏感区；预期输出和运行内容不得进入 HTTP 请求体日志。审计只写 ID/哈希。
+9. 生成并检查迁移（两个新增表及关联/索引）；本工作树未修改 migration journal 或生成迁移。
+10. 集成后运行全链路类型检查、迁移/数据库幂等与跨公司测试、浏览器交互验收。单测和 React 测试不替代这些验证。
+
+## 本切片已运行验证
+
+- 独立轻量 Vitest 配置通过17项服务纯函数/合同/路由测试：固定矩阵、失败与缺失、输入篡改、未知费用、重复/跨公司身份、执行上下文、唯一harness issue成本约束、伪造请求、管理员/代理/成员边界及无执行接口。
+- React/jsdom三项通过：四语未知成本与禁止恢复提示、无权限隐藏表单、公司切换清除报告。
+- token gates 全通过。
+- 尚未在本工作树运行全量类型检查、构建、数据库迁移或真实浏览器；按并行内存预算由父工作树统一执行。
