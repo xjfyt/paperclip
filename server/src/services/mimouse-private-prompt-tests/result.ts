@@ -51,3 +51,15 @@ export function sealPrivatePromptResult(result: AdapterExecutionResult, durableS
     return finish("failed", "private_prompt_result_invalid");
   }
 }
+
+/** This is the complete public adapter return boundary, including accounting. */
+export function privatePromptPublicResult(result: AdapterExecutionResult, sealed: ReturnType<typeof sealPrivatePromptResult>, model: string): AdapterExecutionResult {
+  const number = (value: unknown) => typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
+  const inputTokens = number(result.usage?.inputTokens), outputTokens = number(result.usage?.outputTokens);
+  const usage = inputTokens !== undefined && outputTokens !== undefined ? { inputTokens, outputTokens,
+    ...(number(result.usage?.cachedInputTokens) !== undefined ? { cachedInputTokens: number(result.usage?.cachedInputTokens) } : {}),
+    ...(number(result.usage?.cacheWriteTokens) !== undefined ? { cacheWriteTokens: number(result.usage?.cacheWriteTokens) } : {}),
+  } : undefined;
+  return { ...sealed.publicResult, provider: "anthropic", biller: "anthropic", billingType: "api", model,
+    costUsd: number(result.costUsd), usage, usageComplete: usage !== undefined && result.usageComplete === true };
+}

@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { sealPrivatePromptResult } from "./result.js";
+import { privatePromptPublicResult, sealPrivatePromptResult } from "./result.js";
 const secret = "private literal {{exact}}";
 const result = { exitCode: 0, signal: null, timedOut: false, resultJson: { type: "result", subtype: "success", result: secret }, summary: secret };
 it("keeps bounded completed output private and never spreads arbitrary fields", () => {
@@ -28,4 +28,15 @@ it.each(["bytes", "depth", "nodes", "cycle"])("rejects %s overflow without trunc
   const sealed = sealPrivatePromptResult({ ...result, resultJson: { ...result.resultJson, extra } }, true);
   expect(sealed.status).toBe("failed"); expect(sealed.privateResult).toBeNull();
   expect(sealed.errorCode).toBe("private_prompt_result_limit_exceeded");
+});
+
+it("reconstructs the full public accounting boundary without arbitrary usage fields", () => {
+  const dirty = { ...result, costUsd: 0.01, usageComplete: true, usage: { inputTokens: 2, outputTokens: 3,
+    cachedInputTokens: 1, cacheWriteTokens: -1, marker: secret, nested: { body: secret } } };
+  const output = privatePromptPublicResult(dirty, sealPrivatePromptResult(dirty, true), "claude-fixed");
+  expect(output.usage).toEqual({ inputTokens: 2, outputTokens: 3, cachedInputTokens: 1 });
+  expect(JSON.stringify(output)).not.toContain(secret);
+  const bad = { ...dirty, costUsd: Infinity, usage: { inputTokens: NaN, outputTokens: 2 } };
+  const rejected = privatePromptPublicResult(bad, sealPrivatePromptResult(bad, true), "claude-fixed");
+  expect(rejected.usage).toBeUndefined(); expect(rejected.costUsd).toBeUndefined(); expect(rejected.usageComplete).toBe(false);
 });

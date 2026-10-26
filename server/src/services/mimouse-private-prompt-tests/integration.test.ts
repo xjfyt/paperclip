@@ -13,7 +13,7 @@ import { activityLog, agents, authSessions, authUsers, companies, companyMembers
 import { mimousePrivatePromptTests as tests } from "@paperclipai/db/schema/mimouse_private_prompt_tests";
 
 vi.mock("../../adapters/plugin-loader.js", () => ({ buildExternalAdapters: async () => [] }));
-const processBoundary = vi.hoisted(() => ({ inputs: [] as string[], calls: 0, hold: false, notifySpawn: null as null | (() => void) }));
+const processBoundary = vi.hoisted(() => ({ inputs: [] as string[], calls: 0, hold: false, releasePath: null as string | null, notifySpawn: null as null | (() => void) }));
 vi.mock("@paperclipai/adapter-utils/execution-target", async original => {
   const actual = await original<typeof import("@paperclipai/adapter-utils/execution-target")>();
   return { ...actual, runAdapterExecutionTargetProcess: async (runId: string, target: unknown, command: string, args: string[], options: any) => {
@@ -26,7 +26,7 @@ vi.mock("@paperclipai/adapter-utils/execution-target", async original => {
     // echoes stdin to test leak protection, but never launches any CLI/account.
     return runChildProcess(runId, process.execPath, ["-e", `
       let body='';process.stdin.setEncoding('utf8');process.stdin.on('data',chunk=>body+=chunk);
-      process.stdin.on('end',()=>{if(${processBoundary.hold}){setInterval(()=>{},1000);return;}process.stderr.write(body);process.stdout.write(JSON.stringify({type:'result',subtype:'success',result:body,is_error:false,usage:{input_tokens:1,output_tokens:1}})+'\\n');});
+      process.stdin.on('end',()=>{const finish=()=>{process.stderr.write(body);process.stdout.write(JSON.stringify({type:'result',subtype:'success',result:body,is_error:false,usage:{input_tokens:1,output_tokens:1}})+'\\n');};if(${processBoundary.hold}){const release=${JSON.stringify(processBoundary.releasePath)};const timer=setInterval(()=>{if(release&&require('node:fs').existsSync(release)){clearInterval(timer);finish();}},20);return;}finish();});
     `], { ...options, timeoutSec: 10, graceSec: 1, onSpawn: async (meta: unknown) => { await options.onSpawn(meta); processBoundary.notifySpawn?.(); } });
   } };
 });
@@ -132,6 +132,8 @@ it("creates one intent/wake, dispatches exact stdin, and reads bounded output on
   const detail = await service.detail(actor, promptId, first.item.id);
   expect(detail.item.status, JSON.stringify({ item: detail.item, runs: await db.select({ status: heartbeatRuns.status, error: heartbeatRuns.error }).from(heartbeatRuns) })).toBe("completed");
   expect(detail.privateResult?.summary).toContain(literal);
+  expect((await db.select().from(issues).where(eq(issues.id, first.item.issueId!)))[0].status).toBe("done");
+  expect((await db.select().from(agents).where(eq(agents.id, input.agentId)))[0].status).toBe("idle");
   expect(processBoundary.calls).toBe(1);
   expect(detail.item.prepared?.promptHash).toBe(privatePromptHash(processBoundary.inputs[0]));
   expect(processBoundary.inputs[0]).not.toContain("EXPECTED_ANSWER_NOT_SENT_382e6b");
@@ -197,6 +199,93 @@ it("converges an unadmitted reserved wake to failed on list and never retries it
   expect(created.item.status).toBe("failed");
   expect((await service.list(actor, promptId)).items.find(row => row.id === created.item.id)?.errorCode).toBe("private_prompt_wake_not_admitted");
   await service.create(actor, promptId, request); expect(refused).toHaveBeenCalledTimes(1); expect(processBoundary.calls).toBe(1);
+});
+it("advances two distinct private intents then an ordinary approved wake on the same idle agent", async () => {
+  const before = processBoundary.calls;
+  const ids: string[] = [];
+  for (let index = 0; index < 2; index++) {
+    const created = await privatePromptTestService(db, heartbeat.wakeup).create(actor, promptId, { ...input, requestId: randomUUID() });
+    ids.push(created.item.id);
+    await drainHeartbeatRunsToQuiescence(db, heartbeat);
+    expect((await privatePromptTestService(db).detail(actor, promptId, created.item.id)).item.status).toBe("completed");
+    expect((await db.select().from(issues).where(eq(issues.id, created.item.issueId!)))[0].status).toBe("done");
+    expect((await db.select().from(agents).where(eq(agents.id, input.agentId)))[0].status).toBe("idle");
+  }
+  expect(new Set(ids).size).toBe(2); expect(processBoundary.calls).toBe(before + 2);
+  const [agent] = await db.select().from(agents).where(eq(agents.id, input.agentId));
+  // Separate explicit fixture authorization for an ordinary no-network process;
+  // no Claude CLI, provider account, or private capability is used here.
+  await db.update(agents).set({ adapterType: "process", adapterConfig: {
+    command: process.execPath, args: ["-e", "process.stdout.write('ordinary fixture complete')"], cwd: home,
+  } }).where(eq(agents.id, agent.id));
+  try {
+    const run = await heartbeat.wakeup(agent.id, { source: "on_demand", triggerDetail: "manual", reason: "fixture_approved_ordinary",
+      requestedByActorType: "user", requestedByActorId: actor.userId });
+    expect(run).not.toBeNull();
+    await drainHeartbeatRunsToQuiescence(db, heartbeat);
+    const [ordinary] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, run!.id));
+    expect(ordinary.status, ordinary.error ?? "ordinary successor").toBe("succeeded");
+    expect((await db.select().from(agents).where(eq(agents.id, agent.id)))[0].status).toBe("idle");
+  } finally {
+    await db.update(agents).set({ adapterType: agent.adapterType, adapterConfig: agent.adapterConfig }).where(eq(agents.id, agent.id));
+  }
+});
+it("drains an ordinary approved wake already queued behind a running private child", async () => {
+  const [agent] = await db.select().from(agents).where(eq(agents.id, input.agentId));
+  await db.update(agents).set({ runtimeConfig: { heartbeat: { maxConcurrentRuns: 1 } } }).where(eq(agents.id, agent.id));
+  const spawned = new Promise<void>(accept => { processBoundary.notifySpawn = accept; });
+  processBoundary.hold = true; processBoundary.releasePath = join(home, `release-${randomUUID()}`);
+  try {
+    const created = await privatePromptTestService(db, heartbeat.wakeup).create(actor, promptId, { ...input, requestId: randomUUID() });
+    await spawned;
+    // The private provider process has already spawned under its approved profile.
+    // The operator now approves a different ordinary local fixture configuration.
+    await db.update(agents).set({ adapterType: "process", adapterConfig: {
+      command: process.execPath, args: ["-e", "process.stdout.write('queued ordinary fixture complete')"], cwd: home,
+    } }).where(eq(agents.id, agent.id));
+    const successor = await heartbeat.wakeup(agent.id, { source: "on_demand", triggerDetail: "manual", reason: "fixture_approved_queued",
+      requestedByActorType: "user", requestedByActorId: actor.userId });
+    expect(successor).not.toBeNull();
+    expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, successor!.id)))[0].status).toBe("queued");
+    await writeFile(processBoundary.releasePath!, "release");
+    await drainHeartbeatRunsToQuiescence(db, heartbeat);
+    expect((await privatePromptTestService(db).detail(actor, promptId, created.item.id)).item.status).toBe("completed");
+    expect((await db.select().from(issues).where(eq(issues.id, created.item.issueId!)))[0].status).toBe("done");
+    expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, successor!.id)))[0].status).toBe("succeeded");
+    expect((await db.select().from(agents).where(eq(agents.id, agent.id)))[0].status).toBe("idle");
+  } finally {
+    if (processBoundary.releasePath) await writeFile(processBoundary.releasePath, "release");
+    await drainHeartbeatRunsToQuiescence(db, heartbeat);
+    processBoundary.hold = false; processBoundary.releasePath = null; processBoundary.notifySpawn = null;
+    await db.update(agents).set({ adapterType: agent.adapterType, adapterConfig: agent.adapterConfig, runtimeConfig: agent.runtimeConfig }).where(eq(agents.id, agent.id));
+  }
+});
+it.each(["cancelled", "reassigned"])("does not overwrite a user %s harness while its child finishes", async change => {
+  const spawned = new Promise<void>(accept => { processBoundary.notifySpawn = accept; });
+  processBoundary.hold = true; processBoundary.releasePath = join(home, `release-${randomUUID()}`);
+  try {
+    const created = await privatePromptTestService(db, heartbeat.wakeup).create(actor, promptId, { ...input, requestId: randomUUID() });
+    await spawned;
+    let replacementId: string | null = null;
+    if (change === "reassigned") {
+      const [replacement] = await db.insert(agents).values({ companyId: actor.companyId, name: "Replacement fixture", role: "engineer", adapterType: "process", status: "idle" }).returning();
+      replacementId = replacement.id;
+    }
+    await issueModule.issueService(db).update(created.item.issueId!, {
+      ...(change === "cancelled" ? { status: "cancelled" } : { assigneeAgentId: replacementId }),
+      companyGuard: actor.companyId, actorUserId: actor.userId,
+    });
+    await writeFile(processBoundary.releasePath!, "release");
+    await drainHeartbeatRunsToQuiescence(db, heartbeat);
+    const [issue] = await db.select().from(issues).where(eq(issues.id, created.item.issueId!));
+    expect(issue.status).not.toBe("done");
+    if (change === "cancelled") expect(issue.status).toBe("cancelled");
+    else expect(issue.assigneeAgentId).toBe(replacementId);
+    expect((await db.select().from(agents).where(eq(agents.id, input.agentId)))[0].status).toBe("idle");
+  } finally {
+    if (processBoundary.releasePath) await writeFile(processBoundary.releasePath, "release");
+    processBoundary.hold = false; processBoundary.releasePath = null; processBoundary.notifySpawn = null;
+  }
 });
 it("rejects changed local source, disabled targets, and env/config overlays without dispatch", async () => {
   const [settings] = await db.select().from(instanceSettings);

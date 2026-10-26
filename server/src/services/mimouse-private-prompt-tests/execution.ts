@@ -9,7 +9,10 @@ import { secretService } from "../secrets.js";
 import { conflict } from "../../errors.js";
 import { privatePromptInput, validatePrivatePromptResources, type PrivatePromptRow, type PrivatePromptTx } from "./service.js";
 import { privatePromptFixedContext, privateConfigDigest, privatePromptHash, PRIVATE_PROMPT_IMPLEMENTATION } from "./profile.js";
-import { sealPrivatePromptResult } from "./result.js";
+import { publishActivity, type ActivityPublication } from "../activity-log.js";
+import { executeIssuePostCommitActions, type IssuePostCommitAction } from "../issues.js";
+import { completePrivatePromptHarness } from "./completion.js";
+import { privatePromptPublicResult, sealPrivatePromptResult } from "./result.js";
 
 export async function findPrivatePromptExecution(db: Db, companyId: string, issueId: string | null) {
   if (!issueId) return null;
@@ -102,12 +105,17 @@ export async function executePrivatePromptHeartbeat(db: Db, input: HeartbeatRunt
     if (!guarded.dispatched) throw new Error("private_prompt_dispatch_denied");
     const result = await guarded.resultPromise;
     const sealed = sealPrivatePromptResult(result, spawned);
-    await db.update(tests).set({ status: sealed.status, errorCode: sealed.errorCode, privateResult: sealed.privateResult, updatedAt: new Date() })
-      .where(and(eq(tests.id, binding.id), eq(tests.attemptId, attemptId!)));
-    // Numeric accounting is retained; arbitrary provider/model fields are not.
-    return { ...sealed.publicResult, provider: "anthropic", biller: "anthropic", billingType: "api", model: bound.profile.model,
-      costUsd: typeof result.costUsd === "number" && Number.isFinite(result.costUsd) && result.costUsd >= 0 ? result.costUsd : undefined,
-      usage: result.usage, usageComplete: result.usageComplete === true };
+    const publications: ActivityPublication[] = [], actions: IssuePostCommitAction[] = [];
+    await db.transaction(async tx => {
+      // Match queue lock order: issue before private intent; rollback both writes together.
+      if (sealed.status === "completed") await completePrivatePromptHarness(db, tx, binding, input.run.id, publications, actions);
+      const changed = await tx.update(tests).set({ status: sealed.status, errorCode: sealed.errorCode, privateResult: sealed.privateResult, updatedAt: new Date() })
+        .where(and(eq(tests.id, binding.id), eq(tests.attemptId, attemptId!))).returning({ id: tests.id });
+      if (changed.length !== 1) throw new Error("private_prompt_result_binding_changed");
+    });
+    for (const publication of publications) publishActivity(publication);
+    await executeIssuePostCommitActions(db, actions);
+    return privatePromptPublicResult(result, sealed, bound.profile.model);
   } catch {
     // Unknown persistence/spawn outcomes never authorize a new attempt. No raw
     // exception, SQL params, cause, credentials, prompt or output leaves here.

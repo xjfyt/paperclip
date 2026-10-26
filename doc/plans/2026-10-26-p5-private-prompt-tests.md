@@ -150,3 +150,20 @@ OS沙箱、provider消费或完整隐藏上下文。真实CLI进程树取消/完
 即使执行开关关闭也必须识别历史 private harness，不能退回普通执行。默认关闭不代表
 可以省略 schema 迁移。SQL proposal 不是已注册迁移；编号/journal/snapshot由中央处理。
 迁移后需验证普通历史 issue/skill test 的 API 与执行行为保持，不以开关绕过私有识别。
+
+### 生命周期补验
+
+成功结果与server-owned harness收敛在同一事务中执行：锁序issue→private intent，调用既有
+issueService，核对company/origin/owner/agent/heartbeat/wake及executionRun绑定。仅仍为
+`todo/in_progress`且由该run持有的harness转done；用户cancel、转派或其它状态编辑胜出，
+不会被迟到结果覆盖。done只是本次文本执行任务结束，不是评分通过或发布批准。
+
+完整public adapter返回的usage不再直接转发；仅重建已知finite、非负token计数字段与cost，
+任意嵌套字符串/扩展字段不能绕过私有输出边界。保留正常deferred drain及heartbeat finally
+后继队列启动，不因抑制私有自动recovery而阻塞其它已批准任务。
+
+suite18：3 files / 35 tests passed，其中17项DB窄集成。额外验证了两个不同私有intent顺序
+执行后Agent自然idle、正常已批准Node任务继续执行；真实private child保持运行时，普通wake
+已queued（显式maxConcurrentRuns=1），释放child后后继succeeded、Agent自然idle。另两项真实
+用户取消/转派竞争验证不覆盖用户决定。成功/后继用例没有手动重置Agent状态；故障注入用例的
+idle恢复仅用于隔离刻意制造的失败。普通后继同样仅固定无网络Node脚本，不调用真实CLI账户。
