@@ -1,0 +1,30 @@
+{
+  "id": "mimouse-wecom-receive-only",
+  "plane": "P3",
+  "verificationLevel": "C2",
+  "liveTenantProof": false,
+  "enabledByDefault": false,
+  "transport": "long_connection",
+  "endpoint": "wss://openws.work.weixin.qq.com",
+  "workerFlag": "MIMOUSE_WECOM_WORKER_ENABLED",
+  "requiredWorkerFlagValue": "true",
+  "routeFactory": "server/src/routes/mimouse-wecom.ts#mimouseWecomRoutes",
+  "workerEntry": "server/src/services/mimouse-wecom/receiver.ts#runWecomReceiver",
+  "routeBase": "/api/companies/:companyId/feedback-wecom/connections",
+  "ingestionMode": "provider_push",
+  "automaticReplies": false,
+  "attachments": false,
+  "historyBackfill": false,
+  "modelOrAgentExecution": false,
+  "integrationPending": [
+    "Review and allocate migration identity for schema-proposal.sql; do not append it blindly to an existing journal",
+    "Export mimouse_wecom schema through the database schema index and rebuild the database package",
+    "Mount mimouseWecomRoutes in the API after company authentication middleware",
+    "Verify existing private integration log policy remains installed before the mounted routes",
+    "Regenerate the four compiled locale files from feedbackUi contributions for providerPushed provenance copy",
+    "Wire bounded worker lifecycle and shutdown cancellation only after explicit operator activation",
+    "Run offline automated checks and the documented local database/race test matrix",
+    "Perform separately authorized real-tenant qualification before claiming delivery support"
+  ],
+  "manualGuide": "doc/connections/MIMOUSE-WECOM.md"
+}

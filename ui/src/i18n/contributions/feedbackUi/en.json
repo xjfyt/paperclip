@@ -49,5 +49,6 @@
   "alreadyConfirmed": "A task was already confirmed for this feedback. Its private receipt is not available to this account.",
   "sessionRequired": "Sign in as a company owner or administrator to confirm task creation.",
   "providerFetched": "Read from the configured provider; evidence remains quarantined and requires human review. This is not proof of full trace or log coverage.",
-  "sourceUrl": "Trace source"
+  "sourceUrl": "Trace source",
+  "providerPushed": "Received through the provider connection; untrusted evidence, not a history fetch or verified claim."
 }

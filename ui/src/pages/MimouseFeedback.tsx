@@ -68,7 +68,7 @@ function FeedbackDetail({ companyId, userId, id, onSelect }: { companyId: string
   if (source.isError) return <p role="alert">{t("feedbackUi.readError")}</p>;
   return <section className="space-y-4 rounded-lg border border-border p-4">
     <h2 className="font-medium">{source.data.title}</h2><p className="break-all font-mono text-xs">{source.data.id}</p>
-    <p className="text-sm">{t(source.data.ingestionMode === "provider_fetch" ? "feedbackUi.providerFetched" : "feedbackUi.manualOnly")}</p>
+    <p className="text-sm">{t(source.data.ingestionMode === "provider_fetch" ? "feedbackUi.providerFetched" : source.data.ingestionMode === "provider_push" ? "feedbackUi.providerPushed" : "feedbackUi.manualOnly")}</p>
     {source.data.sourceUrl && <p className="break-all text-xs">{t("feedbackUi.sourceUrl")}: {source.data.sourceUrl}</p>}
     <pre className="whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-sm">{source.data.text}</pre>
     <h3 className="font-medium">{t("feedbackUi.candidates")}</h3><p className="text-xs text-muted-foreground">{t("feedbackUi.candidateBoundary")}</p>

@@ -49,5 +49,6 @@
   "alreadyConfirmed": "此反馈已确认转为任务，当前账号无法查看其私有回执。",
   "sessionRequired": "请以公司负责人或管理员身份登录后确认创建任务。",
   "providerFetched": "由已配置供应商读取，证据仍处于隔离状态并需人工审核，不代表已覆盖完整trace或日志。",
-  "sourceUrl": "Trace来源"
+  "sourceUrl": "Trace来源",
+  "providerPushed": "通过提供方连接接收；内容仍是不可信证据，不代表历史拉取或已核实事实。"
 }

@@ -49,5 +49,6 @@
   "alreadyConfirmed": "Ya se confirmó una tarea para estos comentarios. Esta cuenta no puede ver su comprobante privado.",
   "sessionRequired": "Inicia sesión como propietario o administrador de la organización para confirmar.",
   "providerFetched": "Leído del proveedor configurado; la evidencia sigue en cuarentena y requiere revisión humana. No prueba cobertura completa de trazas o registros.",
-  "sourceUrl": "Fuente de la traza"
+  "sourceUrl": "Fuente de la traza",
+  "providerPushed": "Recibido por la conexión del proveedor; evidencia no confiable, no es una consulta del historial ni una afirmación verificada."
 }
