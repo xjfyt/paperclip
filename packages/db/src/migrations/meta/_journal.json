@@ -2479,6 +2479,13 @@
       "when": 1793008893090,
       "tag": "0355_acoustic_scarecrow",
       "breakpoints": true
+    },
+    {
+      "idx": 356,
+      "version": "7",
+      "when": 1793029575499,
+      "tag": "0356_special_moira_mactaggert",
+      "breakpoints": true
     }
   ]
 }
