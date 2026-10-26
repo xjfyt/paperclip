@@ -17,7 +17,7 @@ it("an old response cannot clear a newer operation marker", () => {
   expect(readPrivatePromptJournal(ids.company, "user")).toEqual(next);
 });
 it.each(["companyId", "actorUserId", "requestId", "id", "approvalDigest", "agentId", "datasetId", "caseId", "skillVersionId", "revisionId", "promptId", "headReceiptId", "executionProfile"])("rejects mismatched %s before acknowledgment", field => {
-  const value = record() as Record<string, unknown>;
+  const value: Record<string, unknown> = { ...record() };
   value[field] = field === "approvalDigest" ? "b".repeat(64) : field === "actorUserId" ? "other" : ids.operation;
   expect(() => verifyPrivatePromptBinding(value, marker())).toThrow();
 });
