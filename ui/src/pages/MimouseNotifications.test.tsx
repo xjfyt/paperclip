@@ -6,6 +6,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { i18n } from "../i18n";
 import { MimouseNotifications } from "./MimouseNotifications";
+import policyEn from "../i18n/contributions/notificationPolicy/en.json";
+import policyZh from "../i18n/contributions/notificationPolicy/zh-CN.json";
+import policyEs from "../i18n/contributions/notificationPolicy/es.json";
+import policyJa from "../i18n/contributions/notificationPolicy/ja.json";
+// Domain contributions are the source; final locale synthesis is the integrator's step.
+for (const [locale, notificationPolicy] of Object.entries({ en: policyEn, "zh-CN": policyZh, es: policyEs, ja: policyJa })) i18n.addResourceBundle(locale, "translation", { notificationPolicy }, true, true);
 const company = vi.hoisted(() => ({ selectedCompanyId: "company-a" }));
 const api = vi.hoisted(() => Object.fromEntries(["policy", "get", "create", "revise", "history", "review", "reviews", "toggle", "subscribe", "toggleSubscription", "preview", "retry", "test"].map(key => [key, vi.fn()])));
 vi.mock("@/context/CompanyContext", () => ({ useCompany: () => company }));
@@ -108,7 +114,7 @@ it("clears the selected observation when switching company", async () => {
 
 async function fillPolicy(value: string) {
   await act(async () => {
-    const input = host.querySelector('input[aria-label="Exact duplicate window (seconds, 0–300)"]')!;
+    const input = host.querySelector('input[aria-label="Merge window (seconds, 0–300)"]')!;
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
@@ -122,10 +128,10 @@ it("saves policy alone without enabling, testing or retrying and rejects out-of-
 it("keeps a policy draft on failure for explicit retry and resets it on company switch", async () => {
   api.policy.mockRejectedValueOnce(Error("policy unavailable")); await mount(); await fillPolicy("40"); await click(button("Save notification policy"));
   expect(host.querySelector('[role="alert"]')).not.toBeNull();
-  expect((host.querySelector('input[aria-label="Exact duplicate window (seconds, 0–300)"]') as HTMLInputElement).value).toBe("40");
+  expect((host.querySelector('input[aria-label="Merge window (seconds, 0–300)"]') as HTMLInputElement).value).toBe("40");
   await click(button("Save notification policy")); expect(api.policy).toHaveBeenCalledTimes(2);
   company.selectedCompanyId = "company-b"; client.setQueryData(["mimouse-notifications", "company-b"], data()); await mount();
-  expect((host.querySelector('input[aria-label="Exact duplicate window (seconds, 0–300)"]') as HTMLInputElement).value).toBe("0");
+  expect((host.querySelector('input[aria-label="Merge window (seconds, 0–300)"]') as HTMLInputElement).value).toBe("0");
   expect(api.test).not.toHaveBeenCalled();
 });
 it("shows delayed, merged and filtered ledger rows without retry controls", async () => {
@@ -147,10 +153,31 @@ it("preserves the conflicting policy draft through polls and requires explicit r
   expect(host.textContent).toContain("Your draft is preserved"); expect((button("Save notification policy") as HTMLButtonElement).disabled).toBe(true);
   const fresh = { ...data(), subscriptions: [{ ...data().subscriptions[0], policyVersion: 2, policy: { minimumSeverity: "warning", mergeWindowSeconds: 20 } }] };
   await act(async () => { client.setQueryData(["mimouse-notifications", "company-a"], fresh); });
-  expect((host.querySelector('input[aria-label="Exact duplicate window (seconds, 0–300)"]') as HTMLInputElement).value).toBe("40");
+  expect((host.querySelector('input[aria-label="Merge window (seconds, 0–300)"]') as HTMLInputElement).value).toBe("40");
   expect(api.policy).toHaveBeenCalledTimes(1); api.get.mockResolvedValue(fresh);
-  await click(button("Discard draft and reload policy")); expect((host.querySelector('input[aria-label="Exact duplicate window (seconds, 0–300)"]') as HTMLInputElement).value).toBe("20");
+  await click(button("Discard draft and reload policy")); expect((host.querySelector('input[aria-label="Merge window (seconds, 0–300)"]') as HTMLInputElement).value).toBe("20");
   await fillPolicy("25"); await click(button("Save notification policy"));
   expect(api.policy).toHaveBeenLastCalledWith("company-a", "subscription-1", { minimumSeverity: "warning", mergeWindowSeconds: 25, expectedVersion: 2 });
   expect(api.toggle).not.toHaveBeenCalled(); expect(api.test).not.toHaveBeenCalled(); expect(api.retry).not.toHaveBeenCalled();
+});
+
+it("opts into a coding digest without dispatching and preserves its mode on CAS conflict", async () => {
+  const current = data(); client.setQueryData(["mimouse-notifications", "company-a"], { ...current, subscriptions: [{ ...current.subscriptions[0], eventType: "coding.artifact_ready" }] });
+  await mount(); const select = host.querySelector('select[aria-label="Merge mode"]')!;
+  await act(async () => { Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(select, "digest"); select.dispatchEvent(new Event("change", { bubbles: true })); });
+  await fillPolicy("30"); api.policy.mockRejectedValueOnce(Object.assign(Error("conflict"), { status: 409 })); await click(button("Save notification policy"));
+  expect(api.policy).toHaveBeenCalledWith("company-a", "subscription-1", { minimumSeverity: "info", mergeWindowSeconds: 30, mergeMode: "digest", expectedVersion: 1 });
+  expect((select as HTMLSelectElement).value).toBe("digest"); expect((button("Save notification policy") as HTMLButtonElement).disabled).toBe(true);
+  expect(api.test).not.toHaveBeenCalled(); expect(api.retry).not.toHaveBeenCalled(); expect(api.toggle).not.toHaveBeenCalled();
+});
+it("keeps failed-run digest unavailable and reports digest children without individual-success claims", async () => {
+  const current = data(); client.setQueryData(["mimouse-notifications", "company-a"], { ...current, deliveries: [{ ...current.deliveries[0], state: "merged", mergeMode: "digest", mergedInto: "leader" }] });
+  await mount(); expect((host.querySelector('select[aria-label="Merge mode"] option[value="digest"]') as HTMLOptionElement).disabled).toBe(true);
+  expect(host.textContent).toContain("Included in digest (not individually sent)"); expect(host.textContent).toContain("Failed runs remain individual"); expect(button("Review before retrying")).toBeNull();
+});
+it("ignores a late policy-save response after switching companies", async () => {
+  let finish!: () => void; api.policy.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+  await mount(); await fillPolicy("30"); await click(button("Save notification policy"));
+  company.selectedCompanyId = "company-b"; client.setQueryData(["mimouse-notifications", "company-b"], data()); await mount();
+  await act(async () => { finish(); }); await flush(); expect((host.querySelector('input[aria-label="Merge window (seconds, 0–300)"]') as HTMLInputElement).value).toBe("0");
 });

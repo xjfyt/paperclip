@@ -4,8 +4,8 @@
   "info": "All notifications",
   "warning": "Warning and critical",
   "critical": "Critical only",
-  "window": "Exact duplicate window (seconds, 0–300)",
-  "help": "Applies only to new events. Approval and budget alerts are critical and always bypass filtering and merging. Only identical frozen messages for the same resource merge; this is not a summary. Saving does not enable the channel or send a message.",
+  "window": "Merge window (seconds, 0–300)",
+  "help": "Applies only to new events. Approval and budget alerts are critical and always bypass filtering and merging. Saving does not enable the channel or send a message.",
   "save": "Save notification policy",
   "state_merged": "Merged exact duplicate",
   "state_filtered": "Filtered by severity",
@@ -13,5 +13,12 @@
   "mergedHelp": "Not sent separately; inspect the original delivery outcome:",
   "filteredHelp": "Not sent because the frozen subscription threshold excluded this event.",
   "conflict": "The notification policy changed elsewhere. Your draft is preserved. Reload the current policy (discarding this draft) before editing again.",
-  "reload": "Discard draft and reload policy"
+  "reload": "Discard draft and reload policy",
+  "mode": "Merge mode",
+  "exact": "Exact duplicates",
+  "digest": "Bounded digest",
+  "digestHelp": "Opt-in digest: at most 10 coding events of the same type and frozen recipient/configuration. Only event labels and resource IDs are included. The first deadline never extends; 0 disables merging. Unknown results are not resent.",
+  "unavailable": "Digest is unavailable for this event/channel. Failed runs remain individual; approval and budget alerts bypass merging. Official-account templates support only exact duplicates.",
+  "state_digest": "Included in digest (not individually sent)",
+  "digestDelayed": "Collecting digest until {{until}}"
 }

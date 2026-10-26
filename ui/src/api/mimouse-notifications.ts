@@ -5,7 +5,7 @@ export interface NotificationCenter {
   enabled: boolean; dispatchEnabled?: boolean; connectedEvents: string[]; unconnectedEvents: string[];
   endpoints: NotificationEndpoint[];
   subscriptions: Array<{ id: string; endpointId: string; eventType: string; locale: string; enabled: boolean; policyVersion?: number; policy?: NotificationPolicyDto }>;
-  deliveries: Array<{ id: string; endpointId: string; state: string; attempt: number; lastCode: string | null; mergedInto?: string | null; mergeUntil?: string | null; createdAt: string }>;
+  deliveries: Array<{ id: string; endpointId: string; state: string; attempt: number; lastCode: string | null; mergeMode?: "exact" | "digest"; mergedInto?: string | null; mergeUntil?: string | null; createdAt: string }>;
 }
 const base = (companyId: string) => `/companies/${companyId}/notifications`;
 export interface NotificationPreview { id: string; state: string; endpointName: string; kind: string; title: string; text: string; target: string | null; secretVersion: number; locale: string; templateData: Record<string, { value: string }> | null }
