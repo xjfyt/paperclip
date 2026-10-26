@@ -33,19 +33,19 @@ AbortSignal 和读 epoch 丢弃迟到响应；重新登录、切公司/用户/�
 401/403 清除面板草稿与结果，并通知父注册表隐藏原文。其他读取失败也隐藏结果及写控件。
 
 POST 响应未知时冻结精确 payload/requestId，只允许恢复同一请求，并锁住父注册表
-所有选择/切换/刷新控件。不会自动执行、重新生成 ID 或提升版本。离开页面有卸载提示；
+所有选择/切换/刷新控件。不会自动执行、重新生成 ID 或提升版本。通用 422 不能证明没有副作用，因此也保留请求待恢复。离开页面有卸载提示；
 **SPA 导航或重载不提供跨页面恢复**，没有持久化请求。离开后先检查服务端历史，不能把
 网络断开当作未执行再授权。表单“清空”不代表取消已经执行的任务。
 
 ## 已运行的窄验证
 
-2026-10-26：512 MB heap、1 worker，以下三个文件 **29 tests passed / 3 files passed**：
+2026-10-26：512 MB heap、1 worker，以下三个文件 **30 tests passed / 3 files passed**：
 
 - `ui/src/api/private-prompt-tests.test.ts`：实际 fetch 边界（mock）验证同 URL 不合并、
   no-store、abort 迟到结果丢弃、编码路径与显式 POST payload。
 - `ui/src/pages/PrivatePromptTests.test.tsx`：三确认、默认 gate 关闭、四语 key parity、
   纯文本结果、unknown 同 key 恢复、company/user/session/revision 隔离、迟到 POST、
-  403 与离线 fail-closed、409 不重发、父 registry 在 unknown 时确实冻结/恢复。
+  403 与离线 fail-closed、409 不重发、通用 422 保留同 key、父 registry 在 unknown 时确实冻结/恢复。
 - 原 `MimousePromptRegistry.test.tsx`：注册表选择/回退行为回归，独立 mock 新面板。
 
 `node scripts/check-token-gates.mjs`：1285 文件，全部 clean。`git diff --check` clean。

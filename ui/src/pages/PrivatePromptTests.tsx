@@ -66,7 +66,7 @@ function PrivateTestSession(props: Props) {
     } catch (error) {
       if (!live.current) return;
       if (error instanceof ApiError && [401, 403].includes(error.status)) rejectRead(error);
-      else if (error instanceof ApiError && [400, 404, 409, 422].includes(error.status)) { clearIntent(); setNotice(error.status === 409 ? "conflict" : "rejected"); await refresh(); }
+      else if (error instanceof ApiError && [400, 404, 409].includes(error.status)) { clearIntent(); setNotice(error.status === 409 ? "conflict" : "rejected"); await refresh(); }
       else setNotice("unknown"); // Keep exact body/requestId; do not mint another intent.
     } finally { writeLock.current = false; if (live.current) setBusy(false); }
   }

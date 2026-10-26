@@ -98,3 +98,11 @@ it("freezes the containing registry during unknown execution and releases it onl
   expect(refreshRegistry.disabled).toBe(true); expect(registry.select).not.toHaveBeenCalled();
   await click(button("recover")); expect(host.querySelector("fieldset")!.disabled).toBe(false); expect(refreshRegistry.disabled).toBe(false);
 });
+
+it("keeps the exact request after a generic 422 because it may follow a committed intent", async () => {
+  calls.create.mockRejectedValueOnce(new ApiError("private_operation_failed", 422, null));
+  await mount(); await approve(); await click(button("execute"));
+  const original = calls.create.mock.calls[0]![1]; expect(pending).toHaveBeenLastCalledWith(true);
+  expect(host.querySelector("fieldset")!.disabled).toBe(true);
+  await click(button("recover")); expect(calls.create.mock.calls[1]![1]).toEqual(original);
+});
