@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { CostRoutingPreview } from "./CostRoutingPreview";
 const calls = vi.hoisted(() => ({ current: vi.fn(), preview: vi.fn(), save: vi.fn(), session: vi.fn() }));
+vi.mock("@/context/BreadcrumbContext", () => ({ useBreadcrumbs: () => ({ setBreadcrumbs: () => {} }) }));
 vi.mock("@/api/cost-routing-preview", () => ({ costRoutingPreviewApi: calls }));
 vi.mock("@/api/auth", () => ({ authApi: { getSession: calls.session } }));
 vi.mock("@/api/health", () => ({ healthApi: { get: async () => ({ deploymentMode: "authenticated" }) } }));

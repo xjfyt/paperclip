@@ -623,6 +623,18 @@
     "unpriced_one": "{{count}} cargo sin precio",
     "unpriced_other": "{{count}} cargos sin precio"
   },
+  "costRoutingPreview": {
+    "title": "Vista previa de política de costes",
+    "chooseCompany": "Selecciona una empresa.",
+    "warning": "Solo vista previa de política y evidencia: sin recomendación, ejecución, sondeo, reserva ni autorización. Un coste USD válido no prueba el prompt, entrada o contexto realmente ejecutado. Los recibos manuales son declaraciones del operador.",
+    "error": "No se pudo completar. Revisa el formato, los permisos de administrador y la revisión; recarga tras un conflicto.",
+    "policy": "Política JSON (solo identificadores no sensibles)",
+    "revision": "Revisión",
+    "save": "Guardar revisión",
+    "preview": "Registrar vista previa",
+    "receipt": "Recibo inmutable de vista previa",
+    "loading": "Cargando política autorizada…"
+  },
   "evaluationRestoreUi": {
     "title": "Restauración controlada de archivos",
     "boundary": "Solo administradores con sesión humana. La empresa debe estar pausada, la habilidad local gestionada desvinculada de agentes y no debe haber ejecuciones activas. Sustituye todos los archivos; no pausa, desvincula ni ejecuta modelos automáticamente. Solo POSIX: directorios0755 y archivos0644/0755. Conserva copias.",

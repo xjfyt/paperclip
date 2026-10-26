@@ -4,12 +4,15 @@ import { authApi } from "@/api/auth";
 import { healthApi } from "@/api/health";
 import { queryKeys } from "@/lib/queryKeys";
 import { useCompany } from "@/context/CompanyContext";
+import { useBreadcrumbs } from "@/context/BreadcrumbContext";
 import { useTranslation } from "@/i18n";
 import { Button } from "@/components/ui/button";
 import { costRoutingPreviewApi as api } from "@/api/cost-routing-preview";
 import { routingPolicySchema, type RoutingPolicyRecord, type RoutingPreviewRecord } from "@paperclipai/shared/cost-routing-preview";
 export function CostRoutingPreview() {
   const { selectedCompanyId } = useCompany(), { t } = useTranslation();
+  const { setBreadcrumbs } = useBreadcrumbs();
+  useEffect(() => { setBreadcrumbs([{ label: t("costRoutingPreview.title") }]); }, [setBreadcrumbs, t]);
   const session = useQuery({ queryKey: queryKeys.auth.session, queryFn: authApi.getSession, retry: false });
   const userId = session.data?.user?.id ?? session.data?.session?.userId;
   const health = useQuery({ queryKey: queryKeys.health, queryFn: healthApi.get, enabled: session.isSuccess && !userId });

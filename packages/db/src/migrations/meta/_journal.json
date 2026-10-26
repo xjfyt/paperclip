@@ -2458,6 +2458,20 @@
       "when": 1793001769873,
       "tag": "0352_third_roxanne_simpson",
       "breakpoints": true
+    },
+    {
+      "idx": 353,
+      "version": "7",
+      "when": 1793004768975,
+      "tag": "0353_gorgeous_songbird",
+      "breakpoints": true
+    },
+    {
+      "idx": 354,
+      "version": "7",
+      "when": 1793005511713,
+      "tag": "0354_faithful_scarlet_spider",
+      "breakpoints": true
     }
   ]
 }

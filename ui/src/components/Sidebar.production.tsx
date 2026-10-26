@@ -162,6 +162,7 @@ export function Sidebar() {
           <SidebarNavItem to="/data-operations" label={t("operationsUi.pageTitle")} icon={ListChecks} />
           <SidebarNavItem to="/research-candidates" label={t("researchUi.pageTitle")} icon={ListChecks} />
           <SidebarNavItem to="/skill-evaluations" label={t("evaluationUi.pageTitle")} icon={ListChecks} />
+          <SidebarNavItem to="/cost-routing-preview" label={t("costRoutingPreview.title")} icon={ListChecks} />
           <SidebarNavItem to="/search" label={t("navigation.search")} icon={Search} />
           <SidebarNavItem to="/dashboard" label={t("navigation.dashboard")} icon={LayoutDashboard} liveCount={liveRunCount} />
           <SidebarNavItem

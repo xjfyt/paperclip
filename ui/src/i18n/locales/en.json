@@ -623,6 +623,18 @@
     "unpriced_one": "{{count}} unpriced charge",
     "unpriced_other": "{{count}} unpriced charges"
   },
+  "costRoutingPreview": {
+    "title": "Cost routing policy preview",
+    "chooseCompany": "Choose a company.",
+    "warning": "Policy and evidence preview only: no recommendation, execution, model probe, budget reservation or dispatch authority. Even valid recorded USD costs cannot prove the actual dispatched prompt/input/context. Manual capability receipts are operator claims, not machine verification.",
+    "error": "Cannot complete request. Check policy format, administrator access and current revision; reload after a conflict.",
+    "policy": "Policy JSON (non-sensitive identifiers only)",
+    "revision": "Revision",
+    "save": "Save policy revision",
+    "preview": "Record preview",
+    "receipt": "Immutable preview receipt",
+    "loading": "Loading authorized policy…"
+  },
   "evaluationRestoreUi": {
     "title": "Controlled file restoration",
     "boundary": "Human-session administrators only. The company must already be paused, this managed-local skill detached from agents, and no runs active. Replaces the complete file inventory; no automatic pause, detach, Agent or model execution. POSIX directories 0755/files 0644 or 0755 only; backups are retained.",

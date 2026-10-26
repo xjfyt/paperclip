@@ -15,7 +15,7 @@
 1. **无运行态应用**：不写 agent instructions、adapter/model config、managed files；不复用上游 legacy `agent_instruction_revisions`；不自动暂停/恢复 agent。
 2. **无提示词实验比较**：既有 skill comparison 的模板+配置一致性要求保持原样。后续 prompt comparison 必须独立固定 dataset、skill version、model/config，并将原始 recorded template 精确匹配到 revision；不能放宽 skill comparison 来伪装完成，也不能生成虚构模型运行。
 3. **无质量发布门禁**：本回执不是“评估已通过/生产发布已成功”的证据。无外部调用、模型执行、身份授权、凭据或权限扩大。
-4. **无四语言 UI**：本切片仅管理员 API/共享契约；页面、导航和 en/zh-CN/ja/ko 文案待独立可审阅切片。任何 UI 必须把内容按纯文本展示，不用 HTML/Markdown 执行能力，不展示“已激活”。
+4. **无四语言 UI**：本切片仅管理员 API/共享契约；页面、导航和 en/zh-CN/es/ja 文案待独立可审阅切片。任何 UI 必须把内容按纯文本展示，不用 HTML/Markdown 执行能力，不展示“已激活”。
 5. 无历史删除/归档清理端点；restrict FK 和 append-only trigger 会阻止误删。公司销毁/数据保留策略需要单独授权设计，不偷偷级联删除历史。
 
 ## 集成清单（由集成者处理中心文件）

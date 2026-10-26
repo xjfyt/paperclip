@@ -265,3 +265,7 @@ export * from "./mimouse_research_routines.js";
 export * from "./mimouse_evaluation_restores.js";
 
 export * from "./capability_evidence.js";
+
+export * from "./mimouse_prompt_registry.js";
+
+export * from "./cost_routing_preview.js";
