@@ -41,7 +41,9 @@ VERIFICATION 最新记录时间/对应源码或 build stamp：
 - C4：公司用户完成约定业务场景；HTTP 200、创建远端任务都不足以单独证明。
 - 人工录入 C3/C4 凭据只是**人工申报**，不是系统独立核验。能力台账不授予运行权限。
 
-编写时的最新定向证据包括源码 API 113 项、UI 定向 37 项、服务端定向 45 项、发布相关定向 14 项通过（精确范围以验证记录为准）。全 UI 8555 项对应较早的 **2199 键**快照；当前 **2246 键**未做同一快照全量复验。全 dist/npm 的原生 wrapper/提升库路径修复代码已经加入，但最新重新构建及消费者启动尚未通过，不可据定向测试宣称安装验收成功。原生恢复的 umask 修复也需新请求重验。
+最近集成证据：129提交阶段的完整 server/UI 构建通过，server build stamp 为 `107e06d`（完整 SHA 以验证记录为准）；源码与编译 server 入口 API 各113项通过。UI定向37项、服务端定向45项、发布相关定向14项通过。全UI8555项对应较早的 **2199键**快照；**2246键**仍未做同快照全量复验，编译server入口仍不等于全dist消费者。
+
+2026-10-26 08:26 UTC 的原生浏览器已实际完成 managed-local 提升及回滚，核对文件内容/模式/删除、保留备份、两条审计收据且Agent运行数为0；旧umask0077失败孤儿仍保留，没有靠删除目录换取通过。全dist消费者已完成启动、health、静态UI与API检查，但导出shutdown对调用方自有进程的保护修复后**最终smoke复跑仍待完成**，不宣称整套发布安装验收通过。所有证据仍需与你拉取的准确SHA对应；以下用户用例仍默认未执行。
 
 ## 2. 安装、启动及数据安全
 
@@ -61,19 +63,50 @@ VERIFICATION 最新记录时间/对应源码或 build stamp：
 ```sh
 node --version
 pnpm --version
-pnpm install --frozen-lockfile
-# 若锁文件/平台依赖不匹配，记录错误并停止；不要悄悄修改锁文件。
 export TEST_HOME="$(mktemp -d "${TMPDIR:-/tmp}/paperclip-acceptance.XXXXXX")"
 printf '%s\n' 'paperclip-mimouse-disposable-fixture-v1' > "$TEST_HOME/.mimouse-test-fixture"
-unset DATABASE_URL PAPERCLIP_CONFIG PAPERCLIP_INSTANCE_ID
+mkdir -p "$TEST_HOME/os-home" "$TEST_HOME/evidence"
+# 只改变本测试终端；不要读取/复制原HOME中的认证目录。
+export HOME="$TEST_HOME/os-home"
+unset DATABASE_URL DATABASE_MIGRATION_URL PAPERCLIP_CONFIG PAPERCLIP_INSTANCE_ID
+unset PAPERCLIP_CONTEXT PAPERCLIP_SECRETS_MASTER_KEY PAPERCLIP_SECRETS_MASTER_KEY_FILE
+unset BETTER_AUTH_SECRET PAPERCLIP_AUTH_PUBLIC_BASE_URL
+unset XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME
 export PAPERCLIP_HOME="$TEST_HOME" PAPERCLIP_INSTANCE_ID=acceptance
 export PAPERCLIP_CONFIG="$TEST_HOME/instances/acceptance/config.json"
+export PAPERCLIP_CONTEXT="$TEST_HOME/context.json"
+export PAPERCLIP_SECRETS_MASTER_KEY_FILE="$TEST_HOME/instances/acceptance/secrets/master.key"
+export PAPERCLIP_DISABLE_CWD_ENV_FILE=true
 export PAPERCLIP_BIND=loopback PAPERCLIP_DEPLOYMENT_MODE=local_trusted
 export PAPERCLIP_OIDC_ENABLED=false PAPERCLIP_WORKBUDDY_ENABLED=false
 export PAPERCLIP_NOTIFICATIONS_ENABLED=false PAPERCLIP_NOTIFICATIONS_WORKER_ENABLED=false
 export PAPERCLIP_GITLAB_PUBLISH_ENABLED=false PAPERCLIP_GITLAB_POLL_ENABLED=false
 export PAPERCLIP_CODING_REPAIR_ENABLED=false
 export PAPERCLIP_TELEMETRY_DISABLED=1 DO_NOT_TRACK=1
+cp pnpm-lock.yaml "$TEST_HOME/evidence/pnpm-lock.before.yaml"
+# 在终端保留完整安装输出与退出码；先只尝试冻结安装。
+pnpm install --frozen-lockfile
+```
+
+安装规则与 [DEVELOPING.md](../DEVELOPING.md) 的锁文件政策一致：GitHub Actions负责提交锁文件，PR不提交本地生成的锁文件。若冻结安装**明确**报过期锁文件（例如新增`@paperclipai/paperclip-eval-kernel` devDependency未进入server importer）或patched-dependency hash mismatch，保留错误输出及退出码，检查错误确属这两类后，仅允许一次本地重试：
+
+```sh
+pnpm install --no-frozen-lockfile
+# 不论重试成功与否，保存版本、锁文件前后差异及安装日志；失败则停止。
+cp pnpm-lock.yaml "$TEST_HOME/evidence/pnpm-lock.after.yaml"
+git diff -- pnpm-lock.yaml > "$TEST_HOME/evidence/pnpm-lock.diff"
+node --version > "$TEST_HOME/evidence/node-version.txt"
+pnpm --version > "$TEST_HOME/evidence/pnpm-version.txt"
+git status --short
+```
+
+网络、认证、权限、平台编译或其它失败**不能**用非冻结安装泛化重试；也不能改依赖版本/补丁内容使它通过。重试生成的锁文件只留本测试克隆，不stage、不commit、不push；报告测试时标明这项本地差异，不把工作树称作完全干净。只保存无秘密的配置与日志。隔离HOME后包管理器如需初始化，先按自身安装文档完成；不要恢复原HOME去继承供应商凭据。
+
+已核对`package.json`的`dev:once`和`scripts/dev-runner-options.ts`：`pnpm dev:once --data-dir "$TEST_HOME"`是支持的参数，会在迁移与启动前设置隔离PAPERCLIP_HOME，并保留显式配置/上下文路径。因此上例同时把这些显式路径放进测试目录，禁用当前目录dotenv。请使用独立普通克隆；已注册worktree的环境引导另有配置，不要混用其生产`.env`。新终端仍应确认没有其它供应商密钥变量或凭据挂载；示例列举不等于自动清除所有可能的外部秘密。
+
+仅安装成功且环境隔离确认后，再单独启动（安装失败不要继续）：
+
+```sh
 pnpm dev:once --data-dir "$TEST_HOME"
 ```
 
@@ -235,7 +268,7 @@ API 入口会核查专用标记及真实 data_directory，拒绝混用现有配�
 
 源码启动成功后，仍不能省略独立安装包验收：
 
-- 对实际交付的本地 tarball 记录 SHA-256，在**不含 workspace 源码和 TS loader**的全新消费者目录按交付的离线依赖说明安装；不要拿 npm 上不同版本替代。无 tarball 或构建未过时记 blocked。
+- 当前集成中消费者启动/health/UI/API已通过，但shutdown调用方进程保护修复后的最终smoke仍待复跑。对实际交付的本地 tarball 记录 SHA-256，在**不含 workspace 源码和 TS loader**的全新消费者目录按交付的离线依赖说明安装；不要拿 npm 上不同版本替代。无 tarball 或构建未过时记 blocked。
 - 执行该包 CLI 帮助、启动隔离实例、health、迁移、打开静态 UI，再测评估/数据库入口。确认入口全部来自安装包，并记录构建 stamp。
 - 特别检查 hoisted `node_modules` 下原生 PostgreSQL wrapper 与平台库能否解析、真实启动数据库；“安装了依赖”或5项布局单测不等于启动通过。
 - 升级演练分别覆盖空库、旧版备份副本、应用回退及备份恢复；检查旧投递/任务/人工审阅历史未被误重放，旧 WorkBuddy 凭据迁移后按文档重新授权，不能复制旧密文猜身份。
