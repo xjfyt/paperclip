@@ -1,3 +1,4 @@
+import { MimouseNotificationPolicy } from "@/components/MimouseNotificationPolicy";
 import { MimouseNotificationReview } from "@/components/MimouseNotificationReview";
 import { useEffect as usePageEffect } from "react";
 import { useBreadcrumbs } from "@/context/BreadcrumbContext";
@@ -94,10 +95,16 @@ function NotificationCompany({ companyId }: { companyId: string }) {
               const subscription = query.data!.subscriptions.find(item => item.endpointId === endpoint.id && item.eventType === eventType);
               const enabled = subscription?.enabled === true;
               const label = t(`notifications.event_${eventType.replaceAll(".", "_")}`, { defaultValue: eventType });
-              return <div key={eventType} className="flex flex-wrap items-center gap-2">
+              return <div key={eventType} className="space-y-2"><div className="flex flex-wrap items-center gap-2">
                 <span>{label}</span><span className="text-xs text-muted-foreground">{subscription?.locale ?? i18n.language}</span>
                 <Button variant="outline" aria-label={`${label}: ${enabled ? t("notifications.pauseSubscription") : t("notifications.enableSubscription")}`} disabled={mutation.isPending} onClick={() => mutation.mutate(() => enabled ? notificationApi.toggleSubscription(companyId, subscription!.id, false) : notificationApi.subscribe(companyId, endpoint.id, eventType, i18n.language))}>{enabled ? t("notifications.pauseSubscription") : t("notifications.enableSubscription")}</Button>
                 {enabled && subscription.locale !== i18n.language && <Button variant="outline" disabled={mutation.isPending} onClick={() => mutation.mutate(() => notificationApi.subscribe(companyId, endpoint.id, eventType, i18n.language))}>{t("notifications.useCurrentLanguage")}</Button>}
+              </div>
+                {subscription && <details><summary className="text-sm">{t("notificationPolicy.title")}</summary>
+                  <MimouseNotificationPolicy scope={`${companyId}:${subscription.id}`} policy={subscription.policy ?? { minimumSeverity: "info", mergeWindowSeconds: 0 }} pending={mutation.isPending}
+                    onSave={policy => mutation.mutate(() => notificationApi.policy(companyId, subscription.id, policy))}
+                    labels={{ severity: t("notificationPolicy.severity"), info: t("notificationPolicy.info"), warning: t("notificationPolicy.warning"), critical: t("notificationPolicy.critical"), window: t("notificationPolicy.window"), help: t("notificationPolicy.help"), save: t("notificationPolicy.save"), cancel: t("common.cancel") }} />
+                </details>}
               </div>;
             })}
           </div>
@@ -134,7 +141,10 @@ function NotificationCompany({ companyId }: { companyId: string }) {
       </section>}
       {reviewing && <MimouseNotificationReview key={reviewing.id} companyId={companyId} delivery={reviewing} onClose={() => setReviewing(null)} />}
       <section className="space-y-2"><h2 className="font-medium">{t("notifications.deliveries")}</h2>
-        {query.data.deliveries.map(delivery => <div key={delivery.id} className="space-y-1"><p className="font-mono text-sm">{delivery.id} · {t(`notifications.state_${delivery.state}`)} · {delivery.lastCode ?? "—"}</p>
+        {query.data.deliveries.map(delivery => <div key={delivery.id} id={`notification-delivery-${delivery.id}`} className="space-y-1"><p className="font-mono text-sm">{delivery.id} · {t(delivery.state === "merged" || delivery.state === "filtered" ? `notificationPolicy.state_${delivery.state}` : `notifications.state_${delivery.state}`)} · {delivery.lastCode ?? "—"}</p>
+          {delivery.state === "pending" && delivery.mergeUntil && new Date(delivery.mergeUntil).getTime() > Date.now() && <p className="text-sm text-muted-foreground">{t("notificationPolicy.delayed", { until: new Intl.DateTimeFormat(i18n.language, { timeStyle: "medium" }).format(new Date(delivery.mergeUntil)) })}</p>}
+          {delivery.state === "merged" && delivery.mergedInto && <p className="text-sm text-muted-foreground">{t("notificationPolicy.mergedHelp")} {query.data.deliveries.some(row => row.id === delivery.mergedInto) ? <a className="underline font-mono" href={`#notification-delivery-${delivery.mergedInto}`}>{delivery.mergedInto}</a> : <span className="font-mono">{delivery.mergedInto}</span>}</p>}
+          {delivery.state === "filtered" && <p className="text-sm text-muted-foreground">{t("notificationPolicy.filteredHelp")}</p>}
           {["accepted", "indeterminate", "rejected"].includes(delivery.state) && <Button variant="outline" onClick={() => { setRetrying(null); setReviewing(delivery); }}>{t("notifications.reviewDelivery")}</Button>}
           {["indeterminate", "rejected"].includes(delivery.state) && !["snapshot_render_failed", "unsupported_render_version"].includes(delivery.lastCode ?? "") && <Button variant="outline" disabled={mutation.isPending} onClick={async () => { const sequence = ++previewSequence.current; setRetrying(null); setReviewed(false); setDuplicateRisk(false); try { const preview = await notificationApi.preview(companyId, delivery.id); if (sequence !== previewSequence.current) return; setReviewed(false); setDuplicateRisk(false); setRetrying({ preview, requestId: crypto.randomUUID() }); } catch { if (sequence === previewSequence.current) mutation.mutate(() => Promise.reject(Error("preview_failed"))); } }}>{t("notifications.reviewRetry")}</Button>}
         </div>)}

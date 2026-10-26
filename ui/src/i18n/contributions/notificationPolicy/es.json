@@ -1,0 +1,15 @@
+{
+  "title": "Política de notificaciones",
+  "severity": "Gravedad mínima",
+  "info": "Todas las notificaciones",
+  "warning": "Advertencias y críticas",
+  "critical": "Solo críticas",
+  "window": "Ventana de duplicados exactos (segundos, 0–300)",
+  "help": "Solo se aplica a eventos nuevos. Las alertas de aprobación y presupuesto son críticas y nunca se filtran ni combinan. Solo se combinan mensajes idénticos del mismo recurso; no es un resumen. Guardar no activa el canal ni envía mensajes.",
+  "save": "Guardar política",
+  "state_merged": "Duplicado exacto combinado",
+  "state_filtered": "Filtrado por gravedad",
+  "delayed": "Recopilando duplicados exactos hasta {{until}}",
+  "mergedHelp": "No se envió por separado; consulta el resultado original:",
+  "filteredHelp": "No se envió porque no alcanzó el umbral de la suscripción fijado al crear el evento."
+}

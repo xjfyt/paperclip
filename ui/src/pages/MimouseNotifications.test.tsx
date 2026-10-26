@@ -7,7 +7,7 @@ import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { i18n } from "../i18n";
 import { MimouseNotifications } from "./MimouseNotifications";
 const company = vi.hoisted(() => ({ selectedCompanyId: "company-a" }));
-const api = vi.hoisted(() => Object.fromEntries(["get", "create", "revise", "history", "review", "reviews", "toggle", "subscribe", "toggleSubscription", "preview", "retry", "test"].map(key => [key, vi.fn()])));
+const api = vi.hoisted(() => Object.fromEntries(["policy", "get", "create", "revise", "history", "review", "reviews", "toggle", "subscribe", "toggleSubscription", "preview", "retry", "test"].map(key => [key, vi.fn()])));
 vi.mock("@/context/CompanyContext", () => ({ useCompany: () => company }));
 vi.mock("@/api/mimouse-notifications", () => ({ notificationApi: api }));
 const data = () => ({ enabled: true, dispatchEnabled: true, connectedEvents: ["approval.requested", "run.failed", "coding.mr_ready", "coding.ci_failed", "coding.artifact_ready", "budget.threshold_reached"], unconnectedEvents: [], endpoints: [{ id: "endpoint-1", name: "Test channel", kind: "wecom_webhook", enabled: true, config: {}, secretRef: "11111111-1111-4111-8111-111111111111", secretVersion: 1, configVersion: 1 }], subscriptions: [{ id: "subscription-1", endpointId: "endpoint-1", eventType: "run.failed", locale: "en", enabled: true }], deliveries: [{ id: "delivery-1", endpointId: "endpoint-1", state: "indeterminate", attempt: 1, lastCode: "transport_unconfirmed", createdAt: "2026-10-25T00:00:00Z" }] });
@@ -104,4 +104,40 @@ it("records an observation only after explicit confirmation without retrying a d
 it("clears the selected observation when switching company", async () => {
   await mount(); await click(button("Record delivery observation")); expect(host.querySelector("#delivery-review-evidence")).not.toBeNull();
   company.selectedCompanyId = "company-b"; client.setQueryData(["mimouse-notifications", "company-b"], data()); await mount(); expect(host.querySelector("#delivery-review-evidence")).toBeNull(); expect(api.review).not.toHaveBeenCalled();
+});
+
+async function fillPolicy(value: string) {
+  await act(async () => {
+    const input = host.querySelector('input[aria-label="Exact duplicate window (seconds, 0–300)"]')!;
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+it("saves policy alone without enabling, testing or retrying and rejects out-of-range windows", async () => {
+  await mount(); await fillPolicy("301"); expect((button("Save notification policy") as HTMLButtonElement).disabled).toBe(true);
+  await fillPolicy("30"); await click(button("Save notification policy"));
+  expect(api.policy).toHaveBeenCalledWith("company-a", "subscription-1", { minimumSeverity: "info", mergeWindowSeconds: 30 });
+  expect(api.toggle).not.toHaveBeenCalled(); expect(api.subscribe).not.toHaveBeenCalled(); expect(api.test).not.toHaveBeenCalled(); expect(api.retry).not.toHaveBeenCalled();
+});
+it("keeps a policy draft on failure for explicit retry and resets it on company switch", async () => {
+  api.policy.mockRejectedValueOnce(Error("policy unavailable")); await mount(); await fillPolicy("40"); await click(button("Save notification policy"));
+  expect(host.querySelector('[role="alert"]')).not.toBeNull();
+  expect((host.querySelector('input[aria-label="Exact duplicate window (seconds, 0–300)"]') as HTMLInputElement).value).toBe("40");
+  await click(button("Save notification policy")); expect(api.policy).toHaveBeenCalledTimes(2);
+  company.selectedCompanyId = "company-b"; client.setQueryData(["mimouse-notifications", "company-b"], data()); await mount();
+  expect((host.querySelector('input[aria-label="Exact duplicate window (seconds, 0–300)"]') as HTMLInputElement).value).toBe("0");
+  expect(api.test).not.toHaveBeenCalled();
+});
+it("shows delayed, merged and filtered ledger rows without retry controls", async () => {
+  const state = data(); client.setQueryData(["mimouse-notifications", "company-a"], { ...state, deliveries: [
+    { ...state.deliveries[0], id: "leader", state: "pending", mergeUntil: new Date(Date.now() + 60000).toISOString() },
+    { ...state.deliveries[0], id: "follower", state: "merged", mergedInto: "leader" },
+    { ...state.deliveries[0], id: "filtered", state: "filtered" },
+  ] });
+  await mount(); expect(host.textContent).toContain("Collecting exact duplicates until"); expect(host.textContent).toContain("Merged exact duplicate"); expect(host.textContent).toContain("Filtered by severity");
+  expect(host.querySelector('a[href="#notification-delivery-leader"]')).not.toBeNull();
+  expect(button("Review before retrying")).toBeNull(); expect(api.retry).not.toHaveBeenCalled();
+});
+it.each([["en", "Notification policy", "always bypass"], ["zh-CN", "通知策略", "始终绕过"], ["es", "Política de notificaciones", "nunca se filtran"], ["ja", "通知ポリシー", "常にフィルター"]])("localizes severity policy and critical guard in %s", async (locale, title, guard) => {
+  await i18n.changeLanguage(locale); await mount(); expect(host.textContent).toContain(title); expect(host.textContent).toContain(guard); expect(host.textContent).not.toContain("notificationPolicy.");
 });

@@ -1,0 +1,15 @@
+{
+  "title": "Notification policy",
+  "severity": "Minimum severity",
+  "info": "All notifications",
+  "warning": "Warning and critical",
+  "critical": "Critical only",
+  "window": "Exact duplicate window (seconds, 0–300)",
+  "help": "Applies only to new events. Approval and budget alerts are critical and always bypass filtering and merging. Only identical frozen messages for the same resource merge; this is not a summary. Saving does not enable the channel or send a message.",
+  "save": "Save notification policy",
+  "state_merged": "Merged exact duplicate",
+  "state_filtered": "Filtered by severity",
+  "delayed": "Collecting exact duplicates until {{until}}",
+  "mergedHelp": "Not sent separately; inspect the original delivery outcome:",
+  "filteredHelp": "Not sent because the frozen subscription threshold excluded this event."
+}
