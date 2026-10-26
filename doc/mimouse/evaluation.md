@@ -34,7 +34,7 @@
 
 1. `packages/shared/src/index.ts`: `export * from "./mimouse-evaluation.js";`
 2. `packages/db/src/schema/index.ts`: `export * from "./mimouse_evaluation.js";`
-3. `server/package.json` dependencies: `"@paperclipai/paperclip-eval-kernel": "workspace:*"`。按仓库约定不提交锁文件。
+3. `server/package.json` **devDependencies**: `"@paperclipai/paperclip-eval-kernel": "workspace:*"`，不能放 runtime dependencies/bundleDependencies：release map 禁止公开包依赖未发布的私有包，bundle staging 也会去 npm 下载。新增 `prepare:eval-vendor` 为 `pnpm --filter @paperclipai/paperclip-eval-kernel build`；build/typecheck 在 tsc 前运行它，build 在 tsc 后运行 `node scripts/vendor-eval-kernel.mjs`。源代码经过 `src/vendor/paperclip-eval-kernel/index.ts` wrapper；最终复制真实 compiled JS/declarations/maps 到同名 dist vendor 路径，带 MIT LICENSE 和文件哈希 PROVENANCE，不能把转发私有包的 shim 留在发布产物中。按仓库约定不提交锁文件。
 4. `server/src/app.ts`: 导入 `mimouseEvaluationRoutes`，在现有公司 API 路由附近 `api.use(mimouseEvaluationRoutes(db));`。
 5. `ui/src/App.tsx`: 导入 `MimouseEvaluation`；公司路由 `skill-evaluations` 渲染该页，非前缀路径交给 `UnprefixedBoardRedirect`。
 6. `ui/src/lib/company-routes.ts`: 添加 `"skill-evaluations"`；两套 Sidebar 添加路径 `/skill-evaluations`，标签 `t("evaluationUi.pageTitle")`，复用现有 `ListChecks` 图标。
@@ -46,8 +46,10 @@
 ## 本切片已运行验证
 
 - 独立轻量 Vitest 配置通过17项服务纯函数/合同/路由测试：固定矩阵、失败与缺失、输入篡改、未知费用、重复/跨公司身份、执行上下文、唯一harness issue成本约束、伪造请求、管理员/代理/成员边界及无执行接口。
-- React/jsdom三项通过：四语未知成本与禁止恢复提示、无权限隐藏表单、公司切换清除报告。
+- React/jsdom四项通过：四语未知成本与禁止恢复提示、无权限隐藏表单、公司切换清除报告、七位小数分显示。
 - token gates 全通过。
 - 尚未在本工作树运行全量类型检查、构建、数据库迁移或真实浏览器；按并行内存预算由父工作树统一执行。
 
 - 新增 `tests/mimouse/evaluation.spec.ts` 六项真实可丢弃数据库/API fixture（父工作树运行）：并发幂等、输入冻结、JSONB报告哈希、跨公司/技能/版本边界、复合FK、缺失/失败/上下文不一致证据、成本未知/小数/晚到记录，以及实际表上的显式session actor路由合同。此文件尚未执行；local_trusted fixture 中注入actor不代表真实登录/SSO验收。
+
+- 发布兼容补充：vendoring helper 的三项 Vitest 测试通过，验证私有依赖不存在时的相对运行入口、类型声明/许可证/来源哈希，以及未知运行时 import/缺失构建产物的失败关闭。生产完整打包安装验收仍由父工作树统一执行。

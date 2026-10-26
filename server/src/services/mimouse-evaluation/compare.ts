@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { runPaperclipEvalMatrix } from "@paperclipai/paperclip-eval-kernel";
+import { runPaperclipEvalMatrix } from "../../vendor/paperclip-eval-kernel/index.js";
 import { canonical } from "../mimouse-operations/preview.js";
 export interface FixedCase { id: string; input: string; expected: string }
 export interface RecordedSkillRun { id: string; companyId: string; skillId: string; versionId: string; caseId: string; inputSnapshot: string; outputSnapshot: string; status: "queued" | "running" | "succeeded" | "failed" | "cancelled"; costCents: number | null; executionContextHash: string | null }

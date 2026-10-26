@@ -45,3 +45,10 @@ it("does not carry selected evidence across companies", async () => {
   calls.companyId = "company-b"; await mount();
   expect(host.textContent).not.toContain("report-a"); expect(host.textContent).not.toContain("a".repeat(64));
 });
+
+it("does not round a nonzero fractional-cent ledger record down to a displayed zero", async () => {
+  const tiny = { ...report, report: { ...report.report, candidate: { ...report.report.candidate, totalCostCents: 0.0000001, knownCostCents: 0.0000001 } } };
+  calls.get.mockImplementation(async (url: string) => ({ items: url.endsWith("comparisons") ? [tiny] : [], nextBeforeId: null }));
+  await mount(); await act(async () => [...host.querySelectorAll("button")].find(item => item.textContent === "report-a")!.click());
+  expect(host.textContent).toContain("0.0000001");
+});

@@ -34,7 +34,7 @@ type Fixture = Awaited<ReturnType<typeof fixture>>;
 async function freeze(request: APIRequestContext, f: Fixture) {
   const response = await request.post(`${f.root}/datasets`, { data: f.datasetInput }); expect(response.status(), await response.text()).toBe(201); return (await response.json()).item;
 }
-function comparison(f: Fixture, datasetId: string) { return { requestId: randomUUID(), datasetId, baselineVersionId: f.versions[0]!.id, candidateVersionId: f.versions[1]!.id, runIds: f.runs.map(run => run.id), maxCandidateCostCents: null }; }
+function comparison(f: Fixture, datasetId: string) { return { requestId: randomUUID(), datasetId, baselineVersionId: f.versions[0]!.id, candidateVersionId: f.versions[1]!.id, runIds: f.runs.map(run => run.id), maxCandidateCostCents: null as number | null }; }
 async function compare(request: APIRequestContext, f: Fixture, body: ReturnType<typeof comparison>) {
   const response = await request.post(`${f.root}/comparisons`, { data: body }); expect(response.status(), await response.text()).toBe(201); return (await response.json()).item;
 }
