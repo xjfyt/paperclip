@@ -2,6 +2,14 @@
 
 核验日期：2026-10-25 UTC。基线为 v2026.1023.0 / 1b4c803816e82b0265c8422e1a804327a7ed8c54。开发分支 mimouse。此记录是可审查候选版的本地证据，不是全部需求完成或生产上线证明。
 
+## 129应用构建收口（2026-10-26 08:34 UTC）
+
+- 构建提交 `107e06d4a5c88b407f7083dee261f5f3f41be9bd`：完整server/UI构建通过，最新源码API113项、编译server入口API113项通过。128构建暴露两处类型/ESM后缀问题，已修正并保留原失败日志。
+- 真正离线全dist安装通过：17个一方tarball、430个依赖，普通Node运行且拒绝TS/源码shim/工作区回退，内嵌runner/eval校验、真实PostgreSQL初始化与打包迁移、实际data_directory边界、health/UI/GET `/api/companies` 均通过；完整命令退出0。
+- 关闭范围：显式shutdown返回、HTTP监听为false、数据库pid不存在；仍观察到PipeWrap/ProcessWrap/Timeout资源，测试工具按导出API的调用方拥有进程语义显式退出。自然退出未验证，不能用exit0掩盖该限制。此前未显式退出的尝试超时，原记录保留。
+- 原生Chrome人工提升与回滚通过，独立文件/DB校验分别1/2条收据、整树字节/执行位/删除、保留备份、人工审计、Agent运行0；四语/刷新同一收据。详见 `checklists/RESTORE-BROWSER-20261026.md`。
+- 新增用户验收入口 `USER-ACCEPTANCE.md`，列出环境、步骤、预期结果与待验收边界。2246键全UI正在执行，不把此前2199键8555项结果套用到新快照。
+
 ## 发布状态与后续验收（2026-10-26 08:08 UTC）
 
 - 98个提交的已验收快照 `98dadacf951ed82a65be37c97ffb3cf20505d9da` 已推送 `xjfyt/paperclip:mimouse`，2026-10-26 07:51 UTC独立远端ref核对一致，作者邮箱与联合署名保留。
