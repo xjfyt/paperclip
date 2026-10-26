@@ -7,7 +7,6 @@ import { Navigate, Outlet, useLocation } from "@/lib/router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { accessApi } from "@/api/access";
 import { ApiError } from "@/api/client";
-import { authApi } from "@/api/auth";
 import { healthApi } from "@/api/health";
 import { isTemporaryApiError } from "@/api/response";
 import { queryKeys } from "@/lib/queryKeys";
@@ -18,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { CloudSignIn } from "@/components/CloudSignIn";
 import { clearCloudSignInAttempt } from "@/lib/cloud-sign-in";
 import { LocalSignOutNotice } from "@/components/LocalSignOutNotice";
-import { clearLocalSignOutNotice } from "@/lib/local-sign-out-notice";
+import { useAuthSession } from "@/hooks/useAuthSession";
 
 const RECONNECT_INTERVAL_MS = 5_000;
 
@@ -89,20 +88,15 @@ export function CloudAccessGate({ allowMembershipRequest = false }: { allowMembe
 
   const isAuthenticatedMode = healthQuery.data?.deploymentMode === "authenticated";
   const isBootstrapPending = isAuthenticatedMode && healthQuery.data?.bootstrapStatus === "bootstrap_pending";
-  const sessionQuery = useQuery({
-    queryKey: queryKeys.auth.session,
-    queryFn: () => authApi.getSession(),
+  const sessionQuery = useAuthSession({
+    cloud: healthQuery.data ? !!healthQuery.data.cloud : undefined,
     enabled: isAuthenticatedMode,
-    retry: false,
     refetchInterval: (query) => isTemporaryApiError(query.state.error) ? RECONNECT_INTERVAL_MS : false,
     refetchIntervalInBackground: true,
   });
 
   useEffect(() => {
-    if (sessionQuery.data) {
-      clearCloudSignInAttempt();
-      clearLocalSignOutNotice();
-    }
+    if (sessionQuery.data) clearCloudSignInAttempt();
   }, [sessionQuery.data]);
 
   const boardAccessQuery = useQuery({
@@ -162,7 +156,7 @@ export function CloudAccessGate({ allowMembershipRequest = false }: { allowMembe
   if (blockingError || (isServerStarting && !hasOpenedBoard)) {
     return (
       <>
-        {!healthQuery.data?.cloud && !sessionQuery.data && <LocalSignOutNotice className="mx-auto mt-6" />}
+        {!healthQuery.data?.cloud && <LocalSignOutNotice className="mx-auto mt-6" />}
         <CloudAccessError
           temporary={blockingError ? isTemporaryApiError(blockingError) : true}
           retrying={activeQueries.some((query) => query.isFetching)}
@@ -179,7 +173,10 @@ export function CloudAccessGate({ allowMembershipRequest = false }: { allowMembe
   }
 
   if (isLoading) {
-    return <PaperclipLoading />;
+    return <>
+      {!healthQuery.data?.cloud && <LocalSignOutNotice className="mx-auto mt-6" />}
+      <PaperclipLoading />
+    </>;
   }
 
   if (isAuthenticatedMode && healthQuery.data?.cloud && !sessionQuery.data) {

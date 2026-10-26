@@ -96,6 +96,42 @@ describe("CloudAccessGate restart recovery", () => {
     expect(hasLocalSignOutNotice()).toBe(false);
   });
 
+  it.each(["pending", "error", "null"])("ignores warm cached login while fresh session verification is %s", async outcome => {
+    client.setQueryData(queryKeys.health, responses["/api/health"]);
+    client.setQueryData(queryKeys.auth.session, responses["/api/auth/get-session"]);
+    fetchMock.mockImplementation(async (path: string) => {
+      if (path === "/api/auth/get-session") {
+        if (outcome === "pending") return new Promise(() => {});
+        if (outcome === "error") throw new Error("offline");
+        return Response.json(null);
+      }
+      return Response.json(responses[path]);
+    });
+    rememberLocalSignOut();
+    await render();
+    expect(hasLocalSignOutNotice()).toBe(true);
+    expect(client.getQueryData(queryKeys.auth.session)).toBeNull();
+    expect(container.querySelector("textarea")).toBeNull();
+    if (outcome === "null") expect(container.querySelector("[data-redirect]")).not.toBeNull();
+    else expect(container.textContent).toContain("global sign-out is unconfirmed");
+  });
+
+  it("only clears a warm-session notice after a fresh nonempty session response", async () => {
+    client.setQueryData(queryKeys.health, responses["/api/health"]);
+    client.setQueryData(queryKeys.auth.session, responses["/api/auth/get-session"]);
+    let finish!: (value: Response) => void;
+    fetchMock.mockImplementation(async (path: string) => path === "/api/auth/get-session"
+      ? new Promise<Response>(resolve => { finish = resolve; }) : Response.json(responses[path]));
+    rememberLocalSignOut();
+    await render();
+    expect(hasLocalSignOutNotice()).toBe(true);
+    expect(container.querySelector("textarea")).toBeNull();
+    finish(Response.json(responses["/api/auth/get-session"]));
+    await flushReact();
+    expect(hasLocalSignOutNotice()).toBe(false);
+    expect(container.querySelector("textarea")).not.toBeNull();
+  });
+
   it.each(checks)("recovers from an HTML response on %s without navigating", async (path) => {
     failingPath = path;
     await render();

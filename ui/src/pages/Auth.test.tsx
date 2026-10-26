@@ -117,8 +117,9 @@ describe("AuthPage", () => {
     vi.clearAllMocks();
   });
 
-  async function mount(path = "/auth") {
+  async function mount(path = "/auth", warmSession?: unknown) {
     const { root, queryClient } = renderAuthPage(container);
+    if (warmSession) queryClient.setQueryData(queryKeys.auth.session, warmSession);
     await act(async () => {
       root.render(
         <MemoryRouter initialEntries={[path]}>
@@ -206,6 +207,52 @@ describe("AuthPage", () => {
     const { root } = await mount();
     await vi.waitFor(() => expect(hasLocalSignOutNotice()).toBe(false));
     expect(container.textContent).not.toContain("Signed out of this app");
+    await act(() => root.unmount());
+  });
+
+  it.each(["pending", "error", "null"])("does not let a warm old session clear/hide the notice when fresh auth is %s", async outcome => {
+    const oldSession = { session: { id: "old-session" }, user: { id: "old-user" } };
+    rememberLocalSignOut();
+    if (outcome === "pending") getSessionMock.mockReturnValue(new Promise(() => {}));
+    if (outcome === "error") getSessionMock.mockRejectedValue(new Error("offline"));
+    if (outcome === "null") getSessionMock.mockResolvedValue(null);
+    const { root, queryClient } = await mount("/auth", oldSession);
+    expect(hasLocalSignOutNotice()).toBe(true);
+    expect(container.textContent).toContain("global sign-out is unconfirmed");
+    expect(queryClient.getQueryData(queryKeys.auth.session)).toBeNull();
+    if (outcome === "error") expect(container.textContent).toContain("Unable to check sign-in");
+    if (outcome === "null") expect(container.querySelector("form")).not.toBeNull();
+    await act(() => root.unmount());
+  });
+
+  it("replaces a warm old session and clears the notice only after the fresh login response", async () => {
+    const oldSession = { session: { id: "old-session" }, user: { id: "old-user" } };
+    const newSession = { session: { id: "new-session" }, user: { id: "new-user" } };
+    let finish!: (value: unknown) => void;
+    getSessionMock.mockReturnValue(new Promise(resolve => { finish = resolve; }));
+    rememberLocalSignOut();
+    const { root, queryClient } = await mount("/auth", oldSession);
+    expect(hasLocalSignOutNotice()).toBe(true);
+    finish(newSession);
+    await vi.waitFor(() => expect(hasLocalSignOutNotice()).toBe(false));
+    expect(queryClient.getQueryData(queryKeys.auth.session)).toEqual(newSession);
+    await act(() => root.unmount());
+  });
+
+  it("does not clear a warm Cloud session while deployment metadata is still unknown", async () => {
+    const oldSession = { session: { id: "cloud-session" }, user: { id: "cloud-user" } };
+    let finishHealth!: (value: unknown) => void;
+    healthMock.mockReturnValue(new Promise(resolve => { finishHealth = resolve; }));
+    getSessionMock.mockReturnValue(new Promise(() => {}));
+    rememberLocalSignOut();
+    const { root, queryClient } = await mount("/auth", oldSession);
+    expect(queryClient.getQueryData(queryKeys.auth.session)).toEqual(oldSession);
+    expect(getSessionMock).not.toHaveBeenCalled();
+    finishHealth({ cloud: { managed: true, managedBy: "paperclip-cloud", cloudBaseUrl: "https://my.paperclip.app", stackSlug: "team" } });
+    await flushReact(); await flushReact();
+    expect(queryClient.getQueryData(queryKeys.auth.session)).toEqual(oldSession);
+    expect(hasLocalSignOutNotice()).toBe(true);
+    expect(queryClient.getQueryCache().getAll().some(query => query.queryKey.includes("after-sign-out"))).toBe(false);
     await act(() => root.unmount());
   });
 

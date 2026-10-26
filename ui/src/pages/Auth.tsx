@@ -17,7 +17,7 @@ import { PaperclipLoading } from "@/components/AnimatedPaperclipIcon";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { PaperclipLockup } from "../components/PaperclipLockup";
 import { LocalSignOutNotice } from "@/components/LocalSignOutNotice";
-import { clearLocalSignOutNotice } from "@/lib/local-sign-out-notice";
+import { useAuthSession } from "@/hooks/useAuthSession";
 
 type AuthMode = "sign_in" | "sign_up";
 
@@ -42,19 +42,17 @@ export function AuthPage() {
     queryFn: () => healthApi.get(),
     retry: false,
   });
-  const { data: session, isLoading: isSessionLoading, error: sessionError } = useQuery({
-    queryKey: queryKeys.auth.session,
-    queryFn: () => authApi.getSession(),
-    retry: false,
+  const { data: session, isLoading: isSessionLoading, error: sessionError } = useAuthSession({
+    cloud: healthQuery.data ? !!healthQuery.data.cloud : undefined,
+    enabled: !!healthQuery.data,
   });
 
   useEffect(() => {
-    if (session) {
+    if (session && healthQuery.data && !healthQuery.error) {
       clearCloudSignInAttempt();
-      clearLocalSignOutNotice();
       navigate(nextPath, { replace: true });
     }
-  }, [session, navigate, nextPath]);
+  }, [session, healthQuery.data, healthQuery.error, navigate, nextPath]);
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -97,9 +95,9 @@ export function AuthPage() {
     email.trim().length > 0 &&
     password.trim().length > 0 &&
     (mode === "sign_in" || (name.trim().length > 0 && password.trim().length >= 8));
-  const signOutNotice = !session && !healthQuery.data?.cloud ? <LocalSignOutNotice /> : null;
+  const signOutNotice = !healthQuery.data?.cloud ? <LocalSignOutNotice /> : null;
 
-  if (healthQuery.isLoading || isSessionLoading || session || (healthQuery.data && !healthQuery.data.cloud && capabilities.isPending)) {
+  if (healthQuery.isLoading || isSessionLoading || (session && healthQuery.data && !healthQuery.error) || (healthQuery.data && !healthQuery.data.cloud && capabilities.isPending)) {
     return (
       <div className="fixed inset-0 flex flex-col items-center justify-center gap-4 p-6">
         {signOutNotice}

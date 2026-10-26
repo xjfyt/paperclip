@@ -23,18 +23,19 @@
 | 退出后本站健康检查失败 | 本地 sign-out 成功后使测试 health 检查失败 | 本地成功提示仍可见，同时保留现有连接/登录检查错误，不能把两种结果混成退出失败。 |
 | 返回、刷新、关闭提示 | 完成一次本地退出，返回、刷新、前进/后退，再关闭提示后刷新 | 同标签页提示持续且不变成全局成功；关闭后不再显示、不发外部请求。 |
 | 重新登录 | 从提示页完成密码/SSO登录；另测SSO直接回公司路径 | 新会话被确认后清理旧提示；再次退出产生新提示。未完成/失败的登录不提前清除。 |
+| 暖缓存与BFCache | 保留退出前页面的历史记录，退出后前进/后退；使本站session检查挂起、失败或返回空 | 不因旧session缓存清掉提示或进入旧账号；提示保留。恢复后的新鲜非空session才清提示，迟到旧响应不覆盖新登录。部署类型未知再确认为Cloud时不得本地清Cloud缓存。 |
 | 禁止浏览器存储 | 测试环境禁止 sessionStorage 或模拟配额错误，再退出 | 本地退出仍成功；当前文档提示可用，不承诺跨页面保留。没有把秘密或 URL 改存到 localStorage。 |
 | query 不可信 | 无提示状态访问 `/auth?logout=success&global_logout=success`；有提示时重复 | 无状态不伪造本地成功；已有提示仍为全局未确认，不据参数解除或升级。 |
 | Cloud 与四语 | Cloud 测试租户退出；自托管分别切中/英/西/日，含移动窄屏及键盘关闭 | Cloud 原路径与缓存行为不变；四语完整、无原始 key、长句不裁切，状态区可读，关闭按钮可操作。 |
 
 ## 自动验证
 
-集中测试覆盖本地成功/失败、账户缓存观察者、health挂起/拒绝、IdP导航抛错/无确认返回、响应验证与URL限制、同标签页回访/关闭/确认新会话、四语文案、Cloud不写提示。9文件132项通过，使用既有依赖、512MB、单worker：
+集中测试覆盖本地成功/失败、账户缓存观察者、health挂起/拒绝、IdP导航抛错/无确认返回、响应验证与URL限制、同标签页回访/关闭/确认新会话、四语文案、Cloud不写提示。独立复核发现旧session暖缓存可能提前清提示，补充独立fresh epoch验证及warm-cache pending/error/null/成功、resetQueries计数回退、BFCache恢复、并行/迟到响应和未知部署→Cloud保护后，10文件148项通过，使用既有依赖、512MB、单worker：
 
 ```sh
 cd ui
 NODE_OPTIONS=--max-old-space-size=512 node ../node_modules/vitest/vitest.mjs run --config vitest.config.ts \
-  src/hooks/useSignOut.test.tsx src/pages/Auth.test.tsx src/api/auth.test.ts \
+  src/hooks/useAuthSession.test.tsx src/hooks/useSignOut.test.tsx src/pages/Auth.test.tsx src/api/auth.test.ts \
   src/lib/local-sign-out-notice.test.ts src/components/CloudAccessGate.test.tsx \
   src/components/SidebarAccountMenu.test.tsx src/components/InviteAuthMethods.test.tsx \
   src/lib/oidc-navigation.test.ts src/lib/browserNavigation.test.ts --maxWorkers=1
