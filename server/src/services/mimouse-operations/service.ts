@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, desc, eq, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { approvals, companies, companyMemberships, mimouseOperationPreviews as previews, type Db } from "@paperclipai/db";
 import { createOperationPreviewSchema, requestOperationApprovalSchema, type CreateOperationPreviewInput, type RequestOperationApprovalInput, type OperationPreviewRecord, type OperationReadiness } from "@paperclipai/shared";
 import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
@@ -32,10 +32,15 @@ export function operationPreviewService(db: Db) {
       return { item: publicRecord(existing), duplicate: true };
     },
     async list(companyId: string, limit = 50, beforeId?: string) {
-      const before = beforeId ? await load(companyId, beforeId) : null;
+      // Validate the company-scoped identity, but never round-trip its
+      // timestamptz through JS Date: PostgreSQL retains sub-millisecond digits.
+      if (beforeId) await load(companyId, beforeId);
       const rows = await db.select({ id: previews.id, companyId: previews.companyId, actorId: previews.actorId, previewHash: previews.previewHash, approvalId: previews.approvalId, createdAt: previews.createdAt,
         period: sql<string>`${previews.preview}->>'period'`, timeZone: sql<string>`${previews.preview}->>'timeZone'`, counts: sql<Record<string, number>>`${previews.preview}->'counts'` })
-        .from(previews).where(and(eq(previews.companyId, companyId), before ? or(lt(previews.createdAt, before.createdAt), and(eq(previews.createdAt, before.createdAt), lt(previews.id, before.id))) : undefined))
+        .from(previews).where(and(eq(previews.companyId, companyId), beforeId ? sql`(${previews.createdAt}, ${previews.id}) < (
+          select preview_cursor.created_at, preview_cursor.id from ${previews} as preview_cursor
+          where preview_cursor.company_id = ${companyId} and preview_cursor.id = ${beforeId}
+        )` : undefined))
         .orderBy(desc(previews.createdAt), desc(previews.id)).limit(limit + 1);
       return { items: rows.slice(0, limit), nextBeforeId: rows.length > limit ? rows[limit - 1].id : null };
     },

@@ -1,4 +1,4 @@
-import { and, desc, eq, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { companies, companyMemberships, issues, mimouseResearchCandidates as candidates, mimouseResearchPromotions as promotions, type Db } from "@paperclipai/db";
 import { researchPromotionSchema, type ResearchCandidate, type ResearchCandidateInput, type ResearchPromotionInput, type ResearchPromotionReceipt } from "@paperclipai/shared";
 import { conflict, forbidden, notFound } from "../../errors.js";
@@ -32,9 +32,14 @@ export function researchCandidateService(db: Db) {
     },
     async get(companyId: string, id: string) { return item(await load(companyId, id)); },
     async list(companyId: string, limit = 50, beforeId?: string) {
-      const before = beforeId ? await load(companyId, beforeId) : null;
+      // Validate the company-scoped identity, but never round-trip its
+      // timestamptz through JS Date: PostgreSQL retains sub-millisecond digits.
+      if (beforeId) await load(companyId, beforeId);
       const rows = await db.select().from(candidates).where(and(eq(candidates.companyId, companyId),
-        before ? or(lt(candidates.createdAt, before.createdAt), and(eq(candidates.createdAt, before.createdAt), lt(candidates.id, before.id))) : undefined))
+        beforeId ? sql`(${candidates.createdAt}, ${candidates.id}) < (
+          select research_cursor.created_at, research_cursor.id from ${candidates} as research_cursor
+          where research_cursor.company_id = ${companyId} and research_cursor.id = ${beforeId}
+        )` : undefined))
         .orderBy(desc(candidates.createdAt), desc(candidates.id)).limit(limit + 1);
       const page = rows.slice(0, limit);
       return { items: page.map(row => ({ id: row.id, companyId: row.companyId, title: row.evidence.title, product: row.evidence.product,
