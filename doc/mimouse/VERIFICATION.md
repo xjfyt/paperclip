@@ -348,3 +348,11 @@ server编译除tsc --singleThreaded之外仍执行package.json中的所有资源
 - 收益/验收/依赖合同：9项单测与新隔离库4项API通过。首次--project server无匹配，改server/vitest.config.ts后通过，未掩盖启动失败。
 - 新research-scheduled-loop独立集成在新隔离库1项通过：真实routine调度、来源关系、JWT/HTTP报告与人审私有待办和真实依赖边；仅heartbeat执行替换为惰性回执，不是实际模型、联网检索或真实业务收益。日志/tmp/paperclip-scheduled-research-api.log。
 - API启动为源码入口，工作区依赖亦为源码；尚未运行本片编译入口完整API。测试目录保留且postmaster.pid存在，不删除锁、不宣称整个PG优雅退出。
+
+## 2026-10-26 23:42 UTC：0358源码API集成
+
+在新隔离PostgreSQL通过完整正常迁移链到0358，source API 158项全部通过（45.8s，/tmp/paperclip-0358-source-api.log）。包括通知策略14项、编码修复11项、反馈验证6项和真实调度到人审链1项；其余沿既有完整清单。无真实供应商/模型，执行边界使用标记fixture。
+
+通知首次新库定向3失败/16通过，根因0356 BEFORE INSERT补verificationEpoch使分组前后hash不同；修复为计算key前冻结安全代次，未删校验。修复后定向30项及本次完整158项均通过。反馈并发使用独立DB客户端，所有三元FK/请求唯一、等待期间撤权、audit写失败回滚均通过。0358新增普通提示词应用表仅数据库创建通过，普通运行态应用专属实现仍在集成。
+
+本次为源码入口，不是编译入口或独立all-dist验收。初步server完整类型检查发现新P5 target环境类型错误，修复仍由对应后续代码片完成，不把API通过当类型通过。
