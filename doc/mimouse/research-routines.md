@@ -40,3 +40,7 @@ Agent 能读写私有任务，不等于它能把任务派生内容发布给所�
 新建仍保持 paused、无触发器、绑定 disabled；只有在原 Routine 页面配置明确公司公开的项目或父任务后才可启用报告。系统不会自动把任何私有任务或项目改为公开。收到的报告是接收当时的公开来源快照；操作者仍不得在公开任务报告中粘贴其他私有来源内容。
 
 代码检查确认原 Routine 调度调用 issueService.create，未显式 visibility 时起始 open，随后继承私有 parent/project。新增 DB fixture 使用这个真实 issueService 路径验证上述默认/继承（backlog、无分配、无 wakeup），但不假装调用了真实调度/模型。
+
+## 公司暂停时只读
+
+真实 session 的 active owner/admin 在公司 active 或 paused 时仍可读取绑定和安全过滤后的可选 Routine，以检查暂停前的配置。缺失、归档公司以及普通成员、失效成员、其他公司或非 session 来源仍拒绝。绑定更新和报告接收继续要求公司 active；只读查询不会恢复公司、启用 Routine 或派发执行。来源隐私与权限边界不因公司暂停而放宽。

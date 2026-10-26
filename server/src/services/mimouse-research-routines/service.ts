@@ -24,17 +24,18 @@ export function researchRoutineService(db: Db) {
       })).allowed,
     });
   }
-  async function assertAdmin(tx: Db, companyId: string, actor: Actor) {
+  async function assertAdmin(tx: Db, companyId: string, actor: Actor, intent: "read" | "write" = "write") {
     if (actor.type !== "board" || actor.source !== "session" || !actor.userId) throw forbidden("Signed-in company administrator required");
     const [member] = await tx.select().from(companyMemberships).where(and(eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, actor.userId))).for("share");
     const [company] = await tx.select().from(companies).where(eq(companies.id, companyId)).for("share");
-    if (company?.status !== "active" || member?.status !== "active" || !["owner", "admin"].includes(member.membershipRole ?? "")) throw forbidden("Active company administrator required");
+    const companyAllowed = company?.status === "active" || (intent === "read" && company?.status === "paused");
+    if (!companyAllowed || member?.status !== "active" || !["owner", "admin"].includes(member.membershipRole ?? "")) throw forbidden("Active company administrator required");
     return actor.userId;
   }
   return {
     async available(companyId: string, actor: Actor) {
       return db.transaction(async tx => {
-        await assertAdmin(tx as unknown as Db, companyId, actor);
+        await assertAdmin(tx as unknown as Db, companyId, actor, "read");
         const rows = await tx.select().from(routines).where(eq(routines.companyId, companyId)).for("share");
         const visible = [];
         for (const row of rows) {
@@ -46,7 +47,7 @@ export function researchRoutineService(db: Db) {
     },
     async list(companyId: string, actor: Actor) {
       return db.transaction(async tx => {
-        await assertAdmin(tx as unknown as Db, companyId, actor);
+        await assertAdmin(tx as unknown as Db, companyId, actor, "read");
         const rows = await tx.select({ binding: bindings, routine: routines }).from(bindings)
           .innerJoin(routines, and(eq(routines.id, bindings.routineId), eq(routines.companyId, bindings.companyId))).where(eq(bindings.companyId, companyId)).for("share");
         const visible = [];

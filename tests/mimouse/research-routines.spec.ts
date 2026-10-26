@@ -3,8 +3,9 @@ import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 const require = createRequire(new URL("../../server/package.json", import.meta.url));
 const { and, eq } = await import(require.resolve("drizzle-orm"));
-import { agents, authUsers, companyMemberships, heartbeatRuns, issues, projects, routines, routineRuns, mimouseResearchCandidates as candidates, mimouseResearchPromotions as promotions } from "../../packages/db/src/index.js";
+import { agents, authUsers, companies, companyMemberships, heartbeatRuns, issues, projects, routines, routineRuns, mimouseResearchCandidates as candidates, mimouseResearchPromotions as promotions } from "../../packages/db/src/index.js";
 import { createFixtureDb } from "./fixture-db.js";
+import { mimouseResearchRoutineRoutes } from "../../server/src/routes/mimouse-research-routines.js";
 import { researchRoutineService } from "../../server/src/services/mimouse-research-routines/service.js";
 import { researchCandidateService } from "../../server/src/services/mimouse-research/service.js";
 import { issueService } from "../../server/src/services/issues.js";
@@ -104,5 +105,55 @@ test("existing issue creation preserves open routine context and inherited priva
     await service.bind(companyId, f.routine.id, f.owner, { product: "MiWork", enabled: false });
     await expect(service.bind(companyId, f.routine.id, f.owner, { product: "MiWork", enabled: true })).rejects.toThrow("Configure a company-open");
     expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, companyId))).toHaveLength(1);
+  } finally { await db.$client.end({ timeout: 1 }); }
+});
+
+test("paused companies allow administrator research reads but never binding or report writes", async ({ request }) => {
+  const companyId = (await (await request.post("/api/companies", { data: { name: "Paused research read fixture" } })).json()).id as string;
+  const foreignId = (await (await request.post("/api/companies", { data: { name: "Foreign research read fixture" } })).json()).id as string;
+  const db = await createFixtureDb();
+  try {
+    const f = await fixture(db, companyId), service = researchRoutineService(db);
+    await service.bind(companyId, f.routine.id, f.owner, { product: "MiWork", enabled: true });
+    // Exercise real routes + real DB role/privacy checks. This deliberately
+    // supplies a test-only actor context; it does not claim to test login/JWT signing.
+    const { default: express } = await import(require.resolve("express"));
+    const { default: supertest } = await import(require.resolve("supertest"));
+    let actor: Express.Request["actor"] = { ...f.owner, companyIds: [companyId] };
+    const app = express(); app.use(express.json());
+    app.use((req: { actor: Express.Request["actor"] }, _res: unknown, next: () => void) => { req.actor = actor; next(); });
+    app.use("/api", mimouseResearchRoutineRoutes(db));
+    app.use((error: { status?: number; message?: string }, _req: unknown, res: { status(code: number): { json(body: unknown): void } }, _next: () => void) => {
+      res.status(error.status ?? 500).json({ error: error.message });
+    });
+    const http = supertest(app), path = `/api/companies/${companyId}/research-routines`;
+    await db.update(companies).set({ status: "paused" }).where(eq(companies.id, companyId));
+    for (const suffix of ["", "/available"]) {
+      const result = await http.get(path + suffix); expect(result.status).toBe(200); expect(result.body).toHaveLength(1);
+    }
+    expect((await http.put(`${path}/${f.routine.id}`).send({ product: "MiWork", enabled: false })).status).toBe(403);
+    expect((await http.get(path)).body[0].enabled).toBe(true);
+    actor = { ...f.actor, onBehalfOfMemberships: [{ companyId, membershipRole: "owner", status: "active" }] };
+    const report = await http.post(`${path}/${f.routine.id}/reports`).send(f.input);
+    expect(report.status).toBe(403); expect(report.body.error).toBe("Active company required");
+    actor = { ...f.owner, companyIds: [companyId] };
+    await db.update(companyMemberships).set({ membershipRole: "viewer" }).where(eq(companyMemberships.id, f.membership.id));
+    for (const suffix of ["", "/available"]) expect((await http.get(path + suffix)).status).toBe(403);
+    await db.update(companyMemberships).set({ membershipRole: "admin" }).where(eq(companyMemberships.id, f.membership.id));
+    for (const suffix of ["", "/available"]) expect((await http.get(path + suffix)).status).toBe(200);
+    for (const suffix of ["", "/available"]) expect((await http.get(`/api/companies/${foreignId}/research-routines${suffix}`)).status).toBe(403);
+    await db.update(companyMemberships).set({ status: "suspended" }).where(eq(companyMemberships.id, f.membership.id));
+    for (const suffix of ["", "/available"]) expect((await http.get(path + suffix)).status).toBe(403);
+    await db.update(companyMemberships).set({ status: "active" }).where(eq(companyMemberships.id, f.membership.id));
+    await expect(service.list(foreignId, f.owner)).rejects.toMatchObject({ status: 403 });
+    await expect(service.available(randomUUID(), f.owner)).rejects.toMatchObject({ status: 403 });
+    actor = { ...f.owner, companyIds: [companyId], source: "local_implicit" };
+    expect((await http.get(path)).status).toBe(403);
+    actor = { ...f.owner, companyIds: [companyId] };
+    await db.update(companies).set({ status: "archived" }).where(eq(companies.id, companyId));
+    for (const suffix of ["", "/available"]) expect((await http.get(path + suffix)).status).toBe(403);
+    expect(await db.select().from(candidates).where(eq(candidates.companyId, companyId))).toHaveLength(0);
+    expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, companyId))).toHaveLength(1);
+    expect((await db.select().from(routines).where(eq(routines.id, f.routine.id)))[0].status).toBe("paused");
   } finally { await db.$client.end({ timeout: 1 }); }
 });
