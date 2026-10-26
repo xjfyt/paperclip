@@ -221,6 +221,28 @@ NODE_OPTIONS=--max-old-space-size=512 node ../node_modules/vitest/vitest.mjs run
 
 - 手测追加：四提供商从 page/dialog 进入，分别测试已有账户复用、新连接、错误 header/console URL、已保存凭据留空、取消/失败回调和弹窗阻止。错误后切语言确认草稿、身份和授权范围不丢，未知服务端诊断保持原文；恢复链接不重复打开窗口或变更 URL；切语言后检查当前链接的键盘焦点、Tab顺序与激活（翻译可能重建链接节点）。实际权限验收仍须测试账户和服务端验证，不能以提示文字或UI禁用状态代替。
 
+## 第十一片：远程 MCP 实际连接表单与展示 metadata（2026-10-26）
+
+- 仅补 `RemoteMcpConnectionSetup` 的 connect 表单、帮助/aria、必要连接标题与上游服务提示，及共享 `SetupWizardFooter` 的保存并退出按钮。没有改其它 SetupWizard 导航或其宿主业务逻辑；非 connect 的权限/管理/draft 展示仍非本片完成范围。
+- `providers.ts` 增加明确展示 key 与 `remoteMcpProviderDisplay`，只为实际消费的操作说明、URL/认证帮助及 Zapier/Executor 文字 placeholder 提供译文。provider 名称/ID、setup/dashboard/default URL、Arcade-User-ID、认证值和 URL placeholder 原样。原始 metadata 和无显式 key 的自定义文案仍可原样使用；未将译文写入连接名称、credentialValues、config 或用户可编辑的 agentInstructions。
+- 供应商外部 UI 的 Other、Connect、User Source、Integrations、Connect an agent 等指引标签保留，避免指向不存在的译名。保留 URL 可能包含秘密令牌、仅使用用户 API key、工作区/组织 key 不能建立 MCP session，以及“无额外认证”不代表无需身份等安全含义。
+- 新增四语实际表单渲染，核对说明、placeholder、密码遮罩、header aria、选项原值和保存按钮，以及四提供商 setupComplete=true 的实际重连标题/说明；mounted 表单切语言不改 token/header/URL/展开状态或调用 edit/connect。实际 AppsConnect 的四提供商用例填写 bearer 与自定义 header 后切四语，再主动提交，核对原始名称、provider ID、URL、认证方式、credentialValues 和原有 finish 次数。
+- 最终专注回归 **7 文件 / 284 用例通过**；独立审阅、资源/合成器安全规则、token gates、调色板/角色同步与 diff 检查通过。共享 footer 的 GitHubChatSetup 与 TriggerWizard 现有用例只添加测试资源并回归，不把这些宿主整体计为已本地化。未执行完整类型检查/构建、真实网络或授权。
+- 复现命令（`ui/`，512 MB、单 worker，纯 mock/jsdom）：
+
+```sh
+NODE_OPTIONS=--max-old-space-size=512 node ../node_modules/vitest/vitest.mjs run \
+  src/i18n/remote-mcp-form-surfaces.test.tsx \
+  src/i18n/remote-mcp-status-surfaces.test.tsx \
+  src/i18n/connection-access-remote.test.tsx \
+  src/pages/apps/AppsConnect.test.tsx \
+  src/pages/apps/chat/GitHubChatSetup.test.tsx \
+  src/components/routine-triggers/TriggerWizard.test.tsx \
+  src/features/connections/ConnectionSetupFlow.architecture.test.ts --maxWorkers=1
+```
+
+- 手测追加：四提供商分别验证 auto/bearer/headers/none 的可用选项、0/1/多 header、默认/自定义 URL 和 Composio 折叠会话；填写测试凭据后切四语，检查字段值/展开状态/焦点与描述关联不变。验证复制的端点原样、没有将已保存秘密回填展示；主动连接/保存与取消各按原意执行。供应商说明有效性、真实授权、窄屏/长文/屏幕阅读器仍需用户验收。
+
 ## 已知剩余范围（不是本片已完成项）
 
 - 真实登录、剪贴板权限及浏览器布局尚未四语验收。系统提示已抽取不代表外部交互已通过。

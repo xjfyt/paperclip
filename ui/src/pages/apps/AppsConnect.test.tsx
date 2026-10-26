@@ -690,6 +690,32 @@ describe("AppsConnect — Connect with a link (M4 frame)", () => {
     expect(container.textContent).not.toContain("Enable memory connectors");
   });
 
+  it.each(["zapier", "arcade", "composio", "executor"])("preserves the real %s credential payload while changing form language", async provider => {
+    mockSearch.value = `source=${provider}&new=1`;
+    await render();
+    if (provider === "composio") await act(async () => buttonByText("Reuse an existing session")!.click());
+    await act(async () => setInputValue(container.querySelector<HTMLInputElement>('input[id$="-url"]')!, "https://customer.example/mcp?keep=raw"));
+    await openAccessAdvanced();
+    await act(async () => { const select = container.querySelector<HTMLSelectElement>('select[id$="-auth"]')!; select.value = "bearer"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+    await act(async () => setInputValue(container.querySelector<HTMLInputElement>('input[id$="-token"]')!, "token-fixture"));
+    await act(async () => buttonByText("Add header")!.click());
+    await act(async () => { setInputValue(container.querySelector<HTMLInputElement>('input[id$="-name"]')!, "X-Customer"); setInputValue(container.querySelector<HTMLInputElement>('input[id$="-value"]')!, "header-fixture"); });
+    const values = () => Array.from(container.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input, select'), input => input.value);
+    const before = values(), saved = JSON.stringify({ ...sessionStorage });
+    for (const locale of ["ja", "zh-CN", "es", "en"]) {
+      await act(async () => { await i18n.changeLanguage(locale); });
+      expect(container.textContent).toContain(i18n.t("remoteMcpFormUi.authentication"));
+      expect(container.textContent).toContain(i18n.t(`remoteMcpFormUi.${provider}Instruction1`));
+      expect(values()).toEqual(before); expect(JSON.stringify({ ...sessionStorage })).toBe(saved);
+      expect(container.querySelector('button[aria-expanded="true"]')).not.toBeNull();
+      expect(connectAppMock).not.toHaveBeenCalled(); expect(startOAuthMock).not.toHaveBeenCalled(); expect(finishAppMock).not.toHaveBeenCalled();
+    }
+    const name = provider.charAt(0).toUpperCase() + provider.slice(1);
+    await act(async () => buttonByText(`Connect ${name}`)!.click()); await flushReact(); await flushReact();
+    expect(connectAppMock).toHaveBeenCalledExactlyOnceWith("company-1", expect.objectContaining({ galleryKey: provider, name, link: "https://customer.example/mcp?keep=raw", grantKind: "organization", authMode: "bearer", credentialValues: { "credentials.authorization": "token-fixture", "headers.X-Customer": "header-fixture" } }));
+    expect(finishAppMock).toHaveBeenCalledOnce(); expect(startOAuthMock).not.toHaveBeenCalled();
+  });
+
   it.each(["zapier", "arcade", "composio", "executor"])("opens direct %s setup with default settings", async (provider) => {
     mockSearch.value = `source=${provider}`;
     await render();

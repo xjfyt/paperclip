@@ -17,7 +17,7 @@ import {
   connectionDefaultSummarySentence,
   StepHeader,
 } from "../ConnectionSetupFlow";
-import type { RemoteMcpProvider } from "./providers";
+import { remoteMcpProviderDisplay, type RemoteMcpProvider } from "./providers";
 import type { RemoteMcpSetupActions, RemoteMcpSetupState } from "./types";
 
 /**
@@ -30,9 +30,10 @@ const steps = ["connect"] as const;
 const selectClass = "h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
 
 function FieldHelp({ label, children }: { label: string; children: ReactNode }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   return <Tooltip open={open} onOpenChange={setOpen}>
-    <TooltipTrigger asChild><button type="button" aria-label={`Help with ${label}`} onClick={() => setOpen(!open)} className="rounded-sm text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><HelpCircle className="size-4" /></button></TooltipTrigger>
+    <TooltipTrigger asChild><button type="button" aria-label={t("remoteMcpFormUi.helpWith", { label })} onClick={() => setOpen(!open)} className="rounded-sm text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><HelpCircle className="size-4" /></button></TooltipTrigger>
     <TooltipContent className="max-w-xs">{children}</TooltipContent>
   </Tooltip>;
 }
@@ -57,6 +58,7 @@ export function RemoteMcpConnectionSetup({ provider, state: s, actions: a, agent
 }) {
   const { t } = useTranslation();
   const notice = typeof s.notice === "string" ? s.notice : s.notice ? t(s.notice.key) : null;
+  const copy = remoteMcpProviderDisplay(provider, t);
   const uid = useId();
   const heading = useRef<HTMLHeadingElement>(null);
   const previousStep = useRef(s.step);
@@ -122,22 +124,22 @@ export function RemoteMcpConnectionSetup({ provider, state: s, actions: a, agent
     : s.connectStatus === "unreachable" ? { title: t("remoteMcpStatusUi.unreachable"), body: t("remoteMcpStatusUi.unreachableHelp") }
     : null;
   const urlField = <div className="space-y-2">
-    <div className="flex items-center gap-2"><Label htmlFor={`${uid}-url`}>MCP server URL</Label><FieldHelp label="MCP server URL">{provider.urlHelp}</FieldHelp></div>
-    <Input id={`${uid}-url`} type="password" autoComplete="off" spellCheck={false} placeholder={provider.placeholder} value={s.url} aria-invalid={s.connectStatus === "invalid_url"} aria-describedby={`${uid}-url-help`} onChange={(event) => change({ url: event.target.value })} />
-    <p id={`${uid}-url-help`} className="text-xs text-muted-foreground">{provider.urlHelp}</p>
-    {provider.id === "executor" ? <div className="space-y-2"><div className="flex items-center gap-2"><Label htmlFor={`${uid}-management`}>Console URL (optional)</Label>
-      <FieldHelp label="Executor console URL">The URL of your Executor organization’s integrations page. Used to open and manage imported accounts.</FieldHelp></div>
+    <div className="flex items-center gap-2"><Label htmlFor={`${uid}-url`}>{t("remoteMcpFormUi.serverUrl")}</Label><FieldHelp label={t("remoteMcpFormUi.serverUrl")}>{copy.urlHelp}</FieldHelp></div>
+    <Input id={`${uid}-url`} type="password" autoComplete="off" spellCheck={false} placeholder={copy.placeholder} value={s.url} aria-invalid={s.connectStatus === "invalid_url"} aria-describedby={`${uid}-url-help`} onChange={(event) => change({ url: event.target.value })} />
+    <p id={`${uid}-url-help`} className="text-xs text-muted-foreground">{copy.urlHelp}</p>
+    {provider.id === "executor" ? <div className="space-y-2"><div className="flex items-center gap-2"><Label htmlFor={`${uid}-management`}>{t("remoteMcpFormUi.consoleUrl")}</Label>
+      <FieldHelp label={t("remoteMcpFormUi.consoleLabel")}>{t("remoteMcpFormUi.consoleHelp")}</FieldHelp></div>
       <Input id={`${uid}-management`} type="url" value={s.managementUrl ?? ""} placeholder="https://executor.sh/your-organization/integrations" onChange={event => change({ managementUrl: event.target.value })} />
     </div> : null}
   </div>;
 
   return <div className={host === "dialog" ? "min-w-0 text-foreground" : "mx-auto max-w-6xl p-4 text-foreground sm:p-8"} data-remote-mcp-provider={provider.id}>
     <StepHeader headingRef={heading} appIdentity={{ name: provider.name, logoUrl: null }}
-      title={upstreamServiceName ? `Connect ${upstreamServiceName} through ${provider.name}` : s.step === "draft" ? "Continue your setup" : s.setupComplete ? s.step === "access" ? "Who can use this connection" : s.step === "connect" ? `Reconnect ${provider.name}` : provider.name : undefined}
-      subtitle={currentStep >= 0 && !s.setupComplete ? `Paperclip will use ${provider.name} on your behalf.` : s.step === "draft" ? `Your ${provider.name} setup is ready to resume.` : s.step === "permissions" ? `Connected${s.identity ? ` as ${s.identity}` : ""} · ${s.tools.length} actions available` : `Manage this ${provider.name} connection.`}
-      step={currentStep >= 0 && !s.setupComplete ? "key" : "gallery"} activeIndex={currentStep} labels={steps.map(() => "Connect")} onCancel={busy || s.step === "management" || s.step === "permissions" || s.step === "draft" ? undefined : onCancel ?? a.saveExit} />
+      title={upstreamServiceName ? t("remoteMcpStatusUi.connectThrough", { app: upstreamServiceName, provider: provider.name }) : s.step === "draft" ? "Continue your setup" : s.setupComplete ? s.step === "access" ? "Who can use this connection" : s.step === "connect" ? t("remoteMcpFormUi.reconnect", { provider: provider.name }) : provider.name : undefined}
+      subtitle={currentStep >= 0 && !s.setupComplete ? t("remoteMcpFormUi.onYourBehalf", { provider: provider.name }) : s.step === "draft" ? `Your ${provider.name} setup is ready to resume.` : s.step === "permissions" ? `Connected${s.identity ? ` as ${s.identity}` : ""} · ${s.tools.length} actions available` : t("remoteMcpFormUi.manageConnection", { provider: provider.name })}
+      step={currentStep >= 0 && !s.setupComplete ? "key" : "gallery"} activeIndex={currentStep} labels={steps.map(() => t("remoteMcpFormUi.connect"))} onCancel={busy || s.step === "management" || s.step === "permissions" || s.step === "draft" ? undefined : onCancel ?? a.saveExit} />
     <main className="space-y-6">
-        {upstreamServiceName && <InlineBanner compact>{provider.name} handles the connection and requests to {upstreamServiceName}. {provider.id === "composio" ? "After connecting this account, sign in to the app in Composio." : "Manage app sign-in in the provider, then refresh your gateway here."}</InlineBanner>}
+        {upstreamServiceName && <InlineBanner compact>{t("remoteMcpFormUi.upstreamHelp", { provider: provider.name, app: upstreamServiceName })} {provider.id === "composio" ? t("remoteMcpFormUi.composioAppHelp") : t("remoteMcpFormUi.gatewayAppHelp")}</InlineBanner>}
         {notice && <p role="status" className="text-sm text-muted-foreground">{notice}</p>}
 
         {s.step === "access" && <AccessStepContent agents={agents} lockedAgentId={lockedAgentId} authKind="oauth" grantKinds={fixedGrantKind ? [fixedGrantKind] : undefined} grantKind={s.grantKind} setGrantKind={(grantKind) => { if (grantKind !== "agent") change({ grantKind }); }}
@@ -158,8 +160,8 @@ export function RemoteMcpConnectionSetup({ provider, state: s, actions: a, agent
         <div className="mx-auto max-w-2xl space-y-6">
         {s.step === "connect" && <>
           <div className="space-y-3">
-            <ol className="list-decimal space-y-2 pl-5 text-sm">{provider.instructions.map((instruction) => <li key={instruction}>{instruction}</li>)}</ol>
-            {external("setup", `Open ${provider.name} setup guide`)}
+            <ol className="list-decimal space-y-2 pl-5 text-sm">{copy.instructions.map((instruction) => <li key={instruction}>{instruction}</li>)}</ol>
+            {external("setup", t("remoteMcpFormUi.setupGuide", { provider: provider.name }))}
           </div>
           {s.connectStatus === "sign_in" && provider.supportsBrowserAuth ? <>
             <div role="status"><InlineBanner title={t("remoteMcpStatusUi.finishSignIn", { provider: provider.name })}>
@@ -172,30 +174,30 @@ export function RemoteMcpConnectionSetup({ provider, state: s, actions: a, agent
             {s.connectStatus === "cancelled" && <p role="status" className="text-sm text-muted-foreground">{t("remoteMcpStatusUi.cancelled")}</p>}
             <fieldset disabled={busy} className="min-w-0 space-y-5">
               {provider.defaultUrl ? <Collapsible open={sessionOpen || s.connectStatus === "invalid_url"} onOpenChange={setSessionOpen}>
-                <CollapsibleTrigger asChild><Button type="button" variant="link" className="h-auto p-0 text-sm text-muted-foreground underline underline-offset-2">Reuse an existing session</Button></CollapsibleTrigger>
+                <CollapsibleTrigger asChild><Button type="button" variant="link" className="h-auto p-0 text-sm text-muted-foreground underline underline-offset-2">{t("remoteMcpFormUi.reuseSession")}</Button></CollapsibleTrigger>
                 <CollapsibleContent className="mt-3">{urlField}</CollapsibleContent>
               </Collapsible> : urlField}
               {defaults(<div className="space-y-4">
-                  <p className="text-sm font-medium text-foreground">Authentication</p>
-                  <p className="text-sm text-muted-foreground">{provider.authHelp}</p>
-                  <div className="space-y-2"><Label htmlFor={`${uid}-auth`}>Sign-in method</Label><select id={`${uid}-auth`} className={selectClass} value={s.auth} onChange={(event) => change({ auth: event.target.value as RemoteMcpSetupState["auth"] })}>
-                    {provider.supportsBrowserAuth && <option value="auto">Automatic (sign in if required)</option>}<option value="bearer">Bearer token</option><option value="headers">Custom headers</option><option value="none">No additional authentication</option>
+                  <p className="text-sm font-medium text-foreground">{t("remoteMcpFormUi.authentication")}</p>
+                  <p className="text-sm text-muted-foreground">{copy.authHelp}</p>
+                  <div className="space-y-2"><Label htmlFor={`${uid}-auth`}>{t("remoteMcpFormUi.signInMethod")}</Label><select id={`${uid}-auth`} className={selectClass} value={s.auth} onChange={(event) => change({ auth: event.target.value as RemoteMcpSetupState["auth"] })}>
+                    {provider.supportsBrowserAuth && <option value="auto">{t("remoteMcpFormUi.automatic")}</option>}<option value="bearer">{t("remoteMcpFormUi.bearerToken")}</option><option value="headers">{t("remoteMcpFormUi.customHeaders")}</option><option value="none">{t("remoteMcpFormUi.noAdditionalAuth")}</option>
                   </select></div>
-                  {s.auth === "bearer" && <div className="space-y-2"><div className="flex items-center gap-2"><Label htmlFor={`${uid}-token`}>Bearer token</Label><FieldHelp label="bearer token">Paste the token only, without the word Bearer. It is kept in the connection’s credentials.</FieldHelp></div><Input id={`${uid}-token`} type="password" autoComplete="off" value={s.token} onChange={(event) => change({ token: event.target.value })} /></div>}
+                  {s.auth === "bearer" && <div className="space-y-2"><div className="flex items-center gap-2"><Label htmlFor={`${uid}-token`}>{t("remoteMcpFormUi.bearerToken")}</Label><FieldHelp label={t("remoteMcpFormUi.bearerLabel")}>{t("remoteMcpFormUi.bearerHelp")}</FieldHelp></div><Input id={`${uid}-token`} type="password" autoComplete="off" value={s.token} onChange={(event) => change({ token: event.target.value })} /></div>}
                   {(s.auth === "bearer" || s.auth === "headers") && <div className="space-y-3">
-                    <p className="text-sm font-medium">{s.auth === "bearer" ? "Additional headers" : "Headers"}</p>
+                    <p className="text-sm font-medium">{s.auth === "bearer" ? t("remoteMcpFormUi.additionalHeaders") : t("remoteMcpFormUi.headers")}</p>
                     {s.headers.map((header, index) => <div key={header.id} className="flex flex-wrap items-end gap-2">
-                      <div className="min-w-0 flex-1 space-y-2"><Label htmlFor={`${uid}-${header.id}-name`}>Header {index + 1} name</Label><Input id={`${uid}-${header.id}-name`} value={header.name} placeholder={provider.id === "arcade" ? "Arcade-User-ID" : "Header name"} onChange={(event) => change({ headers: s.headers.map((h) => h.id === header.id ? { ...h, name: event.target.value } : h) })} /></div>
-                      <div className="min-w-0 flex-1 space-y-2"><Label htmlFor={`${uid}-${header.id}-value`}>Header {index + 1} value</Label><Input id={`${uid}-${header.id}-value`} type="password" autoComplete="off" value={header.value} onChange={(event) => change({ headers: s.headers.map((h) => h.id === header.id ? { ...h, value: event.target.value } : h) })} /></div>
-                      <Button type="button" variant="ghost" size="icon" aria-label={`Remove header ${index + 1}`} onClick={() => change({ headers: s.headers.filter((h) => h.id !== header.id) })}><Trash2 className="size-4" /></Button>
+                      <div className="min-w-0 flex-1 space-y-2"><Label htmlFor={`${uid}-${header.id}-name`}>{t("remoteMcpFormUi.headerName", { index: index + 1 })}</Label><Input id={`${uid}-${header.id}-name`} value={header.name} placeholder={provider.id === "arcade" ? "Arcade-User-ID" : t("remoteMcpFormUi.headerPlaceholder")} onChange={(event) => change({ headers: s.headers.map((h) => h.id === header.id ? { ...h, name: event.target.value } : h) })} /></div>
+                      <div className="min-w-0 flex-1 space-y-2"><Label htmlFor={`${uid}-${header.id}-value`}>{t("remoteMcpFormUi.headerValue", { index: index + 1 })}</Label><Input id={`${uid}-${header.id}-value`} type="password" autoComplete="off" value={header.value} onChange={(event) => change({ headers: s.headers.map((h) => h.id === header.id ? { ...h, value: event.target.value } : h) })} /></div>
+                      <Button type="button" variant="ghost" size="icon" aria-label={t("remoteMcpFormUi.removeHeader", { index: index + 1 })} onClick={() => change({ headers: s.headers.filter((h) => h.id !== header.id) })}><Trash2 className="size-4" /></Button>
                     </div>)}
-                    <Button type="button" variant="outline" size="sm" onClick={() => change({ headers: [...s.headers, { id: crypto.randomUUID(), name: "", value: "" }] })}><Plus className="size-4" />Add header</Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => change({ headers: [...s.headers, { id: crypto.randomUUID(), name: "", value: "" }] })}><Plus className="size-4" />{t("remoteMcpFormUi.addHeader")}</Button>
                   </div>}
                 </div>)}
             </fieldset>
             {additionalSettings}
-            {busy && <p role="status" className="flex items-center gap-2 text-sm"><Loader2 className="size-4 animate-spin motion-reduce:animate-none" />Connecting and discovering tools…</p>}
-            {footer(<>{s.setupComplete ? <Button type="button" variant="outline" disabled={busy} onClick={a.finish}>Back</Button> : <span />}<Button type="submit" disabled={busy || !s.url.trim() || !settingsValid}>{busy ? "Connecting…" : error || s.connectStatus === "cancelled" ? "Try again" : `Connect ${provider.name}`}</Button></>)}
+            {busy && <p role="status" className="flex items-center gap-2 text-sm"><Loader2 className="size-4 animate-spin motion-reduce:animate-none" />{t("remoteMcpFormUi.discovering")}</p>}
+            {footer(<>{s.setupComplete ? <Button type="button" variant="outline" disabled={busy} onClick={a.finish}>{t("connectionOAuthUi.back")}</Button> : <span />}<Button type="submit" disabled={busy || !s.url.trim() || !settingsValid}>{busy ? t("remoteMcpFormUi.connecting") : error || s.connectStatus === "cancelled" ? t("connectionOAuthUi.tryAgain") : t("connectionOAuthUi.headerConnect", { serverName: provider.name })}</Button></>)}
           </form>}
         </>}
 
