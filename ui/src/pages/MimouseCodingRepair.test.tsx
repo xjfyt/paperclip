@@ -9,9 +9,10 @@ import { queryKeys } from "../lib/queryKeys";
 import { MimouseCodingRepair } from "./MimouseCodingRepair";
 import { MimouseCoding } from "./MimouseCoding";
 const api = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }));
+const transport = vi.hoisted(() => ({ fetch: vi.fn() }));
 const routines = vi.hoisted(() => ({ list: vi.fn() }));
 const auth = vi.hoisted(() => ({ getSession: vi.fn() }));
-vi.mock("@/api/client", () => ({ api })); vi.mock("@/api/routines", () => ({ routinesApi: routines })); vi.mock("@/api/auth", () => ({ authApi: auth }));
+vi.mock("@/api/client", async original => ({ ...await original<typeof import("@/api/client")>(), api })); vi.mock("@/api/routines", () => ({ routinesApi: routines })); vi.mock("@/api/auth", () => ({ authApi: auth }));
 vi.mock("@/context/CompanyContext", () => ({ useCompany: () => ({ selectedCompanyId: "company-a" }) }));
 vi.mock("@/lib/router", () => ({ useSearchParams: () => [new URLSearchParams()] }));
 const props = { companyId: "company-a", userId: "owner-a", issueId: "issue-a", deliveryId: "delivery-a", headSha: "a".repeat(40) };
@@ -21,15 +22,16 @@ let host: HTMLDivElement, root: Root, client: QueryClient;
 async function flush() { await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); }); }
 async function click(element: Element) { await act(async () => { element.dispatchEvent(new MouseEvent("click", { bubbles: true })); }); await flush(); }
 async function mount(userId = "owner-a", parent = false) { await act(async () => root.render(<BreadcrumbProvider><QueryClientProvider client={client}>{parent ? <MimouseCoding /> : <MimouseCodingRepair {...props} userId={userId} />}</QueryClientProvider></BreadcrumbProvider>)); await flush(); }
-async function open() { const button = [...host.querySelectorAll("button")].find(item => item.textContent === i18n.t("codingRepair.manage"))!; await click(button); await flush(); }
+async function open() { const button = await vi.waitFor(() => { const found = [...host.querySelectorAll("button")].find(item => item.textContent === i18n.t("codingRepair.manage")); expect(found).toBeDefined(); return found!; }); await click(button); await flush(); }
 async function choose() { const select = host.querySelector("select")!; await act(async () => { select.value = routine.id; select.dispatchEvent(new Event("change", { bubbles: true })); }); await flush(); }
 const authorize = () => [...host.querySelectorAll("button")].find(item => item.textContent === i18n.t("codingRepair.enable"))!;
 beforeEach(async () => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true; vi.clearAllMocks(); await i18n.changeLanguage("en");
-  api.get.mockResolvedValue(data); api.post.mockResolvedValue({}); routines.list.mockResolvedValue([routine]); auth.getSession.mockResolvedValue({ user: { id: "owner-a" }, session: { userId: "owner-a" } });
+  api.get.mockResolvedValue(data); api.post.mockResolvedValue({}); routines.list.mockResolvedValue([routine]); auth.getSession.mockResolvedValue({ user: { id: "owner-a" }, session: { id: "session-a", userId: "owner-a" } });
+  transport.fetch.mockImplementation(async () => Response.json({ deliveries: [], publishEnabled: false })); vi.stubGlobal("fetch", transport.fetch);
   host = document.createElement("div"); document.body.append(host); root = createRoot(host); client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity }, mutations: { retry: false } } });
 });
-afterEach(async () => { await act(async () => root.unmount()); client.clear(); host.remove(); await i18n.changeLanguage("en"); });
+afterEach(async () => { await act(async () => root.unmount()); client.clear(); host.remove(); vi.unstubAllGlobals(); await i18n.changeLanguage("en"); });
 it("requires explicit confirmation and sends the exact displayed routine revision and commit", async () => {
   await mount(); await open(); await choose(); expect(authorize().disabled).toBe(true); expect(api.post).not.toHaveBeenCalled();
   await click(host.querySelector('input[type="checkbox"]')!); expect(authorize().disabled).toBe(false); await click(authorize());
@@ -49,9 +51,12 @@ it.each(["en", "zh-CN", "es", "ja"])("renders repair controls and states in %s",
 });
 it("owner changes remount the coding view and discard its prior private draft", async () => {
   const row = { id: props.deliveryId, issueId: props.issueId, headSha: props.headSha, operationState: "local", mrIid: null, pipelineId: null, gate: { readyForReleaseCandidate: false, blockers: [] } };
-  api.get.mockImplementation((url: string) => Promise.resolve(url.endsWith("/repairs") ? data : { deliveries: [row], publishEnabled: false }));
-  client.setQueryData(queryKeys.auth.session, { user: { id: "owner-a" }, session: { userId: "owner-a" } }); await mount("owner-a", true); await open(); await choose(); await click(host.querySelector('input[type="checkbox"]')!);
-  api.get.mockResolvedValue({ deliveries: [], publishEnabled: false });
-  await act(async () => client.setQueryData(queryKeys.auth.session, { user: { id: "owner-b" }, session: { userId: "owner-b" } })); await flush();
+  transport.fetch.mockImplementation(async () => Response.json({ deliveries: [row], publishEnabled: false }));
+  client.setQueryData(queryKeys.auth.session, { user: { id: "owner-a" }, session: { id: "session-a", userId: "owner-a" } }); await mount("owner-a", true); await open(); await choose(); await click(host.querySelector('input[type="checkbox"]')!);
+  transport.fetch.mockImplementation(async () => Response.json({ deliveries: [], publishEnabled: false }));
+  await act(async () => client.setQueryData(queryKeys.auth.session, { user: { id: "owner-b" }, session: { id: "session-b", userId: "owner-b" } })); await flush();
   expect(host.querySelector('input[type="checkbox"]')).toBeNull(); expect(host.textContent).not.toContain(props.headSha); expect(api.post).not.toHaveBeenCalled();
+  expect(transport.fetch).toHaveBeenCalledTimes(2);
+  expect(transport.fetch).toHaveBeenLastCalledWith("/api/companies/company-a/coding", expect.objectContaining({ cache: "no-store", signal: expect.any(AbortSignal) }));
+  expect(transport.fetch.mock.calls[0]![1].signal).not.toBe(transport.fetch.mock.calls[1]![1].signal);
 });
