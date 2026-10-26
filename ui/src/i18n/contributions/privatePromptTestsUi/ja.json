@@ -39,5 +39,6 @@
   "status_failed": "失敗",
   "status_unknown": "不明 — 再実行禁止",
   "status_cancelled": "キャンセル済み",
-  "runtimeHash": "派生設定 hash（全コンテキストではありません）"
+  "runtimeHash": "派生設定 hash（全コンテキストではありません）",
+  "textOnlyBoundary": "テキスト限定のプロンプト試験です。完全で空でない SKILL.md と、明示的な UTF-8 の実行不可テキストスナップショットが必要です。スキルのスクリプト・ツール・バイナリ・assets は実行しません。ケースは input のみ送信し、expected の正解は送信しません。literal バージョン・固定スキル本文・ケース input の合計上限は 256000 UTF-8 bytes で、超過時は切り詰めず拒否します。"
 }

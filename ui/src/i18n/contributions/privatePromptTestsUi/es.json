@@ -39,5 +39,6 @@
   "status_failed": "Fallido",
   "status_unknown": "Desconocido — no repetir",
   "status_cancelled": "Cancelado",
-  "runtimeHash": "Hash de configuración derivada (no es todo el contexto)"
+  "runtimeHash": "Hash de configuración derivada (no es todo el contexto)",
+  "textOnlyBoundary": "Experimento de prompt solo de texto: requiere un SKILL.md completo y no vacío e instantáneas de texto explícitamente UTF-8 y no ejecutable; no ejecuta scripts de habilidades, herramientas, binarios ni recursos. Solo envía el input del caso, nunca la respuesta expected. La versión literal, el texto fijo de la habilidad y el input del caso no deben superar juntos 256000 bytes UTF-8; se rechaza el exceso, sin truncarlo."
 }

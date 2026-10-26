@@ -29,6 +29,19 @@
   UI 不新增凭据编辑入口。实际 `runtimeConfigHash` 若存在，仅作为派生配置 hash 显示。
   通用 422 `prompt_registry_operation_failed` 可能发生在提交后或 wake 未知，保留同 key。
 
+## 文本试验范围补充
+
+仅接受完整非空 `SKILL.md` 与明确为 UTF-8、非可执行的文本快照。此处是文本提示词
+试验，不执行技能脚本、工具、二进制或 assets。case 仅发送 `input`，不发送 `expected`
+答案；literal revision、固定技能文本和 case input 的合计上限为 **256000 UTF-8 bytes**，
+超限由服务端拒绝，不能截断后冒充完整输入。UI 四语在执行确认前显示这一限制，前端
+没有读取技能正文或 expected，不以浏览器字符数替代服务端 UTF-8 byte 校验。
+
+人工补验：准备完整/缺失/空 `SKILL.md`、非 UTF-8、可执行/二进制/assets 快照，以及
+总量恰好上限和超限的隔离 fixture。确认非法输入零 dispatch、超限无截断；子进程
+捕获数据只有 case input、不含 expected。以上后端边界需由中央 fixture 验证，本 UI
+mock 只证明四语提示被渲染，不声称已经验证实际执行载荷。
+
 ## 隔离与未知请求
 
 组件按 company/user/session/prompt/revision/head 重新挂载，无全局数据缓存或浏览器

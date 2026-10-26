@@ -45,7 +45,7 @@ it("requires all three confirmations and fixed UUID references; never starts aut
 });
 it("shows all four languages with the same warning and status keys", async () => {
   expect(Object.keys(en).sort()).toEqual(Object.keys(zh).sort()); expect(Object.keys(en).sort()).toEqual(Object.keys(es).sort()); expect(Object.keys(en).sort()).toEqual(Object.keys(ja).sort());
-  await mount(); for (const locale of ["en", "zh-CN", "es", "ja"]) { await act(async () => { await i18n.changeLanguage(locale); }); expect(host.textContent).toContain(text("boundary")); expect(host.textContent).toContain(text("profile")); }
+  await mount(); for (const locale of ["en", "zh-CN", "es", "ja"]) { await act(async () => { await i18n.changeLanguage(locale); }); expect(host.textContent).toContain(text("boundary")); expect(host.textContent).toContain(text("profile")); expect(host.textContent).toContain(text("textOnlyBoundary")); expect(text("textOnlyBoundary")).toContain("256000"); expect(text("textOnlyBoundary")).toContain("SKILL.md"); }
 });
 it("disables execution when the server gate is closed without hiding historical results", async () => {
   calls.capabilities.mockResolvedValue({ enabled: false, profile: "claude_cli_bare_api_key_v1", toolsEnabled: false, completeContextCaptured: false });

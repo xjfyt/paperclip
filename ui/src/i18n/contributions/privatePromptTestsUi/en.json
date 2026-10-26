@@ -39,5 +39,6 @@
   "status_failed": "Failed",
   "status_unknown": "Unknown — do not rerun",
   "status_cancelled": "Cancelled",
-  "runtimeHash": "Derived configuration hash (not complete context)"
+  "runtimeHash": "Derived configuration hash (not complete context)",
+  "textOnlyBoundary": "Text-only prompt experiment: requires a complete, non-empty SKILL.md and explicitly UTF-8, non-executable text snapshots; skill scripts, tools, binaries and assets are not executed. Only case input is sent, never the expected answer. The literal revision, fixed skill text and case input together must not exceed 256000 UTF-8 bytes; oversized input is rejected, not truncated."
 }

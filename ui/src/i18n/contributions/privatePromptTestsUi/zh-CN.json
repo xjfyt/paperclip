@@ -39,5 +39,6 @@
   "status_failed": "失败",
   "status_unknown": "未知 — 不要重跑",
   "status_cancelled": "已取消",
-  "runtimeHash": "派生配置 hash（非完整上下文）"
+  "runtimeHash": "派生配置 hash（非完整上下文）",
+  "textOnlyBoundary": "仅限文本提示词试验：要求完整非空的 SKILL.md 和明确为 UTF-8 的非可执行文本快照，不执行技能脚本、工具、二进制或 assets；案例仅发送 input，不发送 expected 答案。literal 版本、固定技能文本与案例 input 合计最多 256000 UTF-8 bytes，超限拒绝，不截断。"
 }

@@ -76,6 +76,7 @@ function PrivateTestSession(props: Props) {
   return <section className="space-y-3 border-t border-border pt-4" aria-label={label("title")}>
     <h2 className="text-lg font-semibold">{label("title")}</h2>
     <p>{label("boundary")}</p><p className="text-sm text-muted-foreground">{label("profile")}</p><p className="text-sm text-muted-foreground">{label("contextBoundary")}</p>
+    <p className="text-sm text-muted-foreground">{label("textOnlyBoundary")}</p>
     <p className="break-all font-mono">{label("revision")}: {props.revisionId}<br />{label("receipt")}: {props.headReceiptId ?? "—"}</p>
     {notice && <p role="status">{label(notice)}</p>}
     {failed ? <p role="alert">{label("readFailed")}</p> : <>
