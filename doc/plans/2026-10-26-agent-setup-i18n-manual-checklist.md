@@ -151,10 +151,37 @@ NODE_OPTIONS=--max-old-space-size=512 node ../node_modules/vitest/vitest.mjs run
 
 - 手测追加：使用测试连接完成配置后，在四语间切换，检查标题、身份/范围/动作计数及按钮；确认权限页的连接 ID 与实际授权范围没有改变，没有再次发起授权/保存。使用长应用名称和窄屏核对摘要对齐、换行及键盘焦点；真实供应商授权和浏览器布局仍须用户验收。
 
+## 第八片：标准 OAuth 登录状态与本地错误缓存（2026-10-26）
+
+- 实际入口为 `AppsConnect` 页面及任务/独立 dialog → `ConnectionSetupFlow` → `StandardConnectionSetupFlow`，其中 curated 和 generic 两处使用 `OAuthConnectStateScreen`。本片仅补这两处状态屏、标准控制器自身的本地错误、共享 `StepHeader` 的自有标题/取消/进度 aria，以及 `UnverifiedServerBadge` 的安全警告标签；独立 `connectionOAuthUi` 四语贡献，未生成最终 locale。
+- `oauthError` 改为既有 `LocalizedUiMessage` 描述符或原文，在状态屏 render 时翻译；回调取消/未完成、弹窗阻止/关闭、连接检查失败、已知 `invalid_grant` 和未知非 Error fallback 可在显示后切换语言。本地刷新账户 guard 使用既有 `LocalizedUiError`；未知 `Error.message`、供应商 guidance、host、URL、用户名称和外部 step 标签保持原文，不按英文字符串猜测来源。
+- 没有改动 callback origin/interaction/outcome 校验、abort/session、认证状态值、权限判断、请求 payload、导航或任何 effect/callback 依赖；没有把 `t` 加入轮询依赖。保留仅认识地址时才批准授权、未经验证服务器、取消后已保存连接未改等安全含义。共享 header/badge 变更仅替换显示文本，不能据此声称它们所有宿主已完成四语。
+- 新增屏幕四语渲染覆盖 entry/resume/starting/redirecting/error、按钮、进度 aria、安全警告、原始 URL/host/供应商诊断和 HTML 字面名称；实际 `AppsConnect` mock 流程先触发 connect/start 的本地 fallback、已知授权过期或原始外部错误，以及已保存 draft 的三种回调失败，再切四语，核对 connect/startOAuth/finish/install/查询记录不增加。保留 draft ID 与 `asCurrentUser` 语义，只有主动重试才重新启动。
+- 弹窗阻止后的四语切换不重复打开窗口/启动请求；独立 dialog 测试拦截 interval 并主动执行原注册回调，证明切语言不重新注册/清理 1 秒轮询、不调用 finish/onComplete；只有原回调读取 mock 已保存 active 状态后才完成。该测试不是实时浏览器计时、真实弹窗或外部 OAuth 验收。
+- 最终专注回归 **11 文件 / 332 用例通过**；资源/实际合成器安全规则、独立审阅、token gates、调色板/角色同步与 diff 检查通过。未执行完整类型检查/构建、真实授权、数据库或网络。
+- 复现命令（`ui/`，512 MB、单 worker，均为纯测试或 mock/jsdom）：
+
+```sh
+NODE_OPTIONS=--max-old-space-size=512 node ../node_modules/vitest/vitest.mjs run \
+  src/i18n/connection-oauth-surfaces.test.tsx \
+  src/i18n/connection-completion-surfaces.test.tsx \
+  src/i18n/connection-access-surfaces.test.tsx \
+  src/i18n/connection-access-remote.test.tsx \
+  src/components/ai-connections/AiProviderSetup.test.tsx \
+  src/pages/apps/AppsConnect.test.tsx \
+  src/features/connections/ConnectionSetupFlow.architecture.test.ts \
+  src/features/connections/ConnectionSetupFlow.oauth.test.ts \
+  src/features/connections/connection-defaults.test.ts \
+  src/lib/oauthHandoff.test.ts src/lib/authorizationUrl.test.ts --maxWorkers=1
+```
+
+- 手测追加：使用测试账户分别从页面、任务弹窗及独立弹窗打开标准 OAuth 连接；在等待、弹窗被阻止/关闭、取消/失败回调、恢复已保存 draft 时切四语。核对正在授权的 host 和 URL 不变、未经验证警告可读、草稿身份/范围保留、不重复打开窗口或启动授权/完成。显式点击重试或新标签页后应仍沿用原连接；真正成功必须以已保存连接验证为准。再测试窄屏、长名称、键盘取消/返回及屏幕阅读器；真实供应商授权、跨窗口消息和计时仍待用户验收。
+
 ## 已知剩余范围（不是本片已完成项）
 
 - 真实登录、剪贴板权限及浏览器布局尚未四语验收。系统提示已抽取不代表外部交互已通过。
-- `AdapterLoginPanel` 与 `useLocalAiLogin` 本片指定显示层已补；`environmentDisplayLabel` 仅拼用户环境名和原始 driver 标识，保留为用户内容/技术值。此前确认的三个共享权限摘要/选择组件已由第六片补齐，三行摘要和完成页由第七片补齐；`ConnectionSetupFlow` 其它分支（如 OAuth 登录状态、校验/错误缓存、密钥表单）以及远程 MCP 的其它认证/管理/错误文案仍未包含，不能据此声称整个连接流程四语完成。所有切片均未更改权限判定或真实授权语义。
+- `AdapterLoginPanel` 与 `useLocalAiLogin` 本片指定显示层已补；`environmentDisplayLabel` 仅拼用户环境名和原始 driver 标识，保留为用户内容/技术值。此前确认的三个共享权限摘要/选择组件已由第六片补齐，三行摘要和完成页由第七片补齐；`ConnectionSetupFlow` 标准 OAuth 状态屏和自身本地错误缓存由第八片补齐，但其它分支（如校验/错误缓存、密钥表单）以及远程 MCP 独立 controller 的其它认证/管理/错误文案仍未包含，不能据此声称整个连接流程四语完成。所有切片均未更改权限判定或真实授权语义。
+- `oauthHandoff.ts` / `authorizationUrl.ts` 工具的本地异常尚未增加明确翻译描述符；它们部分路径混合外部网络原始诊断，本片不按 Error.message 或宽泛错误码猜测翻译。工具既有安全测试通过不等于其本地提示已四语覆盖。
 - 第四片审计发现的 `OnboardingWizard` 本机 connect 错误宿主已由第五片接通；向导的其他硬编码校验/错误及尚未审计的系统文案，不在本次 Agent 创建切片完成结论内。
 - 服务端/适配器 `Error.message`、运行检查结果以及用户/组织/环境名称保持原始内容，不能以纯英文扫描结果判定它们都应翻译。
 - 基线 `6bee5bc` 的 `optionalOnboarding.configureAgent` 三语使用“智能体/agente/エージェント”；本片创建按钮使用独立 Agent 术语键，不覆盖其他域片段。并行 core 切片已修中文 Agent 术语，其他语种与最终集成状态以合并后的资源为准。

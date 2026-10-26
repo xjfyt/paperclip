@@ -1,4 +1,5 @@
 import type { TFunction } from "i18next";
+import { LocalizedUiError, localizedUiErrorMessage, type LocalizedUiMessage } from "@/lib/localized-ui-error";
 import { Trans } from "react-i18next";
 import { i18n, useTranslation } from "@/i18n";
 import { StepHeader } from "./ConnectionSetupHeader";
@@ -182,14 +183,14 @@ function githubRecoveryUrl(value: string | null): string | null {
   }
 }
 
-function oauthCallbackErrorMessage(outcome: string | null, code: string | null): string {
+function oauthCallbackErrorMessage(outcome: string | null, code: string | null): LocalizedUiMessage {
   if (outcome === "denied") {
-    return "Authorization was cancelled or declined. Your saved connection was not changed.";
+    return { key: "connectionOAuthUi.callbackDenied" };
   }
   if (code === "github_installation_required") {
-    return "GitHub access is required. Install Paperclip and grant at least one repository, then try again.";
+    return { key: "connectionOAuthUi.githubRequired" };
   }
-  return "Authorization did not complete. Your saved connection is still here, so you can try again.";
+  return { key: "connectionOAuthUi.callbackIncomplete" };
 }
 
 const ROUTE_STAGE_BY_STEP: Partial<Record<Step, string>> = {
@@ -353,11 +354,6 @@ const SELECTED_APP_STEP_INDEX: Record<Exclude<Step, "gallery" | "success">, numb
   key: 0,
 };
 const ZAPIER_STEP_LABELS = ["Add MCP URL"];
-// Waiting for browser sign-in happens *inside* the flow's last step, so the
-// waiting screen reuses the step model of the flow that opened it. It must not
-// append a trailing step the flow never lands on: a stepper that grows from one
-// dot to two the moment you press Connect reads as a step you missed.
-const OAUTH_SIGN_IN_STEP_LABELS = ["Sign in"];
 
 /**
  * Which identity a fresh connection should default to (PAP-17835).
@@ -749,7 +745,7 @@ function StandardConnectionSetupFlow({
   const [oauthPhase, setOAuthPhase] = useState<OAuthConnectPhase>(
     resumingAfterOAuthFailure ? "error" : "entry",
   );
-  const [oauthError, setOAuthError] = useState<string | null>(() => {
+  const [oauthError, setOAuthError] = useState<LocalizedUiMessage | null>(() => {
     if (!resumingAfterOAuthFailure) return null;
     return oauthCallbackErrorMessage(oauthCallbackOutcome, oauthCallbackCode);
   });
@@ -795,7 +791,7 @@ function StandardConnectionSetupFlow({
     const popup = oauthPopupRef.current;
     if (!popup || popup.closed) {
       setOAuthPhase("error");
-      setOAuthError("Paperclip couldn’t open the sign-in window. Open sign-in in a new tab to continue.");
+      setOAuthError({ key: "connectionOAuthUi.popupBlocked" });
       onPhaseChange?.("needs_retry");
       return;
     }
@@ -817,7 +813,7 @@ function StandardConnectionSetupFlow({
     const timer = window.setInterval(() => {
       if (!oauthPopupRef.current?.closed) return;
       setOAuthPhase("error");
-      setOAuthError("The sign-in window closed. If authorization did not finish, try again.");
+      setOAuthError({ key: "connectionOAuthUi.popupClosed" });
       setAuthorizationFallbackUrl(null);
       onPhaseChange?.("needs_retry");
     }, 1_000);
@@ -835,7 +831,7 @@ function StandardConnectionSetupFlow({
       if (target.kind === "reauthentication") {
         const destination = host === "dialog" ? oauthPopupRef.current : window;
         if (!destination || destination.closed || !start.handoff) {
-          throw new Error("Paperclip couldn’t preserve this sign-in while refreshing your account.");
+          throw new LocalizedUiError("connectionOAuthUi.preserveFailed", "Paperclip couldn’t preserve this sign-in while refreshing your account.");
         }
         savePendingCloudHandoff(start.handoff.session, destination.sessionStorage);
         setOAuthPhase("starting");
@@ -847,7 +843,7 @@ function StandardConnectionSetupFlow({
     } catch (error) {
       if (controller.signal.aborted) return;
       setOAuthPhase("error");
-      setOAuthError(error instanceof Error ? error.message : "Paperclip couldn’t start secure sign-in. Try again.");
+      setOAuthError(localizedUiErrorMessage(error, "connectionOAuthUi.startFailed"));
       onPhaseChange?.("needs_retry");
     } finally {
       if (oauthHandoffAbortRef.current === controller) oauthHandoffAbortRef.current = null;
@@ -868,13 +864,13 @@ function StandardConnectionSetupFlow({
       }
       if (outcome === "declined") {
         setOAuthPhase("error");
-        setOAuthError("Authorization was cancelled. You can try again.");
+        setOAuthError({ key: "connectionOAuthUi.authorizationCancelled" });
         onPhaseChange?.("needs_retry");
         return;
       }
       if (outcome !== "failed") return;
       setOAuthPhase("error");
-      setOAuthError("Authorization did not complete. Try again when you’re ready.");
+      setOAuthError({ key: "connectionOAuthUi.authorizationIncomplete" });
     };
     window.addEventListener("message", receiveOAuthOutcome);
     return () => window.removeEventListener("message", receiveOAuthOutcome);
@@ -893,7 +889,7 @@ function StandardConnectionSetupFlow({
       if (!popup || popup.closed) {
         setDialogOAuthConnectionId(null);
         setOAuthPhase("error");
-        setOAuthError("The sign-in window closed. Try again to finish connecting GitHub.");
+        setOAuthError({ key: "connectionOAuthUi.githubWindowClosed" });
         return;
       }
       let returned: URL;
@@ -902,7 +898,7 @@ function StandardConnectionSetupFlow({
       if (returned.searchParams.has("oauth")) {
         setDialogOAuthConnectionId(null);
         setOAuthPhase("error");
-        setOAuthError("Authorization did not complete. Finish setup in the sign-in window or try again.");
+        setOAuthError({ key: "connectionOAuthUi.finishInWindow" });
         return;
       }
       if (returned.searchParams.get("success") !== "1") return;
@@ -918,7 +914,7 @@ function StandardConnectionSetupFlow({
         if (!cancelled) {
           setDialogOAuthConnectionId(null);
           setOAuthPhase("error");
-          setOAuthError("Could not confirm the connection. Try again.");
+          setOAuthError({ key: "connectionOAuthUi.confirmFailed" });
         }
       } finally { checking = false; }
     }, 1000);
@@ -1322,10 +1318,8 @@ function StandardConnectionSetupFlow({
       onPhaseChange?.("needs_retry");
       setOAuthError(
         details?.code === "invalid_grant"
-          ? "Your authorization expired or was revoked. Reconnect to continue."
-          : error instanceof Error
-            ? error.message
-            : "Paperclip couldn’t start secure sign-in. Try again.",
+          ? { key: "connectionOAuthUi.authorizationExpired" }
+          : localizedUiErrorMessage(error, "connectionOAuthUi.startFailed"),
       );
     },
   });
@@ -1498,10 +1492,8 @@ function StandardConnectionSetupFlow({
         onPhaseChange?.("needs_retry");
         setOAuthError(
           details?.code === "invalid_grant"
-            ? "Your authorization expired or was revoked. Reconnect to continue."
-            : error instanceof Error
-              ? error.message
-              : "Paperclip couldn’t start secure sign-in. Try again.",
+            ? { key: "connectionOAuthUi.authorizationExpired" }
+            : localizedUiErrorMessage(error, "connectionOAuthUi.startFailed"),
         );
         return;
       }
@@ -1689,7 +1681,7 @@ function StandardConnectionSetupFlow({
     if (automaticOAuth && directOAuthRetryingRef.current) return;
     if (automaticOAuth && (applicationsQuery.isError || connectionsQuery.isError)) {
       setOAuthPhase("error");
-      setOAuthError("Paperclip couldn’t check for an existing connection. Try again.");
+      setOAuthError({ key: "connectionOAuthUi.existingCheckFailed" });
       setStep("key");
       return;
     }
@@ -2239,7 +2231,7 @@ function StandardConnectionSetupFlow({
             ]);
             if (applicationsResult.isError || connectionsResult.isError) {
               setOAuthPhase("error");
-              setOAuthError("Paperclip couldn’t check for an existing connection. Try again.");
+              setOAuthError({ key: "connectionOAuthUi.existingCheckFailed" });
               return;
             }
             const refreshedResumeConnection = resumeConnectionId
@@ -2295,12 +2287,12 @@ function StandardConnectionSetupFlow({
     return (
       <OAuthConnectStateScreen
         identity={{
-          name: linkName.trim() || endpointHost(linkUrl) || "this server",
+          name: linkName.trim() || endpointHost(linkUrl) || t("connectionOAuthUi.server"),
           unverifiedHost: endpointHost(linkUrl),
         }}
         // A pasted endpoint walks the generic three-step wizard, so keep that
         // model rather than dropping to the curated two-step one.
-        steps={{ labels: STEP_LABELS, activeIndex: STEP_INDEX.key }}
+        steps={{ labels: [t("connectionOAuthUi.pickAppStep"), t("connectionOAuthUi.addKeyStep")], activeIndex: STEP_INDEX.key }}
         phase={oauthPhase}
         error={oauthError}
         authorizationHost={authorizationHost}
@@ -2722,7 +2714,7 @@ export function OAuthConnectStateScreen({
   recoveryActions,
   authorizationHost,
   authorizationUrl,
-  steps = { labels: OAUTH_SIGN_IN_STEP_LABELS, activeIndex: 0 },
+  steps,
   guidance,
   defaults,
   onRetry,
@@ -2738,7 +2730,7 @@ export function OAuthConnectStateScreen({
   /** This screen is continuing a durable draft rather than creating a new one. */
   resuming?: boolean;
   phase: OAuthConnectPhase;
-  error?: string | null;
+  error?: LocalizedUiMessage | null;
   recoveryActions?: { installationUrl: string | null; managementUrl: string | null };
   /**
    * Host of the authorization page being opened. A valid HTTPS authorization
@@ -2764,41 +2756,48 @@ export function OAuthConnectStateScreen({
   onBack: () => void;
   onCancel: () => void;
 }) {
-  const serverName = entry?.name ?? identity?.name ?? "this server";
+  const { t } = useTranslation();
+  const serverName = entry?.name ?? identity?.name ?? t("connectionOAuthUi.server");
+  // Waiting for browser sign-in happens *inside* the flow's last step, so the
+  // waiting screen reuses the step model of the flow that opened it. It must not
+  // append a trailing step the flow never lands on: a stepper that grows from one
+  // dot to two the moment you press Connect reads as a step you missed.
+  const translatedSteps = steps ?? { labels: [t("connectionOAuthUi.signInStep")], activeIndex: 0 };
+  const errorText = typeof error === "string" ? error : error ? t(error.key) : null;
   const unverifiedHost = entry ? null : identity?.unverifiedHost ?? null;
   const status = phase === "entry"
     ? {
         title: resuming
-          ? `Finish connecting ${serverName}`
-          : `Connect ${serverName} to Paperclip`,
+          ? t("connectionOAuthUi.finishTitle", { serverName })
+          : t("connectionOAuthUi.connectTitle", { serverName }),
         body: resuming
-          ? `Your connection is saved. Continue in ${serverName} to approve access; its identity and agent access will stay the same.`
-          : `Paperclip will open ${serverName} so you can choose a workspace and approve access.`,
+          ? t("connectionOAuthUi.resumeBody", { serverName })
+          : t("connectionOAuthUi.entryBody", { serverName }),
       }
     : phase === "starting"
       ? {
-          title: "Preparing secure sign-in",
-          body: `Paperclip is creating a secure ${serverName} connection.`,
+          title: t("connectionOAuthUi.preparingTitle"),
+          body: t("connectionOAuthUi.preparingBody", { serverName }),
         }
       : phase === "redirecting"
         ? {
-            title: `Opening ${serverName}`,
+            title: t("connectionOAuthUi.openingTitle", { serverName }),
             body: authorizationHost
-              ? `Continue at ${authorizationHost} to choose a workspace and approve access. Only approve access if you recognize that address.`
-              : `Continue in ${serverName} to choose a workspace and approve access.`,
+              ? t("connectionOAuthUi.redirectHostBody", { authorizationHost })
+              : t("connectionOAuthUi.redirectBody", { serverName }),
           }
         : {
-            title: `${serverName} couldn’t connect`,
-            body: error ?? "Paperclip couldn’t start secure sign-in. Try again.",
+            title: t("connectionOAuthUi.errorTitle", { serverName }),
+            body: errorText ?? t("connectionOAuthUi.startFailed"),
           };
 
   return (
     <div className="max-w-5xl">
       <StepHeader
-        subtitle="Secure MCP sign-in"
+        subtitle={t("connectionOAuthUi.subtitle")}
         step="key"
-        activeIndex={steps.activeIndex}
-        labels={steps.labels}
+        activeIndex={translatedSteps.activeIndex}
+        labels={translatedSteps.labels}
         appIdentity={entry ? { name: entry.name, logoUrl: entry.branding.logoUrl, darkLogoUrl: entry.branding.darkLogoUrl } : undefined}
         unverifiedHost={unverifiedHost}
         onCancel={onCancel}
@@ -2829,7 +2828,7 @@ export function OAuthConnectStateScreen({
             {recoveryActions.installationUrl ? (
               <Button type="button" variant="outline" asChild>
                 <a href={recoveryActions.installationUrl} target="_blank" rel="noreferrer">
-                  Install Paperclip on GitHub
+                  {t("connectionOAuthUi.installGithub")}
                   <ArrowUpRight className="ml-1.5 h-3.5 w-3.5" />
                 </a>
               </Button>
@@ -2837,7 +2836,7 @@ export function OAuthConnectStateScreen({
             {recoveryActions.managementUrl ? (
               <Button type="button" variant="ghost" asChild>
                 <a href={recoveryActions.managementUrl} target="_blank" rel="noreferrer">
-                  Manage repositories on GitHub
+                  {t("connectionOAuthUi.manageGithub")}
                 </a>
               </Button>
             ) : null}
@@ -2848,17 +2847,17 @@ export function OAuthConnectStateScreen({
           {phase === "error" || phase === "entry" ? (
             <Button type="button" onClick={onRetry} disabled={!settingsValid}>
               {phase === "entry"
-                ? resuming ? `Finish with ${serverName}` : `Continue to ${serverName}`
-                : "Try again"}
+                ? resuming ? t("connectionOAuthUi.finishWith", { serverName }) : t("connectionOAuthUi.continueTo", { serverName })
+                : t("connectionOAuthUi.tryAgain")}
               {phase === "entry" ? <ArrowUpRight className="h-4 w-4" aria-hidden="true" /> : null}
             </Button>
           ) : (
             <Button type="button" disabled>
-              {phase === "redirecting" ? `Opening ${serverName}…` : "Preparing…"}
+              {phase === "redirecting" ? t("connectionOAuthUi.opening", { serverName }) : t("connectionOAuthUi.preparing")}
             </Button>
           )}
-          {authorizationUrl ? <Button variant="outline" asChild><a href={authorizationUrl} target="_blank" rel="noopener noreferrer" onClick={onOpenAuthorization}>Open sign-in in a new tab</a></Button> : null}
-          <Button type="button" variant="ghost" onClick={onBack}>Back</Button>
+          {authorizationUrl ? <Button variant="outline" asChild><a href={authorizationUrl} target="_blank" rel="noopener noreferrer" onClick={onOpenAuthorization}>{t("connectionOAuthUi.openNewTab")}</a></Button> : null}
+          <Button type="button" variant="ghost" onClick={onBack}>{t("connectionOAuthUi.back")}</Button>
         </div>
       </div>
     </div>

@@ -363,6 +363,7 @@ describe("AppsConnect — Connect with a link (M4 frame)", () => {
     document.body.innerHTML = "";
     vi.restoreAllMocks();
     vi.clearAllMocks();
+    await i18n.changeLanguage("en");
   });
 
   async function render(queryClient?: QueryClient, byoOnly = false, content?: ReactNode) {
@@ -2372,6 +2373,90 @@ describe("AppsConnect — Connect with a link (M4 frame)", () => {
     await act(async () => dialogRoot.unmount());
   });
 
+  it.each([
+    ["connect", "invalid", "authorizationExpired"], ["start", "invalid", "authorizationExpired"],
+    ["connect", "unknown", "startFailed"], ["start", "unknown", "startFailed"],
+    ["connect", "external", null], ["start", "external", null],
+  ] as const)("retranslates cached OAuth %s/%s errors without repeating requests", async (stage, kind, key) => {
+    mockSearch.value = "source=notion";
+    listGalleryMock.mockResolvedValue({ apps: [NOTION] });
+    connectAppMock.mockResolvedValue({ connectionId: "conn-notion", application: { id: "app-notion", name: "Notion" }, connection: { id: "conn-notion", credentialPolicy: "per_user" }, actions: { readOnly: [], canMakeChanges: [] }, catalog: [], suggestedDefaults: {}, auth: { kind: "oauth", startUrl: null } });
+    const raw = "Provider raw diagnostic <write:repo> state=opaque-id";
+    const error = kind === "invalid" ? new ApiError("Raw invalid grant", 400, { details: { code: "invalid_grant" } }) : kind === "external" ? new Error(raw) : { unknown: true };
+    (stage === "connect" ? connectAppMock : startOAuthMock).mockRejectedValue(error);
+    await render();
+    await passAccessStep();
+    await flushReact(); await flushReact();
+    expect(container.textContent).toContain(key ? i18n.t(`connectionOAuthUi.${key}`) : raw);
+    const requests = () => JSON.stringify([connectAppMock.mock.calls, startOAuthMock.mock.calls, putConnectionInstallsMock.mock.calls, finishAppMock.mock.calls, listApplicationsMock.mock.calls, listConnectionsMock.mock.calls, navigateTopLevelMock.mock.calls]);
+    const before = requests();
+    for (const locale of ["ja", "zh-CN", "es", "en"]) {
+      await act(async () => { await i18n.changeLanguage(locale); });
+      expect(container.textContent).toContain(key ? i18n.t(`connectionOAuthUi.${key}`) : raw);
+      expect(buttonByText(i18n.t("connectionOAuthUi.tryAgain"))).toBeTruthy();
+      expect(requests()).toBe(before);
+    }
+    expect(finishAppMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["denied", "oauth_authorization_denied", "callbackDenied"],
+    ["failed", "oauth_callback_failed", "callbackIncomplete"],
+    ["failed", "github_installation_required", "githubRequired"],
+  ])("retranslates a saved OAuth %s/%s checkpoint without restarting or changing its draft", async (outcome, code, key) => {
+    const id = "22222222-2222-4222-8222-222222222222";
+    mockSearch.value = `source=notion&resume=${id}&oauth=${outcome}&code=${code}`;
+    listGalleryMock.mockResolvedValue({ apps: [NOTION] });
+    listApplicationsMock.mockResolvedValue({ applications: [{ id: "app-notion", status: "draft", metadata: { sourceTemplateKey: "notion" } }] });
+    listConnectionsMock.mockResolvedValue({ connections: [{ id, applicationId: "app-notion", name: "Customer 私の接続", authKind: "oauth", credentialPolicy: "per_user", status: "draft", config: { sourceTemplateKey: "notion", connectionMethodKey: "mcp-oauth" }, transportConfig: {} }] });
+    await render(); await flushReact();
+    const requests = () => JSON.stringify([listConnectionsMock.mock.calls, listApplicationsMock.mock.calls, connectAppMock.mock.calls, startOAuthMock.mock.calls, finishAppMock.mock.calls, putConnectionInstallsMock.mock.calls]);
+    const before = requests();
+    for (const locale of ["ja", "zh-CN", "es", "en"]) {
+      await act(async () => { await i18n.changeLanguage(locale); });
+      expect(container.textContent).toContain(i18n.t(`connectionOAuthUi.${key}`));
+      expect(requests()).toBe(before);
+    }
+    await act(async () => buttonByText("Try again")!.click());
+    await flushReact(); await flushReact();
+    expect(startOAuthMock).toHaveBeenCalledExactlyOnceWith(id, { asCurrentUser: true });
+    expect(connectAppMock).not.toHaveBeenCalled();
+    expect(finishAppMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps the same OAuth polling registration across language changes and completes only after saved-state verification", async () => {
+    listGalleryMock.mockResolvedValue({ apps: [NOTION] });
+    connectAppMock.mockResolvedValue({ connectionId: "conn-notion", application: { id: "app-notion", name: "Notion" }, connection: { id: "conn-notion", credentialPolicy: "per_user" }, actions: { readOnly: [], canMakeChanges: [] }, catalog: [], suggestedDefaults: {}, auth: { kind: "oauth" } });
+    const popup = { closed: false, location: { href: "about:blank", assign: vi.fn() }, focus: vi.fn(), close: vi.fn() };
+    const open = vi.spyOn(window, "open").mockReturnValue(popup as unknown as Window);
+    // Drive the registered callbacks explicitly: no real popup, network, or clock delay.
+    const polls: Array<() => unknown> = [];
+    const intervals = vi.spyOn(window, "setInterval").mockImplementation(handler => { polls.push(handler as () => unknown); return polls.length; });
+    const clears = vi.spyOn(window, "clearInterval").mockImplementation(() => {});
+    const onComplete = vi.fn(), onPhaseChange = vi.fn();
+    await render(undefined, false, <ConnectionSetupFlow host="dialog" serviceSlug="notion" onComplete={onComplete} onPhaseChange={onPhaseChange} />);
+    await passAccessStep(); await flushReact(); await flushReact();
+    expect(startOAuthMock).toHaveBeenCalledExactlyOnceWith("conn-notion", { asCurrentUser: true });
+    expect(intervals.mock.calls.filter(call => call[1] === 1000).length).toBe(2);
+    const requests = () => JSON.stringify([connectAppMock.mock.calls, startOAuthMock.mock.calls, finishAppMock.mock.calls, putConnectionInstallsMock.mock.calls, intervals.mock.calls.map(call => call[1]), clears.mock.calls, onPhaseChange.mock.calls, open.mock.calls, popup.location.assign.mock.calls]);
+    const before = requests();
+    for (const locale of ["ja", "zh-CN", "es", "en"]) {
+      await act(async () => { await i18n.changeLanguage(locale); });
+      expect(container.textContent).toContain(i18n.t("connectionOAuthUi.openingTitle", { serverName: "Notion" }));
+      expect(container.textContent).toContain("mcp.notion.com");
+      expect(requests()).toBe(before);
+      expect(onComplete).not.toHaveBeenCalled();
+      expect(getConnectionMock).not.toHaveBeenCalled();
+    }
+    getConnectionMock.mockResolvedValue({ id: "conn-notion", status: "active" });
+    popup.location.href = `${window.location.origin}/CO/apps/conn-notion/permissions?success=1`;
+    await act(async () => { for (const poll of polls) await poll(); });
+    expect(getConnectionMock).toHaveBeenCalledExactlyOnceWith("conn-notion");
+    expect(onComplete).toHaveBeenCalledExactlyOnceWith({ connectionId: "conn-notion" });
+    expect(popup.close).toHaveBeenCalledOnce();
+    expect(finishAppMock).not.toHaveBeenCalled();
+  });
+
   it("reserves the task-dialog OAuth popup before awaiting connection setup and assigns only the validated URL", async () => {
     listGalleryMock.mockResolvedValue({ apps: [NOTION] });
     let resolveConnect!: (value: unknown) => void;
@@ -2492,6 +2577,14 @@ describe("AppsConnect — Connect with a link (M4 frame)", () => {
     expect(fallback?.textContent).toBe("Open sign-in in a new tab");
     expect(fallback?.href).toContain("https://mcp.notion.com/authorize");
     expect(fallback?.rel).toBe("noopener noreferrer");
+    const calls = () => JSON.stringify([connectAppMock.mock.calls, startOAuthMock.mock.calls, putConnectionInstallsMock.mock.calls, finishAppMock.mock.calls, openSpy.mock.calls, onPhaseChange.mock.calls]);
+    const before = calls();
+    for (const locale of ["ja", "zh-CN", "es", "en"]) {
+      await act(async () => { await i18n.changeLanguage(locale); });
+      expect(container.textContent).toContain(i18n.t("connectionOAuthUi.popupBlocked"));
+      expect(container.querySelector('a[target="_blank"]')?.getAttribute('href')).toBe("https://mcp.notion.com/authorize?state=resumed");
+      expect(calls()).toBe(before);
+    }
 
     openSpy.mockRestore();
     await act(async () => dialogRoot.unmount());
