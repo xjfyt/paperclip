@@ -21,7 +21,10 @@ function collectCandidates(source, file, parse) {
       for (const part of node.quasis) add(part, part.value.cooked ?? part.value.raw, "jsx-template");
     } else if (node.type === "ConditionalExpression") {
       expression(node.consequent); expression(node.alternate);
-    } else if (node.type === "LogicalExpression" || node.type === "BinaryExpression") {
+    } else if (node.type === "LogicalExpression") {
+      if (node.operator !== "&&") expression(node.left);
+      expression(node.right);
+    } else if (node.type === "BinaryExpression" && node.operator === "+") {
       expression(node.left); expression(node.right);
     }
   }

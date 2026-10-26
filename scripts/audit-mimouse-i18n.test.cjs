@@ -15,3 +15,7 @@ test("includes display attributes and excludes non-display expression attributes
 test("explicitly leaves function-generated text and technical strings for manual review", () => {
   assert.deepEqual(texts('const x = <p>{displayName(user)}{localT("hello")}{"USD"}{"123"}</p>'), ["USD"]);
 });
+
+test("does not count status comparisons or logical guards as displayed text", () => {
+  assert.deepEqual(texts('const x = <p>{status === "needs_setup" && <span>Set up</span>}{mode !== "sign_up" || "Sign up"}{"guard" && "Shown"}</p>'), ["Set up", "Sign up", "Shown"]);
+});

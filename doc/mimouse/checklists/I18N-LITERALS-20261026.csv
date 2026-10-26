@@ -114,7 +114,6 @@ ui/src/components/SidebarProjects.tsx,186,jsx-template,Open actions for,needs_re
 ui/src/components/SidebarProjects.tsx,200,jsx-expression,Leaving...,needs_review
 ui/src/components/SidebarProjects.tsx,200,jsx-expression,Leave project,needs_review
 ui/src/components/SidebarProjects.tsx,413,jsx-attribute,Projects,needs_review
-ui/src/components/SubscriptionCostCard.tsx,112,jsx-expression,unavailable,needs_review
 ui/src/components/issue-properties/IssueProperties.tsx,172,jsx-template,Copy,needs_review
 ui/src/components/issue-properties/IssueProperties.tsx,172,jsx-template,to clipboard,needs_review
 ui/src/components/issue-properties/IssueProperties.tsx,185,jsx-text,Copied,needs_review
@@ -292,10 +291,7 @@ ui/src/components/issue-properties/IssueProperties.tsx,3190,jsx-template,tab,nee
 ui/src/components/issue-properties/IssueProperties.tsx,3219,jsx-attribute,Open closed sidebar tab,needs_review
 ui/src/components/issue-properties/IssueProperties.tsx,3220,jsx-expression,All sidebar tabs are open,needs_review
 ui/src/components/issue-properties/IssueProperties.tsx,3220,jsx-expression,Open closed sidebar tab,needs_review
-ui/src/pages/AgentDetail.tsx,469,jsx-expression,string,needs_review
-ui/src/pages/AgentDetail.tsx,472,jsx-expression,string,needs_review
 ui/src/pages/AgentDetail.tsx,633,jsx-expression,Failed to load workspace operation log,needs_review
-ui/src/pages/AgentDetail.tsx,732,jsx-expression,boolean,needs_review
 ui/src/pages/AgentDetail.tsx,734,jsx-expression,Created by this run,needs_review
 ui/src/pages/AgentDetail.tsx,734,jsx-expression,Reused existing workspace,needs_review
 ui/src/pages/AgentDetail.tsx,739,jsx-text,stderr excerpt,needs_review
@@ -309,19 +305,6 @@ ui/src/pages/AgentDetail.tsx,1341,jsx-expression,Resetting…,needs_review
 ui/src/pages/AgentDetail.tsx,1341,jsx-expression,Reset to defaults,needs_review
 ui/src/pages/AgentDetail.tsx,1344,jsx-text,Ships with Paperclip and powers,needs_review
 ui/src/pages/AgentDetail.tsx,1345,jsx-text,". Configure it like any agent — model, instructions, budget. It can be paused but not deleted; pausing it pauses",needs_review
-ui/src/pages/AgentDetail.tsx,1395,jsx-expression,run-detail,needs_review
-ui/src/pages/AgentDetail.tsx,1395,jsx-expression,channels,needs_review
-ui/src/pages/AgentDetail.tsx,1398,jsx-expression,overview,needs_review
-ui/src/pages/AgentDetail.tsx,1411,jsx-expression,instructions,needs_review
-ui/src/pages/AgentDetail.tsx,1425,jsx-expression,runtime,needs_review
-ui/src/pages/AgentDetail.tsx,1443,jsx-expression,secrets,needs_review
-ui/src/pages/AgentDetail.tsx,1458,jsx-expression,skills,needs_review
-ui/src/pages/AgentDetail.tsx,1465,jsx-expression,tools,needs_review
-ui/src/pages/AgentDetail.tsx,1469,jsx-expression,channels,needs_review
-ui/src/pages/AgentDetail.tsx,1473,jsx-expression,permissions,needs_review
-ui/src/pages/AgentDetail.tsx,1488,jsx-expression,api-keys,needs_review
-ui/src/pages/AgentDetail.tsx,1494,jsx-expression,revisions,needs_review
-ui/src/pages/AgentDetail.tsx,1498,jsx-expression,run-detail,needs_review
 ui/src/pages/AgentDetail.tsx,1511,jsx-expression,Saving changes…,needs_review
 ui/src/pages/AgentDetail.tsx,1511,jsx-expression,You have unsaved changes.,needs_review
 ui/src/pages/AgentDetail.tsx,1514,jsx-expression,Saving…,needs_review
@@ -338,17 +321,11 @@ ui/src/pages/AgentDetail.tsx,2940,jsx-expression,entry,needs_review
 ui/src/pages/AgentDetail.tsx,2974,jsx-expression,Deprecated virtual file,needs_review
 ui/src/pages/AgentDetail.tsx,2975,jsx-template,file,needs_review
 ui/src/pages/AgentDetail.tsx,2976,jsx-expression,New file in this bundle,needs_review
-ui/src/pages/AgentDetail.tsx,3028,jsx-expression,managed,needs_review
 ui/src/pages/AgentDetail.tsx,3049,jsx-template,Preserved edits for,needs_review
 ui/src/pages/AgentDetail.tsx,3050,jsx-text,. To keep any of these edits in,needs_review
 ui/src/pages/AgentDetail.tsx,3050,jsx-text,", copy them and edit the current entry explicitly.",needs_review
-ui/src/pages/AgentDetail.tsx,3071,jsx-expression,pending,needs_review
-ui/src/pages/AgentDetail.tsx,3072,jsx-expression,managed,needs_review
-ui/src/pages/AgentDetail.tsx,3072,jsx-expression,agent_files,needs_review
 ui/src/pages/AgentDetail.tsx,3129,jsx-attribute,# Agent instructions,needs_review
 ui/src/pages/AgentDetail.tsx,3258,jsx-text,tok,needs_review
-ui/src/pages/AgentDetail.tsx,3589,jsx-expression,running,needs_review
-ui/src/pages/AgentDetail.tsx,3589,jsx-expression,queued,needs_review
 ui/src/pages/AgentDetail.tsx,3597,jsx-expression,Cancelling…,needs_review
 ui/src/pages/AgentDetail.tsx,3609,jsx-expression,Resuming…,needs_review
 ui/src/pages/AgentDetail.tsx,3621,jsx-expression,Retrying…,needs_review
@@ -356,8 +333,6 @@ ui/src/pages/AgentDetail.tsx,3621,jsx-expression,Retry,needs_review
 ui/src/pages/AgentDetail.tsx,3687,jsx-expression,No responsible person,needs_review
 ui/src/pages/AgentDetail.tsx,3704,jsx-expression,Failed to resume run,needs_review
 ui/src/pages/AgentDetail.tsx,3709,jsx-expression,Failed to retry run,needs_review
-ui/src/pages/AgentDetail.tsx,3736,jsx-expression,claude_auth_required,needs_review
-ui/src/pages/AgentDetail.tsx,3736,jsx-expression,claude_local,needs_review
 ui/src/pages/AgentDetail.tsx,3745,jsx-expression,Running claude login...,needs_review
 ui/src/pages/AgentDetail.tsx,3745,jsx-expression,Login to Claude Code,needs_review
 ui/src/pages/AgentDetail.tsx,3751,jsx-expression,Failed to run Claude login,needs_review
@@ -373,30 +348,15 @@ ui/src/pages/AgentDetail.tsx,3908,jsx-text,stdout,needs_review
 ui/src/pages/AgentDetail.tsx,4499,jsx-expression,Loading...,needs_review
 ui/src/pages/AgentDetail.tsx,4499,jsx-expression,Load more log,needs_review
 ui/src/pages/AgentDetail.tsx,4501,jsx-text,Showing the first,needs_review
-ui/src/pages/AgentDetail.tsx,4517,jsx-expression,failed,needs_review
-ui/src/pages/AgentDetail.tsx,4517,jsx-expression,timed_out,needs_review
 ui/src/pages/AgentDetail.tsx,4528,jsx-text,stderr excerpt,needs_review
 ui/src/pages/AgentDetail.tsx,4536,jsx-text,adapter result JSON,needs_review
 ui/src/pages/AgentDetail.tsx,4544,jsx-text,stdout excerpt,needs_review
 ui/src/pages/AgentDetail.tsx,4650,jsx-expression,Hide,needs_review
 ui/src/pages/AgentDetail.tsx,4650,jsx-expression,Show,needs_review
-ui/src/pages/Agents.tsx,360,jsx-expression,needs_setup,needs_review
 ui/src/pages/Agents.tsx,482,jsx-text,New Agent,needs_review
 ui/src/pages/Agents.tsx,489,jsx-text,agent,needs_review
-ui/src/pages/Agents.tsx,504,jsx-expression,list,needs_review
-ui/src/pages/Agents.tsx,510,jsx-expression,list,needs_review
-ui/src/pages/Agents.tsx,515,jsx-expression,org,needs_review
-ui/src/pages/Agents.tsx,519,jsx-expression,org,needs_review
-ui/src/pages/Agents.tsx,523,jsx-expression,org,needs_review
-ui/src/pages/Agents.tsx,603,jsx-expression,needs_setup,needs_review
-ui/src/pages/ApprovalDetail.tsx,278,jsx-expression,pending,needs_review
 ui/src/pages/ApprovalDetail.tsx,279,jsx-text,Resolve this budget stop from the budget controls on,needs_review
 ui/src/pages/ApprovalDetail.tsx,280,jsx-text,/costs,needs_review
-ui/src/pages/ApprovalDetail.tsx,283,jsx-expression,pending,needs_review
-ui/src/pages/ApprovalDetail.tsx,291,jsx-expression,revision_requested,needs_review
-ui/src/pages/ApprovalDetail.tsx,299,jsx-expression,rejected,needs_review
-ui/src/pages/ApprovalDetail.tsx,299,jsx-expression,hire_agent,needs_review
-ui/src/pages/Auth.tsx,156,jsx-expression,sign_up,needs_review
 ui/src/pages/Costs.tsx,683,jsx-text,debits,needs_review
 ui/src/pages/Costs.tsx,684,jsx-text,credits,needs_review
 ui/src/pages/Costs.tsx,696,jsx-text,Subscription accounts also have,needs_review
@@ -405,7 +365,6 @@ ui/src/pages/Costs.tsx,697,jsx-text,Other billing usage:,needs_review
 ui/src/pages/Costs.tsx,697,jsx-text,tokens,needs_review
 ui/src/pages/Costs.tsx,697,jsx-template,in recorded charges,needs_review
 ui/src/pages/Costs.tsx,697,jsx-text,", included in the inference ledger.",needs_review
-ui/src/pages/Costs.tsx,704,jsx-expression,overview,needs_review
 ui/src/pages/Costs.tsx,781,jsx-text,cached) · out,needs_review
 ui/src/pages/Costs.tsx,818,jsx-text,tok,needs_review
 ui/src/pages/Costs.tsx,854,jsx-expression,Unattributed,needs_review
@@ -514,25 +473,12 @@ ui/src/pages/IssueDetail.tsx,2831,jsx-template,run,needs_review
 ui/src/pages/IssueDetail.tsx,2835,jsx-text,task,needs_review
 ui/src/pages/IssueDetail.tsx,5562,jsx-template,Configure,needs_review
 ui/src/pages/IssueDetail.tsx,7024,jsx-expression,Uploading...,needs_review
-ui/src/pages/IssueDetail.tsx,7163,jsx-expression,routine_execution,needs_review
 ui/src/pages/IssueDetail.tsx,7167,jsx-template,Routine execution from routine,needs_review
 ui/src/pages/IssueDetail.tsx,7197,jsx-template,This task is in,needs_review
-ui/src/pages/IssueDetail.tsx,7626,jsx-expression,chat,needs_review
-ui/src/pages/IssueDetail.tsx,7631,jsx-expression,chat,needs_review
-ui/src/pages/IssueDetail.tsx,7635,jsx-expression,in_review,needs_review
-ui/src/pages/IssueDetail.tsx,7635,jsx-expression,waiting,needs_review
-ui/src/pages/IssueDetail.tsx,7659,jsx-expression,composer,needs_review
 ui/src/pages/IssueDetail.tsx,8409,jsx-expression,Plan,needs_review
 ui/src/pages/IssueDetail.tsx,8410,jsx-expression,Properties,needs_review
-ui/src/pages/MimouseCoding.tsx,55,jsx-expression,evidence,needs_review
-ui/src/pages/MimouseCodingRepair.tsx,36,jsx-expression,local-board,needs_review
-ui/src/pages/MimouseNotifications.tsx,71,jsx-expression,feishu_webhook,needs_review
 ui/src/pages/MimouseNotifications.tsx,71,jsx-text,Feishu,needs_review
 ui/src/pages/MimouseNotifications.tsx,71,jsx-text,Lark,needs_review
-ui/src/pages/MimouseNotifications.tsx,74,jsx-expression,dingtalk_app,needs_review
-ui/src/pages/MimouseNotifications.tsx,74,jsx-expression,wechat_official_account,needs_review
-ui/src/pages/MimouseNotifications.tsx,75,jsx-expression,dingtalk_app,needs_review
-ui/src/pages/MimouseNotifications.tsx,76,jsx-expression,wechat_official_account,needs_review
 ui/src/pages/MimouseWorkbuddy.tsx,37,jsx-text,WorkBuddy,needs_review
 ui/src/pages/ProfileSettings.tsx,130,jsx-text,Loading profile...,needs_review
 ui/src/pages/ProfileSettings.tsx,136,jsx-expression,Failed to load profile.,needs_review
