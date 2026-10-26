@@ -34,10 +34,12 @@ export async function runWecomReceiver(db: Db, companyId: string, id: string, si
     for (let attempt = 0; attempt <= MAX_RECONNECTS; attempt++) {
       signal.throwIfAborted();
       if (!await store.renew(lease)) throw new WecomReceiveError("revoked");
+      signal.throwIfAborted();
       const credential = await store.resolveCredential(lease);
       if (!credential.trim()) throw new WecomReceiveError("authentication");
       signal.throwIfAborted();
       if (!await store.renew(lease)) throw new WecomReceiveError("revoked");
+      signal.throwIfAborted();
       reason = await receiveConnection(lease, credential, store, testOnly?.connect ?? connect, signal);
       if (reason !== "transport") break;
       if (!await store.markGap(lease)) throw new WecomReceiveError("revoked");
@@ -63,6 +65,7 @@ export async function runWecomReceiver(db: Db, companyId: string, id: string, si
 async function receiveConnection(lease: WecomLease, credential: string, store: Store,
   openSocket: () => WebSocket, signal: AbortSignal): Promise<WecomStopReason> {
   return new Promise(resolve => {
+    if (signal.aborted) { resolve("cancelled"); return; }
     const controller = new AbortController();
     const session = new WecomSession(lease.config.botId, `aibot_subscribe:${randomUUID()}`);
     let socket: WebSocket;
@@ -112,8 +115,14 @@ async function receiveConnection(lease: WecomLease, credential: string, store: S
         }
       })().catch(() => { if (!stopped) finish("revoked"); }).finally(() => { processing = false; });
     };
-    try { socket = openSocket(); }
-    catch { finish("transport"); return; }
+    if (signal.aborted) { cancel(); return; }
+    try {
+      socket = openSocket();
+      // ws.terminate() while CONNECTING emits an asynchronous error. Install these
+      // before any cancellation path, including cancellation inside construction.
+      socket.on("error", () => finish("transport"));
+      socket.on("close", () => finish("transport"));
+    } catch { finish("transport"); return; }
     signal.addEventListener("abort", cancel, { once: true });
     if (signal.aborted) { cancel(); return; }
     socket.on("open", () => {
@@ -139,7 +148,5 @@ async function receiveConnection(lease: WecomLease, credential: string, store: S
         queue.push(item); consume();
       } catch (error) { finish(error instanceof WecomReceiveError ? error.code : "protocol"); }
     });
-    socket.on("error", () => finish("transport"));
-    socket.on("close", () => finish("transport"));
   });
 }

@@ -129,3 +129,38 @@ it("closes an active fake connection when company pause makes renewal fail", asy
   expect(await done).toEqual({ stopped: "revoked" }); expect(f.socket.readyState).toBe(3);
   expect(f.store.persist).not.toHaveBeenCalled(); expect(f.connect).toHaveBeenCalledTimes(1);
 });
+
+it("does not construct a socket after cancellation during the second lease recheck", async () => {
+  const f = fixture(); let finishRenew!: (ok: boolean) => void;
+  f.store.renew.mockResolvedValueOnce(true).mockImplementationOnce(() => new Promise(resolve => { finishRenew = resolve; }));
+  const done = f.start(); await tick(); expect(f.store.renew).toHaveBeenCalledTimes(2);
+  f.controller.abort(); finishRenew(true);
+  expect(await done).toEqual({ stopped: "cancelled" }); expect(f.connect).not.toHaveBeenCalled();
+  expect(f.store.release).toHaveBeenCalledTimes(1);
+});
+it.each(["during-construction", "while-connecting"])("handles asynchronous terminate error on cancellation %s", async phase => {
+  const f = fixture(); let errorsEmitted = 0, listenersAtTerminate = 0;
+  class ConnectingSocket extends FakeSocket {
+    readyState = 0;
+    override terminate() {
+      listenersAtTerminate = this.listenerCount("error"); this.readyState = 3;
+      queueMicrotask(() => {
+        errorsEmitted++;
+        this.emit("error", new Error("fake connecting termination"));
+        this.emit("close");
+      });
+    }
+  }
+  const socket = new ConnectingSocket();
+  f.connect.mockImplementation(() => {
+    if (phase === "during-construction") f.controller.abort();
+    return socket as unknown as WebSocket;
+  });
+  const done = f.start(); await tick();
+  if (phase === "while-connecting") f.controller.abort();
+  expect(await done).toEqual({ stopped: "cancelled" }); await tick();
+  expect(listenersAtTerminate).toBeGreaterThan(0); expect(errorsEmitted).toBe(1);
+  socket.emit("open"); socket.frame({ cmd: "aibot_msg_callback", body: message });
+  expect(socket.sent).toEqual([]); expect(f.store.persist).not.toHaveBeenCalled();
+  expect(f.store.release).toHaveBeenCalledTimes(1); expect(f.connect).toHaveBeenCalledTimes(1);
+});
