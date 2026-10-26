@@ -9,6 +9,7 @@ import zh from "@/i18n/contributions/privatePromptComparisonUi/zh-CN.json";
 import es from "@/i18n/contributions/privatePromptComparisonUi/es.json";
 import ja from "@/i18n/contributions/privatePromptComparisonUi/ja.json";
 import { comparisonId as id, comparisonInput as input, comparisonReport as report } from "@/test/private-prompt-comparison-fixtures";
+import { privateComparisonBlockerLabels, privateComparisonBlockerLabel } from "@/lib/private-prompt-comparison-blockers";
 import { PrivatePromptComparison } from "./PrivatePromptComparison";
 const compare = vi.hoisted(() => vi.fn());
 vi.mock("@/api/private-prompt-comparison", async original => ({ ...await original<typeof import("@/api/private-prompt-comparison")>(), privatePromptComparisonApi: () => ({ compare }) }));
@@ -74,4 +75,34 @@ it("invalid, duplicate, same-revision and fractional-cap input cannot be submitt
 });
 it("StrictMode does not execute on mount and supports an explicit comparison", async () => {
   await act(async () => root.render(<StrictMode><PrivatePromptComparison {...props} /></StrictMode>)); await ready(); expect(compare).not.toHaveBeenCalled(); await click("compare"); expect(host.textContent).toContain(label("reviewable"));
+});
+
+it("translates every known blocker in four languages without translating unknown codes", () => {
+  expect(Object.keys(privateComparisonBlockerLabels)).toHaveLength(13);
+  for (const resource of [en, zh, es, ja]) {
+    for (const [code, key] of Object.entries(privateComparisonBlockerLabels)) {
+      const text = Object.entries(resource).find(([name]) => name === key)?.[1];
+      expect(typeof text).toBe("string"); expect(text).not.toBe(code); expect(text?.length).toBeGreaterThan(0);
+      expect(privateComparisonBlockerLabel(code)).toBe(key);
+    }
+  }
+  for (const unknown of ["future_code", "toString", id(99), "f".repeat(64)]) expect(privateComparisonBlockerLabel(unknown)).toBeNull();
+});
+it("shows readable global and case blockers with their original codes; locale switches never refetch", async () => {
+  const value = report(); value.candidate.passed = 0; value.candidate.blocked = 1;
+  value.results[1] = { ...value.results[1], passed: false, blocked: "run_not_succeeded" };
+  value.blockers = ["incomplete_or_mismatched_evidence", "candidate_not_all_passed", "quality_regressed"];
+  value.eligibleForHumanReview = false; compare.mockResolvedValueOnce(value);
+  await mount(); await ready(); await click("compare");
+  for (const locale of ["en", "zh-CN", "es", "ja"]) {
+    await act(async () => { await i18n.changeLanguage(locale); });
+    for (const code of [...value.blockers, "run_not_succeeded"]) {
+      expect(host.textContent).toContain(label(privateComparisonBlockerLabel(code)!));
+      expect([...host.querySelectorAll("code")].some(node => node.textContent === `(${code})`)).toBe(true);
+    }
+    expect(host.textContent).toContain(value.results[1].testId!);
+    expect(host.textContent).toContain(value.reportHash);
+    expect(host.textContent).not.toContain("privatePromptComparisonUi.");
+    expect(compare).toHaveBeenCalledTimes(1);
+  }
 });

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { comparePrivatePromptTestsSchema, type PrivatePromptComparison as Comparison } from "@paperclipai/shared/mimouse-private-prompt-comparison";
 import { ApiError } from "@/api/client";
 import { privatePromptComparisonApi, verifyPrivatePromptComparison } from "@/api/private-prompt-comparison";
+import { privateComparisonBlockerLabel } from "@/lib/private-prompt-comparison-blockers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -40,6 +41,7 @@ function ComparisonSession(props: Props & { promptId: string }) {
       if (error instanceof ApiError && [401, 403].includes(error.status)) { setDraft(empty); props.onAccessLost(); }
     } finally { if (current()) { setBusy(false); controller.current = null; } }
   }
+  const blocker = (code: string) => { const key = privateComparisonBlockerLabel(code); return key ? <><span>{label(key)}</span> <code className="font-mono">({code})</code></> : <code className="font-mono">{code}</code>; };
   const cost = (value: number | null) => value === null ? label("unknown") : formatNumber(value, { maximumFractionDigits: 7 });
   return <section className="space-y-3" aria-label={label("title")}>
     <h2 className="text-lg font-semibold">{label("title")}</h2>
@@ -60,8 +62,8 @@ function ComparisonSession(props: Props & { promptId: string }) {
         <p>{label("quality")}: <span className="font-mono">{formatNumber(summary.passed)} / {formatNumber(summary.cases)}</span> · {label("blockedCases")}: <span className="font-mono">{formatNumber(summary.blocked)}</span></p>
         <p>{label("totalCost")}: <span className="font-mono">{cost(summary.totalCostCents)}</span> · {label("knownCost")}: <span className="font-mono">{cost(summary.knownCostCents)}</span> · {label("unknownCases")}: <span className="font-mono">{formatNumber(summary.unknownCostCases)}</span></p>
       </div>; })}
-      <ul>{result.blockers.map(code => <li key={code} className="font-mono break-all">{code}</li>)}</ul>
-      <details><summary>{label("caseEvidence")}</summary><ul>{result.results.map(row => <li key={`${row.revisionId}:${row.caseId}`} className="break-all"><span className="font-mono">{row.caseId} · {row.revisionId} · {row.testId ?? label("missing")}</span>: {row.blocked ? <span className="font-mono">{row.blocked}</span> : label(row.passed ? "matched" : "mismatched")}</li>)}</ul></details>
+      <ul>{result.blockers.map(code => <li key={code} className="break-all">{blocker(code)}</li>)}</ul>
+      <details><summary>{label("caseEvidence")}</summary><ul>{result.results.map(row => <li key={`${row.revisionId}:${row.caseId}`} className="break-all"><span className="font-mono">{row.caseId} · {row.revisionId} · {row.testId ?? label("missing")}</span>: {row.blocked ? blocker(row.blocked) : label(row.passed ? "matched" : "mismatched")}</li>)}</ul></details>
       <details><summary>{label("hashes")}</summary><dl className="font-mono break-all">{[result.datasetHash, result.skillVersionHash, result.contextHash, result.baseline.revisionHash, result.candidate.revisionHash, result.reportHash].map((hash, index) => <div key={index}><dt>{label(["datasetHash", "skillHash", "contextHash", "baselineHash", "candidateHash", "reportHash"][index]!)}</dt><dd>{hash}</dd></div>)}</dl></details>
     </div>}
   </section>;

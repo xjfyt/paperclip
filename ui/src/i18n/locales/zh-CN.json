@@ -2154,7 +2154,7 @@
   },
   "privatePromptComparisonUi": {
     "title": "私有历史提示词测试比较",
-    "boundary": "只读历史比较：不执行模型，不选择、提升或应用版本。P5 仍为部分完成，不会解锁成本路由。",
+    "boundary": "只读历史比较：不执行模型、不选择、提升或应用版本。结果不用于自动成本路由。",
     "evidence": "使用完整固定数据集和历史保存配置。这是本次读取快照，并非完整模型上下文复现。浏览器不会保存私有比较结果。",
     "datasetId": "固定数据集 UUID",
     "baselineRevisionId": "基线提示词版本 UUID",
@@ -2188,7 +2188,20 @@
     "contextHash": "历史上下文哈希",
     "baselineHash": "基线版本哈希",
     "candidateHash": "候选版本哈希",
-    "reportHash": "比较哈希"
+    "reportHash": "比较哈希",
+    "blockerIncompleteEvidence": "历史证据不完整或不一致。",
+    "blockerCandidateNotAllPassed": "候选版本未通过全部用例。",
+    "blockerQualityRegressed": "候选版本质量低于基线。",
+    "blockerCandidateCostUnknown": "候选版本成本未知。",
+    "blockerBaselineCostUnknown": "基线版本成本未知。",
+    "blockerCandidateCostExceedsLimit": "候选版本成本超过你设置的上限。",
+    "blockerMissingRun": "此用例未提供明确的历史测试。",
+    "blockerRunNotSucceeded": "此历史测试未成功完成。",
+    "blockerUnsupportedOutputFormat": "记录的输出不支持原文精确评分。",
+    "blockerInputSnapshotMismatch": "输入快照与固定数据集不一致。",
+    "blockerOutputMissing": "缺少记录的文本输出。",
+    "blockerExecutionContextUnknown": "历史执行上下文未知。",
+    "blockerExecutionContextMismatch": "历史执行上下文不一致。"
   },
   "privatePromptTestsUi": {
     "title": "私有提示词执行测试",

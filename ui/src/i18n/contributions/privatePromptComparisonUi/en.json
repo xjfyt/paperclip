@@ -1,6 +1,6 @@
 {
   "title": "Compare private historical prompt tests",
-  "boundary": "Read-only history comparison: does not execute a model, select, promote or apply a revision. P5 remains partial; this does not unlock cost routing.",
+  "boundary": "Read-only history comparison: does not execute a model, select, promote or apply a revision. Results are not used for automatic cost routing.",
   "evidence": "Uses the complete fixed dataset and saved historical configuration. This is a read snapshot, not a reproduction of complete model context. No private comparison is saved in this browser.",
   "datasetId": "Fixed dataset UUID",
   "baselineRevisionId": "Baseline prompt revision UUID",
@@ -34,5 +34,18 @@
   "contextHash": "Historical context hash",
   "baselineHash": "Baseline revision hash",
   "candidateHash": "Candidate revision hash",
-  "reportHash": "Comparison hash"
+  "reportHash": "Comparison hash",
+  "blockerIncompleteEvidence": "Historical evidence is incomplete or inconsistent.",
+  "blockerCandidateNotAllPassed": "Not all candidate cases passed.",
+  "blockerQualityRegressed": "Candidate quality is lower than the baseline.",
+  "blockerCandidateCostUnknown": "Candidate cost is unknown.",
+  "blockerBaselineCostUnknown": "Baseline cost is unknown.",
+  "blockerCandidateCostExceedsLimit": "Candidate cost exceeds your limit.",
+  "blockerMissingRun": "No explicit historical test was supplied for this case.",
+  "blockerRunNotSucceeded": "This historical test did not finish successfully.",
+  "blockerUnsupportedOutputFormat": "The recorded output is not supported for exact-text scoring.",
+  "blockerInputSnapshotMismatch": "The input snapshot differs from the fixed dataset.",
+  "blockerOutputMissing": "The recorded text output is missing.",
+  "blockerExecutionContextUnknown": "The historical execution context is unknown.",
+  "blockerExecutionContextMismatch": "The historical execution contexts do not match."
 }

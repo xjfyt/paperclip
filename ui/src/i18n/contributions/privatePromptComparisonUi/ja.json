@@ -1,6 +1,6 @@
 {
   "title": "非公開の過去のプロンプトテストを比較",
-  "boundary": "履歴の読み取り専用比較です。モデルの実行やバージョンの選択・昇格・適用は行いません。P5 は未完了で、コストルーティングも有効になりません。",
+  "boundary": "履歴の読み取り専用比較です。モデルの実行や版の選択・昇格・適用は行いません。結果は自動コストルーティングには使用されません。",
   "evidence": "固定データセット全体と保存済みの過去の設定を使用します。今回の読み取り時点のスナップショットであり、モデルの完全なコンテキストの再現ではありません。比較結果をブラウザーに保存しません。",
   "datasetId": "固定データセット UUID",
   "baselineRevisionId": "ベースラインのリビジョン UUID",
@@ -34,5 +34,18 @@
   "contextHash": "過去のコンテキストハッシュ",
   "baselineHash": "ベースラインのハッシュ",
   "candidateHash": "候補のハッシュ",
-  "reportHash": "比較ハッシュ"
+  "reportHash": "比較ハッシュ",
+  "blockerIncompleteEvidence": "履歴の証拠が不完全、または一致していません。",
+  "blockerCandidateNotAllPassed": "候補版のすべてのケースが合格したわけではありません。",
+  "blockerQualityRegressed": "候補版の品質が基準版を下回っています。",
+  "blockerCandidateCostUnknown": "候補版のコストは不明です。",
+  "blockerBaselineCostUnknown": "基準版のコストは不明です。",
+  "blockerCandidateCostExceedsLimit": "候補版のコストが指定した上限を超えています。",
+  "blockerMissingRun": "このケースの履歴テストが明示的に指定されていません。",
+  "blockerRunNotSucceeded": "この履歴テストは正常に完了していません。",
+  "blockerUnsupportedOutputFormat": "記録された出力形式は原文の完全一致採点に対応していません。",
+  "blockerInputSnapshotMismatch": "入力スナップショットが固定データセットと一致しません。",
+  "blockerOutputMissing": "記録されたテキスト出力がありません。",
+  "blockerExecutionContextUnknown": "履歴の実行コンテキストは不明です。",
+  "blockerExecutionContextMismatch": "履歴の実行コンテキストが一致しません。"
 }

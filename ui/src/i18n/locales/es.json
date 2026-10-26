@@ -2154,7 +2154,7 @@
   },
   "privatePromptComparisonUi": {
     "title": "Comparar pruebas privadas históricas de prompts",
-    "boundary": "Comparación de solo lectura: no ejecuta modelos ni selecciona, promueve o aplica versiones. P5 sigue parcial y no habilita el enrutamiento por coste.",
+    "boundary": "Comparación histórica de solo lectura: no ejecuta modelos ni selecciona, promueve o aplica revisiones. Los resultados no se usan para el enrutamiento automático por costes.",
     "evidence": "Usa el conjunto fijo completo y la configuración histórica guardada. Es una instantánea de lectura, no una reproducción de todo el contexto del modelo. El navegador no guarda la comparación privada.",
     "datasetId": "UUID del conjunto fijo",
     "baselineRevisionId": "UUID de la revisión de referencia",
@@ -2188,7 +2188,20 @@
     "contextHash": "Hash del contexto histórico",
     "baselineHash": "Hash de revisión de referencia",
     "candidateHash": "Hash de revisión candidata",
-    "reportHash": "Hash de comparación"
+    "reportHash": "Hash de comparación",
+    "blockerIncompleteEvidence": "La evidencia histórica está incompleta o es inconsistente.",
+    "blockerCandidateNotAllPassed": "No todos los casos de la versión candidata se aprobaron.",
+    "blockerQualityRegressed": "La calidad de la versión candidata es inferior a la de referencia.",
+    "blockerCandidateCostUnknown": "El coste de la versión candidata es desconocido.",
+    "blockerBaselineCostUnknown": "El coste de la versión de referencia es desconocido.",
+    "blockerCandidateCostExceedsLimit": "El coste de la versión candidata supera el límite indicado.",
+    "blockerMissingRun": "No se indicó una prueba histórica explícita para este caso.",
+    "blockerRunNotSucceeded": "Esta prueba histórica no finalizó correctamente.",
+    "blockerUnsupportedOutputFormat": "El formato de salida registrado no admite puntuación por texto exacto.",
+    "blockerInputSnapshotMismatch": "La captura de entrada difiere del conjunto de datos fijo.",
+    "blockerOutputMissing": "Falta la salida de texto registrada.",
+    "blockerExecutionContextUnknown": "Se desconoce el contexto histórico de ejecución.",
+    "blockerExecutionContextMismatch": "Los contextos históricos de ejecución no coinciden."
   },
   "privatePromptTestsUi": {
     "title": "Prueba privada de ejecución del prompt",
