@@ -58,3 +58,9 @@
 
 - `cost-routing` 整个命名空间进入 HTTP 私密请求分类，包括 malformed/rejected/unknown 路由与 400/401/403/404/422/500；请求 body、headers、query、异常回显均不进入日志。
 - 当前策略读取通过 `requestResponse` + `readApiJson` 发独立 GET，不使用 `api.get` 的仅 URL in-flight 合并。`cache:no-store` 只是浏览器缓存策略，不能作为身份隔离。真实 client 回归保留旧会话观察者的 pending request，新会话必须发起自己的请求并只获得新响应。
+
+## 新增 PostgreSQL/API 回归（已编写，尚未执行）
+
+`tests/mimouse/cost-routing.spec.ts` 包含 6 个受 `createFixtureDb` 数据目录身份保护的集成测试：跨连接 CAS/actor 幂等与审计、公司/agent/report 边界、版本/preview 重试、实际 UPDATE/DELETE 不可变 trigger、公司范围 audit 失败回滚、真实 evaluation.compare SQL 采集及评分/reportHash 保持、真实 router ACL 与本地受控服务器挂载。所有 heartbeat/receipt/输出均为直接入库的合成记录，不是实际执行证据；即使完整 USD 诊断仍要求 blocked/null selection。测试临时 audit trigger 仅匹配随机 fixture company，并在 finally 移除。
+
+编写阶段仅做语法/差异检查，**未启动数据库、服务、构建或运行此集成测试**。待总控迁移 0354 与中央挂载完成后在有显式 fixture marker/独立目录的环境运行；不能在真实实例或没有 createFixtureDb 身份核验的数据库运行。
