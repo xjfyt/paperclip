@@ -21,7 +21,23 @@ export function mimouseEvaluationRoutes(db: Db) {
   router.post(`${root}/comparisons`, validate(createEvaluationComparisonSchema), async (req, res) => { const result = await service.compare(admin(req), req.body, getActorInfo(req).actorId); res.status(result.duplicate ? 200 : 201).json(result); });
   router.get(`${root}/comparisons/:id`, async (req, res) => res.json(await service.getComparison(admin(req), z.string().uuid().parse(req.params.id))));
   router.get(`${root}/skills/:skillId/evidence`, async (req, res) => res.json(await service.evidence(admin(req), z.string().uuid().parse(req.params.skillId))));
-  router.get(`${root}/readiness`, (req, res) => { admin(req); res.json({ executionStarted: false, promotionSupported: false, rollbackSupported: false, blockers: ["atomic_version_snapshot_restore_not_implemented"], scorer: "exact_text_v1", costBasis: "recorded_issue_ledger_snapshot" }); });
+  router.get(`${root}/readiness`, (req, res) => {
+    const companyId = admin(req);
+    res.json({
+      // Legacy flags describe this comparison API, not the separate human
+      // restoration API. Capability discovery never grants write authority.
+      capabilityScope: "comparison_only", executionStarted: false,
+      promotionSupported: false, rollbackSupported: false,
+      blockers: ["report_specific_human_restore_readiness_required"],
+      controlledRestore: {
+        implemented: true, supportedMode: "paused_unused_managed_local_only",
+        readinessPathTemplate: `/api/companies/${companyId}/skill-evaluations/restores/readiness/:reportId`,
+        requiresHumanSession: true, requiresReport: true,
+        readiness: null, authorityGranted: false, automaticallyPausesOrDetaches: false,
+      },
+      scorer: "exact_text_v1", costBasis: "recorded_issue_ledger_snapshot",
+    });
+  });
   // No run dispatch, file mutation, promotion or rollback endpoints.
   return router;
 }

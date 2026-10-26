@@ -21,7 +21,7 @@
 
 ## 提升/回滚边界与后续受控入口
 
-原始评测 readiness 保留直接 promotion/rollback 不可用的兼容响应；评测 compare 本身始终不执行、不修改 `currentVersionId`。后续新增独立的人类 session 受控文件恢复入口及页内面板，详见 [整树恢复协议与限制](evaluation-restore.md)。仅支持已经暂停、未被代理使用的 managed-local 技能；不是通用活跃 rollout。旧 readiness 中历史 blocker 不能作为新 restore readiness 的能力判断。
+原始评测 readiness 保留直接 promotion/rollback 不可用的兼容响应；评测 compare 本身始终不执行、不修改 `currentVersionId`。后续新增独立的人类 session 受控文件恢复入口及页内面板，详见 [整树恢复协议与限制](evaluation-restore.md)。仅支持已经暂停、未被代理使用的 managed-local 技能；不是通用活跃 rollout。通用 readiness 的 `capabilityScope=comparison_only` 明确旧两个 false 只描述 compare 接口；`controlledRestore.implemented=true` 发现独立能力并给出公司限定的 report-specific readiness 路径。通用结果 `readiness=null`、`authorityGranted=false`，blocker 为 `report_specific_human_restore_readiness_required`；必须向独立端点以真实管理员 session 查询具体报告，查询本身也不是执行授权。
 
 上游 `company-skills.ts` 已有：
 - 私有 `materializeVersionSnapshot`：在 `__versions__/skill/version` 创建不可变运行目录，校验完整文件清单、字节与可执行位；**并非**恢复可编辑 live skill 文件。

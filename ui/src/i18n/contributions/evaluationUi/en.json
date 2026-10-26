@@ -35,7 +35,7 @@
   "reviewable": "Eligible for human review only",
   "blocked": "Evidence does not satisfy review criteria",
   "results": "Per-case results",
-  "restoreBlocked": "Promotion and rollback unavailable: audited atomic whole-version file restore with concurrency checks is not implemented. No skill files changed.",
+  "restoreBlocked": "Comparison never activates or rolls back files automatically. Use the separate controlled restoration panel: human administrator session, paused company and unused managed-local skill required.",
   "incomplete_or_mismatched_evidence": "Incomplete or mismatched evidence",
   "candidate_not_all_passed": "Candidate did not pass every case",
   "quality_regressed": "Quality regressed",

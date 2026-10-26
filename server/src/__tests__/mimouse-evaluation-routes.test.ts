@@ -23,7 +23,12 @@ it.each(["member", "foreign-owner", "agent", "suspended"])("denies %s before rea
 it("an administrator can inspect fail-closed readiness but cannot activate or execute", async () => {
   const server = app(owner), base = `/companies/${companyId}/skill-evaluations`;
   const response = await request(server).get(`${base}/readiness`);
-  expect(response.status).toBe(200); expect(response.body).toMatchObject({ promotionSupported: false, rollbackSupported: false, executionStarted: false });
+  expect(response.status).toBe(200); expect(response.body).toMatchObject({ capabilityScope: "comparison_only", promotionSupported: false, rollbackSupported: false, executionStarted: false,
+    blockers: ["report_specific_human_restore_readiness_required"],
+    controlledRestore: { implemented: true, supportedMode: "paused_unused_managed_local_only",
+      readinessPathTemplate: `/api/companies/${companyId}/skill-evaluations/restores/readiness/:reportId`,
+      requiresHumanSession: true, requiresReport: true, readiness: null, authorityGranted: false, automaticallyPausesOrDetaches: false } });
+  expect(JSON.stringify(response.body)).not.toContain("atomic_version_snapshot_restore_not_implemented");
   for (const action of ["promote", "rollback", "execute"]) expect((await request(server).post(`${base}/comparisons/${id}/${action}`).send({ confirm: true })).status).toBe(404);
 });
 it("rejects request supplied scores and output snapshots without touching the service", async () => {
@@ -31,4 +36,12 @@ it("rejects request supplied scores and output snapshots without touching the se
   const body = { requestId: id, datasetId: id, baselineVersionId: id, candidateVersionId: companyId, runIds: [], maxCandidateCostCents: null, score: 100, outputSnapshot: "forged" };
   expect((await request(app(owner)).post(`/companies/${companyId}/skill-evaluations/comparisons`).send(body)).status).toBe(400);
   expect(calls.create).not.toHaveBeenCalled();
+});
+
+it("local implicit evaluation discovery does not grant human restore authority or load evidence", async () => {
+  calls.create.mockClear(); calls.list.mockClear();
+  const response = await request(app({ ...owner, source: "local_implicit" })).get(`/companies/${companyId}/skill-evaluations/readiness`);
+  expect(response.status).toBe(200);
+  expect(response.body.controlledRestore).toMatchObject({ implemented: true, requiresHumanSession: true, readiness: null, authorityGranted: false });
+  expect(calls.create).not.toHaveBeenCalled(); expect(calls.list).not.toHaveBeenCalled();
 });

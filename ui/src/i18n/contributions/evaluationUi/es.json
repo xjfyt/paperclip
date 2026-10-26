@@ -35,7 +35,7 @@
   "reviewable": "Solo elegible para revisión humana",
   "blocked": "La evidencia no cumple los criterios",
   "results": "Resultados por caso",
-  "restoreBlocked": "Promoción y reversión no disponibles: falta restauración atómica de todos los archivos con auditoría y control de concurrencia. No se modificaron archivos.",
+  "restoreBlocked": "La comparación nunca activa ni revierte archivos automáticamente. Use el panel de restauración controlada: requiere sesión humana de administrador, empresa pausada y habilidad local administrada sin uso por agentes.",
   "incomplete_or_mismatched_evidence": "Evidencia incompleta o incompatible",
   "candidate_not_all_passed": "La candidata no aprobó todos los casos",
   "quality_regressed": "La calidad empeoró",

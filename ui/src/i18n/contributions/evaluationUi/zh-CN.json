@@ -35,7 +35,7 @@
   "reviewable": "仅可进入人工复核",
   "blocked": "证据不满足复核条件",
   "results": "逐用例结果",
-  "restoreBlocked": "暂不支持提升或回滚：尚未实现带并发检查和审计的整版本原子文件恢复；未修改技能文件。",
+  "restoreBlocked": "评测比较不会自动激活或回滚文件。请使用独立受控恢复面板：需要真实管理员会话、已暂停公司，且 managed-local 技能未被代理使用。",
   "incomplete_or_mismatched_evidence": "证据不完整或不匹配",
   "candidate_not_all_passed": "候选未通过全部用例",
   "quality_regressed": "质量退步",
