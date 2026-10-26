@@ -45,6 +45,7 @@ import {
   applyPendingMigrations,
   createEmbeddedPostgresLogBuffer,
   prepareEmbeddedPostgresNativeRuntime,
+  loadEmbeddedPostgres,
   reconcilePendingMigrationHistory,
   formatDatabaseBackupResult,
   runDatabaseBackup,
@@ -441,7 +442,6 @@ async function startServerWithDatabaseTeardown(
     activeDatabaseConnectionString = config.databaseUrl;
     startupDbInfo = { mode: "external-postgres", connectionString: config.databaseUrl };
   } else {
-    const moduleName = "embedded-postgres";
     let EmbeddedPostgres: EmbeddedPostgresCtor;
     try {
       // embedded-postgres registers async-exit-hook handlers as an import side
@@ -449,7 +449,7 @@ async function startServerWithDatabaseTeardown(
       // racing Paperclip's later heartbeat snapshot query. Paperclip explicitly
       // stops the managed cluster in its own ordered shutdown path instead.
       const mod = await loadWithoutCoordinatedShutdownSignalHooks(
-        () => import(moduleName),
+        loadEmbeddedPostgres,
       );
       EmbeddedPostgres = mod.default as EmbeddedPostgresCtor;
     } catch {

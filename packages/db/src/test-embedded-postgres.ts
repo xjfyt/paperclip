@@ -10,6 +10,7 @@ import {
   createEmbeddedPostgresLogBuffer,
   formatEmbeddedPostgresError,
 } from "./embedded-postgres-error.js";
+import { loadEmbeddedPostgres } from "./embedded-postgres-loader.js";
 import { prepareEmbeddedPostgresNativeRuntime } from "./embedded-postgres-native.js";
 
 // Time budget (ms) for a vitest test in the embedded-Postgres cost class: a
@@ -65,7 +66,7 @@ function getReservedTestPorts(): Set<number> {
 type EmbeddedPostgresCtorProvider = () => Promise<EmbeddedPostgresCtor>;
 
 async function loadEmbeddedPostgresCtor(): Promise<EmbeddedPostgresCtor> {
-  const mod = await import("embedded-postgres");
+  const mod = await loadEmbeddedPostgres();
   await prepareEmbeddedPostgresNativeRuntime();
   return mod.default as EmbeddedPostgresCtor;
 }

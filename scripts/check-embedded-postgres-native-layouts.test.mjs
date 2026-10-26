@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, rm, symlink, readlink } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, rm, symlink, readlink, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { pathToFileURL } from 'node:url';
 import { join, dirname } from 'node:path';
 import { resolveEmbeddedPostgresNativeLibDir, ensureLinuxSharedLibraryAliases } from '../packages/db/src/embedded-postgres-native.ts';
 
@@ -36,3 +37,23 @@ test('rejects unexpected native identity and unsupported host names', async () =
   await assert.rejects(resolveEmbeddedPostgresNativeLibDir(wrapper, 'linux-x64'), /identity/);
   await assert.rejects(resolveEmbeddedPostgresNativeLibDir(wrapper, '../other'), /Unsupported/);
 }));
+
+test('shared DB loader selects bundled qualified wrapper over unpatched hoisted copy', async () => {
+  await fixture('hoisted', async ({ root, wrapper }) => {
+    const bundledPackage = dirname(dirname(wrapper));
+    await writeFile(join(bundledPackage, 'package.json'), JSON.stringify({ name: 'embedded-postgres', type: 'module', exports: './dist/index.js' }));
+    await writeFile(wrapper, 'export default { fixtureIdentity: "qualified-bundled" };');
+    const unpatchedPackage = join(root, 'node_modules/embedded-postgres');
+    await mkdir(unpatchedPackage, { recursive: true });
+    await writeFile(join(unpatchedPackage, 'package.json'), JSON.stringify({ name: 'embedded-postgres', type: 'module', exports: './index.js' }));
+    await writeFile(join(unpatchedPackage, 'index.js'), 'throw new Error("unqualified hoisted wrapper must not load");');
+    const dbDist = join(root, 'node_modules/@paperclipai/db/dist');
+    await mkdir(dbDist, { recursive: true });
+    const loader = join(dbDist, 'embedded-postgres-loader.mjs');
+    // The production loader is also valid JavaScript; copy unchanged to the
+    // installed-layout fixture rather than reimplementing its resolution logic.
+    await writeFile(loader, await readFile(new URL('../packages/db/src/embedded-postgres-loader.ts', import.meta.url), 'utf8'));
+    const { loadEmbeddedPostgres } = await import(pathToFileURL(loader).href);
+    assert.equal((await loadEmbeddedPostgres()).default.fixtureIdentity, 'qualified-bundled');
+  });
+});
