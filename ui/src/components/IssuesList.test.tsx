@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { changeLocale } from "../i18n";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import type { AnchorHTMLAttributes, ReactNode } from "react";
@@ -373,6 +374,31 @@ describe("IssuesList", () => {
   afterEach(() => {
     vi.useRealTimers();
     container.remove();
+  });
+
+  it("localizes the live collection toolbar and empty state while retaining creation defaults", async () => {
+    const { root } = renderWithQueryClient(<IssuesList issues={[]} agents={[]} projects={[]}
+      viewStateKey="paperclip:test-locales" toolbarPresentation="collection"
+      baseCreateIssueDefaults={{ parentId: "parent-original", projectId: "project-original" }}
+      onUpdateIssue={() => undefined} />, container);
+    const cases = [
+      ["zh-CN", "任务操作", "新建任务", "没有符合当前筛选或搜索条件的任务。", "关闭父子任务嵌套"],
+      ["es", "Controles de tareas", "Nueva tarea", "Ninguna tarea coincide con los filtros o la búsqueda actuales.", "Desactivar anidación de tareas"],
+      ["ja", "タスク操作", "新しいタスク", "現在のフィルターや検索に一致するタスクはありません。", "親子タスクの入れ子を無効化"],
+      ["en", "Task controls", "New Task", "No tasks match the current filters or search.", "Disable parent-child nesting"],
+    ] as const;
+    try {
+      for (const [locale, controls, newTask, empty, nesting] of cases) {
+        await act(async () => { await changeLocale(locale); });
+        await waitForAssertion(() => expect(container.textContent).toContain(empty));
+        expect(container.querySelector(`[role="toolbar"][aria-label="${controls}"]`)).not.toBeNull();
+        expect(container.querySelector(`button[title="${nesting}"]`)).not.toBeNull();
+        const button = container.querySelector(`button[aria-label="${newTask}"]`) as HTMLButtonElement;
+        expect(button).not.toBeNull(); act(() => button.click());
+        expect(dialogState.openNewIssue).toHaveBeenLastCalledWith({ parentId: "parent-original", projectId: "project-original" });
+      }
+      expect(dialogState.openNewIssue).toHaveBeenCalledTimes(4);
+    } finally { act(() => root.unmount()); await act(async () => { await changeLocale("en"); }); }
   });
 
   it("uses the master list and legacy persistence when Streamlined UI is off", async () => {

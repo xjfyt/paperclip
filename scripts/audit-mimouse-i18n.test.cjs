@@ -19,3 +19,11 @@ test("explicitly leaves function-generated text and technical strings for manual
 test("does not count status comparisons or logical guards as displayed text", () => {
   assert.deepEqual(texts('const x = <p>{status === "needs_setup" && <span>Set up</span>}{mode !== "sign_up" || "Sign up"}{"guard" && "Shown"}</p>'), ["Set up", "Sign up", "Shown"]);
 });
+
+const { matchesEntry } = require("./audit-mimouse-i18n.cjs");
+test("includes production and legacy route implementations but not unrelated basenames", () => {
+  assert.equal(matchesEntry("ui/src/pages/Agents.production.tsx", ["Agents"]), true);
+  assert.equal(matchesEntry("ui/src/pages/Agents.tsx", ["Agents"]), true);
+  assert.equal(matchesEntry("ui/src/components/IssuesList.tsx", ["IssuesList"]), true);
+  assert.equal(matchesEntry("ui/src/pages/Unrelated.tsx", ["Agents"]), false);
+});

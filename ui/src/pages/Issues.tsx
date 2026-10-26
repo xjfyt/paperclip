@@ -100,6 +100,7 @@ export function Issues() {
 }
 
 function StreamlinedTasks() {
+  useMimouseTranslation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { selectedCompanyId } = useCompany();
@@ -143,7 +144,7 @@ function StreamlinedTasks() {
     return (
       <Inbox
         tab={definition.inboxTab}
-        surfaceLabel="Tasks"
+        surfaceLabel={mimouseT("taskListUi.tasks")}
         toolbarContext={(
           <div className="flex min-w-0 items-center gap-2">
             {viewsMenu}
@@ -167,6 +168,7 @@ function OrganizationIssues({
   const { enabled: streamlinedUiEnabled } = useStreamlinedUiEnabled();
   const issuesPresentation = resolveIssuesPresentation(streamlinedUiEnabled);
   const { selectedCompanyId } = useCompany();
+  const { i18n } = useMimouseTranslation();
   const { setBreadcrumbs } = useBreadcrumbs();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -227,16 +229,16 @@ function OrganizationIssues({
   const issueLinkState = useMemo(
     () =>
       createIssueDetailLocationState(
-        "Tasks",
+        mimouseT("taskListUi.tasks"),
         `${location.pathname}${location.search}${location.hash}`,
         "issues",
       ),
-    [location.pathname, location.search, location.hash],
+    [location.pathname, location.search, location.hash, i18n.language],
   );
 
   useEffect(() => {
-    setBreadcrumbs([{ label: "Tasks" }]);
-  }, [setBreadcrumbs]);
+    setBreadcrumbs([{ label: mimouseT("taskListUi.tasks") }]);
+  }, [setBreadcrumbs, i18n.language]);
 
   const issuePageSize = workspaceIdFilter ? WORKSPACE_FILTER_ISSUE_LIMIT : ISSUES_PAGE_SIZE;
 

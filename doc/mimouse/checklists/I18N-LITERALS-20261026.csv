@@ -37,6 +37,32 @@ ui/src/components/CommentThread.tsx,1050,jsx-attribute,Responsible,needs_review
 ui/src/components/CommentThread.tsx,1057,jsx-text,Responsible,needs_review
 ui/src/components/CommentThread.tsx,1085,jsx-expression,Posting...,needs_review
 ui/src/components/CommentThread.tsx,1085,jsx-expression,Comment,needs_review
+ui/src/components/CompanySettingsSidebar.production.tsx,100,jsx-expression,Company,needs_review
+ui/src/components/CompanySettingsSidebar.production.tsx,106,jsx-attribute,General,needs_review
+ui/src/components/CompanySettingsSidebar.production.tsx,110,jsx-attribute,Profile,needs_review
+ui/src/components/CompanySettingsSidebar.production.tsx,118,jsx-attribute,Members,needs_review
+ui/src/components/CompanySettingsSidebar.production.tsx,136,jsx-attribute,Invites,needs_review
+ui/src/components/CompanySettingsSidebar.production.tsx,139,jsx-attribute,Secrets,needs_review
+ui/src/components/CompanySettingsSidebar.production.tsx,144,jsx-attribute,Environments,needs_review
+ui/src/components/CompanySettingsSidebar.production.tsx,150,jsx-attribute,Connections,needs_review
+ui/src/components/CompanySettingsSidebar.production.tsx,155,jsx-attribute,Access,needs_review
+ui/src/components/CompanySettingsSidebar.production.tsx,163,jsx-attribute,Heartbeats,needs_review
+ui/src/components/CompanySettingsSidebar.production.tsx,169,jsx-attribute,Export,needs_review
+ui/src/components/CompanySettingsSidebar.production.tsx,172,jsx-attribute,Import,needs_review
+ui/src/components/CompanySettingsSidebar.production.tsx,177,jsx-attribute,Experimental,needs_review
+ui/src/components/CompanySettingsSidebar.production.tsx,184,jsx-attribute,Plugins,needs_review
+ui/src/components/CompanySettingsSidebar.production.tsx,212,jsx-attribute,Adapters,needs_review
+ui/src/components/IssuesList.tsx,635,jsx-text,done,needs_review
+ui/src/components/IssuesList.tsx,638,jsx-text,in progress,needs_review
+ui/src/components/IssuesList.tsx,641,jsx-text,blocked,needs_review
+ui/src/components/IssuesList.tsx,647,jsx-template,run,needs_review
+ui/src/components/IssuesList.tsx,649,jsx-template,across,needs_review
+ui/src/components/IssuesList.tsx,649,jsx-template,sub-task,needs_review
+ui/src/components/IssuesList.tsx,653,jsx-text,tokens,needs_review
+ui/src/components/IssuesList.tsx,656,jsx-text,runtime,needs_review
+ui/src/components/IssuesList.tsx,685,jsx-expression,Next up,needs_review
+ui/src/components/IssuesList.tsx,685,jsx-expression,Waiting on blockers,needs_review
+ui/src/components/IssuesList.tsx,2220,jsx-text,sub-task,needs_review
 ui/src/components/NewIssueDialog.tsx,1226,jsx-text,Sub-task of,needs_review
 ui/src/components/NewIssueDialog.tsx,1241,jsx-expression,Couldn't check parent access.,needs_review
 ui/src/components/NewIssueDialog.tsx,1241,jsx-expression,Checking parent access…,needs_review
@@ -51,8 +77,28 @@ ui/src/components/NewIssueDialog.tsx,1340,jsx-text,In Progress,needs_review
 ui/src/components/NewIssueDialog.tsx,1348,jsx-text,is paused and will not start work on this task until it is resumed,needs_review
 ui/src/components/NewIssueDialog.tsx,1351,jsx-expression,— it arrived paused from an organization import,needs_review
 ui/src/components/NewIssueDialog.tsx,1352,jsx-text,. You can resume it from the task page after creating the task.,needs_review
+ui/src/components/Sidebar.production.tsx,158,jsx-attribute,WorkBuddy,needs_review
 ui/src/components/Sidebar.tsx,180,jsx-attribute,WorkBuddy,needs_review
+ui/src/components/SidebarAccountMenu.production.tsx,207,jsx-attribute,View profile,needs_review
+ui/src/components/SidebarAccountMenu.production.tsx,226,jsx-template,View commit,needs_review
+ui/src/components/SidebarAccountMenu.production.tsx,226,jsx-template,on GitHub,needs_review
+ui/src/components/SidebarAccountMenu.production.tsx,228,jsx-text,SHA,needs_review
+ui/src/components/SidebarAccountMenu.production.tsx,238,jsx-attribute,Invite,needs_review
+ui/src/components/SidebarAccountMenu.production.tsx,239,jsx-attribute,Invite people to your organization.,needs_review
+ui/src/components/SidebarAccountMenu.production.tsx,247,jsx-attribute,Documentation,needs_review
+ui/src/components/SidebarAccountMenu.production.tsx,248,jsx-attribute,Open Paperclip docs in a new tab.,needs_review
+ui/src/components/SidebarAccountMenu.production.tsx,270,jsx-expression,Signing out...,needs_review
+ui/src/components/SidebarAccountMenu.production.tsx,270,jsx-expression,Sign out,needs_review
+ui/src/components/SidebarAccountMenu.production.tsx,272,jsx-text,End this browser session.,needs_review
 ui/src/components/SidebarAccountMenu.tsx,228,jsx-text,SHA,needs_review
+ui/src/components/SidebarAgents.production.tsx,188,jsx-attribute,Invalid reporting chain,needs_review
+ui/src/components/SidebarAgents.production.tsx,195,jsx-attribute,Agent paused by budget,needs_review
+ui/src/components/SidebarAgents.production.tsx,255,jsx-expression,Remove from starred,needs_review
+ui/src/components/SidebarAgents.production.tsx,255,jsx-expression,Star agent,needs_review
+ui/src/components/SidebarAgents.production.tsx,268,jsx-text,Edit agent,needs_review
+ui/src/components/SidebarAgents.production.tsx,278,jsx-expression,Agent was paused by budget limits,needs_review
+ui/src/components/SidebarAgents.production.tsx,292,jsx-expression,Leaving...,needs_review
+ui/src/components/SidebarAgents.production.tsx,292,jsx-expression,Leave agent,needs_review
 ui/src/components/SidebarAgents.tsx,188,jsx-attribute,Invalid reporting chain,needs_review
 ui/src/components/SidebarAgents.tsx,195,jsx-attribute,Agent paused by budget,needs_review
 ui/src/components/SidebarAgents.tsx,255,jsx-expression,Remove from starred,needs_review
@@ -244,6 +290,179 @@ ui/src/components/issue-properties/IssueProperties.tsx,3190,jsx-template,tab,nee
 ui/src/components/issue-properties/IssueProperties.tsx,3219,jsx-attribute,Open closed sidebar tab,needs_review
 ui/src/components/issue-properties/IssueProperties.tsx,3220,jsx-expression,All sidebar tabs are open,needs_review
 ui/src/components/issue-properties/IssueProperties.tsx,3220,jsx-expression,Open closed sidebar tab,needs_review
+ui/src/pages/AgentDetail.production.tsx,459,jsx-text,Invocation,needs_review
+ui/src/pages/AgentDetail.production.tsx,461,jsx-text,Adapter:,needs_review
+ui/src/pages/AgentDetail.production.tsx,464,jsx-text,Working dir:,needs_review
+ui/src/pages/AgentDetail.production.tsx,469,jsx-text,Details,needs_review
+ui/src/pages/AgentDetail.production.tsx,475,jsx-text,Command:,needs_review
+ui/src/pages/AgentDetail.production.tsx,481,jsx-text,Command notes,needs_review
+ui/src/pages/AgentDetail.production.tsx,495,jsx-text,Prompt,needs_review
+ui/src/pages/AgentDetail.production.tsx,505,jsx-text,Context,needs_review
+ui/src/pages/AgentDetail.production.tsx,513,jsx-text,Environment,needs_review
+ui/src/pages/AgentDetail.production.tsx,618,jsx-expression,Hide full log,needs_review
+ui/src/pages/AgentDetail.production.tsx,618,jsx-expression,Show full log,needs_review
+ui/src/pages/AgentDetail.production.tsx,622,jsx-text,Loading log...,needs_review
+ui/src/pages/AgentDetail.production.tsx,625,jsx-expression,Failed to load workspace operation log,needs_review
+ui/src/pages/AgentDetail.production.tsx,629,jsx-text,No persisted log lines.,needs_review
+ui/src/pages/AgentDetail.production.tsx,672,jsx-text,Workspace (,needs_review
+ui/src/pages/AgentDetail.production.tsx,690,jsx-text,Command:,needs_review
+ui/src/pages/AgentDetail.production.tsx,696,jsx-text,Working dir:,needs_review
+ui/src/pages/AgentDetail.production.tsx,707,jsx-text,Branch:,needs_review
+ui/src/pages/AgentDetail.production.tsx,710,jsx-text,Base ref:,needs_review
+ui/src/pages/AgentDetail.production.tsx,713,jsx-text,Worktree:,needs_review
+ui/src/pages/AgentDetail.production.tsx,716,jsx-text,Repo root:,needs_review
+ui/src/pages/AgentDetail.production.tsx,719,jsx-text,Cleanup:,needs_review
+ui/src/pages/AgentDetail.production.tsx,725,jsx-expression,Created by this run,needs_review
+ui/src/pages/AgentDetail.production.tsx,725,jsx-expression,Reused existing workspace,needs_review
+ui/src/pages/AgentDetail.production.tsx,730,jsx-text,stderr excerpt,needs_review
+ui/src/pages/AgentDetail.production.tsx,738,jsx-text,stdout excerpt,needs_review
+ui/src/pages/AgentDetail.production.tsx,1226,jsx-text,You left this agent. It no longer appears in your sidebar.,needs_review
+ui/src/pages/AgentDetail.production.tsx,1251,jsx-attribute,Dismiss agent membership notice,needs_review
+ui/src/pages/AgentDetail.production.tsx,1262,jsx-text,Escalation path is paused,needs_review
+ui/src/pages/AgentDetail.production.tsx,1271,jsx-text,Invalid reporting chain,needs_review
+ui/src/pages/AgentDetail.production.tsx,1273,jsx-text,cannot accept tasks or start runs until its reporting chain is repaired.,needs_review
+ui/src/pages/AgentDetail.production.tsx,1281,jsx-text,"Assign this agent to an active manager/root, or explicitly pause or terminate the affected agent/subtree.",needs_review
+ui/src/pages/AgentDetail.production.tsx,1334,jsx-text,"depends on this agent. While paused,",needs_review
+ui/src/pages/AgentDetail.production.tsx,1335,jsx-text,generation is skipped and the,needs_review
+ui/src/pages/AgentDetail.production.tsx,1336,jsx-text,page shows a warning.,needs_review
+ui/src/pages/AgentDetail.production.tsx,1352,jsx-text,Live,needs_review
+ui/src/pages/AgentDetail.production.tsx,1362,jsx-attribute,Built-in agent,needs_review
+ui/src/pages/AgentDetail.production.tsx,1370,jsx-expression,Resetting…,needs_review
+ui/src/pages/AgentDetail.production.tsx,1370,jsx-expression,Reset to defaults,needs_review
+ui/src/pages/AgentDetail.production.tsx,1373,jsx-text,Ships with Paperclip and powers,needs_review
+ui/src/pages/AgentDetail.production.tsx,1374,jsx-text,". Configure it like any agent — model, instructions, budget. It can be paused but not deleted; pausing it pauses",needs_review
+ui/src/pages/AgentDetail.production.tsx,1423,jsx-text,This agent is pending board approval and cannot be invoked yet.,needs_review
+ui/src/pages/AgentDetail.production.tsx,1431,jsx-text,Approve agent,needs_review
+ui/src/pages/AgentDetail.production.tsx,1445,jsx-text,Cancel,needs_review
+ui/src/pages/AgentDetail.production.tsx,1453,jsx-expression,Saving…,needs_review
+ui/src/pages/AgentDetail.production.tsx,1453,jsx-expression,Save,needs_review
+ui/src/pages/AgentDetail.production.tsx,1471,jsx-text,Cancel,needs_review
+ui/src/pages/AgentDetail.production.tsx,1479,jsx-expression,Saving…,needs_review
+ui/src/pages/AgentDetail.production.tsx,1479,jsx-expression,Save,needs_review
+ui/src/pages/AgentDetail.production.tsx,1718,jsx-expression,Live Run,needs_review
+ui/src/pages/AgentDetail.production.tsx,1718,jsx-expression,Latest Run,needs_review
+ui/src/pages/AgentDetail.production.tsx,1801,jsx-attribute,Run Activity,needs_review
+ui/src/pages/AgentDetail.production.tsx,1806,jsx-attribute,Tasks by Priority,needs_review
+ui/src/pages/AgentDetail.production.tsx,1810,jsx-attribute,Tasks by Status,needs_review
+ui/src/pages/AgentDetail.production.tsx,1813,jsx-attribute,Success Rate,needs_review
+ui/src/pages/AgentDetail.production.tsx,1821,jsx-text,Recent Tasks,needs_review
+ui/src/pages/AgentDetail.production.tsx,1825,jsx-text,See All →,needs_review
+ui/src/pages/AgentDetail.production.tsx,1830,jsx-text,No recent tasks.,needs_review
+ui/src/pages/AgentDetail.production.tsx,1844,jsx-text,more tasks,needs_review
+ui/src/pages/AgentDetail.production.tsx,1853,jsx-text,Costs,needs_review
+ui/src/pages/AgentDetail.production.tsx,1882,jsx-text,Input tokens,needs_review
+ui/src/pages/AgentDetail.production.tsx,1886,jsx-text,Output tokens,needs_review
+ui/src/pages/AgentDetail.production.tsx,1890,jsx-text,Cached tokens,needs_review
+ui/src/pages/AgentDetail.production.tsx,1894,jsx-text,Total cost,needs_review
+ui/src/pages/AgentDetail.production.tsx,1905,jsx-text,Date,needs_review
+ui/src/pages/AgentDetail.production.tsx,1906,jsx-text,Run,needs_review
+ui/src/pages/AgentDetail.production.tsx,1907,jsx-text,Input,needs_review
+ui/src/pages/AgentDetail.production.tsx,1908,jsx-text,Output,needs_review
+ui/src/pages/AgentDetail.production.tsx,1909,jsx-text,Cost,needs_review
+ui/src/pages/AgentDetail.production.tsx,2017,jsx-text,API Keys,needs_review
+ui/src/pages/AgentDetail.production.tsx,2030,jsx-text,Configuration Revisions,needs_review
+ui/src/pages/AgentDetail.production.tsx,2037,jsx-text,No configuration revisions yet.,needs_review
+ui/src/pages/AgentDetail.production.tsx,2056,jsx-text,Restore,needs_review
+ui/src/pages/AgentDetail.production.tsx,2060,jsx-text,Changed:,needs_review
+ui/src/pages/AgentDetail.production.tsx,2062,jsx-expression,no tracked changes,needs_review
+ui/src/pages/AgentDetail.production.tsx,2205,jsx-text,"Saved adapter config affects the next run. Active runs keep the config they started with, and config changes may start a fresh adapter session.",needs_review
+ui/src/pages/AgentDetail.production.tsx,2234,jsx-text,Permissions,needs_review
+ui/src/pages/AgentDetail.production.tsx,2238,jsx-text,Can create new agents,needs_review
+ui/src/pages/AgentDetail.production.tsx,2239,jsx-text,Lets this agent create or hire agents. This also grants task assignment authority.,needs_review
+ui/src/pages/AgentDetail.production.tsx,2257,jsx-text,Can create/import skills,needs_review
+ui/src/pages/AgentDetail.production.tsx,2258,jsx-text,"Lets this agent install, import, create, and scan company skills without creating agents.",needs_review
+ui/src/pages/AgentDetail.production.tsx,2276,jsx-text,Can assign tasks,needs_review
+ui/src/pages/AgentDetail.production.tsx,2636,jsx-text,Instructions bundles are only available for local adapters.,needs_review
+ui/src/pages/AgentDetail.production.tsx,2658,jsx-text,"Saved instructions affect the next run. Active runs keep the instructions they started with, and instruction changes may start a fresh adapter session.",needs_review
+ui/src/pages/AgentDetail.production.tsx,2664,jsx-text,Advanced,needs_review
+ui/src/pages/AgentDetail.production.tsx,2671,jsx-text,Mode,needs_review
+ui/src/pages/AgentDetail.production.tsx,2677,jsx-text,Managed: Paperclip stores and serves the instructions bundle. External: you provide a path on disk where the instructions live.,needs_review
+ui/src/pages/AgentDetail.production.tsx,2703,jsx-text,Managed,needs_review
+ui/src/pages/AgentDetail.production.tsx,2720,jsx-text,External,needs_review
+ui/src/pages/AgentDetail.production.tsx,2726,jsx-text,Root path,needs_review
+ui/src/pages/AgentDetail.production.tsx,2732,jsx-text,The absolute directory on disk where the instructions bundle lives. In managed mode this is set by Paperclip automatically.,needs_review
+ui/src/pages/AgentDetail.production.tsx,2739,jsx-expression,(managed),needs_review
+ui/src/pages/AgentDetail.production.tsx,2764,jsx-attribute,/absolute/path/to/agent/prompts,needs_review
+ui/src/pages/AgentDetail.production.tsx,2775,jsx-text,Entry file,needs_review
+ui/src/pages/AgentDetail.production.tsx,2781,jsx-text,The main file the agent reads first when loading instructions. Defaults to AGENTS.md.,needs_review
+ui/src/pages/AgentDetail.production.tsx,2830,jsx-text,Files,needs_review
+ui/src/pages/AgentDetail.production.tsx,2861,jsx-attribute,TOOLS.md,needs_review
+ui/src/pages/AgentDetail.production.tsx,2887,jsx-text,Create,needs_review
+ui/src/pages/AgentDetail.production.tsx,2899,jsx-text,Cancel,needs_review
+ui/src/pages/AgentDetail.production.tsx,2931,jsx-text,virtual file,needs_review
+ui/src/pages/AgentDetail.production.tsx,2935,jsx-text,Legacy inline prompt — this deprecated virtual file preserves the old promptTemplate content,needs_review
+ui/src/pages/AgentDetail.production.tsx,2943,jsx-expression,entry,needs_review
+ui/src/pages/AgentDetail.production.tsx,2977,jsx-expression,Deprecated virtual file,needs_review
+ui/src/pages/AgentDetail.production.tsx,2978,jsx-template,file,needs_review
+ui/src/pages/AgentDetail.production.tsx,2979,jsx-expression,New file in this bundle,needs_review
+ui/src/pages/AgentDetail.production.tsx,2988,jsx-attribute,Copy as markdown,needs_review
+ui/src/pages/AgentDetail.production.tsx,3011,jsx-text,Delete,needs_review
+ui/src/pages/AgentDetail.production.tsx,3025,jsx-attribute,# Agent instructions,needs_review
+ui/src/pages/AgentDetail.production.tsx,3039,jsx-attribute,File contents,needs_review
+ui/src/pages/AgentDetail.production.tsx,3148,jsx-text,tok,needs_review
+ui/src/pages/AgentDetail.production.tsx,3176,jsx-text,No runs yet.,needs_review
+ui/src/pages/AgentDetail.production.tsx,3197,jsx-text,Back to runs,needs_review
+ui/src/pages/AgentDetail.production.tsx,3409,jsx-expression,Cancelling…,needs_review
+ui/src/pages/AgentDetail.production.tsx,3409,jsx-expression,Cancel,needs_review
+ui/src/pages/AgentDetail.production.tsx,3421,jsx-expression,Resuming…,needs_review
+ui/src/pages/AgentDetail.production.tsx,3421,jsx-expression,Resume,needs_review
+ui/src/pages/AgentDetail.production.tsx,3433,jsx-expression,Retrying…,needs_review
+ui/src/pages/AgentDetail.production.tsx,3433,jsx-expression,Retry,needs_review
+ui/src/pages/AgentDetail.production.tsx,3462,jsx-text,On behalf of,needs_review
+ui/src/pages/AgentDetail.production.tsx,3471,jsx-expression,Failed to resume run,needs_review
+ui/src/pages/AgentDetail.production.tsx,3476,jsx-expression,Failed to retry run,needs_review
+ui/src/pages/AgentDetail.production.tsx,3491,jsx-text,Duration:,needs_review
+ui/src/pages/AgentDetail.production.tsx,3512,jsx-expression,Running claude login...,needs_review
+ui/src/pages/AgentDetail.production.tsx,3512,jsx-expression,Login to Claude Code,needs_review
+ui/src/pages/AgentDetail.production.tsx,3518,jsx-expression,Failed to run Claude login,needs_review
+ui/src/pages/AgentDetail.production.tsx,3522,jsx-text,Login URL:,needs_review
+ui/src/pages/AgentDetail.production.tsx,3557,jsx-text,Exit code,needs_review
+ui/src/pages/AgentDetail.production.tsx,3559,jsx-text,(signal:,needs_review
+ui/src/pages/AgentDetail.production.tsx,3592,jsx-text,Input,needs_review
+ui/src/pages/AgentDetail.production.tsx,3596,jsx-text,Output,needs_review
+ui/src/pages/AgentDetail.production.tsx,3600,jsx-text,Cached,needs_review
+ui/src/pages/AgentDetail.production.tsx,3604,jsx-text,Cost,needs_review
+ui/src/pages/AgentDetail.production.tsx,3618,jsx-text,Session,needs_review
+ui/src/pages/AgentDetail.production.tsx,3620,jsx-text,(changed),needs_review
+ui/src/pages/AgentDetail.production.tsx,3626,jsx-expression,Before,needs_review
+ui/src/pages/AgentDetail.production.tsx,3632,jsx-text,After,needs_review
+ui/src/pages/AgentDetail.production.tsx,3652,jsx-expression,clearing session...,needs_review
+ui/src/pages/AgentDetail.production.tsx,3653,jsx-expression,clear session for these tasks,needs_review
+ui/src/pages/AgentDetail.production.tsx,3659,jsx-expression,Failed to clear sessions,needs_review
+ui/src/pages/AgentDetail.production.tsx,3673,jsx-text,Tasks Touched (,needs_review
+ui/src/pages/AgentDetail.production.tsx,3695,jsx-text,stderr,needs_review
+ui/src/pages/AgentDetail.production.tsx,3703,jsx-text,stdout,needs_review
+ui/src/pages/AgentDetail.production.tsx,4191,jsx-text,Loading run logs...,needs_review
+ui/src/pages/AgentDetail.production.tsx,4195,jsx-text,No log events.,needs_review
+ui/src/pages/AgentDetail.production.tsx,4221,jsx-text,Transcript (,needs_review
+ui/src/pages/AgentDetail.production.tsx,4253,jsx-text,Jump to live,needs_review
+ui/src/pages/AgentDetail.production.tsx,4262,jsx-text,Live,needs_review
+ui/src/pages/AgentDetail.production.tsx,4286,jsx-expression,Loading...,needs_review
+ui/src/pages/AgentDetail.production.tsx,4286,jsx-expression,Load more log,needs_review
+ui/src/pages/AgentDetail.production.tsx,4288,jsx-text,Showing the first,needs_review
+ui/src/pages/AgentDetail.production.tsx,4306,jsx-text,Failure details,needs_review
+ui/src/pages/AgentDetail.production.tsx,4309,jsx-text,Error:,needs_review
+ui/src/pages/AgentDetail.production.tsx,4315,jsx-text,stderr excerpt,needs_review
+ui/src/pages/AgentDetail.production.tsx,4323,jsx-text,adapter result JSON,needs_review
+ui/src/pages/AgentDetail.production.tsx,4331,jsx-text,stdout excerpt,needs_review
+ui/src/pages/AgentDetail.production.tsx,4342,jsx-text,Events (,needs_review
+ui/src/pages/AgentDetail.production.tsx,4427,jsx-text,"API key created — copy it now, it will not be shown again.",needs_review
+ui/src/pages/AgentDetail.production.tsx,4438,jsx-expression,Hide,needs_review
+ui/src/pages/AgentDetail.production.tsx,4438,jsx-expression,Show,needs_review
+ui/src/pages/AgentDetail.production.tsx,4446,jsx-attribute,Copy,needs_review
+ui/src/pages/AgentDetail.production.tsx,4450,jsx-text,Copied!,needs_review
+ui/src/pages/AgentDetail.production.tsx,4457,jsx-text,Dismiss,needs_review
+ui/src/pages/AgentDetail.production.tsx,4466,jsx-text,Create API Key,needs_review
+ui/src/pages/AgentDetail.production.tsx,4469,jsx-text,API keys allow this agent to authenticate calls to the Paperclip server.,needs_review
+ui/src/pages/AgentDetail.production.tsx,4474,jsx-attribute,Key name (e.g. production),needs_review
+ui/src/pages/AgentDetail.production.tsx,4487,jsx-text,Create,needs_review
+ui/src/pages/AgentDetail.production.tsx,4494,jsx-text,Loading keys...,needs_review
+ui/src/pages/AgentDetail.production.tsx,4497,jsx-text,No active API keys.,needs_review
+ui/src/pages/AgentDetail.production.tsx,4502,jsx-text,Active Keys,needs_review
+ui/src/pages/AgentDetail.production.tsx,4510,jsx-text,Created,needs_review
+ui/src/pages/AgentDetail.production.tsx,4520,jsx-text,Revoke,needs_review
+ui/src/pages/AgentDetail.production.tsx,4532,jsx-text,Revoked Keys,needs_review
+ui/src/pages/AgentDetail.production.tsx,4540,jsx-text,Revoked,needs_review
 ui/src/pages/AgentDetail.tsx,633,jsx-expression,Failed to load workspace operation log,needs_review
 ui/src/pages/AgentDetail.tsx,734,jsx-expression,Created by this run,needs_review
 ui/src/pages/AgentDetail.tsx,734,jsx-expression,Reused existing workspace,needs_review
@@ -306,6 +525,8 @@ ui/src/pages/AgentDetail.tsx,4536,jsx-text,adapter result JSON,needs_review
 ui/src/pages/AgentDetail.tsx,4544,jsx-text,stdout excerpt,needs_review
 ui/src/pages/AgentDetail.tsx,4650,jsx-expression,Hide,needs_review
 ui/src/pages/AgentDetail.tsx,4650,jsx-expression,Show,needs_review
+ui/src/pages/Agents.production.tsx,483,jsx-text,New Agent,needs_review
+ui/src/pages/Agents.production.tsx,490,jsx-text,agent,needs_review
 ui/src/pages/Agents.tsx,482,jsx-text,New Agent,needs_review
 ui/src/pages/Agents.tsx,489,jsx-text,agent,needs_review
 ui/src/pages/ApprovalDetail.tsx,279,jsx-text,Resolve this budget stop from the budget controls on,needs_review
@@ -345,6 +566,20 @@ ui/src/pages/IssueDetail.tsx,8410,jsx-expression,Properties,needs_review
 ui/src/pages/MimouseNotifications.tsx,71,jsx-text,Feishu,needs_review
 ui/src/pages/MimouseNotifications.tsx,71,jsx-text,Lark,needs_review
 ui/src/pages/MimouseWorkbuddy.tsx,37,jsx-text,WorkBuddy,needs_review
+ui/src/pages/Routines.production.tsx,832,jsx-text,routine,needs_review
+ui/src/pages/Routines.production.tsx,868,jsx-expression,Asc,needs_review
+ui/src/pages/Routines.production.tsx,868,jsx-expression,Desc,needs_review
+ui/src/pages/Routines.production.tsx,913,jsx-expression,Done,needs_review
+ui/src/pages/Routines.production.tsx,913,jsx-expression,Select,needs_review
+ui/src/pages/Routines.production.tsx,1010,jsx-text,For,needs_review
+ui/src/pages/Routines.production.tsx,1098,jsx-text,filed in,needs_review
+ui/src/pages/Routines.production.tsx,1201,jsx-expression,Creating...,needs_review
+ui/src/pages/Routines.production.tsx,1201,jsx-expression,Create routine,needs_review
+ui/src/pages/Routines.production.tsx,1205,jsx-expression,Failed to create routine,needs_review
+ui/src/pages/Routines.production.tsx,1216,jsx-expression,Failed to load routines,needs_review
+ui/src/pages/Routines.production.tsx,1246,jsx-expression,Folder,needs_review
+ui/src/pages/Routines.production.tsx,1247,jsx-text,routine,needs_review
+ui/src/pages/Routines.production.tsx,1434,jsx-text,routine,needs_review
 ui/src/pages/Routines.tsx,1129,jsx-text,filed in,needs_review
 ui/src/pages/Routines.tsx,1277,jsx-text,routine,needs_review
 ui/src/pages/Routines.tsx,1463,jsx-text,routine,needs_review

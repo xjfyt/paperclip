@@ -44,7 +44,8 @@ function collectCandidates(source, file, parse) {
   walk(ast);
   return rows;
 }
-module.exports = { collectCandidates };
+function matchesEntry(file, names) { return names.includes(path.basename(file, ".tsx").replace(/\.production$/, "")); }
+module.exports = { collectCandidates, matchesEntry };
 
 if (require.main === module) {
   const root = path.resolve(__dirname, "..");
@@ -62,7 +63,7 @@ if (require.main === module) {
   }
   if (!parserVersion) throw Error("The parser entry must belong to an installed @babel/parser package");
   const { parse } = require(path.resolve(parserPath));
-const names=['Auth','InviteLanding','InstanceAccess','ProfileSettings','Dashboard','Issues','IssueDetail','Agents','AgentDetail','Approvals','ApprovalDetail','Routines','Costs','MimouseNotifications','MimouseCoding','MimouseCodingRepair','MimouseWorkbuddy','Sidebar','SidebarProjects','SidebarAgents','SidebarAccountMenu','CompanySwitcher','CompanySettingsSidebar','CommandPalette','NewIssueDialog','IssueProperties','IssueFiltersPopover','CommentThread','BudgetPolicyCard','SubscriptionCostCard','ClaudeSubscriptionPanel','CodexSubscriptionPanel','CloudAccessGate','BootstrapPendingPage','AuthRevocationPanel','InviteAuthMethods','ThemeToggle','InboxAgentPolicyControl','AgentMultiSelect'];
+const names=['Auth','InviteLanding','InstanceAccess','ProfileSettings','Dashboard','Issues','IssueDetail','Agents','AgentDetail','Approvals','ApprovalDetail','Routines','Costs','MimouseNotifications','MimouseCoding','MimouseCodingRepair','MimouseWorkbuddy','Sidebar','SidebarProjects','SidebarAgents','SidebarAccountMenu','CompanySwitcher','CompanySettingsSidebar','CommandPalette','NewIssueDialog','IssueProperties','IssuesList','IssueFiltersPopover','CommentThread','BudgetPolicyCard','SubscriptionCostCard','ClaudeSubscriptionPanel','CodexSubscriptionPanel','CloudAccessGate','BootstrapPendingPage','AuthRevocationPanel','InviteAuthMethods','ThemeToggle','InboxAgentPolicyControl','AgentMultiSelect'];
   const all = [];
   function files(directory) {
     for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
@@ -72,7 +73,7 @@ const names=['Auth','InviteLanding','InstanceAccess','ProfileSettings','Dashboar
     }
   }
   files(path.join(root, "ui/src"));
-  const selected = all.filter(file => names.includes(path.basename(file, ".tsx"))).sort();
+  const selected = all.filter(file => matchesEntry(file, names)).sort();
   const candidates = [], counts = [], hash = crypto.createHash("sha256");
   for (const file of selected) {
     const source = fs.readFileSync(file, "utf8"), relative = path.relative(root, file);
@@ -84,7 +85,7 @@ const names=['Auth','InviteLanding','InstanceAccess','ProfileSettings','Dashboar
     generatedAt: new Date().toISOString(), parserVersion,
     method: "JSXText, selected display attributes and direct/conditional JSX literal expressions; candidates, not coverage percentage. Dynamic variables, functions, error messages and custom controls require manual review.",
     sourceSha256: hash.digest("hex"), requestedBasenames: names, matchedFiles: selected.length,
-    unmatchedBasenames: names.filter(name => !selected.some(file => path.basename(file, ".tsx") === name)),
+    unmatchedBasenames: names.filter(name => !selected.some(file => matchesEntry(file, [name]))),
     totalLiteralCandidates: candidates.length, files: counts, candidates,
   };
   fs.writeFileSync(path.resolve(outPath), JSON.stringify(result, null, 2) + "\n");
