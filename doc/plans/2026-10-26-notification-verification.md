@@ -38,3 +38,13 @@ NODE_OPTIONS=--max-old-space-size=512 node ../../node_modules/vitest/vitest.mjs 
 - 协议报告的testedCommit/runtime是人工记录，不是从源码文件存在推断测试通过；UI必须明确它是人工报告，非CI自动认证。凭据真实远端过期若未反映到本地元数据，不能由零probe路径发现；metadata_active绝不宣称远端仍可用。
 
 检查：server/shared六文件83项（含旧adapter schema/服务）通过，旧adapter UI/API两文件7项通过；均512MB/单worker。shared原标准config因工作树复用依赖找不到zod曾失败，纯fixture config追加既有server zod别名后通过；未安装依赖。尚未执行真实SQL锁/触发器、API/浏览器、类型或构建。
+
+## 验证界面切片
+
+通知渠道卡片新增“配置验证”，不改变测试发送和旧人工受理评审。面板独立确认当前session（含现有local_trusted路径），公司/endpoint/用户/session/auth重验代次隔离；GET使用独立requestResponse+signal+no-store，不加入URL-only合并池。认证重验/403/读取失败时隐藏私有内容和登记操作；历史未读全不判当前通过。
+
+四语呈现队列/平台受理、旧人工受理、C2协议报告、C3实连、收件端观察及C4审批场景。人工声明冻结当前configVersion/epoch/ledger revision，二次确认；最新数据变化清空旧确认。API支持同上下文supersede；本次UI提供显式新声明和撤销，不暗中替代旧记录。
+
+未知POST将相同幂等键、冻结payload及scope保存在按公司/用户/session/endpoint隔离的sessionStorage，内容仅允许非敏感别名、代码/资源标识和声明时间。重开同一身份仅可显式重试同一请求，不自动POST、不另建key。存储不可用则阻止新请求；旧组件迟到响应不清标记，当前组件也只compare-and-remove自己完整冻结记录。403/409等明确拒绝后需重新读取；异常/5xx/不匹配回执维持unknown。浏览器清存储或新标签页不提供跨客户端 exactly-once 保证，必须先核对服务端台账。
+
+UI纯fixture：新面板与原通知页2文件50项通过（512MB/单worker）。新面板使用真实API传输层+fetch fixture，包括保留旧api.get observer/新session独立GET、旧signal取消、认证重验、403隐藏、未知POST同key/payload、迟到回执、local_trusted及四语。没有浏览器/真实账号/网络实测。

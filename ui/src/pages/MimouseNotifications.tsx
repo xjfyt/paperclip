@@ -1,3 +1,4 @@
+import { MimouseNotificationVerification } from "@/components/MimouseNotificationVerification";
 import { MimouseNotificationPolicy } from "@/components/MimouseNotificationPolicy";
 import { MimouseNotificationReview } from "@/components/MimouseNotificationReview";
 import { useEffect as usePageEffect } from "react";
@@ -23,6 +24,7 @@ function NotificationCompany({ companyId }: { companyId: string }) {
   const client = useQueryClient();
   const key = ["mimouse-notifications", companyId];
   const query = useQuery({ queryKey: key, queryFn: () => notificationApi.get(companyId), refetchInterval: 10000 });
+  const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [reviewing, setReviewing] = useState<{ id: string; state: string; attempt: number } | null>(null);
   const [editing, setEditing] = useState<NotificationEndpoint | null>(null);
   const [historyId, setHistoryId] = useState<string | null>(null);
@@ -86,6 +88,7 @@ function NotificationCompany({ companyId }: { companyId: string }) {
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" disabled={mutation.isPending} onClick={() => edit(endpoint)}>{t("notifications.edit")}</Button>
             <Button variant="outline" onClick={() => setHistoryId(endpoint.id)}>{t("notifications.history")}</Button>
+            <Button variant="outline" onClick={() => setVerifyingId(endpoint.id)}>{t("notificationVerification.title")}</Button>
             <Button variant="outline" disabled={mutation.isPending} onClick={() => mutation.mutate(() => notificationApi.toggle(companyId, endpoint.id, !endpoint.enabled, endpoint.configVersion))}>{endpoint.enabled ? t("notifications.pause") : t("notifications.enable")}</Button>
             <Button variant="outline" disabled={!endpoint.enabled || !dispatchEnabled || mutation.isPending} onClick={() => { setTesting({ endpoint, requestId: crypto.randomUUID() }); setTestTitle(t("notifications.testTitle")); setTestText(t("notifications.testText")); }}>{t("notifications.test")}</Button>
           </div>
@@ -111,6 +114,7 @@ function NotificationCompany({ companyId }: { companyId: string }) {
           </div>
         </div>)}
       </section>
+      {verifyingId && <MimouseNotificationVerification key={verifyingId} companyId={companyId} endpointId={verifyingId} onClose={() => setVerifyingId(null)} />}
       {historyId && <section className="rounded-lg border border-border p-4 space-y-3" aria-label={t("notifications.history")}>
         <h2>{t("notifications.history")}</h2>
         {history.isLoading && <p>{t("common.loading")}</p>}
