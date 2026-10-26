@@ -272,3 +272,75 @@ export async function coordinateHeartbeatSchedulerShutdown<
     waitedForSchedulerIdle: true,
   };
 }
+
+
+type ServerShutdownSignal = "SIGINT" | "SIGTERM";
+type ServerShutdownSignalTarget = {
+  on(signal: ServerShutdownSignal, listener: () => void): unknown;
+  removeListener(signal: ServerShutdownSignal, listener: () => void): unknown;
+};
+
+/** One work result for programmatic shutdown and every signal. No new timeout
+ * or force-stop policy: the individual drain/finalizer budgets still apply. */
+export function createCoordinatedServerShutdown(input: {
+  begin: () => void;
+  drain: (signal: ServerShutdownSignal) => Promise<void>;
+  finalize: (signal: ServerShutdownSignal) => Promise<void>;
+  signalTarget: ServerShutdownSignalTarget;
+  exit: (code: number) => void;
+  log: ShutdownLogger;
+}): (signal: ServerShutdownSignal) => Promise<void> {
+  let work: Promise<void> | null = null;
+  let signalExitObserved = false;
+
+  const removeListeners = () => {
+    input.signalTarget.removeListener("SIGINT", onSigint);
+    input.signalTarget.removeListener("SIGTERM", onSigterm);
+  };
+  const shutdown = (signal: ServerShutdownSignal): Promise<void> => {
+    if (work) return work;
+    // Publish the promise before begin(), including synchronous/reentrant calls.
+    let resolve!: () => void;
+    let reject!: (error: unknown) => void;
+    work = new Promise<void>((res, rej) => { resolve = res; reject = rej; });
+    const run = async () => {
+      const errors: unknown[] = [];
+      try {
+        input.begin(); // Suppress recovery/scheduling before the first await.
+        await input.drain(signal);
+      } catch (error) {
+        errors.push(error);
+      }
+      try {
+        await input.finalize(signal);
+      } catch (error) {
+        errors.push(error);
+      } finally {
+        removeListeners();
+      }
+      if (errors.length === 1) throw errors[0];
+      if (errors.length > 1) throw new AggregateError(errors, "Server drain and final cleanup failed");
+    };
+    void run().then(resolve, reject);
+    return work;
+  };
+  const onSignal = (signal: ServerShutdownSignal) => {
+    const result = shutdown(signal);
+    if (signalExitObserved) return;
+    signalExitObserved = true;
+    // Only a signal requests process exit. A later signal can join a shutdown
+    // started programmatically, but cannot launch a second teardown/exit.
+    void result.then(
+      () => input.exit(0),
+      (err) => {
+        input.log.error({ err, signal }, "Server shutdown failed");
+        input.exit(1);
+      },
+    );
+  };
+  const onSigint = () => onSignal("SIGINT");
+  const onSigterm = () => onSignal("SIGTERM");
+  input.signalTarget.on("SIGINT", onSigint);
+  input.signalTarget.on("SIGTERM", onSigterm);
+  return shutdown;
+}

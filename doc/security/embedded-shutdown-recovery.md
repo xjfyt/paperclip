@@ -48,3 +48,43 @@ Supervisor 用 EventEmitter 和 deferred Promise 模拟，无真实 child/DB/网
 **限制和代价不能隐藏：**修复前就已有 `graceful heartbeat run drain failed`；PG先被终端进程组信号关闭，随后意外恢复偶然帮助其他数据库清理。修复后不重启PG，数据库依赖的清理出现更多连接拒绝，观察到退出约18秒，相比原场景约5秒更慢；HTTP drain仍触及5秒上限。没有证明活跃任务下状态不受影响，也没有解决终端信号隔离或所有清理的优雅退出。
 
 本补丁只保证服务器进入shutdown后不主动进行恢复，不提前停止原本仍活着的自有数据库，不改变外部/复用数据库的所有权边界。真实部署仍应验收进程管理器仅向Node发送终止信号时的有序清理，以及活跃任务恢复；不能把零任务样本当成完整生产退出验收。
+
+## Root 关停协调前置收口（2026-10-26）
+
+**本片不是终端信号隔离修复。** 16:22 UTC 的 native 复验仍出现 heartbeat drain 连接拒绝、HTTP 五秒排空超时和应用服务清理失败，至 16:22:45 才进入 provider stop。终端返回 prompt、postmaster.pid 消失且无误恢复，只证明该样本最终退出，不证明完整优雅退出。
+
+此前共享 Promise 仅在 embedded supervisor 内；root 的两个 `process.once` listener 和程序化 shutdown 仍可各自重新执行 teardown。本片把 root 入口统一到 `createCoordinatedServerShutdown`：
+
+- 首次调用先发布工作 Promise，随后同步禁止 supervisor recovery/heartbeat scheduling，再执行原有排空。同步重入也取得同一个 Promise。
+- SIGINT、SIGTERM 使用本次实例拥有的持续 listener；同信号、混合信号和程序化调用共用一次工作及结果。首次 signal 才请求进程退出；程序化先开始、signal 后加入也只退出一次。第一调用的 signal 决定排空参数。
+- begin/drain 的未捕获错误不会跳过既有最终清理。等待最终清理结束后，程序化调用仍收到原错误；两阶段都失败时用 AggregateError 保留两个错误。signal 路径记录一次错误并以非零状态退出，不假报成功。
+- 最终清理完成或拒绝时，只移除该协调器自己的两个 listener，不移除预先存在或后来加入的其他 listener。纯程序化 shutdown 不调用 process.exit。
+- HTTP 关闭统一走既有五秒预算的最终清理，不再在程序化尾部重复调用无独立预算的 server.close。服务、连接池、owned provider 顺序及所有权条件不变。
+
+### 本片验证
+
+```sh
+cd server
+NODE_OPTIONS=--max-old-space-size=512 ../node_modules/.bin/vitest run \
+  src/shutdown.test.ts src/__tests__/embedded-postgres-supervisor.test.ts --maxWorkers=1
+```
+
+本轮两个文件 **38 项通过**。新增协调测试覆盖：同信号重复、两信号混合、signal-first / programmatic-first、同步重入、自己的 listener 移除与其他 listener 保留、begin/drain/finalizer 单错和双错、最终清理只执行一次。
+
+其中一项在 POSIX 创建单个 Node 测试子进程，真实向该 ChildProcess 依次发送 SIGINT、第二次 SIGINT、SIGTERM，等子进程确认收到后才释放假 drain；验证进程正常以 0 退出且 begin/drain/finalize/exit 各一次。仅引用本测试创建的 child，无负 PID、组 kill、真实 PostgreSQL 或其他会话；失败时清理也只针对该 child。Windows 跳过这一项，其余协调器测试不依赖 OS 信号。
+
+另以 512MB 执行只含 shutdown.ts / shutdown.test.ts 的独立 TypeScript 检查；不代表 index.ts 的完整项目类型检查。未运行全仓 typecheck/build、真实 PostgreSQL、浏览器或活跃任务验收；不改共享 node_modules、依赖 patch、lockfile、system/security 设置。
+
+### 必须保留的限制
+
+- 前置 begin/drain 抛错会跳过该 drain 中剩余步骤；本片保证的是仍进入一次最终清理，而非每个 worker 都停止成功。既有 finalize 内部自行记录并继续的失败仍保留原语义，不在本片转换成 rejection。
+- 不新增总超时或强制停止策略，沿用已有各阶段预算。因此不能声称所有关停路径都有界：未完成的 worker/drain/provider Promise 仍可能阻塞；等待期间重复信号加入同一工作，不作为强制退出捷径。
+- 同进程组中的 PostgreSQL 仍可能先收到终端 Ctrl+C，本片的真实 Node 信号测试不能作为 DB 维持至 drain 完成的证据。正常 SIGTERM、活跃任务状态保留以及真正的终端 DB 顺序仍待后续验收。
+
+### 候选后续：依赖隔离，尚未实施
+
+本地已安装 embedded-postgres 18.1.0-beta.16 没有可注入 spawn 配置的公开 API。最小候选是扩展仓库已有 patch，增加显式 opt-in，仅 POSIX 的 postgres spawn 设置 detached，保留 pipes/ChildProcess 引用、不 unref；只由本进程创建的新实例和 recovery replacement 开启。initdb、外部/复用实例和 Windows 保持原行为。不得直接改共享 node_modules。
+
+父进程单独收到 SIGKILL **本来就不保证子进程被杀**，不能把所有孤儿风险说成 detached 新增或声称原实现安全。detached 确实改变终端/会话信号传播；异常退出、启动尚未交接 ownership、recovery 正在启动、stop 超时都需另行审计。重启时继续核对 PID/dataDir/实际数据库目录；匹配活进程只复用、不接管停止权限，不通过删 PID 或杀进程组“恢复”。
+
+后续验证应只复制小型依赖 JS/声明/元数据到隔离 staging，逆向已有 patch 得到匹配基线后以 patch --check / apply 验证候选，再用 fake-spawn 测开关及跨平台分支。真实 POSIX 测试须使用新建、可追踪的最小子进程/测试会话，证明信号隔离与有序停止；不得向未知/共享组发信号，也不得用 mock 宣称 native 问题已解决。真实 PostgreSQL和终端验收需独立 fixture及明确所有权。若最终采用 patch，发布 marker、安装完整性和 lockfile patch hash 必须一致；当前未安装、未修改/提交锁文件，不把隔离 staging 等同 frozen-install 通过。

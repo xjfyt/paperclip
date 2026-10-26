@@ -1,8 +1,10 @@
 import { EventEmitter } from "node:events";
+import { spawn } from "node:child_process";
 import { describe, expect, it, vi } from "vitest";
 import {
   closeHttpListenerForShutdown,
   coordinateHeartbeatSchedulerShutdown,
+  createCoordinatedServerShutdown,
   drainRunExecutionFinalizersForShutdown,
   finalizeServerShutdown,
   loadWithoutCoordinatedShutdownSignalHooks,
@@ -522,4 +524,203 @@ describe("coordinateHeartbeatSchedulerShutdown", () => {
       waitedForSchedulerIdle: true,
     });
   });
+});
+
+describe("createCoordinatedServerShutdown", () => {
+  function fixture(overrides: { begin?: () => void; signalTarget?: EventEmitter } = {}) {
+    const signalTarget = new EventEmitter();
+    const drain = deferred();
+    const finalize = deferred();
+    const input = {
+      signalTarget,
+      begin: vi.fn(),
+      drain: vi.fn(() => drain.promise),
+      finalize: vi.fn(() => finalize.promise),
+      exit: vi.fn(),
+      log: stubLogger(),
+      ...overrides,
+    };
+    return { input, drain, finalize, shutdown: createCoordinatedServerShutdown(input) };
+  }
+
+  it.each(["SIGINT", "SIGTERM"] as const)("joins repeated %s and the other signal to programmatic work", async (signal) => {
+    const f = fixture();
+    const other = signal === "SIGINT" ? "SIGTERM" : "SIGINT";
+    const result = f.shutdown(signal);
+    expect(f.input.begin).toHaveBeenCalledOnce();
+    expect(f.input.drain).toHaveBeenCalledWith(signal);
+    f.input.signalTarget.emit(signal);
+    f.input.signalTarget.emit(signal);
+    f.input.signalTarget.emit(other);
+    expect(f.shutdown(other)).toBe(result);
+    expect(f.input.finalize).not.toHaveBeenCalled();
+    expect(f.input.exit).not.toHaveBeenCalled();
+    f.drain.resolve();
+    await Promise.resolve();
+    expect(f.input.finalize).toHaveBeenCalledOnce();
+    expect(f.input.finalize).toHaveBeenCalledWith(signal);
+    expect(f.input.exit).not.toHaveBeenCalled();
+    f.finalize.resolve();
+    await result;
+    expect(f.input.drain).toHaveBeenCalledOnce();
+    expect(f.input.exit).toHaveBeenCalledExactlyOnceWith(0);
+    expect(f.shutdown(other)).toBe(result);
+    expect(f.input.signalTarget.listenerCount("SIGINT")).toBe(0);
+    expect(f.input.signalTarget.listenerCount("SIGTERM")).toBe(0);
+  });
+
+  it.each(["SIGINT", "SIGTERM"] as const)("shares signal-first %s work with subsequent programmatic calls", async (signal) => {
+    const f = fixture();
+    f.input.signalTarget.emit(signal);
+    const result = f.shutdown("SIGTERM");
+    f.input.signalTarget.emit("SIGINT");
+    f.input.signalTarget.emit("SIGTERM");
+    f.drain.resolve();
+    f.finalize.resolve();
+    await result;
+    expect(f.input.begin).toHaveBeenCalledOnce();
+    expect(f.input.drain).toHaveBeenCalledExactlyOnceWith(signal);
+    expect(f.input.finalize).toHaveBeenCalledExactlyOnceWith(signal);
+    expect(f.input.exit).toHaveBeenCalledExactlyOnceWith(0);
+  });
+
+  it("removes only its listeners after programmatic completion and never exits", async () => {
+    const target = new EventEmitter();
+    const otherInt = vi.fn();
+    const otherTerm = vi.fn();
+    target.on("SIGINT", otherInt);
+    target.once("SIGTERM", otherTerm);
+    const f = fixture({ signalTarget: target });
+    const later = vi.fn();
+    target.on("SIGINT", later);
+    const result = f.shutdown("SIGTERM");
+    f.drain.resolve();
+    f.finalize.resolve();
+    await result;
+    expect(target.listeners("SIGINT")).toEqual([otherInt, later]);
+    expect(target.listeners("SIGTERM")).toEqual([otherTerm]);
+    expect(f.input.exit).not.toHaveBeenCalled();
+    expect(f.shutdown("SIGINT")).toBe(result);
+  });
+
+  it("publishes work before synchronous begin can reenter shutdown", async () => {
+    let reentered: Promise<void> | undefined;
+    const f = fixture({ begin: () => { reentered = f.shutdown("SIGTERM"); } });
+    const result = f.shutdown("SIGINT");
+    expect(reentered).toBe(result);
+    f.drain.resolve();
+    f.finalize.resolve();
+    await result;
+    expect(f.input.drain).toHaveBeenCalledOnce();
+  });
+
+  it.each(["begin", "drain"] as const)("retains %s failure until final cleanup settles, once for every caller", async (phase) => {
+    const failure = new Error(`${phase} failed`);
+    const f = fixture(phase === "begin" ? { begin: () => { throw failure; } } : {});
+    const result = f.shutdown("SIGTERM");
+    const rejected = expect(result).rejects.toBe(failure);
+    if (phase === "drain") f.drain.reject(failure);
+    await Promise.resolve();
+    expect(f.input.finalize).toHaveBeenCalledOnce();
+    let settled = false;
+    void result.catch(() => { settled = true; });
+    f.input.signalTarget.emit("SIGINT");
+    f.input.signalTarget.emit("SIGTERM");
+    expect(f.shutdown("SIGINT")).toBe(result);
+    expect(settled).toBe(false);
+    f.finalize.resolve();
+    await rejected;
+    expect(f.input.exit).toHaveBeenCalledExactlyOnceWith(1);
+    expect(f.input.log.error).toHaveBeenCalledOnce();
+    expect(f.input.log.error.mock.calls[0]?.[0]).toMatchObject({ err: failure });
+    expect(f.input.signalTarget.eventNames()).toEqual([]);
+    expect(f.shutdown("SIGINT")).toBe(result);
+    await expect(f.shutdown("SIGINT")).rejects.toBe(failure);
+    expect(f.input.finalize).toHaveBeenCalledOnce();
+  });
+
+  it("preserves both drain and finalizer failures without replacing the first", async () => {
+    const f = fixture();
+    const first = new Error("drain");
+    const second = new Error("finalize");
+    const result = f.shutdown("SIGTERM");
+    const observed = result.catch((error: unknown) => error);
+    f.drain.reject(first);
+    await Promise.resolve();
+    f.finalize.reject(second);
+    const error = await observed;
+    expect(error).toBeInstanceOf(AggregateError);
+    expect((error as AggregateError).errors).toEqual([first, second]);
+    expect(f.input.signalTarget.eventNames()).toEqual([]);
+    expect(f.input.exit).not.toHaveBeenCalled();
+  });
+
+  it("returns finalizer-only failure unchanged", async () => {
+    const f = fixture();
+    const failure = new Error("finalize");
+    const result = f.shutdown("SIGINT");
+    const rejected = expect(result).rejects.toBe(failure);
+    f.drain.resolve();
+    await Promise.resolve();
+    f.finalize.reject(failure);
+    await rejected;
+    expect(f.input.signalTarget.eventNames()).toEqual([]);
+  });
+});
+
+
+it.skipIf(process.platform === "win32")("coordinates real repeated POSIX signals on one owned Node child", async () => {
+  const source = new URL("./shutdown.ts", import.meta.url).href;
+  const child = spawn(process.execPath, ["--import", "tsx", "--input-type=module", "-e", `
+    import { createCoordinatedServerShutdown } from ${JSON.stringify(source)};
+    let release;
+    const drain = new Promise((resolve) => { release = resolve; });
+    createCoordinatedServerShutdown({
+      begin: () => process.send('begin'),
+      drain: () => { process.send('drain'); return drain; },
+      finalize: async () => { process.send('finalize'); },
+      signalTarget: process,
+      exit: (code) => process.send('exit:' + code, () => process.exit(code)),
+      log: { info() {}, error() { process.send('error'); } },
+    });
+    process.on('SIGINT', () => process.send('signal:SIGINT'));
+    process.on('SIGTERM', () => process.send('signal:SIGTERM'));
+    process.on('message', () => release());
+    process.send('ready');
+  `], { stdio: ["ignore", "ignore", "pipe", "ipc"] });
+  const messages: unknown[] = [];
+  let stderr = "";
+  child.stderr?.on("data", (chunk) => { stderr += String(chunk); });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const result = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
+      timer = setTimeout(() => reject(new Error(`Owned signal fixture timed out: ${stderr}`)), 4_000);
+      child.once("error", reject);
+      child.once("exit", (code, signal) => resolve({ code, signal }));
+      child.on("message", (message) => {
+        messages.push(message);
+        if (message === "ready" || message === "drain") child.kill("SIGINT");
+        if (message === "signal:SIGINT" && messages.filter((m) => m === message).length === 2) {
+          child.kill("SIGTERM");
+        }
+        if (message === "signal:SIGTERM") child.send("finish");
+      });
+    });
+    expect(result, stderr).toEqual({ code: 0, signal: null });
+    expect(messages.filter((m) => m === "begin")).toHaveLength(1);
+    expect(messages.filter((m) => m === "drain")).toHaveLength(1);
+    expect(messages.filter((m) => m === "finalize")).toHaveLength(1);
+    expect(messages.filter((m) => m === "exit:0")).toHaveLength(1);
+    expect(messages.filter((m) => m === "signal:SIGINT")).toHaveLength(2);
+    expect(messages.filter((m) => m === "signal:SIGTERM")).toHaveLength(1);
+    expect(messages).not.toContain("error");
+  } finally {
+    if (timer) clearTimeout(timer);
+    // Test-failure cleanup is restricted to the exact child we spawned; no
+    // negative PID, process-group signal, PostgreSQL, or other session is used.
+    if (child.pid !== undefined && child.exitCode === null && child.signalCode === null) {
+      const exited = new Promise<void>((resolve) => child.once("exit", () => resolve()));
+      if (child.kill("SIGKILL")) await exited;
+    }
+  }
 });
