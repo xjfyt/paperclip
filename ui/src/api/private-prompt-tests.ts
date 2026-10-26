@@ -1,4 +1,4 @@
-import type { PreparePrivatePromptTest, ExecutePrivatePromptTest, CancelPrivatePromptTest, PrivatePromptTestRecord, PrivatePromptPreparedWitness, PrivatePromptTestCapabilities } from "@paperclipai/shared/mimouse-private-prompt-tests";
+import type { PreparePrivatePromptTest, ExecutePrivatePromptTest, CancelPrivatePromptTest, PrivatePromptTestRecord, PrivatePromptPreparedWitness, PrivatePromptTestCapabilities, PrivatePromptApprovalSnapshot } from "@paperclipai/shared/mimouse-private-prompt-tests";
 import { requestResponse } from "./client";
 import { readApiJson } from "./response";
 export function privateObject(value: unknown): Record<string, unknown> {
@@ -12,13 +12,25 @@ function date(value: unknown) { const text = privateString(value); if (!/^\d{4}-
 function nullable<T>(value: unknown, parse: (value: unknown) => T): T | null { return value === null ? null : parse(value); }
 function literal<T>(value: unknown, expected: T): T { if (value !== expected) throw Error("private_response_invalid"); return expected; }
 const profile = (value: unknown) => literal(value, "claude_cli_bare_api_key_v1" as const);
+function exactKeys(value: Record<string, unknown>, keys: string[]) { if (Object.keys(value).length !== keys.length || Object.keys(value).some(key => !keys.includes(key))) throw Error("private_response_invalid"); }
+function approvalSnapshot(raw: unknown): PrivatePromptApprovalSnapshot {
+  const r = privateObject(raw), environment = privateObject(r.environment), credential = privateObject(r.credential);
+  exactKeys(r, ["schemaVersion", "executionProfile", "adapterType", "engine", "model", "configuredCwd", "environment", "credential", "configDigest", "freshSession", "toolsEnabled", "paperclipCredentialsEnabled", "completeContextCaptured"]);
+  exactKeys(environment, ["source", "id", "driver"]); exactKeys(credential, ["kind", "secretId", "version"]);
+  const model = privateString(r.model), source = privateString(environment.source), cwd = nullable(r.configuredCwd, privateString);
+  if (!/^claude-[a-zA-Z0-9.-]+$/.test(model) || model.length > 256 || (cwd !== null && cwd.length > 4096) || !["agent", "instance", "implicit"].includes(source) || typeof credential.version !== "number" || !Number.isSafeInteger(credential.version) || credential.version < 1) throw Error("private_response_invalid");
+  return { schemaVersion: literal(r.schemaVersion, 1), executionProfile: profile(r.executionProfile), adapterType: literal(r.adapterType, "claude_local"), engine: literal(r.engine, "cli"), model, configuredCwd: cwd,
+    environment: { source: source as PrivatePromptApprovalSnapshot["environment"]["source"], id: privateUuid(environment.id), driver: literal(environment.driver, "local") },
+    credential: { kind: literal(credential.kind, "pinned_company_secret"), secretId: privateUuid(credential.secretId), version: credential.version }, configDigest: privateHash(r.configDigest),
+    freshSession: literal(r.freshSession, true), toolsEnabled: literal(r.toolsEnabled, false), paperclipCredentialsEnabled: literal(r.paperclipCredentialsEnabled, false), completeContextCaptured: literal(r.completeContextCaptured, false) };
+}
 export type VerifiedPrivatePromptRecord = Omit<PrivatePromptTestRecord, "prepared"> & { prepared: (PrivatePromptPreparedWitness & { runtimeConfigHash?: string }) | null };
 export const privatePromptRecordSchema = { parse(raw: unknown): VerifiedPrivatePromptRecord {
   const r = privateObject(raw), status = privateString(r.status);
   if (!["awaiting_confirmation", "pending_harness", "pending_wake", "queued", "prepared", "spawned", "completed", "failed", "unknown", "cancelled"].includes(status)) throw Error("private_response_invalid");
   const row: VerifiedPrivatePromptRecord = {
     id: privateUuid(r.id), companyId: privateUuid(r.companyId), actorUserId: privateString(r.actorUserId), promptId: privateUuid(r.promptId), requestId: privateUuid(r.requestId),
-    revisionId: privateUuid(r.revisionId), headReceiptId: nullable(r.headReceiptId, privateUuid), approvalDigest: privateHash(r.approvalDigest), executionProfile: profile(r.executionProfile),
+    revisionId: privateUuid(r.revisionId), headReceiptId: nullable(r.headReceiptId, privateUuid), approvalDigest: privateHash(r.approvalDigest), executionProfile: profile(r.executionProfile), approvalSnapshot: nullable(r.approvalSnapshot, approvalSnapshot),
     agentId: privateUuid(r.agentId), datasetId: privateUuid(r.datasetId), caseId: privateUuid(r.caseId), skillVersionId: privateUuid(r.skillVersionId),
     status: status as PrivatePromptTestRecord["status"], issueId: nullable(r.issueId, privateUuid), heartbeatRunId: nullable(r.heartbeatRunId, privateUuid), prepared: null,
     spawnedAt: nullable(r.spawnedAt, date), errorCode: nullable(r.errorCode, privateString), createdAt: date(r.createdAt), updatedAt: date(r.updatedAt), runtimeApplied: literal(r.runtimeApplied, false),

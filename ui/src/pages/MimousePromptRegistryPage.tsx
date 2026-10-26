@@ -13,8 +13,13 @@ export function MimousePromptRegistryPage() {
   const session = useQuery({ queryKey: queryKeys.auth.session, queryFn: authApi.getSession, retry: false });
   useEffect(() => { setBreadcrumbs([{ label: t("promptRegistryUi.title") }]); }, [setBreadcrumbs, t]);
   if (!selectedCompanyId) return <p>{t("feedbackUi.chooseCompany")}</p>;
-  if (session.isPending || session.isFetching) return <p role="status">{t("common.loading")}</p>;
+  if (session.isPending) return <p role="status">{t("common.loading")}</p>;
   const userId = session.data?.user?.id, sessionId = session.data?.session?.id;
   if (session.isError || !userId || !sessionId) return <p role="alert">{t("promptRegistryUi.denied")}</p>;
-  return <MimousePromptRegistry companyId={selectedCompanyId} userId={userId} sessionId={sessionId} />;
+  return <>
+    {session.isFetching && <p role="status">{t("common.loading")}</p>}
+    <div hidden={session.isFetching}>
+      <MimousePromptRegistry companyId={selectedCompanyId} userId={userId} sessionId={sessionId} authPending={session.isFetching} authEpoch={session.dataUpdatedAt} />
+    </div>
+  </>;
 }

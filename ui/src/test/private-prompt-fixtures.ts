@@ -5,6 +5,8 @@ export const record = (patch: Partial<VerifiedPrivatePromptRecord> = {}): Verifi
   const hasWitness = ["prepared", "spawned", "completed"].includes(patch.status ?? "");
   return ({ id: ids.test, companyId: ids.company, actorUserId: "user", promptId: ids.prompt, requestId: ids.request,
   revisionId: ids.revision, headReceiptId: null, approvalDigest: "a".repeat(64), executionProfile: "claude_cli_bare_api_key_v1", agentId: ids.ref, datasetId: ids.ref, caseId: ids.ref, skillVersionId: ids.ref,
+  approvalSnapshot: { schemaVersion: 1, executionProfile: "claude_cli_bare_api_key_v1", adapterType: "claude_local", engine: "cli", model: "claude-sonnet-4-6", configuredCwd: "/fixture/work",
+    environment: { source: "agent", id: ids.ref, driver: "local" }, credential: { kind: "pinned_company_secret", secretId: ids.ref, version: 2 }, configDigest: "d".repeat(64), freshSession: true, toolsEnabled: false, paperclipCredentialsEnabled: false, completeContextCaptured: false },
   status: "awaiting_confirmation", issueId: hasWitness ? ids.ref : null, heartbeatRunId: hasWitness ? ids.ref : null,
   prepared: hasWitness ? { schemaVersion: 1, testId: ids.test, attemptId: ids.ref, companyId: ids.company, issueId: ids.ref, heartbeatRunId: ids.ref, agentId: ids.ref, revisionId: ids.revision, headReceiptId: null,
     revisionHash: "a".repeat(64), promptHash: "b".repeat(64), promptBytes: 42, runtimeConfigHash: "c".repeat(64), implementation: "paperclip.builtin.claude-local.cli.literal.v1", providerConsumed: false, stdinWritten: false } : null,

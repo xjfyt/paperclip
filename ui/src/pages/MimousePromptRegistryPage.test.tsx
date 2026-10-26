@@ -28,13 +28,13 @@ it("passes the exact confirmed company, user and session to the registry", async
   calls.session.mockResolvedValue({ user: { id: "owner" }, session: { id: "owner-session" } }); await mount();
   await vi.waitFor(() => expect(host.textContent).toContain("company-a:owner:owner-session"));
 });
-it("unmounts sensitive state during identity revalidation and passes only the new identity", async () => {
+it("hides but preserves the controller during auth revalidation and passes the new identity", async () => {
   calls.session.mockResolvedValue({ user: { id: "owner" }, session: { id: "old-session" } }); await mount();
   await vi.waitFor(() => expect(host.textContent).toContain("old-session"));
   let finish!: (value: unknown) => void;
   calls.session.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
   await act(async () => { void client.invalidateQueries({ queryKey: ["session"] }); });
-  await vi.waitFor(() => expect(host.querySelector('[data-testid="registry"]')).toBeNull());
+  await vi.waitFor(() => expect(host.querySelector('[data-testid="registry"]')?.parentElement?.hidden).toBe(true));
   await act(async () => { finish({ user: { id: "other" }, session: { id: "new-session" } }); });
   await vi.waitFor(() => expect(host.textContent).toContain("company-a:other:new-session"));
   expect(host.textContent).not.toContain("old-session");

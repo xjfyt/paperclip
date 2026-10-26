@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ApiError } from "@/api/client";
@@ -8,101 +8,149 @@ import en from "@/i18n/contributions/privatePromptTestsUi/en.json";
 import zh from "@/i18n/contributions/privatePromptTestsUi/zh-CN.json";
 import es from "@/i18n/contributions/privatePromptTestsUi/es.json";
 import ja from "@/i18n/contributions/privatePromptTestsUi/ja.json";
+import { ids, marker, record, capabilities } from "@/test/private-prompt-fixtures";
+import { readPrivatePromptJournal, replacePrivatePromptJournal, privatePromptJournalKey } from "@/lib/private-prompt-journal";
 import { PrivatePromptTests } from "./PrivatePromptTests";
 import { MimousePromptRegistry } from "./MimousePromptRegistry";
 import registryEn from "@/i18n/contributions/promptRegistryUi/en.json";
-const calls = vi.hoisted(() => ({ capabilities: vi.fn(), list: vi.fn(), detail: vi.fn(), create: vi.fn() }));
-vi.mock("@/api/private-prompt-tests", () => ({ privatePromptTestsApi: () => calls }));
+const calls = vi.hoisted(() => ({ capabilities: vi.fn(), list: vi.fn(), detail: vi.fn(), prepare: vi.fn(), execute: vi.fn(), cancel: vi.fn() }));
+vi.mock("@/api/private-prompt-tests", async importOriginal => ({ ...await importOriginal<typeof import("@/api/private-prompt-tests")>(), privatePromptTestsApi: () => calls }));
 const registry = vi.hoisted(() => ({ list: vi.fn(), revisions: vi.fn(), receipts: vi.fn(), content: vi.fn(), create: vi.fn(), select: vi.fn() }));
 vi.mock("@/api/prompt-registry", () => ({ promptRegistryApi: () => registry }));
-const id = "22222222-2222-4222-8222-222222222222";
-const item = { id: "test", promptId: "prompt", revisionId: id, status: "completed", prepared: { promptHash: "hash", runtimeConfigHash: "derived-hash" }, spawnedAt: "2026-10-26", errorCode: null };
-let host: HTMLDivElement, root: Root;
+let host: HTMLDivElement, root: Root, current = record();
 const pending = vi.fn(), denied = vi.fn();
 const text = (key: string) => i18n.t(`privatePromptTestsUi.${key}`);
 const button = (key: string) => [...host.querySelectorAll("button")].find(element => element.textContent === text(key))!;
+const stored = () => readPrivatePromptJournal(ids.company, "user");
 async function flush() { await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); }); }
-async function mount(patch: Record<string, unknown> = {}) { await act(async () => root.render(<PrivatePromptTests companyId="company" userId="user" sessionId="session" promptId="prompt" revisionId={id} headReceiptId={null} onPendingChange={pending} onAccessLost={denied} {...patch} />)); await flush(); }
-async function click(element: HTMLElement) { await act(async () => element.click()); await flush(); }
-async function fill(field: string, value = id) { const input = host.querySelector<HTMLInputElement>(`[aria-label="${text(field)}"]`)!; await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value); input.dispatchEvent(new Event("input", { bubbles: true })); }); }
-async function approve() { for (const key of ["agentId", "datasetId", "caseId", "skillVersionId"]) await fill(key); for (const input of host.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')) await click(input); }
+async function mount(patch: Record<string, unknown> = {}) { await act(async () => root.render(<PrivatePromptTests companyId={ids.company} userId="user" sessionId="session" promptId={ids.prompt} revisionId={ids.revision} headReceiptId={null} onPendingChange={pending} onAccessLost={denied} {...patch} />)); await flush(); }
+async function click(element: HTMLElement) { expect(element).toBeDefined(); await act(async () => element.click()); await flush(); }
+async function fill(field: string, value = ids.ref) { const input = host.querySelector<HTMLInputElement>(`[aria-label="${text(field)}"]`)!; await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value); input.dispatchEvent(new Event("input", { bubbles: true })); }); }
+async function prepare() { for (const field of ["agentId", "datasetId", "caseId", "skillVersionId"]) await fill(field); await click(button("prepare")); }
+async function confirm() { for (const input of host.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')) await click(input); }
+async function reload(patch: Record<string, unknown> = {}) { await act(async () => root.unmount()); root = createRoot(host); await mount(patch); }
 beforeEach(async () => {
-  for (const [locale, data] of Object.entries({ en, "zh-CN": zh, es, ja })) i18n.addResourceBundle(locale, "translation", { privatePromptTestsUi: data }, true, true);
+  sessionStorage.clear(); for (const [locale, data] of Object.entries({ en, "zh-CN": zh, es, ja })) i18n.addResourceBundle(locale, "translation", { privatePromptTestsUi: data }, true, true);
   i18n.addResourceBundle("en", "translation", { promptRegistryUi: registryEn }, true, true);
-  await i18n.changeLanguage("en"); Object.values(calls).forEach(call => call.mockReset()); pending.mockClear(); denied.mockClear();
-  calls.capabilities.mockResolvedValue({ enabled: true, profile: "claude_cli_bare_api_key_v1", toolsEnabled: false, privateResults: true, completeContextCaptured: false });
-  calls.list.mockResolvedValue({ items: [item], nextBeforeId: null }); calls.detail.mockResolvedValue({ item, privateResult: { summary: "<script>not executed</script>", resultJson: { result: "exact" } }, contentDisposition: "untrusted_inert_text" });
-  calls.create.mockResolvedValue({ item, duplicate: false }); host = document.createElement("div"); document.body.append(host); root = createRoot(host);
+  await i18n.changeLanguage("en"); Object.values(calls).forEach(call => call.mockReset()); pending.mockClear(); denied.mockClear(); current = record();
+  calls.capabilities.mockResolvedValue(capabilities); calls.list.mockImplementation(async () => ({ items: [current], nextBeforeId: null }));
+  calls.detail.mockImplementation(async () => ({ item: current, privateResult: current.status === "completed" ? { summary: "<script>not executed</script>", resultJson: { result: "exact" } } : null, contentDisposition: "untrusted_inert_text" }));
+  calls.prepare.mockImplementation(async (_promptId, body) => { current = record({ ...body, headReceiptId: body.expectedHeadReceiptId }); return { item: current, duplicate: false }; });
+  calls.execute.mockImplementation(async () => { current = record({ ...current, status: "queued" }); return { item: current, duplicate: false }; });
+  calls.cancel.mockImplementation(async () => { current = record({ ...current, status: "cancelled" }); return { item: current, duplicate: false }; });
+  host = document.createElement("div"); document.body.append(host); root = createRoot(host);
 });
-afterEach(async () => { await act(async () => root.unmount()); host.remove(); });
-it("requires all three confirmations and fixed UUID references; never starts automatically", async () => {
-  await mount(); expect(calls.create).not.toHaveBeenCalled(); expect(button("execute").disabled).toBe(true);
-  await approve(); expect(button("execute").disabled).toBe(false); await click(button("execute"));
-  expect(calls.create).toHaveBeenCalledExactlyOnceWith("prompt", expect.objectContaining({ revisionId: id, expectedHeadReceiptId: null, executionProfile: "claude_cli_bare_api_key_v1", confirmRestrictedProfile: true, confirmExecution: true, confirmPossibleCharges: true }));
-  expect(pending).toHaveBeenCalledWith(true); expect(pending).toHaveBeenLastCalledWith(false);
-  expect(host.textContent).toContain(text("completedBoundary")); expect(host.textContent).toContain(`${text("runtimeHash")}: derived-hash`); expect(host.querySelector("script")).toBeNull();
-  expect(host.querySelector("pre")?.textContent).toContain("<script>not executed</script>");
+afterEach(async () => { await act(async () => root.unmount()); host.remove(); sessionStorage.clear(); vi.restoreAllMocks(); });
+it("prepares only metadata; separately confirms all three execution terms against the fixed digest", async () => {
+  await mount(); await prepare(); expect(calls.execute).not.toHaveBeenCalled();
+  expect(calls.prepare.mock.calls[0]![1]).not.toHaveProperty("confirmExecution"); expect(stored()?.phase).toBe("awaiting_confirmation");
+  expect(host.textContent).toContain(current.approvalDigest); expect(button("execute").disabled).toBe(true);
+  await confirm(); await click(button("execute")); expect(calls.execute).toHaveBeenCalledExactlyOnceWith(ids.prompt, ids.test, { approvalDigest: current.approvalDigest, executionProfile: current.executionProfile, confirmRestrictedProfile: true, confirmExecution: true, confirmPossibleCharges: true });
+  expect(stored()?.phase).toBe("accepted"); expect(button("execute")).toBeUndefined(); expect(pending).toHaveBeenLastCalledWith(true);
 });
-it("shows all four languages with the same warning and status keys", async () => {
-  expect(Object.keys(en).sort()).toEqual(Object.keys(zh).sort()); expect(Object.keys(en).sort()).toEqual(Object.keys(es).sort()); expect(Object.keys(en).sort()).toEqual(Object.keys(ja).sort());
-  await mount(); for (const locale of ["en", "zh-CN", "es", "ja"]) { await act(async () => { await i18n.changeLanguage(locale); }); expect(host.textContent).toContain(text("boundary")); expect(host.textContent).toContain(text("profile")); expect(host.textContent).toContain(text("textOnlyBoundary")); expect(text("textOnlyBoundary")).toContain("256000"); expect(text("textOnlyBoundary")).toContain("SKILL.md"); }
+it("renders four languages including text-only and two-stage billing boundaries", async () => {
+  for (const data of [zh, es, ja]) expect(Object.keys(data).sort()).toEqual(Object.keys(en).sort());
+  await mount(); for (const locale of ["en", "zh-CN", "es", "ja"]) { await act(async () => { await i18n.changeLanguage(locale); }); for (const key of ["boundary", "profile", "textOnlyBoundary", "twoPhase"]) expect(host.textContent).toContain(text(key)); }
 });
-it("disables execution when the server gate is closed without hiding historical results", async () => {
-  calls.capabilities.mockResolvedValue({ enabled: false, profile: "claude_cli_bare_api_key_v1", toolsEnabled: false, completeContextCaptured: false });
-  await mount(); expect(host.querySelector("fieldset")!.disabled).toBe(true); expect(host.textContent).toContain(text("disabled"));
-  await click([...host.querySelectorAll("button")].find(element => element.textContent === "test")!); expect(host.querySelector("pre")).not.toBeNull(); expect(calls.create).not.toHaveBeenCalled();
+it("retains metadata-only preparation after an unknown response and recovers the exact request", async () => {
+  calls.prepare.mockRejectedValueOnce(Error("lost")); await mount(); await prepare(); const original = calls.prepare.mock.calls[0]![1];
+  expect(stored()?.phase).toBe("prepare_pending"); await reload({ sessionId: "new-session", revisionId: ids.ref });
+  expect(calls.execute).not.toHaveBeenCalled(); await click(button("recoverPrepare")); expect(calls.prepare.mock.calls[1]![1]).toEqual(original);
 });
-it("freezes an uncertain POST and recovers the same exact request once", async () => {
-  calls.create.mockRejectedValueOnce(Error("response lost")); await mount(); await approve(); await click(button("execute"));
-  const original = calls.create.mock.calls[0]![1]; expect(host.querySelector("fieldset")!.disabled).toBe(true); expect(button("refresh").disabled).toBe(true); expect(pending).toHaveBeenLastCalledWith(true);
-  await click(button("recover")); expect(calls.create.mock.calls[1]![1]).toEqual(original); expect(pending).toHaveBeenLastCalledWith(false);
+it.each([400, 401, 403, 404, 409, 422, 500])("never clears an unresolved execution because of HTTP %s", async code => {
+  calls.execute.mockRejectedValueOnce(new ApiError("failed", code, null)); await mount(); await prepare(); await confirm(); await click(button("execute"));
+  expect(stored()?.phase).toBe("execute_pending"); expect(pending).toHaveBeenLastCalledWith(true);
+  if ([401, 403].includes(code)) { expect(denied).toHaveBeenCalled(); expect(host.querySelector("pre")).toBeNull(); }
 });
-it.each(["companyId", "userId", "sessionId", "revisionId"])("drops late private reads and drafts when %s changes", async dimension => {
-  let finish!: (value: unknown) => void; calls.detail.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
-  await mount(); await fill("agentId"); await click([...host.querySelectorAll("button")].find(element => element.textContent === "test")!);
-  await mount({ [dimension]: dimension === "revisionId" ? "33333333-3333-4333-8333-333333333333" : "new" });
-  await act(async () => finish({ item, privateResult: { summary: "old secret" }, contentDisposition: "untrusted_inert_text" })); await flush();
-  expect(host.textContent).not.toContain("old secret"); expect(host.querySelector<HTMLInputElement>(`[aria-label="${text("agentId")}"]`)!.value).toBe("");
+it.each([{}, { item: {} }, { item: record({ requestId: ids.ref }), duplicate: false }])("never acknowledges malformed or mismatched 200", async response => {
+  calls.execute.mockResolvedValueOnce(response); await mount(); await prepare(); await confirm(); await click(button("execute"));
+  expect(stored()?.phase).toBe("execute_pending"); expect(pending).toHaveBeenLastCalledWith(true);
 });
-it("revocation clears private result and drafts and informs the registry", async () => {
-  await mount(); await click([...host.querySelectorAll("button")].find(element => element.textContent === "test")!); calls.capabilities.mockRejectedValueOnce(new ApiError("forbidden", 403, null));
-  await click(button("refresh")); expect(host.querySelector("pre")).toBeNull(); expect(host.querySelector("fieldset")).toBeNull(); expect(denied).toHaveBeenCalledOnce();
-  await click(button("refresh")); expect(host.querySelector<HTMLInputElement>(`[aria-label="${text("agentId")}"]`)!.value).toBe("");
+it("survives session/head/revision remount and awaiting GET cannot erase a delayed execution", async () => {
+  calls.execute.mockRejectedValueOnce(Error("lost")); await mount(); await prepare(); await confirm(); await click(button("execute")); const original = stored()!;
+  await reload({ sessionId: "renewed", revisionId: ids.ref, headReceiptId: ids.ref });
+  expect(stored()).toEqual(original); expect(calls.execute).toHaveBeenCalledTimes(1); expect(button("retryExecute").disabled).toBe(true);
+  await confirm(); await click(button("retryExecute")); expect(calls.execute.mock.calls[1]).toEqual(calls.execute.mock.calls[0]); expect(stored()?.phase).toBe("accepted");
 });
-it("409 clears confirmation and never automatically issues a new intent", async () => {
-  calls.create.mockRejectedValueOnce(new ApiError("conflict", 409, null)); await mount(); await approve(); await click(button("execute"));
-  expect(calls.create).toHaveBeenCalledTimes(1); expect(button("execute").disabled).toBe(true); expect(host.textContent).toContain(text("conflict")); expect(pending).toHaveBeenLastCalledWith(false);
+it("background auth verification cannot acknowledge a delayed POST or erase its marker", async () => {
+  let finish!: (value: unknown) => void; calls.execute.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  await mount(); await prepare(); await confirm(); await click(button("execute")); const original = stored()!;
+  await mount({ authPending: true }); await act(async () => finish({ item: record({ ...current, status: "queued" }), duplicate: false })); await flush();
+  expect(stored()).toEqual(original); await mount({ authPending: false }); expect(stored()?.phase).toBe("execute_pending"); expect(calls.execute).toHaveBeenCalledTimes(1);
 });
-it("an offline read hides the previous result and all mutation controls", async () => {
-  await mount(); await click([...host.querySelectorAll("button")].find(element => element.textContent === "test")!); calls.list.mockRejectedValueOnce(Error("offline")); await click(button("refresh"));
-  expect(host.querySelector("pre")).toBeNull(); expect(host.querySelector("fieldset")).toBeNull(); expect(denied).not.toHaveBeenCalled();
+it("storage failure sends zero execution requests and never silently forgets the ticket", async () => {
+  await mount(); await prepare(); await confirm(); const before = stored(); vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw Error("quota"); });
+  await click(button("execute")); expect(calls.execute).not.toHaveBeenCalled(); expect(stored()).toEqual(before); expect(host.textContent).toContain(text("storageFailed"));
+});
+it("old POST cannot clear a newer marker for the same scope", async () => {
+  let finish!: (value: unknown) => void; calls.execute.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  await mount(); await prepare(); await confirm(); await click(button("execute")); const first = stored()!, newer = { ...first, operationId: ids.ref };
+  replacePrivatePromptJournal(newer, first.operationId); await act(async () => finish({ item: record({ requestId: current.requestId, status: "completed" }), duplicate: false })); await flush(); expect(stored()).toEqual(newer);
+});
+it("UI cancellation clears only its matching receipt without invoking Execute", async () => {
+  replacePrivatePromptJournal(marker(), null); await mount(); await click(button("cancelTicket")); expect(stored()).toBeNull(); expect(calls.cancel).toHaveBeenCalledExactlyOnceWith(ids.prompt, ids.test, { approvalDigest: "a".repeat(64) });
+  expect(calls.execute).not.toHaveBeenCalled(); expect(host.textContent).toContain(text("status_cancelled"));
+});
+it("unknown is retained, while a verified terminal GET clears the marker and renders inert private results", async () => {
+  replacePrivatePromptJournal(marker({ phase: "accepted" }), null); current = record({ status: "unknown" }); await mount(); expect(stored()).not.toBeNull(); expect(button("execute")).toBeUndefined();
+  current = record({ status: "completed" }); await click(button("refresh")); expect(stored()).toBeNull(); expect(host.querySelector("script")).toBeNull(); expect(host.querySelector("pre")?.textContent).toContain("<script>not executed</script>");
+});
+it("different user/company cannot read or replay another scope marker; returning revalidates without POST", async () => {
+  replacePrivatePromptJournal(marker(), null); await mount(); await mount({ userId: "other", promptId: null, revisionId: null });
+  expect(stored()).not.toBeNull(); expect(button("retryExecute")).toBeUndefined(); expect(host.textContent).not.toContain(ids.test);
+  await mount(); expect(calls.execute).not.toHaveBeenCalled(); expect(stored()).not.toBeNull();
+});
+it("does not put prompt content, result or credentials in persisted metadata", async () => {
+  await mount(); await prepare(); const raw = sessionStorage.getItem(privatePromptJournalKey(ids.company, "user"))!;
+  expect(raw).not.toMatch(/content|summary|resultJson|ANTHROPIC_API_KEY/); expect(JSON.parse(raw).approvalDigest).toBe(current.approvalDigest);
 });
 
-it("drops a late successful POST after replacement session and does not read its private result", async () => {
-  let finish!: (value: unknown) => void; calls.create.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
-  await mount(); await approve(); await click(button("execute")); await mount({ sessionId: "replacement" });
-  await act(async () => finish({ item: { ...item, id: "old-test" } })); await flush();
-  expect(calls.detail).not.toHaveBeenCalled(); expect(host.textContent).not.toContain("old-test"); expect(button("execute").disabled).toBe(true);
+it("StrictMode rehearsal preserves recovery identity and still permits private reads", async () => {
+  replacePrivatePromptJournal(marker(), null);
+  await act(async () => root.render(<StrictMode><PrivatePromptTests companyId={ids.company} userId="user" sessionId="session" promptId={ids.prompt} revisionId={ids.revision} headReceiptId={null} onPendingChange={pending} onAccessLost={denied} /></StrictMode>)); await flush();
+  expect(stored()?.testId).toBe(ids.test); expect(button("retryExecute")).toBeDefined(); expect(calls.execute).not.toHaveBeenCalled();
 });
-it("freezes the containing registry during unknown execution and releases it only after recovery", async () => {
-  const head = { id: "prompt", promptKey: "reviewer", selectedRevisionId: id, headReceiptId: null };
-  registry.list.mockResolvedValue({ items: [head], nextBeforeId: null }); registry.revisions.mockResolvedValue({ head, items: [{ id, contentHash: "hash" }], nextBeforeId: null });
-  registry.receipts.mockResolvedValue({ head, items: [], nextBeforeId: null }); registry.content.mockResolvedValue({ id, content: "private revision", contentHash: "hash" });
-  calls.create.mockRejectedValueOnce(Error("lost"));
-  await act(async () => root.render(<MimousePromptRegistry companyId="company" userId="user" sessionId="session" />)); await flush();
-  await click([...host.querySelectorAll("button")].find(element => element.textContent === "reviewer")!);
-  await click([...host.querySelectorAll("button")].find(element => element.textContent === id)!);
-  await approve(); await click(button("execute"));
-  expect(host.querySelector("fieldset")!.disabled).toBe(true);
+it("cancel losing to execution keeps the same accepted marker instead of authorizing another charge", async () => {
+  replacePrivatePromptJournal(marker(), null); calls.cancel.mockResolvedValueOnce({ item: record({ status: "queued" }), duplicate: true });
+  await mount(); await click(button("cancelTicket")); expect(stored()?.phase).toBe("accepted"); expect(button("retryExecute")).toBeUndefined(); expect(calls.execute).not.toHaveBeenCalled();
+});
+it("storage readback mismatch blocks Execute even when setItem appears to succeed", async () => {
+  await mount(); await prepare(); await confirm(); const before = stored(); vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {});
+  await click(button("execute")); expect(calls.execute).not.toHaveBeenCalled(); expect(stored()).toEqual(before); expect(host.textContent).toContain(text("storageFailed"));
+});
+
+it.each(["pending_harness", "pending_wake"] as const)("explicitly resumes %s only through the original ticket and digest", async status => {
+  replacePrivatePromptJournal(marker({ phase: "accepted" }), null); current = record({ status }); await mount();
+  expect(calls.execute).not.toHaveBeenCalled(); expect(button("continueExecution").disabled).toBe(true);
+  await confirm(); await click(button("continueExecution")); expect(calls.prepare).not.toHaveBeenCalled(); expect(calls.execute).toHaveBeenCalledExactlyOnceWith(ids.prompt, ids.test, expect.objectContaining({ approvalDigest: "a".repeat(64) }));
+});
+it("shows only the saved approval snapshot and forbids execution of null historical snapshots", async () => {
+  replacePrivatePromptJournal(marker({ phase: "awaiting_confirmation" }), null); await mount();
+  expect(host.textContent).toContain("claude-sonnet-4-6"); expect(host.textContent).toContain("/fixture/work"); expect(host.textContent).toContain(`${ids.ref} / v2`); expect(host.textContent).toContain(text("snapshotTitle"));
+  current = record({ approvalSnapshot: null }); await click(button("refresh")); expect(host.textContent).toContain(text("snapshotUnavailable")); expect(button("execute")).toBeUndefined(); expect(calls.execute).not.toHaveBeenCalled();
+});
+it("a closed execution gate remains read-only without auto preparation or execution", async () => {
+  calls.capabilities.mockResolvedValue({ ...capabilities, enabled: false }); await mount(); expect(host.querySelector("fieldset")!.disabled).toBe(true); expect(calls.prepare).not.toHaveBeenCalled(); expect(calls.execute).not.toHaveBeenCalled();
+});
+it("real Registry host keeps pending recovery and parent locks across auth verification/epoch remount without a selected revision", async () => {
+  replacePrivatePromptJournal(marker(), null); registry.list.mockResolvedValue({ items: [], nextBeforeId: null });
+  const render = async (authPending: boolean, authEpoch: number) => { await act(async () => root.render(<MimousePromptRegistry companyId={ids.company} userId="user" sessionId="session" {...{ authPending, authEpoch }} />)); await flush(); };
+  await render(false, 1); expect(host.textContent).toContain(ids.test); expect(host.querySelector("fieldset")!.disabled).toBe(true);
+  await render(true, 1); expect(stored()?.testId).toBe(ids.test);
+  await render(false, 2); expect(host.textContent).toContain(ids.test); expect(host.querySelector("fieldset")!.disabled).toBe(true);
   const refreshRegistry = [...host.querySelectorAll("button")].find(element => element.textContent === i18n.t("promptRegistryUi.refresh"))!;
-  expect(refreshRegistry.disabled).toBe(true); expect(registry.select).not.toHaveBeenCalled();
-  await click(button("recover")); expect(host.querySelector("fieldset")!.disabled).toBe(false); expect(refreshRegistry.disabled).toBe(false);
+  expect(refreshRegistry.disabled).toBe(true); expect(calls.prepare).not.toHaveBeenCalled(); expect(calls.execute).not.toHaveBeenCalled();
+});
+it("late prior-epoch POST finally cannot release the new epoch's active write lock", async () => {
+  const finishes: Array<(value: unknown) => void> = []; calls.execute.mockImplementation(() => new Promise(resolve => finishes.push(resolve)));
+  await mount(); await prepare(); await confirm(); await click(button("execute")); await mount({ authPending: true }); await mount({ authPending: false });
+  await confirm(); await click(button("retryExecute")); expect(calls.execute).toHaveBeenCalledTimes(2);
+  await act(async () => finishes[0]!({ item: record({ requestId: current.requestId, status: "completed" }), duplicate: false })); await flush();
+  expect(stored()?.phase).toBe("execute_pending"); expect(button("refresh").disabled).toBe(true);
+  await act(async () => finishes[1]!({ item: record({ ...current, status: "queued" }), duplicate: false })); await flush(); expect(stored()?.phase).toBe("accepted");
 });
 
-it("keeps the exact request after a generic 422 because it may follow a committed intent", async () => {
-  calls.create.mockRejectedValueOnce(new ApiError("private_operation_failed", 422, null));
-  await mount(); await approve(); await click(button("execute"));
-  const original = calls.create.mock.calls[0]![1]; expect(pending).toHaveBeenLastCalledWith(true);
-  expect(host.querySelector("fieldset")!.disabled).toBe(true);
-  await click(button("recover")); expect(calls.create.mock.calls[1]![1]).toEqual(original);
+it("labels a null configured directory as unresolved rather than claiming a pinned execution directory", async () => {
+  replacePrivatePromptJournal(marker({ phase: "awaiting_confirmation" }), null); current = record({ approvalSnapshot: { ...record().approvalSnapshot!, configuredCwd: null } });
+  await mount(); expect(host.textContent).toContain(text("snapshotTarget")); expect(host.textContent).toContain(text("snapshotCwdUnresolved"));
 });

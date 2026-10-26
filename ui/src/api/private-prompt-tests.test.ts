@@ -46,3 +46,13 @@ it.each(["missing", "date", "false-flag", "witness", "nested-id", "profile"])("r
 it("rejects malformed or oversized private results and terminal result absence", () => {
   for (const privateResult of [undefined, null, { summary: 4, resultJson: {} }, { summary: "x".repeat(128001), resultJson: {} }]) expect(() => privatePromptDetailSchema.parse({ item: record({ status: "completed" }), privateResult, contentDisposition: "untrusted_inert_text" })).toThrow();
 });
+
+it.each(["extra-env", "credential-value", "tools", "latest", "wrong-profile"])("rejects unsafe approval snapshot %s", kind => {
+  const row = record(), snapshot = row.approvalSnapshot! as unknown as Record<string, unknown>;
+  if (kind === "extra-env") snapshot.env = { SECRET: "value" };
+  if (kind === "credential-value") (snapshot.credential as Record<string, unknown>).value = "secret";
+  if (kind === "tools") snapshot.toolsEnabled = true;
+  if (kind === "latest") (snapshot.credential as Record<string, unknown>).version = "latest";
+  if (kind === "wrong-profile") snapshot.executionProfile = "other";
+  expect(() => privatePromptRecordSchema.parse(row)).toThrow();
+});

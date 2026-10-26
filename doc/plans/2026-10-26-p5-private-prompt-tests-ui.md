@@ -1,92 +1,112 @@
-# P5 私有提示词测试 UI：集成与人工验收
+# P5 私有提示词测试 UI：两阶段授权、恢复与人工验收
 
-## 本提交范围
+## 当前合同与范围
 
-在已有注册表查看某个 revision 后显示独立的私有执行测试面板，不把提示词原文
-传给面板或 POST 请求。原选择/撤销按钮和 `runtimeApplied: false` 合同不变。
-顶部说明明确区分“注册表选择不执行”与“测试另行授权会执行”，不再让整个页面
-的文字误称绝不执行。四语言为 en / zh-CN / es / ja。
+本 UI 使用共享两阶段合同 `1405522`、所有者绑定补充 `4213834`、批准快照 `9bfced3`。此文档替代早期
+“单 POST 执行／只在内存保留请求”的描述。旧方案已发现自动 auth revalidation 会
+丢失未知收费请求身份的问题，不能作为安全上线方案。
 
-共享合同来自 `449a530` 的 `mimouse-private-prompt-tests.ts`，本提交不修改后端、
-共享合同、正式生成 locale、DB 或迁移。后端接口、执行开关及安全检查必须由中央
-集成；本 UI 的 mock 测试通过不证明真实模型执行或端到端完成。
+注册表选择/回滚仍保持 `runtimeApplied: false`。测试是独立、可能收费的外部模型
+执行，不自动选择/提升/发布版本。四语言为 en / zh-CN / es / ja。私有 ACL 不是
+Agent、CLI 或文件系统沙箱；不承诺完整模型上下文、provider consumption 或 stdin
+written 见证。prepared、spawned、completed 不混为一谈。
 
-## 请求与状态
+仅支持固定版本 `local_encrypted` 公司 `secret_ref` 的 `ANTHROPIC_API_KEY`，
+使用 builtin Claude CLI bare、legacy、本地、fresh profile，无 Paperclip token、
+runtime tools、MCP、bridge。latest、订阅 OAuth、其他 env、router、extra args、
+同名 adapter override、ACP/native、remote、resume 均不回退。
 
-- API 基址：`/api/companies/:companyId/prompt-registry`。
-- `GET /test-capabilities` 读取默认关闭的执行开关与 profile，页面不自动开启开关。
-- `GET /:promptId/tests[?beforeId=UUID]` 读取私有历史；分页为 UUID 顺序。
-- `POST /:promptId/tests` 固定 revision/head、Agent、dataset/case、skillVersion，
-  三项独立确认：受限 profile、真实执行、外部处理及可能收费。无原文/config/context。
-- `GET /:promptId/tests/:testId` 读取有界私有结果，按纯文本 `<pre>` 展示。
-- prepared 只表示最终 prompt hash；spawned 不证明消费；completed 仅表示该次
-  适配器结束并返回可用结果，不等于正确性/消费见证/发布通过。无完整 stdout/stderr。
-- 明示仅 builtin Claude CLI bare / API-key / legacy / local / fresh；无 Paperclip
-  token、tools、MCP、bridge。订阅登录、override、ACP/native、remote、resume 不回退。
-  私有 ACL 不是 Agent/CLI/文件系统沙箱；派生配置只有 hash，不承诺完整上下文。
-- 凭据配置进一步限定为固定版本的 `local_encrypted` 公司 `secret_ref`
-  `ANTHROPIC_API_KEY`；禁止 latest、订阅 OAuth、其他 env、路由器及额外 args。
-  UI 不新增凭据编辑入口。实际 `runtimeConfigHash` 若存在，仅作为派生配置 hash 显示。
-  通用 422 `prompt_registry_operation_failed` 可能发生在提交后或 wake 未知，保留同 key。
+仅接收完整非空 `SKILL.md` 和明确 UTF-8 的非可执行文本快照；不执行技能脚本、
+工具、binary 或 assets。只发送 case `input`，不发送 `expected`。literal revision、
+固定 skill 文本与 case input 合计最多 **256000 UTF-8 bytes**，超限拒绝，不截断。
+前端没有读取技能正文/expected，不用浏览器字符数代替服务端 byte 校验。
 
-## 文本试验范围补充
+## 两阶段 API
 
-仅接受完整非空 `SKILL.md` 与明确为 UTF-8、非可执行的文本快照。此处是文本提示词
-试验，不执行技能脚本、工具、二进制或 assets。case 仅发送 `input`，不发送 `expected`
-答案；literal revision、固定技能文本和 case input 的合计上限为 **256000 UTF-8 bytes**，
-超限由服务端拒绝，不能截断后冒充完整输入。UI 四语在执行确认前显示这一限制，前端
-没有读取技能正文或 expected，不以浏览器字符数替代服务端 UTF-8 byte 校验。
+基址：`/api/companies/:companyId/prompt-registry`。
 
-人工补验：准备完整/缺失/空 `SKILL.md`、非 UTF-8、可执行/二进制/assets 快照，以及
-总量恰好上限和超限的隔离 fixture。确认非法输入零 dispatch、超限无截断；子进程
-捕获数据只有 case input、不含 expected。以上后端边界需由中央 fixture 验证，本 UI
-mock 只证明四语提示被渲染，不声称已经验证实际执行载荷。
+1. `GET /test-capabilities`：默认关闭的服务端 gate；页面不能自动开启。
+2. `POST /:promptId/tests`：**仅准备元数据，不执行、不调用模型**。body 含 requestId、
+   revision/head、Agent、dataset/case、skillVersion、executionProfile，不带三项执行确认。
+   返回 `awaiting_confirmation` ticket 及固定 `approvalDigest`。
+3. 用户核对 ticket 固定绑定，重新勾选受限 profile、真实执行和可能收费三确认，才调用
+   `POST /:promptId/tests/:testId/execute`，body 为 digest/profile/三确认。
+4. `POST /:promptId/tests/:testId/cancel` 携带同 digest，仅原子取消尚未执行 ticket。
+   执行和取消竞态只能一方推进；客户端不根据网络结果猜测谁赢。
+5. `GET /:promptId/tests` 与 `GET /:promptId/tests/:testId` 只读；无自动 POST。
 
-## 隔离与未知请求
+响应由无新增依赖的显式运行时解析器校验：required fields、UUID、64hex digest、
+已知状态、固定 profile、false flags、带时区时间、nullable witness/result、嵌套
+witness 对齐、结果 JSON 大小/深度/节点数。不会只 `as` 类型后释放收费身份。
 
-组件按 company/user/session/prompt/revision/head 重新挂载，无全局数据缓存或浏览器
-storage；请求经 `requestResponse` + `readApiJson`，不用 URL 合并 GET，每次均 no-store。
-AbortSignal 和读 epoch 丢弃迟到响应；重新登录、切公司/用户/版本不复用结果/草稿。
-401/403 清除面板草稿与结果，并通知父注册表隐藏原文。其他读取失败也隐藏结果及写控件。
+prepare 回执展示的是服务端持久化的 `approvalSnapshot`，不是当前 Agent 查询结果：
+model、CLI/builtin、configuredCwd、本机环境 source/id、固定 company secret 引用及版本、
+configDigest、fresh/禁工具/禁 Paperclip 凭据/非完整上下文均可核对。严格拒绝摘要中
+夹带 env 映射、凭据值或未知字段。历史 null 摘要只读，禁止授权执行；不凭当前 Agent
+配置“补齐”旧快照。`configuredCwd` 仅为配置工作目录；null显示“运行时解析，尚未确定”。
+实际执行目录由核心 executionWorkspace 在运行时解析，不能称prepare已锁定实际目录；
+effective local environment ID/source只是已知目标，不是完整context。journal 不保存整个快照，固定 approvalDigest 由服务端覆盖它。
 
-POST 响应未知时冻结精确 payload/requestId，只允许恢复同一请求，并锁住父注册表
-所有选择/切换/刷新控件。不会自动执行、重新生成 ID 或提升版本。通用 422 不能证明没有副作用，因此也保留请求待恢复。离开页面有卸载提示；
-**SPA 导航或重载不提供跨页面恢复**，没有持久化请求。离开后先检查服务端历史，不能把
-网络断开当作未执行再授权。表单“清空”不代表取消已经执行的任务。
+## 同标签页非秘密 pending journal
 
-## 已运行的窄验证
+- 同步写入 `sessionStorage` 并读回完全一致后才允许 POST；写失败/读回不一致，
+  **零 execute 请求**。prepare 同样记账，但未知 prepare 本身不收费。
+- key 按 company/user 隔离。严格字段白名单只保留版本号、原 session 标识、
+  operationId、test/request/digest、UUID refs/head、profile、阶段；无正文、凭据、
+  私有结果、summary 或任意配置内容。
+- controller 稳定在 owner/company 层，不依赖 revision/head 选中状态。auth 后台
+  revalidation 隐藏私有展示、禁止操作并失效旧 HTTP epoch，但不删除 journal；
+  新 session/epoch 清空展示/checkbox，并以新权限 GET 重验。不同用户/公司不读取
+  或重放别人的 marker；切回原 scope 仍只 GET，不自动执行。
+- 每次显式 POST 尝试先 CAS 写新的 operationId；旧响应不能修改/清除更新的 marker。
+- 所有 HTTP 错误（包括 400/401/403/404/409/422）、畸形200、错误绑定都保留 marker。
+  401/403 只隐藏内容、清草稿与确认，不删未知操作身份。
+- GET `awaiting_confirmation` **不能证明迟到 execute 不存在**。execute_pending 只能
+  显式重试同 test/digest（重新三确认）或原子 cancel；cancel_pending 只重试 cancel。
+- 已确认 pending_harness/pending_wake/queued/prepared/spawned 记作 accepted。
+  queued/prepared/spawned 之后只 GET；pending_harness/pending_wake 可重新三确认后显式
+  “继续同一执行准入”，只携带原 testId/digest 恢复同一 fence，不 prepare、不新建 attempt。`unknown` 永不自动重跑且保留 marker。
+- 仅 schema 合法、所有者及全部固定绑定一致的 completed/failed/cancelled 终态才
+  CAS 清除；后端合同保证终态不被迟到 execute 重新推进。失败也不是重新收费的理由。
+- 保证范围是**当前标签页正常刷新/卸载**。不承诺关 tab、清 storage、另一标签页、
+  用户主动篡改浏览器存储或跨设备恢复。现有 owner 历史可显式查看，但不自动执行。
 
-2026-10-26：512 MB heap、1 worker，以下三个文件 **30 tests passed / 3 files passed**：
+## 验证记录与限制
 
-- `ui/src/api/private-prompt-tests.test.ts`：实际 fetch 边界（mock）验证同 URL 不合并、
-  no-store、abort 迟到结果丢弃、编码路径与显式 POST payload。
-- `ui/src/pages/PrivatePromptTests.test.tsx`：三确认、默认 gate 关闭、四语 key parity、
-  纯文本结果、unknown 同 key 恢复、company/user/session/revision 隔离、迟到 POST、
-  403 与离线 fail-closed、409 不重发、通用 422 保留同 key、父 registry 在 unknown 时确实冻结/恢复。
-- 原 `MimousePromptRegistry.test.tsx`：注册表选择/回退行为回归，独立 mock 新面板。
+两阶段补丁使用 512 MB heap、单 worker，五文件 **82 tests passed / 5 files passed**：
 
-`node scripts/check-token-gates.mjs`：1285 文件，全部 clean。`git diff --check` clean。
-未运行：浏览器视觉检查、真实后端/DB E2E、真实账号/CLI/模型调用、全量 typecheck/build。
-没有安装依赖或更改共享 node_modules；仅为本 worktree 的 `ui/node_modules` 添加指向
-已有依赖的本地链接。首次根目录测试因该 worktree 根缺少 vitest 依赖未加载测试；
-改为从 ui 目录运行后通过。没有将加载失败记为通过。
+- `api/private-prompt-tests.test.ts`：独立私有 fetch/no-store、abort、分离prepare/execute/
+  cancel、畸形200、required/nested shape/结果大小负例。
+- `lib/private-prompt-journal.test.ts`：strict非秘密字段、scope隔离、operationId CAS、
+  全部绑定错配、损坏存储 fail-closed。
+- `pages/PrivatePromptTests.test.tsx`：两阶段三确认、unknown同key、所有HTTP错误、
+  session/head/revision恢复、auth revalidation迟到POST、storage失败/读回失败零execute、
+  旧响应不得清新marker、取消竞态、unknown与终态、StrictMode、真实Registry host+authEpoch组合、旧epoch写锁、pending准入恢复、固定审批快照及四语言。
+- 原 `MimousePromptRegistry.test.tsx` 与 `MimousePromptRegistryPage.test.tsx` 回归。
 
-## 用户拉取后的人工测试点
+`git diff --check` clean；token gates 1285 文件 clean。首次测试因 UI 未声明 zod 而
+加载失败，随后移除该依赖，改为显式窄解析器并重新通过，没有新增/安装依赖。
+未运行真实浏览器视觉测试、真实后端/DB E2E、全量 typecheck/build、真实模型/CLI或
+外部请求。本记录只证明 UI/mock 边界，不代替后端唯一执行 fence、迁移或真人验收。
+中央集成必须生成正式 locale、类型检查并完成独立安全审阅。
 
-1. 中央合并后先生成 locale，启动隔离测试实例。用真人 active owner/admin session
-   打开注册表，查看一个 revision；确认默认 disabled，打开页面不产生执行请求。
-2. 配置受支持 profile 并由运维开启执行 gate。确认外部处理、费用、无工具 profile
-   三项均未勾选时不能执行；逐项勾选与修改任一 UUID 后确认状态应清空。
-3. 先用本地无网络 fixture 完整走 create → wake → prepared → spawn → completed。
-   网络面板检查 POST 无正文，全部私有读 no-store。普通运行日志不应出现正文/回显。
-4. 注入 POST 已提交但响应丢失：输入及父 registry 全冻结；“恢复同一请求”使用完全
-   相同 ID/body，只能对应一份执行意图。不要把“刷新”做成新执行。
-5. 在待处理请求/结果读取期间切公司、换用户、同用户重新登录；旧响应不可出现。
-   撤销管理员资格再读取：结果及父 registry 原文隐藏，重新授权也不能恢复旧草稿。
-6. 模拟 stale head 409、unsupported 422、网络失败；不自动重发，不显示后台异常正文。
-   用 `<script>`/HTML 的 fixture 结果验证纯文本显示，无脚本或 Markdown 执行。
-7. 取消、重启、进程失败、结果超限、CLI 返回0但无可用结果由后端 fixture 验证：UI
-   如实显示 failed/unknown/cancelled，不显示 completed。unknown 不自动重跑。
-8. 切换四语言、窄屏、键盘焦点，核对警告及按钮可见，表单清空在左、授权执行在右。
-9. 真实 CLI/账号/外部收费/进程树行为仅由用户另行人工验收；先核准权限与额度，不把
-   本提交的 mock 成功当作真实账号验证。没有授权从订阅自动切换 API 计费。
+## 人工验收清单
+
+1. 用真人 active owner/admin session 打开页面；默认 gate 关闭；打开/读取/切语言不会
+   创建收费执行。准备 ticket 后检查没有 wake、spawn、模型请求或费用。
+2. 使用隔离本地无网络 fixture，核对 ticket 的固定引用/digest，再三确认 Execute；
+   检查 prepare 与 execute 是两个接口，execute 前 sessionStorage marker 已存在且不含秘密。
+3. 在 execute 已发但响应断开时刷新、切窗口触发 auth refetch、同用户重登录、切 head/
+   revision。新画面恢复同 ticket，原 UUID refs/digest 不变，无自动 POST、无新收费意图。
+4. 逐一注入 400/401/403/404/409/422/500、空200、错误 request/test/digest/owner/refs。
+   marker不能清；403内容隐藏。存储禁用/配额失败/读回不一致必须零 execute。
+5. 让迟到 Execute 与 cancel 竞态。GET awaiting不能解锁新执行；cancel成功才显示取消。
+   若执行已被接纳则只显示原ticket状态并GET，不能在“取消失败”后新建收费执行。
+6. 改变同scope marker 的operationId，再送旧200；旧响应不能清新marker。unknown保留；
+   完整匹配终态才清理。切其他user/company看不到原scope结果，切回重新授权读取。
+7. 用 `<script>`/HTML 结果验证纯文本。复核非 UTF-8、缺失/空SKILL.md、可执行/binary/
+   assets、256000 bytes边界及超限；非法输入零dispatch、超限不截断、stdin无expected。
+8. 四语言、窄屏、键盘焦点检查；清空在左、准备在右。清空表单不代表取消执行；
+   cancel仅取消尚未执行ticket，不是正在运行的进程终止按钮。
+9. 真实CLI/API-key/费用/进程树仅由用户另行授权后人工验收。本地mock成功不构成真实
+   账号验证，也不授权订阅切换API计费。
