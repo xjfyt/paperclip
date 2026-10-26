@@ -5,6 +5,7 @@ import { HTTP_LOG_REDACT_PATHS } from "./http-log-redaction.js";
 import {
   isPrivateWebhookHttpRequest,
   isPrivateIntegrationHttpRequest,
+  privateIntegrationHttpLogUrl,
   isSecretSensitiveHttpRequest,
   isPrivateAgentCommentaryHttpRequest,
   shouldSilenceHttpSuccessLog,
@@ -75,6 +76,10 @@ function requestLogUrl(req: {
   originalUrl?: unknown;
   url?: unknown;
 }) {
+  const url = requestClassificationUrl(req);
+  const integrationUrl = privateIntegrationHttpLogUrl(url);
+  if (integrationUrl) return integrationUrl;
+  if (isPrivateAgentCommentaryHttpRequest(url)) return "/api/companies/:companyId/agent-commentary/:redacted";
   return isPrivateWebhook(req)
     ? privateWebhookLogUrl(requestClassificationUrl(req))
     : stripSecretBearingUrlParts(typeof req.url === "string" ? req.url : "");
@@ -86,7 +91,7 @@ export function createHttpLogger(baseLogger: Logger) {
     serializers: {
       req(req: Record<string, unknown> & { url?: unknown }) {
         if (isPrivateIntegrationHttpRequest(typeof req.url === "string" ? req.url : undefined) || isPrivateAgentCommentaryHttpRequest(typeof req.url === "string" ? req.url : undefined)) {
-          return { id: req.id, method: req.method, url: stripSecretBearingUrlParts(req.url as string) };
+          return { id: req.id, method: req.method, url: requestLogUrl({ url: req.url }) };
         }
         if (
           isPrivateWebhook({

@@ -45,11 +45,20 @@ const SECRET_SENSITIVE_HTTP_PATHS = [
 ];
 const SECRET_SENSITIVE_HTTP_METHODS = new Set(["POST", "PUT", "PATCH"]);
 
+const PRIVATE_INTEGRATION_PATH = /^\/api\/companies\/[^/]+\/(feedback-wecom|cost-routing|capability-evidence|notifications|coding|feedback-inbox|feedback-langfuse|data-operations|research-candidates|research-routines|skill-evaluations|prompt-registry|integrations\/workbuddy)(?:\/|$)/i;
+
+/** Only an allowlisted static namespace may reach diagnostics, never supplied IDs.
+ * Match raw paths before URL normalization so malformed tails cannot escape. */
+export function privateIntegrationHttpLogUrl(url: string | undefined): string | null {
+  if (!url) return null;
+  const pathname = normalizePath(url).replace(/^https?:\/\/[^/]*/i, "");
+  const namespace = PRIVATE_INTEGRATION_PATH.exec(pathname)?.[1];
+  return namespace ? `/api/companies/:companyId/${namespace.toLowerCase()}/:redacted` : null;
+}
+
 /** New integration requests may contain user prompts or malformed secret inputs. */
 export function isPrivateIntegrationHttpRequest(url: string | undefined): boolean {
-  if (!url) return false;
-  const pathname = normalizePath(url).replace(/^https?:\/\/[^/]*/i, "");
-  return /^\/api\/companies\/[^/]+\/(?:feedback-wecom|cost-routing|capability-evidence|notifications|coding|feedback-inbox|feedback-langfuse|data-operations|research-candidates|research-routines|skill-evaluations|prompt-registry|integrations\/workbuddy)(?:\/|$)/i.test(pathname);
+  return privateIntegrationHttpLogUrl(url) !== null;
 }
 
 /** Free-form agent feedback must never be copied into HTTP diagnostics. */
