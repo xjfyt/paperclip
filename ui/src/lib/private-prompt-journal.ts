@@ -41,10 +41,15 @@ export function clearPrivatePromptJournal(expected: PrivatePromptJournal) {
 }
 export function verifyPrivatePromptBinding(raw: unknown, pending: PrivatePromptJournal): VerifiedPrivatePromptRecord {
   const row = privatePromptRecordSchema.parse(raw);
-  const same = row.companyId === pending.companyId && row.actorUserId === pending.userId && row.promptId === pending.promptId &&
-    row.requestId === pending.requestId && row.revisionId === pending.revisionId && row.headReceiptId === pending.headReceiptId &&
-    row.agentId === pending.agentId && row.datasetId === pending.datasetId && row.caseId === pending.caseId && row.skillVersionId === pending.skillVersionId &&
-    row.executionProfile === pending.executionProfile && (pending.testId === null || row.id === pending.testId) &&
+  pending = parseJournal(pending);
+  // UUID spelling is not identity. Never rewrite persisted requests or opaque actor/hash values.
+  const sameUuid = (left: string, right: string) => left.toLowerCase() === right.toLowerCase();
+  const sameHead = row.headReceiptId === null || pending.headReceiptId === null
+    ? row.headReceiptId === pending.headReceiptId : sameUuid(row.headReceiptId, pending.headReceiptId);
+  const same = sameUuid(row.companyId, pending.companyId) && row.actorUserId === pending.userId && sameUuid(row.promptId, pending.promptId) &&
+    sameUuid(row.requestId, pending.requestId) && sameUuid(row.revisionId, pending.revisionId) && sameHead &&
+    sameUuid(row.agentId, pending.agentId) && sameUuid(row.datasetId, pending.datasetId) && sameUuid(row.caseId, pending.caseId) && sameUuid(row.skillVersionId, pending.skillVersionId) &&
+    row.executionProfile === pending.executionProfile && (pending.testId === null || sameUuid(row.id, pending.testId)) &&
     (pending.approvalDigest === null || row.approvalDigest === pending.approvalDigest);
   if (!same) throw Error("private_result_binding_invalid");
   return row;

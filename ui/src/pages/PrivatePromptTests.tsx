@@ -98,7 +98,8 @@ function PrivateTestSession(props: Props) {
     if (!active() || writeLock.current || !props.promptId || !props.revisionId) return;
     const next: PrivatePromptJournal = { version: 1, companyId: props.companyId, userId: props.userId, originSessionId: props.sessionId, operationId: crypto.randomUUID(),
       promptId: props.promptId, requestId: crypto.randomUUID(), revisionId: props.revisionId, headReceiptId: props.headReceiptId,
-      ...draft, executionProfile: "claude_cli_bare_api_key_v1", phase: "prepare_pending", testId: null, approvalDigest: null };
+      // Canonicalize only new input; retry bodies must preserve the original request digest.
+      agentId: draft.agentId.toLowerCase(), datasetId: draft.datasetId.toLowerCase(), caseId: draft.caseId.toLowerCase(), skillVersionId: draft.skillVersionId.toLowerCase(), executionProfile: "claude_cli_bare_api_key_v1", phase: "prepare_pending", testId: null, approvalDigest: null };
     await post("prepare", next, null);
   }
   async function post(kind: "prepare" | "execute" | "cancel", original: PrivatePromptJournal, expected: PrivatePromptJournal | null = original) {

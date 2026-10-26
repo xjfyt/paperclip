@@ -162,3 +162,41 @@ it.each([undefined, "not-a-hash"])("retains execution journal when a terminal wi
     await click(button("execute"));
     expect(stored()?.phase).toBe("execute_pending"); expect(pending).toHaveBeenLastCalledWith(true);
 });
+
+const letterUuid = "abcdefab-cdef-4abc-abcd-abcdefabcdef";
+it("normalizes all four new draft UUIDs before journaling and posting", async () => {
+  calls.prepare.mockImplementation(async (_promptId, body) => {
+    for (const field of ["agentId", "datasetId", "caseId", "skillVersionId"] as const) {
+      expect(body[field]).toBe(letterUuid); expect(stored()?.[field]).toBe(letterUuid);
+    }
+    current = record({ ...body, headReceiptId: body.expectedHeadReceiptId });
+    return { item: current, duplicate: false };
+  });
+  await mount();
+  for (const field of ["agentId", "datasetId", "caseId", "skillVersionId"]) await fill(field, letterUuid.toUpperCase());
+  await click(button("prepare"));
+  expect(calls.prepare).toHaveBeenCalledTimes(1); expect(stored()?.phase).toBe("awaiting_confirmation");
+  expect(calls.execute).not.toHaveBeenCalled();
+});
+it("recovers old uppercase metadata with a lowercase receipt while retrying the exact original body", async () => {
+  const upper = letterUuid.toUpperCase();
+  const old = marker({ phase: "prepare_pending", testId: null, approvalDigest: null,
+    requestId: upper, revisionId: upper, headReceiptId: upper, agentId: upper, datasetId: upper, caseId: upper, skillVersionId: upper,
+    originSessionId: "Session-ABC" });
+  replacePrivatePromptJournal(old, null);
+  calls.prepare.mockRejectedValueOnce(Error("lost"));
+  calls.prepare.mockImplementationOnce(async (_promptId, body) => {
+    current = record({ ...body, requestId: letterUuid, revisionId: letterUuid, headReceiptId: letterUuid,
+      agentId: letterUuid, datasetId: letterUuid, caseId: letterUuid, skillVersionId: letterUuid });
+    return { item: current, duplicate: true };
+  });
+  await mount(); expect(stored()).toEqual(old);
+  await click(button("recoverPrepare")); const firstBody = calls.prepare.mock.calls[0]![1];
+  expect(firstBody).toEqual({ requestId: upper, revisionId: upper, expectedHeadReceiptId: upper,
+    agentId: upper, datasetId: upper, caseId: upper, skillVersionId: upper, executionProfile: old.executionProfile });
+  expect(stored()?.phase).toBe("prepare_pending");
+  await reload({ sessionId: "Different-Session" }); await click(button("recoverPrepare"));
+  expect(calls.prepare.mock.calls[1]![1]).toEqual(firstBody);
+  expect(stored()).toEqual(expect.objectContaining({ ...old, operationId: expect.any(String), phase: "awaiting_confirmation", testId: ids.test, approvalDigest: "a".repeat(64) }));
+  expect(button("execute").disabled).toBe(true); expect(calls.execute).not.toHaveBeenCalled();
+});
