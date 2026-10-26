@@ -45,7 +45,11 @@ can still require separate provider qualification.
 Startup runs the staged server with plain Node (no tsx), a fresh explicitly marked
 fixture, fresh embedded PostgreSQL, loopback ephemeral ports, telemetry/update
 checks/announcements/heartbeat scheduling disabled, and isolated home/storage/key
-paths. Before success it queries `SHOW data_directory` and checks the canonical
+paths. Before startup, only the newly marked fixture is initialized using the
+installed DB package's bundled PostgreSQL and native-runtime helper. Its
+`postgresql.conf` gets `unix_socket_directories = ''` for sandbox-safe loopback
+TCP; existing cluster state, pid files and symlinked config paths are refused.
+No agent/provider executable is invoked by the harness. Before success it queries `SHOW data_directory` and checks the canonical
 path against the fixture, waits for `/api/health` status `ok`, fetches packaged UI,
 and optionally GETs the requested API path. It shuts down the server and database;
 the parent also terminates the isolated process group on timeout/failure. Never
@@ -57,3 +61,9 @@ PostgreSQL refusal, vendor mismatch, startup failure, or timeout is a **failed**
 smoke. Never replace such a failure with a metadata-only green result. No
 production service, fixed port, real account, registry publication, or external
 provider run is required.
+
+The canonical bundled producer receives `sourceRoot` pointing at the built
+checkout, not the partial staging tree. It reads that checkout's root
+`package.json`, `packages/paperclip-runner/acpx-profiles.json`, and configured
+patch files; only package payload and install/patch outputs go to the fixture.
+These inputs need not be copied or guessed in staging.

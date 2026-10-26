@@ -1,4 +1,6 @@
-import { readFileSync, realpathSync, existsSync, statSync, readdirSync, writeFileSync } from 'node:fs';
+import { readFileSync, realpathSync, existsSync, statSync, readdirSync, writeFileSync, appendFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:net';
 import { resolve, relative, sep, isAbsolute } from 'node:path';
@@ -53,6 +55,24 @@ const home = resolve(fixture, 'home'), configPath = resolve(home, 'config.json')
 writeFileSync(configPath, JSON.stringify({ $meta: { version: 1, updatedAt: new Date().toISOString(), source: 'configure' }, database: { mode: 'embedded-postgres', embeddedPostgresDataDir: dataDir, embeddedPostgresPort: dbPort, backup: { enabled: false } }, logging: { mode: 'file', logDir: resolve(home, 'logs') }, telemetry: { enabled: false }, updates: { checkEnabled: false }, server: { host: '127.0.0.1', port, deploymentMode: 'local_trusted', exposure: 'private' } }));
 Object.assign(process.env, { HOME: home, PAPERCLIP_HOME: home, PAPERCLIP_CONFIG: configPath, HOST: '127.0.0.1', PORT: String(port), PAPERCLIP_DEPLOYMENT_MODE: 'local_trusted', PAPERCLIP_TELEMETRY_DISABLED: '1', PAPERCLIP_ANNOUNCEMENTS_ENABLED: 'false', PAPERCLIP_DB_BACKUP_ENABLED: 'false', HEARTBEAT_SCHEDULER_ENABLED: 'false', PAPERCLIP_MIGRATION_PROMPT: 'never', PAPERCLIP_MIGRATION_AUTO_APPLY: 'true', PAPERCLIP_UI_DEV_MIDDLEWARE: 'false', SERVE_UI: 'true', PAPERCLIP_STORAGE_LOCAL_DIR: resolve(home, 'storage'), PAPERCLIP_SECRETS_MASTER_KEY_FILE: resolve(home, 'master.key') });
 for (const name of ['DATABASE_URL', 'DATABASE_MIGRATION_URL', 'NODE_OPTIONS', 'NODE_PATH']) if (process.env[name]) throw new Error(`Unsafe inherited environment: ${name}`);
+// Initialize only this brand-new marked fixture, without starting PostgreSQL.
+// Exec sandboxes may not permit the package's default /tmp Unix socket; use
+// loopback TCP exactly as the disposable MiMouse fixture does. Resolve the
+// bundled dependency from the installed DB package, never a workspace issuer.
+if (readFileSync(resolve(fixture, '.fixture-marker'), 'utf8') !== plan.marker || existsSync(dataDir)) throw new Error('Refusing unmarked or reused DB fixture');
+const dbRequire = createRequire(resolve('node_modules/@paperclipai/db/package.json'));
+const embeddedEntry = realpathSync(dbRequire.resolve('embedded-postgres'));
+if (!inside(process.cwd(), embeddedEntry)) throw new Error('Embedded PostgreSQL escaped installed consumer');
+const { loadWithoutCoordinatedShutdownSignalHooks } = await import(pathToFileURL(resolve(serverRoot, 'dist/shutdown.js')).href);
+const { default: EmbeddedPostgres } = await loadWithoutCoordinatedShutdownSignalHooks(() => import(pathToFileURL(embeddedEntry).href));
+const { prepareEmbeddedPostgresNativeRuntime } = await import('@paperclipai/db/embedded-postgres-native');
+await prepareEmbeddedPostgresNativeRuntime();
+const fixturePostgres = new EmbeddedPostgres({ databaseDir: dataDir, user: 'paperclip', password: 'paperclip', port: dbPort, persistent: true,
+  initdbFlags: ['--encoding=UTF8', '--locale=C', '--lc-messages=C'], onLog: line => console.log(String(line)), onError: line => console.error(String(line)) });
+await fixturePostgres.initialise();
+const postgresConfig = resolve(dataDir, 'postgresql.conf');
+if (realpathSync(dataDir) !== dataDir || realpathSync(postgresConfig) !== postgresConfig || existsSync(resolve(dataDir, 'postmaster.pid'))) throw new Error('Unexpected initialized fixture state');
+appendFileSync(postgresConfig, "\n# Isolated smoke: loopback TCP only; no shared Unix socket.\nunix_socket_directories = ''\n");
 const { startServer } = await import('@paperclipai/server');
 const app = await startServer();
 try {
