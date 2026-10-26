@@ -105,9 +105,10 @@ export function useSignOut({ onSignedOut }: UseSignOutOptions = {}) {
         predicate: (query) => isAccountScopedQueryKey(query.queryKey),
       });
 
-      // Instance-scoped, so refreshed in place rather than dropped — see
-      // INSTANCE_SCOPED_QUERY_ROOTS.
-      await queryClient.invalidateQueries({ queryKey: queryKeys.health });
+      // Instance-scoped, so refreshed in place rather than dropped. This is
+      // ancillary to the already-completed logout: a stalled/offline health
+      // probe must not prevent IdP navigation or keep local logout pending.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.health }).catch(() => undefined);
       if (target.result?.redirect && target.result.url) navigateTopLevel(target.result.url);
     },
   });

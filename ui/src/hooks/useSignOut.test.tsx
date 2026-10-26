@@ -253,6 +253,37 @@ describe("useSignOut", () => {
 
     flushSync(() => root.unmount());
   });
+  it.each([true, false])("does not wait for a stalled health refresh after successful local logout (OIDC=%s)", async oidc => {
+    const destination = "https://id.example/logout";
+    mockAuthApi.signOut.mockResolvedValue(oidc ? { success: true, redirect: true, url: destination } : { success: true });
+    queryClient.setQueryData(queryKeys.health, { status: "ok", deploymentMode: "authenticated" });
+    queryClient.setQueryData(queryKeys.auth.session, { session: { id: "old-session" } });
+    let releaseHealth!: () => void;
+    const refresh = vi.spyOn(queryClient, "invalidateQueries").mockImplementation(() => new Promise<void>(resolve => { releaseHealth = resolve; }));
+    const root = renderHarness();
+    try {
+      flushSync(() => captured?.mutate());
+      await vi.waitFor(() => expect(refresh).toHaveBeenCalled());
+      expect(queryClient.getQueryData(queryKeys.auth.session)).toBeUndefined();
+      await vi.waitFor(() => expect(captured?.isSuccess).toBe(true));
+      if (oidc) expect(mockNavigateTopLevel).toHaveBeenCalledExactlyOnceWith(destination);
+      else expect(mockNavigateTopLevel).not.toHaveBeenCalled();
+    } finally { releaseHealth?.(); await act(async () => { await Promise.resolve(); root.unmount(); }); }
+  });
+
+  it("does not turn a successful logout into an error when the health refresh rejects", async () => {
+    mockAuthApi.signOut.mockResolvedValue({ success: true, redirect: true, url: "https://id.example/logout" });
+    queryClient.setQueryData(queryKeys.health, { status: "ok", deploymentMode: "authenticated" });
+    queryClient.setQueryData(queryKeys.auth.session, { session: { id: "old-session" } });
+    vi.spyOn(queryClient, "invalidateQueries").mockRejectedValue(new Error("health offline"));
+    const root = renderHarness();
+    try {
+      flushSync(() => captured?.mutate()); await vi.waitFor(() => expect(captured?.isSuccess).toBe(true));
+      expect(captured?.error).toBeNull(); expect(queryClient.getQueryData(queryKeys.auth.session)).toBeUndefined();
+      expect(mockNavigateTopLevel).toHaveBeenCalledExactlyOnceWith("https://id.example/logout");
+    } finally { flushSync(() => root.unmount()); }
+  });
+
 });
 
 describe("isAccountScopedQueryKey", () => {

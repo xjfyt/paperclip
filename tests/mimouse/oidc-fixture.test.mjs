@@ -27,6 +27,8 @@ test('wrong verifier, foreign app origins and foreign redirects are rejected', a
     const code = await authorize(fixture, 'x'.repeat(64), 'outsider'); assert.equal((await redeem(fixture, code, 'wrong')).status, 400); assert.equal((await redeem(fixture, code, 'x'.repeat(64))).status, 400);
     assert.equal((await fetch(`${fixture.issuer}/authorize?redirect_uri=https://example.com`)).status, 400);
     assert.equal((await fetch(`${fixture.issuer}/logout?post_logout_redirect_uri=https://example.com`, { redirect: 'manual' })).status, 400);
+    assert.deepEqual(await (await fetch(`${fixture.issuer}/__fixture/status`)).json(), { kind: 'loopback-only', logoutRedirects: 0 });
     const logout = await fetch(`${fixture.issuer}/logout?post_logout_redirect_uri=${encodeURIComponent('http://127.0.0.1:3101/auth')}`, { redirect: 'manual' }); assert.equal(logout.status, 302);
+    assert.deepEqual(await (await fetch(`${fixture.issuer}/__fixture/status`)).json(), { kind: 'loopback-only', logoutRedirects: 1 });
   } finally { await fixture.close(); }
 });

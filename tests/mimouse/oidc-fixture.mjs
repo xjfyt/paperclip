@@ -20,6 +20,7 @@ export async function startOidcFixture({ port = 3102, appOrigin = 'http://127.0.
   const redirectUri = `${app.origin}/api/auth/callback/casdoor`;
   const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
   const pending = new Map(), codes = new Map(); let issuer = '';
+  const stats = { logoutRedirects: 0 };
   const response = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); };
   async function readBody(req) { let bytes = 0; const chunks = []; for await (const chunk of req) { bytes += chunk.length; if (bytes > 8192) throw Error('Request too large'); chunks.push(chunk); } return new URLSearchParams(Buffer.concat(chunks).toString('utf8')); }
   const server = createServer(async (req, res) => {
@@ -27,6 +28,7 @@ export async function startOidcFixture({ port = 3102, appOrigin = 'http://127.0.
       if (req.headers.host !== new URL(issuer).host) return response(res, 400, { error: 'fixture_host_mismatch' });
       const url = new URL(req.url, issuer);
       for (const map of [pending, codes]) for (const [key, value] of map) if (value.expires < Date.now()) map.delete(key);
+      if (req.method === 'GET' && url.pathname === '/__fixture/status') return response(res, 200, { kind: 'loopback-only', ...stats });
       if (req.method === 'GET' && url.pathname === '/discovery') return response(res, 200, { issuer, authorization_endpoint: `${issuer}/authorize`, token_endpoint: `${issuer}/token`, jwks_uri: `${issuer}/jwks`, end_session_endpoint: `${issuer}/logout`, response_types_supported: ['code'], subject_types_supported: ['public'], id_token_signing_alg_values_supported: ['RS256'], code_challenge_methods_supported: ['S256'], token_endpoint_auth_methods_supported: ['client_secret_basic', 'client_secret_post'] });
       if (req.method === 'GET' && url.pathname === '/jwks') return response(res, 200, { keys: [{ ...publicKey.export({ format: 'jwk' }), kid: 'fixture-rsa', alg: 'RS256', use: 'sig' }] });
       if (req.method === 'GET' && url.pathname === '/authorize') {
@@ -58,6 +60,7 @@ export async function startOidcFixture({ port = 3102, appOrigin = 'http://127.0.
       if (req.method === 'GET' && url.pathname === '/logout') {
         const target = url.searchParams.get('post_logout_redirect_uri');
         if (target !== `${app.origin}/auth`) return response(res, 400, { error: 'invalid_logout_redirect' });
+        stats.logoutRedirects += 1;
         res.writeHead(302, { location: target, 'cache-control': 'no-store' }); res.end(); return;
       }
       return response(res, 404, { error: 'fixture_route_not_found' });

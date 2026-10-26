@@ -60,3 +60,5 @@ POST /api/admin/users/:userId/auth-revocations 请求：requestId（UUID）、co
 5. 若IdP仍允许登录，该身份仍可建立新会话。本地撤销不替代Casdoor停用，也不是back-channel logout；不会回滚已完成动作或取消已放行的在途请求。
 
 恢复需由管理员重新授予必要成员访问并在IdP恢复授权；已撤销的Board key不能恢复，应另走受控新授权流程。真实环境停用仍需有授权的测试身份与Casdoor联调。
+
+注销后的health刷新仅是附带状态更新，不阻塞已完成的本地退出或IdP跳转。定向测试已复现health请求挂起时旧实现一直pending并未进入IdP；改为保留health缓存原位刷新、同时继续退出。原API退出失败仍不清缓存、不跳转；Cloud仍走原harness流程。
