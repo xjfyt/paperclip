@@ -2,7 +2,7 @@
   "pageTitle": "Feedback inbox",
   "chooseCompany": "Select an organization first.",
   "readError": "Cannot read feedback or confirmation state. Check your administrator access and refresh.",
-  "boundary": "Company-private manual imports only. Source labels do not mean Langfuse or WeCom is connected. No external fetch, customer reply or Agent execution.",
+  "boundary": "Company-private feedback evidence. Manual source labels do not prove connectivity; explicit Langfuse reads are separate. No customer reply or Agent execution.",
   "importTitle": "Import evidence",
   "sourceKind": "Declared source",
   "source_manual": "Manual note",
@@ -47,5 +47,7 @@
   "confirmed": "Confirmation recorded. No Agent was dispatched.",
   "openTask": "Open the created task",
   "alreadyConfirmed": "A task was already confirmed for this feedback. Its private receipt is not available to this account.",
-  "sessionRequired": "Sign in as a company owner or administrator to confirm task creation."
+  "sessionRequired": "Sign in as a company owner or administrator to confirm task creation.",
+  "providerFetched": "Read from the configured provider; evidence remains quarantined and requires human review. This is not proof of full trace or log coverage.",
+  "sourceUrl": "Trace source"
 }

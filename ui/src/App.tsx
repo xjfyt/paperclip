@@ -1,3 +1,4 @@
+import { MimouseEvaluation } from "./pages/MimouseEvaluation";
 import { MimouseResearch } from "./pages/MimouseResearch";
 import { MimouseOperations } from "./pages/MimouseOperations";
 import { MimouseFeedback } from "./pages/MimouseFeedback";
@@ -163,6 +164,7 @@ function boardRoutes(streamlinedUiEnabled: boolean, combinedInboxTasksEnabled: b
       <Route path="integrations/workbuddy" element={<MimouseWorkbuddy />} />
       <Route path="data-operations" element={<MimouseOperations />} />
       <Route path="research-candidates" element={<MimouseResearch />} />
+      <Route path="skill-evaluations" element={<MimouseEvaluation />} />
       <Route path="feedback-inbox" element={<MimouseFeedback />} />
       <Route path="coding" element={<MimouseCoding />} />
       <Route path="notifications" element={<MimouseNotifications />} />
@@ -844,6 +846,7 @@ export function App() {
           <Route path="integrations/workbuddy" element={<UnprefixedBoardRedirect />} />
           <Route path="data-operations" element={<UnprefixedBoardRedirect />} />
           <Route path="research-candidates" element={<UnprefixedBoardRedirect />} />
+          <Route path="skill-evaluations" element={<UnprefixedBoardRedirect />} />
           <Route path="feedback-inbox" element={<UnprefixedBoardRedirect />} />
           <Route path="coding" element={<UnprefixedBoardRedirect />} />
           <Route path="notifications" element={<UnprefixedBoardRedirect />} />

@@ -2875,7 +2875,7 @@ export type { AgentLifecycleRequest, AgentLifecycleResult } from "./types/agent-
 
 export * from "./fast-response.js";
 
-export type { NotificationEndpointDto, NotificationRevisionDto, NotificationRevisionInput, NotificationReviewInput, NotificationReviewDto } from "./mimouse-notifications.js";
+export type { NotificationPolicyDto, NotificationEndpointDto, NotificationRevisionDto, NotificationRevisionInput, NotificationReviewInput, NotificationReviewDto } from "./mimouse-notifications.js";
 
 export type { CompanySetupCapabilities } from "./mimouse-access.js";
 export { revokeLocalAuthSchema, type RevokeLocalAuthInput, type AuthRevocationDto } from "./mimouse-auth-revocations.js";
@@ -2885,3 +2885,5 @@ export { feedbackPromotionSchema, type FeedbackPromotionInput, type FeedbackProm
 export { isSafeOperationField, operationPreviewInputSchema, createOperationPreviewSchema, type OperationPreviewInput, type CreateOperationPreviewInput, type OperationScalar, type OperationPreview } from "./mimouse-operations.js";
 export { requestOperationApprovalSchema, type RequestOperationApprovalInput, type OperationPreviewRecord, type OperationReadiness } from "./mimouse-operations.js";
 export * from "./mimouse-research.js";
+
+export * from "./mimouse-evaluation.js";

@@ -2,7 +2,7 @@
   "pageTitle": "反馈收件箱",
   "chooseCompany": "请先选择组织。",
   "readError": "无法读取反馈或确认状态，请检查管理员权限并刷新。",
-  "boundary": "仅供公司内人工导入。来源标签不代表已连接 Langfuse 或企业微信，不会抓取外部链接、回复客户或执行 Agent。",
+  "boundary": "公司私有反馈证据。手动选择来源不代表已连接；Langfuse读取需另行明确操作。不自动回复客户或执行Agent。",
   "importTitle": "导入证据",
   "sourceKind": "声明的来源",
   "source_manual": "人工记录",
@@ -47,5 +47,7 @@
   "confirmed": "确认已记录，未派发 Agent。",
   "openTask": "打开已创建的任务",
   "alreadyConfirmed": "此反馈已确认转为任务，当前账号无法查看其私有回执。",
-  "sessionRequired": "请以公司负责人或管理员身份登录后确认创建任务。"
+  "sessionRequired": "请以公司负责人或管理员身份登录后确认创建任务。",
+  "providerFetched": "由已配置供应商读取，证据仍处于隔离状态并需人工审核，不代表已覆盖完整trace或日志。",
+  "sourceUrl": "Trace来源"
 }

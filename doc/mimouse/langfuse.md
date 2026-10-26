@@ -76,7 +76,7 @@ Fake-transport unit tests cover GET/auth/fields, redaction, exact identities,
 pagination, project/time boundaries, cancellation, malformed/oversized payloads,
 cycles, unsupported routes and rate limits, with no real network requests.
 UI tests cover explicit page/replay controls, cancellation and company isolation.
-No real-provider/customer-data tests or database execution were authorized here.
+No real-provider/customer-data tests were performed. Database execution was deferred to the parent integration stage to avoid concurrent heavy test servers.
 `tests/mimouse/langfuse.spec.ts` supplies seven real disposable DB/API scenarios
 for parent execution: atomic page/audit rollback, restart dedup, idempotent create,
 active pinned credential scope/revocation, NOWAIT concurrency, cancellation,

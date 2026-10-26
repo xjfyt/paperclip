@@ -1,3 +1,4 @@
+import { errorHandler } from "../../server/src/middleware/error-handler.js";
 import { test, expect } from "@playwright/test";
 import { createRequire } from "node:module";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
@@ -32,9 +33,9 @@ test("fixed-SHA diff HTTP review binds consent, denies stale/foreign/member/agen
     const [row] = await db.insert(deliveries).values({ companyId: company.id, issueId: issue.id, workspaceId: workspace.id, secretRef: secret.id, gitlabOrigin: "https://git.example", projectId: 9, sourceBranch: "paperclip/review", targetBranch: "main", baseSha, headSha }).returning();
     let projectReads = 0;
     const service = codingService(db, { client: (() => ({ project: async () => { projectReads++; return { id: 9, http_url_to_repo: workspace.repoUrl, ssh_url_to_repo: "", default_branch: "main" }; } })) as any });
-    let actor: any = { type: "board", source: "session", userId: "fixture-reviewer", isInstanceAdmin: true };
+    let actor: any = { type: "board", source: "session", userId: "fixture-reviewer", isInstanceAdmin: true, companyIds: [company.id] };
     const app = express(); app.use(express.json()); app.use((req: any, _res: any, next: any) => { req.actor = actor; next(); }); app.use("/api", mimouseCodingRoutes(db, { service }));
-    app.use((error: any, _req: any, res: any, _next: any) => res.status(error.status ?? 500).json({ error: error.message }));
+    app.use(errorHandler);
     const http = supertest(app); const url = `/api/companies/${company.id}/coding/${row.id}`;
     const response = await http.get(`${url}/diff`); expect(response.status).toBe(200); expect(response.headers["cache-control"]).toBe("no-store");
     const diff = response.body; expect(diff.patch).toContain("+after"); expect(diff.complete).toBe(true); expect(JSON.stringify(diff)).not.toContain("fixture-never-sent");

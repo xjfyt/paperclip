@@ -2,7 +2,7 @@
   "pageTitle": "Bandeja de comentarios",
   "chooseCompany": "Selecciona una organización.",
   "readError": "No se pueden leer los comentarios o la confirmación. Comprueba el acceso de administrador y actualiza.",
-  "boundary": "Solo importación manual privada de la organización. Las etiquetas no implican conexión con Langfuse o WeCom. No se consultan enlaces, responde a clientes ni ejecutan Agents.",
+  "boundary": "Evidencia privada de la empresa. Las etiquetas manuales no prueban conectividad; las lecturas explícitas de Langfuse son independientes. Sin respuesta al cliente ni ejecución de Agent.",
   "importTitle": "Importar evidencia",
   "sourceKind": "Origen declarado",
   "source_manual": "Nota manual",
@@ -47,5 +47,7 @@
   "confirmed": "Confirmación registrada. No se ejecutó ningún Agent.",
   "openTask": "Abrir la tarea creada",
   "alreadyConfirmed": "Ya se confirmó una tarea para estos comentarios. Esta cuenta no puede ver su comprobante privado.",
-  "sessionRequired": "Inicia sesión como propietario o administrador de la organización para confirmar."
+  "sessionRequired": "Inicia sesión como propietario o administrador de la organización para confirmar.",
+  "providerFetched": "Leído del proveedor configurado; la evidencia sigue en cuarentena y requiere revisión humana. No prueba cobertura completa de trazas o registros.",
+  "sourceUrl": "Fuente de la traza"
 }

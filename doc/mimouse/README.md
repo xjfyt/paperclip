@@ -12,6 +12,8 @@
 - [GitLab 编码交付](coding.md)
 - [运营数据预演与审核](operations.md)
 - [调研候选与人工确认](research.md)
+- [固定技能评估与未完成的提升/回滚](evaluation.md)
+- [Langfuse只读反馈接入](langfuse.md)
 - [四语覆盖与未完成项](i18n_remaining.md)
 - [实现缺口与后续验收](REMAINING.md)
 - [逐项验收清单](checklists/ACCEPTANCE.csv)

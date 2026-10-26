@@ -1,3 +1,4 @@
+import { MimouseLangfusePanel } from "@/components/MimouseLangfusePanel";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { FeedbackImportInput, FeedbackInboxItem, FeedbackInboxPage, FeedbackPromotionInput, FeedbackPromotionReceipt } from "@paperclipai/shared";
@@ -37,6 +38,7 @@ function FeedbackCompany({ companyId, userId }: { companyId: string; userId: str
   const maxLengths = { sourceInstance: 160, externalId: 160, title: 240, product: 120, softwareVersion: 120, commitSha: 40, traceId: 160, occurredAt: 40 };
   return <div className="space-y-6">
     <p className="text-sm text-muted-foreground">{t("feedbackUi.boundary")}</p>
+    <details className="rounded-lg border border-border p-4"><summary className="cursor-pointer font-medium">{t("langfuseUi.title")}</summary><div className="pt-4"><MimouseLangfusePanel companyId={companyId} onImported={() => { void client.invalidateQueries({ queryKey: key }); }} /></div></details>
     <form className="space-y-3 rounded-lg border border-border p-4" onSubmit={event => { event.preventDefault(); setNotice(""); mutation.mutate({ ...form, commitSha: form.commitSha || null, traceId: form.traceId || null }); }}>
       <h2 className="font-medium">{t("feedbackUi.importTitle")}</h2>
       <fieldset disabled={mutation.isPending} className="space-y-3">
@@ -65,7 +67,8 @@ function FeedbackDetail({ companyId, userId, id, onSelect }: { companyId: string
   if (source.isError) return <p role="alert">{t("feedbackUi.readError")}</p>;
   return <section className="space-y-4 rounded-lg border border-border p-4">
     <h2 className="font-medium">{source.data.title}</h2><p className="break-all font-mono text-xs">{source.data.id}</p>
-    <p className="text-sm">{t("feedbackUi.manualOnly")}</p>
+    <p className="text-sm">{t(source.data.ingestionMode === "provider_fetch" ? "feedbackUi.providerFetched" : "feedbackUi.manualOnly")}</p>
+    {source.data.sourceUrl && <p className="break-all text-xs">{t("feedbackUi.sourceUrl")}: {source.data.sourceUrl}</p>}
     <pre className="whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-sm">{source.data.text}</pre>
     <h3 className="font-medium">{t("feedbackUi.candidates")}</h3><p className="text-xs text-muted-foreground">{t("feedbackUi.candidateBoundary")}</p>
     {candidates.isPending ? <p>{t("common.loading")}</p> : candidates.isError ? <p role="alert">{t("feedbackUi.readError")}</p> : candidates.data.items.length ? candidates.data.items.map(item => <Button key={item.id} variant="outline" className="h-auto whitespace-normal" onClick={() => onSelect(item.id)}>{item.title} · {item.sourceInstance}</Button>) : <p>{t("feedbackUi.noCandidates")}</p>}

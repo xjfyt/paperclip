@@ -256,3 +256,7 @@ export { mimouseAuthRevocations } from "./mimouse_auth_revocations.js";
 export { mimouseFeedbackInbox, mimouseFeedbackPromotions } from "./mimouse_feedback.js";
 export { mimouseOperationPreviews } from "./mimouse_operation_previews.js";
 export { mimouseResearchCandidates, mimouseResearchPromotions } from "./mimouse_research.js";
+
+export * from "./mimouse_evaluation.js";
+
+export * from "./mimouse_langfuse.js";

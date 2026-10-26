@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { i18n } from "@/i18n";
 import { MimouseFeedback } from "./MimouseFeedback";
 const calls = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), session: vi.fn(), breadcrumbs: vi.fn(), companyId: "company-a" as string | null }));
+vi.mock("@/components/MimouseLangfusePanel", () => ({ MimouseLangfusePanel: ({ companyId }: { companyId: string }) => <section data-testid="langfuse-panel">{companyId}</section> }));
 vi.mock("@/api/client", () => ({ api: { get: calls.get, post: calls.post } }));
 vi.mock("@/api/auth", () => ({ authApi: { getSession: calls.session } }));
 vi.mock("@/context/CompanyContext", () => ({ useCompany: () => ({ selectedCompanyId: calls.companyId }) }));
@@ -85,4 +86,17 @@ it("ignores a late private task receipt after switching organizations", async ()
   expect(host.querySelector('a[href="/issues/created-task"]')).toBeNull();
   expect(host.textContent).not.toContain(i18n.t("feedbackUi.confirmed"));
   expect(host.textContent).not.toContain("Customer crash");
+});
+it.each(["en", "zh-CN", "es", "ja"])("distinguishes fetched quarantined evidence from manual labels in %s", async locale => {
+  await i18n.changeLanguage(locale);
+  const fetched = { ...source, sourceKind: "langfuse", ingestionMode: "provider_fetch", sourceUrl: "https://langfuse.example.invalid/project/p/traces/t" };
+  calls.get.mockImplementation(async (url: string) => url.endsWith("/promotion") ? { recorded: false, receipt: null }
+    : url.endsWith("/candidates") ? { items: [], autoMerged: false } : url.endsWith("/source-a") ? fetched : { items: [fetched], nextBeforeId: null });
+  await mount(); await openReview();
+  expect(i18n.exists("feedbackUi.providerFetched")).toBe(true);
+  expect(host.textContent).toContain(i18n.t("feedbackUi.providerFetched"));
+  expect(host.textContent).not.toContain(i18n.t("feedbackUi.manualOnly"));
+  expect(host.textContent).toContain(fetched.sourceUrl);
+  expect(host.querySelector('[data-testid="langfuse-panel"]')?.textContent).toBe("company-a");
+  expect(calls.post).not.toHaveBeenCalled();
 });
