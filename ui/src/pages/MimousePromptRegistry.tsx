@@ -5,6 +5,7 @@ import { promptRegistryApi, type PromptDetail } from "@/api/prompt-registry";
 import { useTranslation } from "@/i18n";
 import { Button } from "@/components/ui/button";
 import { PrivatePromptTests } from "./PrivatePromptTests";
+import { PrivatePromptComparison } from "./PrivatePromptComparison";
 type Identity = { companyId: string; userId: string; sessionId: string; authPending?: boolean; authEpoch?: number };
 type Intent = { kind: "create"; body: CreatePromptRevision } | { kind: "select"; promptId: string; body: SelectPromptRevision };
 /** Mount only with actual session identity, never an API key/implicit fallback.
@@ -113,6 +114,7 @@ function RegistrySession({ companyId, userId, sessionId, authPending }: Identity
       {intent && <div className="space-y-2"><p>{label("unknown")}</p><p className="break-all">{intent.body.requestId}</p><Button disabled={busy} onClick={() => void submit(intent)}>{label("recover")}</Button></div>}
     </>}
     <PrivatePromptTests {...{ companyId, userId, sessionId, authPending }} promptId={head?.id ?? null} revisionId={detail?.id ?? null} headReceiptId={head?.headReceiptId ?? null} onPendingChange={setPrivatePending} onAccessLost={() => invalidate(new ApiError("forbidden", 403, null))} />
+    {!failed && <PrivatePromptComparison {...{ companyId, userId, sessionId, authPending }} promptId={head?.id ?? null} onAccessLost={() => invalidate(new ApiError("forbidden", 403, null))} />}
     <Button variant="outline" disabled={busy || privatePending || authPending} onClick={() => void refresh()}>{label("refresh")}</Button>
   </section>;
 }
