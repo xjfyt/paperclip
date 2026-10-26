@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { queryKeys } from "../lib/queryKeys";
 import { AuthPage } from "./Auth";
 
+const capabilitiesMock = vi.hoisted(() => vi.fn());
 const getSessionMock = vi.hoisted(() => vi.fn());
 const signInEmailMock = vi.hoisted(() => vi.fn());
 const signUpEmailMock = vi.hoisted(() => vi.fn());
@@ -22,7 +23,7 @@ vi.mock("@/lib/cloud-sign-in", () => ({
 
 vi.mock("../api/auth", () => ({
   authApi: {
-    capabilities: async () => ({ password: true, providers: [] }),
+    capabilities: () => capabilitiesMock(),
     signInCasdoor: async () => "https://id.example/authorize",
     getSession: () => getSessionMock(),
     signInEmail: (input: unknown) => signInEmailMock(input),
@@ -95,6 +96,7 @@ describe("AuthPage", () => {
   beforeEach(() => {
     container = document.createElement("div");
     document.body.appendChild(container);
+    capabilitiesMock.mockResolvedValue({ password: true, providers: [] });
     getSessionMock.mockResolvedValue(null);
     healthMock.mockResolvedValue({ status: "ok", deploymentMode: "authenticated" });
     beginCloudSignInMock.mockReturnValue(true);
@@ -311,4 +313,13 @@ describe("AuthPage", () => {
       root.unmount();
     });
   });
+  it("does not advertise email/password in SSO-only mode", async () => {
+    capabilitiesMock.mockResolvedValue({ password: false, providers: [{ id: "casdoor" }] });
+    const { root } = await mount();
+    expect(container.textContent).toContain("Use your organization’s single sign-on");
+    expect(container.textContent).not.toContain("Use your email and password");
+    expect(container.querySelector('input[name="password"]')).toBeNull();
+    await act(async () => root.unmount());
+  });
+
 });

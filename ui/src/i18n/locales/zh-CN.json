@@ -53,7 +53,8 @@
     "signInLink": "登录",
     "casdoor": "使用 Casdoor 登录",
     "linkCasdoor": "绑定 Casdoor 账号",
-    "linkHelp": "显式绑定当前登录账号，不会仅因邮箱相同而自动合并账号。"
+    "linkHelp": "显式绑定当前登录账号，不会仅因邮箱相同而自动合并账号。",
+    "ssoHelp": "使用组织单点登录访问此实例。"
   },
   "authGate": {
     "noAccess": "没有组织访问权限",
@@ -573,6 +574,15 @@
     "kindCount_other": "{{count}} 个类别",
     "billerCount_one": "{{count}} 个计费方",
     "billerCount_other": "{{count}} 个计费方"
+  },
+  "inviteAuth": {
+    "checking": "正在检查登录方式…",
+    "retry": "重试",
+    "title": "使用组织账号继续",
+    "help": "通过 Casdoor 登录后返回此邀请。组织访问权限仍由邀请和管理员审批决定。",
+    "ssoOnly": "此实例仅支持单点登录，不能使用密码注册或登录。",
+    "noMethod": "当前没有可用的登录方式，请联系实例管理员。",
+    "chooseMethod": "使用下方可用的登录方式登录后，继续处理此邀请。"
   },
   "liveUi": {
     "none": "无",

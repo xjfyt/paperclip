@@ -36,3 +36,9 @@ Casdoor 联调：https://casdoor.ai/docs/how-to-connect/oidc-client/
 ## 仅 SSO 模式的解绑保护
 
 SSO-only 下，即使历史 credential 账号行仍存在，密码也不是可用回退方式。因此服务端在 Better Auth 的 unlink-account 前置钩子明确拒绝解绑 Casdoor；dual 模式继续沿用库的最后账号保护。内存 OAuth 流测试已覆盖旧密码账号显式绑定成功后拒绝解绑，而非只检查配置布尔值。
+
+## 邀请入口
+
+未登录的人类邀请通过实例auth-capabilities选择登录方式：dual保留密码表单并显示Casdoor，sso-only只显示SSO，未知/加载/失败状态不显示密码回退。Cloud邀请继续使用CloudSignIn；SSO返回路径限定本地邀请路径。重复点击单飞，切换邀请或卸载后忽略旧SSO响应。健康/会话/成员查询失败时不自动接受邀请。邀请不会授予实例管理员权限，原有邀请/公司服务仍做最终授权。
+
+新入口四语显示不代表整张存量邀请页已完成翻译，旧表单与部分状态文案仍在高频页面翻译清单中。

@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AGENT_ADAPTER_TYPES } from "@paperclipai/shared";
 import type { AgentAdapterType, JoinRequest } from "@paperclipai/shared";
+import { InviteAuthMethods } from "@/components/InviteAuthMethods";
+import { useTranslation } from "@/i18n";
 import { Button } from "@/components/ui/button";
 import { CompanyPatternIcon } from "@/components/CompanyPatternIcon";
 import { useCompany } from "@/context/CompanyContext";
@@ -207,6 +209,7 @@ function AwaitingJoinApprovalPanel({
 }
 
 export function InviteLandingPage() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { setSelectedCompanyId } = useCompany();
@@ -311,6 +314,8 @@ export function InviteLandingPage() {
   const showsAgentForm = invite?.inviteType !== "bootstrap_ceo" && invite?.allowedJoinTypes === "agent";
   const shouldAutoAcceptHumanInvite =
     Boolean(invite) && !inviteQuery.isPending && !inviteQuery.isError &&
+    !healthQuery.isPending && !healthQuery.isError && !sessionQuery.isError &&
+    !companiesQuery.isError && !companiesQuery.isFetching &&
     Boolean(sessionQuery.data) &&
     !showsAgentForm &&
     invite?.inviteType !== "bootstrap_ceo" &&
@@ -444,6 +449,10 @@ export function InviteLandingPage() {
     return <div className="mx-auto max-w-xl py-10 text-sm text-muted-foreground">Loading invite...</div>;
   }
 
+  if (healthQuery.isError || sessionQuery.isError || companiesQuery.isError) {
+    return <p role="alert" className="p-6">{t("auth.unavailable")}</p>;
+  }
+
   if (isCheckingExistingMembership) {
     return <div className="mx-auto max-w-xl py-10 text-sm text-muted-foreground">Checking your access...</div>;
   }
@@ -574,7 +583,7 @@ export function InviteLandingPage() {
                   {showsAgentForm
                     ? "Review the invite details, then submit the agent information below to start the join request."
                     : requiresHumanAccount
-                      ? "Create your Paperclip account first. If you already have one, switch to sign in and continue the invite with the same email."
+                      ? t("inviteAuth.chooseMethod")
                       : "Your account is ready. Review the invite details, then accept it to continue."}
                 </p>
               </div>
@@ -665,6 +674,7 @@ export function InviteLandingPage() {
                 </Button>
               </div>
             ) : requiresHumanAccount ? (
+              <InviteAuthMethods key={token} token={token} cloud={healthQuery.data?.cloud}>
               <div className="space-y-5">
                 <div>
                   <h2 className="text-lg font-semibold">
@@ -814,6 +824,7 @@ export function InviteLandingPage() {
                     : "No account yet? Switch back to create account so you can accept the invite with a new login."}
                 </p>
               </div>
+              </InviteAuthMethods>
             ) : (
               <div className="space-y-4">
                 <div>

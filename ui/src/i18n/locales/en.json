@@ -53,7 +53,8 @@
     "signInLink": "Sign in",
     "casdoor": "Sign in with Casdoor",
     "linkCasdoor": "Link Casdoor account",
-    "linkHelp": "Explicitly link your signed-in account. Matching email addresses never automatically merge accounts."
+    "linkHelp": "Explicitly link your signed-in account. Matching email addresses never automatically merge accounts.",
+    "ssoHelp": "Use your organization’s single sign-on to access this instance."
   },
   "authGate": {
     "noAccess": "No organization access",
@@ -573,6 +574,15 @@
     "kindCount_other": "{{count}} kinds",
     "billerCount_one": "{{count}} biller",
     "billerCount_other": "{{count}} billers"
+  },
+  "inviteAuth": {
+    "checking": "Checking sign-in methods…",
+    "retry": "Retry",
+    "title": "Continue with your organization account",
+    "help": "Sign in with Casdoor, then return to this invitation. Organization access is still determined by the invitation and administrator approval.",
+    "ssoOnly": "This instance uses single sign-on only. Password registration and sign-in are unavailable.",
+    "noMethod": "No sign-in method is available. Contact the instance administrator.",
+    "chooseMethod": "Use an available sign-in method below to continue with this invitation."
   },
   "liveUi": {
     "none": "None",

@@ -1,0 +1,9 @@
+{
+  "checking": "Checking sign-in methods…",
+  "retry": "Retry",
+  "title": "Continue with your organization account",
+  "help": "Sign in with Casdoor, then return to this invitation. Organization access is still determined by the invitation and administrator approval.",
+  "ssoOnly": "This instance uses single sign-on only. Password registration and sign-in are unavailable.",
+  "noMethod": "No sign-in method is available. Contact the instance administrator.",
+  "chooseMethod": "Use an available sign-in method below to continue with this invitation."
+}

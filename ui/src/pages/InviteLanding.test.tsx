@@ -26,6 +26,7 @@ vi.mock("../api/access", () => ({
 
 vi.mock("../api/auth", () => ({
   authApi: {
+    capabilities: async () => ({ password: true, providers: [] }),
     getSession: () => getSessionMock(),
     signInEmail: (input: unknown) => signInEmailMock(input),
     signUpEmail: (input: unknown) => signUpEmailMock(input),
@@ -1244,6 +1245,19 @@ describe("InviteLandingPage", () => {
       for (let i = 0; i < 6; i++) await flushReact();
       expect(container.textContent).not.toContain("Invite not found"); expect(acceptInviteMock).toHaveBeenCalledExactlyOnceWith("pcp_invite_delayed", { requestType: "human" });
     } finally { await act(async () => root.unmount()); queryClient.clear(); }
+  });
+
+  it.each(["health", "session", "companies"])("fails closed when %s lookup fails instead of accepting an invite", async failing => {
+    getSessionMock.mockResolvedValue({ session: { id: "session", userId: "user" }, user: { id: "user", name: "Fixture", email: "fixture@example.invalid" } });
+    if (failing === "health") healthGetMock.mockRejectedValue(new Error("unavailable"));
+    if (failing === "session") getSessionMock.mockRejectedValue(new Error("unavailable"));
+    if (failing === "companies") listCompaniesMock.mockRejectedValue(new Error("unavailable"));
+    const root = createRoot(container), queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    await act(async () => root.render(<MemoryRouter initialEntries={["/invite/pcp_invite_test"]}><QueryClientProvider client={queryClient}><Routes><Route path="/invite/:token" element={<InviteLandingPage />} /></Routes></QueryClientProvider></MemoryRouter>));
+    await flushReact(); await flushReact();
+    expect(container.querySelector('[role="alert"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="invite-inline-auth"]')).toBeNull(); expect(acceptInviteMock).not.toHaveBeenCalled();
+    await act(async () => root.unmount()); queryClient.clear();
   });
 
 });

@@ -18,5 +18,6 @@
   "signInLink": "Sign in",
   "casdoor": "Sign in with Casdoor",
   "linkCasdoor": "Link Casdoor account",
-  "linkHelp": "Explicitly link your signed-in account. Matching email addresses never automatically merge accounts."
+  "linkHelp": "Explicitly link your signed-in account. Matching email addresses never automatically merge accounts.",
+  "ssoHelp": "Use your organization’s single sign-on to access this instance."
 }

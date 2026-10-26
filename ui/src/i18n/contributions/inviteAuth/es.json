@@ -1,0 +1,9 @@
+{
+  "checking": "Comprobando métodos de acceso…",
+  "retry": "Reintentar",
+  "title": "Continuar con tu cuenta de organización",
+  "help": "Accede con Casdoor y vuelve a esta invitación. El acceso a la organización sigue dependiendo de la invitación y la aprobación del administrador.",
+  "ssoOnly": "Esta instancia solo permite inicio de sesión único. El registro y acceso con contraseña no están disponibles.",
+  "noMethod": "No hay ningún método de acceso disponible. Contacta con el administrador de la instancia.",
+  "chooseMethod": "Usa un método de acceso disponible a continuación para continuar con esta invitación."
+}

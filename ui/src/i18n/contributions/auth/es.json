@@ -18,5 +18,6 @@
   "signInLink": "Iniciar sesión",
   "casdoor": "Acceder con Casdoor",
   "linkCasdoor": "Vincular cuenta de Casdoor",
-  "linkHelp": "Vincula explícitamente tu cuenta actual. Un correo coincidente nunca fusiona cuentas automáticamente."
+  "linkHelp": "Vincula explícitamente tu cuenta actual. Un correo coincidente nunca fusiona cuentas automáticamente.",
+  "ssoHelp": "Usa el inicio de sesión único de tu organización para acceder a esta instancia."
 }

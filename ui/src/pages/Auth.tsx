@@ -128,7 +128,9 @@ export function AuthPage() {
             {mode === "sign_in" ? t("auth.signInTitle") : t("auth.signUpTitle")}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {mode === "sign_in"
+            {capabilities.data?.password === false
+              ? t("auth.ssoHelp")
+              : mode === "sign_in"
               ? t("auth.signInHelp")
               : t("auth.signUpHelp")}
           </p>

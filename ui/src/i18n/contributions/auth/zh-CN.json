@@ -18,5 +18,6 @@
   "signInLink": "登录",
   "casdoor": "使用 Casdoor 登录",
   "linkCasdoor": "绑定 Casdoor 账号",
-  "linkHelp": "显式绑定当前登录账号，不会仅因邮箱相同而自动合并账号。"
+  "linkHelp": "显式绑定当前登录账号，不会仅因邮箱相同而自动合并账号。",
+  "ssoHelp": "使用组织单点登录访问此实例。"
 }
