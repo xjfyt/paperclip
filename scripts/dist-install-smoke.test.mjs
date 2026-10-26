@@ -26,3 +26,8 @@ test('containment rejects sibling-prefix and parent escapes', () => {
   assert.equal(inside('/tmp/fixture', '/tmp/fixture/x'), true);
   for (const p of ['/tmp/fixture-other/x', '/tmp/fixture', '/tmp/outside']) assert.equal(inside('/tmp/fixture', p), false);
 });
+
+test('allows compiled dist/src layout but rejects package-root source and traversal', () => {
+  assert.doesNotThrow(() => assertRuntimeExports({ '.': { import: './dist/src/index.js', types: './dist/src/index.d.ts' } }));
+  assert.throws(() => assertRuntimeExports('./dist/../src/index.js'), /Non-dist/);
+});

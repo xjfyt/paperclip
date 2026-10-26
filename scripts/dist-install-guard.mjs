@@ -12,7 +12,7 @@ registerHooks({ resolve(specifier, context, nextResolve) {
     if (rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) throw new Error(`Runtime escaped isolated consumer: ${path}`);
     if (/\.(?:[cm]?ts|tsx)$/.test(path)) throw new Error(`Runtime loaded TypeScript: ${path}`);
     if (path.includes(`${sep}@paperclipai${sep}`)) {
-      if (path.includes(`${sep}src${sep}`) || /shim/i.test(path)) throw new Error(`Runtime loaded workspace source/shim: ${path}`);
+      if (/\/@paperclipai\/[^/]+\/src\//.test(path) || /shim/i.test(path)) throw new Error(`Runtime loaded workspace source/shim: ${path}`);
       appendFileSync(resolve(root, 'runtime-resolutions.jsonl'), JSON.stringify({ specifier, path }) + '\n');
     }
   }

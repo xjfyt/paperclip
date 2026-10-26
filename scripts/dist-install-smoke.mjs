@@ -33,7 +33,7 @@ export function releaseClosure(packages, root = '@paperclipai/server') {
 }
 export function assertRuntimeExports(value, key = 'exports') {
   if (typeof value === 'string') {
-    if (/\.(?:[cm]?ts|tsx)$/.test(value) || /(?:^|\/)src\//.test(value) || /shim/i.test(value)) {
+    if (/\.(?:[cm]?ts|tsx)$/.test(value) || /^(?:\.\/)?src\//.test(value) || /(?:^|\/)\.\.\//.test(value) || /shim/i.test(value)) {
       throw new Error(`Non-dist runtime ${key}: ${value}`);
     }
   } else if (value && typeof value === 'object') {

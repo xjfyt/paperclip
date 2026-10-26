@@ -14,7 +14,7 @@ const allowed = new Set(plan.packages);
 function inside(root, path) { const r = relative(root, path); return r !== '..' && !r.startsWith(`..${sep}`) && !isAbsolute(r); }
 function checkExports(value, key = 'exports') {
   if (typeof value === 'string') {
-    if (/\.(?:[cm]?ts|tsx)$/.test(value) || /(?:^|\/)src\//.test(value) || /shim/i.test(value)) throw new Error(`Non-dist ${key}: ${value}`);
+    if (/\.(?:[cm]?ts|tsx)$/.test(value) || /^(?:\.\/)?src\//.test(value) || /(?:^|\/)\.\.\//.test(value) || /shim/i.test(value)) throw new Error(`Non-dist ${key}: ${value}`);
   } else if (value && typeof value === 'object') for (const [k, v] of Object.entries(value)) if (k !== 'types') checkExports(v, `${key}.${k}`);
 }
 // Check nested bundled packages too, not just hoisted names. No symlink escapes.
