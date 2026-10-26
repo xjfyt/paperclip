@@ -1,4 +1,4 @@
-import { t, useTranslation } from "@/i18n";
+import { i18n, t, useTranslation } from "@/i18n";
 import { isNativeWorkspaceExportRepairCause } from "@paperclipai/shared";
 import { useWorkspaceIsolationControls } from "@/hooks/useWorkspaceIsolationControls";
 import { requiresExecutionReconciliation } from "@paperclipai/shared";
@@ -41,7 +41,6 @@ import {
   type RecoveryDisplayState,
 } from "@/lib/recovery-display";
 import {
-  formatRecoveryAttemptLabel,
   formatRecoveryRetryOffset,
   readRecoveryRetryLineage,
   type RecoveryRetryLineage,
@@ -132,30 +131,30 @@ export interface IssueRecoveryActionCardProps {
 }
 
 const KIND_LABEL: Record<IssueRecoveryActionKind, string> = {
-  missing_disposition: "Missing Disposition",
-  deliberate_wait_without_target: "Wait Without A Target",
-  stranded_assigned_issue: "Stranded Task",
-  workspace_validation: "Workspace Validation",
-  configuration_validation: "Configuration Validation",
-  active_run_watchdog: "Active Watchdog",
-  issue_graph_liveness: "Task Needs Next Step",
+  missing_disposition: "issueRecoveryUi.kindMissing",
+  deliberate_wait_without_target: "issueRecoveryUi.kindWait",
+  stranded_assigned_issue: "issueRecoveryUi.kindStranded",
+  workspace_validation: "issueRecoveryUi.kindWorkspace",
+  configuration_validation: "issueRecoveryUi.kindConfiguration",
+  active_run_watchdog: "issueRecoveryUi.kindWatchdog",
+  issue_graph_liveness: "issueRecoveryUi.kindNextStep",
 };
 
 const KIND_HEADLINE: Record<IssueRecoveryActionKind, string> = {
   missing_disposition:
-    "This task's run finished, but no next step was chosen. Choose what happens next — try the task again, mark it done, or send it for review.",
+    "issueRecoveryUi.headlineMissing",
   deliberate_wait_without_target:
-    "This task's last run stopped to wait, but there is no reviewer, blocker, monitor, or approval to wait for. Paperclip is repairing the next step; the task stays with its owner.",
+    "issueRecoveryUi.headlineWait",
   stranded_assigned_issue:
-    "Paperclip retried this task's last run, but there is still no queued run, reviewer, blocker, or other next owner. To get it moving, choose what happens next — try the task again, mark it done, or send it for review.",
+    "issueRecoveryUi.headlineStranded",
   workspace_validation:
-    "Paperclip stopped this run because the task's git workspace could not be validated.",
+    "issueRecoveryUi.headlineWorkspace",
   configuration_validation:
-    "Paperclip stopped before dispatching this run because required secret/env bindings are missing.",
+    "issueRecoveryUi.headlineConfiguration",
   active_run_watchdog:
-    "The active run has been silent. Recovery is observing without interrupting it.",
+    "issueRecoveryUi.headlineWatchdog",
   issue_graph_liveness:
-    "Paperclip could not find a clear next step for this open task. Choose whether to continue work, send it for review, mark it done, or record what is blocking it.",
+    "issueRecoveryUi.headlineNextStep",
 };
 
 /** Shared shell for the retry-timing pill so every timing state reads as the same control. */
@@ -172,7 +171,7 @@ const STATE_TONE: Record<RecoveryCardCardState, {
   divider: string;
 }> = {
   needed: {
-    label: "RECOVERY NEEDED",
+    label: "issueRecoveryUi.stateNeeded",
     containerClass:
       "border-amber-300/70 bg-amber-50/85 text-amber-950 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100",
     iconWrapClass: "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-200",
@@ -182,7 +181,7 @@ const STATE_TONE: Record<RecoveryCardCardState, {
     divider: "border-amber-300/60 dark:border-amber-500/30",
   },
   in_progress: {
-    label: "RECOVERY IN PROGRESS",
+    label: "issueRecoveryUi.stateProgress",
     containerClass:
       "border-sky-300/70 bg-sky-50/80 text-sky-950 dark:border-sky-500/40 dark:bg-sky-500/10 dark:text-sky-100",
     iconWrapClass: "bg-sky-100 text-sky-800 dark:bg-sky-500/20 dark:text-sky-200",
@@ -192,7 +191,7 @@ const STATE_TONE: Record<RecoveryCardCardState, {
     divider: "border-sky-300/60 dark:border-sky-500/30",
   },
   observe_only: {
-    label: "OBSERVING ACTIVE RUN",
+    label: "issueRecoveryUi.stateObserving",
     containerClass:
       "border-border bg-muted/40 text-foreground dark:bg-muted/20",
     iconWrapClass: "bg-muted text-foreground/70",
@@ -202,7 +201,7 @@ const STATE_TONE: Record<RecoveryCardCardState, {
     divider: "border-border/70",
   },
   escalated: {
-    label: "RECOVERY ESCALATED",
+    label: "issueRecoveryUi.stateEscalated",
     containerClass:
       "border-red-400/60 bg-red-50/85 text-red-950 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-100",
     iconWrapClass: "bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-200",
@@ -212,7 +211,7 @@ const STATE_TONE: Record<RecoveryCardCardState, {
     divider: "border-red-400/50 dark:border-red-500/30",
   },
   resolved: {
-    label: "RECOVERY RESOLVED",
+    label: "issueRecoveryUi.stateResolved",
     containerClass:
       "border-emerald-300/70 bg-emerald-50/80 text-emerald-950 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-100",
     iconWrapClass: "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200",
@@ -224,14 +223,14 @@ const STATE_TONE: Record<RecoveryCardCardState, {
 };
 
 const OUTCOME_LABEL: Record<IssueRecoveryActionOutcome, string> = {
-  restored: "restored",
-  handed_back: "handed back to original owner",
-  owner_completed: "completed by recovery owner",
-  delegated: "delegated to follow-up",
-  false_positive: "false positive",
-  blocked: "blocked",
-  escalated: "escalated",
-  cancelled: "cancelled",
+  restored: "issueRecoveryUi.outcomeRestored",
+  handed_back: "issueRecoveryUi.outcomeHandedBack",
+  owner_completed: "issueRecoveryUi.outcomeOwnerCompleted",
+  delegated: "issueRecoveryUi.outcomeDelegated",
+  false_positive: "issueRecoveryUi.outcomeFalsePositive",
+  blocked: "issueRecoveryUi.outcomeBlocked",
+  escalated: "issueRecoveryUi.outcomeEscalated",
+  cancelled: "issueRecoveryUi.outcomeCancelled",
 };
 
 function readEvidenceString(value: unknown): string | null {
@@ -493,10 +492,9 @@ function DivergenceDiagnosis({
         >
           <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
           <span>
-            Worktree claimed by{" "}
+            {t("issueRecoveryUi.claimedBy")}
             <code className="font-mono text-foreground/90">{contentionLabel(divergence.contention)}</code>{" "}
-            {divergence.contention.hasActiveRun ? "(active run)" : "(claim held)"} — the lossless repair
-            can&apos;t run while another workspace holds the live branch.
+            {divergence.contention.hasActiveRun ? t("issueRecoveryUi.claimActive") : t("issueRecoveryUi.claimHeld")}{t("issueRecoveryUi.claimExplanation")}
           </span>
         </p>
       ) : null}
@@ -507,7 +505,7 @@ function DivergenceDiagnosis({
 function contentionLabel(contention: WorkspaceContention): string {
   return (
     contention.claimedByIssueIdentifier ??
-    (contention.claimedByIssueId ? `issue ${contention.claimedByIssueId.slice(0, 8)}` : "another task")
+    (contention.claimedByIssueId ? t("issueRecoveryUi.taskId", { id: contention.claimedByIssueId.slice(0, 8) }) : t("issueRecoveryUi.anotherTask"))
   );
 }
 
@@ -755,17 +753,17 @@ function readWakePolicySummary(action: IssueRecoveryAction): string | null {
   if (!policy) return null;
   const type = readEvidenceString(policy.type);
   if (!type) return null;
-  if (type === "wake_owner") return "An agent will be asked to choose the next step";
+  if (type === "wake_owner") return t("issueRecoveryUi.wakeOwner");
   if (type === "bounded_owner_disposition_repair") {
-    return "Paperclip is retrying the original owner";
+    return t("issueRecoveryUi.wakeOriginal");
   }
-  if (type === "bounded_recovery_owner") return "A recovery owner is repairing the next step";
-  if (type === "board_escalation") return "Board decision required";
-  if (type === "manual") return "Manual follow-up needed";
-  if (type === "manual_repair_required") return "Repair needed before retry";
+  if (type === "bounded_recovery_owner") return t("issueRecoveryUi.wakeRecovery");
+  if (type === "board_escalation") return t("issueRecoveryUi.wakeBoard");
+  if (type === "manual") return t("issueRecoveryUi.wakeManual");
+  if (type === "manual_repair_required") return t("issueRecoveryUi.wakeRepair");
   if (type === "monitor") {
     const interval = readEvidenceString(policy.intervalLabel);
-    return interval ? `Check scheduled · ${interval}` : "Check scheduled";
+    return interval ? t("issueRecoveryUi.checkInterval", { interval }) : t("issueRecoveryUi.checkScheduled");
   }
   return type.replaceAll("_", " ");
 }
@@ -779,9 +777,9 @@ function formatTimeShort(value: string | Date | null | undefined): string | null
     const diffMs = date.getTime() - now;
     const absMin = Math.round(Math.abs(diffMs) / 60_000);
     if (absMin < 60) {
-      return diffMs >= 0 ? `in ${absMin}m` : `${absMin}m ago`;
+      return diffMs >= 0 ? t("issueRecoveryUi.inMinutes", { count: absMin }) : t("issueRecoveryUi.minutesAgo", { count: absMin });
     }
-    return date.toLocaleString(undefined, {
+    return date.toLocaleString(i18n.language, {
       month: "short",
       day: "numeric",
       hour: "numeric",
@@ -832,7 +830,7 @@ function AgentLink({
     return fallback ? <span>{fallback}</span> : <MissingValue />;
   }
   const agent = agentMap?.get(agentId);
-  const label = agent?.name ?? `agent ${agentId.slice(0, 8)}`;
+  const label = agent?.name ?? t("issueRecoveryUi.agentId", { id: agentId.slice(0, 8) });
   if (agent) {
     return (
       <Link
@@ -860,7 +858,7 @@ function RunChip({
   const inner = (
     <>
       <code className="rounded bg-background/80 px-1.5 py-0.5 font-mono text-(length:--text-micro) text-foreground/80">
-        run {short}
+        {t("issueRecoveryUi.runId", { id: short })}
       </code>
       {status ? (
         <span className="font-sans text-(length:--text-micro) text-muted-foreground">{status}</span>
@@ -884,7 +882,7 @@ function formatTimeAbsolute(value: string | Date | null | undefined): string | n
   if (!value) return null;
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleString(undefined, {
+  return date.toLocaleString(i18n.language, {
     month: "short",
     day: "numeric",
     hour: "numeric",
@@ -898,26 +896,26 @@ function formatTimeAbsolute(value: string | Date | null | undefined): string | n
  */
 function lineageHeadline(lineage: RecoveryRetryLineage): string {
   if (lineage.lane === "native_run") {
-    if (lineage.liveRunId) return "Paperclip is recovering the existing run.";
-    if (lineage.exhausted) return "Paperclip could not recover the existing run within its retry budget. Review the recorded failure before retrying.";
-    if (lineage.retryExpired) return "The retry for the existing run came due and did not start. Review the recorded failure and retry when ready.";
-    if (lineage.nextRetryAt) return "Paperclip has scheduled another attempt to resume the existing run.";
-    return "The existing run still needs recovery. Review the recorded failure before retrying.";
+    if (lineage.liveRunId) return t("issueRecoveryUi.nativeRecovering");
+    if (lineage.exhausted) return t("issueRecoveryUi.nativeExhausted");
+    if (lineage.retryExpired) return t("issueRecoveryUi.nativeExpired");
+    if (lineage.nextRetryAt) return t("issueRecoveryUi.nativeScheduled");
+    return t("issueRecoveryUi.nativeNeeded");
   }
   // An attempt that came due and never ran leaves nobody working on this task, even though
   // attempts remain on paper. Say so before any lane wording that ends in "no action needed".
   if (lineage.retryExpired) {
-    return "This task's automatic retry came due and did not run, so nothing is moving it forward right now. Someone must retry it or record the next step.";
+    return t("issueRecoveryUi.lineageExpired");
   }
   if (lineage.lane === "source_owner") {
     return lineage.exhausted
-      ? "This task's last run stopped to wait, but nothing was waiting for it. The original owner has used every automatic repair attempt, so the next step needs a decision. The task stays with its owner."
-      : "This task's last run stopped to wait, but nothing was waiting for it. Paperclip is retrying the original owner to record a real next step. The task stays with its owner, and no action is needed yet.";
+      ? t("issueRecoveryUi.lineageOwnerExhausted")
+      : t("issueRecoveryUi.lineageOwnerRetrying");
   }
   if (lineage.lane === "recovery_owner") {
-    return "The original owner could not record a next step within its retry budget. A recovery owner is now repairing the path only — the task itself still belongs to its original owner.";
+    return t("issueRecoveryUi.lineageRecovery");
   }
-  return "Automatic recovery is exhausted, so the board must choose the next step. The task itself still belongs to its original owner.";
+  return t("issueRecoveryUi.lineageBoard");
 }
 
 /** Spent/remaining attempts as pips. The readable count lives beside it in text. */
@@ -995,7 +993,7 @@ export function IssueRecoveryActionCard({
   variant = "full",
   className,
 }: IssueRecoveryActionCardProps) {
-  useTranslation();
+  const { i18n } = useTranslation();
   const { visible: workspaceIsolationControlsVisible } = useWorkspaceIsolationControls();
   const liveness = useMemo(() => ({ scheduledRetry }), [scheduledRetry]);
   const cardState: RecoveryCardCardState = forcedState ?? deriveRecoveryCardState(action, liveness);
@@ -1006,25 +1004,25 @@ export function IssueRecoveryActionCard({
 
   const headline = useMemo(() => {
     if (cardState === "resolved" && action.outcome) {
-      return `Recovery resolved as ${OUTCOME_LABEL[action.outcome] ?? action.outcome}.`;
+      return t("issueRecoveryUi.resolvedHeadline", { outcome: OUTCOME_LABEL[action.outcome] ? t(OUTCOME_LABEL[action.outcome]) : action.outcome });
     }
     if (
       (cardState === "needed" || cardState === "escalated") &&
       action.kind === "active_run_watchdog" &&
       action.ownerType === "board"
     ) {
-      return "This recovery needs a human decision. Review the recorded failure and choose the next step.";
+      return t("issueRecoveryUi.humanDecision");
     }
     if (lineage) return lineageHeadline(lineage);
-    return KIND_HEADLINE[action.kind] ?? KIND_HEADLINE.missing_disposition;
-  }, [action.kind, action.outcome, action.ownerType, cardState, lineage]);
+    return t(KIND_HEADLINE[action.kind] ?? KIND_HEADLINE.missing_disposition);
+  }, [action.kind, action.outcome, action.ownerType, cardState, lineage, i18n.language]);
 
   // A lane with no path left must not keep advertising a retry that will never run — whether
   // the budget ran out or the scheduled attempt simply never fired.
   const wakeSummary = lineage?.retryExpired
-    ? "The scheduled retry did not run — a retry or a decision is needed"
+    ? t("issueRecoveryUi.retryDidNotRun")
     : lineage?.exhausted && !lineage.liveRunId && lineage.lane !== "board"
-    ? "Automatic retries are finished — a decision is needed"
+    ? t("issueRecoveryUi.retriesFinished")
     : readWakePolicySummary(action);
   const evidenceSummary = pickEvidenceSummary(action);
   const sourceRunId = readEvidenceRunId(action, "sourceRunId") ?? readEvidenceRunId(action, "latestRunId");
@@ -1038,7 +1036,11 @@ export function IssueRecoveryActionCard({
     action.ownerAgentId !== null &&
     action.ownerAgentId === sourceOwnerAgentId;
   const retryOffset = lineage ? formatRecoveryRetryOffset(lineage) : null;
-  const attemptLabel = lineage ? formatRecoveryAttemptLabel(lineage) : null;
+  const attemptLabel = lineage?.maxAttempts != null
+    ? t("issueRecoveryUi.attempt", { attempt: Math.min(lineage.attempt, lineage.maxAttempts), max: lineage.maxAttempts })
+    : null;
+  // Keep the existing offset sentinel for timing branches; localize only its display.
+  const retryOffsetLabel = i18n.language === "en" ? retryOffset : formatTimeShort(lineage?.nextRetryAt);
   const showTimeoutInline = (() => {
     // The retry-progress row is the single place a lineage reports its timing.
     if (lineage) return false;
@@ -1054,11 +1056,11 @@ export function IssueRecoveryActionCard({
   const updatedAtLabel = formatTimeShort(action.updatedAt);
 
   const ariaState = ({
-    needed: "needed",
-    in_progress: "in progress",
-    observe_only: "observing active run",
-    escalated: "escalated",
-    resolved: "resolved",
+    needed: "issueRecoveryUi.ariaNeeded",
+    in_progress: "issueRecoveryUi.ariaProgress",
+    observe_only: "issueRecoveryUi.ariaObserving",
+    escalated: "issueRecoveryUi.ariaEscalated",
+    resolved: "issueRecoveryUi.ariaResolved",
   } satisfies Record<RecoveryCardCardState, string>)[cardState];
 
   const visibleResolveOptions = RESOLVE_OPTIONS.filter((option) => {
@@ -1102,7 +1104,7 @@ export function IssueRecoveryActionCard({
     divergence !== null &&
     divergence.cleanliness === "dirty";
   const repairDisabledReason = repairContention
-    ? `Held by ${contentionLabel(repairContention)}${showReissueAction ? " — re-issue on an isolated workspace instead." : "."}`
+    ? t(showReissueAction ? "issueRecoveryUi.heldByReissue" : "issueRecoveryUi.heldBy", { owner: contentionLabel(repairContention) })
     : null;
   // When contended, the re-issue is the recommended path, so it takes the primary emphasis and a
   // "Recommended" hint while the repair button is disabled.
@@ -1119,7 +1121,7 @@ export function IssueRecoveryActionCard({
   return (
     <section
       role="status"
-      aria-label={`Recovery action: ${ariaState}`}
+      aria-label={t("issueRecoveryUi.ariaAction", { state: t(ariaState) })}
       data-recovery-state={cardState}
       data-recovery-kind={action.kind}
       data-recovery-lane={lineage?.lane}
@@ -1141,10 +1143,10 @@ export function IssueRecoveryActionCard({
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-(length:--text-micro) font-semibold uppercase tracking-(--tracking-eyebrow)">
-            <span className={tone.labelClass}>{tone.label}</span>
+            <span className={tone.labelClass}>{t(tone.label)}</span>
             <span className="text-muted-foreground/60" aria-hidden>·</span>
             <code className="rounded bg-background/70 px-1.5 py-0.5 font-mono text-(length:--text-micro) tracking-normal text-muted-foreground">
-              {KIND_LABEL[action.kind] ?? action.kind}
+              {KIND_LABEL[action.kind] ? t(KIND_LABEL[action.kind]) : action.kind}
             </code>
             {updatedAtLabel ? (
               <>
@@ -1198,7 +1200,7 @@ export function IssueRecoveryActionCard({
                     <span className="text-muted-foreground">{t("issueRecoveryUi.decidesNextStep")}</span>
                   </>
                 ) : action.ownerType === "user" && action.ownerUserId ? (
-                  <span className="font-medium">user {action.ownerUserId.slice(0, 6)}</span>
+                  <span className="font-medium">{t("issueRecoveryUi.userId", { id: action.ownerUserId.slice(0, 6) })}</span>
                 ) : (
                   <span className="text-muted-foreground">{t("issueRecoveryUi.unassignedPick")}</span>
                 )}
@@ -1229,7 +1231,7 @@ export function IssueRecoveryActionCard({
                     data-testid="recovery-next-retry"
                     data-recovery-retry-expired="true"
                   >
-                    {retryOffset ? `Retry missed ${retryOffset}` : t("issueRecoveryUi.retryMissed")}
+                    {retryOffset ? t("issueRecoveryUi.retryMissedOffset", { offset: retryOffsetLabel }) : t("issueRecoveryUi.retryMissed")}
                   </span>
                 ) : retryOffset ? (
                   <span
@@ -1237,7 +1239,7 @@ export function IssueRecoveryActionCard({
                     title={formatTimeAbsolute(lineage.nextRetryAt) ?? undefined}
                     data-testid="recovery-next-retry"
                   >
-                    {retryOffset === "now" ? t("issueRecoveryUi.nextTryNow") : `Next try ${retryOffset}`}
+                    {retryOffset === "now" ? t("issueRecoveryUi.nextTryNow") : t("issueRecoveryUi.nextTryOffset", { offset: retryOffsetLabel })}
                   </span>
                 ) : lineage.exhausted ? (
                   <span className={RETRY_PILL_CLASS} data-testid="recovery-next-retry">{t("issueRecoveryUi.retriesUsed")}</span>
@@ -1247,8 +1249,7 @@ export function IssueRecoveryActionCard({
             {lineage.lane !== "source_owner" && lineage.sourceMaxAttempts !== null ? (
               <MetadataRow label={t("issueRecoveryUi.ownerRetries")}>
                 <span data-testid="recovery-source-attempts">
-                  The original owner used {lineage.sourceAttempt ?? lineage.sourceMaxAttempts} of{" "}
-                  {lineage.sourceMaxAttempts} automatic attempts.
+                  {t("issueRecoveryUi.ownerAttemptCount", { attempt: lineage.sourceAttempt ?? lineage.sourceMaxAttempts, max: lineage.sourceMaxAttempts })}
                 </span>
               </MetadataRow>
             ) : null}
@@ -1264,7 +1265,7 @@ export function IssueRecoveryActionCard({
             ) : action.ownerType === "board" ? (
               <span className="font-medium">{t("issueRecoveryUi.board")}</span>
             ) : action.ownerType === "user" && action.ownerUserId ? (
-              <span className="font-medium">user {action.ownerUserId.slice(0, 6)}</span>
+              <span className="font-medium">{t("issueRecoveryUi.userId", { id: action.ownerUserId.slice(0, 6) })}</span>
             ) : action.ownerType === "system" ? (
               <span className="font-medium">{t("issueRecoveryUi.system")}</span>
             ) : (
@@ -1308,12 +1309,12 @@ export function IssueRecoveryActionCard({
             {wakeSummary ? <span>{wakeSummary}</span> : <MissingValue />}
             {showAttempt ? (
               <span className="rounded-md border border-border/50 bg-background/60 px-1.5 py-0.5 text-(length:--text-micro) text-muted-foreground">
-                attempt {action.attemptCount} of {action.maxAttempts}
+                {t("issueRecoveryUi.attemptChip", { attempt: action.attemptCount, max: action.maxAttempts })}
               </span>
             ) : null}
             {showTimeoutInline ? (
               <span className="rounded-md border border-border/50 bg-background/60 px-1.5 py-0.5 text-(length:--text-micro) text-muted-foreground">
-                Times out {formatTimeShort(action.timeoutAt) ?? "soon"}
+                {t("issueRecoveryUi.timeout", { time: formatTimeShort(action.timeoutAt) ?? t("issueRecoveryUi.soon") })}
               </span>
             ) : null}
           </span>
@@ -1321,7 +1322,7 @@ export function IssueRecoveryActionCard({
         {cardState === "resolved" && action.outcome ? (
           <MetadataRow label={t("issueRecoveryUi.resolution")}>
             <span className={cn("font-medium", tone.labelClass)}>
-              Resolved as {OUTCOME_LABEL[action.outcome]}
+              {t("issueRecoveryUi.resolvedAs", { outcome: OUTCOME_LABEL[action.outcome] ? t(OUTCOME_LABEL[action.outcome]) : action.outcome })}
               {action.resolvedAt ? ` · ${formatTimeShort(action.resolvedAt) ?? ""}` : ""}
             </span>
           </MetadataRow>

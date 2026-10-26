@@ -1222,3 +1222,80 @@ describe("recovery card localized controls", () => {
     expect(onConfirm).not.toHaveBeenCalled();
   });
 });
+
+
+describe("recovery card localized status and payload boundaries", () => {
+  afterEach(() => { act(() => { void i18n.changeLanguage("en"); }); });
+
+  it.each(Object.entries(issueRecoveryMessages))("keeps %s machine state and escalated human decision independent of translated labels", (locale, messages) => {
+    act(() => { void i18n.changeLanguage(locale); });
+    const node = render(<IssueRecoveryActionCard action={buildAction({
+      status: "escalated", kind: "active_run_watchdog", ownerType: "board",
+    })} />);
+    expect(node.querySelector("section")?.dataset.recoveryState).toBe("escalated");
+    expect(node.querySelector("section")?.dataset.recoveryKind).toBe("active_run_watchdog");
+    expect(node.textContent).toContain(messages.humanDecision);
+    expect(node.textContent).toContain(messages.stateEscalated);
+    expect(node.querySelector("section")?.getAttribute("aria-label")).toBe(messages.ariaAction.replace("{{state}}", messages.ariaEscalated));
+    act(() => { void i18n.changeLanguage(locale === "ja" ? "en" : "ja"); });
+    expect(node.textContent).toContain((locale === "ja" ? issueRecoveryMessages.en : issueRecoveryMessages.ja).humanDecision);
+  });
+
+  it.each(Object.entries(issueRecoveryMessages))("keeps %s isolated re-issue request exact and pending disabled", (locale, messages) => {
+    act(() => { void i18n.changeLanguage(locale); });
+    const onReissue = vi.fn();
+    const action = buildWorkspaceValidationAction();
+    const node = render(<IssueRecoveryActionCard action={action} onReissueIsolated={onReissue} />);
+    click(node.querySelector("[data-testid='recovery-action-reissue-trigger']"));
+    expect(document.body.textContent).toContain(messages.reissueDescription);
+    click(document.body.querySelector("[data-testid='recovery-action-reissue-confirm']"));
+    expect(onReissue.mock.calls).toEqual([[{
+      baseRef: "nleach/PAP-1405-live", liveBranch: "nleach/PAP-1405-live",
+      liveHeadSha: "bbbbbbbbbbbb33334444", expectedBranch: "PAP-522-recorded",
+    }]]);
+    act(() => root?.render(<IssueRecoveryActionCard action={action} onReissueIsolated={onReissue} reissuePending />));
+    click(document.body.querySelector("[data-testid='recovery-action-reissue-confirm']"));
+    expect(onReissue).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(Object.entries(issueRecoveryMessages))("localizes %s unassigned and resolved states but preserves unknown evidence", (locale, messages) => {
+    act(() => { void i18n.changeLanguage(locale); });
+    const node = render(<IssueRecoveryActionCard action={buildAction({ ownerType: "agent", ownerAgentId: null,
+      evidence: { latestRunErrorCode: "E_NOT_TRANSLATABLE" },
+    })} />);
+    expect(node.textContent).toContain(messages.unassignedPick);
+    expect(node.textContent).toContain("E_NOT_TRANSLATABLE");
+    act(() => root?.render(<IssueRecoveryActionCard action={buildAction({ status: "resolved", outcome: "restored" })} />));
+    expect(node.textContent).toContain(messages.resolvedHeadline.replace("{{outcome}}", messages.outcomeRestored));
+    expect(node.querySelector("section")?.dataset.recoveryState).toBe("resolved");
+  });
+});
+
+
+describe("localized retry timing is presentation-only", () => {
+  const now = new Date("2026-10-26T12:00:00.000Z");
+  beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(now); });
+  afterEach(() => { vi.useRealTimers(); act(() => { void i18n.changeLanguage("en"); }); });
+
+  it.each(Object.entries(issueRecoveryMessages))("keeps %s future and missed retry lanes, counts and timing distinct", (locale, messages) => {
+    act(() => { void i18n.changeLanguage(locale); });
+    const actionAt = (offset: number) => buildAction({
+      kind: "deliberate_wait_without_target", ownerAgentId: returnAgent.id,
+      wakePolicy: { type: "bounded_owner_disposition_repair", attempt: 2, maxAttempts: 5,
+        retryAt: new Date(now.getTime() + offset).toISOString(), scheduledRunId: "run-stable-id" },
+      attemptCount: 2, maxAttempts: 5,
+    });
+    const node = render(<IssueRecoveryActionCard action={actionAt(180000)} />);
+    const progress = node.querySelector<HTMLElement>("[data-testid='recovery-retry-progress']");
+    expect(progress?.dataset.recoveryLane).toBe("source_owner");
+    expect(progress?.dataset.recoveryAttempt).toBe("2");
+    expect(progress?.dataset.recoveryMaxAttempts).toBe("5");
+    expect(node.textContent).toContain(messages.attempt.replace("{{attempt}}", "2").replace("{{max}}", "5"));
+    expect(node.textContent).toContain(messages.lineageOwnerRetrying);
+    expect(node.textContent).toContain(messages.nextTryOffset.replace("{{offset}}", messages.inMinutes.replace("{{count}}", "3")));
+    act(() => root?.render(<IssueRecoveryActionCard action={actionAt(-180000)} />));
+    expect(node.querySelector("[data-testid='recovery-next-retry']")?.getAttribute("data-recovery-retry-expired")).toBe("true");
+    expect(node.textContent).toContain(messages.lineageExpired);
+    expect(node.textContent).toContain(messages.retryMissedOffset.replace("{{offset}}", messages.minutesAgo.replace("{{count}}", "3")));
+  });
+});
