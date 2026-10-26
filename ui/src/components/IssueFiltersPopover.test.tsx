@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { IssueFiltersPopover } from "./IssueFiltersPopover";
+import { changeLocale } from "../i18n";
 import { defaultIssueFilterState } from "../lib/issue-filters";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -229,4 +230,46 @@ describe("IssueFiltersPopover", () => {
 
     act(() => root.unmount());
   });
+  it("changes all filter labels live in four languages without changing values, user names or typed searches", async () => {
+    const root = createRoot(container), onChange = vi.fn(), onCategoryChange = vi.fn(), onApprovalStatusChange = vi.fn();
+    await act(async () => { await changeLocale("en"); root.render(<IssueFiltersPopover
+      presentation="streamlined" state={{ ...defaultIssueFilterState, creators: ["user:self"] }} activeFilterCount={1}
+      onChange={onChange} currentUserId="self"
+      agents={Array.from({ length: 7 }, (_, i) => ({ id: `agent-${i}`, name: `Customer Agent ${i}` }))}
+      projects={Array.from({ length: 7 }, (_, i) => ({ id: `project-${i}`, name: `Customer Project ${i}` }))}
+      labels={Array.from({ length: 7 }, (_, i) => ({ id: `label-${i}`, name: `Customer Label ${i}`, color: "#000" }))}
+      creators={[{ id: "user:customer", label: "Customer Creator", kind: "user" }]}
+      enableRoutineVisibilityFilter
+      inboxScopeFilters={{ category: "everything", approvalStatus: "actionable", showApprovalStatus: true,
+        onCategoryChange, onApprovalStatusChange, onClear: vi.fn() }} />); });
+    const input = container.querySelector('input[aria-label="Search creators..."]') as HTMLInputElement;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "Customer");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const cases = [
+      ["zh-CN", "快捷筛选", "搜索负责人", "需要认证", "移除创建人 你", "已完成"],
+      ["es", "Filtros rápidos", "Buscar responsables", "Requiere autenticación", "Quitar creador Tú", "Finalizados"],
+      ["ja", "クイックフィルター", "担当者を検索", "認証が必要", "作成者 あなた を解除", "完了"],
+      ["en", "Quick filters", "Search responsible", "Auth required", "Remove creator You", "Done"],
+    ] as const;
+    try {
+      for (const [locale, heading, search, external, remove, preset] of cases) {
+        await act(async () => { await changeLocale(locale); });
+        expect(container.textContent).toContain(heading); expect(container.textContent).toContain(external);
+        expect(container.querySelector(`input[aria-label="${search}"]`)).not.toBeNull();
+        expect(container.querySelector(`button[aria-label="${remove}"]`)).not.toBeNull();
+        expect(container.textContent).toContain("Customer Creator"); expect(container.textContent).toContain("Customer Project 0");
+        expect(input.value).toBe("Customer");
+        expect(onChange).not.toHaveBeenCalled();
+        const presetButton = [...container.querySelectorAll("button")].find(button => button.textContent?.trim() === preset)!;
+        act(() => presetButton.click());
+        expect(onChange).toHaveBeenCalledExactlyOnceWith({ statuses: ["done", "cancelled"] }); onChange.mockClear();
+        const categoryButtons = container.querySelectorAll('[data-filter-options="inbox-category"] button');
+        act(() => (categoryButtons[3] as HTMLButtonElement).click());
+        expect(onCategoryChange).toHaveBeenLastCalledWith("approvals");
+      }
+    } finally { await act(async () => { root.unmount(); await changeLocale("en"); }); }
+  });
+
 });

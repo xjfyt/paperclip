@@ -37,30 +37,6 @@ ui/src/components/CommentThread.tsx,1050,jsx-attribute,Responsible,needs_review
 ui/src/components/CommentThread.tsx,1057,jsx-text,Responsible,needs_review
 ui/src/components/CommentThread.tsx,1085,jsx-expression,Posting...,needs_review
 ui/src/components/CommentThread.tsx,1085,jsx-expression,Comment,needs_review
-ui/src/components/IssueFiltersPopover.tsx,95,jsx-template,Search,needs_review
-ui/src/components/IssueFiltersPopover.tsx,96,jsx-template,Search,needs_review
-ui/src/components/IssueFiltersPopover.tsx,213,jsx-text,Filters,needs_review
-ui/src/components/IssueFiltersPopover.tsx,219,jsx-text,Clear,needs_review
-ui/src/components/IssueFiltersPopover.tsx,229,jsx-text,Category,needs_review
-ui/src/components/IssueFiltersPopover.tsx,256,jsx-text,Approval status,needs_review
-ui/src/components/IssueFiltersPopover.tsx,288,jsx-text,Quick filters,needs_review
-ui/src/components/IssueFiltersPopover.tsx,315,jsx-text,Status,needs_review
-ui/src/components/IssueFiltersPopover.tsx,333,jsx-text,Priority,needs_review
-ui/src/components/IssueFiltersPopover.tsx,352,jsx-text,Responsible,needs_review
-ui/src/components/IssueFiltersPopover.tsx,354,jsx-attribute,Responsible,needs_review
-ui/src/components/IssueFiltersPopover.tsx,362,jsx-text,No responsible,needs_review
-ui/src/components/IssueFiltersPopover.tsx,388,jsx-text,Creator,needs_review
-ui/src/components/IssueFiltersPopover.tsx,399,jsx-template,Remove creator,needs_review
-ui/src/components/IssueFiltersPopover.tsx,412,jsx-attribute,Search creators...,needs_review
-ui/src/components/IssueFiltersPopover.tsx,434,jsx-text,No creators match.,needs_review
-ui/src/components/IssueFiltersPopover.tsx,442,jsx-text,Project,needs_review
-ui/src/components/IssueFiltersPopover.tsx,444,jsx-attribute,Projects,needs_review
-ui/src/components/IssueFiltersPopover.tsx,464,jsx-text,Labels,needs_review
-ui/src/components/IssueFiltersPopover.tsx,466,jsx-attribute,Labels,needs_review
-ui/src/components/IssueFiltersPopover.tsx,485,jsx-text,External object status,needs_review
-ui/src/components/IssueFiltersPopover.tsx,517,jsx-text,Visibility,needs_review
-ui/src/components/IssueFiltersPopover.tsx,523,jsx-text,Live runs only,needs_review
-ui/src/components/IssueFiltersPopover.tsx,531,jsx-text,Hide routine runs,needs_review
 ui/src/components/NewIssueDialog.tsx,1226,jsx-text,Sub-task of,needs_review
 ui/src/components/NewIssueDialog.tsx,1241,jsx-expression,Couldn't check parent access.,needs_review
 ui/src/components/NewIssueDialog.tsx,1241,jsx-expression,Checking parent access…,needs_review
