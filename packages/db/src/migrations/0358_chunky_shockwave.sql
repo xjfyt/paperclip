@@ -136,3 +136,17 @@ ALTER TABLE "mimouse_prompt_applications" ADD CONSTRAINT "mimouse_prompt_applica
 ALTER TABLE "mimouse_prompt_applications" ADD CONSTRAINT "mimouse_prompt_applications_company_id_agent_id_agents_company_id_id_fk" FOREIGN KEY ("company_id","agent_id") REFERENCES "public"."agents"("company_id","id") ON DELETE restrict ON UPDATE no action;
 --> statement-breakpoint
 ALTER TABLE "mimouse_prompt_applications" ADD CONSTRAINT "mimouse_prompt_applications_company_id_prompt_id_revision_id_mimouse_prompt_revisions_company_id_prompt_id_id_fk" FOREIGN KEY ("company_id","prompt_id","revision_id") REFERENCES "public"."mimouse_prompt_revisions"("company_id","prompt_id","id") ON DELETE restrict ON UPDATE no action;
+--> statement-breakpoint
+-- These records are append-only evidence, not mutable current-state rows.
+CREATE FUNCTION mimouse_review_history_immutable() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN RAISE EXCEPTION 'review_history_immutable' USING ERRCODE = '23514'; END;
+$$;
+--> statement-breakpoint
+CREATE TRIGGER mimouse_feedback_verifications_immutable BEFORE UPDATE OR DELETE ON mimouse_feedback_verifications
+FOR EACH ROW EXECUTE FUNCTION mimouse_review_history_immutable();
+--> statement-breakpoint
+CREATE TRIGGER mimouse_prompt_applications_immutable BEFORE UPDATE OR DELETE ON mimouse_prompt_applications
+FOR EACH ROW EXECUTE FUNCTION mimouse_review_history_immutable();
+--> statement-breakpoint
+CREATE TRIGGER mimouse_prompt_application_receipts_immutable BEFORE UPDATE OR DELETE ON mimouse_prompt_application_receipts
+FOR EACH ROW EXECUTE FUNCTION mimouse_review_history_immutable();

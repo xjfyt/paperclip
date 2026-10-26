@@ -121,6 +121,9 @@ test("PostgreSQL composite foreign keys reject foreign company, promotion, task 
       await postgresFailure(f.db.insert(verifications).values({ ...stored, id: randomUUID(), requestId: randomUUID(), ...patch }), "23503");
     }
     await postgresFailure(f.db.insert(verifications).values({ ...stored, id: randomUUID() }), "23505");
+    await postgresFailure(f.db.update(verifications).set({ snapshot: { forged: true } }).where(eq(verifications.id, stored.id)), "23514");
+    await postgresFailure(f.db.delete(verifications).where(eq(verifications.id, stored.id)), "23514");
+    expect((await f.rows())[0].snapshot).toEqual(stored.snapshot);
     expect(await f.rows()).toHaveLength(1);
     expect(await f.db.select().from(promotions).where(eq(promotions.feedbackId, f.source.id))).toHaveLength(1);
   } finally { await foreign?.db.$client.end({ timeout: 1 }); await f.db.$client.end({ timeout: 1 }); }
