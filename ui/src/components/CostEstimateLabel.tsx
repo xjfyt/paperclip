@@ -1,3 +1,4 @@
+import { t as qualityT, useTranslation, i18n } from "@/i18n";
 import type { CostByAgent } from "@paperclipai/shared";
 import { Badge } from "./ui/badge";
 
@@ -6,15 +7,16 @@ export function CostEstimateLabel({
   eventCount,
   estimatedEventCount,
 }: Partial<Pick<CostByAgent, "eventCount" | "estimatedEventCount">>) {
+  useTranslation();
   if (!estimatedEventCount) return null;
   const allEstimated = estimatedEventCount === eventCount;
   return (
     <Badge
       variant="outline"
       className="font-normal text-muted-foreground"
-      title={`${estimatedEventCount} estimated ${estimatedEventCount === 1 ? "charge" : "charges"}. Calculated from token usage and published rates; provider bills may differ.`}
+      title={qualityT("costQuality.estimateTitle", { count: estimatedEventCount })}
     >
-      {allEstimated ? "Estimated" : "Partially estimated"}
+      {allEstimated ? qualityT("costQuality.estimated") : qualityT("costQuality.partial")}
     </Badge>
   );
 }

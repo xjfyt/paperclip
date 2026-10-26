@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { i18n } from "@/i18n";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
@@ -31,7 +32,7 @@ describe("actionable cost notices", () => {
     container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container);
     client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   });
-  afterEach(() => { act(() => root.unmount()); client.clear(); container.remove(); });
+  afterEach(async () => { act(() => root.unmount()); client.clear(); container.remove(); await i18n.changeLanguage("en"); });
   async function render(counts: { unpricedCount?: number; pendingCount?: number; unknownBillingCount?: number } = {}) {
     await act(async () => root.render(<MemoryRouter initialEntries={["/PAP/activity/costs"]}><QueryClientProvider client={client}><ToastProvider><ToastStatus />
       <CostDataQualityNotice companyId="company" from="2026-10-01" to="2026-10-09" reportKey={key} unpricedCount={12} pendingCount={4} unknownBillingCount={9} {...counts} />
@@ -189,4 +190,18 @@ describe("actionable cost notices", () => {
     await click("Retry loading"); await loaded();
     expect(container.textContent).toContain("Select a shorter date range to inspect more.");
   });
+  it.each([["en", "Ready to record"], ["zh-CN", "可记录"], ["es", "Listo para registrar"], ["ja", "記録可能"]])("localizes actionable accounting reasons in %s without changing resource links", async (locale, ready) => {
+    await i18n.changeLanguage(locale); await render();
+    await act(async () => container.querySelector<HTMLButtonElement>("button")!.click());
+    await act(async () => vi.waitFor(() => expect(container.textContent).toContain(ready)));
+    expect(container.textContent).toContain("Codie"); expect(container.querySelector('a[href="/PAP/agents/codie/runs/unknown_billing-run"]')).not.toBeNull();
+    expect(mocks.retryAccounting).not.toHaveBeenCalled();
+  });
+  it("keeps a Chinese cost-recording retry separate from running an agent", async () => {
+    await i18n.changeLanguage("zh-CN"); await render(); await act(async () => container.querySelector<HTMLButtonElement>("button")!.click());
+    await act(async () => vi.waitFor(() => expect(container.textContent).toContain("可记录")));
+    await click("重试记录费用"); await act(async () => vi.waitFor(() => expect(container.textContent).toContain("未重新运行 Agent。")));
+    expect(mocks.retryAccounting).toHaveBeenCalledExactlyOnceWith("company", "retryable-run");
+  });
+
 });
