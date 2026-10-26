@@ -1,3 +1,4 @@
+import "./remote-mcp-management-test-resources";
 import "./remote-mcp-form-test-resources";
 import "./remote-mcp-status-test-resources";
 import "./connection-handoff-test-resources";

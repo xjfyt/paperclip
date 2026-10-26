@@ -1,0 +1,12 @@
+{
+  "settings": "Configuración de la conexión",
+  "reconnect": "Reconectar",
+  "manage": "Gestionar en {{provider}}",
+  "disconnect": "Desconectar",
+  "confirmTitle": "¿Desconectar {{provider}}?",
+  "confirmHelp": "Elimina las credenciales guardadas de esta conexión y detiene las llamadas posteriores a través de Paperclip. Las demás conexiones no se ven afectadas. Las acciones ya enviadas al proveedor pueden completarse. Para volver a conectar se necesita un nuevo inicio de sesión o una clave.",
+  "disconnecting": "Desconectando…",
+  "confirmDisconnect": "Desconectar la conexión",
+  "disconnectFailed": "No se pudo desconectar",
+  "tryAgain": "Vuelve a intentarlo."
+}

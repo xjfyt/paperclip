@@ -1,0 +1,12 @@
+{
+  "settings": "接続設定",
+  "reconnect": "再接続",
+  "manage": "{{provider}} で管理",
+  "disconnect": "切断",
+  "confirmTitle": "{{provider}} を切断しますか？",
+  "confirmHelp": "この接続の保存済み認証情報を削除し、Paperclip 経由の以後の呼び出しを停止します。他の接続には影響しません。プロバイダーに送信済みの操作は完了する場合があります。再接続には新たなサインインまたはキーが必要です。",
+  "disconnecting": "切断中…",
+  "confirmDisconnect": "接続を切断",
+  "disconnectFailed": "切断できませんでした",
+  "tryAgain": "もう一度お試しください。"
+}

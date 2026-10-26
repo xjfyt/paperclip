@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import "@/i18n/remote-mcp-management-test-resources";
+import { i18n } from "@/i18n";
 
 import { flushSync } from "react-dom";
 import type { ReactNode } from "react";
@@ -12,6 +14,7 @@ import { rememberSkillSourceReturn, skillSourceReturnPath } from "@/lib/skill-so
 import { AppDetail } from "./AppDetail";
 import { APP_TABS } from "./app-tabs";
 
+const archiveConnectionMock = vi.hoisted(() => vi.fn());
 const getConnectionMock = vi.hoisted(() => vi.fn());
 const getConnectionInstallsMock = vi.hoisted(() => vi.fn());
 const listApplicationsMock = vi.hoisted(() => vi.fn());
@@ -77,7 +80,7 @@ vi.mock("@/api/tools", () => ({
       finalizeOAuthAccessMock(companyId, connectionId, input),
     putConnectionInstalls: (connectionId: string, installs: unknown) =>
       putConnectionInstallsMock(connectionId, installs),
-    archiveConnection: vi.fn(),
+    archiveConnection: (id: string) => archiveConnectionMock(id),
     refreshCatalog: (connectionId: string) => refreshCatalogMock(connectionId),
     checkConnectionHealth: (connectionId: string) => checkConnectionHealthMock(connectionId),
     startOAuth: (connectionId: string, input?: unknown) => input === undefined
@@ -462,11 +465,12 @@ describe("AppDetail", () => {
     });
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     flushSync(() => root?.unmount());
     container.remove();
     vi.restoreAllMocks();
     vi.clearAllMocks();
+    await i18n.changeLanguage("en");
   });
 
   async function renderAppDetail() {
@@ -488,6 +492,42 @@ describe("AppDetail", () => {
       config: { sourceTemplateKey: "composio", connectionMethodKey: "mcp" } }));
     listApplicationsMock.mockResolvedValue({ applications: [{ id: "app-1", applicationKey: "composio", name: "Composio", metadata: { sourceTemplateKey: "composio" } }] });
   }
+
+  it("does not expose remote disconnect after language changes without configure permission", async () => {
+    useComposioConnection();
+    listConnectionGrantsMock.mockResolvedValue({ grants: [], capabilities: fullCapabilities({ canConfigure: false }), currentUserId: "user-1", members: [] });
+    await renderAppDetail();
+    for (const locale of ["ja", "zh-CN", "es", "en"]) {
+      await act(async () => { await i18n.changeLanguage(locale); }); await flushReact();
+      expect(Array.from(container.querySelectorAll('button')).some(button => button.textContent === i18n.t("remoteMcpManagementUi.disconnect"))).toBe(false);
+      expect(archiveConnectionMock).not.toHaveBeenCalled();
+    }
+  });
+
+  it.each(["raw", "unknown"])("keeps remote disconnect confirmation dynamic but %s failure toasts at emission language", async kind => {
+    useComposioConnection();
+    archiveConnectionMock.mockRejectedValue(kind === "raw" ? new Error("Provider raw disconnect diagnostic") : { unknown: true });
+    await renderAppDetail(); await flushReact();
+    await act(async () => { await i18n.changeLanguage("ja"); }); await flushReact();
+    const button = (label: string) => Array.from(document.body.querySelectorAll('button')).find(b => b.textContent === label)!;
+    await act(async () => button(i18n.t("remoteMcpManagementUi.disconnect")).click());
+    const calls = () => JSON.stringify([getConnectionMock.mock.calls, getConnectionInstallsMock.mock.calls, listConnectionGrantsMock.mock.calls, syncAggregatorAppsMock.mock.calls, archiveConnectionMock.mock.calls, startOAuthMock.mock.calls, finishAppMock.mock.calls, mockNavigate.mock.calls]);
+    const before = calls();
+    for (const locale of ["zh-CN", "es", "en", "ja"]) {
+      await act(async () => { await i18n.changeLanguage(locale); }); await flushReact();
+      expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain(i18n.t("remoteMcpManagementUi.confirmHelp"));
+      expect(calls()).toBe(before);
+    }
+    await act(async () => button(i18n.t("remoteMcpManagementUi.confirmDisconnect")).click()); await flushReact();
+    expect(archiveConnectionMock).toHaveBeenCalledExactlyOnceWith("conn-1");
+    expect(pushToastMock).toHaveBeenLastCalledWith({ title: i18n.t("remoteMcpManagementUi.disconnectFailed"), body: kind === "raw" ? "Provider raw disconnect diagnostic" : i18n.t("remoteMcpManagementUi.tryAgain"), tone: "error" });
+    const emitted = JSON.stringify(pushToastMock.mock.calls);
+    await act(async () => { await i18n.changeLanguage("zh-CN"); }); await flushReact();
+    expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain(i18n.t("remoteMcpManagementUi.confirmHelp"));
+    expect(JSON.stringify(pushToastMock.mock.calls)).toBe(emitted);
+    expect(archiveConnectionMock).toHaveBeenCalledOnce(); expect(mockNavigate).not.toHaveBeenCalled();
+    expect(startOAuthMock).not.toHaveBeenCalled(); expect(finishAppMock).not.toHaveBeenCalled();
+  });
 
   it("refreshes connected apps on first load, shows progress, and exposes the completed inventory", async () => {
     useComposioConnection();

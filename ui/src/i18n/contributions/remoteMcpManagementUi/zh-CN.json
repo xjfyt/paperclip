@@ -1,0 +1,12 @@
+{
+  "settings": "连接设置",
+  "reconnect": "重新连接",
+  "manage": "在 {{provider}} 中管理",
+  "disconnect": "断开连接",
+  "confirmTitle": "断开 {{provider}} 连接？",
+  "confirmHelp": "删除此连接已保存的凭据，并停止通过 Paperclip 发起后续调用。其他连接不受影响。已发送给供应商的操作仍可能完成。重新连接需要新的登录授权或密钥。",
+  "disconnecting": "正在断开连接…",
+  "confirmDisconnect": "断开此连接",
+  "disconnectFailed": "无法断开连接",
+  "tryAgain": "请重试。"
+}

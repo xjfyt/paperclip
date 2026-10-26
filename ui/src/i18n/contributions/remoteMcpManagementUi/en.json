@@ -1,0 +1,12 @@
+{
+  "settings": "Connection settings",
+  "reconnect": "Reconnect",
+  "manage": "Manage in {{provider}}",
+  "disconnect": "Disconnect",
+  "confirmTitle": "Disconnect {{provider}}?",
+  "confirmHelp": "Delete this connection’s saved credentials and stop further calls through Paperclip. Other connections are unaffected. Actions already sent to the provider may still complete. Connecting again requires a new sign-in or key.",
+  "disconnecting": "Disconnecting…",
+  "confirmDisconnect": "Disconnect connection",
+  "disconnectFailed": "Couldn't disconnect",
+  "tryAgain": "Please try again."
+}
