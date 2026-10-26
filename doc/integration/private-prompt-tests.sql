@@ -8,7 +8,7 @@ CREATE TABLE mimouse_private_prompt_tests (
   agent_id uuid NOT NULL REFERENCES agents(id) ON DELETE RESTRICT,
   dataset_id uuid NOT NULL, dataset_hash text NOT NULL, case_id uuid NOT NULL,
   skill_version_id uuid NOT NULL REFERENCES company_skill_versions(id) ON DELETE RESTRICT,
-  config_digest text NOT NULL, skill_version_hash text NOT NULL, secret_value_hash text NOT NULL,
+  approval_snapshot jsonb, config_digest text NOT NULL, skill_version_hash text NOT NULL, secret_value_hash text NOT NULL,
   status text NOT NULL DEFAULT 'awaiting_confirmation',
   issue_id uuid REFERENCES issues(id) ON DELETE RESTRICT,
   wakeup_request_id uuid REFERENCES agent_wakeup_requests(id) ON DELETE RESTRICT,

@@ -193,3 +193,24 @@ prompt正文、凭据或结果，不自动POST。跨用户/公司/session的旧�
 两阶段后端初验twophase20：3files/38项通过，额外覆盖prepare零wake、旧合并body拒绝、
 重复prepare不恢复pending、prepare后配置漂移/撤权、execute/cancel竞态及迟到execute不重派。
 该轮尚未证明最终UI真实浏览器行为，须独立UI审查与中央联调。
+
+### 可展示的审批摘要与HTTP边界补验
+
+approvalSnapshot为server严格白名单构造的专用JSONB：固定profile/builtin/cli/model、
+configuredCwd、本机目标ID/source、固定secretRef ID/version、配置digest与禁工具等约束。
+它不含secret value、prompt正文、完整env或派生context；持久值纳入approvalDigest，GET
+重现prepare原值，不能从当前Agent配置重建。configuredCwd仅表示配置输入，null意味着
+运行时解析、尚未确定；实际executionWorkspace.cwd仍由核心派生，不冒称锁定完整工作目录。
+历史null或不合法摘要只读且不能新执行；额外未知字段在读取时也不输出。
+
+当前head变化不使固定ticket追随新selection：prepare检查当时head，确认后仍引用该旧revision
+及旧headReceipt。界面必须称固定历史快照，而不是“当前head已执行”。pending_harness和
+pending_wake可显式继续原操作（原testId/digest与三项确认），不重新prepare、不自动POST；
+其余运行/unknown状态只读取，不增加attempt。
+
+snapshot22为40项通过，含原值重现、摘要篡改/漂移、历史null拒执行、admission后harness中断
+再按同ticket恢复且只有一个wake/child。http24为41项通过（含独立DB普通成员及session）：新增仅127.0.0.1的Express真实
+router+实际error middleware，以node:http客户端请求，保留全局fetch外联拒绝。验证匿名、
+无session与普通成员拒绝、no-store、prepare 201/200零wake、旧合并body strict拒绝、
+execute/cancel完整绑定与重复不重派。fixture actor注入不是OIDC/真实登录验证；真实浏览器、
+会话中间件与用户CLI仍需中央/用户独立验收。启动的HTTP listener在finally明确关闭。

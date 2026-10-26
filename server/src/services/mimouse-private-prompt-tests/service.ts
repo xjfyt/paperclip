@@ -3,7 +3,7 @@ import { and, desc, eq, gt, inArray, isNull, lt, sql } from "drizzle-orm";
 import { activityLog, agents, authSessions, authUsers, companies, companyMemberships, companySecrets, companySecretVersions,
   companySkills, companySkillVersions, heartbeatRuns, agentWakeupRequests, environments, instanceSettings, projects, issues, mimouseEvaluationDatasets, mimousePromptRevisions, mimousePrompts, type Db } from "@paperclipai/db";
 import { mimousePrivatePromptTests as tests } from "@paperclipai/db/schema/mimouse_private_prompt_tests";
-import { preparePrivatePromptTestSchema, executePrivatePromptTestSchema, cancelPrivatePromptTestSchema, type PreparePrivatePromptTest, type ExecutePrivatePromptTest, type CancelPrivatePromptTest, type CreatePrivatePromptTest, type PrivatePromptTestRecord } from "@paperclipai/shared/mimouse-private-prompt-tests";
+import { privatePromptApprovalSnapshotSchema, preparePrivatePromptTestSchema, executePrivatePromptTestSchema, cancelPrivatePromptTestSchema, type PreparePrivatePromptTest, type ExecutePrivatePromptTest, type CancelPrivatePromptTest, type CreatePrivatePromptTest, type PrivatePromptTestRecord } from "@paperclipai/shared/mimouse-private-prompt-tests";
 import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
 import { issueService } from "../issues.js";
 import { accessService } from "../access.js";
@@ -73,6 +73,26 @@ export async function validatePrivatePromptResources(tx: PrivatePromptTx, actor:
   if (!assignment.allowed) throw forbidden("private_prompt_assignment_denied");
   return { agent, profile, revision, dataset, testCase, version, secret, textInventory };
 }
+type ValidatedPrivatePromptResources = Awaited<ReturnType<typeof validatePrivatePromptResources>>;
+function approvalSnapshotForBound(bound: ValidatedPrivatePromptResources) {
+  const { profile } = bound;
+  const parsed = privatePromptApprovalSnapshotSchema.safeParse({
+    schemaVersion: 1, executionProfile: "claude_cli_bare_api_key_v1", adapterType: "claude_local", engine: "cli",
+    model: profile.model, configuredCwd: bound.agent.adapterConfig.cwd ?? null,
+    environment: { source: profile.effectiveEnvironment.source, id: profile.effectiveEnvironment.id, driver: "local" },
+    credential: { kind: "pinned_company_secret", secretId: profile.secretId, version: profile.secretVersion },
+    configDigest: profile.configDigest, freshSession: true, toolsEnabled: false, paperclipCredentialsEnabled: false, completeContextCaptured: false,
+  });
+  if (!parsed.success) throw unprocessable("private_prompt_approval_snapshot_invalid");
+  return parsed.data;
+}
+export function assertPrivatePromptBoundSnapshot(row: PrivatePromptRow, bound: ValidatedPrivatePromptResources) {
+  if (!row.approvalSnapshot || !privatePromptApprovalSnapshotSchema.safeParse(row.approvalSnapshot).success ||
+      privateConfigDigest(row.approvalSnapshot) !== privateConfigDigest(approvalSnapshotForBound(bound)) ||
+      bound.profile.configDigest !== row.configDigest || bound.dataset.datasetHash !== row.datasetHash ||
+      bound.revision.contentHash !== row.revisionHash || privateConfigDigest(bound.version.fileInventory) !== row.skillVersionHash ||
+      bound.secret.valueHash !== row.secretValueHash) throw conflict("private_prompt_approval_snapshot_changed");
+}
 /** Called before heartbeat provider/runtime/MCP preparation, then again at dispatch. */
 export async function assertPrivatePromptEarlyBinding(db: Db, run: typeof heartbeatRuns.$inferSelect, issueId: string | null) {
   if (!issueId) return null;
@@ -101,9 +121,7 @@ export async function assertPrivatePromptEarlyBinding(db: Db, run: typeof heartb
     }
     const bound = await validatePrivatePromptResources(tx,
       { companyId: row.companyId, userId: row.actorUserId, sessionId: row.actorSessionId }, privatePromptInput(row), row.promptId, true, true);
-    if (bound.profile.configDigest !== row.configDigest || bound.dataset.datasetHash !== row.datasetHash ||
-        bound.revision.contentHash !== row.revisionHash || privateConfigDigest(bound.version.fileInventory) !== row.skillVersionHash ||
-        bound.secret.valueHash !== row.secretValueHash) throw conflict("private_prompt_execution_snapshot_changed");
+    assertPrivatePromptBoundSnapshot(row, bound);
     return { ...row, effectiveEnvironmentId: bound.profile.effectiveEnvironment.id };
   });
 }
@@ -112,11 +130,12 @@ export function privatePromptApprovalDigest(row: PrivatePromptRow): string {
     promptId: row.promptId, revisionId: row.revisionId, headReceiptId: row.headReceiptId, agentId: row.agentId,
     datasetId: row.datasetId, caseId: row.caseId, skillVersionId: row.skillVersionId, executionProfile: "claude_cli_bare_api_key_v1",
     requestId: row.requestId, requestDigest: row.requestDigest, revisionHash: row.revisionHash, datasetHash: row.datasetHash,
-    skillVersionHash: row.skillVersionHash, secretValueHash: row.secretValueHash, configDigest: row.configDigest });
+    approvalSnapshot: row.approvalSnapshot, skillVersionHash: row.skillVersionHash, secretValueHash: row.secretValueHash, configDigest: row.configDigest });
 }
 export function privatePromptRecord(row: PrivatePromptRow): PrivatePromptTestRecord {
+  const snapshot = privatePromptApprovalSnapshotSchema.safeParse(row.approvalSnapshot);
   return { id: row.id, companyId: row.companyId, actorUserId: row.actorUserId, requestId: row.requestId, headReceiptId: row.headReceiptId, approvalDigest: privatePromptApprovalDigest(row),
-    executionProfile: "claude_cli_bare_api_key_v1", promptId: row.promptId, revisionId: row.revisionId, agentId: row.agentId, datasetId: row.datasetId,
+    executionProfile: "claude_cli_bare_api_key_v1", approvalSnapshot: snapshot.success ? snapshot.data : null, promptId: row.promptId, revisionId: row.revisionId, agentId: row.agentId, datasetId: row.datasetId,
     caseId: row.caseId, skillVersionId: row.skillVersionId, status: row.status, issueId: row.issueId,
     heartbeatRunId: row.heartbeatRunId, prepared: row.prepared, spawnedAt: row.spawnedAt?.toISOString() ?? null,
     errorCode: row.errorCode, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), runtimeApplied: false };
@@ -184,7 +203,7 @@ export function privatePromptTestService(db: Db, wake?: (agentId: string, opts: 
           return { row: prior, duplicate: true };
         }
         const bound = await validatePrivatePromptResources(tx, actor, input, promptId);
-        const [row] = await tx.insert(tests).values({ status: "awaiting_confirmation", companyId: actor.companyId, promptId, revisionId: input.revisionId,
+        const [row] = await tx.insert(tests).values({ approvalSnapshot: approvalSnapshotForBound(bound), status: "awaiting_confirmation", companyId: actor.companyId, promptId, revisionId: input.revisionId,
           headReceiptId: input.expectedHeadReceiptId, revisionHash: bound.revision.contentHash, requestId: input.requestId,
           requestDigest: digest, actorUserId: actor.userId, actorSessionId: actor.sessionId, agentId: input.agentId,
           datasetId: input.datasetId, datasetHash: bound.dataset.datasetHash, caseId: input.caseId,
@@ -204,6 +223,7 @@ export function privatePromptTestService(db: Db, wake?: (agentId: string, opts: 
           eq(tests.id, id), eq(tests.actorUserId, actor.userId))).for("update");
         if (!row) throw notFound("private_prompt_test_not_found");
         if (input.approvalDigest !== privatePromptApprovalDigest(row)) throw conflict("private_prompt_approval_changed");
+        if (!row.approvalSnapshot) throw unprocessable("private_prompt_approval_snapshot_missing");
         if (row.status !== "awaiting_confirmation") return { item: privatePromptRecord(await reconcilePrivatePromptState(tx, row)), duplicate: true };
         const [cancelled] = await tx.update(tests).set({ status: "cancelled", errorCode: "private_prompt_confirmation_cancelled", updatedAt: new Date() })
           .where(and(eq(tests.id, row.id), eq(tests.status, "awaiting_confirmation"))).returning();
@@ -218,11 +238,10 @@ export function privatePromptTestService(db: Db, wake?: (agentId: string, opts: 
           eq(tests.id, id), eq(tests.actorUserId, actor.userId))).for("update");
         if (!row) throw notFound("private_prompt_test_not_found");
         if (input.approvalDigest !== privatePromptApprovalDigest(row)) throw conflict("private_prompt_approval_changed");
+        if (!row.approvalSnapshot) throw unprocessable("private_prompt_approval_snapshot_missing");
         if (row.status !== "awaiting_confirmation") return { row, duplicate: true };
         const bound = await validatePrivatePromptResources(tx, actor, privatePromptInput(row), promptId, true);
-        if (bound.profile.configDigest !== row.configDigest || bound.dataset.datasetHash !== row.datasetHash ||
-            bound.revision.contentHash !== row.revisionHash || privateConfigDigest(bound.version.fileInventory) !== row.skillVersionHash ||
-            bound.secret.valueHash !== row.secretValueHash) throw conflict("private_prompt_approval_snapshot_changed");
+        assertPrivatePromptBoundSnapshot(row, bound);
         const [admitted] = await tx.update(tests).set({ status: "pending_harness", actorSessionId: actor.sessionId, updatedAt: new Date() })
           .where(and(eq(tests.id, row.id), eq(tests.status, "awaiting_confirmation"))).returning();
         await tx.insert(activityLog).values({ companyId: row.companyId, actorType: "user", actorId: actor.userId,
@@ -234,7 +253,8 @@ export function privatePromptTestService(db: Db, wake?: (agentId: string, opts: 
         await db.transaction(async tx => {
           const [row] = await tx.select().from(tests).where(eq(tests.id, created.row.id)).for("update");
           if (row.status !== "pending_harness") return;
-          await validatePrivatePromptResources(tx, { ...actor, sessionId: row.actorSessionId }, privatePromptInput(row), promptId, true);
+          const bound = await validatePrivatePromptResources(tx, { ...actor, sessionId: row.actorSessionId }, privatePromptInput(row), promptId, true);
+          assertPrivatePromptBoundSnapshot(row, bound);
           const assertHarness = async (issue: typeof issues.$inferSelect) => { assertPrivatePromptHarness(issue, row); };
           const issue = await issueService(db).create(actor.companyId, { id: randomUUID(), title: "Private prompt test",
             description: "Private prompt test. Results are available only through the private prompt test API.",

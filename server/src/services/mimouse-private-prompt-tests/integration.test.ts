@@ -31,6 +31,7 @@ vi.mock("@paperclipai/adapter-utils/execution-target", async original => {
   } };
 });
 import { getServerAdapter, privatePromptTestImplementation, registerServerAdapter } from "../../adapters/registry.js";
+import { privatePromptHttpFixture } from "./http-fixture.js";
 import { snapshotFile } from "../skill-snapshot.js";
 import * as issueModule from "../issues.js";
 import { assertPrivatePromptEarlyBinding, privatePromptTestService as rawPrivatePromptTestService } from "./service.js";
@@ -435,7 +436,9 @@ it("rejects configuration drift and revoked authorization between prepare and ex
   try {
     await db.update(agents).set({ adapterConfig: { ...agent.adapterConfig, model: "claude-changed" } }).where(eq(agents.id, agent.id));
     await expect(service.execute(actor, promptId, ticket.item.id, confirmation(ticket.item.approvalDigest))).rejects.toThrow("private_prompt_approval_snapshot_changed");
-    expect((await service.detail(actor, promptId, ticket.item.id)).item.approvalDigest).toBe(ticket.item.approvalDigest);
+    const frozen = (await service.detail(actor, promptId, ticket.item.id)).item;
+    expect(frozen.approvalDigest).toBe(ticket.item.approvalDigest);
+    expect(frozen.approvalSnapshot?.model).toBe(agent.adapterConfig.model);
     await db.update(agents).set({ adapterConfig: agent.adapterConfig }).where(eq(agents.id, agent.id));
     await db.update(companyMemberships).set({ status: "suspended" }).where(and(eq(companyMemberships.companyId, actor.companyId), eq(companyMemberships.principalId, actor.userId)));
     await expect(service.execute(actor, promptId, ticket.item.id, confirmation(ticket.item.approvalDigest))).rejects.toThrow("private_prompt_active_session_administrator_required");
@@ -465,6 +468,84 @@ it("serializes execute/cancel and keeps late execute and terminal replay on the 
   const count = processBoundary.calls;
   expect((await service.execute(actor, promptId, ticket.item.id, confirmation(ticket.item.approvalDigest))).item.status).toBe(resolved.item.status);
   expect(processBoundary.calls).toBe(count);
+});
+it("keeps persisted approval summaries immutable and fails closed on tampering or historical null", async () => {
+  const service = rawPrivatePromptTestService(db, heartbeat.wakeup), before = processBoundary.calls;
+  const ticket = await service.prepare(actor, promptId, preparationInput());
+  expect(ticket.item.approvalSnapshot?.model).toBe("claude-sonnet-4-5");
+  expect(JSON.stringify(ticket.item.approvalSnapshot)).not.toContain("fixture-not-a-real-key");
+  expect(JSON.stringify(ticket.item.approvalSnapshot)).not.toContain(marker);
+  await db.update(tests).set({ approvalSnapshot: { ...ticket.item.approvalSnapshot!, model: "claude-tampered" } }).where(eq(tests.id, ticket.item.id));
+  await expect(service.execute(actor, promptId, ticket.item.id, confirmation(ticket.item.approvalDigest))).rejects.toThrow("private_prompt_approval_changed");
+  const tampered = await service.detail(actor, promptId, ticket.item.id);
+  await expect(service.execute(actor, promptId, ticket.item.id, confirmation(tampered.item.approvalDigest))).rejects.toThrow("private_prompt_approval_snapshot_changed");
+  await db.update(tests).set({ approvalSnapshot: { ...ticket.item.approvalSnapshot!, leaked: marker } as never }).where(eq(tests.id, ticket.item.id));
+  const malformed = await service.detail(actor, promptId, ticket.item.id);
+  expect(malformed.item.approvalSnapshot).toBeNull(); expect(JSON.stringify(malformed)).not.toContain(marker);
+  await db.update(tests).set({ approvalSnapshot: null }).where(eq(tests.id, ticket.item.id));
+  const history = await service.detail(actor, promptId, ticket.item.id);
+  expect(history.item.approvalSnapshot).toBeNull();
+  await expect(service.execute(actor, promptId, ticket.item.id, confirmation(history.item.approvalDigest))).rejects.toThrow("private_prompt_approval_snapshot_missing");
+  expect(processBoundary.calls).toBe(before);
+});
+it("explicitly resumes the same admitted ticket after an interrupted harness creation", async () => {
+  const service = rawPrivatePromptTestService(db, heartbeat.wakeup), before = processBoundary.calls;
+  const ticket = await service.prepare(actor, promptId, preparationInput());
+  const original = issueModule.issueService;
+  const interruption = vi.spyOn(issueModule, "issueService").mockImplementationOnce((...args) => ({
+    ...original(...args), create: async () => { throw Error("fixture interrupted after admission"); },
+  }));
+  await expect(service.execute(actor, promptId, ticket.item.id, confirmation(ticket.item.approvalDigest))).rejects.toThrow("fixture interrupted");
+  interruption.mockRestore();
+  expect((await service.detail(actor, promptId, ticket.item.id)).item.status).toBe("pending_harness");
+  expect(processBoundary.calls).toBe(before);
+  await service.execute(actor, promptId, ticket.item.id, confirmation(ticket.item.approvalDigest));
+  await drainHeartbeatRunsToQuiescence(db, heartbeat);
+  const completed = await service.detail(actor, promptId, ticket.item.id);
+  expect(completed.item.status).toBe("completed"); expect(completed.item.approvalDigest).toBe(ticket.item.approvalDigest);
+  expect(processBoundary.calls).toBe(before + 1);
+  expect(await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.idempotencyKey, `private-prompt-test:${ticket.item.id}`))).toHaveLength(1);
+});
+it("enforces the actual loopback HTTP router and error middleware without a production login claim", async () => {
+  const owner: Express.Request["actor"] = { type: "board", source: "session", userId: actor.userId, sessionId: actor.sessionId,
+    companyIds: [actor.companyId], memberships: [{ companyId: actor.companyId, membershipRole: "owner", status: "active" }] };
+  const memberId = randomUUID(), memberSession = randomUUID(), now = new Date();
+  await db.insert(authUsers).values({ id: memberId, name: "HTTP member fixture", email: `${memberId}@example.invalid`, createdAt: now, updatedAt: now });
+  await db.insert(authSessions).values({ id: memberSession, token: randomUUID(), userId: memberId, expiresAt: new Date(Date.now() + 3600000), createdAt: now, updatedAt: now });
+  await db.insert(companyMemberships).values({ companyId: actor.companyId, principalType: "user", principalId: memberId, membershipRole: "member", status: "active" });
+  const http = await privatePromptHttpFixture(db, { owner, noSession: { ...owner, sessionId: null },
+    member: { ...owner, userId: memberId, sessionId: memberSession, memberships: [{ companyId: actor.companyId, membershipRole: "member", status: "active" }] } });
+  const path = `/api/companies/${actor.companyId}/prompt-registry/${promptId}/tests`, before = processBoundary.calls;
+  try {
+    for (const role of ["anonymous", "noSession", "member"]) {
+      const denied = await http.call("POST", path, preparationInput(), role);
+      expect(denied.status).toBe(403); expect(denied.headers["cache-control"]).toBe("no-store");
+    }
+    expect((await http.call("POST", path, input)).status).toBe(400);
+    const preparation = preparationInput(), prepared = await http.call("POST", path, preparation);
+    expect(prepared.status).toBe(201); expect(prepared.headers["cache-control"]).toBe("no-store");
+    expect(prepared.body.item.status).toBe("awaiting_confirmation"); expect(prepared.body.item.requestId).toBe(preparation.requestId);
+    expect(prepared.body.item.approvalSnapshot.model).toBe("claude-sonnet-4-5");
+    const replay = await http.call("POST", path, preparation);
+    expect(replay.status).toBe(200); expect(replay.body.item).toEqual(prepared.body.item);
+    expect(processBoundary.calls).toBe(before);
+    const id = prepared.body.item.id, digest = prepared.body.item.approvalDigest;
+    const executed = await http.call("POST", `${path}/${id}/execute`, confirmation(digest));
+    expect(executed.status).toBe(200); expect(executed.body.item.approvalDigest).toBe(digest);
+    await drainHeartbeatRunsToQuiescence(db, heartbeat);
+    const detail = await http.call("GET", `${path}/${id}`);
+    expect(detail.status).toBe(200); expect(detail.headers["cache-control"]).toBe("no-store");
+    expect(detail.body.item.status).toBe("completed"); expect(detail.body.item.requestId).toBe(preparation.requestId);
+    expect((await http.call("POST", `${path}/${id}/execute`, confirmation(digest))).body.item.status).toBe("completed");
+    expect(processBoundary.calls).toBe(before + 1);
+    const cancelTicket = await http.call("POST", path, preparationInput());
+    const cancelPath = `${path}/${cancelTicket.body.item.id}`, cancelDigest = cancelTicket.body.item.approvalDigest;
+    const cancelled = await http.call("POST", `${cancelPath}/cancel`, { approvalDigest: cancelDigest });
+    expect(cancelled.status).toBe(200); expect(cancelled.body.item.status).toBe("cancelled");
+    expect(cancelled.body.item.approvalDigest).toBe(cancelDigest);
+    expect((await http.call("POST", `${cancelPath}/execute`, confirmation(cancelDigest))).body.item.status).toBe("cancelled");
+    expect(processBoundary.calls).toBe(before + 1);
+  } finally { await http.close(); }
 });
 it("denies another active administrator and a revoked original administrator", async () => {
   const before = processBoundary.calls;

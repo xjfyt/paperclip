@@ -1,6 +1,6 @@
 import { mimousePrivatePromptTests } from "@paperclipai/db/schema/mimouse_private_prompt_tests";
 import { privatePromptWakeAuthority } from "../mimouse-private-prompt-tests/wake-authority.js";
-import { validatePrivatePromptResources, privatePromptInput } from "../mimouse-private-prompt-tests/service.js";
+import { assertPrivatePromptBoundSnapshot, validatePrivatePromptResources, privatePromptInput } from "../mimouse-private-prompt-tests/service.js";
 import { isAgentAwaitingSetup } from "../../modules/agent-lifecycle/index.js";
 import { normalizeAgentNameKey } from "./retries.js";
 import { publishActiveDotComment } from "../dot-assignment-follow-up.js";
@@ -2694,7 +2694,7 @@ export function createHeartbeatQueue(db: Db, dependencies: HeartbeatQueueDepende
             if (test.status !== "pending_wake") throw new HttpError(409, "private_prompt_wake_not_pending");
             const bound = await validatePrivatePromptResources(tx,
               { companyId: test.companyId, userId: test.actorUserId, sessionId: test.actorSessionId }, privatePromptInput(test), test.promptId, true);
-            if (bound.profile.configDigest !== test.configDigest) throw new HttpError(409, "private_prompt_config_changed");
+            assertPrivatePromptBoundSnapshot(test, bound);
             const [existingWake] = await tx.select({ id: agentWakeupRequests.id }).from(agentWakeupRequests).where(and(
               eq(agentWakeupRequests.companyId, test.companyId), eq(agentWakeupRequests.idempotencyKey, opts.idempotencyKey)));
             if (existingWake) throw new HttpError(409, "private_prompt_prior_wake_not_admitted");

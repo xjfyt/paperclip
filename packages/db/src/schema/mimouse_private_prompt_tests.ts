@@ -1,6 +1,6 @@
 import { pgTable, uuid, text, timestamp, jsonb, uniqueIndex, foreignKey, check } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-import type { PrivatePromptPreparedWitness, PrivatePromptTestStatus } from "@paperclipai/shared/mimouse-private-prompt-tests";
+import type { PrivatePromptApprovalSnapshot, PrivatePromptPreparedWitness, PrivatePromptTestStatus } from "@paperclipai/shared/mimouse-private-prompt-tests";
 import { companies } from "./companies.js";
 import { agents } from "./agents.js";
 import { issues } from "./issues.js";
@@ -22,6 +22,7 @@ export const mimousePrivatePromptTests = pgTable("mimouse_private_prompt_tests",
   datasetId: uuid("dataset_id").notNull(), datasetHash: text("dataset_hash").notNull(), caseId: uuid("case_id").notNull(),
   skillVersionId: uuid("skill_version_id").notNull().references(() => companySkillVersions.id, { onDelete: "restrict" }),
   configDigest: text("config_digest").notNull(),
+  approvalSnapshot: jsonb("approval_snapshot").$type<PrivatePromptApprovalSnapshot>(),
   skillVersionHash: text("skill_version_hash").notNull(), secretValueHash: text("secret_value_hash").notNull(),
   status: text("status").$type<PrivatePromptTestStatus>().notNull().default("awaiting_confirmation"),
   issueId: uuid("issue_id").references(() => issues.id, { onDelete: "restrict" }),

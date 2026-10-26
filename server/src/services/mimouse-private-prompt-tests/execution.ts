@@ -7,7 +7,7 @@ import type { HeartbeatRuntimeExecutionInput } from "../heartbeat/runtime-execut
 import { privatePromptTestImplementation } from "../../adapters/registry.js";
 import { secretService } from "../secrets.js";
 import { conflict } from "../../errors.js";
-import { privatePromptInput, validatePrivatePromptResources, type PrivatePromptRow, type PrivatePromptTx } from "./service.js";
+import { assertPrivatePromptBoundSnapshot, privatePromptInput, validatePrivatePromptResources, type PrivatePromptRow, type PrivatePromptTx } from "./service.js";
 import { privatePromptFixedContext, privateConfigDigest, privatePromptHash, PRIVATE_PROMPT_IMPLEMENTATION } from "./profile.js";
 import { publishActivity, type ActivityPublication } from "../activity-log.js";
 import { executeIssuePostCommitActions, type IssuePostCommitAction } from "../issues.js";
@@ -37,6 +37,7 @@ async function validate(tx: PrivatePromptTx, row: PrivatePromptRow, input: Heart
       !privatePromptTestImplementation(input.runtime.adapter)) throw conflict("private_prompt_execution_binding_denied");
   const bound = await validatePrivatePromptResources(tx,
     { companyId: row.companyId, userId: row.actorUserId, sessionId: row.actorSessionId }, privatePromptInput(row), row.promptId, true, true);
+  assertPrivatePromptBoundSnapshot(row, bound);
   if (input.workspace.executionTarget?.kind !== "local" || input.workspace.executionTarget.environmentId !== bound.profile.effectiveEnvironment.id ||
       bound.profile.configDigest !== row.configDigest || bound.dataset.datasetHash !== row.datasetHash ||
       bound.revision.contentHash !== row.revisionHash || privateConfigDigest(bound.version.fileInventory) !== row.skillVersionHash ||
