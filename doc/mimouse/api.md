@@ -18,6 +18,9 @@
 - PATCH `/endpoints/:id`：enabled、expectedVersion（旧客户端默认1）；版本冲突409。
 - GET `/endpoints/:id/revisions`：最近100条非秘密配置历史、操作者及版本。
 - POST `/endpoints/:id/revisions`：expectedVersion与完整name/kind/config/secretRef/secretVersion；kind不可改变，成功新增版本且暂停，不修改旧投递快照。
+- GET `/endpoints/:id/verification`：no-store、精确配置版本/安全代次与最新测试/审批观察，不读取秘密值或发送探针。
+- GET `/endpoints/:id/verification/evidence`：afterRevision分页、同endpoint人工凭据及全公司headRevision；未读全不可判当前通过。
+- POST `/endpoints/:id/verification/evidence`：expectedRevision/configVersion/epoch、idempotencyKey、confirm=true与record/revoke/supersede；所有声明manual=true/machineVerified=false，引用/版本变化拒绝，审计同事务。详见通知验证手册。
 - POST `/subscriptions`：endpointId、eventType、locale；同渠道同事件幂等更新。
 - PATCH `/subscriptions/:id`：enabled，停用尚未进入 sending 的投递。
 - POST `/endpoints/:id/test`：requestId、expectedVersion、confirm=true、title、text；同请求键入队一次，不同步声称已送达。
@@ -84,3 +87,12 @@ POST `/api/companies/:companyId/feedback-inbox/:id/promote` 使用feedbackPromot
 回执记录initialStatus/initialVisibility及agentDispatched:false，是创建时的历史事实，不代替当前任务状态。当前不自动回复客户、派发Agent或直接修改代码。确认记录不可覆盖，引用任务的永久删除按上游引用冲突逻辑拒绝，可按现有任务流程归档；公司级永久清理需后续明确的保留/删除策略，不能删除确认记录后自动重建任务。
 
 GET `/:id/promotion`：真实浏览器管理员读取确认状态，返回recorded及自己的receipt；已由其他人确认只返回recorded:true/receipt:null，不泄露他人的私有任务回执。界面刷新只GET，不重放POST；未知提交沿用冻结的requestId及原始确认内容重试。切换组织/用户/反馈后旧请求回执不会覆盖新页面。
+
+
+## 反馈来源关联固定评估数据集
+
+根 `/companies/:companyId/skill-evaluations`。
+
+- POST `/datasets/feedback-preview`：真实session、active公司及当前active owner/admin；skillId、inputId、feedbackId、expected，返回精确输入/来源摘要及previewDigest，零写入、零执行。
+- POST `/datasets` 的可选 case.feedback：feedbackId、previewDigest、reviewed=true。保留既有requestId幂等，事务复核实际成员和精确快照，变化409；关联只保存隔离来源引用，不复制反馈正文或解除权限。旧不带feedback的请求兼容原合同。
+- GET `/datasets`/既有单条读取展示固定来源历史。旧数据集不回填来源、不重新计算哈希。详细限制见 [反馈来源链](FEEDBACK-EVALUATION-LINEAGE.md)。
