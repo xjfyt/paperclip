@@ -12,9 +12,9 @@
 
 C1=实现/本地检查，C2=受控协议及故障夹具，C3=真实租户/版本/网络，C4=实际业务场景。实现状态与证据等级是两个维度。人工能力申报不是独立供应商验证；unknown 不算成功或零费用。
 
-本轮已确认 2354 键快照完整 UI 回归：770 文件、8665 项通过，sourceUnchanged=true，源码集合 SHA-256 `979d17c84647f5bd050bc5f8695334623d0e09d96c10b0aeff93214026530db5`。这是冻结 UI 的 C2 证据，不是后续翻译/IME 修复或浏览器验收证明。`6bee5bc` 完整 server 类型检查通过，PG 修复后的构建/API 复验待记录。审计时已核实远端为 `0d43ebb`；本文不把本地提交自动称作已推送。历史结果保留在 [VERIFICATION](VERIFICATION.md)，不要迁移到新 SHA。
+本轮已确认 2354 键快照完整 UI 回归：770 文件、8665 项通过，sourceUnchanged=true，源码集合 SHA-256 `979d17c84647f5bd050bc5f8695334623d0e09d96c10b0aeff93214026530db5`。这是冻结 UI 的 C2 证据，不是后续翻译/IME 修复或浏览器验收证明。`6bee5bc` 完整server类型、标准构建及编译入口132项已通过（44.1秒），退出限制独立保留。审计时已核实远端为 `0d43ebb`；本文不把本地提交自动称作已推送。历史结果保留在 [VERIFICATION](VERIFICATION.md)，不要迁移到新 SHA。
 
-核心任务漏译、Agent 设置漏译及 MarkdownEditor/InlineEntitySelector IME 防误提交三片正在修复；以下先记部分，合入并验证后按新证据更新。
+12:50 UTC：核心任务、Agent设置四文件首片及MarkdownEditor/InlineEntitySelector IME保护已合入，2504键生成、完整UI类型/构建及235/113/69项定向回归通过；更多共享子组件/管理路径仍在修复，真实IME与全路径布局未验，因此宽范围条目继续标部分。退出状态提示与产物清单UI仍未合入本快照。
 
 ## 原始条目矩阵
 
