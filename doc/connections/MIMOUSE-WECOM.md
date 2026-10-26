@@ -142,7 +142,8 @@ Secret 必须已在该公司 vault 中保存为可用的公司级凭据，固定
 - [ ] active 租约运行时暂停/归档公司；续租、凭据读取与入库拒绝，停止状态持久化、socket 关闭，
   没有 inbox 或 received 审计；暂停公司新建/更新/启用拒绝，状态读取和禁用仍允许。
 - [ ] 两个 worker 同时 acquire 同一配置只有一个成功；跨公司创建同 Bot 发生冲突。
-- [ ] 模拟进程崩溃、租约到期、另一 worker 接管；旧 token 写入回滚且不增加审计计数。
+- [ ] 模拟进程崩溃、租约到期，下一次 acquire 必须标为 interrupted 并禁用，不自动重置重试预算；
+  操作员显式禁用→启用后产生新 activation token，旧 lease/activation token 写入回滚且不增加收到审计。
 - [ ] 在读取凭据前/后、排队后/提交前撤销版本或禁用配置；持久化必须拒绝或回滚。
 - [ ] 取消发生于事务前/提交前，不能提交后续排队数据；提交失败与审计失败一起回滚。
 - [ ] 超大帧、畸形 JSON、二进制帧、队列溢出、DB 慢响应、认证超时、心跳丢失、网络
@@ -160,7 +161,7 @@ Secret 必须已在该公司 vault 中保存为可用的公司级凭据，固定
 
 ## 本次离线验证记录
 
-2026-10-26：4 个纯 fixture 测试文件、64 个测试通过；涵盖协议认证/范围/投影、
+2026-10-26：5 个纯 fixture 测试文件、74 个测试通过；涵盖协议认证/范围/投影、
 fake socket 收取与取消/溢出/重连预算、mock store 拒绝路径/脱敏、管理鉴权及日志策略。
 内存上限 512 MiB、单 worker，未启动数据库或服务，也未建立供应商连接。
 `node scripts/check-token-gates.mjs` 四项 UI token gate 均通过；`git diff --check` 通过。
@@ -175,3 +176,42 @@ node scripts/check-token-gates.mjs
 
 未执行完整 typecheck/build、浏览器 UI 测试、数据库迁移与并发事务测试、真实租户测试。
 Mock 通过不证明真实 PostgreSQL 锁/回滚、TLS/供应商权限或消息送达；上方手测清单仍待执行。
+
+
+## 有界后台生命周期接线
+
+主入口保持未改动。整合方在已有数据库与 leader/standby/drain 判定建立后导入：
+
+```ts
+import { startWecomWorker } from "./services/mimouse-wecom/worker.js";
+const wecomWorker = startWecomWorker(db, () => isLeader && !isWarmStandby && !isDraining);
+// 已有 leader / warm-standby / drain 状态变化的同一处理器内：
+void wecomWorker.reconcile();
+// 正式 shutdown 时，先禁止启动，再关闭外部 socket；根生命周期应 await：
+const { drained } = await wecomWorker.stop();
+// drained=false 表示五秒内未收到全部数据库完成结果，不能报告优雅排空成功。
+```
+
+示例门控名称需替换为主入口已有权威状态，不能另造始终为 true 的 gate。未设全局开关
+或不为字符串 `true` 时，start 不分配定时器、不读数据库、不连接供应商。开关为真时每秒
+有一次非重叠 tick；状态转换处理器应立即调用 reconcile，不只依赖轮询。mayRun 为 false
+会同步 abort 全部运行；stop 不可逆，不会在稍后返回的候选查询上启动新连接。
+
+每批最多 8 个候选、每进程最多 2 个 receiver。候选仅来自 enabled 配置、有效 activation
+字段与可尝试租约；配置重新校验后仍由 receiver 事务 acquire 决定所有权。两个实例的
+候选竞争不绕过全库 Bot 预留、租约及 activation fencing。worker 没有启用/修改配置能力。
+
+只有管理员从 disabled→enabled 的明确操作才生成新 activation_token；重复 enabled=true
+不改变 token。每个进程保留最多 1024 个尝试过的激活 token，达到上限停止派发并输出固定
+预算事件，需运营人员重启 worker；它不自动重置单次重连预算。终止后的旧候选、displaced、
+未知 release 结果均不会用同一 token 再开连接。获取租约失败不等于已运行，仍可受原有
+租约约束重试；已过期但保留旧 lease 的崩溃激活则标 interrupted/缺口并禁用，必须显式
+禁用→启用才能恢复。没有 replay/backfill 或历史补齐声明。
+
+shutdown 立即终止 socket，最多等五秒数据库 drain；超时只记录固定事件名和有界 activeCount，
+不记录错误对象、公司、Bot、token、Secret 或文本。晚回数据库结果仍受 AbortSignal 与提交前
+双 token fencing 限制；超时返回并不是数据库事务已经取消的证明。
+
+`tests/mimouse/wecom-inbound.spec.ts` 新增真实隔离数据库夹具，当前未运行：全局注册权限、
+跨公司冲突、公司暂停/归档、凭据撤销、双 token/过期中断、第一次快照及审计失败回滚。
+仅由中央一次性测试实例应用迁移后执行；不启动 receiver，不使用真实网络/客户凭据。

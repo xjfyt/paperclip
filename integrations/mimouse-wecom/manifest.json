@@ -9,7 +9,7 @@
   "workerFlag": "MIMOUSE_WECOM_WORKER_ENABLED",
   "requiredWorkerFlagValue": "true",
   "routeFactory": "server/src/routes/mimouse-wecom.ts#mimouseWecomRoutes",
-  "workerEntry": "server/src/services/mimouse-wecom/receiver.ts#runWecomReceiver",
+  "workerEntry": "server/src/services/mimouse-wecom/worker.ts#startWecomWorker",
   "routeBase": "/api/companies/:companyId/feedback-wecom/connections",
   "ingestionMode": "provider_push",
   "automaticReplies": false,
@@ -26,5 +26,11 @@
     "Run offline automated checks and the documented local database/race test matrix",
     "Perform separately authorized real-tenant qualification before claiming delivery support"
   ],
-  "manualGuide": "doc/connections/MIMOUSE-WECOM.md"
+  "manualGuide": "doc/connections/MIMOUSE-WECOM.md",
+  "receiverEntry": "server/src/services/mimouse-wecom/receiver.ts#runWecomReceiver",
+  "maxActiveReceivers": 2,
+  "candidateBatch": 8,
+  "shutdownDrainMs": 5000,
+  "activationBudgetPerProcess": 1024,
+  "databaseFixture": "tests/mimouse/wecom-inbound.spec.ts"
 }
