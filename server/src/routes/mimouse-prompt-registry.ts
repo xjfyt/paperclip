@@ -1,3 +1,7 @@
+import { createPrivatePromptTestSchema } from "@paperclipai/shared/mimouse-private-prompt-tests";
+import { privatePromptTestService } from "../services/mimouse-private-prompt-tests/service.js";
+import { privatePromptTestsEnabled } from "../services/mimouse-private-prompt-tests/profile.js";
+import { heartbeatService } from "../services/heartbeat.js";
 import { Router, type Request } from "express";
 import { z } from "zod";
 import type { Db } from "@paperclipai/db";
@@ -9,6 +13,7 @@ import { promptRegistryService } from "../services/mimouse-prompt-registry/servi
 const uuid = z.string().uuid(), page = z.object({ beforeId: uuid.optional() }).strict();
 export function mimousePromptRegistryRoutes(db: Db) {
   const router = Router(), service = promptRegistryService(db), root = "/companies/:companyId/prompt-registry";
+  const privateTests = privatePromptTestService(db, (agentId, opts) => heartbeatService(db).wakeup(agentId, opts));
   function human(req: Request) {
     const companyId = uuid.parse(req.params.companyId); assertBoard(req); assertCompanyAccess(req, companyId);
     if (req.actor.source !== "session" || !req.actor.userId) throw forbidden("prompt_signed_in_human_required");
@@ -24,6 +29,31 @@ export function mimousePromptRegistryRoutes(db: Db) {
     }
   }
   router.use(root, (_req, res, next) => { res.setHeader("Cache-Control", "no-store"); next(); });
+  function privateHuman(req: Request) {
+    const actor = human(req);
+    if (!req.actor.sessionId) throw forbidden("private_prompt_session_required");
+    return { ...actor, sessionId: req.actor.sessionId };
+  }
+  router.get(`${root}/test-capabilities`, async (req, res) => {
+    const actor = privateHuman(req);
+    // Listing an empty UUID scope performs the same current DB authorization.
+    await safe(() => privateTests.list(actor, "00000000-0000-4000-8000-000000000000"));
+    res.json({ enabled: privatePromptTestsEnabled(), profile: "claude_cli_bare_api_key_v1",
+      privateResults: true, toolsEnabled: false, completeContextCaptured: false });
+  });
+  router.post(`${root}/:promptId/tests`, validate(createPrivatePromptTestSchema), async (req, res) => {
+    const actor = privateHuman(req), promptId = uuid.parse(req.params.promptId);
+    const result = await safe(() => privateTests.create(actor, promptId, req.body));
+    res.status(result.duplicate ? 200 : 201).json(result);
+  });
+  router.get(`${root}/:promptId/tests`, async (req, res) => {
+    const actor = privateHuman(req), promptId = uuid.parse(req.params.promptId);
+    res.json(await safe(() => privateTests.list(actor, promptId, page.parse(req.query).beforeId)));
+  });
+  router.get(`${root}/:promptId/tests/:testId`, async (req, res) => {
+    const actor = privateHuman(req), promptId = uuid.parse(req.params.promptId), testId = uuid.parse(req.params.testId);
+    res.json(await safe(() => privateTests.detail(actor, promptId, testId)));
+  });
   router.get(root, async (req, res) => { const { companyId, userId } = human(req);
     res.json(await safe(() => service.list(companyId, userId, page.parse(req.query).beforeId))); });
   router.post(`${root}/revisions`, validate(createPromptRevisionSchema), async (req, res) => {

@@ -1,3 +1,4 @@
+import { findPrivatePromptExecution, executePrivatePromptHeartbeat } from "../mimouse-private-prompt-tests/execution.js";
 import { parseNativeSessionGoalControl } from "./scheduling.js";
 import { isHeartbeatRunTerminalStatus } from "./run-lifecycle.js";
 import {
@@ -236,7 +237,9 @@ export async function executeHeartbeatRuntime(db: Db, input: HeartbeatRuntimeExe
     issueRef?.workMode === "skill_test"
       ? { kind: "skill_test" as const, issueId: issueRef.id }
       : { kind: "standard" as const };
+  const privatePromptBinding = await findPrivatePromptExecution(db, run.companyId, issueId);
   const authToken =
+    !privatePromptBinding &&
     nativeRuntimeResolution.kind === "legacy" &&
     adapter.supportsLocalAgentJwt
       ? createLocalAgentJwt(
@@ -251,7 +254,7 @@ export async function executeHeartbeatRuntime(db: Db, input: HeartbeatRuntimeExe
   if (
     nativeRuntimeResolution.kind === "legacy" &&
     adapter.supportsLocalAgentJwt &&
-    !authToken
+    !privatePromptBinding && !authToken
   ) {
     logger.warn(
       {
@@ -491,7 +494,9 @@ export async function executeHeartbeatRuntime(db: Db, input: HeartbeatRuntimeExe
     context.goalControlRequestId,
   );
   try {
-    if (nativeRuntimeResolution.kind === "native") {
+    if (privatePromptBinding) {
+      adapterResult = await executePrivatePromptHeartbeat(db, input, privatePromptBinding);
+    } else if (nativeRuntimeResolution.kind === "native") {
       if (!nativeExecution || !nativeRunnerInstanceId)
         throw new Error("native_runtime_selection_not_persisted");
       const expectedNativeMcpDigest =
