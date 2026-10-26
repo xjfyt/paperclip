@@ -2,7 +2,7 @@
 
 日期：2026-10-26
 
-状态：**普通运行时应用未实现；以下方案待确认，不构成执行授权。** 本文说明持续改进闭环中尚未完成的发布环节，不启用模型、任务或自动发布。现有 UI 冻结边界不变。
+状态：**普通运行时应用未实现；2026-10-26 23:22 UTC 用户委托按通用方案决定开发设计，不构成实际运行授权。** 本文说明持续改进闭环中尚未完成的发布环节，不启用模型、任务或自动发布。现有 UI 冻结边界不变。
 
 ## 已有能力与未完成项
 
@@ -48,9 +48,9 @@ Registry selection 已有幂等请求、head 行锁、expected-head CAS 和当�
 
 代码入口：`server/src/services/mimouse-prompt-registry/service.ts`、`server/src/services/agents.ts` 的 `rollbackConfigRevision`、`server/src/modules/agent-lifecycle/adapters/configuration.ts`。
 
-## 待确认的最小建议合同
+## 本轮采用的最小开发合同
 
-以下是一种收敛范围的建议，**尚未批准，也尚未实现**：
+用户已委托选择技术方案，本轮采用以下保守合同，**尚未实现；具体目标与真实应用仍由产品内人审确认**：
 
 1. **单公司、单个明确指定 Agent。** 首期限定受支持的普通 Claude 本地运行组合，不做全局激活，不自动扩大到其他 adapter、远端或 native runtime。
 2. **新建独立的原文追加位置。** 不覆盖现有 `promptTemplate`、bootstrap 或指令文件；revision 作为 literal supplemental section 拼接在普通 run prompt 的明确位置，保留正文内部字节，不解析其中的 `{{...}}`。这是新增 adapter 合同，不是现有模板位的别名，也不改变工具、访问控制、预算或审批权限。
@@ -59,7 +59,7 @@ Registry selection 已有幂等请求、head 行锁、expected-head CAS 和当�
 5. **人审绑定具体提案。** 记录 source revision/hash、目标 Agent/slot、报告及证据摘要、前态、effective context、adapter/部署版本、可见性和会话策略。服务端验证报告，不信任客户端传入的“已通过”；bare 结果只能作参考，不得标为普通工具运行等价证明。
 6. **不自动触发运行。** 准备、审批、应用绑定和实际派发分别留痕；应用配置不启动 wake、批量试验或成本路由。任何实际执行仍须满足原有授权和任务门禁。
 
-用户仍需确认上述 scope、原文追加语义和普通运行披露边界，并指定实际目标。当前文档不能替代这些决定。
+本轮开发不再等待用户逐项选择技术细节。应用界面必须由操作者指定实际目标，核对固定版本、范围和普通运行披露边界；保存方案或本次开发委托不替代实际应用审批，也不授予模型调用、外发或费用授权。
 
 ## 实现前需落实的状态与并发约束
 
@@ -84,4 +84,12 @@ Registry selection 已有幂等请求、head 行锁、expected-head CAS 和当�
 - 权限撤销及时生效；审批不能由 Agent 自授；正文传播范围与批准的披露合同一致。
 - 实际派发可追溯到准确 receipt/generation；回退只控制未来派发，不声称撤销历史工具副作用。
 
-在上述合同确认、实现和验证之前，普通运行时应用保持未实现/阻断状态，现有 `runtimeApplied:false` 与私有试验限制继续有效。
+在上述合同实现和验证之前，普通运行时应用保持未实现/阻断状态，现有 `runtimeApplied:false` 与私有试验限制继续有效。
+
+## 方案依据与非通用部分
+
+2026-10-26核对官方资料：[Langfuse提示词版本控制](https://langfuse.com/docs/prompt-management/features/prompt-version-control)将不可变版本与部署标签分开，支持按精确版本获取、受保护标签和移动标签回退。本方案借鉴“版本与生效绑定分离”，但执行时固定已批准revision/hash，而不是每次追踪latest；单Agent范围、审批CAS和新任务隔离是本项目的保守约束，不宣称所有平台都采用相同规则。
+
+[Claude Code CLI参考](https://code.claude.com/docs/en/cli-reference)区分恢复会话及提示词追加/替换选项。已有Paperclip适配器的模板、指令文件与resume路径不能被简单视为同一个追加位置；最终应以本仓适配器合同及实际版本测试为准，不只根据CLI帮助宣称已正确接线。选用独立literal追加位是为避免覆盖原模板、提升权限或改变正文中的占位字符，不表示它等价于系统提示词。
+
+上线顺序：固定版本与目标提案 → 显式普通可见性和范围确认 → 原子绑定与回退 → 受支持的新任务派发回执。任何阶段证据不完整必须明确阻断，不把private bare比较视作普通带工具运行的完整验证。
