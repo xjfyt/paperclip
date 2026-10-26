@@ -30,7 +30,8 @@ export function prepareFeedbackImport(raw: FeedbackImportInput) {
 }
 function publicItem(row: typeof inbox.$inferSelect): FeedbackInboxItem {
   return { id: row.id, companyId: row.companyId, sourceKind: row.sourceKind as FeedbackImportInput["sourceKind"],
-    sourceInstance: row.sourceInstance, externalId: row.externalId, ingestionMode: "manual_import",
+    sourceInstance: row.sourceInstance, externalId: row.externalId, ingestionMode: row.ingestionMode as FeedbackInboxItem["ingestionMode"],
+    sourceUrl: row.sourceUrl, sourceTrust: { preset: "low_trust_review", disposition: "quarantined" },
     title: row.title, text: row.body, product: row.product, softwareVersion: row.softwareVersion, commitSha: row.commitSha, traceId: row.traceId,
     occurredAt: row.occurredAt.toISOString(), createdAt: row.createdAt.toISOString(), actorId: row.actorId,
     redacted: row.redacted, redactionVersion: 1, status: "candidate" };
