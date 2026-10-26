@@ -39,12 +39,21 @@ async function syncDirectory(directory: string) {
   const handle = await fs.open(directory, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
   try { await handle.sync(); } finally { await handle.close(); }
 }
+async function createRestoreDirectory(directory: string, allowExisting = false) {
+  try { await fs.mkdir(directory, { mode: 0o755 }); }
+  catch (error) { if (allowExisting && (error as NodeJS.ErrnoException).code === "EEXIST") return; throw error; }
+  // mkdir's mode is filtered by the process umask. Set the canonical mode only
+  // after OUR exclusive creation succeeds; never chmod an existing directory.
+  // Use a no-follow directory handle, not path chmod that could follow a link.
+  const handle = await fs.open(directory, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+  try { await handle.chmod(0o755); } finally { await handle.close(); }
+}
 async function mkdir(root: string, directory: string) {
   const parts = path.relative(root, directory).split(path.sep).filter(Boolean); let current = root;
   await assertRestoreDirectory(root);
   for (const part of parts) {
     if (part === "..") throw Error("restore_path_outside_root"); current = path.join(current, part);
-    await fs.mkdir(current, { mode: 0o755 }).catch((error: NodeJS.ErrnoException) => { if (error.code !== "EEXIST") throw error; });
+    await createRestoreDirectory(current, true);
     await assertRestoreDirectory(root, current);
   }
 }
@@ -109,7 +118,7 @@ export async function stageRestoreTree(plan: RestoreTreePlan, files: File[], onD
   }
   const existing = await readRestoreTree(loc.root, loc.stage);
   if (existing) { if (skillSnapshotHash(existing) === plan.targetHash && !await readRestoreTree(loc.root, loc.backup)) { await durableStage(); return; } throw Error("restore_orphan_stage_requires_review"); }
-  await fs.mkdir(loc.stage, { mode: 0o755 });
+  await createRestoreDirectory(loc.stage);
   for (const file of files) {
     const target = path.join(loc.stage, file.path); await mkdir(loc.root, path.dirname(target));
     const handle = await fs.open(target, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, file.executable ? 0o755 : 0o644);

@@ -70,3 +70,32 @@ it("fsyncs every nested directory bottom-up, including a reused complete stage",
     for (let index = 1; index < paths.length; index++) expect(synced.indexOf(paths[index - 1]!)).toBeLessThan(synced.indexOf(paths[index]!));
   }
 });
+
+it("creates canonical staging under umask 0077 without widening existing source or parent directories", async () => {
+  const plan = await fixture(), invalid = await fixture(), existingParent = await fixture(), invalidStage = await fixture();
+  await fs.chmod(invalid.live, 0o700);
+  const orphanStage = path.join(invalidStage.root, "__mimouse_restores__", invalidStage.operationId, "target");
+  await fs.mkdir(orphanStage, { recursive: true }); await fs.chmod(orphanStage, 0o700);
+  const namespace = path.join(existingParent.root, "__mimouse_restores__");
+  await fs.mkdir(namespace); await fs.chmod(namespace, 0o700);
+  const deep = [...target, { path: "a/b/c/data.bin", kind: "asset" as const, content: "AP8B", encoding: "base64" as const }];
+  plan.targetHash = skillSnapshotHash(deep);
+  const previous = process.umask(0o077);
+  try {
+    await stageRestoreTree(plan, deep);
+    const operation = path.join(plan.root, "__mimouse_restores__", plan.operationId), stage = path.join(operation, "target");
+    for (const directory of [path.dirname(operation), operation, stage, path.join(stage, "a"), path.join(stage, "a/b"), path.join(stage, "a/b/c"), path.join(stage, "assets"), path.join(stage, "bin")]) {
+      expect((await fs.stat(directory)).mode & 0o7777).toBe(0o755);
+    }
+    await resolveRestoreTree(plan, "apply"); expect(skillSnapshotHash((await readRestoreTree(plan.root, plan.live))!)).toBe(plan.targetHash);
+    expect((await fs.stat(path.join(plan.live, "bin/example.sh"))).mode & 0o7777).toBe(0o755);
+    expect((await fs.stat(path.join(plan.live, "a/b/c/data.bin"))).mode & 0o7777).toBe(0o644);
+    await resolveRestoreTree(plan, "compensate"); expect(skillSnapshotHash((await readRestoreTree(plan.root, plan.live))!)).toBe(plan.beforeHash);
+    await expect(stageRestoreTree(invalid, target)).rejects.toThrow("restore_noncanonical_directory_mode");
+    expect((await fs.stat(invalid.live)).mode & 0o7777).toBe(0o700);
+    await expect(stageRestoreTree(invalidStage, target)).rejects.toThrow("restore_noncanonical_directory_mode");
+    expect((await fs.stat(orphanStage)).mode & 0o7777).toBe(0o700);
+    await stageRestoreTree(existingParent, target);
+    expect((await fs.stat(namespace)).mode & 0o7777).toBe(0o700);
+  } finally { process.umask(previous); }
+});
