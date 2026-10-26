@@ -133,3 +133,13 @@ server编译除tsc --singleThreaded之外仍执行package.json中的所有资源
 新增确认状态读取成功路径已在真实回环SSO会话验证，刷新不重放创建。source API全集60项在新空库通过；服务端定向5文件62项通过，UI定向5文件78项通过，UI类型、构建和设计门禁通过。并行资源竞争导致一次server类型SIGKILL/Vite137，串行复验均通过。详情见FEEDBACK-BROWSER-20261026.md。
 
 标准server构建（runner合同/资源/Rust/编译/复制/印章）此前完成，stamp=063df7e10e5ae4f281a9e66c20caa78fca247729，Rust7项既有警告保留；该产物尚不含随后新增GET确认状态接口，不能当作当前界面的编译入口验收。DB标准构建与迁移检查通过，未改既有迁移。最新UI1730键全量回归与新server编译入口复验安排下一冻结点，不沿用8375项历史快照。
+
+## 2026-10-26 04:15 UTC 1730键候选复验
+
+冻结应用代码bd5af65f702458d1fab44be646daacd1d6e25acc：UI743文件/75批/8394项全部通过，无失败/跳过，sourceUnchanged=true，源码摘要`dc616ecbc525ddac91a00b1d84c07c6729c3fa1df376d6eea05b508cb9fbf756`。本次覆盖新增反馈/矩阵及任务入口，不沿用旧1396/1666键结果。
+
+同一应用代码标准server构建完成，stamp=bd5af65f702458d1fab44be646daacd1d6e25acc；新的独立空库上compiled server入口API60项通过，source API60项也已通过。编译入口仍使用workspace TS依赖loader，不是npm all-dist安装验收。适配器和回环IdP协议24项重新通过；server定向5文件62项、UI定向5文件78项、shared/DB构建及server/UI完整类型/生产构建通过。Rust7项与Vite既有警告保留；资源失败与串行修复记录不删除。
+
+75个应用提交的补丁已在独立临时验证克隆重放，tree=ae812dfc2319034d430a848756359595115ebf67与原分支一致，bundle保留精确SHA，全部作者/联合署名校验通过。随后的文档提交不改变受测应用代码。该验证克隆只用于本地重放，没有创建独立Codex任务。
+
+真实供应商、Runner、上传及P4/P5等剩余范围仍按REMAINING列出，不称原计划完成。实现代码尚未推送GitHub，提交身份授权待选择；MiWork剩余恢复文件未获永久删除确认，未删除。
