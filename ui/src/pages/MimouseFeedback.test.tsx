@@ -10,6 +10,7 @@ const calls = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), session: vi.fn(),
 vi.mock("@/components/MimouseWecomPanel", () => ({ MimouseWecomPanel: ({ companyId, userId, sessionId }: { companyId: string; userId: string; sessionId: string }) => <section data-testid="wecom-panel" data-company={companyId} data-user={userId} data-session={sessionId} /> }));
 vi.mock("@/components/MimouseLangfusePanel", () => ({ MimouseLangfusePanel: ({ companyId }: { companyId: string }) => <section data-testid="langfuse-panel">{companyId}</section> }));
 vi.mock("@/api/client", () => ({ api: { get: calls.get, post: calls.post } }));
+vi.mock("@/api/private-feedback", () => ({ privateFeedbackGet: (...args: unknown[]) => calls.get(...args) }));
 vi.mock("@/api/auth", () => ({ authApi: { getSession: calls.session } }));
 vi.mock("@/context/CompanyContext", () => ({ useCompany: () => ({ selectedCompanyId: calls.companyId }) }));
 vi.mock("@/context/BreadcrumbContext", () => ({ useBreadcrumbs: () => ({ setBreadcrumbs: calls.breadcrumbs }) }));
@@ -128,7 +129,51 @@ it("removes private WeCom session identity during authentication refetch without
   calls.session.mockResolvedValue({ user: { id: "owner-a" }, session: { id: "session-a", userId: "owner-a" } }); await mount();
   let finish!: (value: unknown) => void; calls.session.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
   let refreshing!: Promise<void>; await act(async () => { refreshing = client.refetchQueries({ queryKey: queryKeys.auth.session }); }); await flush();
-  expect(host.querySelector('[data-testid="wecom-panel"]')!.getAttribute("data-session")).toBe("");
+  expect(host.querySelector('[data-testid="wecom-panel"]')).toBeNull();
   await act(async () => { finish({ user: { id: "owner-a" }, session: { id: "session-new", userId: "owner-a" } }); await refreshing; }); await flush();
   expect(host.querySelector('[data-testid="wecom-panel"]')!.getAttribute("data-session")).toBe("session-new"); expect(calls.post).not.toHaveBeenCalled();
+});
+
+it("does not reuse warm feedback after same-user session rotation", async () => {
+  client.setDefaultOptions({ queries: { retry: false, staleTime: 30_000, gcTime: 300_000 } });
+  calls.session.mockResolvedValue({ user: { id: "owner-a" }, session: { id: "old", userId: "owner-a" } });
+  await mount(); expect(host.textContent).toContain(source.title);
+  let finish!: (value: unknown) => void;
+  calls.get.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  await act(async () => { client.setQueryData(queryKeys.auth.session, { user: { id: "owner-a" }, session: { id: "new", userId: "owner-a" } }); }); await flush();
+  expect(host.textContent).not.toContain(source.title);
+  await act(async () => finish({ items: [], nextBeforeId: null })); await flush();
+  expect(host.textContent).not.toContain(source.title);
+  expect(client.getQueryData(["mimouse-feedback", "company-a", "owner-a", "new", "list", undefined])).toEqual({ items: [], nextBeforeId: null });
+});
+it("discards pending old-session list after same-user rotation", async () => {
+  let finish!: (value: unknown) => void;
+  calls.get.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  calls.session.mockResolvedValue({ user: { id: "owner-a" }, session: { id: "old", userId: "owner-a" } });
+  await mount(); calls.get.mockResolvedValue({ items: [], nextBeforeId: null });
+  await act(async () => { client.setQueryData(queryKeys.auth.session, { user: { id: "owner-a" }, session: { id: "new", userId: "owner-a" } }); }); await flush();
+  expect(calls.get).toHaveBeenCalledTimes(2);
+  await act(async () => finish({ items: [source], nextBeforeId: null })); await flush();
+  expect(host.textContent).not.toContain(source.title);
+});
+it.each([401, 403])("hides cached promotion receipt after %s", async status => {
+  recorded = true; await mount(); await openReview();
+  expect(host.querySelector('a[href="/issues/created-task"]')).not.toBeNull();
+  const previous = calls.get.getMockImplementation()!;
+  calls.get.mockImplementation((url: string) => url.endsWith("/promotion") ? Promise.reject(Object.assign(new Error("denied"), { status })) : previous(url));
+  await act(async () => { await client.refetchQueries({ predicate: query => query.queryKey.at(-1) === "promotion" }); }); await flush();
+  expect(host.querySelector('a[href="/issues/created-task"]')).toBeNull(); expect(host.textContent).not.toContain(receipt.requestId);
+  expect(host.querySelectorAll("form")).toHaveLength(1);
+});
+it("clears a locally returned promotion receipt when authorization is subsequently denied", async () => {
+  await mount(); const form = await openReview(); await completeReview(form); await submit(form);
+  expect(host.querySelector('a[href="/issues/created-task"]')).not.toBeNull();
+  const previous = calls.get.getMockImplementation()!;
+  calls.get.mockImplementation((url: string) => url.endsWith("/promotion") ? Promise.reject(Object.assign(new Error("denied"), { status: 403 })) : previous(url));
+  await act(async () => { await client.refetchQueries({ predicate: query => query.queryKey.at(-1) === "promotion" }); }); await flush();
+  expect(host.querySelector('a[href="/issues/created-task"]')).toBeNull();
+  calls.get.mockImplementation((url: string) => url.endsWith("/promotion") ? Promise.resolve({ recorded: false, receipt: null }) : previous(url));
+  await act(async () => { await client.refetchQueries({ predicate: query => query.queryKey.at(-1) === "promotion" }); }); await flush();
+  expect(host.querySelector('a[href="/issues/created-task"]')).toBeNull();
+  expect(host.textContent).not.toContain(receipt.requestId);
 });

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { FeedbackImportInput, FeedbackInboxItem, FeedbackInboxPage, FeedbackPromotionInput, FeedbackPromotionReceipt } from "@paperclipai/shared";
 import { api } from "@/api/client";
+import { privateFeedbackGet } from "@/api/private-feedback";
 import { authApi } from "@/api/auth";
 import { queryKeys } from "@/lib/queryKeys";
 import { useCompany } from "@/context/CompanyContext";
@@ -22,7 +23,7 @@ export function MimouseFeedback() {
   const session = useQuery({ queryKey: queryKeys.auth.session, queryFn: () => authApi.getSession(), retry: false });
   useEffect(() => { setBreadcrumbs([{ label: t("feedbackUi.pageTitle") }]); }, [setBreadcrumbs, t]);
   if (!selectedCompanyId) return <p>{t("feedbackUi.chooseCompany")}</p>;
-  if (session.isPending) return <p>{t("common.loading")}</p>;
+  if (session.isPending || session.isFetching) return <p>{t("common.loading")}</p>;
   if (session.isError) return <p role="alert">{t("feedbackUi.readError")}</p>;
   const userId = session.data?.user?.id ?? session.data?.session?.userId ?? "local-board";
   const sessionId = session.data?.session?.id ?? "";
@@ -31,11 +32,11 @@ export function MimouseFeedback() {
 function FeedbackCompany({ companyId, userId, sessionId, privateSessionReady }: { companyId: string; userId: string; sessionId: string; privateSessionReady: boolean }) {
   const { t } = useTranslation(), client = useQueryClient(), active = useActive();
   const [beforeId, setBeforeId] = useState<string>(), [selectedId, setSelectedId] = useState<string | null>(null), [form, setForm] = useState(blankImport), [notice, setNotice] = useState("");
-  const root = `/companies/${companyId}/feedback-inbox`, key = ["mimouse-feedback", companyId, userId];
-  const query = useQuery({ queryKey: [...key, "list", beforeId], queryFn: () => api.get<FeedbackInboxPage>(`${root}${beforeId ? `?beforeId=${encodeURIComponent(beforeId)}` : ""}`), retry: false });
+  const root = `/companies/${companyId}/feedback-inbox`, key = ["mimouse-feedback", companyId, userId, sessionId];
+  const query = useQuery({ queryKey: [...key, "list", beforeId], gcTime: 0, staleTime: 0, queryFn: ({ signal }) => privateFeedbackGet<FeedbackInboxPage>(`${root}${beforeId ? `?beforeId=${encodeURIComponent(beforeId)}` : ""}`, signal), retry: false });
   const mutation = useMutation({ mutationFn: (payload: FeedbackImportInput) => api.post<{ item: FeedbackInboxItem; duplicate: boolean }>(root, payload),
     onSuccess: result => { void client.invalidateQueries({ queryKey: key }); if (!active.current) return; setSelectedId(result.item.id); setNotice(result.duplicate ? "duplicate" : "imported"); } });
-  if (query.isPending) return <p>{t("common.loading")}</p>;
+  if (query.isPending || query.isFetching) return <p>{t("common.loading")}</p>;
   if (query.isError) return <p role="alert">{t("feedbackUi.readError")}</p>;
   const fields = ["sourceInstance", "externalId", "title", "product", "softwareVersion", "commitSha", "traceId", "occurredAt"] as const;
   const maxLengths = { sourceInstance: 160, externalId: 160, title: 240, product: 120, softwareVersion: 120, commitSha: 40, traceId: 160, occurredAt: 40 };
@@ -60,14 +61,14 @@ function FeedbackCompany({ companyId, userId, sessionId, privateSessionReady }: 
       <div className="space-y-2">{query.data.items.map(item => <Button key={item.id} variant="outline" className="h-auto w-full justify-start whitespace-normal text-left" onClick={() => setSelectedId(item.id)}>{item.title} · {item.product} · {item.softwareVersion}</Button>)}</div>
       <div className="flex gap-2">{beforeId && <Button variant="outline" onClick={() => setBeforeId(undefined)}>{t("feedbackUi.latest")}</Button>}{query.data.nextBeforeId && <Button variant="outline" onClick={() => setBeforeId(query.data.nextBeforeId!)}>{t("feedbackUi.older")}</Button>}</div>
     </section>
-    {selectedId && <FeedbackDetail key={selectedId} companyId={companyId} userId={userId} id={selectedId} onSelect={setSelectedId} />}
+    {selectedId && <FeedbackDetail key={selectedId} companyId={companyId} userId={userId} sessionId={sessionId} id={selectedId} onSelect={setSelectedId} />}
   </div>;
 }
-function FeedbackDetail({ companyId, userId, id, onSelect }: { companyId: string; userId: string; id: string; onSelect: (id: string) => void }) {
-  const { t } = useTranslation(), root = `/companies/${companyId}/feedback-inbox/${id}`, key = ["mimouse-feedback", companyId, userId, id];
-  const source = useQuery({ queryKey: [...key, "item"], queryFn: () => api.get<FeedbackInboxItem>(root), retry: false });
-  const candidates = useQuery({ queryKey: [...key, "candidates"], queryFn: () => api.get<{ items: FeedbackInboxItem[]; hasMore: boolean; autoMerged: false }>(`${root}/candidates`), retry: false });
-  if (source.isPending) return <p>{t("common.loading")}</p>;
+function FeedbackDetail({ companyId, userId, sessionId, id, onSelect }: { companyId: string; userId: string; sessionId: string; id: string; onSelect: (id: string) => void }) {
+  const { t } = useTranslation(), root = `/companies/${companyId}/feedback-inbox/${id}`, key = ["mimouse-feedback", companyId, userId, sessionId, id];
+  const source = useQuery({ queryKey: [...key, "item"], gcTime: 0, staleTime: 0, queryFn: ({ signal }) => privateFeedbackGet<FeedbackInboxItem>(root, signal), retry: false });
+  const candidates = useQuery({ queryKey: [...key, "candidates"], gcTime: 0, staleTime: 0, queryFn: ({ signal }) => privateFeedbackGet<{ items: FeedbackInboxItem[]; hasMore: boolean; autoMerged: false }>(`${root}/candidates`, signal), retry: false });
+  if (source.isPending || source.isFetching) return <p>{t("common.loading")}</p>;
   if (source.isError) return <p role="alert">{t("feedbackUi.readError")}</p>;
   return <section className="space-y-4 rounded-lg border border-border p-4">
     <h2 className="font-medium">{source.data.title}</h2><p className="break-all font-mono text-xs">{source.data.id}</p>
@@ -75,26 +76,27 @@ function FeedbackDetail({ companyId, userId, id, onSelect }: { companyId: string
     {source.data.sourceUrl && <p className="break-all text-xs">{t("feedbackUi.sourceUrl")}: {source.data.sourceUrl}</p>}
     <pre className="whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-sm">{source.data.text}</pre>
     <h3 className="font-medium">{t("feedbackUi.candidates")}</h3><p className="text-xs text-muted-foreground">{t("feedbackUi.candidateBoundary")}</p>
-    {candidates.isPending ? <p>{t("common.loading")}</p> : candidates.isError ? <p role="alert">{t("feedbackUi.readError")}</p> : candidates.data.items.length ? candidates.data.items.map(item => <Button key={item.id} variant="outline" className="h-auto whitespace-normal" onClick={() => onSelect(item.id)}>{item.title} · {item.sourceInstance}</Button>) : <p>{t("feedbackUi.noCandidates")}</p>}
-    {candidates.data?.hasMore && <p>{t("feedbackUi.moreCandidates")}</p>}
-    <MimouseFeedbackEvidence key={id} companyId={companyId} userId={userId} id={id} onSelect={onSelect} />
-    <FeedbackReview companyId={companyId} userId={userId} item={source.data} />
+    {candidates.isPending || candidates.isFetching ? <p>{t("common.loading")}</p> : candidates.isError ? <p role="alert">{t("feedbackUi.readError")}</p> : candidates.data.items.length ? candidates.data.items.map(item => <Button key={item.id} variant="outline" className="h-auto whitespace-normal" onClick={() => onSelect(item.id)}>{item.title} · {item.sourceInstance}</Button>) : <p>{t("feedbackUi.noCandidates")}</p>}
+    {!candidates.isError && !candidates.isFetching && candidates.data?.hasMore && <p>{t("feedbackUi.moreCandidates")}</p>}
+    <MimouseFeedbackEvidence key={id} companyId={companyId} userId={userId} sessionId={sessionId} id={id} onSelect={onSelect} />
+    <FeedbackReview companyId={companyId} userId={userId} sessionId={sessionId} item={source.data} />
   </section>;
 }
-function FeedbackReview({ companyId, userId, item }: { companyId: string; userId: string; item: FeedbackInboxItem }) {
+function FeedbackReview({ companyId, userId, sessionId, item }: { companyId: string; userId: string; sessionId: string; item: FeedbackInboxItem }) {
   const { t } = useTranslation(), active = useActive(), client = useQueryClient();
-  const root = `/companies/${companyId}/feedback-inbox/${item.id}`, key = ["mimouse-feedback", companyId, userId, item.id, "promotion"];
-  const status = useQuery({ queryKey: key, queryFn: () => api.get<PromotionStatus>(`${root}/promotion`), enabled: userId !== "local-board", retry: false });
+  const root = `/companies/${companyId}/feedback-inbox/${item.id}`, key = ["mimouse-feedback", companyId, userId, sessionId, item.id, "promotion"];
+  const status = useQuery({ queryKey: key, gcTime: 0, staleTime: 0, queryFn: ({ signal }) => privateFeedbackGet<PromotionStatus>(`${root}/promotion`, signal), enabled: userId !== "local-board", retry: false });
   const [draft, setDraft] = useState({ title: item.title, reproduction: "", expectedBehavior: "", fixProposal: "", acceptanceCriteria: "" });
   const [confirmed, setConfirmed] = useState(false), [attempt, setAttempt] = useState<FeedbackPromotionInput | null>(null), [receipt, setReceipt] = useState<FeedbackPromotionReceipt | null>(null);
   const mutation = useMutation({ mutationFn: (payload: FeedbackPromotionInput) => api.post<FeedbackPromotionReceipt>(`${root}/promote`, payload),
     onSuccess: result => { void client.invalidateQueries({ queryKey: key }); if (active.current) setReceipt(result); },
     onError: () => { void client.invalidateQueries({ queryKey: key }); } });
+  useEffect(() => { if (status.isFetching || status.isError) setConfirmed(false); if (status.isError) setReceipt(null); }, [status.isFetching, status.isError]);
   if (userId === "local-board") return <p>{t("feedbackUi.sessionRequired")}</p>;
+  if (status.isError) return <p role="alert">{t("feedbackUi.readError")}</p>;
+  if (status.isPending || status.isFetching) return <p>{t("common.loading")}</p>;
   const recorded = receipt ?? status.data?.receipt;
   if (recorded) return <div className="space-y-2"><p role="status">{t("feedbackUi.confirmed")}</p><Link className="text-sm underline" to={`/issues/${recorded.issueId}`}>{t("feedbackUi.openTask")}</Link><p className="break-all font-mono text-xs">{recorded.requestId}</p></div>;
-  if (status.isPending) return <p>{t("common.loading")}</p>;
-  if (status.isError) return <p role="alert">{t("feedbackUi.readError")}</p>;
   if (status.data.recorded) return <p>{t("feedbackUi.alreadyConfirmed")}</p>;
   return <form className="space-y-3 border-t border-border pt-4" onSubmit={event => {
     event.preventDefault(); if (mutation.isPending) return;
