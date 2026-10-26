@@ -48,3 +48,20 @@ it("uses only the privacy-filtered research routine selector", async () => {
   await mount(); expect(calls.get).toHaveBeenCalledWith("/companies/company/research-routines/available");
   expect(calls.list).not.toHaveBeenCalled(); expect(host.textContent).toContain("configure an open project or parent");
 });
+it("subscribes to language changes after mount and translates status without changing IDs", async () => {
+  await mount(); expect(host.textContent).toContain("Scheduled research");
+  await act(async () => { await i18n.changeLanguage("zh-CN"); }); await flush();
+  expect(host.textContent).toContain("定期调研"); expect(host.textContent).not.toContain("Create paused research routine");
+  const option = host.querySelector('option[value="routine"]'); expect(option).not.toBeNull();
+  expect(option?.textContent).toContain(i18n.t("statuses.paused")); expect(option?.textContent).not.toContain("paused");
+  expect(calls.create).not.toHaveBeenCalled(); expect(calls.put).not.toHaveBeenCalled();
+});
+it("does not create a second routine while the first creation is pending", async () => {
+  let finish!: (value: { id: string; status: string }) => void;
+  calls.create.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+  await mount(); await setProduct("MiWork"); await click("Create paused research routine"); await click("Create paused research routine");
+  expect(calls.create).toHaveBeenCalledTimes(1); expect(calls.put).not.toHaveBeenCalled();
+  await act(async () => finish({ id: "new-routine", status: "paused" })); await flush();
+  expect(calls.put).toHaveBeenCalledTimes(1);
+  expect(calls.put).toHaveBeenCalledWith("/companies/company/research-routines/new-routine", { product: "MiWork", enabled: false });
+});

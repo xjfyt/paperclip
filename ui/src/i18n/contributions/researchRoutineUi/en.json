@@ -1,0 +1,23 @@
+{
+  "title": "Scheduled research",
+  "boundary": "Uses existing routine schedules, timezones and assignment. Reports remain quarantined; no development is dispatched. Only company-open source tasks, projects and ancestors are supported. Creating leaves the routine paused and report acceptance disabled; configure an open project or parent before enabling reports.",
+  "product": "Product",
+  "routine": "Existing routine",
+  "bind": "Bind / update",
+  "enabled": "Accept reports",
+  "create": "Create paused research routine",
+  "error": "Could not save. A newly created routine may remain paused; check the routine list before retrying.",
+  "loadError": "Could not read routine settings.",
+  "configure": "Configure schedule and assignee",
+  "contract": "Report protocol — add to the routine description before activating",
+  "report": "Agent report · source claims not independently verified",
+  "manual": "Manual import · source claims not independently verified",
+  "provenance": "Read-only execution provenance",
+  "task": "Source task",
+  "run": "Execution run",
+  "received": "Received",
+  "gap": "Gap",
+  "suggestion": "Suggestion",
+  "accepting": "Accepting reports",
+  "notAccepting": "Report acceptance disabled"
+}

@@ -1,0 +1,23 @@
+{
+  "title": "Investigación programada",
+  "boundary": "Reutiliza horarios, zonas horarias y asignaciones de rutinas. Los informes quedan en cuarentena, sin desarrollo automático. Solo se admiten tareas, proyectos y ancestros abiertos a la empresa. Las nuevas rutinas quedan pausadas y no aceptan informes hasta configurar un proyecto o tarea superior abiertos.",
+  "product": "Producto",
+  "routine": "Rutina existente",
+  "bind": "Vincular / actualizar",
+  "enabled": "Aceptar informes",
+  "create": "Crear rutina de investigación pausada",
+  "error": "No se pudo guardar. La rutina nueva puede estar pausada; revise la lista antes de reintentar.",
+  "loadError": "No se pudo leer la configuración.",
+  "configure": "Configurar horario y responsable",
+  "contract": "Protocolo del informe — añadir a la descripción antes de activar",
+  "report": "Informe de agente · fuentes no verificadas independientemente",
+  "manual": "Importación manual · fuentes no verificadas independientemente",
+  "provenance": "Procedencia de ejecución de solo lectura",
+  "task": "Tarea de origen",
+  "run": "Ejecución",
+  "received": "Recibido",
+  "gap": "Brecha",
+  "suggestion": "Sugerencia",
+  "accepting": "Aceptando informes",
+  "notAccepting": "Recepción de informes desactivada"
+}

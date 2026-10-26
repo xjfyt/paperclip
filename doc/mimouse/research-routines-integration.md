@@ -8,7 +8,7 @@
 2. server app 引入 `mimouseResearchRoutineRoutes` 并在既有认证后的 `/api` router 区域挂载，和 `mimouseResearchRoutes` 同级。
 3. `server/src/middleware/http-log-policy.ts` 的私有公司集成路径 regex 增加 `research-routines`，确保验证错误/请求正文不进入普通 HTTP 日志。
 4. 新共享契约使用既有 wildcard subpath `@paperclipai/shared/mimouse-research-routines`，无需根 export。DB 服务同样使用 wildcard schema subpath；必须导出表以纳入 Drizzle migration schema。
-5. 调研页面已内嵌四语组件，不新增顶级导航或页面；旧手动路径仍在。四语文案在独立组件 copy.ts，未修改生成 locale。
+5. 调研页面已内嵌四语组件，不新增顶级导航或页面；旧手动路径仍在。四语文案在独立 researchRoutineUi contribution 域，组件使用 useTranslation/t；未修改生成 locale。集成后先运行 `node scripts/compose-mimouse-locales.mjs`，再执行 locale 校验和 UI 测试。
 
 ## 新表参考 DDL（迁移生成时核对，不手工重复应用）
 
@@ -54,3 +54,11 @@ CREATE TABLE mimouse_research_routine_bindings (
 - 启用报告必须先配置公开项目或父任务；新建保持 disabled，不改变任何已有隐私设置。
 - DB fixture 扩展了同公司其他所有者的私有父任务、私有项目、继承边界和真实 issueService 创建默认值；仍待父任务执行，未启动 DB。
 - 安全补丁实际验证：4 个纯测试文件 / 58 项通过（含原 44 项和 14 项公开边界测试），512MB、单 worker，5.51 秒。日志 `/workspace/scratch/f6c354020279/research-routines-privacy-pure.log`。UI/DB/全量检查仍未执行。
+
+
+## i18n 接入补丁
+
+- 删除独立 copy.ts 字典；21 个展示键进入 `ui/src/i18n/contributions/researchRoutineUi/{en,zh-CN,es,ja}.json`，由标准 composition/key/placeholder 校验覆盖。
+- 两个组件通过 useTranslation/t 订阅实时语言变化；Routine 状态展示复用 statuses/propertyLabels，状态值、协议路径、ID、JSON 来源声明保持原值。
+- 补充挂载后切语言与重复点击 pending-create 测试；仍由父任务运行。新建仍 paused、报告 disabled，部分创建失败提示和不自动重试不变。
+- 此补丁只执行 diff 空白检查，未运行 UI/DB/编译测试，未写入或提交生成 locale。
