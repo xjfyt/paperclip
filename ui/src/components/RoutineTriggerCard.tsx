@@ -1,3 +1,4 @@
+import { useTranslation, t, formatDate } from "../i18n";
 import { useEffect, useState } from "react";
 import { Clock3, RefreshCw, Save, Trash2, Webhook, Zap } from "lucide-react";
 import type { RoutineTrigger } from "@paperclipai/shared";
@@ -44,6 +45,7 @@ export function RoutineTriggerCard({
   onDelete: (id: string) => void;
   disabled?: boolean;
 }) {
+  useTranslation();
   const [draft, setDraft] = useState({
     label: trigger.label ?? "",
     cronExpression: trigger.cronExpression ?? "",
@@ -65,12 +67,12 @@ export function RoutineTriggerCard({
   const humanCron = trigger.kind === "schedule" ? describeCron(draft.cronExpression) : null;
   const lastResultFailed = /fail|error/i.test(trigger.lastResult ?? "");
   const lastResultLabel = trigger.lastResult?.startsWith("Created execution issue ")
-    ? "Task created"
+    ? t("routineScheduleUi.taskCreated")
     : trigger.lastResult;
 
   return (
     <form
-      aria-label={`Trigger: ${trigger.label ?? trigger.kind}`}
+      aria-label={t("routineScheduleUi.triggerLabel", { name: trigger.label ?? t(`routineScheduleUi.kind_${trigger.kind}`) })}
       className="space-y-4 rounded-lg border border-border p-4"
       onSubmit={(event) => event.preventDefault()}
     >
@@ -78,7 +80,7 @@ export function RoutineTriggerCard({
         <div className="min-w-0 space-y-1">
           <div className="flex items-center gap-2 text-sm font-medium">
             <KindIcon className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate">{trigger.label ?? trigger.kind}</span>
+            <span className="truncate">{trigger.label ?? t(`routineScheduleUi.kind_${trigger.kind}`)}</span>
           </div>
           {humanCron ? (
             <p id={`cron-readable-${trigger.id}`} className="text-xs text-muted-foreground">
@@ -94,7 +96,7 @@ export function RoutineTriggerCard({
           ) : null}
           <span className="text-xs text-muted-foreground">
             {trigger.kind === "schedule" && trigger.nextRunAt
-              ? `Next: ${new Date(trigger.nextRunAt).toLocaleString()}`
+              ? t("routineScheduleUi.next", { time: formatDate(new Date(trigger.nextRunAt), { dateStyle: "medium", timeStyle: "short" }) })
               : trigger.kind === "webhook"
                 ? "Webhook"
                 : "API"}
@@ -104,17 +106,17 @@ export function RoutineTriggerCard({
 
       {trigger.kind === "webhook" && trigger.webhookUrl && (
         <div className="space-y-1.5">
-          <Label htmlFor={`webhook-url-${trigger.id}`} className="text-xs">Webhook URL</Label>
+          <Label htmlFor={`webhook-url-${trigger.id}`} className="text-xs">{t("routineScheduleUi.webhookUrl")}</Label>
           <Input id={`webhook-url-${trigger.id}`} value={trigger.webhookUrl} readOnly onFocus={(event) => event.target.select()} />
           <p className="text-xs text-muted-foreground">
-            Send a POST request with Content-Type: application/json. Keep this URL private when signing is disabled.
+            {t("routineScheduleUi.webhookHelp")}
           </p>
         </div>
       )}
 
       <div className="grid gap-3 md:grid-cols-2">
         <div className="space-y-1.5">
-          <Label className="text-xs">Label</Label>
+          <Label className="text-xs">{t("stabilizationUi.label")}</Label>
           <Input
             value={draft.label}
             disabled={disabled}
@@ -123,7 +125,7 @@ export function RoutineTriggerCard({
         </div>
         {trigger.kind === "schedule" && (
           <div className="space-y-1.5 md:col-span-2">
-            <Label className="text-xs">Schedule</Label>
+            <Label className="text-xs">{t("routineScheduleUi.schedule")}</Label>
             <ScheduleEditor
               value={draft.cronExpression}
               onChange={(cronExpression) =>
@@ -135,7 +137,7 @@ export function RoutineTriggerCard({
         {trigger.kind === "webhook" && (
           <>
             <div className="space-y-1.5">
-              <Label className="text-xs">Signing mode</Label>
+              <Label className="text-xs">{t("routineScheduleUi.signing")}</Label>
               <Select
                 value={draft.signingMode}
                 onValueChange={(signingMode) =>
@@ -149,7 +151,7 @@ export function RoutineTriggerCard({
                 <SelectContent>
                   {signingModes.map((mode) => (
                     <SelectItem key={mode} value={mode}>
-                      {mode}
+                      {t(`routineScheduleUi.signing_${mode}`)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -157,7 +159,7 @@ export function RoutineTriggerCard({
             </div>
             {!SIGNING_MODES_WITHOUT_REPLAY_WINDOW.has(draft.signingMode) && (
               <div className="space-y-1.5">
-                <Label className="text-xs">Replay window (seconds)</Label>
+                <Label className="text-xs">{t("routineScheduleUi.replay")}</Label>
                 <Input
                   value={draft.replayWindowSec}
                   disabled={disabled}
@@ -180,12 +182,12 @@ export function RoutineTriggerCard({
             onClick={() => onDelete(trigger.id)}
           >
             <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-            Delete
+            {t("commonUi.delete")}
           </Button>
           {trigger.kind === "webhook" && (
             <Button variant="outline" size="sm" onClick={() => onRotate(trigger.id)}>
               <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-              Rotate secret
+              {t("routineScheduleUi.rotate")}
             </Button>
           )}
           <Button
@@ -196,7 +198,7 @@ export function RoutineTriggerCard({
             }
           >
             <Save className="mr-1.5 h-3.5 w-3.5" />
-            Save trigger
+            {t("routineScheduleUi.saveTrigger")}
           </Button>
         </div>
       )}

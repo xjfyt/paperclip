@@ -1,11 +1,10 @@
+import { t, i18n, formatDate } from "../i18n";
 /**
- * Tiny best-effort cron → plain-English helper for the routine Triggers section.
+ * Tiny best-effort cron → localized display helper for the routine Triggers section.
  * Not a full cron parser: it covers the common shapes Paperclip schedule triggers
  * produce (every N minutes/hours, daily at HH:MM, weekday/weekend, day-of-week).
  * Falls back to the raw expression when it can't confidently describe it.
  */
-
-const DOW_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 function pad2(value: number): string {
   return value.toString().padStart(2, "0");
@@ -19,19 +18,19 @@ function describeTime(minute: string, hour: string): string | null {
   return `${pad2(h)}:${pad2(m)}`;
 }
 
-function describeDayOfWeek(dow: string): string | null {
-  if (dow === "*" || dow === "?") return "every day";
-  if (dow === "1-5") return "every weekday";
-  if (dow === "0,6" || dow === "6,0" || dow === "0,7") return "every weekend";
+function describeDayOfWeek(dow: string, time: string): string | null {
+  if (dow === "*" || dow === "?") return t("routineScheduleUi.daily", { time });
+  if (dow === "1-5") return t("routineScheduleUi.weekdayAt", { time });
+  if (dow === "0,6" || dow === "6,0" || dow === "0,7") return t("routineScheduleUi.weekendAt", { time });
   const parts = dow.split(",").map((part) => part.trim());
   const names = parts.map((part) => {
     const n = Number(part);
-    if (!Number.isInteger(n)) return null;
-    return DOW_NAMES[n % 7];
+    if (!Number.isInteger(n) || n < 0 || n > 7) return null;
+    return formatDate(new Date(Date.UTC(2026, 0, 4 + n % 7)), { weekday: "long", timeZone: "UTC" });
   });
   if (names.some((name) => name === null)) return null;
-  if (names.length === 1) return `every ${names[0]}`;
-  return `every ${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  const days = new Intl.ListFormat(i18n.language, { style: "long", type: "conjunction" }).format(names as string[]);
+  return t("routineScheduleUi.weeklyAt", { days, time });
 }
 
 export function describeCron(expression: string | null | undefined): string | null {
@@ -45,18 +44,18 @@ export function describeCron(expression: string | null | undefined): string | nu
   // Every N minutes
   const everyMinutes = minute.match(/^\*\/(\d+)$/);
   if (everyMinutes && hour === "*" && dom === "*" && month === "*" && dow === "*") {
-    return `Every ${everyMinutes[1]} minutes`;
+    return t("routineScheduleUi.everyMinutes", { amount: everyMinutes[1] });
   }
 
   // Every N hours, on the minute
   const everyHours = hour.match(/^\*\/(\d+)$/);
   if (everyHours && /^\d+$/.test(minute) && dom === "*" && month === "*" && dow === "*") {
-    return `Every ${everyHours[1]} hours at :${pad2(Number(minute))}`;
+    return t("routineScheduleUi.everyHours", { amount: everyHours[1], minute: pad2(Number(minute)) });
   }
 
   // Hourly
   if (/^\d+$/.test(minute) && hour === "*" && dom === "*" && month === "*" && dow === "*") {
-    return `Every hour at :${pad2(Number(minute))}`;
+    return t("routineScheduleUi.hourly", { minute: pad2(Number(minute)) });
   }
 
   // Daily / weekly at a fixed time
@@ -64,14 +63,14 @@ export function describeCron(expression: string | null | undefined): string | nu
     const time = describeTime(minute, hour);
     if (!time) return null;
     if (dom === "*" && (dow === "*" || dow === "?")) {
-      return `Every day at ${time}`;
+      return t("routineScheduleUi.daily", { time });
     }
     if (dom === "*") {
-      const dowText = describeDayOfWeek(dow);
-      if (dowText) return `${dowText[0].toUpperCase()}${dowText.slice(1)} at ${time}`;
+      const dowText = describeDayOfWeek(dow, time);
+      if (dowText) return dowText;
     }
     if (/^\d+$/.test(dom) && (dow === "*" || dow === "?")) {
-      return `Day ${dom} of every month at ${time}`;
+      return t("routineScheduleUi.monthDay", { day: dom, time });
     }
   }
 
