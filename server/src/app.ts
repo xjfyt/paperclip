@@ -1,5 +1,6 @@
 import { mimouseAuthRevocationRoutes } from "./routes/mimouse-auth-revocations.js";
 import { mimouseSetupAccessRoutes } from "./routes/mimouse-access.js";
+import { mimouseFeedbackRoutes } from "./routes/mimouse-feedback.js";
 import { mimouseCodingRoutes } from "./routes/mimouse-coding.js";
 import { workbuddyRoutes } from "./routes/workbuddy.js";
 import { mimouseNotificationRoutes } from "./routes/mimouse-notifications.js";
@@ -898,6 +899,7 @@ export async function createApp(
   api.use(mimouseNotificationRoutes(db));
   api.use(workbuddyRoutes(db));
   api.use(mimouseCodingRoutes(db));
+  api.use(mimouseFeedbackRoutes(db));
   api.use(instanceSettingsRoutes(db, workerManager, opts.prepareIdleDatabaseBackup));
   if (opts.databaseBackupService) {
     api.use(instanceDatabaseBackupRoutes(opts.databaseBackupService));

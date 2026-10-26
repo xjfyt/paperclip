@@ -63,3 +63,14 @@
 GET `/companies/:companyId/setup-capabilities`：当前登录board的只读能力提示，现返回canCreateAgents。经现有公司边界和实际authorization service判定，响应private/no-store；不通过role名称猜测，不能作为后续修改请求的授权凭证。Dashboard在未知、刷新中、错误或明确拒绝时不自动打开Agent创建引导。
 
 - `GET/POST /api/admin/users/:userId/auth-revocations`：实例管理员浏览器session专用，尊重instance.access托管限制。POST要求requestId、confirmUserId、reason，原子失效目标既有会话并撤销个人Board keys；同requestId只返回原回执，输入变化409。返回截止时间及数量，不返回秘密。此接口不是账号封禁，不修改成员关系、IdP、MCP/连接器凭据或运行任务；详见casdoor.md停用顺序。
+
+## 公司反馈候选入站（人工导入底座）
+
+- POST `/api/companies/:companyId/feedback-inbox`：公司管理员导入一条文本证据；body使用共享feedbackImportSchema。sourceKind为manual/application_log/langfuse/wecom_smart_bot，sourceInstance+externalId标识原始事件，title/text/product/softwareVersion/commitSha/traceId/occurredAt描述证据。sourceKind只是导入来源声明，所有记录固定manual_import，绝不据此声称真实连接器已连接。
+- GET 同路径：limit 1–100（默认50）、可选beforeId，返回items和nextBeforeId；分页游标同样检查公司归属。
+- GET `/:id`：脱敏候选详情；无效/其他公司ID404。
+- GET `/:id/candidates`：同公司、规范化产品/版本/标题的最多20个候选与hasMore；autoMerged固定false，不修改原始事件、合并事实或执行模型。
+
+幂等身份为company/sourceKind/sourceInstance/externalId；原始导入的内容摘要仅内部保存，重试相同内容返回原记录，改变内容409。并发由唯一索引仲裁，不能覆盖先前证据。只保存经过确定性脱敏的文本；已知凭据/邮箱/电话和URL用户信息、query/fragment被去除。规则不能保证检测任意形式秘密；导入方仍须预先审核，不在sourceInstance/externalId/traceId等标识字段放凭据或客户隐私。导入API及错误日志整段隐去请求体。
+
+当前没有外部URL抓取、附件下载、客户回复、Langfuse/企微授权、自动建任务或Agent派发。外部文本是数据，绝不形成平台权限。该接口与上游Paperclip产品反馈导出无调用关系，不向其反馈站发送公司客户内容。后续人审转任务与UI、可信连接器另行接入。

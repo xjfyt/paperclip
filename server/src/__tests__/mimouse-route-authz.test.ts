@@ -2,6 +2,7 @@ import express from "express";
 import request from "supertest";
 import { describe, expect, it, vi } from "vitest";
 import type { Db } from "@paperclipai/db";
+import { mimouseFeedbackRoutes } from "../routes/mimouse-feedback.js";
 import { mimouseNotificationRoutes } from "../routes/mimouse-notifications.js";
 import { mimouseCodingRoutes } from "../routes/mimouse-coding.js";
 import { workbuddyRoutes } from "../routes/workbuddy.js";
@@ -12,20 +13,20 @@ function app(actor: Express.Request["actor"]) {
   const select = vi.fn(() => { throw Error("must deny before database access"); });
   const db = { select } as unknown as Db; const server = express(); server.use(express.json());
   server.use((req, _res, next) => { req.actor = actor; next(); });
-  server.use(mimouseNotificationRoutes(db), mimouseCodingRoutes(db), workbuddyRoutes(db));
+  server.use(mimouseFeedbackRoutes(db), mimouseNotificationRoutes(db), mimouseCodingRoutes(db), workbuddyRoutes(db));
   server.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => { res.status(error instanceof HttpError ? error.status : 500).json({ error: "denied" }); });
   return { server, select };
 }
 describe("new integration route authorization boundary", () => {
-  it.each(["notifications", "coding", "coding/33333333-3333-4333-8333-333333333333/build-matrix", "integrations/workbuddy"])("denies other-company %s before reading resources", async route => {
+  it.each(["feedback-inbox", "notifications", "coding", "coding/33333333-3333-4333-8333-333333333333/build-matrix", "integrations/workbuddy"])("denies other-company %s before reading resources", async route => {
     const { server, select } = app({ type: "board", source: "session", userId: "owner", companyIds: ["other"], memberships: [{ companyId: "other", membershipRole: "owner", status: "active" }] });
     expect((await request(server).get(`/companies/${companyId}/${route}`)).status).toBe(403); expect(select).not.toHaveBeenCalled();
   });
-  it.each(["notifications", "coding", "coding/33333333-3333-4333-8333-333333333333/build-matrix"])("denies ordinary members access to %s administration", async route => {
+  it.each(["feedback-inbox", "notifications", "coding", "coding/33333333-3333-4333-8333-333333333333/build-matrix"])("denies ordinary members access to %s administration", async route => {
     const { server, select } = app({ type: "board", source: "session", userId: "member", companyIds: [companyId], memberships: [{ companyId, membershipRole: "member", status: "active" }] });
     expect((await request(server).get(`/companies/${companyId}/${route}`)).status).toBe(403); expect(select).not.toHaveBeenCalled();
   });
-  it.each(["notifications", "coding", "coding/33333333-3333-4333-8333-333333333333/build-matrix", "integrations/workbuddy"])("does not grant an Agent the %s owner settings view", async route => {
+  it.each(["feedback-inbox", "notifications", "coding", "coding/33333333-3333-4333-8333-333333333333/build-matrix", "integrations/workbuddy"])("does not grant an Agent the %s owner settings view", async route => {
     const { server, select } = app({ type: "agent", source: "agent_jwt", companyId, agentId: "33333333-3333-4333-8333-333333333333", runId: "44444444-4444-4444-8444-444444444444" });
     expect((await request(server).get(`/companies/${companyId}/${route}`)).status).toBe(403); expect(select).not.toHaveBeenCalled();
   });
@@ -56,5 +57,15 @@ it.each(["member", "foreign-owner", "agent"])("denies %s delivery observations b
   const { server, select } = app(actor); const path = `/companies/${companyId}/notifications/deliveries/33333333-3333-4333-8333-333333333333/reviews`;
   expect((await request(server).get(path)).status).toBe(403);
   expect((await request(server).post(path).send({ requestId: "44444444-4444-4444-8444-444444444444", confirm: true, outcome: "unknown", evidence: "Permission fixture", expectedState: "indeterminate", expectedAttempt: 1 })).status).toBe(403);
+  expect(select).not.toHaveBeenCalled();
+});
+
+it.each(["member", "foreign-owner", "agent"])("denies %s manual feedback imports and candidate reads", async role => {
+  const actor: Express.Request["actor"] = role === "agent"
+    ? { type: "agent", source: "agent_jwt", companyId, agentId: "33333333-3333-4333-8333-333333333333" }
+    : { type: "board", source: "session", userId: role, companyIds: [role === "member" ? companyId : "other"], memberships: [{ companyId: role === "member" ? companyId : "other", membershipRole: role === "member" ? "member" : "owner", status: "active" }] };
+  const { server, select } = app(actor), path = `/companies/${companyId}/feedback-inbox`;
+  expect((await request(server).post(path).send({ sourceKind: "manual", sourceInstance: "fixture", externalId: "event-1", title: "Feedback", text: "data only", product: "app", occurredAt: "2026-10-26T00:00:00Z" })).status).toBe(403);
+  expect((await request(server).get(`${path}/33333333-3333-4333-8333-333333333333/candidates`)).status).toBe(403);
   expect(select).not.toHaveBeenCalled();
 });
