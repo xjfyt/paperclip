@@ -55,7 +55,7 @@ C1=实现/本地检查，C2=受控协议及故障夹具，C3=真实租户/版本
 | V2-NOTIFY-02 | §7.2 六事件/事务outbox | 实现完成 | outbox.ts；事件去重、不可变目标及凭据版本、租约、未知发送、并发限流 | T06 / 隔离 DB |
 | V2-NOTIFY-03 | §7.3 业务码/token/重试 | 实现完成 | drivers、token-cache；HTTP 200 不等于业务成功；平台受理非已读 | T06 / 受控响应 |
 | V2-NOTIFY-04 | §7.4 订阅/严重程度/合并窗口 | 部分 | policy.ts 已有严重程度和精确重复窗口；没有事件摘要聚合窗口 | T06 / 须先明确实现合并行为 |
-| V2-NOTIFY-05 | §7.4 配置验证等级 | 部分 | 渠道配置与状态已实现；配置有效/协议已测/实连已验完整证据展示未闭合 | T06 / 不能把保存当 C3 |
+| V2-NOTIFY-05 | §7.4 配置验证等级 | 实现完成，实测待做 | 配置版本/凭据安全代次观察与四类人工证据台账已接入，明确平台受理、收件观察、C2/C3/C4；不做自动供应商认证 | T06 / notification-verification NV-01–12；保存不是 C3 |
 | V2-NOTIFY-06 | §7.4 显式测试/最小正文/审批链接 | 实现完成 | MimouseNotifications.tsx、render.ts；保存不发送、无默认 @all、GET 不审批 | T06 / 明确测试目标授权 |
 | V2-NOTIFY-07 | §7.1 真实群/公众号资格 | 仅待实测 | 驱动 C2 不证明平台权限、模板、收件人或送达 | T06 / bot、模板、OpenID、发送授权 |
 | V2-NOTIFY-08 | §7.1 微信客服 | 未实现 | 原文下一轮的独立官方入口；不与公众号或企微混称 | 须产品资格/接口合同 |
@@ -77,7 +77,7 @@ C1=实现/本地检查，C2=受控协议及故障夹具，C3=真实租户/版本
 | V2-P3-03 | §13 P3 问题聚类 | 实现完成 | mimouse-feedback-evidence.ts 产品/版本/标题及错误/堆栈确定性分组；原文未要求语义模型 | T08 / 相同/不同版本脱敏样本 |
 | V2-P3-05 | §13.1 trace/版本/提交引用 | 部分 | 来源引用及版本已有；需在真实案例中核对 trace、软件版本、反馈、固定代码提交的完整关联，不以标题相同替代 | T08 / 可追踪脱敏案例 |
 | V2-P3-06 | §13.1 客服回复授权/人工转接 | 不适用 | 当前入站只收不答，不授予客服自动回复权；若启用客服则须另实现明确渠道授权、转人工和上下文保留 | 先明确客服产品/权限，不能由入站开启推断 |
-| V2-P3-04 | §13 P3 复现/建议/人审 | 部分 | promotion.ts 人工字段转 private backlog 已有；reproduction=not_performed、regressionTest=requires_review；缺可验证复现/测试或回归集关联链 | T08 仅验人审转任务；先补证据链 |
+| V2-P3-04 | §13 P3 复现/建议/人审 | 部分 | promotion.ts 人工字段转 private backlog 已有；reproduction=not_performed、regressionTest=requires_review；反馈到固定回归集的精确人审来源链已补；仍缺可验证复现/修复回执 | T08,T11 / FEEDBACK-EVALUATION-LINEAGE清单 |
 | V2-P4-01 | §13.1 调研来源与人工确认 | 实现完成 | mimouse-research/{evidence,service}.ts；来源URL/时间/证据、范围确认转私有待办；自动任务依赖完整性另见 P4-05 | T09 / 可公开来源样本 |
 | V2-P4-02 | §13.1 routines 调研闭环 | 部分 | mimouse-research-routines 已有保存绑定及 run-bound 公司公开报告；需实际来源与定时运行闭环证据，不硬要求自建 GitHub collector | T09 / 允许来源与真实 routine run |
 | V2-P4-03 | §13.1 月度数据校验/差异/审核 | 部分 | mimouse-operations 人工快照、时区/月度校验、不可变预览及原审批已实现；真实数据读取尚未接通 | T10 / 脱敏输入/来源接口合同 |

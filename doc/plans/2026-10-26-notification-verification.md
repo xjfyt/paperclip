@@ -114,3 +114,10 @@ SQL提案是**完整参考**，不能把整个文件追加到Drizzle生成结果
 `packages/db/drizzle.config.ts`读取`dist/schema/*.js`，中央生成前必须让dist来自集成后的schema，不能用旧dist得出“无变更”。以中央实际生成SQL与最新snapshot为准核对上述3项；若缺失，先查生成输入/基线，不盲目重复追加。自定义部分置于新增列之后，每个完整function或trigger之间按既有迁移格式添加`--> statement-breakpoint`，不能把分隔符插到`$$`函数体内部。该片没有额外自定义constraint/index：均已归Drizzle管理。
 
 中央分配迁移号并更新journal/snapshot后，检查每个列/check/index/function/trigger恰好一次，再执行迁移安全检查和隔离DB/API十项。提案不回填旧delivery epoch、不发送消息、不resolve secret。本分支没有生成或修改journal/snapshot，也没有执行迁移。
+
+
+## 中央迁移与隔离数据库结果（2026-10-26）
+
+已分配 `0356_special_moira_mactaggert.sql`：Drizzle列/check/index各一次，自定义四函数/四触发器各一次，既有journal前缀和历史snapshot保留。新空库迁移及本文10项真实DB/API全部通过，包括确定性FK交错、CAS和审计回滚；与evaluation合跑20项通过。后续完整source API145项也通过。首次匿名HTTP用例混淆直接router的403与应用登录中间件401，按既有assertBoard合同纠正并加强零写检查后重跑；未改变生产权限。
+
+以上仍是隔离fixture，不是NV-01–12真实账号或浏览器验收。中央最终通知纯合同6文件85项通过；UI/服务端类型与构建最新边界见 [验证记录](../mimouse/VERIFICATION.md)。
