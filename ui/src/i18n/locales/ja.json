@@ -1355,6 +1355,21 @@
     "readError": "プレビューまたはレビュー状態を取得できません。管理者権限を確認して再試行してください。",
     "retryRead": "読み込みを再試行"
   },
+  "optionalOnboarding": {
+    "welcomeTitle": "Paperclip へようこそ",
+    "organizationHelp": "組織ごとにタスク、設定、アクセス権を分離します。準備ができたら作成してください。エージェントやモデル接続は後からダッシュボードで設定できます。",
+    "agentHelp": "エージェントの設定は任意です。いつでもダッシュボードに戻り、準備ができてから設定できます。",
+    "addAgentTitle": "{{name}} のエージェントを設定",
+    "createAnotherOrganization": "別の組織を作成",
+    "createOrganization": "組織を作成",
+    "createAndOpen": "作成してダッシュボードを開く",
+    "configureLater": "後で設定",
+    "openDashboard": "ダッシュボードへ",
+    "noAgents": "エージェントはまだありません。先に組織の画面を確認し、準備ができてから設定できます。",
+    "configureAgent": "エージェントを設定",
+    "createdPending": "組織は作成されましたが、このセッションではまだダッシュボードを開けません。もう一度開くか、キャンセルしてメイン画面に戻ってください。再試行しても別の組織は作成されません。",
+    "retryOpen": "ダッシュボードを再度開く"
+  },
   "promptRegistryUi": {
     "title": "プロンプトレジストリ",
     "boundary": "レジストリの選択のみです。エージェントのファイル、モデル設定、実行状態には適用しません。認証情報を保存しないでください。",

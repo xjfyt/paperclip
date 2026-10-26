@@ -1355,6 +1355,21 @@
     "readError": "Cannot read the preview or review state. Check administrator access and retry.",
     "retryRead": "Retry reading"
   },
+  "optionalOnboarding": {
+    "welcomeTitle": "Welcome to Paperclip",
+    "organizationHelp": "Organizations keep tasks, settings, and access separate. Create one when you are ready; agents and model connections can be configured later from the dashboard.",
+    "agentHelp": "Agent setup is optional. You can return to the dashboard at any time and configure an agent when you are ready.",
+    "addAgentTitle": "Configure an agent for {{name}}",
+    "createAnotherOrganization": "Create another organization",
+    "createOrganization": "Create organization",
+    "createAndOpen": "Create and open dashboard",
+    "configureLater": "Configure later",
+    "openDashboard": "Go to dashboard",
+    "noAgents": "No agents yet. You can explore this organization and configure an agent whenever you are ready.",
+    "configureAgent": "Configure agent",
+    "createdPending": "The organization was created, but its dashboard is not ready in this session. Retry opening it, or cancel and return to the main page. Retrying will not create another organization.",
+    "retryOpen": "Retry opening dashboard"
+  },
   "promptRegistryUi": {
     "title": "Prompt registry",
     "boundary": "Registry selection only. This never applies agent files, model configuration or runtime changes. Do not store credentials.",
