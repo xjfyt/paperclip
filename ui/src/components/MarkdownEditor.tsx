@@ -1375,6 +1375,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
           }}
           onBlur={() => onBlur?.()}
           onKeyDown={(event) => {
+            if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
             if (onSubmit && event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
               event.preventDefault();
               onSubmit();
@@ -1410,7 +1411,8 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
         }
       }}
       onKeyDownCapture={(e) => {
-        if (readOnly) return;
+        // Candidate confirmation/navigation belongs to the IME, not submit or autocomplete.
+        if (readOnly || e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return;
         if (
           (e.key === "Backspace" || e.key === "Delete")
           && e.target instanceof HTMLElement

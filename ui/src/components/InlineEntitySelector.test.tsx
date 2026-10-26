@@ -252,6 +252,64 @@ describe("InlineEntitySelector", () => {
     });
   });
 
+  it.each(["Enter", "Tab"])("preserves IME candidate keys before ordinary %s selection", async (acceptKey) => {
+    const root = createRoot(container);
+    const onChange = vi.fn();
+    const onConfirm = vi.fn();
+    await act(() => root.render(
+      <InlineEntitySelector
+        value=""
+        options={[{ id: "agent-1", label: "Agent One" }, { id: "agent-2", label: "Agent Two" }]}
+        placeholder="Assignee"
+        noneLabel="No assignee"
+        searchPlaceholder="Search assignees..."
+        emptyMessage="No assignees found."
+        onChange={onChange}
+        onConfirm={onConfirm}
+      />,
+    ));
+    try {
+      await act(() => container.querySelector<HTMLButtonElement>("button")!.click());
+      const input = document.querySelector<HTMLInputElement>('input[placeholder="Search assignees..."]')!;
+      const highlighted = () => document.querySelector("[data-mobile-entity-picker-list] .bg-accent");
+      const initialHighlight = highlighted();
+      expect(initialHighlight?.textContent).toContain("No assignee");
+      for (const composition of [{ isComposing: true }, { isComposing: false, keyCode: 229 }]) {
+        for (const key of ["ArrowDown", "ArrowUp", "Enter", "Tab", "Escape"]) {
+          const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key, ...composition });
+          await act(() => { input.dispatchEvent(event); });
+          // Radix's Escape dismissal is canceled explicitly; other IME keys stay native.
+          expect(event.defaultPrevented).toBe(key === "Escape");
+          expect(input.isConnected).toBe(true);
+          expect(document.activeElement).toBe(input);
+          expect(highlighted()).toBe(initialHighlight);
+          expect(onChange).not.toHaveBeenCalled();
+          expect(onConfirm).not.toHaveBeenCalled();
+        }
+      }
+      const arrow = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "ArrowDown" });
+      await act(() => { input.dispatchEvent(arrow); });
+      expect(arrow.defaultPrevented).toBe(true);
+      expect(highlighted()).not.toBe(initialHighlight);
+      expect(highlighted()?.textContent).toContain("Agent One");
+      const accept = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: acceptKey });
+      await act(() => { input.dispatchEvent(accept); });
+      expect(accept.defaultPrevented).toBe(true);
+      expect(onChange).toHaveBeenCalledExactlyOnceWith("agent-1");
+      expect(document.querySelector("[data-mobile-entity-picker]")).toBeNull();
+      await vi.waitFor(() => expect(onConfirm).toHaveBeenCalledTimes(1));
+      await act(() => container.querySelector<HTMLButtonElement>("button")!.click());
+      const reopenedInput = document.querySelector<HTMLInputElement>('input[placeholder="Search assignees..."]')!;
+      const escape = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Escape" });
+      await act(() => { reopenedInput.dispatchEvent(escape); });
+      expect(document.querySelector("[data-mobile-entity-picker]")).toBeNull();
+      expect(onChange).toHaveBeenCalledTimes(1);
+      expect(onConfirm).toHaveBeenCalledTimes(1);
+    } finally {
+      await act(() => root.unmount());
+    }
+  });
+
   it("focuses the search input when opened on coarse pointers", async () => {
     window.matchMedia = vi.fn().mockImplementation((query: string) => ({
       matches: query === "(pointer: coarse)" || query === "(max-width: 40rem)",

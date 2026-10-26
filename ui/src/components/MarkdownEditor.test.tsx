@@ -597,6 +597,44 @@ describe("MarkdownEditor", () => {
     });
   });
 
+  it.each([false, true])("keeps IME confirmation out of submit shortcuts (fallback: %s)", async (fallback) => {
+    mdxEditorMockState.emitMountParseError = fallback;
+    const onSubmit = vi.fn();
+    const root = createRoot(container);
+    await act(() => root.render(<MarkdownEditor value="Draft" onChange={() => {}} onSubmit={onSubmit} />));
+    await flush();
+    try {
+      const selector = fallback ? "textarea" : '[contenteditable="true"]';
+      await vi.waitFor(() => expect(container.querySelector(selector)).not.toBeNull());
+      const input = container.querySelector<HTMLElement>(selector)!;
+      for (const composition of [{ isComposing: true }, { isComposing: false, keyCode: 229 }]) {
+        for (const modifier of [{}, { shiftKey: true }, { ctrlKey: true }, { metaKey: true }]) {
+          const event = new KeyboardEvent("keydown", {
+            bubbles: true, cancelable: true, key: "Enter", ...composition, ...modifier,
+          });
+          await act(() => { input.dispatchEvent(event); });
+          expect(event.defaultPrevented).toBe(false);
+          expect(onSubmit).not.toHaveBeenCalled();
+        }
+      }
+      // Ordinary Enter/Shift+Enter keep the editor's existing newline behavior.
+      for (const shiftKey of [false, true]) {
+        const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter", shiftKey });
+        await act(() => { input.dispatchEvent(event); });
+        expect(event.defaultPrevented).toBe(false);
+        expect(onSubmit).not.toHaveBeenCalled();
+      }
+      for (const modifier of [{ ctrlKey: true }, { metaKey: true }]) {
+        const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter", ...modifier });
+        await act(() => { input.dispatchEvent(event); });
+        expect(event.defaultPrevented).toBe(true);
+      }
+      expect(onSubmit).toHaveBeenCalledTimes(2);
+    } finally {
+      await act(() => root.unmount());
+    }
+  });
+
   it("falls back to a raw textarea when the rich editor crashes during render", async () => {
     mdxEditorMockState.throwOnRender = true;
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -1415,6 +1453,33 @@ describe("MarkdownEditor", () => {
     expect(menu).toBeTruthy();
     return { option: option!, root, menu: menu! };
   }
+
+  it.each([{ isComposing: true }, { isComposing: false, keyCode: 229 }])(
+    "leaves autocomplete keys to the IME (%j)",
+    async (composition) => {
+      const handleChange = vi.fn();
+      const { root, menu, option } = await openMentionMenuFor(handleChange);
+      const editable = container.querySelector<HTMLElement>('[contenteditable="true"]')!;
+      try {
+        for (const key of ["ArrowDown", "ArrowUp", "Escape", "Tab", "Enter"]) {
+          const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key, ...composition });
+          await act(() => { editable.dispatchEvent(event); });
+          expect(event.defaultPrevented).toBe(false);
+          expect(menu.isConnected).toBe(true);
+          expect(option.isConnected).toBe(true);
+          expect(handleChange).not.toHaveBeenCalled();
+        }
+        const enter = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" });
+        await act(() => { editable.dispatchEvent(enter); });
+        expect(enter.defaultPrevented).toBe(true);
+        expect(handleChange).toHaveBeenCalledWith(
+          `[@Paperclip App](${buildProjectMentionHref("project-123", "#336699")}) `,
+        );
+      } finally {
+        await act(() => root.unmount());
+      }
+    },
+  );
 
   it("accepts mention selection from a touch tap", async () => {
     const handleChange = vi.fn();

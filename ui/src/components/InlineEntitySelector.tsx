@@ -204,6 +204,10 @@ export const InlineEntitySelector = forwardRef<HTMLButtonElement, InlineEntitySe
             event.preventDefault();
             inputRef.current?.focus();
           }}
+          onEscapeKeyDown={(event) => {
+            // Radix handles Escape in document capture, before the input's key handler.
+            if (event.isComposing || event.keyCode === 229) event.preventDefault();
+          }}
           onCloseAutoFocus={(event) => {
             if (!shouldPreventCloseAutoFocusRef.current) {
               // Radix returns focus to the trigger on Escape/outside dismissal.
@@ -243,6 +247,7 @@ export const InlineEntitySelector = forwardRef<HTMLButtonElement, InlineEntitySe
                 setQuery(event.target.value);
               }}
               onKeyDown={(event) => {
+                if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
                 if (event.key === "ArrowDown") {
                   event.preventDefault();
                   event.stopPropagation();
