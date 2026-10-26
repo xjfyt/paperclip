@@ -1,3 +1,4 @@
+import { codingRepairInitialExecutionPending, stopExpiredCodingRepair, type RepairCancelRun, type RepairDispatchBinding } from "./repair-deadline.js";
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import {
@@ -16,7 +17,7 @@ import { repairAgentConfigHash, repairSettingsSchema, savedRepairPolicySchema, t
 
 type Attempt = typeof attempts.$inferSelect;
 const safeCode = (error: unknown) => error instanceof GitLabError && /^[a-z0-9_]{1,80}$/.test(error.code) ? error.code : "repair_requires_reconciliation";
-export function codingRepairService(db: Db, deps: { client?: typeof gitlabClient; heartbeat?: IssueAssignmentWakeupDeps; pluginWorkerManager?: PluginWorkerManager } = {}) {
+export function codingRepairService(db: Db, deps: { client?: typeof gitlabClient; heartbeat?: IssueAssignmentWakeupDeps & { cancelRun?: RepairCancelRun }; pluginWorkerManager?: PluginWorkerManager } = {}) {
   const coding = codingService(db, deps);
   async function boundary(row: typeof deliveries.$inferSelect, policy: RepairPolicy) {
     if (process.env.PAPERCLIP_CODING_REPAIR_ENABLED !== "true") throw new GitLabError("repair_operator_disabled");
@@ -84,7 +85,7 @@ export function codingRepairService(db: Db, deps: { client?: typeof gitlabClient
         if (!current || (current.repairPolicy as RepairPolicy | null)?.revision !== policy.revision || (current.repairPolicy as RepairPolicy | null)?.enabled !== true || current.headSha !== failure.headSha) throw new GitLabError("repair_policy_changed");
         const [existing] = await tx.select().from(attempts).where(and(eq(attempts.deliveryId, id), eq(attempts.pipelineId, failure.pipelineId)));
         if (existing) return existing;
-        const active = await tx.select({ id: attempts.id }).from(attempts).where(and(eq(attempts.deliveryId, id), inArray(attempts.state, ["reserved", "dispatching", "indeterminate", "dispatched"])));
+        const active = await tx.select({ id: attempts.id }).from(attempts).where(and(eq(attempts.deliveryId, id), inArray(attempts.state, ["reserved", "dispatching", "indeterminate", "dispatched", "deadline_stopping", "deadline_unverified"])));
         if (active.length) throw new GitLabError("repair_previous_attempt_requires_reconciliation");
         const decision = repairDecision({ attempts: current.repairAttempts, remainingBudgetCents: Math.max(0, policy.maxCostCents - spent), elapsedMs: Date.now() - Date.parse(policy.approvedAt), maxDurationMs: Date.parse(policy.expiresAt) - Date.parse(policy.approvedAt), fingerprint: failure.fingerprint, previousFingerprint: current.lastFailureFingerprint, environmentAvailable: true });
         if (decision.action !== "repair" || current.repairAttempts >= policy.maxAttempts) throw new GitLabError(decision.action === "human" ? `repair_${decision.reason}` : "repair_limit");
@@ -100,6 +101,7 @@ export function codingRepairService(db: Db, deps: { client?: typeof gitlabClient
       if (!attempt) return null;
       let routineInvoked = false;
       try {
+        if (!deps.heartbeat) throw new GitLabError("repair_dispatch_control_unavailable");
         const policy = savedRepairPolicySchema.parse(attempt.snapshot.policy); const row = await coding.load(companyId, attempt.deliveryId);
         if ((row.repairPolicy as RepairPolicy | null)?.revision !== policy.revision || (row.repairPolicy as RepairPolicy | null)?.enabled !== true) throw new GitLabError("repair_policy_changed");
         const bound = await boundary(row, policy);
@@ -110,7 +112,18 @@ export function codingRepairService(db: Db, deps: { client?: typeof gitlabClient
           JSON.stringify({ jobs: attempt.snapshot.jobs, omittedJobCount: attempt.snapshot.omittedJobCount }),
         ].join("\n\n");
         routineInvoked = true;
-        const result = await routineService(db, { heartbeat: deps.heartbeat, pluginWorkerManager: deps.pluginWorkerManager }).runPipelineStageEntryRoutine(policy.routineId, {
+        const heartbeat = deps.heartbeat ? { wakeup: async (agentId: string, opts: Parameters<IssueAssignmentWakeupDeps["wakeup"]>[1]) => {
+          if (Date.parse(policy.expiresAt) <= Date.now()) throw new GitLabError("repair_approval_expired_or_disabled");
+          const issueId = opts.contextSnapshot?.issueId;
+          if (agentId !== policy.agentId || typeof issueId !== "string") throw new GitLabError("repair_task_identity_unverified");
+          const dispatch: RepairDispatchBinding = { version: 1, issueId, agentId, workspaceId: row.workspaceId, wakeKey: `${attempt.requestKey}:initial` };
+          const saved = await db.update(attempts).set({ snapshot: { ...attempt.snapshot, dispatch } })
+            .where(and(eq(attempts.id, attempt.id), eq(attempts.lease, lease), eq(attempts.state, "dispatching"))).returning({ id: attempts.id });
+          if (!saved.length) throw new GitLabError("repair_dispatch_lease_lost");
+          return deps.heartbeat!.wakeup(agentId, { ...opts, allowRunCoalescing: false, idempotencyKey: dispatch.wakeKey,
+            contextSnapshot: { ...opts.contextSnapshot, codingRepairAttemptId: attempt.id } });
+        } } : undefined;
+        const result = await routineService(db, { heartbeat, pluginWorkerManager: deps.pluginWorkerManager }).runPipelineStageEntryRoutine(policy.routineId, {
           source: "api", expectedRevisionId: policy.routineRevisionId, idempotencyKey: attempt.requestKey, projectId: bound.issue.projectId, assigneeAgentId: policy.agentId,
           executionWorkspaceId: row.workspaceId, descriptionAppendix, payload: { codingRepairAttemptId: attempt.id, codingDeliveryId: row.id, headSha: row.headSha, pipelineId: attempt.pipelineId },
         }, { userId: policy.ownerUserId });
@@ -121,16 +134,17 @@ export function codingRepairService(db: Db, deps: { client?: typeof gitlabClient
     reconcile: async (companyId: string, attemptId: string) => {
       const [attempt] = await db.select().from(attempts).where(and(eq(attempts.companyId, companyId), eq(attempts.id, attemptId)));
       if (!attempt || attempt.state === "reserved" || attempt.state === "dispatching" && attempt.leaseExpiresAt && attempt.leaseExpiresAt.getTime() > Date.now()) return null;
+      if (["dispatched", "indeterminate", "deadline_stopping"].includes(attempt.state) && await stopExpiredCodingRepair(db, attempt, deps.heartbeat?.cancelRun)) return null;
       if (attempt.state === "dispatched") {
         const [issue] = attempt.issueId ? await db.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, attempt.issueId))) : [];
         if (!issue || issue.originRunId !== attempt.routineRunId) await finish(attempt, "blocked", "repair_task_identity_unverified");
-        else if (issue.status === "done") {
+        else if (["done", "cancelled", "blocked"].includes(issue.status) && await codingRepairInitialExecutionPending(db, attempt)) {
+          await db.update(attempts).set({ updatedAt: new Date() }).where(and(eq(attempts.id, attempt.id), eq(attempts.state, "dispatched")));
+        } else if (issue.status === "done") {
           await finish(attempt, "completed", "repair_requires_fixed_sha_review");
         } else if (["cancelled", "blocked"].includes(issue.status)) await finish(attempt, "blocked", "repair_task_requires_human");
         else {
           await db.update(attempts).set({ updatedAt: new Date() }).where(and(eq(attempts.id, attempt.id), eq(attempts.state, "dispatched")));
-          const policy = savedRepairPolicySchema.safeParse(attempt.snapshot.policy);
-          if (!policy.success || Date.parse(policy.data.expiresAt) <= Date.now()) await db.update(deliveries).set({ repairStatus: "needs_human", repairLastCode: "repair_deadline_elapsed_existing_run_not_cancelled" }).where(eq(deliveries.id, attempt.deliveryId));
         }
         return issue ?? null;
       }

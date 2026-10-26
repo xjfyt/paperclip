@@ -1,3 +1,4 @@
+import { codingRepairRunDeadlineElapsed } from "./mimouse-coding/repair-deadline.js";
 import { assertPrivatePromptEarlyBinding } from "./mimouse-private-prompt-tests/service.js";
 import { selectHeartbeatEnvironment } from "./heartbeat/environment-selection.js";
 import { prepareHeartbeatWorkspace } from "./heartbeat/workspace-preparation.js";
@@ -1958,6 +1959,10 @@ export function heartbeatService(
     let run = await getRun(runId);
     if (!run) return;
     if (run.status !== "queued" && run.status !== "running") return;
+    if (await codingRepairRunDeadlineElapsed(db, run)) {
+      await cancelRunInternal(run.id, "Coding repair deadline elapsed", { errorCode: "coding_repair_deadline_elapsed", suppressImmediateRecovery: true });
+      return;
+    }
 
     if (run.status === "queued") {
       const claimed = await claimQueuedRun(run);
@@ -3592,6 +3597,12 @@ export function heartbeatService(
           readNonEmptyString(runLedgerScope.projectId), runLedgerScope, runOptions.nativeLeaseOwner);
         let entered = false;
         try {
+          // Async deadline preflight must precede the final ownership gate;
+          // its dispatch callback still enters the adapter synchronously.
+          if (await codingRepairRunDeadlineElapsed(db, run)) {
+            await cancelRunInternal(run.id, "Coding repair deadline elapsed", { errorCode: "coding_repair_deadline_elapsed", suppressImmediateRecovery: true });
+            return { dispatched: false as const };
+          }
           return await dispatchResolvedInteractionContinuationAfterAdmission((markDispatchStarted) => {
             entered = true;
             return dispatch(markDispatchStarted);

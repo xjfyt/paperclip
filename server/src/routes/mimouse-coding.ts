@@ -6,7 +6,7 @@ import { artifactManifest } from "../services/mimouse-coding/artifacts.js";
 import { enqueueNotification } from "../services/mimouse-notifications/outbox.js";
 import { Router, type Request } from "express";
 import { z } from "zod";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { companySecrets, executionWorkspaces, issues, mimouseCodingDeliveries as deliveries, mimouseCodingRepairAttempts as repairAttempts, type Db } from "@paperclipai/db";
 import { assertBoard, assertCompanyAccess, getActorInfo } from "./authz.js";
 import { forbidden, notFound, unprocessable } from "../errors.js";
@@ -56,7 +56,7 @@ export function mimouseCodingRoutes(db: Db, deps: { service?: ReturnType<typeof 
   router.get(`${root}/:id/repairs`, async (req, res) => {
     const companyId = admin(req); const row = await loadDelivery(companyId, String(req.params.id)); await issueAccess(req, companyId, row.issueId);
     const history = await db.select({ id: repairAttempts.id, attempt: repairAttempts.attempt, state: repairAttempts.state, pipelineId: repairAttempts.pipelineId, headSha: repairAttempts.headSha,
-      routineRunId: repairAttempts.routineRunId, issueId: repairAttempts.issueId, lastCode: repairAttempts.lastCode, createdAt: repairAttempts.createdAt }).from(repairAttempts)
+      routineRunId: repairAttempts.routineRunId, issueId: repairAttempts.issueId, lastCode: repairAttempts.lastCode, deadline: sql<Record<string, unknown> | null>`${repairAttempts.snapshot}->'deadline'`, createdAt: repairAttempts.createdAt }).from(repairAttempts)
       .where(and(eq(repairAttempts.companyId, companyId), eq(repairAttempts.deliveryId, row.id))).orderBy(desc(repairAttempts.createdAt)).limit(10);
     res.json({ operatorEnabled: process.env.PAPERCLIP_CODING_REPAIR_ENABLED === "true", status: row.repairStatus, lastCode: row.repairLastCode, policy: row.repairPolicy, attempts: history });
   });

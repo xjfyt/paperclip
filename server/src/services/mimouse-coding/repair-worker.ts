@@ -6,11 +6,10 @@ import { GitLabError } from "./gitlab.js";
 type Dependencies = NonNullable<Parameters<typeof codingRepairService>[1]>;
 export function codingRepairWorker(db: Db, deps: Dependencies = {}) {
   const service = codingRepairService(db, deps);
-  async function tick(companyId?: string) {
-    if (process.env.PAPERCLIP_CODING_REPAIR_ENABLED !== "true") return false;
+  async function tick(companyId?: string, allowDispatch = true) {
     const now = new Date(); const due = new Date(now.getTime() - 30000);
     const [pending] = await db.select().from(attempts).where(and(
-      or(eq(attempts.state, "reserved"), and(eq(attempts.state, "dispatching"), lte(attempts.leaseExpiresAt, now)), and(inArray(attempts.state, ["indeterminate", "dispatched"]), lte(attempts.updatedAt, due))),
+      or(...(allowDispatch && process.env.PAPERCLIP_CODING_REPAIR_ENABLED === "true" ? [eq(attempts.state, "reserved")] : []), and(eq(attempts.state, "dispatching"), lte(attempts.leaseExpiresAt, now)), and(inArray(attempts.state, ["indeterminate", "dispatched", "deadline_stopping"]), lte(attempts.updatedAt, due), or(isNull(attempts.lease), lte(attempts.leaseExpiresAt, now)))),
       ...(companyId ? [eq(attempts.companyId, companyId)] : []),
     )).orderBy(asc(attempts.updatedAt)).limit(1);
     if (pending) {
@@ -18,6 +17,7 @@ export function codingRepairWorker(db: Db, deps: Dependencies = {}) {
       else await service.reconcile(pending.companyId, pending.id);
       return true;
     }
+    if (!allowDispatch || process.env.PAPERCLIP_CODING_REPAIR_ENABLED !== "true") return false;
     const [row] = await db.select({ id: deliveries.id, companyId: deliveries.companyId }).from(deliveries)
       .innerJoin(companies, eq(companies.id, deliveries.companyId))
       .where(and(eq(companies.status, "active"), eq(deliveries.repairStatus, "armed"), isNull(deliveries.syncLease),
@@ -33,10 +33,11 @@ export function codingRepairWorker(db: Db, deps: Dependencies = {}) {
   }
   return { tick };
 }
-export function startCodingRepairWorker(db: Db, deps: Dependencies = {}, mayRun: () => boolean = () => true) {
-  if (process.env.PAPERCLIP_CODING_REPAIR_ENABLED !== "true") return { stop: async () => {} };
+export function startCodingRepairWorker(db: Db, deps: Dependencies = {}, mayRun: () => boolean = () => true, mayReconcile: () => boolean = mayRun) {
+  // Separate process/fixture control: feature-off still reconciles prior grants.
+  if (process.env.PAPERCLIP_CODING_REPAIR_WORKER_ENABLED === "false") return { stop: async () => {} };
   const worker = codingRepairWorker(db, deps); let stopped = false; let running: Promise<unknown> | null = null;
-  const wake = () => { if (!stopped && mayRun() && !running) running = worker.tick()
+  const wake = () => { if (!stopped && mayReconcile() && !running) running = worker.tick(undefined, mayRun())
     .catch(() => logger.warn({ code: "coding_repair_worker_failed" }, "Repair state retained for reconciliation"))
     .finally(() => { running = null; }); };
   const timer = setInterval(wake, 5000); timer.unref(); wake();

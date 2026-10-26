@@ -1,3 +1,4 @@
+import { isDedicatedCodingRepairRun } from "../mimouse-coding/repair-deadline.js";
 import { mimousePrivatePromptTests } from "@paperclipai/db/schema/mimouse_private_prompt_tests";
 import { privatePromptWakeAuthority } from "../mimouse-private-prompt-tests/wake-authority.js";
 import { assertPrivatePromptBoundSnapshot, validatePrivatePromptResources, privatePromptInput } from "../mimouse-private-prompt-tests/service.js";
@@ -3693,6 +3694,7 @@ export function createHeartbeatQueue(db: Db, dependencies: HeartbeatQueueDepende
             const dotBindingId = readNonEmptyString(parseObject(agent.adapterConfig).dotBindingId);
             const dotFollowUp = agent.adapterType === "paperclip_runner" && parseObject(agent.adapterConfig).provider === "openai_dot"
                 && dotBindingId && activeExecutionRun.agentId === agentId && issue.assigneeAgentId === agentId
+                && !isDedicatedCodingRepairRun(activeExecutionRun)
                 && reason === "issue_commented" && wakeCommentId && opts.allowRunCoalescing !== false
                 && enrichedContextSnapshot.forceFreshSession !== true && !explicitResumeSession && !opts.manualUserWake
                 && !enrichedContextSnapshot.interactionId && !payload?.interactionId && !receiptRequest
@@ -3743,7 +3745,7 @@ export function createHeartbeatQueue(db: Db, dependencies: HeartbeatQueueDepende
                   contextSnapshot: activeExecutionRun.contextSnapshot,
                   wakeupRequestId: activeExecutionRun.wakeupRequestId,
                 },
-                allowRunCoalescing: isConversation(issue) ? false : opts.allowRunCoalescing,
+                allowRunCoalescing: isConversation(issue) || isDedicatedCodingRepairRun(activeExecutionRun) ? false : opts.allowRunCoalescing,
                 durableReceipt: receiptRequest
                   ? {
                       id: receiptRequest.id,
@@ -4229,7 +4231,7 @@ export function createHeartbeatQueue(db: Db, dependencies: HeartbeatQueueDepende
             : (sameScopeRunningRun ?? null)));
 
     const coalescedTargetRun = filterZombieCoalesceTarget(
-      rawCoalescedTarget,
+      isDedicatedCodingRepairRun(rawCoalescedTarget) ? null : rawCoalescedTarget,
       liveRunExecutions,
     );
 

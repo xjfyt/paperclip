@@ -6,7 +6,7 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { randomUUID } from "node:crypto";
-import { agents, authUsers, budgetPolicies, companies, companyMemberships, costEvents, executionWorkspaces, issues, projects, routineRuns, mimouseCodingDeliveries as deliveries, mimouseCodingRepairAttempts as attempts } from "../../packages/db/src/index.js";
+import { agentWakeupRequests, heartbeatRuns, agents, authUsers, budgetPolicies, companies, companyMemberships, costEvents, executionWorkspaces, issues, projects, routineRuns, mimouseCodingDeliveries as deliveries, mimouseCodingRepairAttempts as attempts } from "../../packages/db/src/index.js";
 import { createFixtureDb } from "./fixture-db.js";
 import { secretService } from "../../server/src/services/secrets.js";
 import { instanceSettingsService } from "../../server/src/services/instance-settings.js";
@@ -38,8 +38,23 @@ async function fixture(request: APIRequestContext) {
   const [workspace] = await db.insert(executionWorkspaces).values({ companyId: company.id, projectId: project.id, sourceIssueId: original.id, mode: "isolated", strategyType: "git_worktree", name: "repair", providerType: "local_fs", status: "active", branchName: "paperclip/repair", repoUrl: "https://git.example/group/repo.git", cwd: root }).returning();
   await db.update(issues).set({ projectId: project.id, executionWorkspaceId: workspace.id, responsibleUserId: owner, createdByUserId: owner }).where(eq(issues.id, original.id));
   await db.insert(budgetPolicies).values({ companyId: company.id, scopeType: "project", scopeId: project.id, metric: "billed_cents", windowKind: "lifetime", amount: 10000, hardStopEnabled: true, unpricedUsagePolicy: "block" });
-  const state = { wakeups: 0, uncertain: false, pipelineId: 10, jobName: "unit-test", reason: "script_failure" };
-  const heartbeat = { wakeup: async () => { state.wakeups++; if (state.uncertain) throw Error("uncertain dispatch"); return { id: randomUUID() }; } };
+  const state = { wakeups: 0, cancellations: [] as string[], cancelUncertain: false, uncertain: false, pipelineId: 10, jobName: "unit-test", reason: "script_failure" };
+  const heartbeat = { wakeup: async (agentId: string, opts: any) => {
+    state.wakeups++; if (state.uncertain) throw Error("uncertain dispatch");
+    const [wake] = await db.insert(agentWakeupRequests).values({ companyId: company.id, agentId, source: "assignment", status: "completed",
+      idempotencyKey: opts.idempotencyKey, payload: opts.payload }).returning();
+    const [run] = await db.insert(heartbeatRuns).values({ companyId: company.id, agentId, scopeKind: "issue", issueId: opts.contextSnapshot.issueId,
+      wakeupRequestId: wake.id, status: "succeeded", startedAt: new Date(), finishedAt: new Date(), contextSnapshot: opts.contextSnapshot }).returning();
+    await db.update(agentWakeupRequests).set({ runId: run.id }).where(eq(agentWakeupRequests.id, wake.id));
+    return run; // Durable fixture receipts only; never execute an adapter.
+  }, cancelRun: async (runId: string) => {
+    state.cancellations.push(runId);
+    if (state.cancelUncertain) throw Error("uncertain fixture cancellation");
+    const [run] = await db.update(heartbeatRuns).set({ status: "cancelled", finishedAt: new Date(),
+      resultJson: { executionCancellation: { state: "acknowledged", acknowledgedAt: new Date().toISOString() } } })
+      .where(eq(heartbeatRuns.id, runId)).returning();
+    return run;
+  } };
   const routineSvc = routineService(db, { heartbeat });
   const routine = await routineSvc.create(company.id, createRoutineSchema.parse({ projectId: project.id, parentIssueId: original.id, title: "Reviewable coding repair", description: "Run the existing check, make the smallest fix, and return evidence. Never publish.", assigneeAgentId: agent.id, concurrencyPolicy: "always_enqueue" }), { userId: owner });
   const secret = await secretService(db).create(company.id, { name: "repair-fixture", provider: "local_encrypted", value: JSON.stringify({ token: "fixture-not-live" }) });
@@ -169,5 +184,35 @@ test("repair service and composite foreign key reject another company's delivery
     await expect(f.db.insert(attempts).values({ ...attempt, id: randomUUID(), companyId: other.id, attempt: 99, pipelineId: 9999, requestKey: randomUUID() })).rejects.toMatchObject({ cause: { code: "23503", constraint_name: "mimouse_repair_delivery_company_fk" } });
     expect(f.state.wakeups).toBe(0);
     expect(await f.db.select().from(attempts).where(eq(attempts.deliveryId, f.delivery.id))).toHaveLength(1);
+  } finally { await f.cleanup(); }
+});
+
+
+test("deadline survives task done, worker disable, and uncertain stop restart without touching a later user run", async ({ request }) => {
+  const f = await fixture(request);
+  try {
+    const attempt = await f.repairs.reserve(f.company.id, f.delivery.id); const result = await f.repairs.dispatch(f.company.id, attempt.id);
+    const [run] = await f.db.select().from(heartbeatRuns).where(eq(heartbeatRuns.issueId, result!.linkedIssueId!));
+    await f.db.update(heartbeatRuns).set({ status: "running", finishedAt: null }).where(eq(heartbeatRuns.id, run.id));
+    await f.db.update(issues).set({ status: "done" }).where(eq(issues.id, result!.linkedIssueId!));
+    await f.repairs.reconcile(f.company.id, attempt.id);
+    expect((await f.db.select().from(attempts).where(eq(attempts.id, attempt.id)))[0].state).toBe("dispatched");
+    const [current] = await f.db.select().from(attempts).where(eq(attempts.id, attempt.id));
+    const policy = { ...current.snapshot.policy as Record<string, unknown>, approvedAt: new Date(Date.now() - 120000).toISOString(), expiresAt: new Date(Date.now() - 60000).toISOString() };
+    await f.db.update(attempts).set({ snapshot: { ...current.snapshot, policy }, updatedAt: new Date(Date.now() - 60000) }).where(eq(attempts.id, attempt.id));
+    process.env.PAPERCLIP_CODING_REPAIR_ENABLED = "false"; f.state.cancelUncertain = true;
+    await codingRepairWorker(f.db, f.deps).tick(f.company.id);
+    const [pending] = await f.db.select().from(attempts).where(eq(attempts.id, attempt.id));
+    expect(pending.state).toBe("deadline_stopping"); expect(pending.snapshot.deadline).toMatchObject({ runId: run.id, state: "stop_requested", remoteStopVerified: false });
+    const [manual] = await f.db.insert(heartbeatRuns).values({ companyId: f.company.id, agentId: f.agent.id, scopeKind: "issue", issueId: result!.linkedIssueId!, status: "scheduled_retry", scheduledRetryAt: new Date(Date.now() + 86400000), contextSnapshot: { issueId: result!.linkedIssueId!, source: "fixture.manual" } }).returning();
+    f.state.cancelUncertain = false;
+    await codingRepairService(f.db, f.deps).reconcile(f.company.id, attempt.id);
+    expect(f.state.cancellations).toEqual([run.id, run.id]); expect(f.state.wakeups).toBe(1);
+    expect((await f.db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, manual.id)))[0].status).toBe("scheduled_retry");
+    const [stopped] = await f.db.select().from(attempts).where(eq(attempts.id, attempt.id));
+    expect(stopped.state).toBe("deadline_stopped"); expect(stopped.snapshot.deadline).toMatchObject({ state: "local_stop_verified", runId: run.id, descendantsStopVerified: false });
+    const view = await request.get(`/api/companies/${f.company.id}/coding/${f.delivery.id}/repairs`);
+    expect((await view.json()).attempts[0].deadline).toMatchObject({ state: "local_stop_verified", scope: "initial_repair_run_only" });
+    await f.db.update(heartbeatRuns).set({ status: "cancelled", finishedAt: new Date() }).where(eq(heartbeatRuns.id, manual.id));
   } finally { await f.cleanup(); }
 });

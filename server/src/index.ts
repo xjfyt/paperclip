@@ -1222,7 +1222,7 @@ async function startServerWithDatabaseTeardown(
     : () => {};
   if (process.env.MIMOUSE_WECOM_WORKER_ENABLED === "true") void mimouseWecomWorker.reconcile();
   const mimouseNotificationWorker = startNotificationWorker(db);
-  const mimouseCodingRepairWorker = startCodingRepairWorker(db, { heartbeat: accountingHeartbeat, pluginWorkerManager }, () => !isWarmStandby() && !isIdleTaskDrainActive());
+  const mimouseCodingRepairWorker = startCodingRepairWorker(db, { heartbeat: accountingHeartbeat, pluginWorkerManager }, () => !isWarmStandby() && !isIdleTaskDrainActive(), () => !isWarmStandby());
   const mimouseCodingPollWorker = startCodingPollWorker(db, () => !isWarmStandby() && !isIdleTaskDrainActive());
   const executionControlInterval = setInterval(sweepExecutionControl, EXECUTION_RECONCILIATION_INTERVAL_MS);
   executionControlInterval.unref?.();
