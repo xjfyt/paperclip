@@ -2,7 +2,7 @@ id,level,scope,status,evidence,remaining
 BASE-01,C1,固定上游与独立分支,passed,v2026.1023.0 1b4c803816e82b0265c8422e1a804327a7ed8c54,远端开发提交同步另行核验
 I18N-01,C1,四语资源结构与占位符,passed,compose-mimouse-locales --check,不等于全页面翻译覆盖
 I18N-02,C2,语言选择与数字日期格式,passed,ui/src/i18n 和格式化回归,实际字体布局未验收
-I18N-03,C2,全 UI 回归快照,passed,1730键快照743文件8394项 75批全部通过 源码摘要dc616ecbc525ddac,真实供应商与IME另计，不等于所有文案覆盖
+I18N-03,C2,历史全 UI 回归快照,passed,1730键快照743文件8394项 75批全部通过 源码摘要dc616ecbc525ddac,保留该1730键历史证据；最新2354键另见I18N-07，不迁移历史passed到新源码
 I18N-04,C2,命令面板中文输入法 Enter,passed,CommandPalette.test.tsx composition 测试,真实输入法浏览器待验收
 I18N-05,C2,四语浏览器关键路径,partial,助手云桌面Chrome的隔离本地应用四语任务/审批/暂停通知和本地OIDC路径,实际供应商租户及真实IME未全量验收
 AUTH-01,C2,OIDC 配置和签名令牌拒绝矩阵,passed,Casdoor 与 ID token 协议测试,实际 Casdoor 版本及 claims
@@ -28,14 +28,14 @@ CODE-05,C4,跨平台签名发布,not_run,首轮未接入真实构建矩阵,Windo
 BUILD-01,C1,UI类型和生产构建,passed,UI typecheck build与token gates,大chunk警告保留
 BUILD-02,C1,Rust runner构建,passed,固定1.97.1构建,上游7条警告保留
 BUILD-03,C1,完整server类型,passed,tsc --noEmit --singleThreaded 完整检查通过,早期SIGKILL和事务类型错误已修正 不代替全仓构建
-DB-01,C2,新增迁移落地并启动实际服务,passed,0334至0344已应用；当前源入口54项及编译server入口54项通过,编译入口使用workspace TS依赖；生产备份升级演练未完成
+DB-01,C2,历史0334至0344迁移与入口检查,passed,0334至0344已应用；当前源入口54项及编译server入口54项通过,保留54项历史证据；后续0355及132项等见VERIFICATION各自快照，当前升级副本仍待演练
 RELEASE-01,C4,全部需求生产验收,blocked,存在上述阻断项,不可宣称全功能完成
 QODER-04,C2,实际核心任务至CLI运行链路,passed,qoder-runtime.spec 安装适配器和真实Agent生命周期 heartbeat回执,假CLI 不证明真实账号或工具JWT
 WB-05,C2,私有令牌和刷新竞争,passed,0338专用密文及四项实际数据库测试,旧连接重新授权 实际租户仍待验证
 WB-06,C2,Agent只读就绪验证,passed,所有者授权与只读任务列表探针 不创建远端任务,真实应用授权与生命周期实连
 CODE-06,C1,自动CI轮询与有限修复调度,partial,0339轮询及0340有限修复调度已接入 10项修复真实DB用例,真实供应商闭环未验收 派发窗口不是运行中强制截止
 NOTIFY-06,C2,应用token自动刷新,passed,0341加密缓存租约及27单元10数据库测试,真实钉钉公众号凭据和提前失效仍需实连验收
-I18N-06,C1,约定高频路径全部系统字符串,partial,1730项四语资源 设置邀请筛选任务集合反馈矩阵已补齐；50文件585语法候选仍待复核,动态对话框筛选和部分错误仍有英文 不等于全覆盖
+I18N-06,C1,约定高频路径全部系统字符串,partial,2354键审计基点；50文件585语法候选仅辅助，不是实际路由全覆盖,核心任务/Agent设置漏译与IME保护修复中；按PLAN-TRACEABILITY V2-I18N-04至07逐项验收
 BUILD-04,C1,server编译及标准资源打包,passed,标准资源及串行编译通过 stamp bd5af65；compiled入口API60项,workspace依赖仍TS loader 非完整npm all-dist安装验证
 ADAPTER-01,C2,七项能力证据展示,passed,10项测试及真实浏览器unknown状态检查,不等于当前账号C3C4验收
 BUILD-05,C1,所有工作区包分批构建与类型,passed,历史49提交基线35包分批通过；本轮受影响shared/DB/server/UI重验,不等于默认根命令一次运行或发布安装包验收
@@ -45,12 +45,13 @@ NOTIFY-08,C2,投递人工核对及幂等依据,passed,4项真实DB用例 19项�
 AUTH-04,C2,本地真实浏览器身份与权限,passed,OIDC-BROWSER-20261026：邀请/未邀请隔离、Viewer读写、旧账号显式绑定、退出,本地IdP，不代替实际Casdoor租户
 AUTH-05,C2,仅SSO邀请入口与恢复,passed,中文西语真实浏览器无密码表单；4文件43项定向UI通过,真实Casdoor租户仍待联调；其他存量页面另列剩余文案
 AUTH-06,C2,管理员撤销会话和个人Board keys,passed,真实本地OAuth：旧会话/key401、其他账号200、Viewer403；API54及路由6/UI10,不封禁新登录、不撤销MCP或连接器、不终止在途任务
-P3-01,C2,反馈日志候选与人审转任务,partial,0345/0346人工导入脱敏、持久去重、精确标题候选与人审私有待办，真实SSO浏览器闭环通过,Langfuse/企微真实连接器、日志语义分析和自动复现仍未完成
-P4-01,C2,调研运营可追溯与dry-run,partial,0347月度时区与不可变差异及现有审核通过；四语Chrome与118项UI回归通过,0348调研候选人审转私有待办本地Chrome通过；routines接线、真实拉取写入及持久对账尚未完整实现
-P5-01,C2,固定集版本评估与受控提升回滚,partial,固定集与服务器历史运行比较及费用未知边界已实现；真实顺序createTestRun夹具通过,受控提升/文件回滚仍在开发；成本路由与独立提示词版本尚未完成
+P3-01,C2,反馈日志候选与人审转任务,partial,人工脱敏导入、确定性产品/版本/标题及错误堆栈分组、人审私有任务；Langfuse只读连接器与企微接收/管理UI已实现,真实来源联调及可验证复现/测试或回归集关联尚缺；语义模型聚类/自动复现不是原文硬要求
+P4-01,C2,调研运营可追溯与dry-run,partial,月度人工快照与不可变差异/审核；调研来源/时间/证据、人审转任务、run-bound routines报告已实现,实际来源与定时运行闭环证据、业务读取/写入与持久执行对账尚缺；不强制自建GitHub collector
+P5-01,C2,固定集版本评估与受控提升回滚,partial,固定集精确比较、历史费用边界、暂停且未挂接技能的managed-local整树提升/回退已实现；提示词注册表及UI已实现,提示词运行比较/应用未实现；成本预览全部blocked不推荐，真实成本路由未实现
 CODE-07,C2,六目标构建证据缺口矩阵,passed,公司/项目/SHA隔离API与四语真实Chrome；本地hash不升级Runner证据,实际Runner、签名、上传合同仍未验收
 P3-02,C2,人工反馈确认与私有权限隔离,passed,真实OAuth Viewer task404/inbox403；promotionCount1/AgentRuns0；刷新同一回执,人工来源声明不是连接器已实连
-
-P3-02,C2,Langfuse观测只读拉取,passed,35服务单测与9UI；7真实DB/API夹具通过并进入91项集成回归,真实租户C3尚未联调；仅有限字段而非完整trace或日志
+P3-03,C2,Langfuse观测只读拉取,passed,35服务单测与9UI；7真实DB/API夹具通过并进入91项集成回归,真实租户C3尚未联调；仅有限字段而非完整trace或日志
 NOTIFY-09,C2,订阅策略CAS与精确重复窗口,passed,9真实DB/API含双连接并发/审计回滚/失败运行触发器通过,真实平台策略及浏览器复验仍待完成
-CODE-07,C2,固定SHA差异与审阅摘要,passed,本地Git与HTTP/DB审阅回执通过；隐式promisor获取关闭并有对照回归,实际GitLab项目/Runner未验收；二进制/子模块/过大差异失败关闭
+CODE-08,C2,固定SHA差异与审阅摘要,passed,本地Git与HTTP/DB审阅回执通过；隐式promisor获取关闭并有对照回归,实际GitLab项目/Runner未验收；二进制/子模块/过大差异失败关闭
+I18N-07,C2,2354键冻结UI回归,passed,770文件8665项通过 sourceUnchanged=true SHA256 979d17c84647f5bd050bc5f8695334623d0e09d96c10b0aeff93214026530db5,不含后续漏译/IME修复；不是真实输入法或四语全覆盖
+AUTH-07,C1,全局退出未确认提示（原§5.4）,not_run,6bee5bc审计基点尚缺明确UI；修复切片开发中,本地session退出与IdP全局退出分开；合入后需定向回归和实际Casdoor不可达手测

@@ -68,9 +68,9 @@ GET `/api/companies/:companyId/coding/:id/build-matrix` 和交付列表的 `buil
 
 重要：当前本地产物平台/架构与job名称是声明，不证明Runner运行或目标架构。每个目标仍为blocked，区分manifest_missing、manifest_invalid、manifest_identity_mismatch、artifact_missing、runner_evidence_missing。客户端伪造testStatus、signatureStatus、uploaded、productionReleased或buildMatrix成功字段不能升级证据。上传固定blocked/upload_contract_missing；不发外部请求。旧的MR/CI候选门禁不是完整矩阵发布门禁。
 
-本切片C2：服务端3文件30项通过；真实隔离数据库/API覆盖六目标、本地hash不升级、其他公司404、同公司第二项目错配拒绝、列表与详情一致。首次跨公司404断言发现既有load抛普通集成错误产生500，已在路由边界精准映射404，保留其他异常。第二次夹具误复用同issue/head触发原唯一约束，改成真实独立任务/项目/工作区，不修改约束。共享包标准构建通过；整套server类型/构建等待当前完整UI回归结束后串行复验，尚不以定向测试代替。
+本切片C2：服务端3文件30项通过；真实隔离数据库/API覆盖六目标、本地hash不升级、其他公司404、同公司第二项目错配拒绝、列表与详情一致。首次跨公司404断言发现既有load抛普通集成错误产生500，已在路由边界精准映射404，保留其他异常。第二次夹具误复用同issue/head触发原唯一约束，改成真实独立任务/项目/工作区，不修改约束。共享包标准构建通过；当时整套 server 类型/构建等待串行复验，此句仅为该切片历史记录。当前审计的完整类型与 UI 冻结结果见 PLAN-TRACEABILITY；新构建/API 仍须各自证据。
 
-后续仍需实际Runner回执的可信采集/固定SHA绑定、目标工具链和签名验证、上传合同及UI矩阵展示。此接口是可用的证据缺口清单，不是已经完成六平台构建。
+后续仍需实际Runner回执的可信采集/固定SHA绑定、目标工具链和签名验证、上传合同。UI 六目标缺口矩阵已经展示，不是后续未接线项。此接口是可用的证据缺口清单，不是已经完成六平台构建。
 
 ## 固定 SHA 代码差异审阅（P2）
 
@@ -103,3 +103,5 @@ MR/CI 同步不会把旧式 SHA 勾选升级为新回执，任何候选状态仍
 仅不显式调用 fetch 不足以保证本地读取：partial clone 的缺失对象会触发 promisor remote 下载，且 promisor 可以不是 origin。
 本地 Git 2.52.0 夹具删除 base blob，配置第二 promisor remote 与仅写标记后退出的 SSH helper；对照检查确实触发 helper，受防护差异检查失败且不触发 helper、不补回对象、不访问网络。
 此限制仅用于检查，不更改显式授权 push 的环境。实现依据：[Git 2.52.0 --no-lazy-fetch / GIT_NO_LAZY_FETCH](https://git-scm.com/docs/git/2.52.0#Documentation/git.txt---no-lazy-fetch)、[Git 2.52.0 GIT_ALLOW_PROTOCOL 与 GIT_OPTIONAL_LOCKS](https://git-scm.com/docs/git/2.52.0)、[Partial clone 缺失对象与多个 promisor remote](https://git-scm.com/docs/partial-clone)。
+
+逐项原计划范围及手测见 [PLAN-TRACEABILITY](PLAN-TRACEABILITY.md) 的 V2-CODE-01–10/T07。六格 blocked 是正确失败关闭，不是可信构建/上传已经实现；缺代码和缺机器/合同分别记录。

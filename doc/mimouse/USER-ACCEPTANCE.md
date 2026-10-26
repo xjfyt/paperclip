@@ -1,5 +1,7 @@
 # MiMouse 用户拉取与手工验收指南
 
+> 当前原计划逐项结论与统一手测见 [PLAN-TRACEABILITY](PLAN-TRACEABILITY.md)。最新审计基点 6bee5bc；已核实远端0d43ebb。2354键冻结UI已完成770文件8665项回归、sourceUnchanged=true（摘要见矩阵）；后续漏译/IME/退出提示修复另验。6bee5bc server完整类型已过，构建/API复验待记录。以下旧SHA及各自通过数是历史证据，不顺延。
+
 本指南供你拉取代码后，在**独立、可丢弃测试环境**中自行验证。它是测试步骤，不是通过报告；下列手工用例默认均为「未执行」，实际结果请另行记录。
 
 先读 [VERIFICATION.md](VERIFICATION.md) 最新时间段和 [REMAINING.md](REMAINING.md)，再按本文执行。模块文档中的早期「待集成」段落是历史切片说明，不能覆盖较新的集成证据；反过来，历史通过也不能证明最新代码通过。
@@ -31,7 +33,7 @@ VERIFICATION 最新记录时间/对应源码或 build stamp：
 用例 ID | 通过/失败/阻塞/未执行 | 实际结果 | 脱敏截图或日志 | 相关资源 ID
 ```
 
-**不要凭提交数量判断拿到了最新代码。** 本次校准时已独立核实的远端是 `f19971da0444d75fa785f695eb7974cefa75a2bd`；以自己拉取的完整 SHA 和下面的证据范围核对。后续本地代码、测试或按钮不自动成为已发布版本。
+**不要凭提交数量判断拿到了最新代码。** 下列旧轮次校准时已独立核实的远端是 `f19971da0444d75fa785f695eb7974cefa75a2bd`；以自己拉取的完整 SHA 和下面的证据范围核对。后续本地代码、测试或按钮不自动成为已发布版本。
 
 ### 已核实版本与历史快照（2026-10-26 10:38 UTC）
 
@@ -42,7 +44,7 @@ VERIFICATION 最新记录时间/对应源码或 build stamp：
 | 2,246 键历史 UI 冻结快照（133 阶段） | 757 文件、76 批、8,575 项全过，失败/跳过/todo 均为 0，源码未变；source hash `252ec1888ae3299adc2b6b5642db2b608ddfa73aba04cb5168f404f4d16f8723` | 不是 141 阶段或后续 2,286 键源码的同快照全量证明 |
 | 应用 `107e06d4a5c88b407f7083dee261f5f3f41be9bd`（129 阶段）独立安装 | 17 个一方包、430 个安装依赖；普通 Node、无 TS loader/工作区回退，真实 PostgreSQL、health、打包 UI/API 通过；owned-process guard 检查后退出 0 | `naturalExit=not_verified_owned_process_exit`：未证明所有资源自然退出，也不是后续版本/全平台/生产发布资格 |
 | 已包含在上述远端的应用 `c3840243f37b730f80146bb7bbd673e2b2ab37c7`：企微接收与提示词 UI | 源码 API 132 项、完整 server/UI 类型检查和 2,286 键 UI 生产构建通过 | 最新完整 UI 和独立安装不能沿用历史通过；编译入口见下一行，未宣称浏览器或供应商 C3 已过 |
-| 同属已发布远端的 `c21a6ebcc4666a97397631594e811c2474b1a70f`：响应日志隐私修复 | 5 文件 67 项定向检查通过，含真实 pino 的虚构 canary；server 标准构建和编译入口 API 132项通过，build stamp 精确对应本 SHA | 编译入口仍使用workspace TS依赖loader；企微管理面板另在开发，不宣称已提供或完成 |
+| 同属已发布远端的 `c21a6ebcc4666a97397631594e811c2474b1a70f`：响应日志隐私修复 | 5 文件 67 项定向检查通过，含真实 pino 的虚构 canary；server 标准构建和编译入口 API 132项通过，build stamp 精确对应本 SHA | 编译入口仍使用workspace TS依赖loader；该历史快照尚无企微管理面板；当前基点已提供，不能沿用此历史构建证明新UI |
 
 受控技能提升/回滚已在 129 阶段的原生 Chrome、`umask 0077` 测试实例实际通过：整树内容/执行位/删除恢复、备份、审计回执、四语和刷新相同回执，Agent 运行数为 0。旧失败 staging 孤儿保留，没有靠删除目录换取通过。独立安装的退出语义和复验方法见 [独立安装冒烟](../ALL-DIST-INSTALL-SMOKE.md)。这些历史结果不会自动填入你的用户验收记录。
 
@@ -243,7 +245,7 @@ API 入口会核查专用标记及真实 data_directory，拒绝混用现有配�
 3. **FEEDBACK-03**：人类 owner/admin 填复现、预期、建议、验收标准并确认转待办；连点/刷新/重试。预期一个 private/backlog 任务、无 Agent 指派/派发；quarantined 不因晋级变可信；另一用户看不到他人的私有回执。
 4. **LF-01**：Langfuse 面板创建只读任务，使用测试项目的受控密钥引用、固定版本、明确不超过24小时窗口；先检查缺项/非法 origin 被拒绝。没有实连授权仅运行 fixture，不向实际账号请求。
 5. **LF-02（可选实连）**：明确点击拉取一页，核对来源 URL、project/trace/observation、微秒时间与 `provider_fetch`；继续页、重启服务后继续、显式 replay。预期游标持久化、同事件不重复、初始脱敏快照不覆盖；人工 sourceKind=langfuse 仍标 manual_import。
-6. **LF-03**：受控 fixture 测试401/429、未知schema、404/405/410、取消、页面并发与审计失败。预期失败关闭、重试时间可见、页和游标同事务；响应丢失先刷新状态，不宣称完整抓取。只读 GET、不拉完整 trace/io/客户日志、不发模型/客户回复。企微接收的未发布增量见 4.12；语义聚类和自动复现仍未完成。
+6. **LF-03**：受控 fixture 测试401/429、未知schema、404/405/410、取消、页面并发与审计失败。预期失败关闭、重试时间可见、页和游标同事务；响应丢失先刷新状态，不宣称完整抓取。只读 GET、不拉完整 trace/io/客户日志、不发模型/客户回复。当前企微接收与管理界面见 4.12；可验证复现/测试关联仍缺，语义模型聚类/自动复现是可选增强。
 
 ### 4.8 调研与例行任务（候选/人工晋级/报告身份接线已实现）
 
@@ -289,7 +291,7 @@ API 入口会核查专用标记及真实 data_directory，拒绝混用现有配�
 
 ### 4.12 企业微信接收入站（未发布增量；默认关闭，非真实 C3）
 
-先确认实际 SHA 已包含该增量。当前管理入口是 `GET/POST /api/companies/:companyId/feedback-wecom/connections`、`PATCH .../:id` 和 `POST .../:id/enabled`，不是通知 webhook；管理面板另在开发，本节不假定已有可用配置页面。配置字段以 `server/src/services/mimouse-wecom/protocol.ts` 为准。先用仓库隔离 fixture 和虚构秘密；worker 保持 `MIMOUSE_WECOM_WORKER_ENABLED=false`，不得把真实企业群/生产 bot 当故障注入对象。
+先确认实际 SHA 已包含该增量。当前管理入口是 `GET/POST /api/companies/:companyId/feedback-wecom/connections`、`PATCH .../:id` 和 `POST .../:id/enabled`，不是通知 webhook；当前已提供反馈页企微管理面板；旧快照缺入口需先升级，不以手写凭据绕过选择器。配置字段以 `server/src/services/mimouse-wecom/protocol.ts` 为准。先用仓库隔离 fixture 和虚构秘密；worker 保持 `MIMOUSE_WECOM_WORKER_ENABLED=false`，不得把真实企业群/生产 bot 当故障注入对象。
 
 只有你明确批准测试企业、bot、群/直接发送者白名单和固定版本的公司秘密引用后，才在**另一个隔离终端/实例**显式启用 worker。开关、配置和授权都不是 C3；需要另记真实供应商证据。缺条件就记 blocked，不要求提供生产凭据。
 
@@ -303,9 +305,9 @@ API 入口会核查专用标记及真实 data_directory，拒绝混用现有配�
 8. **WECOM-08 回执与低信任**：fixture 发送一条允许的文本，重复同 msgid，再用同 msgid 改正文；附带媒体 URL、response_url、aeskey 或指令文本。预期 `provider_push`、首份脱敏快照保留、重复不新增、quarantined 不升级可信；不下载附件、不执行消息指令、不自动创建/指派任务或调用模型。状态如有 gap 必须保留，`replaySupported:false` 不能当完整补抓；人工晋级沿 FEEDBACK-03 单独确认。
 9. **WECOM-09 可选实连**：仅在明确测试授权下接收一个虚构最小文本，保存 bot/范围/版本的脱敏对应证据、供应商消息 ID 映射、接收与停止回执。缺真实供应商回执仍是 C2/blocked；10 项本地 DB/API 或纯协议通过都不能代替这项 C3。
 
-### 4.13 提示词注册表（已发布 API；四语 UI 属后续增量，不应用运行态）
+### 4.13 提示词注册表（API 和四语 UI 已实现，不应用运行态）
 
-142 快照通过管理员 API 测；只有实际包含 UI 的版本才执行页面步骤。入口为公司 `prompt-registry` 页面（若提供）及 `GET /api/companies/:companyId/prompt-registry`、`POST .../revisions`、`POST .../:promptId/selections`。参阅 [提示词注册表](../plans/2026-10-26-p5-prompt-registry.md)。必须是真人 owner/admin 的有效 session，不使用 Board key、Agent key 或 local_implicit 替代。
+142 快照仅有 API；当前基点已含 UI，按实际拉取 SHA 执行页面步骤。入口为公司 `prompt-registry` 页面及 `GET /api/companies/:companyId/prompt-registry`、`POST .../revisions`、`POST .../:promptId/selections`。参阅 [提示词注册表](../plans/2026-10-26-p5-prompt-registry.md)。必须是真人 owner/admin 的有效 session，不使用 Board key、Agent key 或 local_implicit 替代。
 
 1. **PROMPT-01 精确内容**：用虚构 promptKey 创建两版，正文包含前后空格、换行及无害 HTML 字样；再读取版本正文/哈希。预期不可变、原样文本展示，不 trim、模板插值或执行 HTML；创建不会自动选择版本。正文和数据库绑定 SQL 不能出现在错误日志中。
 2. **PROMPT-02 仅注册表选择**：查看目标内容/ID/hash及服务端 head receipt，再明确勾选「仅选择注册表」进行 promote；刷新查询回执。预期 `runtimeApplied:false`，Agent 指令、技能文件、调度/模型调用均不变。选择不表示效果提升、运行态激活或默认将来运行采用该版本。
@@ -339,4 +341,4 @@ API 入口会核查专用标记及真实 data_directory，拒绝混用现有配�
 
 建议先完成：版本核对 → 安装/health → 四语与基本任务 → AUTHZ → 反馈/运营/调研人工路径 → 评估/恢复 → fixture 自动复验 → 有授权条件的供应商实连 → 独立安装包/备份恢复。没有外部条件的项目记 blocked，未点击的项目记未执行，不因其它模块通过而勾选。
 
-验收结论分别填写「源码可用」「构建通过」「安装包通过」「手工路径通过」「供应商 C3」「业务 C4」，只对实际测试 SHA 和环境有效。本文不会把尚未实现的业务写入、上传、六目标 Runner、语义聚类、自动复现或真实供应商验证写成已完成。
+验收结论分别填写「源码可用」「构建通过」「安装包通过」「手工路径通过」「供应商 C3」「业务 C4」，只对实际测试 SHA 和环境有效。本文不会把尚未实现的业务写入、上传、可信六目标 Runner、复现/回归集关联或真实供应商验证写成已完成。语义模型聚类与自动复现属于可选增强，不是原计划额外必交项。
