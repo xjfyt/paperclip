@@ -2,8 +2,9 @@ import { test, expect, type APIRequestContext } from "@playwright/test";
 import { createHash, randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import { createFixtureDb } from "./fixture-db.js";
-import { activityLog, agents, heartbeatRuns, issues, companySkills, companySkillVersions, companySkillTestInputs, companySkillTestRuns, costEvents,
+import { activityLog, authUsers, companyMemberships, mimouseFeedbackInbox, agents, heartbeatRuns, issues, companySkills, companySkillVersions, companySkillTestInputs, companySkillTestRuns, costEvents,
   mimouseEvaluationDatasets as datasets, mimouseEvaluationComparisons as comparisons } from "../../packages/db/src/index.js";
+import { feedbackInboxService } from "../../server/src/services/mimouse-feedback.js";
 import { companySkillService } from "../../server/src/services/company-skills.js";
 import { evaluationService } from "../../server/src/services/mimouse-evaluation/service.js";
 import { mimouseEvaluationRoutes } from "../../server/src/routes/mimouse-evaluation.js";
@@ -195,4 +196,112 @@ test("normal sequential upstream test runs retain completed superseded evidence 
     // Previously persisted comparison remains pinned despite later superseding.
     expect((await (await request.get(`${f.root}/comparisons/${report.id}`)).json()).report).toEqual(report.report);
   } finally { await f.db.$client.end({ timeout: 1 }); }
+});
+
+/** Explicit session actor + actual persisted membership, not an SSO/login proof. */
+async function lineageFixture(request: APIRequestContext) {
+  const f = await fixture(request, false), userId = randomUUID();
+  await f.db.insert(authUsers).values({ id: userId, name: "Lineage reviewer", email: `${userId}@fixture.invalid`, createdAt: new Date(), updatedAt: new Date() });
+  const [membership] = await f.db.insert(companyMemberships).values({ companyId: f.companyId, principalType: "user", principalId: userId, status: "active", membershipRole: "owner" }).returning();
+  const imported = await feedbackInboxService(f.db).import(f.companyId, {
+    sourceKind: "manual", sourceInstance: "lineage-fixture", externalId: randomUUID(), title: "Fixture source title",
+    text: "UNTRUSTED_SOURCE_DO_NOT_EXECUTE_OR_COPY", product: "Fixture app", softwareVersion: "1.0", commitSha: null, traceId: "fixture-trace", occurredAt: "2026-10-26T00:00:00Z",
+  }, userId);
+  const owner: Express.Request["actor"] = { type: "board", source: "session", userId, companyIds: [f.companyId], memberships: [{ companyId: f.companyId, membershipRole: "owner", status: "active" }] };
+  function app(actor: Express.Request["actor"] = owner) {
+    const server = express(); server.use(express.json()); server.use((req, _res, next) => { req.actor = actor; next(); }); server.use(mimouseEvaluationRoutes(f.db));
+    server.use((error: unknown, _req: import("express").Request, res: import("express").Response, _next: import("express").NextFunction) => { res.status(error instanceof HttpError ? error.status : 500).json({ error: "denied" }); }); return server;
+  }
+  const base = `/companies/${f.companyId}/skill-evaluations/datasets`;
+  const previewBody = { skillId: f.skill.id, inputId: f.input.id, feedbackId: imported.item.id, expected: "correct\noutput" };
+  const rows = () => f.db.select().from(datasets).where(eq(datasets.companyId, f.companyId));
+  const audits = async () => (await f.db.select().from(activityLog).where(eq(activityLog.companyId, f.companyId))).filter(row => row.action === "evaluation.dataset.created");
+  async function preview() { const response = await supertest(app()).post(`${base}/feedback-preview`).send(previewBody); expect(response.status, JSON.stringify(response.body)).toBe(200); return response.body as { previewDigest: string }; }
+  const draft = (previewDigest: string) => ({ ...f.datasetInput, cases: [{ inputId: f.input.id, expected: previewBody.expected, feedback: { feedbackId: imported.item.id, previewDigest, reviewed: true as const } }] });
+  return { ...f, owner, userId, membership, source: imported.item, app, base, previewBody, preview, draft, rows, audits };
+}
+
+test("feedback lineage real DB API freezes exact references once and never alters the actual test input", async ({ request }) => {
+  const f = await lineageFixture(request); try {
+    const preview = await f.preview(), body = f.draft(preview.previewDigest);
+    expect(await f.rows()).toHaveLength(0); expect(await f.audits()).toHaveLength(0);
+    const responses = await Promise.all([supertest(f.app()).post(f.base).send(body), supertest(f.app()).post(f.base).send(body)]);
+    expect(responses.map(response => response.status).sort()).toEqual([200, 201]);
+    const [a, b] = responses.map(response => response.body); expect(a.item).toEqual(b.item);
+    expect(a.item.cases[0]).toMatchObject({ id: f.input.id, input: f.input.content.trim(), sourceInputSnapshot: f.input.content, expected: f.previewBody.expected,
+      feedbackSource: { companyId: f.companyId, feedbackId: f.source.id, sourceInstance: f.source.sourceInstance, externalId: f.source.externalId, softwareVersion: "1.0", commitSha: null,
+        sourceTrust: "quarantined", reproductionStatus: "not_reproduced", previewDigest: preview.previewDigest, reviewedBy: f.userId } });
+    expect(a.item.cases[0].feedbackSource.sanitizedSnapshotDigest).toMatch(/^[a-f0-9]{64}$/);
+    expect(a.item.datasetHash).toBe(digest(a.item.cases)); expect(await f.rows()).toHaveLength(1); expect(await f.audits()).toHaveLength(1);
+    expect(JSON.stringify(await f.rows())).not.toContain("UNTRUSTED_SOURCE"); expect(JSON.stringify(await f.audits())).not.toContain(f.input.content);
+    expect((await supertest(f.app()).post(f.base).send({ ...body, name: "changed payload" })).status).toBe(409);
+    // Same production input-building method as real skill tests, but a fixture
+    // NO-OP wake dependency: no model, provider, heartbeat or external account.
+    await f.db.update(agents).set({ status: "idle" }).where(eq(agents.id, f.agent.id));
+    let wakes = 0;
+    const skills = companySkillService(f.db);
+    const run = await skills.createTestRun(f.companyId, f.skill.id, { inputId: f.input.id, agentId: f.agent.id, skillVersionId: f.versions[0]!.id, templateId: null }, { type: "system" }, {
+      createHarnessIssue: async input => { const [row] = await f.db.insert(issues).values({ ...input, companyId: f.companyId }).returning({ id: issues.id }); return row!; },
+      wakeHarnessIssue: async () => { wakes += 1; return { fixtureNoOp: true }; },
+    });
+    const [storedRun] = await f.db.select().from(companySkillTestRuns).where(eq(companySkillTestRuns.id, run.id));
+    const [harness] = await f.db.select().from(issues).where(eq(issues.id, run.issueId));
+    expect(storedRun!.inputSnapshot).toBe(f.input.content.trim()); expect(JSON.stringify(storedRun)).not.toContain(f.source.id);
+    expect(harness!.description).not.toContain("UNTRUSTED_SOURCE"); expect(harness!.description).not.toContain(f.source.id);
+    expect(wakes).toBe(1); expect(await f.db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.companyId))).toHaveLength(0);
+    const legacy = await freeze(request, { ...f, datasetInput: { ...f.datasetInput, requestId: randomUUID() } });
+    expect(legacy.cases[0]).toEqual({ id: f.input.id, input: f.input.content.trim(), sourceInputSnapshot: f.input.content, expected: f.previewBody.expected });
+    expect(legacy.datasetHash).toBe(digest(legacy.cases)); expect(legacy.cases[0].feedbackSource).toBeUndefined();
+  } finally { await f.db.$client.end({ timeout: 1 }); }
+});
+
+test("feedback lineage real DB rejects non-human, foreign and stale snapshots without dataset or audit writes", async ({ request }) => {
+  const f = await lineageFixture(request), other = await lineageFixture(request); try {
+    const preview = await f.preview(), body = f.draft(preview.previewDigest);
+    for (const actor of [
+      { ...f.owner, source: "local_implicit" },
+      { ...f.owner, companyIds: [other.companyId], memberships: [{ companyId: other.companyId, membershipRole: "owner", status: "active" }] },
+      { ...f.owner, memberships: [{ companyId: f.companyId, membershipRole: "member", status: "active" }] },
+      { type: "agent", source: "agent_key", companyId: f.companyId, agentId: f.agent.id },
+    ] as Express.Request["actor"][]) {
+      expect((await supertest(f.app(actor)).post(`${f.base}/feedback-preview`).send(f.previewBody)).status).toBe(403);
+      expect((await supertest(f.app(actor)).post(f.base).send(body)).status).toBe(403);
+    }
+    for (const patch of [{ feedbackId: other.source.id }, { inputId: other.input.id }]) expect((await supertest(f.app()).post(`${f.base}/feedback-preview`).send({ ...f.previewBody, ...patch })).status).toBe(404);
+    expect((await supertest(f.app()).post(f.base).send({ ...body, cases: [{ ...body.cases[0], feedback: { ...body.cases[0]!.feedback, feedbackId: other.source.id } }] })).status).toBe(404);
+    await f.db.update(companySkillTestInputs).set({ content: "changed after preview" }).where(eq(companySkillTestInputs.id, f.input.id));
+    expect((await supertest(f.app()).post(f.base).send(body)).status).toBe(409);
+    await f.db.update(companySkillTestInputs).set({ content: f.input.content }).where(eq(companySkillTestInputs.id, f.input.id));
+    // Keep the old raw-import contentDigest unchanged: current sanitized content
+    // must independently bind the confirmation snapshot.
+    await f.db.update(mimouseFeedbackInbox).set({ body: "changed sanitized source" }).where(eq(mimouseFeedbackInbox.id, f.source.id));
+    expect((await supertest(f.app()).post(f.base).send(body)).status).toBe(409);
+    const current = await f.preview();
+    await f.db.update(companyMemberships).set({ status: "suspended" }).where(eq(companyMemberships.id, f.membership.id));
+    expect((await supertest(f.app()).post(f.base).send(f.draft(current.previewDigest))).status).toBe(403);
+    expect((await supertest(f.app()).post(`${f.base}/feedback-preview`).send(f.previewBody)).status).toBe(403);
+    expect(await f.rows()).toHaveLength(0); expect(await f.audits()).toHaveLength(0);
+  } finally { await other.db.$client.end({ timeout: 1 }); await f.db.$client.end({ timeout: 1 }); }
+});
+
+test("feedback lineage audit failure rolls the real transaction back and the same request can recover", async ({ request }) => {
+  const f = await lineageFixture(request), name = `fixture_lineage_audit_${randomUUID().replaceAll("-", "")}`;
+  let functionCreated = false, triggerCreated = false;
+  try {
+    const body = f.draft((await f.preview()).previewDigest);
+    await f.db.$client.unsafe(`CREATE FUNCTION ${name}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+      IF NEW.company_id = '${f.companyId}'::uuid AND NEW.action = 'evaluation.dataset.created' THEN RAISE EXCEPTION 'fixture lineage audit failure'; END IF;
+      RETURN NEW; END; $$`); functionCreated = true;
+    await f.db.$client.unsafe(`CREATE TRIGGER ${name} BEFORE INSERT ON activity_log FOR EACH ROW EXECUTE FUNCTION ${name}()`); triggerCreated = true;
+    expect((await supertest(f.app()).post(f.base).send(body)).status).toBe(500);
+    expect(await f.rows()).toHaveLength(0); expect(await f.audits()).toHaveLength(0);
+    await f.db.$client.unsafe(`DROP TRIGGER ${name} ON activity_log`); triggerCreated = false;
+    const created = await supertest(f.app()).post(f.base).send(body); expect(created.status).toBe(201);
+    const retry = await supertest(f.app()).post(f.base).send(body); expect(retry.status).toBe(200); expect(retry.body.item).toEqual(created.body.item);
+    expect(await f.rows()).toHaveLength(1); expect(await f.audits()).toHaveLength(1);
+  } finally {
+    try { if (triggerCreated) await f.db.$client.unsafe(`DROP TRIGGER IF EXISTS ${name} ON activity_log`);
+      if (functionCreated) await f.db.$client.unsafe(`DROP FUNCTION IF EXISTS ${name}()`);
+    } finally { await f.db.$client.end({ timeout: 1 }); }
+  }
 });
