@@ -46,6 +46,9 @@ export const agentWakeupRequests = pgTable(
       .defaultNow(),
   },
   (table) => ({
+    privatePromptTestIdempotencyUq: uniqueIndex("agent_wakeup_requests_private_prompt_test_uq")
+      .on(table.companyId, table.idempotencyKey)
+      .where(sql`${table.idempotencyKey} LIKE 'private-prompt-test:%'`),
     companyAgentStatusIdx: index(
       "agent_wakeup_requests_company_agent_status_idx",
     ).on(table.companyId, table.agentId, table.status),

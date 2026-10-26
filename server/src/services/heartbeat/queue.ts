@@ -1,3 +1,6 @@
+import { mimousePrivatePromptTests } from "@paperclipai/db/schema/mimouse_private_prompt_tests";
+import { privatePromptWakeAuthority } from "../mimouse-private-prompt-tests/wake-authority.js";
+import { validatePrivatePromptResources, privatePromptInput } from "../mimouse-private-prompt-tests/service.js";
 import { isAgentAwaitingSetup } from "../../modules/agent-lifecycle/index.js";
 import { normalizeAgentNameKey } from "./retries.js";
 import { publishActiveDotComment } from "../dot-assignment-follow-up.js";
@@ -2122,6 +2125,17 @@ export function createHeartbeatQueue(db: Db, dependencies: HeartbeatQueueDepende
     let issueId =
       readNonEmptyString(enrichedContextSnapshot.issueId) ?? issueIdFromPayload;
     if (executionReconciliationWake && !issueId) return null;
+    const privateTestId = privatePromptWakeAuthority(opts);
+    const reservedPrivateWake = opts.idempotencyKey?.startsWith("private-prompt-test:") ||
+      reason === "private_prompt_test" || "privatePromptTest" in contextSnapshot || "privatePromptTestId" in contextSnapshot;
+    if (reservedPrivateWake && !privateTestId) throw new HttpError(403, "private_prompt_wake_authority_required");
+    if (issueId) {
+      const [privateIssue] = await db.select({ id: mimousePrivatePromptTests.id }).from(mimousePrivatePromptTests)
+        .where(eq(mimousePrivatePromptTests.issueId, issueId));
+      if (privateIssue && privateIssue.id !== privateTestId) throw new HttpError(403, "private_prompt_generic_wake_denied");
+      if (privateTestId && privateIssue?.id !== privateTestId) throw new HttpError(403, "private_prompt_wake_binding_denied");
+    } else if (privateTestId) throw new HttpError(403, "private_prompt_wake_binding_denied");
+
 
     let agent = await getAgent(agentId);
     if (!agent) throw notFound("Agent not found");
@@ -2664,6 +2678,27 @@ export function createHeartbeatQueue(db: Db, dependencies: HeartbeatQueueDepende
           await tx.execute(
             sql`select id from issues where id = ${issueId} and company_id = ${agent.companyId} for update`,
           );
+
+          if (privateTestId) {
+            const [test] = await tx.select().from(mimousePrivatePromptTests).where(and(
+              eq(mimousePrivatePromptTests.id, privateTestId), eq(mimousePrivatePromptTests.companyId, agent.companyId),
+              eq(mimousePrivatePromptTests.agentId, agentId), eq(mimousePrivatePromptTests.issueId, issueId))).for("update");
+            if (!test || opts.idempotencyKey !== `private-prompt-test:${test.id}` || opts.requestedByActorId !== test.actorUserId) {
+              throw new HttpError(403, "private_prompt_wake_binding_denied");
+            }
+            if (test.heartbeatRunId) {
+              const [existing] = await tx.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, test.heartbeatRunId));
+              if (!existing) throw new HttpError(409, "private_prompt_run_missing");
+              return { kind: "replayed" as const, run: existing };
+            }
+            if (test.status !== "pending_wake") throw new HttpError(409, "private_prompt_wake_not_pending");
+            const bound = await validatePrivatePromptResources(tx,
+              { companyId: test.companyId, userId: test.actorUserId, sessionId: test.actorSessionId }, privatePromptInput(test), test.promptId, true);
+            if (bound.profile.configDigest !== test.configDigest) throw new HttpError(409, "private_prompt_config_changed");
+            const [existingWake] = await tx.select({ id: agentWakeupRequests.id }).from(agentWakeupRequests).where(and(
+              eq(agentWakeupRequests.companyId, test.companyId), eq(agentWakeupRequests.idempotencyKey, opts.idempotencyKey)));
+            if (existingWake) throw new HttpError(409, "private_prompt_prior_wake_not_admitted");
+          }
 
           if (executionWaitRequestId) {
             const [pending] = await tx.select().from(agentWakeupRequests).where(and(
@@ -4063,6 +4098,12 @@ export function createHeartbeatQueue(db: Db, dependencies: HeartbeatQueueDepende
               updatedAt: new Date(),
             })
             .where(eq(agentWakeupRequests.id, wakeupRequest.id));
+
+          if (privateTestId) {
+            await tx.update(mimousePrivatePromptTests).set({ status: "queued", wakeupRequestId: wakeupRequest.id,
+              heartbeatRunId: newRun.id, updatedAt: new Date() }).where(and(eq(mimousePrivatePromptTests.id, privateTestId),
+              eq(mimousePrivatePromptTests.status, "pending_wake"), isNull(mimousePrivatePromptTests.heartbeatRunId)));
+          }
 
           if (adoptedComments.length) {
             await tx

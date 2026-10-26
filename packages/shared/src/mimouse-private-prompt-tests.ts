@@ -21,6 +21,7 @@ export interface PrivatePromptPreparedWitness {
   testId: string; attemptId: string; companyId: string; issueId: string; heartbeatRunId: string;
   agentId: string; revisionId: string; headReceiptId: string | null;
   revisionHash: string; promptHash: string; promptBytes: number;
+  runtimeConfigHash: string;
   implementation: "paperclip.builtin.claude-local.cli.literal.v1";
   providerConsumed: false;
   stdinWritten: false;

@@ -271,3 +271,5 @@ export * from "./mimouse_prompt_registry.js";
 export * from "./cost_routing_preview.js";
 
 export * from "./mimouse_wecom.js";
+
+export * from "./mimouse_private_prompt_tests.js";
