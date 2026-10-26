@@ -8,6 +8,8 @@ export interface SupervisedEmbeddedPostgres {
 
 export interface EmbeddedPostgresSupervisor {
   current(): SupervisedEmbeddedPostgres;
+  /** Suppress recovery now; leave the live owned child for the final teardown phase. */
+  beginShutdown(): void;
   shutdown(): Promise<void>;
   waitForRecovery(): Promise<void>;
 }
@@ -33,6 +35,7 @@ export function createEmbeddedPostgresSupervisor(options: Options): EmbeddedPost
   let activeInstanceExited = false;
   let shuttingDown = false;
   let recoveryPromise: Promise<void> | null = null;
+  let shutdownPromise: Promise<void> | null = null;
 
   const recover = async () => {
     let lastError: unknown = new Error("Embedded PostgreSQL exited unexpectedly");
@@ -44,6 +47,7 @@ export function createEmbeddedPostgresSupervisor(options: Options): EmbeddedPost
       if (shuttingDown) return;
       try {
         await options.beforeRestart?.(attempt);
+        if (shuttingDown) return;
         const replacement = options.createInstance();
         await replacement.start();
         if (shuttingDown) {
@@ -82,11 +86,14 @@ export function createEmbeddedPostgresSupervisor(options: Options): EmbeddedPost
   return {
     current: () => activeInstance,
     waitForRecovery: async () => { await recoveryPromise; },
-    shutdown: async () => {
-      if (shuttingDown) return;
+    beginShutdown: () => { shuttingDown = true; },
+    shutdown: () => {
       shuttingDown = true;
-      await recoveryPromise;
-      if (!activeInstanceExited) await activeInstance.stop();
+      shutdownPromise ??= (async () => {
+        await recoveryPromise;
+        if (!activeInstanceExited) await activeInstance.stop();
+      })();
+      return shutdownPromise;
     },
   };
 }

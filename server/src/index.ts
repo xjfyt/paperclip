@@ -1986,6 +1986,10 @@ async function startServerWithDatabaseTeardown(
     signal: "SIGINT" | "SIGTERM",
     exitProcess: boolean,
   ) => {
+    // Suppress recovery before any asynchronous drain: terminal signals may
+    // independently stop the owned child while the HTTP listener is draining.
+    // Actual provider stop remains in the final ordered teardown below.
+    if (embeddedPostgresStartedByThisProcess) embeddedPostgresSupervisor?.beginShutdown();
     heartbeatSchedulerStopped = true;
     void mimouseWecomWorker.reconcile(); // Abort sockets before any asynchronous shutdown work.
     unsubscribeWecomTaskDrain();
