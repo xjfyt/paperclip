@@ -153,7 +153,7 @@ OS沙箱、provider消费或完整隐藏上下文。真实CLI进程树取消/完
 
 必须先应用正式迁移再启动新版服务。queue、早期私有绑定保护、最终执行都会查询新表，
 即使执行开关关闭也必须识别历史 private harness，不能退回普通执行。默认关闭不代表
-可以省略 schema 迁移。SQL proposal 不是已注册迁移；编号/journal/snapshot由中央处理。
+可以省略 schema 迁移。中央已生成正式0357迁移/journal/snapshot；SQL proposal只保留历史审查用途，不作为安装或测试旁路。
 迁移后需验证普通历史 issue/skill test 的 API 与执行行为保持，不以开关绕过私有识别。
 
 ### 生命周期补验
@@ -214,3 +214,9 @@ router+实际error middleware，以node:http客户端请求，保留全局fetch�
 无session与普通成员拒绝、no-store、prepare 201/200零wake、旧合并body strict拒绝、
 execute/cancel完整绑定与重复不重派。fixture actor注入不是OIDC/真实登录验证；真实浏览器、
 会话中间件与用户CLI仍需中央/用户独立验收。启动的HTTP listener在finally明确关闭。
+
+## 中央正式迁移与升级窗口
+
+正式迁移为 `0357_deep_nehzno.sql`，统一迁移链创建私有表和保留前缀的全生命周期唯一唤醒约束；测试不再额外执行 `doc/integration/private-prompt-tests.sql` 历史方案。新功能默认关闭不代表可以跳过迁移：核心队列的私有任务防绕过检查需要这张表。先备份并停止本实例应用/worker、排空旧事务，在维护窗口通过正常迁移工具升级，再启动新版本。不要用运行中的旧/新混合worker跳过该前置。
+
+该文件保持原有per-file事务，私有表与唤醒唯一索引原子提交。既有 `agent_wakeup_requests` 即使没有新前缀，也需要扫描来创建partial index；不是零锁/零成本在线升级。本文件设置事务局部 `lock_timeout=5s`、每语句 `statement_timeout=120s`，不是整个文件或迁移 advisory lock 等待的总截止。竞争锁、超时或已有重复前缀导致整个文件回滚，不删除历史、不放弃唯一性。大型库如超时，应在维护窗口检查规模/锁与失败原因，另行审核迁移策略，不能直接删除超时或安全检查。迁移安全检查中的这一项精确例外记录上述理由，不覆盖其它规则。

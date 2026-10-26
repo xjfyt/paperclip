@@ -1,7 +1,7 @@
 import { appendFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { createServer } from "node:net";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, readFile, writeFile, appendFile, rm, access } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -9,7 +9,7 @@ import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import { activityLog, agents, authSessions, authUsers, companies, companyMemberships, companySkills, companySkillVersions,
   mimouseEvaluationDatasets, issueCreateIdempotencyKeys, heartbeatRuns, heartbeatRunEvents, issues, agentWakeupRequests, createDb, type Db,
-  ensurePostgresDatabase, applyPendingMigrations, instanceSettings, environments } from "@paperclipai/db";
+  ensurePostgresDatabase, applyPendingMigrations, inspectMigrations, reconcilePendingMigrationHistory, instanceSettings, environments } from "@paperclipai/db";
 import { mimousePrivatePromptTests as tests } from "@paperclipai/db/schema/mimouse_private_prompt_tests";
 
 vi.mock("../../adapters/plugin-loader.js", () => ({ buildExternalAdapters: async () => [] }));
@@ -59,6 +59,64 @@ let actor: { companyId: string; userId: string; sessionId: string };
 let input: any, promptId: string, heartbeat: ReturnType<typeof heartbeatService>;
 const marker = "PRIVATE_PROMPT_LEAK_SENTINEL_9c4d73b1";
 const literal = "  PRIVATE_PROMPT_LEAK_SENTINEL_9c4d73b1 私有原文🧪\r\n{{agent.name}}\n<script>inert</script>  ";
+/** Only the just-created, marked, empty owned database may exercise this rollback.
+ * Never accepts an arbitrary database or drops objects with CASCADE. */
+async function verifyLatestMigrationAtomicity(connectionString: string) {
+  const latestTag = "0357_deep_nehzno", fileName = `${latestTag}.sql`;
+  const markerValue = await readFile(join(home, ".private-prompt-test-fixture"), "utf8");
+  const directory = await db.execute(sql`show data_directory`);
+  if (markerValue !== "paperclip-private-prompt-disposable-v1" || resolve(String(directory[0].data_directory)) !== resolve(dataDir)) {
+    throw Error("Refusing migration rollback outside the owned fixture");
+  }
+  const journal = JSON.parse(await readFile(new URL("../../../../packages/db/src/migrations/meta/_journal.json", import.meta.url), "utf8"));
+  expect(journal.entries.at(-1)?.tag).toBe(latestTag);
+  const migration = await readFile(new URL(`../../../../packages/db/src/migrations/${fileName}`, import.meta.url), "utf8");
+  const hash = createHash("sha256").update(migration).digest("hex");
+  expect(await db.select().from(tests)).toHaveLength(0);
+  expect(await db.select().from(agentWakeupRequests)).toHaveLength(0);
+  const historyBefore = await db.execute(sql`select id, hash, created_at from drizzle.__drizzle_migrations order by created_at, id`);
+  const latest = historyBefore.at(-1)!;
+  expect(latest.hash).toBe(hash);
+  expect(historyBefore.filter(row => row.hash === hash)).toHaveLength(1);
+  recordPg(`migration atomicity: reverting only owned empty ${fileName}, journal id=${latest.id}`);
+  await db.transaction(async tx => {
+    await tx.execute(sql`drop index public.agent_wakeup_requests_private_prompt_test_uq`);
+    await tx.execute(sql`drop table public.mimouse_private_prompt_tests`);
+    const deleted = await tx.execute(sql`delete from drizzle.__drizzle_migrations where id = ${latest.id} and hash = ${hash} returning id`);
+    expect(deleted).toHaveLength(1);
+  });
+  const [fixtureCompany] = await db.insert(companies).values({ name: "Owned 0357 atomicity fixture", issuePrefix: "MAT" }).returning();
+  const [fixtureAgent] = await db.insert(agents).values({ companyId: fixtureCompany.id, name: "Migration only, never executed", role: "engineer", adapterType: "process", status: "idle" }).returning();
+  const key = `private-prompt-test:migration-fixture-${randomUUID()}`;
+  const inserted = await db.insert(agentWakeupRequests).values(["skipped", "failed"].map(status => ({
+    companyId: fixtureCompany.id, agentId: fixtureAgent.id, source: "on_demand", status, idempotencyKey: key,
+    reason: "owned_migration_duplicate_fixture",
+  }))).returning();
+  const pending = await inspectMigrations(connectionString);
+  expect(pending.status).toBe("needsMigrations");
+  if (pending.status !== "needsMigrations") throw Error("0357 unexpectedly skipped before failure test");
+  expect(pending.pendingMigrations).toEqual([fileName]);
+  await expect(applyPendingMigrations(connectionString)).rejects.toMatchObject({ code: "23505" });
+  const objectsAfterFailure = await db.execute(sql`select to_regclass('public.mimouse_private_prompt_tests') as private_table,
+    to_regclass('public.agent_wakeup_requests_private_prompt_test_uq') as wake_index`);
+  expect(objectsAfterFailure[0]).toMatchObject({ private_table: null, wake_index: null });
+  const historyAfter = await db.execute(sql`select id, hash, created_at from drizzle.__drizzle_migrations order by created_at, id`);
+  expect([...historyAfter]).toEqual([...historyBefore].filter(row => row.id !== latest.id));
+  expect(await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.companyId, fixtureCompany.id)).orderBy(agentWakeupRequests.id))
+    .toEqual([...inserted].sort((a, b) => a.id.localeCompare(b.id)));
+  const reconciled = await reconcilePendingMigrationHistory(connectionString);
+  expect(reconciled.repairedMigrations).toEqual([]); expect(reconciled.remainingMigrations).toEqual([fileName]);
+  expect((await db.execute(sql`select count(*)::int as count from drizzle.__drizzle_migrations where hash = ${hash}`))[0].count).toBe(0);
+  recordPg("migration atomicity: duplicate fence failed with 23505; whole file and journal rolled back; fixture rows retained");
+  // Remove only this test's two rows and their exact fixture parents. No broad cleanup.
+  for (const row of inserted) await db.delete(agentWakeupRequests).where(and(eq(agentWakeupRequests.id, row.id), eq(agentWakeupRequests.companyId, fixtureCompany.id)));
+  await db.delete(agents).where(and(eq(agents.id, fixtureAgent.id), eq(agents.companyId, fixtureCompany.id)));
+  await db.delete(companies).where(eq(companies.id, fixtureCompany.id));
+  await applyPendingMigrations(connectionString);
+  expect((await inspectMigrations(connectionString)).status).toBe("upToDate");
+  expect((await db.execute(sql`select count(*)::int as count from drizzle.__drizzle_migrations where hash = ${hash}`))[0].count).toBe(1);
+  recordPg("migration atomicity: exact duplicate fixtures removed; real 0357 reapplied and journaled once");
+}
 beforeAll(async () => {
   home = await mkdtemp(join(tmpdir(), "paperclip-private-prompt-home-"));
   pgLog = `${home}-postgres.log`; recordPg(`owned fixture ${home}`);
@@ -99,7 +157,9 @@ beforeAll(async () => {
   db = createDb(connectionString);
   const directory = await db.execute(sql`show data_directory`);
   if (resolve(String(directory[0].data_directory)) !== resolve(dataDir)) throw Error("Owned database mismatch");
-  await db.execute(sql.raw(await readFile(new URL("../../../../doc/integration/private-prompt-tests.sql", import.meta.url), "utf8")));
+  await verifyLatestMigrationAtomicity(connectionString);
+  // The normal migration chain (including 0357) owns schema creation.
+  // Never execute the historical SQL review proposal as fixture-only DDL.
   const userId = randomUUID(), sessionId = randomUUID(), now = new Date();
   await db.insert(authUsers).values({ id: userId, name: "Private fixture", email: `${userId}@example.invalid`, createdAt: now, updatedAt: now });
   await db.insert(authSessions).values({ id: sessionId, token: randomUUID(), userId, expiresAt: new Date(Date.now()+3600000), createdAt: now, updatedAt: now });
@@ -136,6 +196,29 @@ afterAll(async () => {
     }
   } finally { vi.unstubAllEnvs(); vi.unstubAllGlobals(); if (home && safeCleanup) await rm(home, { recursive: true, force: true }); }
 }, 60000);
+it("installs the real 0357 all-status unique fence and enforced private status constraint", async () => {
+  const indexes = await db.execute(sql`select i.indisunique, i.indisvalid, i.indisready, pg_get_expr(i.indpred, i.indrelid) as predicate
+    from pg_index i join pg_class c on c.oid = i.indexrelid join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and c.relname = 'agent_wakeup_requests_private_prompt_test_uq'`);
+  expect(indexes).toHaveLength(1);
+  expect(indexes[0]).toMatchObject({ indisunique: true, indisvalid: true, indisready: true });
+  expect(String(indexes[0].predicate)).toContain("private-prompt-test:%"); expect(String(indexes[0].predicate)).not.toContain("status");
+  const constraints = await db.execute(sql`select convalidated, pg_get_constraintdef(oid) as definition from pg_constraint
+    where conrelid = 'public.mimouse_private_prompt_tests'::regclass and conname = 'mimouse_private_prompt_test_state'`);
+  expect(constraints).toHaveLength(1); expect(constraints[0].convalidated).toBe(true);
+  expect(String(constraints[0].definition)).toContain("awaiting_confirmation");
+  const id = randomUUID();
+  let violation: any;
+  try {
+    await db.insert(tests).values({ id, companyId: actor.companyId, promptId, revisionId: input.revisionId,
+      requestId: randomUUID(), requestDigest: "migration-status-fixture", revisionHash: "fixture", actorUserId: actor.userId,
+      actorSessionId: actor.sessionId, agentId: input.agentId, datasetId: input.datasetId, datasetHash: "fixture", caseId: input.caseId,
+      skillVersionId: input.skillVersionId, configDigest: "fixture", skillVersionHash: "fixture", secretValueHash: "fixture",
+      status: "not_a_private_test_status" as never });
+  } catch (error) { violation = (error as { cause?: unknown }).cause ?? error; }
+  expect(violation).toMatchObject({ code: "23514", constraint_name: "mimouse_private_prompt_test_state" });
+  expect(await db.select().from(tests).where(eq(tests.id, id))).toHaveLength(0);
+});
 it("creates one intent/wake, dispatches exact stdin, and reads bounded output only through private result", async () => {
   const service = privatePromptTestService(db, heartbeat.wakeup);
   const [first, duplicate] = await Promise.all([service.create(actor, promptId, input), service.create(actor, promptId, input)]);

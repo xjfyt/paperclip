@@ -1,3 +1,5 @@
+-- Historical review proposal, superseded by 0357_deep_nehzno.sql.
+-- Application and fixture setup must use the normal migration chain only.
 -- REVIEW PROPOSAL ONLY. Central integration generates/assigns the migration.
 -- Do not execute alongside generated CREATE TABLE statements.
 CREATE TABLE mimouse_private_prompt_tests (
