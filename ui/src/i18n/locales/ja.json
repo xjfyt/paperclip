@@ -2253,7 +2253,10 @@
     "snapshotRestrictions": "保存済み構成は新規セッションを要求し、ツールと Paperclip 認証情報を無効にします。全コンテキストの取得や、以後の Agent 設定変更を承認するものではありません。",
     "snapshotUnavailable": "この履歴には検証済み承認スナップショットがありません。読み取り専用で、実行を承認できません。",
     "continueExecution": "同じ実行の受け入れ処理を続行",
-    "snapshotCwdUnresolved": "実行時に解決 — まだ未確定"
+    "snapshotCwdUnresolved": "実行時に解決 — まだ未確定",
+    "abandonPrepare": "ローカルの準備を破棄して編集",
+    "abandonPrepareBoundary": "このタブのメタデータのみの準備を忘れる操作です。サーバーのチケットは取り消しません。別途実行承認を待つチケットが残る場合があります。準備はモデル実行を許可しません。",
+    "prepareAbandoned": "ローカルの準備を破棄しました。参照を編集し、必要なら明示的に新しいチケットを準備してください。サーバーへの取消・実行要求は行っていません。"
   },
   "promptRegistryUi": {
     "title": "プロンプトレジストリ",

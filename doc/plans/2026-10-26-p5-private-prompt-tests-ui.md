@@ -66,7 +66,7 @@ effective local environment ID/source只是已知目标，不是完整context。
 - 已确认 pending_harness/pending_wake/queued/prepared/spawned 记作 accepted。
   queued/prepared/spawned 之后只 GET；pending_harness/pending_wake 可重新三确认后显式
   “继续同一执行准入”，只携带原 testId/digest 恢复同一 fence，不 prepare、不新建 attempt。`unknown` 永不自动重跑且保留 marker。
-- 仅 schema 合法、所有者及全部固定绑定一致的 completed/failed/cancelled 终态才
+- 对已知票据或可能收费阶段，仅 schema 合法、所有者及全部固定绑定一致的 completed/failed/cancelled 终态才
   CAS 清除；后端合同保证终态不被迟到 execute 重新推进。失败也不是重新收费的理由。
 - 保证范围是**当前标签页正常刷新/卸载**。不承诺关 tab、清 storage、另一标签页、
   用户主动篡改浏览器存储或跨设备恢复。现有 owner 历史可显式查看，但不自动执行。
@@ -114,3 +114,11 @@ effective local environment ID/source只是已知目标，不是完整context。
 ### CLI 安装并非 prepare 检测项
 
 执行的固定PATH及人工安装前置见[服务端手册](2026-10-26-p5-private-prompt-tests.md#真实-cli-发现前置未由-node-夹具证明)。prepare仅准备固定元数据，不代表本机已能发现claude或其Node依赖；默认用户目录安装可能不在受限PATH内。本轮没有用真实CLI/账号证明安装成功，不自动继承环境补救，也不自动重试未知执行。
+
+## 输入更正与仅元数据准备的显式放弃
+
+新准备的4个UUID输入按UUID语义规范小写；旧journal与重试body保留原字节拼写，因为服务端requestDigest绑定原body。经过严格格式校验的UUID绑定比较忽略字母大小写，actor/session/hash/操作CAS仍严格比较。
+
+当用户填错引用，准备请求可能404/422，或网络结果未知。仅当journal为prepare_pending且testId、approvalDigest都为null，当前身份已验证且无正在进行的请求时，用户可显式选择“放弃本地准备并编辑”。同步重新读取storage，复核owner/company、phase、空票据字段和operationId后才删除本地marker；存储失败仍锁定。动作不发POST，不生成新requestId，不宣称服务器票据被取消。之后另一次用户主动准备才生成新ID；服务器可能保留一张从未授权执行的历史票据。
+
+安全依据是prepare接口从不执行/唤醒，不是错误码能证明服务端没有写入。execute_pending、cancel_pending、accepted及任何已知ticket均不允许此出口；不能用它清除未知收费执行。人工验收增加：错误但格式合法UUID→准备被拒绝→显式本地放弃→编辑正确大写UUID→新准备成功；确认无自动执行，新旧请求不混用、旧迟到响应不复活marker。

@@ -2253,7 +2253,10 @@
     "snapshotRestrictions": "此已保存配置要求全新会话，禁用工具与 Paperclip 凭据，且不捕获完整上下文；不授权后续 Agent 配置变更。",
     "snapshotUnavailable": "此历史记录没有已验证的批准快照，仅可读取，不能授权执行。",
     "continueExecution": "继续同一执行准入",
-    "snapshotCwdUnresolved": "运行时解析，尚未确定"
+    "snapshotCwdUnresolved": "运行时解析，尚未确定",
+    "abandonPrepare": "放弃本地准备并编辑",
+    "abandonPrepareBoundary": "此操作仅清除此标签页内仅含元数据的准备标记，不会取消服务器票据；服务器可能仍保留等待单独执行授权的票据。准备操作从未授权模型执行。",
+    "prepareAbandoned": "已放弃本地准备。请编辑引用，确有需要时再手动准备新票据。未请求服务器取消或执行。"
   },
   "promptRegistryUi": {
     "title": "提示词注册表",

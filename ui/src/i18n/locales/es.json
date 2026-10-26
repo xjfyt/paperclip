@@ -2253,7 +2253,10 @@
     "snapshotRestrictions": "Este perfil guardado exige sesión nueva, desactiva herramientas y credenciales Paperclip y no captura todo el contexto. No autoriza cambios posteriores del agente.",
     "snapshotUnavailable": "Este registro histórico no tiene una instantánea de aprobación validada. Es de solo lectura; no permite autorizar ejecución.",
     "continueExecution": "Continuar la misma admisión de ejecución",
-    "snapshotCwdUnresolved": "Se resolverá en ejecución; aún no está determinado"
+    "snapshotCwdUnresolved": "Se resolverá en ejecución; aún no está determinado",
+    "abandonPrepare": "Descartar preparación local y editar",
+    "abandonPrepareBoundary": "Solo olvida la preparación de metadatos en esta pestaña. No cancela un ticket del servidor; puede quedar un ticket pendiente de autorización de ejecución independiente. Preparar no autorizó ninguna ejecución del modelo.",
+    "prepareAbandoned": "Preparación local descartada. Edite las referencias y prepare explícitamente un nuevo ticket si lo necesita. No se solicitó cancelación ni ejecución al servidor."
   },
   "promptRegistryUi": {
     "title": "Registro de prompts",
