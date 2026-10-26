@@ -36,5 +36,22 @@
   "rejected": "Solicitud rechazada. Revise estado y autoridad antes de una nueva operación.",
   "unknown": "Respuesta incierta: NO repita el POST. Actualice manualmente y concilie con un administrador. La lista redactada no prueba la identidad del Bot; no hay detalles de configuración.",
   "reconciled": "Ya concilié; descartar borrador",
-  "refresh": "Actualizar estado"
+  "refresh": "Actualizar estado",
+  "state_disabled": "Deshabilitada",
+  "state_pending": "Worker pendiente",
+  "state_company_inactive": "Empresa inactiva",
+  "state_interrupted": "Interrumpida",
+  "state_revoked": "Credencial revocada",
+  "state_connecting": "Conectando",
+  "state_authenticated": "Autenticada",
+  "state_reconnecting": "Reconectando",
+  "state_receiving": "Recibiendo",
+  "state_cancelled": "Cancelada",
+  "state_displaced": "Sustituida por otra conexión",
+  "state_authentication": "Autenticación fallida",
+  "state_budget_exhausted": "Presupuesto de reintentos agotado",
+  "state_protocol": "Error de protocolo",
+  "state_overflow": "Desbordamiento del búfer de recepción",
+  "state_transport": "Fallo de transporte",
+  "state_unknown": "Estado desconocido"
 }

@@ -36,5 +36,22 @@
   "rejected": "Request rejected. Review current state and authority before any new operation.",
   "unknown": "Response uncertain: do NOT repeat the POST. Refresh manually and reconcile with an administrator. Redacted lists cannot prove Bot identity; no configuration details are available here.",
   "reconciled": "I reconciled independently; discard draft",
-  "refresh": "Refresh status"
+  "refresh": "Refresh status",
+  "state_disabled": "Disabled",
+  "state_pending": "Pending worker",
+  "state_company_inactive": "Company inactive",
+  "state_interrupted": "Interrupted",
+  "state_revoked": "Credential revoked",
+  "state_connecting": "Connecting",
+  "state_authenticated": "Authenticated",
+  "state_reconnecting": "Reconnecting",
+  "state_receiving": "Receiving",
+  "state_cancelled": "Cancelled",
+  "state_displaced": "Replaced by another connection",
+  "state_authentication": "Authentication failed",
+  "state_budget_exhausted": "Retry budget exhausted",
+  "state_protocol": "Protocol error",
+  "state_overflow": "Receive buffer overflow",
+  "state_transport": "Transport failure",
+  "state_unknown": "Unknown status"
 }

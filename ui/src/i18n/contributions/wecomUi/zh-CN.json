@@ -36,5 +36,22 @@
   "rejected": "请求被拒绝，发起新操作前请检查当前状态和权限。",
   "unknown": "响应不确定：不要重复 POST。请手动刷新并由管理员核对；脱敏列表不能证明机器人身份，此处无配置详情。",
   "reconciled": "我已独立核对，丢弃草稿",
-  "refresh": "刷新状态"
+  "refresh": "刷新状态",
+  "state_disabled": "已禁用",
+  "state_pending": "等待 worker",
+  "state_company_inactive": "公司非活跃",
+  "state_interrupted": "连接中断",
+  "state_revoked": "凭据已撤销",
+  "state_connecting": "正在连接",
+  "state_authenticated": "认证成功",
+  "state_reconnecting": "正在重连",
+  "state_receiving": "正在接收",
+  "state_cancelled": "已取消",
+  "state_displaced": "被其他连接替代",
+  "state_authentication": "认证失败",
+  "state_budget_exhausted": "重试预算耗尽",
+  "state_protocol": "协议错误",
+  "state_overflow": "接收缓冲区溢出",
+  "state_transport": "传输失败",
+  "state_unknown": "未知状态"
 }

@@ -36,5 +36,22 @@
   "rejected": "リクエストが拒否されました。次の操作前に状態と権限を確認してください。",
   "unknown": "応答が不明です。POST を繰り返さないでください。手動で更新し管理者と照合してください。秘匿化一覧では Bot の識別を証明できず、設定詳細もありません。",
   "reconciled": "別途照合済み、下書きを破棄",
-  "refresh": "状態を更新"
+  "refresh": "状態を更新",
+  "state_disabled": "無効",
+  "state_pending": "worker 待機中",
+  "state_company_inactive": "会社が非アクティブ",
+  "state_interrupted": "中断",
+  "state_revoked": "認証情報が失効",
+  "state_connecting": "接続中",
+  "state_authenticated": "認証済み",
+  "state_reconnecting": "再接続中",
+  "state_receiving": "受信中",
+  "state_cancelled": "キャンセル済み",
+  "state_displaced": "別の接続に置換",
+  "state_authentication": "認証失敗",
+  "state_budget_exhausted": "再試行予算を消費",
+  "state_protocol": "プロトコルエラー",
+  "state_overflow": "受信バッファ超過",
+  "state_transport": "通信失敗",
+  "state_unknown": "不明な状態"
 }

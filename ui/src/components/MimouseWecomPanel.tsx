@@ -5,6 +5,7 @@ import { useTranslation } from "@/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 type Identity = { companyId: string; userId: string; sessionId: string };
+const knownStates = new Set(["disabled", "pending", "company_inactive", "interrupted", "revoked", "connecting", "authenticated", "reconnecting", "receiving", "cancelled", "displaced", "authentication", "budget_exhausted", "protocol", "overflow", "transport"]);
 const blank = { botId: "", product: "", groups: "", senders: "", secretId: "", version: "" };
 const identities = (value: string) => value.split("\n").map(item => item.trim()).filter(Boolean);
 const validIdentity = (value: string) => /^[A-Za-z0-9][A-Za-z0-9_.:@-]{0,159}$/.test(value);
@@ -48,7 +49,7 @@ function Panel({ companyId }: Identity) {
     } catch (error) {
       if (!live.current) return;
       if (error instanceof ApiError && [401, 403].includes(error.status)) deny();
-      else if (error instanceof ApiError && [400, 404, 409].includes(error.status)) { setNotice("rejected"); setPending(null); }
+      else if (error instanceof ApiError && [400, 404, 409, 422].includes(error.status)) { setNotice("rejected"); setPending(null); }
       else { setUncertain(true); setRefreshed(false); setNotice("unknown"); }
     } finally { lock.current = false; if (live.current) setBusy(false); }
   }
@@ -63,7 +64,7 @@ function Panel({ companyId }: Identity) {
       <fieldset disabled={busy || uncertain} className="space-y-3">
         {rows.map(row => <div key={row.id} className="space-y-2 rounded-md border border-border p-3">
           <p className="break-all">{row.product} · {row.id}</p>
-          <p>{text("state")}: {row.state} · {text("enabled")}: {text(row.enabled ? "yes" : "no")} · {text("imported")}: {row.imported}</p>
+          <p>{text("state")}: {text(`state_${knownStates.has(row.state) ? row.state : "unknown"}`)} · {text("enabled")}: {text(row.enabled ? "yes" : "no")} · {text("imported")}: {row.imported}</p>
           <p>{text("groups")}: {row.allowedGroupCount} · {text("senders")}: {row.allowedDirectSenderCount} · {text("gap")}: {text(row.gapDetected ? "yes" : "no")}</p>
           <Button variant="outline" onClick={() => { setPending({ id: row.id, enabled: !row.enabled }); setConfirmed(false); }}>{text(row.enabled ? "disable" : "enable")}</Button>
         </div>)}

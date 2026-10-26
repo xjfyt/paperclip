@@ -76,3 +76,19 @@ it("late metadata after session change never populates new session", async () =>
 it("read error fails closed and missing session performs no reads", async () => {
   calls.list.mockRejectedValueOnce(Error("offline")); await mount(); expect(host.querySelector("fieldset")).toBeNull(); calls.list.mockClear(); await mount("company", "user", ""); expect(calls.list).not.toHaveBeenCalled();
 });
+it("422 revoked credential pin is a known rejection, editable only after renewed confirmation", async () => {
+  calls.register.mockRejectedValueOnce(new ApiError("Active pinned company credential required", 422, null));
+  await mount(); await registration(); await check(); await click("register");
+  expect(calls.register).toHaveBeenCalledTimes(1); expect(host.textContent).toContain(label("rejected"));
+  expect(host.textContent).not.toContain(label("unknown")); expect(button("reconciled")).toBeUndefined(); expect(host.querySelector("fieldset")!.disabled).toBe(false);
+  expect(button("register").disabled).toBe(true); await fill("version", "2"); expect(button("register").disabled).toBe(true);
+  await check(); await click("register"); expect(calls.register).toHaveBeenCalledTimes(2);
+  expect(calls.register.mock.calls[0]![0].secret.version).toBe(4); expect(calls.register.mock.calls[1]![0].secret.version).toBe(2);
+});
+it.each(["en", "zh-CN", "es", "ja"])("localizes every backend state and safely replaces unknown state in %s", async locale => {
+  await i18n.changeLanguage(locale);
+  const states = ["disabled", "pending", "company_inactive", "interrupted", "revoked", "connecting", "authenticated", "reconnecting", "receiving", "cancelled", "displaced", "authentication", "budget_exhausted", "protocol", "overflow", "transport"];
+  calls.list.mockResolvedValue([...states.map(state => ({ ...row, id: state, state })), { ...row, id: "unknown-row", state: '<script>private-server-state</script>' }]);
+  await mount(); for (const state of states) { expect(label(`state_${state}`)).not.toBe(`wecomUi.state_${state}`); expect(host.textContent).toContain(`${label("state")}: ${label(`state_${state}`)}`); }
+  expect(host.textContent).toContain(`${label("state")}: ${label("state_unknown")}`); expect(host.textContent).not.toContain("private-server-state"); expect(host.querySelector("script")).toBeNull();
+});

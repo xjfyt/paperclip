@@ -35,12 +35,12 @@ auth session 正在 refetch 时，父级不给 WeCom 传旧 sessionId，私密�
 2. 脱敏列表不能证明具体 bot 身份，产品名称也不是唯一标识；必须与管理员、服务器审计/实际状态独立核对。
 3. 只有刷新成功后，才提供“我已独立核对，丢弃草稿”本地动作；它不发请求，清空 bot/scope/secret pin/操作确认后解锁新的意图。
 
-本面板不声明能自动判断原创建是否成功。离开页面/身份切换会丢弃本地未知状态，未把敏感草稿持久化；回来后仍须人工核对，不能因为页面已重置就重复原 POST。400/404/409 明确拒绝会提示检查，不自动重试；403 清空页面。
+本面板不声明能自动判断原创建是否成功。离开页面/身份切换会丢弃本地未知状态，未把敏感草稿持久化；回来后仍须人工核对，不能因为页面已重置就重复原 POST。400/404/409/422 明确拒绝会提示检查，不自动重试；403 清空页面。
 
 ## 集成清单
 
 - 已直接挂载到 `ui/src/pages/MimouseFeedback.tsx`，将实际 `session.id` 传给新面板，并使 FeedbackCompany 的本地状态 key 包含 session。
-- 四语言贡献：`ui/src/i18n/contributions/wecomUi/{en,zh-CN,es,ja}.json`，38 keys。父集成运行 `node scripts/compose-mimouse-locales.mjs`；本提交不改生成 locale、根 App/sidebar/index/package 或后端。
+- 四语言贡献：`ui/src/i18n/contributions/wecomUi/{en,zh-CN,es,ja}.json`，55 keys。父集成运行 `node scripts/compose-mimouse-locales.mjs`；本提交不改生成 locale、根 App/sidebar/index/package 或后端。
 - 仍沿用 `/api/companies/:companyId/feedback-wecom/connections` 后端及服务权限；若生产未挂载应先集成后台，不以 UI 代替权限验证。
 
 ## 已运行与尚未运行
@@ -70,3 +70,11 @@ node scripts/check-token-gates.mjs
 8. 在读取 secret metadata 或提交在途中切公司/用户/同用户重新登录 session；旧结果不能出现在新会话，草稿和确认清空。模拟 retained old observer，再从新 session 打开同 URL，网络必须是两次独立 fetch。
 9. 撤销管理员权限/令读取失败，再刷新：私密内容与写操作隐藏；权限恢复后刷新不会恢复旧草稿。缺少真实 session 的页面不请求 WeCom/secret 数据。
 10. 检查页面无编辑完整 config、测试发送、自动回复、重放历史或全局开关按钮；刷新不能将 gap 标记解释为已修复。只在另行授权真实租户资格验证时开启 worker gate，按后端文档测试连接，不把本 UI 验收当作该授权。
+
+
+### 窄补充：422 与状态标签
+
+- 后端已知 422（例如固定凭据版本被撤销）属于明确拒绝，不归入未知响应。面板保留可修正的注册草稿但清除确认，不自动重发；管理员明确改 pin 并重新确认后才可发送新请求。模拟 revoked pin 422，确认没有未知结果核对按钮或冻结状态，原请求只发送一次。
+- 16 个当前后端状态均按四语言标签展示；新/不认识的 state 一律显示安全的“未知状态”，不回显原始字符串。人工验收可用 disposable fixture 逐个设置已知状态及异常字符串，检查无 raw state 或 HTML 执行。
+- 此补充不修改 Feedback 页或其缓存边界；生成 locale 仍由父集成 compose。
+- 补充验证：512MB 单 worker，`ui/src/api/wecom.test.ts` 5 + `ui/src/components/MimouseWecomPanel.test.tsx` 17 = **2 files / 22 tests passed**，4.23 秒；token gates clean、55 keys 四语言一致，未跑 build/DB/network。日志 `/tmp/wecom-admin-ui-polish-tests.log`。
