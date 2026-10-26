@@ -15,7 +15,7 @@
 1. **无运行态应用**：不写 agent instructions、adapter/model config、managed files；不复用上游 legacy `agent_instruction_revisions`；不自动暂停/恢复 agent。
 2. **无提示词实验比较**：既有 skill comparison 的模板+配置一致性要求保持原样。后续 prompt comparison 必须独立固定 dataset、skill version、model/config，并将原始 recorded template 精确匹配到 revision；不能放宽 skill comparison 来伪装完成，也不能生成虚构模型运行。
 3. **无质量发布门禁**：本回执不是“评估已通过/生产发布已成功”的证据。无外部调用、模型执行、身份授权、凭据或权限扩大。
-4. **无四语言 UI**：本切片仅管理员 API/共享契约；页面、导航和 en/zh-CN/es/ja 文案待独立可审阅切片。任何 UI 必须把内容按纯文本展示，不用 HTML/Markdown 执行能力，不展示“已激活”。
+4. **四语言 UI 已补齐、中心挂载待集成**：`MimousePromptRegistry` 提供 en/zh-CN/es/ja 管理界面，纯文本展示；导航、路由与生成 locale 由父集成处理。仍无运行态应用。
 5. 无历史删除/归档清理端点；restrict FK 和 append-only trigger 会阻止误删。公司销毁/数据保留策略需要单独授权设计，不偷偷级联删除历史。
 
 ## 集成清单（由集成者处理中心文件）
@@ -92,3 +92,36 @@ fixture helper 会再次校验 DB `data_directory`，不允许连接到真实实
 8. paused 公司可以管理 registry；archived 拒绝。验证 agent 文件/config/模型参数、heartbeat 数量始终没有因为 registry 操作改变。
 9. 按 fixture 注入 audit 写失败，确认 revision/receipt/head 不留下半成品。只在 disposable DB 做 SQL 故障试验。
 10. 删除临时 fixture；本切片在正式库中无清除历史端点，不通过直接 SQL/禁用 trigger 绕过留存。
+
+
+## 追加切片：管理员 UI（2026-10-26）
+
+### 精确集成 hooks
+
+- 新组件：`ui/src/pages/MimousePromptRegistry.tsx` 的 `MimousePromptRegistry({ companyId, userId, sessionId })`。建议公司路由 `prompt-registry`，导航名使用 `promptRegistryUi.title`。
+- 父级页从 `useCompany().selectedCompanyId` 和**当前已验证的真人 session** 传入 `user.id` 与 `session.id`；无 session/loading/error 或权限撤销时必须卸载组件，不能沿用前一用户缓存、使用 `local-board`、把 userId 当 sessionId，或给新 session 复用旧 token。组件三维 key 会丢弃草稿/确认/待处理请求并忽略旧响应。
+- 页面读取的 session identity 必须遵守现有登出/重新登录失效流程；如果在刷新验证期间无法确定当前 identity，应先卸载，不保留旧授权画面。
+- 组件没有 React Query/global/localStorage/sessionStorage 数据缓存。每个 session 的 HTTP controller 与所有状态都在 keyed 子组件内；敏感读取全部经 `promptRegistryApi` 的非合并 `requestResponse` + `readApiJson`、`signal` 与 `cache: no-store`。
+- 新 locale contribution 位于 `ui/src/i18n/contributions/promptRegistryUi/{en,zh-CN,es,ja}.json`。父集成运行 `node scripts/compose-mimouse-locales.mjs`，再挂载路由/导航；本提交不修改生成 locale、根 App/sidebar/index。
+- 创建 revision 是新增不可变意图；保存成功清空正文，再次填写属于新意图并生成新 requestId。未知响应冻结正文/操作/原 requestId，只开放“恢复同一请求”，重试相同 POST 获取已有 revision/receipt。收到旧回执后再读取 heads，不把历史回执当当前状态。401/403 清空敏感草稿，所有读取错误隐藏内容/写控件，409 清除确认并刷新，绝不自动覆盖。
+- 未知请求期间禁止新意图，页面注册 beforeunload 提醒避免误关闭；**不把原文/请求持久化到浏览器存储**。离开页面或更换 identity 会丢弃本地恢复状态，不能声称支持跨重载自动恢复。发生此情形先由管理员查看已保存 revision/receipt 与服务器审计，再决定新的操作，切勿假设请求失败。
+- UUID 分页明确不代表时间；headReceiptId/selectedRevisionId 始终为准。当前回执不在首屏时必须继续加载回执后才能确认 rollback；已选 revision 可直接读取，不要求在第一页。
+
+### UI 人工测试（集成后）
+
+1. 用公司管理员真人 session 打开“提示词注册表”，切换 en/zh-CN/es/ja，确认四语言都明确“仅注册表，不应用运行态”。无 session 或 member/agent/API-key 不应显示可用写控件。
+2. 填 reviewer 和包含中文/emoji/空格/换行/`<script>` 的正文，保存 revision；保存成功正文清空。点击 reviewer，再点 revision UUID，正文以 `<pre>` 原文显示，无 script 元素或 Markdown/HTML 执行，hash/UUID 可检查。
+3. 打开 revision 详情，选择“选择版本”；勾选独立确认前按钮不可用。确认后检查请求携带当前 headReceiptId 与 registry-only flag；页面仅显示保存回执，不显示 runtime applied。
+4. 打开两个窗口，窗口 A 完成选择，窗口 B 用旧 head 提交；B 应收到冲突说明、刷新状态并清除确认。重新查看版本并勾选才可再次提交。
+5. 选择“撤销当前回执”，核对显示的 head 与 beforeRevision 目标。若当前 receipt 不在 UUID 第一页，未加载到该 receipt 前 checkbox 应禁用；逐页加载后仍需主动确认。
+6. 在 disposable 环境模拟 POST 已提交但响应断线：原正文/操作被冻结；点“恢复同一请求”，检查两次 POST 的 requestId、正文与 CAS 完全相同，只生成一条历史/审计；恢复后页面重新读当前 head。恢复前不能修改成新意图。此场景不要关闭页面。
+7. 打开旧内容或提交后立即更换公司、用户或同用户重新登录的新 session；草稿/确认清空，旧响应迟到不能显示旧正文/回执。以网络面板核对相同 URL 的两个 session 读取分别发送 HTTP，而不是共享旧 inflight response。
+8. 撤销当前管理员 DB membership，再刷新/读详情；即使有旧数据，任何 403 或读取失败都隐藏内容/写控件。恢复权限并刷新后，403 清除的草稿不会恢复。
+9. 刷新状态（包括 500/离线）时不根据缓存继续允许写入。确认 agent/model/files/heartbeat 完全未因以上操作变更。
+
+### UI 验证记录
+
+- 纯测试：`ui/src/api/prompt-registry.test.ts` 与 `ui/src/pages/MimousePromptRegistry.test.tsx`，**16 tests passed / 2 files passed**，512 MB 单 worker，最终重跑 3.95 秒；使用实际 requestResponse/fetch 边界验证同 URL 的旧 observer + 新 session 不合并、abort 后迟到正文丢弃、no-store/signal。UI 测试覆盖四语言、inert script、三维身份切换、403/离线 fail-closed、CAS、显式确认、UUID receipt 分页与相同 request 恢复。
+- `node scripts/check-token-gates.mjs`：所有 gates clean（1265 文件）。
+- 未运行：浏览器真实交互、该 UI 的全量类型检查/build。没有启动 DB/server、安装依赖或更改父工作树的根依赖。父集成此前 DB 通过不等于本 UI 浏览器验收通过。
+- 集成后执行：`NODE_OPTIONS=--max-old-space-size=512 pnpm --filter @paperclipai/ui exec vitest run src/api/prompt-registry.test.ts src/pages/MimousePromptRegistry.test.tsx --maxWorkers=1`，再执行上述浏览器步骤。
