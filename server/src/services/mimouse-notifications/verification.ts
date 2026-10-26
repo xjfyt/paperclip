@@ -3,7 +3,7 @@ import { companySecrets, companySecretVersions, companySecretProviderConfigs, mi
   mimouseNotificationDeliveries as deliveries, mimouseNotificationReviews as reviews, mimouseNotificationSubscriptions as subscriptions, type Db } from "@paperclipai/db";
 import { notificationSnapshotMatches, type NotificationCredentialStatus, type NotificationDeliveryObservation,
   type NotificationVerificationScope, type NotificationVerificationDto } from "@paperclipai/shared/notification-verification";
-import { notFound } from "../../errors.js";
+import { conflict, notFound } from "../../errors.js";
 
 export function notificationScope(endpoint: typeof endpoints.$inferSelect): NotificationVerificationScope {
   return { endpointId: endpoint.id, configVersion: endpoint.configVersion, verificationEpoch: endpoint.verificationEpoch,
@@ -45,11 +45,11 @@ export function notificationVerification(db: Db) {
           and(eq(subscriptions.companyId, deliveries.companyId), eq(subscriptions.id, deliveries.subscriptionId)))
           .where(and(eq(deliveries.companyId, companyId), eq(deliveries.endpointId, endpointId), eq(subscriptions.eventType, eventType),
             sql`${deliveries.snapshot}->>'configVersion' = ${String(scope.configVersion)}`))
-          .orderBy(desc(deliveries.createdAt), desc(deliveries.id)).limit(1);
+          .orderBy(desc(deliveries.createdAt), sql`CASE WHEN ${deliveries.state}='accepted' THEN 0 ELSE 1 END DESC`, desc(deliveries.id)).limit(1);
         if (!row) return null;
         const delivery = row.delivery;
         const [review] = await db.select().from(reviews).where(and(eq(reviews.companyId, companyId), eq(reviews.deliveryId, delivery.id)))
-          .orderBy(desc(reviews.createdAt), desc(reviews.id)).limit(1);
+          .orderBy(desc(reviews.createdAt), sql`CASE WHEN ${reviews.outcome}='accepted' THEN 0 ELSE 1 END DESC`, desc(reviews.id)).limit(1);
         const snapshot = delivery.snapshot;
         const number = (value: unknown) => Number.isSafeInteger(value) && Number(value) > 0 ? Number(value) : null;
         return { id: delivery.id, eventId: delivery.eventId, subscriptionId: delivery.subscriptionId, state: delivery.state,
@@ -60,9 +60,13 @@ export function notificationVerification(db: Db) {
           createdAt: delivery.createdAt.toISOString(), updatedAt: delivery.updatedAt.toISOString(),
           review: review ? { ...review, outcome: review.outcome as "accepted" | "not_accepted" | "unknown", createdAt: review.createdAt.toISOString() } : null };
       }
-      return { scope, configuration: "saved_not_revalidated", credentialStatus: await notificationCredentialStatus(db, companyId, scope),
-        endpointEnabled: endpoint.enabled, dispatchEnabled: process.env.PAPERCLIP_NOTIFICATIONS_ENABLED === "true" && process.env.PAPERCLIP_NOTIFICATIONS_WORKER_ENABLED !== "false",
-        implemented: true, machineVerified: false, latestTest: await latest("manual.test"), latestApproval: await latest("approval.requested") };
+      const credentialStatus = await notificationCredentialStatus(db, companyId, scope);
+      const latestTest = await latest("manual.test"), latestApproval = await latest("approval.requested");
+      const [current] = await db.select().from(endpoints).where(and(eq(endpoints.companyId, companyId), eq(endpoints.id, endpointId)));
+      if (!current || JSON.stringify(notificationScope(current)) !== JSON.stringify(scope)) throw conflict("Notification binding changed during verification read; reload");
+      return { scope, configuration: "saved_not_revalidated", credentialStatus,
+        endpointEnabled: current.enabled, dispatchEnabled: process.env.PAPERCLIP_NOTIFICATIONS_ENABLED === "true" && process.env.PAPERCLIP_NOTIFICATIONS_WORKER_ENABLED !== "false",
+        implemented: true, machineVerified: false, latestTest, latestApproval };
     },
   };
 }

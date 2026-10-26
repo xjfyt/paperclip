@@ -7,19 +7,19 @@ vi.mock("@paperclipai/db", () => {
 vi.mock("drizzle-orm", () => ({
   eq: (key: string, value: any) => (row: any) => row[key] === (typeof value === "string" && value in row ? row[value] : value),
   and: (...checks: any[]) => (row: any) => checks.every(fn => fn(row)), desc: (key: string) => key,
-  sql: (_strings: TemplateStringsArray, key: string, version: string) => (row: any) => String(row[key].configVersion) === version,
+  sql: (strings: TemplateStringsArray, key: string, version?: string) => strings.join("").includes("CASE") ? { score: (row: any) => row[key] === "accepted" ? 0 : 1 } : (row: any) => String(row[key].configVersion) === version,
 }));
 import type { Db } from "@paperclipai/db";
 import { notificationVerification } from "./verification.js";
 const flatten = (name: string, row: any) => Object.fromEntries(Object.entries(row).map(([key, value]) => [`${name}.${key}`, value]));
 function database() {
   return { select: (projection?: any) => {
-    let source = "", rows: any[] = [], order: string[] = [], limit = Infinity;
+    let source = "", rows: any[] = [], order: any[] = [], limit = Infinity;
     const chain: any = {
       from: (table: any) => { source = table.name; fixture.calls.push(source); rows = fixture.rows[source].map(row => flatten(source, row)); return chain; },
       innerJoin: (table: any, check: any) => { rows = rows.flatMap(row => fixture.rows[table.name].map(other => ({ ...row, ...flatten(table.name, other) }))).filter(check); return chain; },
       where: (check: any) => { rows = rows.filter(check); return chain; }, orderBy: (...keys: string[]) => { order = keys; return chain; }, limit: (n: number) => { limit = n; return chain; },
-      then: (resolve: any, reject: any) => Promise.resolve(rows.sort((a, b) => { for (const key of order) { if (a[key] < b[key]) return 1; if (a[key] > b[key]) return -1; } return 0; }).slice(0, limit).map(row => {
+      then: (resolve: any, reject: any) => Promise.resolve(rows.sort((a, b) => { for (const key of order) { const av = typeof key === "string" ? a[key] : key.score(a), bv = typeof key === "string" ? b[key] : key.score(b); if (av < bv) return 1; if (av > bv) return -1; } return 0; }).slice(0, limit).map(row => {
         const whole = (name: string) => Object.fromEntries(Object.entries(row).filter(([key]) => key.startsWith(`${name}.`)).map(([key, value]) => [key.slice(name.length + 1), value]));
         return projection ? Object.fromEntries(Object.entries(projection).map(([key, value]: any) => [key, typeof value === "string" ? row[value] : whole(value.name)])) : whole(source);
       })).then(resolve, reject),
@@ -68,4 +68,13 @@ describe("notification verification reads (query fixture; no database/provider)"
     fixture.rows.versions[0].providerVersionRef = "immutable-provider-version";
     expect((await notificationVerification(database()).read("c", "e")).credentialStatus).toBe("metadata_active");
   });
+  it("timestamp ties fail closed rather than hiding rejection behind a higher random accepted UUID", async () => {
+    fixture.rows.deliveries = [delivery("z-accepted", "accepted"), delivery("a-rejected", "rejected")];
+    fixture.rows.reviews = [
+      { id: "z-review", companyId: "c", deliveryId: "a-rejected", outcome: "accepted", createdAt: time },
+      { id: "a-review", companyId: "c", deliveryId: "a-rejected", outcome: "unknown", createdAt: time },
+    ];
+    expect((await notificationVerification(database()).read("c", "e")).latestTest).toMatchObject({ id: "a-rejected", review: { id: "a-review", outcome: "unknown" } });
+  });
+
 });

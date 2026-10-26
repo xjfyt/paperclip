@@ -36,16 +36,20 @@ CREATE TRIGGER mimouse_notification_version_epoch AFTER UPDATE OR DELETE ON comp
   FOR EACH ROW EXECUTE FUNCTION mimouse_notification_version_epoch();
 
 CREATE FUNCTION mimouse_notification_provider_epoch() RETURNS trigger LANGUAGE plpgsql AS $$
-DECLARE prior company_secret_provider_configs; current_row company_secret_provider_configs;
+DECLARE prior company_secret_provider_configs; current_row company_secret_provider_configs; security_changed boolean;
 BEGIN
   IF TG_OP <> 'INSERT' THEN prior := OLD; END IF;
   IF TG_OP <> 'DELETE' THEN current_row := NEW; END IF;
-  IF TG_OP = 'UPDATE' AND ROW(OLD.provider, OLD.status, OLD.config, OLD.is_default, OLD.disabled_at)
-    IS NOT DISTINCT FROM ROW(NEW.provider, NEW.status, NEW.config, NEW.is_default, NEW.disabled_at) THEN RETURN NEW; END IF;
+  IF TG_OP = 'UPDATE' THEN
+    security_changed := ROW(OLD.provider, OLD.status, OLD.config, OLD.disabled_at) IS DISTINCT FROM ROW(NEW.provider, NEW.status, NEW.config, NEW.disabled_at);
+  ELSE security_changed := true; END IF;
+  IF TG_OP = 'UPDATE' AND NOT security_changed AND OLD.is_default IS NOT DISTINCT FROM NEW.is_default THEN RETURN NEW; END IF;
   UPDATE mimouse_notification_endpoints e SET verification_epoch = verification_epoch + 1
-    FROM company_secrets s WHERE e.company_id = s.company_id AND e.secret_ref = s.id AND (
-      (s.company_id = prior.company_id AND (s.provider_config_id = prior.id OR (s.provider_config_id IS NULL AND s.provider = prior.provider))) OR
-      (s.company_id = current_row.company_id AND (s.provider_config_id = current_row.id OR (s.provider_config_id IS NULL AND s.provider = current_row.provider)))
+    FROM company_secrets s WHERE e.company_id = s.company_id AND e.secret_ref = s.id AND s.provider <> 'local_encrypted' AND (
+      (s.company_id = prior.company_id AND ((security_changed AND s.provider_config_id = prior.id)
+        OR (prior.is_default AND s.provider_config_id IS NULL AND s.provider = prior.provider))) OR
+      (s.company_id = current_row.company_id AND ((security_changed AND s.provider_config_id = current_row.id)
+        OR (current_row.is_default AND s.provider_config_id IS NULL AND s.provider = current_row.provider)))
     );
   IF TG_OP = 'DELETE' THEN RETURN OLD; END IF; RETURN NEW;
 END $$;

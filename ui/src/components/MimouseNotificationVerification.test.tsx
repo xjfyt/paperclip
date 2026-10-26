@@ -135,3 +135,24 @@ it("confirmed local-trusted identity works, but a missing authenticated session 
   state.health.mockResolvedValue({ deploymentMode: "authenticated" }); await act(async () => client.setQueryData(queryKeys.health, { deploymentMode: "authenticated" })); await flush();
   expect(host.textContent).toContain(text("readError")); expect(button("prepare")).toBeUndefined();
 });
+it("late success never removes a replacement operation marker at the same identity", async () => {
+  let resolve!: (value: Response) => void; state.append.mockImplementationOnce(() => new Promise(r => { resolve = r; }));
+  await mount(); await edit(); await confirm(); await click(button("save")); const old = state.append.mock.calls[0][0], key = sessionStorage.key(0)!;
+  const replacement = JSON.stringify({ input: { ...old, idempotencyKey: id(98) }, scope }); sessionStorage.setItem(key, replacement);
+  await act(async () => resolve(Response.json(receipt(old)))); await flush(); await flush();
+  expect(sessionStorage.getItem(key)).toBe(replacement); expect(state.append).toHaveBeenCalledOnce();
+});
+it.each(["companyId", "endpointId"])("changing %s clears draft/consent without posting", async field => {
+  await mount(); await edit(); await confirm();
+  const patch = { [field]: field === "companyId" ? "another-company" : id(30) };
+  if (field === "endpointId") state.view = { ...state.view, scope: { ...scope, endpointId: id(30) } };
+  await mount(patch); expect(host.textContent).not.toContain("report-one"); expect(button("save")).toBeUndefined(); expect(state.append).not.toHaveBeenCalled();
+});
+
+it("malformed persisted scope blocks replay without clearing the unknown marker", async () => {
+  state.append.mockRejectedValueOnce(Error("lost")); await mount(); await edit(); await confirm(); await click(button("save"));
+  const key = sessionStorage.key(0)!, frozen = JSON.parse(sessionStorage.getItem(key)!); delete frozen.scope;
+  sessionStorage.setItem(key, JSON.stringify(frozen));
+  await act(async () => root.render(<QueryClientProvider client={client}><span>closed</span></QueryClientProvider>)); await mount();
+  expect(host.textContent).toContain(text("manualRecovery")); expect(button("retrySame")).toBeUndefined(); expect(state.append).toHaveBeenCalledOnce(); expect(sessionStorage.length).toBe(1);
+});

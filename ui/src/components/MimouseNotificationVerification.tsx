@@ -80,7 +80,13 @@ function Declaration({ companyId, endpointId, identity, view, revision, events, 
   const storageKey = `paperclip:notification-declaration:${JSON.stringify([companyId, identity, endpointId])}`;
   const [stored] = useState(() => { try { return { value: sessionStorage.getItem(storageKey), error: false }; } catch { return { value: null, error: true }; } });
   const [frozen, setFrozen] = useState<Frozen | null>(() => {
-    try { if (!stored.value) return null; const value = JSON.parse(stored.value); return { input: appendNotificationEvidenceSchema.parse(value.input), scope: value.scope }; } catch { return null; }
+    try {
+      if (!stored.value) return null;
+      const value = JSON.parse(stored.value), input = appendNotificationEvidenceSchema.parse(value.input), scope = value.scope;
+      if (!scope || scope.endpointId !== endpointId || scope.configVersion !== input.expectedConfigVersion || scope.verificationEpoch !== input.expectedEpoch
+        || typeof scope.kind !== "string" || typeof scope.secretRef !== "string" || !Number.isSafeInteger(scope.secretVersion) || scope.secretVersion < 1) return null;
+      return { input, scope };
+    } catch { return null; }
   });
   const [mode, setMode] = useState<"draft" | "confirm" | "pending" | "unknown" | "saved" | "denied">(stored.value ? "unknown" : "draft");
   const [error, setError] = useState(stored.error ? "storageError" : "");

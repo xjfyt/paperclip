@@ -57,6 +57,7 @@ export const mimouseNotificationDeliveries = pgTable("mimouse_notification_deliv
   mergeWindow: index("mimouse_notification_delivery_merge_window").on(t.companyId, t.mergeKey, t.mergeUntil),
   mergeShape: check("mimouse_notification_delivery_merge_shape", sql`(${t.mergedInto} IS NULL OR (${t.state}='merged' AND ${t.mergedInto}<>${t.id})) AND (${t.state}<>'merged' OR ${t.mergedInto} IS NOT NULL)`),
   pending: index("mimouse_notification_delivery_pending").on(t.state, t.nextAttemptAt),
+  verificationLatest: index("mimouse_notification_verification_latest").on(t.companyId, t.endpointId, sql`(${t.snapshot}->>'configVersion')`, t.createdAt.desc(), t.id.desc()),
   stateCheck: check("mimouse_notification_delivery_state", sql`${t.state} IN ('pending','claimed','sending','accepted','rejected','retryable','indeterminate','paused','filtered','merged')`),
 }));
 
