@@ -56,3 +56,9 @@ it.each(["extra-env", "credential-value", "tools", "latest", "wrong-profile"])("
   if (kind === "wrong-profile") snapshot.executionProfile = "other";
   expect(() => privatePromptRecordSchema.parse(row)).toThrow();
 });
+
+it.each([undefined, null, "", "not-a-hash", "a".repeat(63)])("rejects missing or malformed required runtime config hash: %s", runtimeConfigHash => {
+  const row = record({ status: "completed" });
+  const prepared = { ...row.prepared, runtimeConfigHash };
+  expect(() => privatePromptRecordSchema.parse({ ...row, prepared })).toThrow("private_response_invalid");
+});

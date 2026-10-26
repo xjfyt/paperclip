@@ -154,3 +154,11 @@ it("labels a null configured directory as unresolved rather than claiming a pinn
   replacePrivatePromptJournal(marker({ phase: "awaiting_confirmation" }), null); current = record({ approvalSnapshot: { ...record().approvalSnapshot!, configuredCwd: null } });
   await mount(); expect(host.textContent).toContain(text("snapshotTarget")); expect(host.textContent).toContain(text("snapshotCwdUnresolved"));
 });
+
+it.each([undefined, "not-a-hash"])("retains execution journal when a terminal witness runtime config hash is invalid: %s", async runtimeConfigHash => {
+    await mount(); await prepare(); await confirm();
+    const completed = record({ ...current, status: "completed" });
+    calls.execute.mockResolvedValueOnce({ item: { ...completed, prepared: { ...completed.prepared, runtimeConfigHash } }, duplicate: false });
+    await click(button("execute"));
+    expect(stored()?.phase).toBe("execute_pending"); expect(pending).toHaveBeenLastCalledWith(true);
+});

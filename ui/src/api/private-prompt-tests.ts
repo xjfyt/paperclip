@@ -24,7 +24,7 @@ function approvalSnapshot(raw: unknown): PrivatePromptApprovalSnapshot {
     credential: { kind: literal(credential.kind, "pinned_company_secret"), secretId: privateUuid(credential.secretId), version: credential.version }, configDigest: privateHash(r.configDigest),
     freshSession: literal(r.freshSession, true), toolsEnabled: literal(r.toolsEnabled, false), paperclipCredentialsEnabled: literal(r.paperclipCredentialsEnabled, false), completeContextCaptured: literal(r.completeContextCaptured, false) };
 }
-export type VerifiedPrivatePromptRecord = Omit<PrivatePromptTestRecord, "prepared"> & { prepared: (PrivatePromptPreparedWitness & { runtimeConfigHash?: string }) | null };
+export type VerifiedPrivatePromptRecord = PrivatePromptTestRecord;
 export const privatePromptRecordSchema = { parse(raw: unknown): VerifiedPrivatePromptRecord {
   const r = privateObject(raw), status = privateString(r.status);
   if (!["awaiting_confirmation", "pending_harness", "pending_wake", "queued", "prepared", "spawned", "completed", "failed", "unknown", "cancelled"].includes(status)) throw Error("private_response_invalid");
@@ -38,11 +38,12 @@ export const privatePromptRecordSchema = { parse(raw: unknown): VerifiedPrivateP
   if (r.prepared !== null) {
     const p = privateObject(r.prepared);
     if (typeof p.promptBytes !== "number" || !Number.isSafeInteger(p.promptBytes) || p.promptBytes < 0) throw Error("private_response_invalid");
-    row.prepared = { schemaVersion: literal(p.schemaVersion, 1), testId: privateUuid(p.testId), attemptId: privateUuid(p.attemptId), companyId: privateUuid(p.companyId), issueId: privateUuid(p.issueId), heartbeatRunId: privateUuid(p.heartbeatRunId),
+    const prepared: PrivatePromptPreparedWitness = { schemaVersion: literal(p.schemaVersion, 1), testId: privateUuid(p.testId), attemptId: privateUuid(p.attemptId), companyId: privateUuid(p.companyId), issueId: privateUuid(p.issueId), heartbeatRunId: privateUuid(p.heartbeatRunId),
       agentId: privateUuid(p.agentId), revisionId: privateUuid(p.revisionId), headReceiptId: nullable(p.headReceiptId, privateUuid), revisionHash: privateHash(p.revisionHash), promptHash: privateHash(p.promptHash), promptBytes: p.promptBytes,
       implementation: literal(p.implementation, "paperclip.builtin.claude-local.cli.literal.v1"), providerConsumed: literal(p.providerConsumed, false), stdinWritten: literal(p.stdinWritten, false),
-      ...(p.runtimeConfigHash === undefined ? {} : { runtimeConfigHash: privateHash(p.runtimeConfigHash) }) };
-    if (row.prepared.testId !== row.id || row.prepared.companyId !== row.companyId || row.prepared.agentId !== row.agentId || row.prepared.revisionId !== row.revisionId || row.prepared.headReceiptId !== row.headReceiptId || row.prepared.issueId !== row.issueId || row.prepared.heartbeatRunId !== row.heartbeatRunId) throw Error("private_response_invalid");
+      runtimeConfigHash: privateHash(p.runtimeConfigHash) };
+    if (prepared.testId !== row.id || prepared.companyId !== row.companyId || prepared.agentId !== row.agentId || prepared.revisionId !== row.revisionId || prepared.headReceiptId !== row.headReceiptId || prepared.issueId !== row.issueId || prepared.heartbeatRunId !== row.heartbeatRunId) throw Error("private_response_invalid");
+    row.prepared = prepared;
   }
   if (["prepared", "spawned", "completed"].includes(row.status) && !row.prepared) throw Error("private_response_invalid");
   if (["spawned", "completed"].includes(row.status) && !row.spawnedAt) throw Error("private_response_invalid");
