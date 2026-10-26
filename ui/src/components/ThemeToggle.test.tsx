@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { i18n } from "@/i18n";
 
 import { act } from "react";
 import { createRoot } from "react-dom/client";
@@ -121,4 +122,14 @@ describe("ThemeToggle", () => {
 
     await act(async () => root.unmount());
   });
+  it.each(["en", "zh-CN", "es", "ja"])("localizes theme accessibility and leaves toggle behavior unchanged in %s", async locale => {
+    await i18n.changeLanguage(locale); const root = createRoot(container);
+    try {
+      await act(async () => root.render(<ThemeToggle variant="menu-action" />));
+      expect(container.querySelector("button")?.getAttribute("aria-label")).toBe(i18n.t("settingsUi.lightMode"));
+      expect(container.textContent).toContain(i18n.t("settingsUi.themeHelp"));
+      await act(async () => container.querySelector("button")!.click()); expect(mockToggleTheme).toHaveBeenCalledTimes(1);
+    } finally { await act(async () => root.unmount()); await i18n.changeLanguage("en"); }
+  });
+
 });

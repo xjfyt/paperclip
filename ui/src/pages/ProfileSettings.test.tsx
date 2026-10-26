@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { i18n } from "@/i18n";
 
 import { act } from "react";
 import { createRoot } from "react-dom/client";
@@ -201,4 +202,20 @@ describe("ProfileSettings", () => {
       root.unmount();
     });
   });
+  it.each(["en", "zh-CN", "es", "ja"])("localizes profile controls without changing account data in %s", async locale => {
+    await i18n.changeLanguage(locale);
+    const root = createRoot(container), client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    try {
+      await act(async () => root.render(<QueryClientProvider client={client}><ProfileSettings /></QueryClientProvider>));
+      await flushReact(); await flushReact();
+      expect(container.textContent).toContain(i18n.t("settingsUi.profileHelp"));
+      expect(container.textContent).toContain(i18n.t("settingsUi.emailHelp"));
+      expect(container.textContent).toContain("jane@example.com");
+      expect(container.querySelector<HTMLInputElement>('input[autocomplete="name"]')?.value ?? [...container.querySelectorAll("input")].find(input => input.value === "Jane Example")?.value).toBe("Jane Example");
+      const save = [...container.querySelectorAll("button")].find(button => button.textContent?.includes(i18n.t("settingsUi.saveProfile")));
+      expect(save).toBeDefined(); await act(async () => save!.click()); await flushReact();
+      expect(mockAuthApi.updateProfile).toHaveBeenCalledWith({ name: "Jane Example", image: "https://example.com/jane.png" });
+    } finally { await act(async () => root.unmount()); client.clear(); await i18n.changeLanguage("en"); }
+  });
+
 });

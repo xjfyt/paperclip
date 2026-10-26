@@ -37,21 +37,6 @@ ui/src/components/CommentThread.tsx,1050,jsx-attribute,Responsible,needs_review
 ui/src/components/CommentThread.tsx,1057,jsx-text,Responsible,needs_review
 ui/src/components/CommentThread.tsx,1085,jsx-expression,Posting...,needs_review
 ui/src/components/CommentThread.tsx,1085,jsx-expression,Comment,needs_review
-ui/src/components/CompanySettingsSidebar.tsx,90,jsx-attribute,Settings,needs_review
-ui/src/components/CompanySettingsSidebar.tsx,99,jsx-attribute,Back to app,needs_review
-ui/src/components/CompanySettingsSidebar.tsx,103,jsx-attribute,Settings,needs_review
-ui/src/components/CompanySettingsSidebar.tsx,108,jsx-attribute,General,needs_review
-ui/src/components/CompanySettingsSidebar.tsx,112,jsx-attribute,Profile,needs_review
-ui/src/components/CompanySettingsSidebar.tsx,120,jsx-attribute,Members,needs_review
-ui/src/components/CompanySettingsSidebar.tsx,138,jsx-attribute,Secrets,needs_review
-ui/src/components/CompanySettingsSidebar.tsx,143,jsx-attribute,Environments,needs_review
-ui/src/components/CompanySettingsSidebar.tsx,149,jsx-attribute,Connections,needs_review
-ui/src/components/CompanySettingsSidebar.tsx,154,jsx-attribute,Access,needs_review
-ui/src/components/CompanySettingsSidebar.tsx,160,jsx-attribute,Export,needs_review
-ui/src/components/CompanySettingsSidebar.tsx,163,jsx-attribute,Import,needs_review
-ui/src/components/CompanySettingsSidebar.tsx,168,jsx-attribute,Experimental,needs_review
-ui/src/components/CompanySettingsSidebar.tsx,175,jsx-attribute,Plugins,needs_review
-ui/src/components/CompanySettingsSidebar.tsx,203,jsx-attribute,Adapters,needs_review
 ui/src/components/IssueFiltersPopover.tsx,95,jsx-template,Search,needs_review
 ui/src/components/IssueFiltersPopover.tsx,96,jsx-template,Search,needs_review
 ui/src/components/IssueFiltersPopover.tsx,213,jsx-text,Filters,needs_review
@@ -91,15 +76,7 @@ ui/src/components/NewIssueDialog.tsx,1348,jsx-text,is paused and will not start 
 ui/src/components/NewIssueDialog.tsx,1351,jsx-expression,— it arrived paused from an organization import,needs_review
 ui/src/components/NewIssueDialog.tsx,1352,jsx-text,. You can resume it from the task page after creating the task.,needs_review
 ui/src/components/Sidebar.tsx,180,jsx-attribute,WorkBuddy,needs_review
-ui/src/components/SidebarAccountMenu.tsx,204,jsx-attribute,View profile,needs_review
-ui/src/components/SidebarAccountMenu.tsx,225,jsx-template,View commit,needs_review
-ui/src/components/SidebarAccountMenu.tsx,225,jsx-template,on GitHub,needs_review
-ui/src/components/SidebarAccountMenu.tsx,227,jsx-text,SHA,needs_review
-ui/src/components/SidebarAccountMenu.tsx,236,jsx-attribute,Settings,needs_review
-ui/src/components/SidebarAccountMenu.tsx,243,jsx-attribute,Invite,needs_review
-ui/src/components/SidebarAccountMenu.tsx,251,jsx-attribute,Documentation,needs_review
-ui/src/components/SidebarAccountMenu.tsx,272,jsx-expression,Signing out...,needs_review
-ui/src/components/SidebarAccountMenu.tsx,272,jsx-expression,Sign out,needs_review
+ui/src/components/SidebarAccountMenu.tsx,228,jsx-text,SHA,needs_review
 ui/src/components/SidebarAgents.tsx,188,jsx-attribute,Invalid reporting chain,needs_review
 ui/src/components/SidebarAgents.tsx,195,jsx-attribute,Agent paused by budget,needs_review
 ui/src/components/SidebarAgents.tsx,255,jsx-expression,Remove from starred,needs_review
@@ -368,25 +345,6 @@ ui/src/pages/Costs.tsx,697,jsx-text,", included in the inference ledger.",needs_
 ui/src/pages/Costs.tsx,781,jsx-text,cached) · out,needs_review
 ui/src/pages/Costs.tsx,818,jsx-text,tok,needs_review
 ui/src/pages/Costs.tsx,854,jsx-expression,Unattributed,needs_review
-ui/src/pages/InstanceAccess.tsx,97,jsx-text,Loading instance access…,needs_review
-ui/src/pages/InstanceAccess.tsx,113,jsx-text,Failed to load organizations. Try again before changing access.,needs_review
-ui/src/pages/InstanceAccess.tsx,114,jsx-text,Try again,needs_review
-ui/src/pages/InstanceAccess.tsx,124,jsx-text,Instance Access,needs_review
-ui/src/pages/InstanceAccess.tsx,126,jsx-text,"Search users, manage instance-admin status, and control which organizations they can access.",needs_review
-ui/src/pages/InstanceAccess.tsx,134,jsx-text,Search users,needs_review
-ui/src/pages/InstanceAccess.tsx,139,jsx-attribute,Search by name or email,needs_review
-ui/src/pages/InstanceAccess.tsx,164,jsx-text,active organization memberships,needs_review
-ui/src/pages/InstanceAccess.tsx,173,jsx-text,Select a user to inspect instance access.,needs_review
-ui/src/pages/InstanceAccess.tsx,175,jsx-text,Loading user access…,needs_review
-ui/src/pages/InstanceAccess.tsx,178,jsx-expression,Failed to load user access.,needs_review
-ui/src/pages/InstanceAccess.tsx,196,jsx-expression,Remove instance admin,needs_review
-ui/src/pages/InstanceAccess.tsx,196,jsx-expression,Promote to instance admin,needs_review
-ui/src/pages/InstanceAccess.tsx,202,jsx-text,Organization access,needs_review
-ui/src/pages/InstanceAccess.tsx,203,jsx-text,Toggle organization membership for this user. New access defaults to an active operator membership.,needs_review
-ui/src/pages/InstanceAccess.tsx,236,jsx-expression,Saving…,needs_review
-ui/src/pages/InstanceAccess.tsx,236,jsx-expression,Save organization access,needs_review
-ui/src/pages/InstanceAccess.tsx,244,jsx-text,Current memberships,needs_review
-ui/src/pages/InstanceAccess.tsx,254,jsx-expression,unset,needs_review
 ui/src/pages/InviteLanding.tsx,177,jsx-text,Request to join,needs_review
 ui/src/pages/InviteLanding.tsx,180,jsx-text,Your request is still awaiting approval.,needs_review
 ui/src/pages/InviteLanding.tsx,181,jsx-text,must approve your request to join.,needs_review
@@ -480,22 +438,6 @@ ui/src/pages/IssueDetail.tsx,8410,jsx-expression,Properties,needs_review
 ui/src/pages/MimouseNotifications.tsx,71,jsx-text,Feishu,needs_review
 ui/src/pages/MimouseNotifications.tsx,71,jsx-text,Lark,needs_review
 ui/src/pages/MimouseWorkbuddy.tsx,37,jsx-text,WorkBuddy,needs_review
-ui/src/pages/ProfileSettings.tsx,130,jsx-text,Loading profile...,needs_review
-ui/src/pages/ProfileSettings.tsx,136,jsx-expression,Failed to load profile.,needs_review
-ui/src/pages/ProfileSettings.tsx,154,jsx-text,Profile,needs_review
-ui/src/pages/ProfileSettings.tsx,156,jsx-text,Control how your account appears in the sidebar and other board surfaces.,needs_review
-ui/src/pages/ProfileSettings.tsx,216,jsx-expression,Change photo,needs_review
-ui/src/pages/ProfileSettings.tsx,216,jsx-expression,Upload photo,needs_review
-ui/src/pages/ProfileSettings.tsx,225,jsx-text,Remove,needs_review
-ui/src/pages/ProfileSettings.tsx,235,jsx-expression,No email,needs_review
-ui/src/pages/ProfileSettings.tsx,237,jsx-text,Click the avatar to upload a new image.,needs_review
-ui/src/pages/ProfileSettings.tsx,253,jsx-text,Display name,needs_review
-ui/src/pages/ProfileSettings.tsx,259,jsx-attribute,Board,needs_review
-ui/src/pages/ProfileSettings.tsx,261,jsx-text,Shown in the sidebar account footer and comment author surfaces.,needs_review
-ui/src/pages/ProfileSettings.tsx,267,jsx-text,Email,needs_review
-ui/src/pages/ProfileSettings.tsx,274,jsx-text,Email is managed by your auth session and is read-only here.,needs_review
-ui/src/pages/ProfileSettings.tsx,282,jsx-expression,Saving...,needs_review
-ui/src/pages/ProfileSettings.tsx,282,jsx-expression,Save profile,needs_review
 ui/src/pages/Routines.tsx,1129,jsx-text,filed in,needs_review
 ui/src/pages/Routines.tsx,1277,jsx-text,routine,needs_review
 ui/src/pages/Routines.tsx,1463,jsx-text,routine,needs_review

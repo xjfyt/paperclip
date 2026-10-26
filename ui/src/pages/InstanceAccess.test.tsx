@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { i18n } from "@/i18n";
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -126,4 +127,18 @@ describe("InstanceAccess company directory", () => {
     await eventually(() => expect(container.textContent).toContain("Instance admin access is required"));
     expect(mocks.directory).not.toHaveBeenCalled();
   });
+  it.each(["en", "zh-CN", "es", "ja"])("localizes access management while preserving user and organization identifiers in %s", async locale => {
+    await i18n.changeLanguage(locale);
+    try {
+      await renderPage();
+      await eventually(() => expect(button(i18n.t("settingsUi.saveOrganizationAccess"))).toBeDefined());
+      expect(container.textContent).toContain(i18n.t("settingsUi.instanceHelp"));
+      expect(container.textContent).toContain(i18n.t("settingsUi.roleOwner"));
+      expect(container.textContent).toContain(i18n.t("settingsUi.statusActive"));
+      expect(container.textContent).toContain("Company A"); expect(container.textContent).toContain(user.email);
+      await act(async () => button(i18n.t("settingsUi.saveOrganizationAccess"))!.click());
+      await eventually(() => expect(mocks.setUserCompanyAccess).toHaveBeenCalledWith(user.id, [companyA.id]));
+    } finally { await act(async () => { await i18n.changeLanguage("en"); }); }
+  });
+
 });

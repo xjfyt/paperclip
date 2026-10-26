@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { i18n } from "@/i18n";
 
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -369,6 +370,19 @@ describe("CompanySettingsSidebar", () => {
       root.unmount();
     });
   });
+  it.each(["en", "zh-CN", "es", "ja"])("localizes settings navigation and leaves plugin names unchanged in %s", async locale => {
+    await i18n.changeLanguage(locale);
+    mockUsePluginSlots.mockReturnValue({ slots: [{ id: "fixture-slot", pluginKey: "fixture", routePath: "fixture", displayName: "客户扩展 Custom" }], isLoading: false, errorMessage: null });
+    const root = createRoot(container), client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(queryKeys.health, { status: "ok" });
+    try {
+      await act(async () => root.render(<QueryClientProvider client={client}><CompanySettingsSidebar /></QueryClientProvider>)); await flushReact();
+      for (const key of ["backToApp", "general", "profile", "members", "access"]) expect(container.textContent).toContain(i18n.t(`settingsUi.${key}`));
+      expect(container.textContent).toContain("客户扩展 Custom");
+      expect(container.querySelector('select')?.getAttribute("aria-label")).toBe(i18n.t("common.language"));
+    } finally { await act(async () => root.unmount()); client.clear(); await i18n.changeLanguage("en"); }
+  });
+
 });
 
 describe("CompanySettingsSidebar operator-hidden entries", () => {

@@ -122,6 +122,7 @@ export function SidebarAccountMenu({
   forceExpanded = false,
 }: SidebarAccountMenuProps) {
   useMimouseUiTranslation();
+  const settingsT = mimouseUiT;
   const cloud = useCloudInstance();
   const isCloud = Boolean(cloud);
   // Invites live on the Members page (or in Cloud's People settings). Hide the
@@ -156,9 +157,9 @@ export function SidebarAccountMenu({
 
   const signOutMutation = useSignOut({ onSignedOut: closeNavigationChrome });
 
-  const displayName = session?.user.name?.trim() || "Board";
+  const displayName = session?.user.name?.trim() || settingsT("settingsUi.board");
   const secondaryLabel =
-    session?.user.email?.trim() || (deploymentMode === "authenticated" ? "Signed in" : "Local workspace board");
+    session?.user.email?.trim() || (deploymentMode === "authenticated" ? settingsT("settingsUi.signedIn") : settingsT("settingsUi.localBoard"));
   const initials = deriveInitials(displayName);
   const profileHref = userProfilePath(session?.user);
 
@@ -201,7 +202,7 @@ export function SidebarAccountMenu({
             <div className="relative flex h-(--profile-popover-header-height) shrink-0 items-center gap-2.5 px-3.5">
               <Link
                 to={profileHref}
-                aria-label="View profile"
+                aria-label={settingsT("settingsUi.viewProfile")}
                 onClick={closeNavigationChrome}
                 className="absolute inset-0 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
               />
@@ -222,7 +223,7 @@ export function SidebarAccountMenu({
                     href={`https://github.com/paperclipai/paperclip/commit/${stagingCommit}`}
                     target="_blank"
                     rel="noreferrer"
-                    aria-label={`View commit ${stagingCommit} on GitHub`}
+                    aria-label={settingsT("settingsUi.viewCommit", { sha: stagingCommit })}
                     title={stagingCommit}
                   >
                     SHA {stagingCommit.slice(0, 7)}
@@ -233,14 +234,14 @@ export function SidebarAccountMenu({
 
             <div className="flex flex-1 flex-col gap-0.5 border-t border-border px-2.5 pb-2.5 pt-2">
               <MenuAction
-                label="Settings"
+                label={settingsT("settingsUi.settings")}
                 icon={Settings}
                 href="/company/settings"
                 onClick={closeNavigationChrome}
               />
               {showInvite && inviteHref ? (
                 <MenuAction
-                  label="Invite"
+                  label={settingsT("settingsUi.invite")}
                   icon={UserPlus}
                   href={inviteHref}
                   topLevel={isCloud}
@@ -248,7 +249,7 @@ export function SidebarAccountMenu({
                 />
               ) : null}
               <MenuAction
-                label="Documentation"
+                label={settingsT("settingsUi.documentation")}
                 icon={BookOpen}
                 href={DOCS_URL}
                 external
@@ -269,7 +270,7 @@ export function SidebarAccountMenu({
                     <LogOut className="size-4" />
                   </span>
                   <span className="min-w-0 flex-1 truncate">
-                    {signOutMutation.isPending ? "Signing out..." : "Sign out"}
+                    {signOutMutation.isPending ? settingsT("settingsUi.signingOut") : settingsT("settingsUi.signOut")}
                   </span>
                 </button>
               ) : null}
