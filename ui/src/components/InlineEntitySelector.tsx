@@ -24,6 +24,8 @@ interface InlineEntitySelectorProps {
   noneAtEnd?: boolean;
   searchPlaceholder: string;
   emptyMessage: string;
+  /** Localized accessible label for the mobile close control. */
+  closeLabel?: string;
   onChange: (id: string) => void;
   onConfirm?: () => void;
   className?: string;
@@ -81,6 +83,7 @@ export const InlineEntitySelector = forwardRef<HTMLButtonElement, InlineEntitySe
       noneAtEnd = false,
       searchPlaceholder,
       emptyMessage,
+      closeLabel = "Close selector",
       onChange,
       onConfirm,
       className,
@@ -230,7 +233,7 @@ export const InlineEntitySelector = forwardRef<HTMLButtonElement, InlineEntitySe
             <button
               type="button"
               className="inline-flex size-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-              aria-label="Close selector"
+              aria-label={closeLabel}
               onClick={() => {
                 shouldPreventCloseAutoFocusRef.current = true;
                 setOpen(false);
@@ -245,6 +248,7 @@ export const InlineEntitySelector = forwardRef<HTMLButtonElement, InlineEntitySe
               ref={inputRef}
               className="min-w-0 flex-1 bg-transparent py-2 text-base outline-none placeholder:text-muted-foreground/60 md:text-sm"
               placeholder={searchPlaceholder}
+              aria-label={searchPlaceholder}
               value={query}
               onChange={(event) => {
                 setQuery(event.target.value);

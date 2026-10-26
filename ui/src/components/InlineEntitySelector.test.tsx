@@ -5,6 +5,8 @@ import { flushSync } from "react-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Dialog, DialogContent, DialogTitle } from "./ui/dialog";
 import { InlineEntitySelector } from "./InlineEntitySelector";
+import { i18n } from "../i18n";
+import { issueWatchdogMessages } from "../i18n/issue-watchdog-test-resources";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -31,6 +33,44 @@ describe("InlineEntitySelector", () => {
     window.matchMedia = originalMatchMedia;
     container.remove();
     document.body.innerHTML = "";
+  });
+
+  it.each(Object.entries(issueWatchdogMessages))("renders watchdog selector labels without changing identity in %s", async (locale, messages) => {
+    await i18n.changeLanguage(locale);
+    const onChange = vi.fn();
+    const root = createRoot(container);
+    await act(() => root.render(
+      <InlineEntitySelector
+        value="agent-raw"
+        options={[{ id: "agent-raw", label: "No watchdog agent" }]}
+        placeholder={messages.selectAgent}
+        noneLabel={messages.noAgent}
+        noneSearchText={`No watchdog agent ${messages.noAgent}`}
+        searchPlaceholder={messages.searchAgents}
+        emptyMessage={messages.noAgents}
+        closeLabel={messages.closeSelector}
+        onChange={onChange}
+        openOnFocus={false}
+        triggerTestId="watchdog-agent-picker"
+      />,
+    ));
+    try {
+      const trigger = container.querySelector<HTMLButtonElement>("[data-testid=watchdog-agent-picker]")!;
+      expect(trigger.textContent).toBe("No watchdog agent");
+      await act(() => trigger.click());
+      const search = document.querySelector<HTMLInputElement>(`input[aria-label="${messages.searchAgents}"]`)!;
+      expect(search).not.toBeNull();
+      expect(document.querySelector(`[data-mobile-entity-picker][aria-label="${messages.selectAgent}"]`)).not.toBeNull();
+      const close = document.querySelector<HTMLButtonElement>(`button[aria-label="${messages.closeSelector}"]`)!;
+      expect(close).not.toBeNull();
+      await act(() => close.click());
+      expect(document.querySelector("[data-mobile-entity-picker]")).toBeNull();
+      expect(trigger.textContent).toBe("No watchdog agent");
+      expect(onChange).not.toHaveBeenCalled();
+    } finally {
+      await act(() => root.unmount());
+      await i18n.changeLanguage("en");
+    }
   });
 
   it.each([false, true])("allows wheel and touch scrolling outside a parent dialog (mobile: %s)", async (mobile) => {

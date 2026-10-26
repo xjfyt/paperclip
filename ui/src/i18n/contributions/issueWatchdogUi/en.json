@@ -1,0 +1,20 @@
+{
+  "disabled": "(disabled)",
+  "agent": "Watchdog agent",
+  "selectAgent": "Select agent",
+  "noAgent": "No watchdog agent",
+  "searchAgents": "Search agents...",
+  "noAgents": "No agents found.",
+  "closeSelector": "Close selector",
+  "instructions": "Instructions",
+  "optional": "(optional)",
+  "instructionsPlaceholder": "What should the watchdog watch for and how should it keep work moving?",
+  "task": "Watchdog task:",
+  "viewTask": "View task",
+  "openTask": "Open watchdog task",
+  "removing": "Removing…",
+  "remove": "Remove",
+  "saving": "Saving…",
+  "update": "Update",
+  "set": "Set watchdog"
+}

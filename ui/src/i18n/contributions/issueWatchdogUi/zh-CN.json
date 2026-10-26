@@ -1,0 +1,20 @@
+{
+  "disabled": "（已停用）",
+  "agent": "监控 Agent",
+  "selectAgent": "选择 Agent",
+  "noAgent": "不设置监控 Agent",
+  "searchAgents": "搜索 Agent…",
+  "noAgents": "未找到 Agent。",
+  "closeSelector": "关闭选择器",
+  "instructions": "指令",
+  "optional": "（可选）",
+  "instructionsPlaceholder": "监控 Agent 应关注哪些情况，以及如何推动任务继续进行？",
+  "task": "监控任务：",
+  "viewTask": "查看任务",
+  "openTask": "打开监控任务",
+  "removing": "正在移除…",
+  "remove": "移除",
+  "saving": "正在保存…",
+  "update": "更新",
+  "set": "设置监控"
+}

@@ -2,6 +2,7 @@
 
 import { i18n, coreTaskMessages } from "../i18n/core-task-test-resources";
 import { issuePropertyControlsMessages } from "../i18n/issue-property-controls-test-resources";
+import { issueWatchdogMessages } from "../i18n/issue-watchdog-test-resources";
 
 import type { ComponentProps, ReactNode } from "react";
 import { flushSync } from "react-dom";
@@ -3289,6 +3290,181 @@ describe("IssueProperties", () => {
       ...overrides,
     } as unknown as NonNullable<Issue["watchdog"]>;
   }
+
+  it.each(Object.entries(issueWatchdogMessages))("localizes the watchdog editor and keeps values in %s", async (locale, messages) => {
+    await i18n.changeLanguage(locale);
+    mockAgentsApi.list.mockResolvedValue([{ ...watchdogAgent, name: "No watchdog agent" }]);
+    mockIssuesApi.upsertWatchdog.mockClear();
+    mockIssuesApi.deleteWatchdog.mockClear();
+    const onUpdate = vi.fn();
+    const issue = createIssue({
+      watchdog: createWatchdogSummary({ status: "disabled", watchdogIssueId: "issue-wd", instructions: "Keep 原文 moving" }),
+    });
+    const root = renderProperties(container, {
+      issue, childIssues: [createIssue({ id: "issue-wd", identifier: null })], onUpdate, inline: true,
+    });
+    try {
+      await waitForAssertion(() => {
+        expect(findRowTrigger(container, "Watchdog")?.textContent).toContain(messages.disabled);
+        expect(findRowTrigger(container, "Watchdog")?.textContent).toContain("No watchdog agent");
+      });
+      const link = container.querySelector<HTMLAnchorElement>(`a[aria-label="${messages.openTask}"]`)!;
+      expect(link.getAttribute("href")).toBe("/issues/issue-wd");
+      expect(link.title).toBe(messages.openTask);
+      await act(() => findRowTrigger(container, "Watchdog")!.click());
+      expect(container.textContent).toContain(messages.agent);
+      expect(container.textContent).toContain(messages.optional);
+      expect(container.textContent).toContain(messages.task);
+      expect(container.textContent).toContain(messages.viewTask);
+      const instructions = container.querySelector<HTMLTextAreaElement>(`textarea[aria-label="${messages.instructions}"]`)!;
+      expect(instructions.value).toBe("Keep 原文 moving");
+      expect(instructions.placeholder).toBe(messages.instructionsPlaceholder);
+      const search = container.querySelector<HTMLInputElement>(`input[placeholder="${messages.searchAgents}"]`)!;
+      expect(search.getAttribute("aria-label")).toBe(messages.searchAgents);
+      expect(container.querySelector(`button[aria-label="${messages.closeSelector}"]`)).not.toBeNull();
+      const searchFor = async (text: string) => {
+        await act(() => {
+          Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")!.set!.call(search, text);
+          search.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+      };
+      // English compatibility alias is limited to the system no-agent option.
+      for (const query of ["No watchdog agent", messages.noAgent]) {
+        await searchFor(query);
+        expect(container.textContent).toContain(messages.noAgent);
+      }
+      await searchFor("No matching agent 731");
+      expect(container.textContent).toContain(messages.noAgents);
+      await searchFor("");
+      await act(() => {
+        Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")!.set!.call(instructions, "  Keep 中文 / 日本語 original  ");
+        instructions.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      const save = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === messages.update)!;
+      await act(() => save.click());
+      await waitForAssertion(() => expect(mockIssuesApi.upsertWatchdog).toHaveBeenCalledWith("issue-1", {
+        agentId: "agent-1", instructions: "Keep 中文 / 日本語 original",
+      }));
+      expect(mockIssuesApi.deleteWatchdog).not.toHaveBeenCalled();
+      expect(onUpdate).not.toHaveBeenCalled();
+      expect(issue.watchdog?.status).toBe("disabled");
+    } finally {
+      await act(() => root.unmount());
+    }
+  });
+
+  it("keeps an open watchdog draft across language changes and discards it only on dismissal", async () => {
+    mockAgentsApi.list.mockResolvedValue([watchdogAgent]);
+    mockIssuesApi.upsertWatchdog.mockClear();
+    mockIssuesApi.deleteWatchdog.mockClear();
+    const root = renderProperties(container, {
+      issue: createIssue({ watchdog: createWatchdogSummary() }), childIssues: [], onUpdate: vi.fn(), inline: true,
+    });
+    try {
+      await waitForAssertion(() => expect(findRowTrigger(container, "Watchdog")?.textContent).toContain("ClaudeCoder"));
+      await act(() => findRowTrigger(container, "Watchdog")!.click());
+      const textarea = container.querySelector("textarea")!;
+      await act(() => {
+        Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")!.set!.call(textarea, "Unsaved 中文 draft");
+        textarea.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      for (const [locale, messages] of Object.entries(issueWatchdogMessages)) {
+        await act(async () => { await i18n.changeLanguage(locale); });
+        expect(container.querySelector("textarea")).toBe(textarea);
+        expect(textarea.value).toBe("Unsaved 中文 draft");
+        expect(textarea.getAttribute("aria-label")).toBe(messages.instructions);
+        expect(container.textContent).toContain(messages.update);
+        expect(container.textContent).toContain("ClaudeCoder");
+      }
+      await act(() => findRowTrigger(container, "Watchdog")!.click());
+      expect(container.querySelector("textarea")).toBeNull();
+      await act(() => findRowTrigger(container, "Watchdog")!.click());
+      expect(container.querySelector("textarea")?.value).toBe("Keep the tree moving.");
+      expect(mockIssuesApi.upsertWatchdog).not.toHaveBeenCalled();
+      expect(mockIssuesApi.deleteWatchdog).not.toHaveBeenCalled();
+    } finally {
+      await act(() => root.unmount());
+    }
+  });
+
+  it.each(Object.entries(issueWatchdogMessages).flatMap(([locale, messages]) =>
+    (["save", "remove"] as const).map((action) => ({ locale, messages, action })),
+  ))("shows watchdog $action pending and original failures in $locale", async ({ locale, messages, action }) => {
+    await i18n.changeLanguage(locale);
+    mockAgentsApi.list.mockResolvedValue([watchdogAgent]);
+    const api = action === "save" ? mockIssuesApi.upsertWatchdog : mockIssuesApi.deleteWatchdog;
+    api.mockClear();
+    let rejectRequest!: (reason: Error) => void;
+    api.mockReturnValueOnce(new Promise((_resolve, reject) => { rejectRequest = reject; }));
+    const root = renderProperties(container, {
+      issue: createIssue({ watchdog: createWatchdogSummary() }), childIssues: [], onUpdate: vi.fn(), inline: true,
+    });
+    try {
+      await waitForAssertion(() => expect(findRowTrigger(container, "Watchdog")?.textContent).toContain("ClaudeCoder"));
+      await act(() => findRowTrigger(container, "Watchdog")!.click());
+      const label = action === "save" ? messages.update : messages.remove;
+      const pending = action === "save" ? messages.saving : messages.removing;
+      const button = Array.from(container.querySelectorAll("button")).find((item) => item.textContent === label)!;
+      await act(() => button.click());
+      await waitForAssertion(() => expect(button.textContent).toBe(pending));
+      expect(button.disabled).toBe(true);
+      await act(() => button.click());
+      expect(api).toHaveBeenCalledTimes(1);
+      expect(api.mock.calls[0][0]).toBe("issue-1");
+      const diagnostic = `${action} denied by provider 原文`;
+      await act(() => rejectRequest(new Error(diagnostic)));
+      await waitForAssertion(() => expect(container.textContent).toContain(diagnostic));
+      expect(button.textContent).toBe(label);
+      if (action === "save") expect(container.querySelector("textarea")?.value).toBe("Keep the tree moving.");
+    } finally {
+      await act(() => root.unmount());
+    }
+  });
+
+  it.each(Object.entries(issueWatchdogMessages))("keeps watchdog creation disabled without an agent in %s", async (locale, messages) => {
+    await i18n.changeLanguage(locale);
+    mockIssuesApi.upsertWatchdog.mockClear();
+    const root = renderProperties(container, {
+      issue: createIssue(), childIssues: [], onUpdate: vi.fn(), inline: true,
+    });
+    try {
+      await flush();
+      await act(() => findRowTrigger(container, "Watchdog")!.click());
+      expect(container.textContent).toContain(messages.selectAgent);
+      const save = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === messages.set)!;
+      expect(save.disabled).toBe(true);
+      await act(() => save.click());
+      expect(mockIssuesApi.upsertWatchdog).not.toHaveBeenCalled();
+    } finally {
+      await act(() => root.unmount());
+    }
+  });
+
+  it.each(Object.entries(issueWatchdogMessages))("creates a watchdog with unchanged agent ID and null instructions in %s", async (locale, messages) => {
+    await i18n.changeLanguage(locale);
+    mockAgentsApi.list.mockResolvedValue([watchdogAgent]);
+    mockIssuesApi.upsertWatchdog.mockClear();
+    const root = renderProperties(container, {
+      issue: createIssue(), childIssues: [], onUpdate: vi.fn(), inline: true,
+    });
+    try {
+      await flush();
+      await act(() => findRowTrigger(container, "Watchdog")!.click());
+      await waitForAssertion(() => expect(container.textContent).toContain("ClaudeCoder"));
+      const agent = Array.from(container.querySelectorAll("button")).find((button) =>
+        button.textContent === "ClaudeCoder" && button.closest("[data-mobile-entity-picker-list]"),
+      )!;
+      await act(() => agent.click());
+      const save = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === messages.set)!;
+      expect(save.disabled).toBe(false);
+      await act(() => save.click());
+      await waitForAssertion(() => expect(mockIssuesApi.upsertWatchdog).toHaveBeenCalledWith("issue-1", {
+        agentId: "agent-1", instructions: null,
+      }));
+    } finally {
+      await act(() => root.unmount());
+    }
+  });
 
   it("shows the empty watchdog state and saves a new watchdog via the API", async () => {
     mockInstanceSettingsApi.getExperimental.mockResolvedValue({

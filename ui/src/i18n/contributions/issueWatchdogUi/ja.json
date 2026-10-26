@@ -1,0 +1,20 @@
+{
+  "disabled": "（無効）",
+  "agent": "監視エージェント",
+  "selectAgent": "エージェントを選択",
+  "noAgent": "監視エージェントなし",
+  "searchAgents": "エージェントを検索…",
+  "noAgents": "エージェントが見つかりません。",
+  "closeSelector": "選択画面を閉じる",
+  "instructions": "指示",
+  "optional": "（任意）",
+  "instructionsPlaceholder": "監視エージェントは何に注意し、どのように作業の進行を促すべきですか？",
+  "task": "監視タスク：",
+  "viewTask": "タスクを表示",
+  "openTask": "監視タスクを開く",
+  "removing": "削除中…",
+  "remove": "削除",
+  "saving": "保存中…",
+  "update": "更新",
+  "set": "監視を設定"
+}

@@ -1166,7 +1166,7 @@ export function IssueProperties({
         </span>
       ) : null}
       {issue.watchdog.status === "disabled" ? (
-        <span className="shrink-0 text-xs text-muted-foreground">(disabled)</span>
+        <span className="shrink-0 text-xs text-muted-foreground">{t("issueWatchdogUi.disabled")}</span>
       ) : null}
     </span>
   ) : (
@@ -1187,17 +1187,19 @@ export function IssueProperties({
   const watchdogContent = (
     <div className="space-y-3 p-2">
       <div className="space-y-1.5">
-        <div className="text-xs font-medium text-foreground">Watchdog agent</div>
+        <div className="text-xs font-medium text-foreground">{t("issueWatchdogUi.agent")}</div>
         <InlineEntitySelector
           value={watchdogAgentInput}
           options={watchdogAgentOptions}
-          placeholder="Select agent"
-          noneLabel="No watchdog agent"
-          searchPlaceholder="Search agents..."
-          emptyMessage="No agents found."
+          placeholder={t("issueWatchdogUi.selectAgent")}
+          noneLabel={t("issueWatchdogUi.noAgent")}
+          noneSearchText={`No watchdog agent ${t("issueWatchdogUi.noAgent")}`}
+          searchPlaceholder={t("issueWatchdogUi.searchAgents")}
+          emptyMessage={t("issueWatchdogUi.noAgents")}
+          closeLabel={t("issueWatchdogUi.closeSelector")}
           onChange={setWatchdogAgentInput}
           renderTriggerValue={(option) => {
-            if (!option) return <span className="text-muted-foreground">Select agent</span>;
+            if (!option) return <span className="text-muted-foreground">{t("issueWatchdogUi.selectAgent")}</span>;
             const agent = (agents ?? []).find((candidate) => candidate.id === option.id);
             return (
               <>
@@ -1219,21 +1221,22 @@ export function IssueProperties({
       </div>
       <div className="space-y-1.5">
         <div className="text-xs font-medium text-foreground">
-          Instructions <span className="font-normal text-muted-foreground">(optional)</span>
+          {t("issueWatchdogUi.instructions")} <span className="font-normal text-muted-foreground">{t("issueWatchdogUi.optional")}</span>
         </div>
         <Textarea
           value={watchdogInstructionsInput}
           onChange={(event) => setWatchdogInstructionsInput(event.target.value)}
-          placeholder="What should the watchdog watch for and how should it keep work moving?"
+          placeholder={t("issueWatchdogUi.instructionsPlaceholder")}
+          aria-label={t("issueWatchdogUi.instructions")}
           rows={4}
           className="text-xs"
         />
       </div>
       {watchdogIssueRef ? (
         <div className="text-xs text-muted-foreground">
-          Watchdog task:{" "}
+          {t("issueWatchdogUi.task")}{" "}
           <Link to={`/issues/${watchdogIssueRef.id}`} className="text-primary hover:underline">
-            {watchdogIssueRef.identifier ?? "View task"}
+            {watchdogIssueRef.identifier ?? t("issueWatchdogUi.viewTask")}
           </Link>
         </div>
       ) : null}
@@ -1249,7 +1252,7 @@ export function IssueProperties({
           disabled={deleteWatchdog.isPending || (!issue.watchdog && !watchdogAgentInput)}
           onClick={removeWatchdog}
         >
-          {deleteWatchdog.isPending ? "Removing…" : "Remove"}
+          {deleteWatchdog.isPending ? t("issueWatchdogUi.removing") : t("issueWatchdogUi.remove")}
         </button>
         <Button
           type="button"
@@ -1258,7 +1261,7 @@ export function IssueProperties({
           disabled={!watchdogAgentInput || upsertWatchdog.isPending}
           onClick={saveWatchdog}
         >
-          {upsertWatchdog.isPending ? "Saving…" : issue.watchdog ? "Update" : "Set watchdog"}
+          {upsertWatchdog.isPending ? t("issueWatchdogUi.saving") : issue.watchdog ? t("issueWatchdogUi.update") : t("issueWatchdogUi.set")}
         </Button>
       </div>
     </div>
@@ -2732,8 +2735,8 @@ export function IssueProperties({
               <Link
                 to={`/issues/${watchdogIssueRef.id}`}
                 className="inline-flex items-center justify-center h-5 w-5 rounded hover:bg-accent/50 transition-colors text-muted-foreground hover:text-foreground"
-                title="Open watchdog task"
-                aria-label="Open watchdog task"
+                title={t("issueWatchdogUi.openTask")}
+                aria-label={t("issueWatchdogUi.openTask")}
                 onClick={(e) => e.stopPropagation()}
               >
                 <ArrowUpRight className="h-3 w-3" />
