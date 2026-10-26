@@ -17,5 +17,16 @@
   "noBlockers": "No blockers",
   "addBlocker": "Add blocker",
   "noSubtasks": "No subtasks yet.",
-  "addSubtask": "Add subtask"
+  "addSubtask": "Add subtask",
+  "copyValue": "Copy {{value}} to clipboard",
+  "copied": "Copied",
+  "propertiesTab": "Properties",
+  "subtasksTab": "Subtasks",
+  "referencesTab": "References",
+  "planTab": "Plan",
+  "artifactsTab": "Artifacts",
+  "panelSections": "Properties panel sections",
+  "closeTab": "Close {{label}} tab",
+  "openClosedTab": "Open closed sidebar tab",
+  "allTabsOpen": "All sidebar tabs are open"
 }

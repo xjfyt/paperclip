@@ -757,6 +757,55 @@ describe("IssueProperties", () => {
     act(() => root.unmount());
   });
 
+  it.each(Object.entries(issuePropertyControlsMessages))("localizes tabs and copy feedback while preserving paths and tab state in %s", async (locale, messages) => {
+    await i18n.changeLanguage(locale);
+    const headerSlot = document.createElement("div");
+    headerSlot.id = "properties-pane-header-slot";
+    document.body.appendChild(headerSlot);
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    const path = "/tmp/用户/PAP-1";
+    const onUpdate = vi.fn();
+    const { root, queryClient } = renderPropertiesWithQueryClient(container, {
+      issue: createIssue({ executionWorkspaceId: "workspace-1", currentExecutionWorkspace: createExecutionWorkspace({ cwd: path }) }),
+      childIssues: [createIssue({ id: "child-1", identifier: "PAP-2", title: "用户 Child task" })], onUpdate,
+    });
+    try {
+      await flush(); await flush();
+      expect(headerSlot.textContent).toContain(messages.propertiesTab);
+      expect(headerSlot.textContent).toContain(messages.subtasksTab);
+      const copy = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.title === path)!;
+      expect(copy.getAttribute("aria-label")).toBe(messages.copyValue.replace("{{value}}", path));
+      await act(async () => copy.click());
+      await flush();
+      expect(writeText).toHaveBeenCalledExactlyOnceWith(path);
+      expect(container.querySelector('[role="status"]')?.textContent).toContain(messages.copied);
+      const close = headerSlot.querySelector<HTMLButtonElement>(`[aria-label="${messages.closeTab.replace("{{label}}", messages.subtasksTab)}"]`)!;
+      await act(() => close.click());
+      expect(headerSlot.textContent).not.toContain(messages.subtasksTab);
+      expect(headerSlot.querySelector('[role="tab"][data-state="active"]')?.textContent).toBe(messages.propertiesTab);
+      const calls = mockIssuesApi.listWorkProducts.mock.calls.length;
+      await act(async () => { await i18n.changeLanguage(locale === "ja" ? "es" : "ja"); });
+      await flush();
+      const next = locale === "ja" ? issuePropertyControlsMessages.es : issuePropertyControlsMessages.ja;
+      expect(headerSlot.textContent).toContain(next.propertiesTab);
+      expect(headerSlot.textContent).not.toContain(next.subtasksTab);
+      const open = headerSlot.querySelector<HTMLButtonElement>(`[aria-label="${next.openClosedTab}"]`)!;
+      expect(open.disabled).toBe(false);
+      await act(() => {
+        open.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0 }));
+        open.click();
+      });
+      await flush();
+      const reopen = Array.from(document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')).find(item => item.textContent === next.subtasksTab)!;
+      await act(() => reopen.click());
+      await flush();
+      expect(headerSlot.querySelector('[role="tab"][data-state="active"]')?.textContent).toContain(next.subtasksTab);
+      expect(onUpdate).not.toHaveBeenCalled();
+      expect(mockIssuesApi.listWorkProducts).toHaveBeenCalledTimes(calls);
+    } finally { act(() => root.unmount()); queryClient.clear(); }
+  });
+
   it("uses the same filled active-tab treatment in a multi-tab pane header", async () => {
     const headerSlot = document.createElement("div");
     headerSlot.id = "properties-pane-header-slot";

@@ -17,5 +17,16 @@
   "noBlockers": "无阻塞项",
   "addBlocker": "添加阻塞项",
   "noSubtasks": "暂无子任务。",
-  "addSubtask": "添加子任务"
+  "addSubtask": "添加子任务",
+  "copyValue": "将 {{value}} 复制到剪贴板",
+  "copied": "已复制",
+  "propertiesTab": "属性",
+  "subtasksTab": "子任务",
+  "referencesTab": "引用",
+  "planTab": "计划",
+  "artifactsTab": "产物",
+  "panelSections": "属性面板分区",
+  "closeTab": "关闭{{label}}标签页",
+  "openClosedTab": "打开已关闭的侧栏标签页",
+  "allTabsOpen": "所有侧栏标签页均已打开"
 }

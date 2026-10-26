@@ -17,5 +17,16 @@
   "noBlockers": "Sin bloqueos",
   "addBlocker": "Añadir bloqueo",
   "noSubtasks": "Aún no hay subtareas.",
-  "addSubtask": "Añadir subtarea"
+  "addSubtask": "Añadir subtarea",
+  "copyValue": "Copiar {{value}} al portapapeles",
+  "copied": "Copiado",
+  "propertiesTab": "Propiedades",
+  "subtasksTab": "Subtareas",
+  "referencesTab": "Referencias",
+  "planTab": "Plan",
+  "artifactsTab": "Artefactos",
+  "panelSections": "Secciones del panel de propiedades",
+  "closeTab": "Cerrar pestaña {{label}}",
+  "openClosedTab": "Abrir pestaña cerrada de la barra lateral",
+  "allTabsOpen": "Todas las pestañas de la barra lateral están abiertas"
 }

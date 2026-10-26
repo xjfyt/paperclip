@@ -17,5 +17,16 @@
   "noBlockers": "ブロック元なし",
   "addBlocker": "ブロック元を追加",
   "noSubtasks": "サブタスクはまだありません。",
-  "addSubtask": "サブタスクを追加"
+  "addSubtask": "サブタスクを追加",
+  "copyValue": "{{value}} をクリップボードにコピー",
+  "copied": "コピーしました",
+  "propertiesTab": "プロパティ",
+  "subtasksTab": "サブタスク",
+  "referencesTab": "参照",
+  "planTab": "計画",
+  "artifactsTab": "成果物",
+  "panelSections": "プロパティパネルのセクション",
+  "closeTab": "{{label}} タブを閉じる",
+  "openClosedTab": "閉じたサイドバーのタブを開く",
+  "allTabsOpen": "サイドバーのタブはすべて開いています"
 }
