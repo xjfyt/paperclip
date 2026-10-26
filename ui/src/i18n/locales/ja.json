@@ -882,6 +882,15 @@
     "clearFilters": "フィルターをクリア",
     "noTasks": "タスクはまだありません。"
   },
+  "composerAssigneeUi": {
+    "noAssignee": "担当者なし",
+    "chooseAssignee": "担当者を選択",
+    "assignees": "担当者",
+    "assignee": "担当者",
+    "searchAssignees": "担当者を検索",
+    "searchPlaceholder": "担当者を検索…",
+    "noMatches": "一致する項目がありません。"
+  },
   "connectionAccessUi": {
     "requestingAgent": "リクエスト元の Agent",
     "githubIdentityHeading": "GitHub に接続するアカウント",

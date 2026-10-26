@@ -882,6 +882,15 @@
     "clearFilters": "Borrar filtros",
     "noTasks": "Aún no hay tareas."
   },
+  "composerAssigneeUi": {
+    "noAssignee": "Sin responsable",
+    "chooseAssignee": "Elegir responsable",
+    "assignees": "Responsables",
+    "assignee": "Responsable",
+    "searchAssignees": "Buscar responsables",
+    "searchPlaceholder": "Buscar responsables…",
+    "noMatches": "No hay coincidencias."
+  },
   "connectionAccessUi": {
     "requestingAgent": "el Agent solicitante",
     "githubIdentityHeading": "Conectar GitHub como",

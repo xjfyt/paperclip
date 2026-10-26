@@ -882,6 +882,15 @@
     "clearFilters": "清除筛选",
     "noTasks": "暂无任务。"
   },
+  "composerAssigneeUi": {
+    "noAssignee": "无负责人",
+    "chooseAssignee": "选择负责人",
+    "assignees": "负责人",
+    "assignee": "负责人",
+    "searchAssignees": "搜索负责人",
+    "searchPlaceholder": "搜索负责人…",
+    "noMatches": "无匹配结果。"
+  },
   "connectionAccessUi": {
     "requestingAgent": "发起请求的 Agent",
     "githubIdentityHeading": "以哪种身份连接 GitHub",

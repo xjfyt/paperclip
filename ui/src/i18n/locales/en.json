@@ -882,6 +882,15 @@
     "clearFilters": "Clear filters",
     "noTasks": "No tasks yet."
   },
+  "composerAssigneeUi": {
+    "noAssignee": "No assignee",
+    "chooseAssignee": "Choose assignee",
+    "assignees": "Assignees",
+    "assignee": "Assignee",
+    "searchAssignees": "Search assignees",
+    "searchPlaceholder": "Search assignees…",
+    "noMatches": "No matches."
+  },
   "connectionAccessUi": {
     "requestingAgent": "the requesting agent",
     "githubIdentityHeading": "Connect GitHub as",
