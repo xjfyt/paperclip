@@ -1,3 +1,5 @@
+import type { TFunction } from "i18next";
+import { LocalizedUiError, localizedUiErrorMessage, type LocalizedUiMessage } from "@/lib/localized-ui-error";
 import { useTranslation } from "@/i18n";
 import { useConnectionModels } from "./ai-connections/useConnectionModels";
 import { aiRoutingHarness } from "@paperclipai/shared";
@@ -2238,20 +2240,21 @@ function AdapterLoginTerminalState({
   status: AdapterAuthSessionStatus;
   message: string | null;
 }) {
+  const { t } = useTranslation();
   if (status === "authenticated") {
     return (
       <div className="flex items-center gap-2 text-(length:--text-micro) text-foreground">
         <Check className="size-3 shrink-0" />
-        <span>Authenticated. The environment has credentials now.</span>
+        <span>{t("agentSetupLoginUi.authenticated")}</span>
       </div>
     );
   }
   const label =
     status === "timed_out"
-      ? "Login timed out"
+      ? t("agentSetupLoginUi.timedOut")
       : status === "cancelled"
-        ? "Login cancelled"
-        : "Login failed";
+        ? t("agentSetupLoginUi.cancelled")
+        : t("agentSetupLoginUi.failed");
   return (
     <div className="flex items-start gap-2 text-(length:--text-micro) text-destructive">
       <TriangleAlert className="size-3 shrink-0" />
@@ -2359,9 +2362,9 @@ const ADAPTER_LOGIN_PROVIDER: Record<string, string> = {
   codex_local: "OpenAI",
 };
 
-function adapterLoginTitle(adapterType: string): string {
+function adapterLoginTitle(adapterType: string, t: TFunction): string {
   const provider = ADAPTER_LOGIN_PROVIDER[adapterType];
-  return provider ? `Sign in to ${provider}` : "Sign in to the environment";
+  return provider ? t("agentSetupLoginUi.signInProvider", { provider }) : t("agentSetupLoginUi.signInEnvironment");
 }
 
 export function AdapterLoginPanel(props: AdapterLoginPanelProps) {
@@ -2373,9 +2376,9 @@ export function AdapterLoginPanel(props: AdapterLoginPanelProps) {
   return <DisplayedCodeLoginPanel {...props} />;
 }
 
-class AdapterLoginConflictError extends Error {
+class AdapterLoginConflictError extends LocalizedUiError {
   constructor(readonly sessionId: string) {
-    super("Another sign-in attempt is active. Finish or cancel that attempt before starting a new sign-in.");
+    super("agentSetupLoginUi.activeConflict", "Another sign-in attempt is active. Finish or cancel that attempt before starting a new sign-in.");
   }
 }
 
@@ -2390,8 +2393,10 @@ function DisplayedCodeLoginPanel({
   aiConnection,
   onPromptReady,
 }: AdapterLoginPanelProps) {
+  const { t } = useTranslation();
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [startError, setStartError] = useState<string | null>(null);
+  const [startError, setStartError] = useState<LocalizedUiMessage | null>(null);
+  const startErrorText = typeof startError === "string" ? startError : startError ? t(startError.key) : null;
   // The server delivers the one-time prompt on the first owner read only. Latch
   // it so a later poll that returns a null prompt does not hide the code and the
   // URL.
@@ -2423,7 +2428,7 @@ function DisplayedCodeLoginPanel({
       setSessionId(session.sessionId);
     },
     onError: (error) => {
-      setStartError(error instanceof Error ? error.message : "Could not start the login.");
+      setStartError(localizedUiErrorMessage(error, "agentSetupLoginUi.startFailed"));
     },
   });
 
@@ -2440,7 +2445,7 @@ function DisplayedCodeLoginPanel({
     mutationFn: () => agentsApi.cancelAdapterAuthLogin(companyId, adapterType, sessionId!),
     onSuccess: clearActiveSession,
     onError: (error) => {
-      setStartError(error instanceof Error ? error.message : "Could not cancel the login.");
+      setStartError(localizedUiErrorMessage(error, "agentSetupLoginUi.cancelFailed"));
     },
   });
 
@@ -2571,7 +2576,7 @@ function DisplayedCodeLoginPanel({
       setStartError(null);
       await activeSessionQuery.refetch();
     },
-    onError: () => setStartError("Could not cancel the previous sign-in. Retry before starting a new one."),
+    onError: () => setStartError({ key: "agentSetupLoginUi.cancelPreviousFailed" }),
   });
   const startLoginRef = useRef(startLogin.mutate);
   startLoginRef.current = startLogin.mutate;
@@ -2583,9 +2588,7 @@ function DisplayedCodeLoginPanel({
     if (activeSessionQuery.isError) {
       autoStartedRef.current = true;
       setStartError(
-        activeSessionQuery.error instanceof Error
-          ? activeSessionQuery.error.message
-          : "Could not check for an active login.",
+        localizedUiErrorMessage(activeSessionQuery.error, "agentSetupLoginUi.activeCheckFailed"),
       );
       return;
     }
@@ -2670,21 +2673,21 @@ function DisplayedCodeLoginPanel({
       >
         {startError ? (
           <div>
-            <p role="alert" className="pl-2 text-xs text-destructive">{startError}</p>
+            <p role="alert" className="pl-2 text-xs text-destructive">{startErrorText}</p>
             {activeSessionQuery.error instanceof AdapterLoginConflictError && (
               <Button type="button" variant="outline" disabled={cancelConflictingLogin.isPending}
                 onClick={() => cancelConflictingLogin.mutate()}>
-                Cancel previous sign-in and retry
+                {t("agentSetupLoginUi.cancelPreviousRetry")}
               </Button>
             )}
           </div>
         ) : failed ? (
           <p role="alert" className="pl-2 text-xs text-destructive">
             {status === "timed_out"
-              ? "The login timed out. Start it again."
+              ? t("agentSetupLoginUi.timedOutRetry")
               : status === "cancelled"
-                ? "The login was cancelled."
-                : "The login did not finish. Start it again."}
+                ? t("agentSetupLoginUi.wasCancelled")
+                : t("agentSetupLoginUi.unfinishedRetry")}
           </p>
         ) : (
           <OnboardingLoginCodeRow code={prompt?.code ?? ""} autoCopy />
@@ -2701,7 +2704,7 @@ function DisplayedCodeLoginPanel({
           inside the card that pushes the row off centre. A gap only
           applies between children that render. */}
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-medium text-foreground">{adapterLoginTitle(adapterType)}</span>
+        <span className="text-xs font-medium text-foreground">{adapterLoginTitle(adapterType, t)}</span>
         <div className="flex items-center gap-1.5">
           {isActive && (
             <Button
@@ -2712,7 +2715,7 @@ function DisplayedCodeLoginPanel({
               disabled={cancelLogin.isPending}
               onClick={() => cancelLogin.mutate()}
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
           )}
           <Button
@@ -2723,14 +2726,14 @@ function DisplayedCodeLoginPanel({
             disabled={startDisabled}
             onClick={() => startLogin.mutate()}
           >
-            Sign in
+            {t("agentSetupLoginUi.signIn")}
           </Button>
         </div>
       </div>
 
       {startError && (
         <div role="alert" className="text-(length:--text-micro) text-destructive">
-          {startError}
+          {startErrorText}
         </div>
       )}
 
@@ -2740,14 +2743,14 @@ function DisplayedCodeLoginPanel({
         {isActive && !prompt && (
           <div className="flex items-center gap-2 text-(length:--text-micro) text-muted-foreground">
             <Loader2 className="size-3 animate-spin shrink-0" />
-            <span>Preparing...</span>
+            <span>{t("agentSetupLoginUi.preparing")}</span>
           </div>
         )}
 
         {isActive && prompt && (
           <div className="space-y-2">
             <div className="text-(length:--text-micro) text-muted-foreground">
-              Copy the code, then open the authentication page.
+              {t("agentSetupLoginUi.copyCodeFirst")}
             </div>
           {/* Code first, then the URL, and the sentence and the numbering both
               say so.
@@ -2767,28 +2770,28 @@ function DisplayedCodeLoginPanel({
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
               <div className="text-(length:--text-micro) uppercase tracking-wide text-muted-foreground">
-                1. Code
+                {t("agentSetupLoginUi.codeStep")}
               </div>
               <span className="font-mono text-xs text-foreground break-all">{prompt.code}</span>
             </div>
-            <AdapterLoginCopyButton value={prompt.code} label="Copy code" />
+            <AdapterLoginCopyButton value={prompt.code} label={t("agentSetupLoginUi.copyCode")} />
           </div>
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
               <div className="text-(length:--text-micro) uppercase tracking-wide text-muted-foreground">
-                2. Authentication URL
+                {t("agentSetupLoginUi.authenticationUrlStep")}
               </div>
               <span className="font-mono text-xs text-foreground break-all">{prompt.url}</span>
             </div>
             <div className="flex items-center">
-              <AdapterLoginCopyButton value={prompt.url} label="Copy URL" />
+              <AdapterLoginCopyButton value={prompt.url} label={t("agentSetupLoginUi.copyUrl")} />
               <Button
                 asChild
                 type="button"
                 variant="ghost"
                 size="icon-xs"
-                aria-label="Open the authentication page"
-                title="Open the authentication page"
+                aria-label={t("agentSetupLoginUi.openAuthentication")}
+                title={t("agentSetupLoginUi.openAuthentication")}
                 className="text-muted-foreground hover:text-foreground"
               >
                 <a href={prompt.url} target="_blank" rel="noreferrer noopener">
@@ -2810,20 +2813,20 @@ function DisplayedCodeLoginPanel({
         {status === "authenticated" && accountBindState === "saving" && (
           <div className="flex items-center gap-2 text-(length:--text-micro) text-muted-foreground">
             <Loader2 className="size-3 animate-spin shrink-0" />
-            <span>Binding this agent to the signed-in account...</span>
+            <span>{t("agentSetupLoginUi.binding")}</span>
           </div>
         )}
         {status === "authenticated" && accountBindState === "bound" && (
           <div className="flex items-center gap-2 text-(length:--text-micro) text-foreground">
             <Check className="size-3 shrink-0" />
-            <span>Agent bound to the signed-in account.</span>
+            <span>{t("agentSetupLoginUi.bound")}</span>
           </div>
         )}
         {status === "authenticated" && accountBindState === "failed" && (
           <div className="flex items-center gap-2 text-(length:--text-micro)">
             <TriangleAlert className="size-3 shrink-0 text-destructive" />
             <span className="text-destructive">
-              Could not bind this agent to the signed-in account.
+              {t("agentSetupLoginUi.bindFailed")}
             </span>
             <Button
               type="button"
@@ -2834,7 +2837,7 @@ function DisplayedCodeLoginPanel({
                 if (accountBinding) void runAccountBinding(accountBinding);
               }}
             >
-              Retry
+              {t("common.retry")}
             </Button>
           </div>
         )}
@@ -2854,7 +2857,7 @@ const CLAUDE_LOGIN_FAILURE_STATUSES = new Set<AdapterAuthSessionStatus>([
 // The fixed, non-secret message for a failed Claude login. The panel shows this
 // text and returns to its start state. It never shows a provider message that
 // could carry a secret.
-const CLAUDE_LOGIN_FAILED_MESSAGE = "The login did not finish. Start the login again.";
+const CLAUDE_LOGIN_FAILED_MESSAGE = "agentSetupLoginUi.claudeFailed";
 
 // The client wall-clock cap for one active login. The panel polls the status
 // route and the prompt route every two seconds. The server can leave a session
@@ -2871,7 +2874,7 @@ const CLAUDE_LOGIN_FAILSAFE_TIMEOUT_MS = 15 * 60_000;
 
 // The fixed, non-secret message for a timed-out Claude login. The panel shows
 // this text, stops both polls, and returns to its start state.
-const CLAUDE_LOGIN_TIMED_OUT_MESSAGE = "The login timed out. Start the login again.";
+const CLAUDE_LOGIN_TIMED_OUT_MESSAGE = "agentSetupLoginUi.claudeTimedOut";
 
 // The submitted-browser-code login panel for the Claude adapter. It starts a
 // setup-token login, polls the status route, and reads the authorization URL
@@ -2892,8 +2895,10 @@ function SubmittedBrowserCodeLoginPanel({
   aiConnection,
   onPromptReady,
 }: AdapterLoginPanelProps) {
+  const { t } = useTranslation();
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [startError, setStartError] = useState<string | null>(null);
+  const [startError, setStartError] = useState<LocalizedUiMessage | null>(null);
+  const startErrorText = typeof startError === "string" ? startError : startError ? t(startError.key) : null;
   // The server delivers the authorization URL on the guarded prompt read only.
   // Latch it so a later poll does not hide the URL.
   const [authorizationUrl, setAuthorizationUrl] = useState<string | null>(null);
@@ -2996,7 +3001,7 @@ function SubmittedBrowserCodeLoginPanel({
       setSessionId(session.sessionId);
     },
     onError: (error) => {
-      setStartError(error instanceof Error ? error.message : "Could not start the login.");
+      setStartError(localizedUiErrorMessage(error, "agentSetupLoginUi.startFailed"));
     },
   });
 
@@ -3023,7 +3028,7 @@ function SubmittedBrowserCodeLoginPanel({
         clearActiveSession();
         return;
       }
-      setStartError(error instanceof Error ? error.message : "Could not cancel the login.");
+      setStartError(localizedUiErrorMessage(error, "agentSetupLoginUi.cancelFailed"));
     },
   });
 
@@ -3057,7 +3062,7 @@ function SubmittedBrowserCodeLoginPanel({
       try {
         const active = await agentsApi.getActiveClaudeSetupTokenLoginSession(companyId);
         if (!active) return null;
-        if ((aiConnection && active.environmentId !== environmentId) || Boolean(active.aiConnection) !== Boolean(aiConnection) || (aiConnection && (active.aiConnection?.provider !== aiConnection.provider || active.aiConnection?.method !== aiConnection.method || active.aiConnection?.connectionId !== aiConnection.connectionId || active.aiConnection?.ownership !== aiConnection.ownership || active.aiConnection?.allAgents !== aiConnection.allAgents || JSON.stringify(active.aiConnection?.agentIds) !== JSON.stringify(aiConnection.agentIds)))) throw new Error("Another sign-in attempt is active. Finish or cancel it in its original account setup before starting this one.");
+        if ((aiConnection && active.environmentId !== environmentId) || Boolean(active.aiConnection) !== Boolean(aiConnection) || (aiConnection && (active.aiConnection?.provider !== aiConnection.provider || active.aiConnection?.method !== aiConnection.method || active.aiConnection?.connectionId !== aiConnection.connectionId || active.aiConnection?.ownership !== aiConnection.ownership || active.aiConnection?.allAgents !== aiConnection.allAgents || JSON.stringify(active.aiConnection?.agentIds) !== JSON.stringify(aiConnection.agentIds)))) throw new LocalizedUiError("agentSetupLoginUi.accountConflict", "Another sign-in attempt is active. Finish or cancel it in its original account setup before starting this one.");
         return active;
       } catch (error) {
         if (error instanceof ApiError && error.status === 404) return null;
@@ -3187,7 +3192,7 @@ function SubmittedBrowserCodeLoginPanel({
     mutationFn: (code: string) =>
       agentsApi.submitClaudeSetupTokenBrowserCode(companyId, sessionId!, code),
     onError: (error) => {
-      setStartError(error instanceof Error ? error.message : "Could not submit the browser code.");
+      setStartError(localizedUiErrorMessage(error, "agentSetupLoginUi.submitBrowserCodeFailed"));
     },
   });
 
@@ -3318,9 +3323,7 @@ function SubmittedBrowserCodeLoginPanel({
     if (activeSessionQuery.isError) {
       autoStartedRef.current = true;
       setStartError(
-        activeSessionQuery.error instanceof Error
-          ? activeSessionQuery.error.message
-          : "Could not check for an active login.",
+        localizedUiErrorMessage(activeSessionQuery.error, "agentSetupLoginUi.activeCheckFailed"),
       );
       return;
     }
@@ -3415,17 +3418,16 @@ function SubmittedBrowserCodeLoginPanel({
         {transportInsecure && (
           <p className="flex items-start gap-2 pl-2 text-xs text-amber-700 dark:text-amber-200">
             <TriangleAlert className="mt-0.5 size-3 shrink-0" />
-            This connection is not encrypted. The login code travels in clear text on this
-            network. Continue only on a network you trust.
+            {t("agentSetupLoginUi.insecureTransport")}
           </p>
         )}
         {startError ? (
           <p role="alert" className="pl-2 text-xs text-destructive">
-            {startError}
+            {startErrorText}
           </p>
         ) : failedNow ? (
           <p role="alert" className="pl-2 text-xs text-destructive">
-            {timedOut && !isFailure ? CLAUDE_LOGIN_TIMED_OUT_MESSAGE : CLAUDE_LOGIN_FAILED_MESSAGE}
+            {timedOut && !isFailure ? t(CLAUDE_LOGIN_TIMED_OUT_MESSAGE) : t(CLAUDE_LOGIN_FAILED_MESSAGE)}
           </p>
         ) : (
           <OnboardingCardField
@@ -3454,7 +3456,7 @@ function SubmittedBrowserCodeLoginPanel({
           inside the card that pushes the row off centre. A gap only
           applies between children that render. */}
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-medium text-foreground">{adapterLoginTitle(adapterType)}</span>
+        <span className="text-xs font-medium text-foreground">{adapterLoginTitle(adapterType, t)}</span>
         <div className="flex items-center gap-1.5">
           {isActive && (
             <Button
@@ -3465,7 +3467,7 @@ function SubmittedBrowserCodeLoginPanel({
               disabled={cancelLogin.isPending}
               onClick={() => cancelLogin.mutate()}
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
           )}
           {/* Apply the existing stored login with no new login round trip. The
@@ -3482,7 +3484,7 @@ function SubmittedBrowserCodeLoginPanel({
                 setAppliedStored(true);
               }}
             >
-              Use saved login
+              {t("agentSetupLoginUi.useSavedLogin")}
             </Button>
           )}
           <Button
@@ -3493,7 +3495,7 @@ function SubmittedBrowserCodeLoginPanel({
             disabled={startDisabled}
             onClick={() => startLogin.mutate()}
           >
-            {storedToken && !isActive && !isStored ? "Sign in to replace" : "Sign in"}
+            {storedToken && !isActive && !isStored ? t("agentSetupLoginUi.signInReplace") : t("agentSetupLoginUi.signIn")}
           </Button>
         </div>
       </div>
@@ -3503,21 +3505,20 @@ function SubmittedBrowserCodeLoginPanel({
           token; a replacement login rotates it under the captured version. */}
       {storedToken && !isActive && !isStored && !appliedStored && (
         <div className="text-(length:--text-micro) text-muted-foreground">
-          You have a saved Claude login. Use it to bind this agent, or log in again to replace the
-          stored token.
+          {t("agentSetupLoginUi.savedClaudeHelp")}
         </div>
       )}
 
       {appliedStored && (
         <div className="flex items-center gap-2 text-(length:--text-micro) text-foreground">
           <Check className="size-3 shrink-0" />
-          <span>The saved Claude login is bound to this agent now.</span>
+          <span>{t("agentSetupLoginUi.savedClaudeBound")}</span>
         </div>
       )}
 
       {startError && (
         <div role="alert" className="text-(length:--text-micro) text-destructive">
-          {startError}
+          {startErrorText}
         </div>
       )}
 
@@ -3527,7 +3528,7 @@ function SubmittedBrowserCodeLoginPanel({
         {isActive && !authorizationUrl && !isCompleting && (
           <div className="flex items-center gap-2 text-(length:--text-micro) text-muted-foreground">
             <Loader2 className="size-3 animate-spin shrink-0" />
-            <span>Preparing...</span>
+            <span>{t("agentSetupLoginUi.preparing")}</span>
           </div>
         )}
 
@@ -3539,30 +3540,29 @@ function SubmittedBrowserCodeLoginPanel({
               >
                 <TriangleAlert className="size-3 shrink-0 mt-0.5" />
                 <span>
-                  This connection is not encrypted. The login code travels in clear text on this
-                  network. Continue only on a network you trust.
+                  {t("agentSetupLoginUi.insecureTransport")}
                 </span>
               </div>
             )}
             <div className="text-(length:--text-micro) text-muted-foreground">
-              Open the authorization page, then enter the browser code it shows.
+              {t("agentSetupLoginUi.openAuthorizationThenCode")}
             </div>
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <div className="text-(length:--text-micro) uppercase tracking-wide text-muted-foreground">
-                  1. Authorization URL
+                  {t("agentSetupLoginUi.authorizationUrlStep")}
                 </div>
                 <span className="font-mono text-xs text-foreground break-all">{authorizationUrl}</span>
               </div>
               <div className="flex items-center">
-                <AdapterLoginCopyButton value={authorizationUrl} label="Copy URL" />
+                <AdapterLoginCopyButton value={authorizationUrl} label={t("agentSetupLoginUi.copyUrl")} />
                 <Button
                   asChild
                   type="button"
                   variant="ghost"
                   size="icon-xs"
-                  aria-label="Open the authorization page"
-                  title="Open the authorization page"
+                  aria-label={t("agentSetupLoginUi.openAuthorization")}
+                  title={t("agentSetupLoginUi.openAuthorization")}
                   className="text-muted-foreground hover:text-foreground"
                 >
                   <a href={authorizationUrl} target="_blank" rel="noreferrer noopener">
@@ -3573,17 +3573,18 @@ function SubmittedBrowserCodeLoginPanel({
             </div>
             <div className="space-y-1">
               <div className="text-(length:--text-micro) uppercase tracking-wide text-muted-foreground">
-                2. Browser code
+                {t("agentSetupLoginUi.browserCodeStep")}
               </div>
               <div className="flex items-center gap-2">
                 <input
-                  aria-label="Browser code"
+                  aria-label={t("agentSetupLoginUi.browserCode")}
                   type="text"
                   autoComplete="off"
                   spellCheck={false}
                   value={browserCode}
                   onChange={(event) => setBrowserCode(event.target.value)}
                   onKeyDown={(event) => {
+                    if (event.nativeEvent.isComposing || event.keyCode === 229) return;
                     if (event.key === "Enter") {
                       event.preventDefault();
                       handleSubmit();
@@ -3599,7 +3600,7 @@ function SubmittedBrowserCodeLoginPanel({
                   disabled={!canSubmit}
                   onClick={handleSubmit}
                 >
-                  Submit
+                  {t("agentSetupLoginUi.submit")}
                 </Button>
               </div>
             </div>
@@ -3609,28 +3610,28 @@ function SubmittedBrowserCodeLoginPanel({
         {isCompleting && (
           <div className="flex items-center gap-2 text-(length:--text-micro) text-muted-foreground">
             <Loader2 className="size-3 animate-spin shrink-0" />
-            <span>Completing the login…</span>
+            <span>{t("agentSetupLoginUi.completing")}</span>
           </div>
         )}
 
         {isStored && (
           <div className="flex items-center gap-2 text-(length:--text-micro) text-foreground">
             <Check className="size-3 shrink-0" />
-            <span>Authenticated. The environment has credentials now.</span>
+            <span>{t("agentSetupLoginUi.authenticated")}</span>
           </div>
         )}
 
         {isFailure && (
           <div className="flex items-start gap-2 text-(length:--text-micro) text-destructive">
             <TriangleAlert className="size-3 shrink-0" />
-            <span>{CLAUDE_LOGIN_FAILED_MESSAGE}</span>
+            <span>{t(CLAUDE_LOGIN_FAILED_MESSAGE)}</span>
           </div>
         )}
 
         {timedOut && !isFailure && !isStored && (
           <div className="flex items-start gap-2 text-(length:--text-micro) text-destructive">
             <TriangleAlert className="size-3 shrink-0" />
-            <span>{CLAUDE_LOGIN_TIMED_OUT_MESSAGE}</span>
+            <span>{t(CLAUDE_LOGIN_TIMED_OUT_MESSAGE)}</span>
           </div>
         )}
       </div>

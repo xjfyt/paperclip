@@ -11,7 +11,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { aiProviderSetupPreset } from "@paperclipai/shared";
 import type { AiConnectionCredentialStep } from "./AiConnectionCredentialStep";
 
-globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 let credentialProps: ComponentProps<typeof AiConnectionCredentialStep> | undefined;
 vi.mock("@/api/ai-connections", () => ({ aiConnectionsApi: { create: vi.fn(async () => ({ connectionId: "connection", grantId: "grant" })), list: vi.fn(async () => ({ currentUserId: "owner", connections: [], canManageConnections: true })) } }));

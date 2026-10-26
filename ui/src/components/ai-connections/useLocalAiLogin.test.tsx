@@ -1,5 +1,8 @@
 // @vitest-environment jsdom
-import { StrictMode } from "react";
+import "@/i18n/agent-setup-test-resources";
+import "@/i18n/agent-setup-login-test-resources";
+import { i18n } from "@/i18n";
+import { act, StrictMode } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -19,7 +22,7 @@ beforeEach(() => {
   api.connectLocal.mockResolvedValue({ connectionId: "connection", grantId: "grant" });
   host = document.createElement("div"); document.body.append(host); root = createRoot(host);
 });
-afterEach(() => { flushSync(() => root.unmount()); host.remove(); });
+afterEach(async () => { flushSync(() => root.unmount()); host.remove(); vi.useRealTimers(); await i18n.changeLanguage("en"); });
 function Harness({ name = "Account", provider = "openai", enabled = true }: { name?: string; provider?: "anthropic" | "openai"; enabled?: boolean }) {
   const login = useLocalAiLogin("company", { provider, method: "subscription", name, ownership: "personal", agentIds: [], allAgents: true }, enabled);
   return <><LocalProviderLoginInstructions adapterType={provider === "anthropic" ? "claude_local" : "codex_local"} login={login} /><button onClick={() => void login.connect()}>Connect</button></>;
@@ -105,4 +108,60 @@ it("hides a failed device prompt and lets the user restart sign-in", async () =>
   flushSync(() => Array.from(host.querySelectorAll("button")).find(b => b.textContent === "Start sign-in again")!.click());
   await vi.waitFor(() => expect(host.textContent).toContain("NEW-CODE"));
   expect(host.querySelector('[role="alert"]')).toBeNull();
+});
+
+it.each(["expired", "fallback", "external"])("retranslates local %s errors without restarting sign-in or checks", async kind => {
+  await i18n.changeLanguage("ja");
+  if (kind === "expired") api.checkLocalLogin.mockResolvedValue({ status: "expired" });
+  else api.checkLocalLogin.mockRejectedValue(kind === "external" ? new Error("Provider raw diagnostic") : null);
+  flushSync(() => root.render(<Harness />));
+  const message = () => kind === "external" ? "Provider raw diagnostic" : i18n.t(`agentSetupLoginUi.${kind === "expired" ? "localExpired" : "localCheckFailed"}`);
+  await vi.waitFor(() => expect(host.querySelector('[role="alert"]')?.textContent).toContain(message()));
+  await act(async () => { await i18n.changeLanguage("zh-CN"); });
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain(message());
+  expect(api.startLocalLogin).toHaveBeenCalledTimes(1);
+  expect(api.checkLocalLogin).toHaveBeenCalledTimes(1);
+  expect(api.cancelLocalLogin).not.toHaveBeenCalled();
+  expect(api.connectLocal).not.toHaveBeenCalled();
+});
+
+it("keeps the existing local polling deadline and prompt across a language switch", async () => {
+  vi.useFakeTimers();
+  await i18n.changeLanguage("ja");
+  await act(async () => root.render(<Harness />));
+  expect(host.textContent).toContain("ABCD-12345");
+  await act(async () => vi.advanceTimersByTimeAsync(3000));
+  await act(async () => { await i18n.changeLanguage("zh-CN"); });
+  expect(api.startLocalLogin).toHaveBeenCalledTimes(1);
+  expect(api.checkLocalLogin).toHaveBeenCalledTimes(1);
+  expect(api.cancelLocalLogin).not.toHaveBeenCalled();
+  expect(host.textContent).toContain("ABCD-12345");
+  expect(host.querySelector('a[href="https://auth.openai.com/codex/device"]')).not.toBeNull();
+  await act(async () => vi.advanceTimersByTimeAsync(2000));
+  expect(api.checkLocalLogin).toHaveBeenCalledTimes(2);
+  expect(api.startLocalLogin).toHaveBeenCalledTimes(1);
+  expect(api.connectLocal).not.toHaveBeenCalled();
+});
+
+it("retranslates sanitized submit errors without repeating the authorization request", async () => {
+  await i18n.changeLanguage("ja");
+  api.checkLocalLogin.mockResolvedValue({ status: "sign_in_required", authorizationUrl: "https://claude.ai/oauth/authorize?client_id=test" });
+  api.submitLocalLoginCode.mockRejectedValue(new Error("private-provider-diagnostic"));
+  flushSync(() => root.render(<Harness provider="anthropic" />));
+  await vi.waitFor(() => expect(host.querySelector('input')).not.toBeNull());
+  const input = host.querySelector('input')!;
+  flushSync(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "fixture-code");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  flushSync(() => Array.from(host.querySelectorAll('button')).find(button => button.textContent === i18n.t("agentSetupSharedUi.submitCode"))!.click());
+  await vi.waitFor(() => expect(host.textContent).toContain(i18n.t("agentSetupLoginUi.localSubmitFailed")));
+  await act(async () => { await i18n.changeLanguage("zh-CN"); });
+  expect(host.textContent).toContain(i18n.t("agentSetupLoginUi.localSubmitFailed"));
+  expect(host.textContent).not.toContain("private-provider-diagnostic");
+  expect(api.submitLocalLoginCode).toHaveBeenCalledExactlyOnceWith("company", "attempt-1", "fixture-code");
+  expect(api.checkLocalLogin).toHaveBeenCalledTimes(1);
+  expect(api.startLocalLogin).toHaveBeenCalledTimes(1);
+  expect(api.cancelLocalLogin).not.toHaveBeenCalled();
+  expect(api.connectLocal).not.toHaveBeenCalled();
 });

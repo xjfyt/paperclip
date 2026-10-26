@@ -65,10 +65,33 @@ NODE_OPTIONS=--max-old-space-size=512 node ../node_modules/vitest/vitest.mjs run
 - 复现：在 `ui/` 使用前述命令运行 `AiProviderSetup.test.tsx`、`AiConnectionField.test.tsx`、`NewAgent.test.tsx`、`AgentProviderConnection.test.tsx`、`agent-setup-connection-surfaces.test.tsx`、`saved-provider-credentials.test.ts`（使用各文件的 `src/` 完整路径）。token gates、调色板/角色同步、diff 检查通过。
 - 手测追加：四语创建高级网关/本地模型连接，编辑中切语言，检查标题/placeholder 与账号状态更新而权限、模型和 URL 不变；已有账户名称恰含英文系统词时仍保留名称。使用受控账户验证 API 成功/失败与重连，不能仅以 mock 请求通过代替外部连接验收。
 
+## 第四片：实际登录面板与本机登录错误（2026-10-26）
+
+- 已补 `AgentConfigForm` 中 `AdapterLoginPanel` 的显示验证码/提交浏览器验证码两模式：标题、复制/打开/提交动作、准备/完成/超时/取消、账号绑定、保存登录、明文传输警告及本地错误。授权 URL、验证码、供应商标识与服务端原始诊断不自动翻译；Claude 终态仍使用固定脱敏失败提示，不展示可能包含凭据的供应商原文。
+- `useLocalAiLogin` 的本地错误保存为描述符，显示时翻译；`LocalizedUiError` 保留英文 `Error.message` 兼容值，仅由显式识别的宿主使用翻译 key。`AgentProviderConnection` 已识别描述符，未知外部 `Error.message` 原样保留。
+- 语言切换不纳入登录 effect/query key/轮询依赖；回归验证已有错误在日语→中文后更新，不新建/取消登录、不重读凭据、不重复提交。另用假时钟验证原有 5 秒本机轮询截止点没有因切语言被重置；两种面板的 URL/验证码/输入草稿不变。
+- 原计划 §4.4 独立安全补齐：非 onboarding 的 `Browser code` 原生输入新增组合输入/keyCode 229 早返回。四语回归确认组合 Enter 不提交且不 preventDefault，普通中文输入正常保留，普通 Enter 仍 preventDefault 并仅提交一次。第二片的 `OnboardingCardField` guard 保持；真实操作系统 IME 仍未测试。
+- 最终专注回归 **7 文件 / 266 用例通过**（512 MB、单 worker）；覆盖此前创建/连接场景与新增登录两模式、错误动态翻译、轮询不重置、脱敏和 IME 回归。token gates、调色板/角色同步及 diff 检查通过；没有执行全量类型检查、生产构建、数据库、真实浏览器或供应商登录。
+- 复现命令（`ui/`）：
+
+```sh
+NODE_OPTIONS=--max-old-space-size=512 node ../node_modules/vitest/vitest.mjs run \
+  src/components/AgentConfigForm.render.test.tsx \
+  src/components/ai-connections/useLocalAiLogin.test.tsx \
+  src/i18n/agent-setup-login-resources.test.ts \
+  src/pages/NewAgent.test.tsx \
+  src/components/new-agent/AgentProviderConnection.test.tsx \
+  src/components/AdapterLoginChrome.test.tsx \
+  src/components/ai-connections/AiProviderSetup.test.tsx --maxWorkers=1
+```
+
+- 手测追加：登录等待中、失败后、验证码已填入后切换四语，核对请求数/草稿和原定轮询节奏；在非 onboarding 面板及 onboarding 两个入口分别用真实中文/日文 IME 确认候选；验证 HTTP 明文警告四语可读，截图必须遮盖验证码/账号信息。
+
 ## 已知剩余范围（不是本片已完成项）
 
 - 真实登录、剪贴板权限及浏览器布局尚未四语验收。系统提示已抽取不代表外部交互已通过。
-- 下一片继续审计 `AgentConfigForm` 的 `AdapterLoginPanel`、`useLocalAiLogin` 及环境显示辅助函数。高级连接的 `ConnectionSetupFlow` 中 `connectionDefaultSummarySentence`、`ConnectionAccessDefaults`、`AccessStepContent` 仍有权限摘要与 Change 等英文，需独立切片；本片没有更改权限语义。
+- `AdapterLoginPanel` 与 `useLocalAiLogin` 本片指定显示层已补；`environmentDisplayLabel` 仅拼用户环境名和原始 driver 标识，保留为用户内容/技术值。高级连接的 `ConnectionSetupFlow` 中 `connectionDefaultSummarySentence`、`ConnectionAccessDefaults`、`AccessStepContent` 仍有权限摘要与 Change 等英文，需独立切片；本片没有更改权限语义。
+- `OnboardingWizard` 是 `useLocalAiLogin` 的另一个宿主，其创建 catch 仍直接使用 `err.message`（基线约 2161/2300 行）；本片的显式 local throw 在该路径仍显示英文兼容值，不应声称 hook 的所有宿主错误均已完成动态翻译。向导自身其他文案也不在此次 Agent 创建切片覆盖结论内。
 - 服务端/适配器 `Error.message`、运行检查结果以及用户/组织/环境名称保持原始内容，不能以纯英文扫描结果判定它们都应翻译。
 - 基线 `6bee5bc` 的 `optionalOnboarding.configureAgent` 三语使用“智能体/agente/エージェント”；本片创建按钮使用独立 Agent 术语键，不覆盖其他域片段。并行 core 切片已修中文 Agent 术语，其他语种与最终集成状态以合并后的资源为准。
 

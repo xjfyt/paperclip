@@ -1,5 +1,8 @@
 // @vitest-environment jsdom
 
+import "@/i18n/agent-setup-test-resources";
+import "@/i18n/agent-setup-login-test-resources";
+import { i18n } from "@/i18n";
 import { useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { flushSync } from "react-dom";
@@ -651,6 +654,8 @@ async function flushUntil(check: () => boolean, timeoutMs = 4000) {
   }
   await flushReact();
 }
+
+afterEach(async () => { await i18n.changeLanguage("en"); });
 
 describe("AgentConfigForm environment selector", () => {
   let roots: Root[] = [];
@@ -1765,6 +1770,130 @@ describe("AgentConfigForm environment selector", () => {
     });
 
     expect(mockAgentsApi.cancelAdapterAuthLogin).not.toHaveBeenCalled();
+  });
+
+  it.each(["en", "zh-CN", "es", "ja"])("keeps a displayed-code login unchanged while translating from %s", async locale => {
+    await i18n.changeLanguage(locale);
+    const container = document.createElement("div"); document.body.append(container);
+    const root = createRoot(container); roots.push(root);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    await act(async () => root.render(<QueryClientProvider client={client}><AdapterLoginPanel companyId="company-1" adapterType="codex_local" environmentId="sandbox-1" autoStart /></QueryClientProvider>));
+    await flushUntil(() => container.textContent?.includes("WXYZ-1234") ?? false);
+    expect(container.textContent).toContain(i18n.t("agentSetupLoginUi.signInProvider", { provider: "OpenAI" }));
+    expect(container.textContent).toContain(i18n.t("agentSetupLoginUi.copyCodeFirst"));
+    const reads = mockAgentsApi.getAdapterAuthLoginStatus.mock.calls.length;
+    const activeReads = mockAgentsApi.getActiveAdapterAuthLoginSession.mock.calls.length;
+    await act(async () => { await i18n.changeLanguage(locale === "ja" ? "zh-CN" : "ja"); });
+    expect(container.textContent).toContain(i18n.t("agentSetupLoginUi.copyCodeFirst"));
+    expect(container.textContent).toContain("WXYZ-1234");
+    expect(container.querySelector('a')?.getAttribute("href")).toBe("https://auth.example.test/device");
+    expect(container.querySelector(`[aria-label="${i18n.t("agentSetupLoginUi.copyCode")}"]`)).not.toBeNull();
+    expect(mockAgentsApi.startAdapterAuthLogin).toHaveBeenCalledTimes(1);
+    expect(mockAgentsApi.getAdapterAuthLoginStatus).toHaveBeenCalledTimes(reads);
+    expect(mockAgentsApi.getActiveAdapterAuthLoginSession).toHaveBeenCalledTimes(activeReads);
+    expect(mockAgentsApi.cancelAdapterAuthLogin).not.toHaveBeenCalled();
+    client.clear();
+  });
+
+  it.each(["en", "zh-CN", "es", "ja"])("preserves browser code and IME safety when translating from %s", async locale => {
+    await i18n.changeLanguage(locale);
+    mockAgentsApi.getClaudeSetupTokenLoginPrompt.mockResolvedValue({ authorizationUrl: "https://claude.example.test/authorize", transportAdvisory: "insecure" });
+    const container = document.createElement("div"); document.body.append(container);
+    const root = createRoot(container); roots.push(root);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    const onSubmitted = vi.fn();
+    await act(async () => root.render(<QueryClientProvider client={client}><AdapterLoginPanel companyId="company-1" adapterType="claude_local" environmentId="sandbox-1" onCodeSubmitted={onSubmitted} autoStart /></QueryClientProvider>));
+    await flushUntil(() => Boolean(container.querySelector('input')));
+    const input = container.querySelector('input')!;
+    const fill = async (value: string) => act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await fill("中文输入");
+    expect(input.value).toBe("中文输入");
+    await fill("fixture-browser-code");
+    const reads = mockAgentsApi.getClaudeSetupTokenLoginStatus.mock.calls.length;
+    const prompts = mockAgentsApi.getClaudeSetupTokenLoginPrompt.mock.calls.length;
+    const credentialReads = mockAgentsApi.getClaudeOAuthTokenStatus.mock.calls.length;
+    const activeReads = mockAgentsApi.getActiveClaudeSetupTokenLoginSession.mock.calls.length;
+    await act(async () => { await i18n.changeLanguage(locale === "ja" ? "zh-CN" : "ja"); });
+    expect(input.value).toBe("fixture-browser-code");
+    expect(input.getAttribute("aria-label")).toBe(i18n.t("agentSetupLoginUi.browserCode"));
+    expect(container.textContent).toContain(i18n.t("agentSetupLoginUi.insecureTransport"));
+    expect(container.querySelector('a')?.getAttribute("href")).toBe("https://claude.example.test/authorize");
+    for (const options of [{ isComposing: true }, { keyCode: 229 }]) {
+      const event = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, ...options });
+      await act(async () => { input.dispatchEvent(event); });
+      expect(event.defaultPrevented).toBe(false);
+    }
+    expect(mockAgentsApi.submitClaudeSetupTokenBrowserCode).not.toHaveBeenCalled();
+    expect(onSubmitted).not.toHaveBeenCalled();
+    expect(mockAgentsApi.startClaudeSetupTokenLogin).toHaveBeenCalledTimes(1);
+    expect(mockAgentsApi.getClaudeSetupTokenLoginStatus).toHaveBeenCalledTimes(reads);
+    expect(mockAgentsApi.getClaudeSetupTokenLoginPrompt).toHaveBeenCalledTimes(prompts);
+    expect(mockAgentsApi.getClaudeOAuthTokenStatus).toHaveBeenCalledTimes(credentialReads);
+    expect(mockAgentsApi.getActiveClaudeSetupTokenLoginSession).toHaveBeenCalledTimes(activeReads);
+    expect(mockAgentsApi.cancelClaudeSetupTokenLogin).not.toHaveBeenCalled();
+    expect(mockAgentsApi.completeClaudeSetupTokenLogin).not.toHaveBeenCalled();
+    const enter = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+    await act(async () => { input.dispatchEvent(enter); });
+    expect(enter.defaultPrevented).toBe(true);
+    expect(mockAgentsApi.submitClaudeSetupTokenBrowserCode).toHaveBeenCalledExactlyOnceWith("company-1", "claude-session-1", "fixture-browser-code");
+    expect(onSubmitted).toHaveBeenCalledTimes(1);
+    client.clear();
+  });
+
+  it.each(["codex_local", "claude_local"])("retranslates %s local errors without reissuing login requests", async adapterType => {
+    await i18n.changeLanguage("ja");
+    const start = adapterType === "codex_local" ? mockAgentsApi.startAdapterAuthLogin : mockAgentsApi.startClaudeSetupTokenLogin;
+    start.mockRejectedValueOnce(null);
+    const container = document.createElement("div"); document.body.append(container);
+    const root = createRoot(container); roots.push(root);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    await act(async () => root.render(<QueryClientProvider client={client}><AdapterLoginPanel companyId="company-1" adapterType={adapterType} environmentId="sandbox-1" autoStart /></QueryClientProvider>));
+    await flushUntil(() => container.textContent?.includes(i18n.t("agentSetupLoginUi.startFailed")) ?? false);
+    const calls = Object.fromEntries(Object.entries(mockAgentsApi).map(([key, fn]) => [key, fn.mock.calls.length]));
+    await act(async () => { await i18n.changeLanguage("zh-CN"); });
+    expect(container.textContent).toContain(i18n.t("agentSetupLoginUi.startFailed"));
+    expect(start).toHaveBeenCalledTimes(1);
+    for (const [key, fn] of Object.entries(mockAgentsApi)) expect(fn).toHaveBeenCalledTimes(calls[key]);
+    client.clear();
+  });
+
+  it.each(["codex_local", "claude_local"])("retranslates %s account conflicts without cancelling or starting", async adapterType => {
+    await i18n.changeLanguage("ja");
+    const active = adapterType === "codex_local" ? mockAgentsApi.getActiveAdapterAuthLoginSession : mockAgentsApi.getActiveClaudeSetupTokenLoginSession;
+    active.mockResolvedValueOnce({ sessionId: "other", environmentId: "other-env", status: "waiting_for_user", prompt: null });
+    const container = document.createElement("div"); document.body.append(container);
+    const root = createRoot(container); roots.push(root);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    await act(async () => root.render(<QueryClientProvider client={client}><AdapterLoginPanel companyId="company-1" adapterType={adapterType} environmentId="sandbox-1" aiConnection={{ provider: "openai", method: "subscription", name: "Customer", ownership: "personal", agentIds: [], allAgents: true }} chrome="onboarding" autoStart /></QueryClientProvider>));
+    const key = `agentSetupLoginUi.${adapterType === "codex_local" ? "activeConflict" : "accountConflict"}`;
+    await flushUntil(() => container.textContent?.includes(i18n.t(key)) ?? false);
+    await act(async () => { await i18n.changeLanguage("zh-CN"); });
+    expect(container.textContent).toContain(i18n.t(key));
+    expect(active).toHaveBeenCalledTimes(1);
+    expect(mockAgentsApi.startAdapterAuthLogin).not.toHaveBeenCalled();
+    expect(mockAgentsApi.startClaudeSetupTokenLogin).not.toHaveBeenCalled();
+    expect(mockAgentsApi.cancelAdapterAuthLogin).not.toHaveBeenCalled();
+    expect(mockAgentsApi.cancelClaudeSetupTokenLogin).not.toHaveBeenCalled();
+    client.clear();
+  });
+
+  it("keeps Claude terminal failures sanitized while retranslating the local message", async () => {
+    await i18n.changeLanguage("ja");
+    mockAgentsApi.getClaudeSetupTokenLoginStatus.mockResolvedValue({ sessionId: "claude-session-1", environmentId: "sandbox-1", status: "failed", failure: { message: "private-provider-diagnostic" }, expiresAt: null });
+    const container = document.createElement("div"); document.body.append(container);
+    const root = createRoot(container); roots.push(root);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    await act(async () => root.render(<QueryClientProvider client={client}><AdapterLoginPanel companyId="company-1" adapterType="claude_local" environmentId="sandbox-1" autoStart /></QueryClientProvider>));
+    await flushUntil(() => container.textContent?.includes(i18n.t("agentSetupLoginUi.claudeFailed")) ?? false);
+    await act(async () => { await i18n.changeLanguage("zh-CN"); });
+    expect(container.textContent).toContain(i18n.t("agentSetupLoginUi.claudeFailed"));
+    expect(container.textContent).not.toContain("private-provider-diagnostic");
+    expect(mockAgentsApi.startClaudeSetupTokenLogin).toHaveBeenCalledTimes(1);
+    expect(mockAgentsApi.completeClaudeSetupTokenLogin).not.toHaveBeenCalled();
+    client.clear();
   });
 
   it("recovers a previous-environment sign-in only after explicit successful cancellation", async () => {

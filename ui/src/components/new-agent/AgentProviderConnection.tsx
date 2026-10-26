@@ -1,3 +1,4 @@
+import { localizedUiErrorMessage } from "@/lib/localized-ui-error";
 import { useTranslation } from "@/i18n";
 import { healthApi } from "@/api/health";
 import { aiConnectionsApi } from "@/api/ai-connections";
@@ -221,9 +222,7 @@ export function AgentProviderConnection({
       if (run !== epoch.current) return;
       if (managedAccount) setApiKey("");
       setError(
-        cause instanceof Error
-          ? cause.message
-          : { key: "agentSetupUi.providerConnectFailed" },
+        localizedUiErrorMessage(cause, "agentSetupUi.providerConnectFailed"),
       );
     } finally {
       if (run === epoch.current) setBusy(false);
