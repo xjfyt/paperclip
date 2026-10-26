@@ -1,9 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 import { and, desc, eq, gt, isNull, lte, or, sql } from "drizzle-orm";
-import { activityLog, companySecrets, companySecretVersions, mimouseFeedbackInbox as inbox, type Db } from "@paperclipai/db";
+import { activityLog, companies, instanceUserRoles, companySecrets, companySecretVersions, mimouseFeedbackInbox as inbox, type Db } from "@paperclipai/db";
 import { mimouseWecomConnections as connections } from "@paperclipai/db/schema/mimouse_wecom";
 import type { FeedbackImportInput } from "@paperclipai/shared";
-import { conflict, HttpError, notFound, unprocessable } from "../errors.js";
+import { conflict, forbidden, HttpError, notFound, unprocessable } from "../errors.js";
 import { prepareFeedbackImport } from "./mimouse-feedback.js";
 import { wecomConfigSchema, type WecomConfig, type WecomStopReason } from "./mimouse-wecom/protocol.js";
 
@@ -35,12 +35,41 @@ async function audit(tx: Tx, companyId: string, id: string, actor: Actor, action
   await tx.insert(activityLog).values({ companyId, ...actor, action, entityType: "wecom_connection", entityId: id,
     responsibleUserId: actor.actorType === "user" ? actor.actorId : null, details: { provider: "wecom_smart_bot", receiveOnly: true } });
 }
+async function boundedTransaction<T>(db: Db, work: (tx: Tx) => Promise<T>) {
+  return db.transaction(async tx => {
+    // Server-enforced per-statement/lock bounds, scoped to this transaction only.
+    await tx.execute(sql`select set_config('lock_timeout', '1000', true), set_config('statement_timeout', '2000', true), set_config('idle_in_transaction_session_timeout', '5000', true)`);
+    return work(tx);
+  });
+}
+async function requireRegistrar(tx: Tx, actor: Actor) {
+  if (actor.actorType !== "user") throw forbidden("Instance administrator registration required");
+  const [role] = await tx.select({ id: instanceUserRoles.id }).from(instanceUserRoles)
+    .where(and(eq(instanceUserRoles.userId, actor.actorId), eq(instanceUserRoles.role, "instance_admin"))).for("share");
+  if (!role) throw forbidden("Instance administrator registration required");
+}
+// Always lock company first, then connection, then credential rows. A pause/archive
+// transaction cannot commit while an authorized receive transaction is in flight.
+async function activeCompany(tx: Tx, companyId: string) {
+  const [company] = await tx.select({ status: companies.status }).from(companies).where(eq(companies.id, companyId)).for("share");
+  return company?.status === "active";
+}
+async function requireActiveCompany(tx: Tx, companyId: string) {
+  if (!await activeCompany(tx, companyId)) throw conflict("Active company required");
+}
+async function stopInactiveCompany(tx: Tx, companyId: string, id: string) {
+  await tx.update(connections).set({ enabled: false, state: "company_inactive", gapDetected: true,
+    leaseToken: null, leaseExpiresAt: null, updatedAt: new Date() }).where(scope(companyId, id));
+  await audit(tx, companyId, id, systemActor, "feedback.wecom.stopped");
+}
 /** No network side effects in configuration; worker ownership is fenced by PostgreSQL. */
 export function wecomFeedbackService(db: Db) {
   return {
     async create(companyId: string, raw: WecomConfig, actor: Actor) {
       const config = wecomConfigSchema.parse(raw);
-      return db.transaction(async tx => {
+      return boundedTransaction(db, async tx => {
+        await requireActiveCompany(tx, companyId);
+        await requireRegistrar(tx, actor);
         await assertCredential(tx, companyId, config);
         const [row] = await tx.insert(connections).values({ companyId, config, botHash: botHash(config.botId) })
           .onConflictDoNothing({ target: connections.botHash }).returning();
@@ -51,7 +80,8 @@ export function wecomFeedbackService(db: Db) {
     },
     async update(companyId: string, id: string, raw: WecomConfig, actor: Actor) {
       const config = wecomConfigSchema.parse(raw);
-      return db.transaction(async tx => {
+      return boundedTransaction(db, async tx => {
+        await requireActiveCompany(tx, companyId);
         const [row] = await tx.select().from(connections).where(scope(companyId, id)).for("update");
         if (!row) throw notFound("WeCom connection not found");
         if (row.enabled || row.leaseToken) throw conflict("Disable the connection before changing configuration");
@@ -66,7 +96,8 @@ export function wecomFeedbackService(db: Db) {
       return (await db.select().from(connections).where(eq(connections.companyId, companyId)).orderBy(desc(connections.createdAt)).limit(100)).map(publicConnection);
     },
     async setEnabled(companyId: string, id: string, enabled: boolean, actor: Actor) {
-      return db.transaction(async tx => {
+      return boundedTransaction(db, async tx => {
+        if (enabled) await requireActiveCompany(tx, companyId);
         const [row] = await tx.select().from(connections).where(scope(companyId, id)).for("update");
         if (!row) throw notFound("WeCom connection not found");
         if (enabled) await assertCredential(tx, companyId, row.config);
@@ -79,10 +110,12 @@ export function wecomFeedbackService(db: Db) {
       });
     },
     async acquire(companyId: string, id: string): Promise<WecomLease | null> {
-      return db.transaction(async tx => {
+      return boundedTransaction(db, async tx => {
+        const active = await activeCompany(tx, companyId);
         const [row] = await tx.select().from(connections).where(and(scope(companyId, id), eq(connections.enabled, true),
           or(isNull(connections.leaseToken), lte(connections.leaseExpiresAt, sql`clock_timestamp()`)))).for("update", { skipLocked: true });
         if (!row) return null;
+        if (!active) { await stopInactiveCompany(tx, companyId, id); return null; }
         try { await assertCredential(tx, companyId, row.config); }
         catch (error) {
           if (!(error instanceof HttpError) || error.status !== 422) throw error;
@@ -99,9 +132,11 @@ export function wecomFeedbackService(db: Db) {
       });
     },
     async renew(lease: WecomLease) {
-      return db.transaction(async tx => {
+      return boundedTransaction(db, async tx => {
+        const active = await activeCompany(tx, lease.companyId);
         const [row] = await tx.select().from(connections).where(activeLease(lease)).for("update");
         if (!row) return false;
+        if (!active) { await stopInactiveCompany(tx, lease.companyId, lease.id); return false; }
         await assertCredential(tx, lease.companyId, row.config);
         const updated = await tx.update(connections).set({ leaseExpiresAt: sql`clock_timestamp() + interval '30 seconds'`, updatedAt: new Date() })
           .where(activeLease(lease)).returning({ id: connections.id });
@@ -109,30 +144,48 @@ export function wecomFeedbackService(db: Db) {
       });
     },
     async resolveCredential(lease: WecomLease) {
-      // Active lease and credential authorization checked before AND after decryption.
-      const config = await db.transaction(async tx => {
-        const [row] = await tx.select().from(connections).where(activeLease(lease)).for("share");
+      // Commit lifecycle stops before rejecting; do not roll them back via throw.
+      const readAuthorizedConfig = () => boundedTransaction(db, async tx => {
+        const active = await activeCompany(tx, lease.companyId);
+        const [row] = await tx.select().from(connections).where(activeLease(lease)).for("update");
         if (!row) throw conflict("WeCom worker lease lost");
+        if (!active) { await stopInactiveCompany(tx, lease.companyId, lease.id); return null; }
         await assertCredential(tx, lease.companyId, row.config);
         return row.config;
       });
+      const config = await readAuthorizedConfig();
+      if (!config) throw conflict("Active company required");
       const { secretService } = await import("./secrets.js");
       const value = await secretService(db).resolveSecretValue(lease.companyId, config.secret.secretId, config.secret.version);
-      await db.transaction(async tx => {
-        const [row] = await tx.select().from(connections).where(activeLease(lease)).for("share");
-        if (!row) throw conflict("WeCom worker lease lost");
-        await assertCredential(tx, lease.companyId, row.config);
-      });
+      if (!await readAuthorizedConfig()) throw conflict("Active company required");
       if (!value.trim()) throw unprocessable("Active nonempty company credential required");
       return value;
     },
+    async markAuthenticated(lease: WecomLease) {
+      return boundedTransaction(db, async tx => {
+        const active = await activeCompany(tx, lease.companyId);
+        const [row] = await tx.select().from(connections).where(activeLease(lease)).for("update");
+        if (!row) return false;
+        if (!active) { await stopInactiveCompany(tx, lease.companyId, lease.id); return false; }
+        await assertCredential(tx, lease.companyId, row.config);
+        const updated = await tx.update(connections).set({ state: "authenticated", updatedAt: new Date() })
+          .where(activeLease(lease)).returning({ id: connections.id });
+        return updated.length === 1;
+      });
+    },
     async markGap(lease: WecomLease) {
-      const updated = await db.update(connections).set({ gapDetected: true, state: "reconnecting", updatedAt: new Date() })
-        .where(activeLease(lease)).returning({ id: connections.id });
-      return updated.length === 1;
+      return boundedTransaction(db, async tx => {
+        const active = await activeCompany(tx, lease.companyId);
+        const [row] = await tx.select().from(connections).where(activeLease(lease)).for("update");
+        if (!row) return false;
+        if (!active) { await stopInactiveCompany(tx, lease.companyId, lease.id); return false; }
+        const updated = await tx.update(connections).set({ gapDetected: true, state: "reconnecting", updatedAt: new Date() })
+          .where(activeLease(lease)).returning({ id: connections.id });
+        return updated.length === 1;
+      });
     },
     async release(lease: WecomLease, reason: WecomStopReason) {
-      return db.transaction(async tx => {
+      return boundedTransaction(db, async tx => {
         const [row] = await tx.update(connections).set({ leaseToken: null, leaseExpiresAt: null, state: reason,
           enabled: false, gapDetected: true, updatedAt: new Date() })
           .where(and(scope(lease.companyId, lease.id), eq(connections.leaseToken, lease.token))).returning();
@@ -140,10 +193,12 @@ export function wecomFeedbackService(db: Db) {
       });
     },
     async persist(lease: WecomLease, raw: FeedbackImportInput, signal?: AbortSignal, knownCredential?: string) {
-      return db.transaction(async tx => {
+      const result = await boundedTransaction(db, async tx => {
         signal?.throwIfAborted();
+        const active = await activeCompany(tx, lease.companyId);
         const [row] = await tx.select().from(connections).where(activeLease(lease)).for("update");
         if (!row) throw conflict("WeCom worker lease lost");
+        if (!active) { await stopInactiveCompany(tx, lease.companyId, lease.id); return null; }
         await assertCredential(tx, lease.companyId, row.config);
         // Internal worker-only literal redaction; never accept product attribution from a payload.
         const product = knownCredential ? row.config.product.split(knownCredential).join("[REDACTED]") : row.config.product;
@@ -161,6 +216,8 @@ export function wecomFeedbackService(db: Db) {
         signal?.throwIfAborted();
         return inserted.length === 1;
       });
+      if (result === null) throw conflict("Active company required");
+      return result;
     },
   };
 }

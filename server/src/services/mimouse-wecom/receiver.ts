@@ -8,7 +8,7 @@ import { WECOM_ENDPOINT, WECOM_MAX_FRAME_BYTES, WecomReceiveError, WecomSession,
 
 const MAX_QUEUE = 32;
 const MAX_RECONNECTS = 3;
-type Store = Pick<ReturnType<typeof wecomFeedbackService>, "acquire" | "renew" | "release" | "resolveCredential" | "persist" | "markGap">;
+type Store = Pick<ReturnType<typeof wecomFeedbackService>, "acquire" | "renew" | "release" | "resolveCredential" | "persist" | "markGap" | "markAuthenticated">;
 /** Test injection is never exposed to HTTP routes. No SDK raw-payload logging. */
 export type WecomReceiverDependencies = {
   store: Store;
@@ -127,7 +127,11 @@ async function receiveConnection(lease: WecomLease, credential: string, store: S
         const frame = parseWecomFrame(asBuffer(raw), binary);
         if (!frame.cmd && pendingPing && frame.headers?.req_id === pendingPing && frame.errcode === 0) pendingPing = null;
         const action = session.accept(frame);
-        if (action === "authenticated") { clearTimeout(authTimeout); return; }
+        if (action === "authenticated") {
+          clearTimeout(authTimeout);
+          void store.markAuthenticated(lease).then(ok => { if (!ok) finish("revoked"); }, () => finish("revoked"));
+          return;
+        }
         if (action !== "message") return;
         const item = projectWecomMessage(lease.config, frame.body, new Date(), credential);
         if (!item) return;

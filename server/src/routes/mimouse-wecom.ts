@@ -24,6 +24,7 @@ export function mimouseWecomRoutes(db: Db) {
   router.get(path, async (req, res) => { res.json(await service.list(admin(req))); });
   router.post(path, async (req, res) => {
     const companyId = admin(req);
+    if (!req.actor.isInstanceAdmin) throw forbidden("Instance administrator registration required");
     const config = wecomConfigSchema.parse(req.body);
     res.status(201).json(await service.create(companyId, config, getActorInfo(req)));
   });

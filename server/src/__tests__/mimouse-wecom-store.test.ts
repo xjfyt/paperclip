@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Db } from "@paperclipai/db";
+import { companies, type Db } from "@paperclipai/db";
 import { wecomFeedbackService, type WecomLease } from "../services/mimouse-wecom.js";
 import type { WecomStopReason } from "../services/mimouse-wecom/protocol.js";
 
@@ -8,18 +8,20 @@ const lease: WecomLease = { companyId: "22222222-2222-4222-8222-222222222222", i
     allowedGroupIds: ["test-group"], allowedDirectSenderIds: [], secret: { secretId: "55555555-5555-4555-8555-555555555555", version: 1 } } };
 function mockDb() {
   const forLock = vi.fn().mockResolvedValue([]);
-  const select = vi.fn(() => ({ from: () => ({ where: () => ({ for: forLock }) }) }));
+  const companyFor = vi.fn().mockResolvedValue([{ status: "active" }]);
+  const select = vi.fn(() => ({ from: (table: unknown) => ({ where: () => ({ for: table === companies ? companyFor : forLock }) }) }));
   const returning = vi.fn().mockResolvedValue([]);
   const set = vi.fn(() => ({ where: () => ({ returning }) }));
   const update = vi.fn(() => ({ set }));
-  const insert = vi.fn();
-  const tx = { select, update, insert };
+  const insert = vi.fn().mockImplementation(() => ({ values: vi.fn().mockResolvedValue(undefined) }));
+  const execute = vi.fn().mockResolvedValue(undefined);
+  const tx = { select, update, insert, execute };
   const db = { update, transaction: (fn: (value: typeof tx) => unknown) => fn(tx) } as unknown as Db;
-  return { db, select, update, insert, set, forLock, returning };
+  return { db, select, update, insert, set, forLock, returning, companyFor, execute };
 }
 describe("WeCom durable store fail-closed seams (no database or sockets)", () => {
   it("retains a transient transport gap without enabling or renewing the lease", async () => {
-    const mock = mockDb();
+    const mock = mockDb(); mock.forLock.mockResolvedValue([{ config: lease.config }]);
     mock.returning.mockResolvedValue([{ id: lease.id }]);
     expect(await wecomFeedbackService(mock.db).markGap(lease)).toBe(true);
     expect(mock.set).toHaveBeenCalledWith({ gapDetected: true, state: "reconnecting", updatedAt: expect.any(Date) });
@@ -74,4 +76,57 @@ describe("WeCom durable store fail-closed seams (no database or sockets)", () =>
       expect(mock.set).toHaveBeenCalledWith(expect.objectContaining({ enabled: false, leaseToken: null, leaseExpiresAt: null, gapDetected: true, state: reason }));
       expect(mock.insert).not.toHaveBeenCalled(); // stale lease cannot emit an audit event
     });
+});
+
+describe("company lifecycle is authoritative inside the durable transaction", () => {
+  it.each(["paused", "archived"])("stops and commits %s company rejection at acquire/renew/persist/credential boundaries", async status => {
+    for (const boundary of ["acquire", "renew", "persist", "resolveCredential", "markGap", "markAuthenticated"] as const) {
+      const mock = mockDb(); mock.companyFor.mockResolvedValue([{ status }]);
+      mock.forLock.mockResolvedValue([{ ...lease, enabled: true, config: lease.config }]);
+      const service = wecomFeedbackService(mock.db);
+      if (boundary === "acquire") expect(await service.acquire(lease.companyId, lease.id)).toBeNull();
+      else if (boundary === "renew" || boundary === "markGap" || boundary === "markAuthenticated") expect(await service[boundary](lease)).toBe(false);
+      else if (boundary === "persist") await expect(service.persist(lease, {} as never)).rejects.toMatchObject({ status: 409 });
+      else await expect(service.resolveCredential(lease)).rejects.toMatchObject({ status: 409 });
+      expect(mock.set).toHaveBeenCalledWith(expect.objectContaining({ enabled: false, state: "company_inactive", gapDetected: true, leaseToken: null }));
+      // Only the fixed stopped audit is inserted: no inbox or received audit.
+      expect(mock.insert).toHaveBeenCalledTimes(1);
+      const auditValues = mock.insert.mock.results[0].value.values;
+      expect(auditValues).toHaveBeenCalledWith(expect.objectContaining({ action: "feedback.wecom.stopped" }));
+      expect(mock.forLock).toHaveBeenCalledTimes(1); // credential rows were never read
+    }
+  });
+  it.each(["paused", "archived"])("blocks new config, edits and enabling in %s company", async status => {
+    const mock = mockDb(); mock.companyFor.mockResolvedValue([{ status }]);
+    const service = wecomFeedbackService(mock.db), actor = { actorType: "user" as const, actorId: "admin" };
+    await expect(service.create(lease.companyId, lease.config, actor)).rejects.toMatchObject({ status: 409 });
+    await expect(service.update(lease.companyId, lease.id, lease.config, actor)).rejects.toMatchObject({ status: 409 });
+    await expect(service.setEnabled(lease.companyId, lease.id, true, actor)).rejects.toMatchObject({ status: 409 });
+    expect(mock.insert).not.toHaveBeenCalled(); expect(mock.update).not.toHaveBeenCalled();
+  });
+  it("an active lease cannot renew after company pause", async () => {
+    const mock = mockDb(), service = wecomFeedbackService(mock.db);
+    mock.forLock.mockResolvedValueOnce([{ config: lease.config }])
+      .mockResolvedValueOnce([{ scope: "company", status: "active", deletedAt: null }])
+      .mockResolvedValueOnce([{ status: "current", revokedAt: null }]);
+    mock.returning.mockResolvedValue([{ id: lease.id }]);
+    expect(await service.renew(lease)).toBe(true);
+    mock.companyFor.mockResolvedValue([{ status: "paused" }]);
+    mock.forLock.mockResolvedValue([{ config: lease.config }]);
+    expect(await service.renew(lease)).toBe(false);
+    expect(mock.set).toHaveBeenLastCalledWith(expect.objectContaining({ state: "company_inactive", enabled: false }));
+  });
+});
+
+it("ordinary company admin cannot reserve a global bot with any dummy secret reference", async () => {
+  const mock = mockDb(); // active company but no current instance administrator role
+  await expect(wecomFeedbackService(mock.db).create(lease.companyId, lease.config,
+    { actorType: "user", actorId: "company-admin" })).rejects.toMatchObject({ status: 403 });
+  expect(mock.forLock).toHaveBeenCalledTimes(1); // role lookup only; no credential ownership proof inferred
+  expect(mock.insert).not.toHaveBeenCalled();
+  expect(mock.update).not.toHaveBeenCalled();
+});
+it("sets transaction-local statement and lock budgets even on a denied lease", async () => {
+  const mock = mockDb(); await wecomFeedbackService(mock.db).renew(lease);
+  expect(mock.execute).toHaveBeenCalledTimes(1);
 });

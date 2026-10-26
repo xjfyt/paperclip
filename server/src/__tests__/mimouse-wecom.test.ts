@@ -63,7 +63,7 @@ class FakeSocket extends EventEmitter {
 function fixture() {
   const socket = new FakeSocket(), lease = { companyId: "company-a", id: "connection-a", token: "fence", config };
   const store = { acquire: vi.fn(async () => lease), renew: vi.fn(async () => true), release: vi.fn(async () => {}),
-    resolveCredential: vi.fn(async () => "test-secret"), markGap: vi.fn(async () => true), persist: vi.fn(async (_lease: unknown, _item: unknown, _signal?: AbortSignal, _credential?: string) => true) };
+    resolveCredential: vi.fn(async () => "test-secret"), markGap: vi.fn(async () => true), markAuthenticated: vi.fn(async () => true), persist: vi.fn(async (_lease: unknown, _item: unknown, _signal?: AbortSignal, _credential?: string) => true) };
   const connect = vi.fn(() => socket as unknown as WebSocket);
   const controller = new AbortController();
   return { socket, store, connect, controller, start: (enabled = true) => runWecomReceiver({} as Db, lease.companyId, lease.id, controller.signal, { store, connect, workerEnabled: enabled }) };
@@ -119,4 +119,13 @@ it("caps reconnects per run and records gaps even before terminal exhaustion", a
   await vi.runAllTimersAsync();
   expect(await done).toEqual({ stopped: "budget_exhausted" });
   expect(f.connect).toHaveBeenCalledTimes(4); expect(f.store.markGap).toHaveBeenCalledTimes(4);
+});
+
+it("closes an active fake connection when company pause makes renewal fail", async () => {
+  vi.useFakeTimers(); const f = fixture(), done = f.start(); await tick(); f.socket.emit("open");
+  f.socket.frame({ headers: f.socket.sent[0].headers, errcode: 0 });
+  f.store.renew.mockResolvedValue(false);
+  await vi.advanceTimersByTimeAsync(5000);
+  expect(await done).toEqual({ stopped: "revoked" }); expect(f.socket.readyState).toBe(3);
+  expect(f.store.persist).not.toHaveBeenCalled(); expect(f.connect).toHaveBeenCalledTimes(1);
 });

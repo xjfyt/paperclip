@@ -43,10 +43,16 @@ it("saving validates only a pinned config and never enables it", async () => {
     secret: { secretId: "44444444-4444-4444-8444-444444444444", version: 1 } };
   calls.create.mockResolvedValue({ id, enabled: false });
   const json = vi.fn(), status = vi.fn().mockReturnValue({ json });
-  await handlers()[1]({ actor: admin, params: { companyId }, body: config } as unknown as Request,
+  await handlers()[1]({ actor: { ...admin, isInstanceAdmin: true }, params: { companyId }, body: config } as unknown as Request,
     { status } as unknown as Response, vi.fn());
   expect(status).toHaveBeenCalledWith(201);
   expect(calls.create).toHaveBeenCalledWith(companyId, config, expect.objectContaining({ actorId: "admin" }));
   expect(calls.setEnabled).not.toHaveBeenCalled();
   expect(calls.update).not.toHaveBeenCalled();
+});
+
+it("company administrators cannot reserve globally unique bot identities", async () => {
+  await expect(handlers()[1]({ actor: admin, params: { companyId }, body: { botId: "known-other-bot", secret: "dummy" } } as unknown as Request,
+    {} as Response, vi.fn())).rejects.toMatchObject({ status: 403 });
+  expect(calls.create).not.toHaveBeenCalled();
 });
