@@ -182,6 +182,7 @@ export function Sidebar({ children }: { children?: ReactNode }) {
           <SidebarNavItem to="/notifications" label={t("notifications.title")} icon={Inbox} />
           <SidebarNavItem to="/feedback-inbox" label={t("feedbackUi.pageTitle")} icon={Inbox} />
           <SidebarNavItem to="/data-operations" label={t("operationsUi.pageTitle")} icon={ListChecks} />
+          <SidebarNavItem to="/research-candidates" label={t("researchUi.pageTitle")} icon={ListChecks} />
           <SidebarNavItem to="/search" label={t("navigation.search")} icon={Search} />
           <SidebarNavItem to="/dashboard" label={t("navigation.dashboard")} icon={LayoutDashboard} liveCount={liveRunCount} />
           {!combinedInboxTasks ? (

@@ -46,7 +46,7 @@ AUTH-04,C2,本地真实浏览器身份与权限,passed,OIDC-BROWSER-20261026：�
 AUTH-05,C2,仅SSO邀请入口与恢复,passed,中文西语真实浏览器无密码表单；4文件43项定向UI通过,真实Casdoor租户仍待联调；其他存量页面另列剩余文案
 AUTH-06,C2,管理员撤销会话和个人Board keys,passed,真实本地OAuth：旧会话/key401、其他账号200、Viewer403；API54及路由6/UI10,不封禁新登录、不撤销MCP或连接器、不终止在途任务
 P3-01,C2,反馈日志候选与人审转任务,partial,0345/0346人工导入脱敏、持久去重、精确标题候选与人审私有待办，真实SSO浏览器闭环通过,Langfuse/企微真实连接器、日志语义分析和自动复现仍未完成
-P4-01,C1,调研运营可追溯与dry-run,not_run,可复用routines；写入需具体接口与授权,来源候选、差异预览、审核与对账尚未完整实现
+P4-01,C2,调研运营可追溯与dry-run,partial,0347月度时区与不可变差异及现有审核通过；四语Chrome与118项UI回归通过,0348调研候选人审转私有待办本地Chrome通过；routines接线、真实拉取写入及持久对账尚未完整实现
 P5-01,C1,固定集版本评估与受控提升回滚,not_run,可复用paperclip-eval-kernel,业务版本台账与发布回滚、成本路由尚未完整实现
 CODE-07,C2,六目标构建证据缺口矩阵,passed,公司/项目/SHA隔离API与四语真实Chrome；本地hash不升级Runner证据,实际Runner、签名、上传合同仍未验收
 P3-02,C2,人工反馈确认与私有权限隔离,passed,真实OAuth Viewer task404/inbox403；promotionCount1/AgentRuns0；刷新同一回执,人工来源声明不是连接器已实连

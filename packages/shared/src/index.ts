@@ -2884,3 +2884,4 @@ export { feedbackImportSchema, type FeedbackImportInput, type FeedbackInboxItem,
 export { feedbackPromotionSchema, type FeedbackPromotionInput, type FeedbackPromotionReceipt } from "./mimouse-feedback.js";
 export { isSafeOperationField, operationPreviewInputSchema, createOperationPreviewSchema, type OperationPreviewInput, type CreateOperationPreviewInput, type OperationScalar, type OperationPreview } from "./mimouse-operations.js";
 export { requestOperationApprovalSchema, type RequestOperationApprovalInput, type OperationPreviewRecord, type OperationReadiness } from "./mimouse-operations.js";
+export * from "./mimouse-research.js";

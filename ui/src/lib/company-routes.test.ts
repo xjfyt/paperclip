@@ -168,3 +168,8 @@ it("keeps data previews and review deep links inside the selected company", () =
   expect(applyCompanyPrefix("/data-operations?preview=fixture", "OID")).toBe("/OID/data-operations?preview=fixture");
   expect(toCompanyRelativePath("/OID/data-operations?preview=fixture")).toBe("/data-operations?preview=fixture");
 });
+it("keeps research candidate deep links in the organization shell", () => {
+  expect(isBoardPathWithoutPrefix("/research-candidates")).toBe(true);
+  expect(applyCompanyPrefix("/research-candidates?candidate=fixture", "OID")).toBe("/OID/research-candidates?candidate=fixture");
+  expect(toCompanyRelativePath("/OID/research-candidates?candidate=fixture")).toBe("/research-candidates?candidate=fixture");
+});

@@ -1,3 +1,4 @@
+import { mimouseResearchRoutes } from "./routes/mimouse-research.js";
 import { mimouseOperationRoutes } from "./routes/mimouse-operations.js";
 import { mimouseAuthRevocationRoutes } from "./routes/mimouse-auth-revocations.js";
 import { mimouseSetupAccessRoutes } from "./routes/mimouse-access.js";
@@ -902,6 +903,7 @@ export async function createApp(
   api.use(mimouseCodingRoutes(db));
   api.use(mimouseFeedbackRoutes(db));
   api.use(mimouseOperationRoutes(db));
+  api.use(mimouseResearchRoutes(db));
   api.use(instanceSettingsRoutes(db, workerManager, opts.prepareIdleDatabaseBackup));
   if (opts.databaseBackupService) {
     api.use(instanceDatabaseBackupRoutes(opts.databaseBackupService));
