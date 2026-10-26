@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 
+import { i18n } from "../i18n";
+import { issueWorkspaceMessages } from "../i18n/issue-workspace-test-resources";
 import type { ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -284,7 +286,8 @@ describe("buildWorkspaceRuntimeControlItems", () => {
 describe("WorkspaceRuntimeControls", () => {
   let container: HTMLDivElement;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await i18n.changeLanguage("en");
     container = document.createElement("div");
     document.body.appendChild(container);
     mockInstanceSettingsApi.getExperimental.mockResolvedValue({});
@@ -413,6 +416,47 @@ describe("WorkspaceRuntimeControls", () => {
     expect(container.textContent).toContain("Jobs");
 
     act(() => root.unmount());
+  });
+
+  it.each(Object.entries(issueWorkspaceMessages))("localizes quick actions without changing runtime requests in %s", async (locale, messages) => {
+    await i18n.changeLanguage(locale);
+    const sections = buildWorkspaceRuntimeControlSections({
+      runtimeConfig: { services: [{ name: "Start", command: "raw-command" }, { name: "User 服务", command: "other-command" }] },
+      runtimeServices: [createRuntimeService({ serviceName: "Start", command: "raw-command", status: "running", configIndex: 0 })],
+      canStartServices: true,
+    });
+    const onAction = vi.fn();
+    const root = createRoot(container);
+    const render = (pending: boolean) => act(() => root.render(<WorkspaceRuntimeQuickControls
+      sections={sections} onAction={onAction} iconOnly isPending={pending}
+      pendingRequest={pending ? { action: "stop", workspaceCommandId: sections.services[0].workspaceCommandId, runtimeServiceId: "service-1", serviceIndex: 0 } : null}
+    />));
+    try {
+      render(false);
+      expect(container.textContent).toContain("Start");
+      expect(container.textContent).toContain("User 服务");
+      for (const action of ["stop", "restart", "start"] as const) {
+        const button = container.querySelector<HTMLButtonElement>(`button[aria-label="${messages[action]}"]`)!;
+        expect(button.title).toBe(messages[action]);
+        act(() => button.click());
+        expect(onAction).toHaveBeenLastCalledWith({
+          action, workspaceCommandId: sections.services[action === "start" ? 1 : 0].workspaceCommandId,
+          runtimeServiceId: action === "start" ? null : "service-1", serviceIndex: action === "start" ? 1 : 0,
+        });
+      }
+      render(true);
+      for (const button of container.querySelectorAll<HTMLButtonElement>("button")) {
+        expect(button.disabled).toBe(true);
+        act(() => button.click());
+      }
+      expect(onAction).toHaveBeenCalledTimes(3);
+      act(() => { void i18n.changeLanguage(locale === "ja" ? "en" : "ja"); });
+      expect(container.textContent).toContain("User 服务");
+      expect(onAction).toHaveBeenCalledTimes(3);
+    } finally {
+      act(() => root.unmount());
+      await i18n.changeLanguage("en");
+    }
   });
 
   it("lets quick action buttons inherit the shared button shape tokens", () => {

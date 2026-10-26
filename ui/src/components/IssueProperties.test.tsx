@@ -2,6 +2,7 @@
 
 import { i18n, coreTaskMessages } from "../i18n/core-task-test-resources";
 import { issuePropertyControlsMessages } from "../i18n/issue-property-controls-test-resources";
+import { issueWorkspaceMessages } from "../i18n/issue-workspace-test-resources";
 import { issueMonitorMessages } from "../i18n/issue-monitor-test-resources";
 import { issueModelMessages } from "../i18n/issue-model-test-resources";
 import { issueWatchdogMessages } from "../i18n/issue-watchdog-test-resources";
@@ -4188,6 +4189,118 @@ describe("IssueProperties", () => {
     expect(container.querySelector('a[href="/execution-workspaces/workspace-1"]')).not.toBeNull();
     expect(onUpdate).not.toHaveBeenCalled();
     act(() => root.unmount());
+  });
+
+  it.each(Object.entries(issueWorkspaceMessages))("localizes workspace selection while preserving names and payloads in %s", async (locale, messages) => {
+    await i18n.changeLanguage(locale);
+    mockInstanceSettingsApi.getExperimental.mockResolvedValue({ enableIsolatedWorkspaces: true });
+    mockProjectsApi.list.mockResolvedValue([createProject({ executionWorkspacePolicy: { enabled: true, defaultMode: "shared_workspace" } })]);
+    const workspace = createExecutionWorkspace({ id: "workspace-reuse", name: "All workspaces", branchName: "原始/branch", lastUsedAt: new Date() });
+    mockExecutionWorkspacesApi.list.mockResolvedValue([workspace]);
+    const onUpdate = vi.fn();
+    const root = renderProperties(container, {
+      issue: createIssue({ projectId: "project-1" }), childIssues: [], onUpdate, inline: true,
+    });
+    try {
+      await waitForAssertion(() => expect(findRowTrigger(container, "Execution")?.textContent).toBe(messages.default));
+      await act(() => findRowTrigger(container, "Execution")!.click());
+      expect(container.textContent).toContain(messages.useProjectPolicy);
+      expect(container.textContent).toContain(messages.nextRun);
+      await act(() => Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.includes(messages.newIsolated))!.click());
+      expect(onUpdate).toHaveBeenLastCalledWith({
+        executionWorkspacePreference: "isolated_workspace", executionWorkspaceId: null,
+        executionWorkspaceSettings: { mode: "isolated_workspace", environmentId: null },
+      });
+      await act(() => findRowTrigger(container, "Execution")!.click());
+      await act(() => Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.includes(messages.reuseOption))!.click());
+      await waitForAssertion(() => expect(container.textContent).toContain(messages.all));
+      expect(container.textContent).toContain(messages.recent);
+      expect(container.textContent).toContain("All workspaces");
+      expect(container.textContent).toContain("原始/branch");
+      const search = container.querySelector<HTMLInputElement>(`input[aria-label="${messages.searchReusable}"]`)!;
+      await act(() => {
+        Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")!.set!.call(search, "原始/branch");
+        search.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      const calls = onUpdate.mock.calls.length;
+      await act(async () => { await i18n.changeLanguage(locale === "en" ? "ja" : "en"); });
+      expect(container.querySelector('input[value="原始/branch"]')).toBe(search);
+      expect(onUpdate.mock.calls).toHaveLength(calls);
+      await act(async () => { await i18n.changeLanguage(locale); });
+      await act(() => container.querySelector<HTMLButtonElement>(`button[aria-label="${messages.back}"]`)!.click());
+      expect(container.textContent).toContain(messages.useProjectPolicy);
+      await act(() => Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.includes(messages.reuseOption))!.click());
+      await act(() => Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.includes("All workspaces原始/branch"))!.click());
+      expect(onUpdate).toHaveBeenLastCalledWith({
+        executionWorkspacePreference: "reuse_existing", executionWorkspaceId: "workspace-reuse",
+        executionWorkspaceSettings: { mode: "isolated_workspace", environmentId: null },
+      });
+      await act(() => findRowTrigger(container, "Execution")!.click());
+      await act(() => Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.includes(messages.useProjectPolicy))!.click());
+      expect(onUpdate).toHaveBeenLastCalledWith({ executionWorkspacePreference: null, executionWorkspaceId: null, executionWorkspaceSettings: null });
+    } finally {
+      await act(() => root.unmount());
+    }
+  });
+
+  it.each(Object.entries(issueWorkspaceMessages).flatMap(([locale, messages]) =>
+    (["loading", "loadFailed", "noMatching"] as const).map((state) => ({ locale, messages, state })),
+  ))("localizes reusable workspace $state in $locale", async ({ locale, messages, state }) => {
+    await i18n.changeLanguage(locale);
+    mockInstanceSettingsApi.getExperimental.mockResolvedValue({ enableIsolatedWorkspaces: true });
+    mockProjectsApi.list.mockResolvedValue([createProject({ executionWorkspacePolicy: { enabled: true, defaultMode: "shared_workspace" } })]);
+    if (state === "loading") mockExecutionWorkspacesApi.list.mockReturnValue(new Promise(() => {}));
+    else if (state === "loadFailed") mockExecutionWorkspacesApi.list.mockRejectedValue(new Error("Provider failure"));
+    else mockExecutionWorkspacesApi.list.mockResolvedValue([]);
+    const onUpdate = vi.fn();
+    const root = renderProperties(container, { issue: createIssue({ projectId: "project-1" }), childIssues: [], onUpdate, inline: true });
+    try {
+      await waitForAssertion(() => expect(findRowTrigger(container, "Execution")).toBeDefined());
+      await act(() => findRowTrigger(container, "Execution")!.click());
+      await act(() => Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.includes(messages.reuseOption))!.click());
+      await waitForAssertion(() => expect(container.textContent).toContain(messages[state]));
+      await act(() => findRowTrigger(container, "Execution")!.click());
+      expect(onUpdate).not.toHaveBeenCalled();
+    } finally {
+      await act(() => root.unmount());
+    }
+  });
+
+  it.each(Object.entries(issueWorkspaceMessages))("keeps runtime feedback live across language changes in %s", async (locale, messages) => {
+    await i18n.changeLanguage(locale);
+    mockProjectsApi.list.mockResolvedValue([createProject()]);
+    const workspace = createExecutionWorkspace({
+      config: { workspaceRuntime: { services: [{ name: "web", command: "pnpm dev" }] } } as ExecutionWorkspace["config"],
+      runtimeServices: [createRuntimeService({ status: "running", configIndex: 0, url: "https://workspace.example.test" })],
+    });
+    mockExecutionWorkspacesApi.controlRuntimeCommands.mockResolvedValue({ workspace, operation: {} });
+    const root = renderProperties(container, { issue: createIssue({ projectId: "project-1", executionWorkspaceId: workspace.id, currentExecutionWorkspace: workspace }), childIssues: [], onUpdate: vi.fn(), inline: true });
+    try {
+      await flush();
+      expect(container.querySelector('a[href="/execution-workspaces/workspace-1"]')?.textContent).toContain(messages.view);
+      const stop = container.querySelector<HTMLButtonElement>(`button[aria-label="${messages.stop}"]`)!;
+      expect(stop.title).toBe(messages.stop);
+      await act(() => stop.click());
+      await waitForAssertion(() => expect(container.querySelector('[role="status"]')?.textContent).toBe(messages.serviceStopped));
+      expect(mockExecutionWorkspacesApi.controlRuntimeCommands).toHaveBeenCalledTimes(1);
+      expect(mockExecutionWorkspacesApi.controlRuntimeCommands).toHaveBeenCalledWith("workspace-1", "stop", { action: "stop", workspaceCommandId: "service:web", runtimeServiceId: "service-1", serviceIndex: 0 });
+      const otherLocale = locale === "ja" ? "en" : "ja";
+      await act(async () => { await i18n.changeLanguage(otherLocale); });
+      expect(container.querySelector('[role="status"]')?.textContent).toBe(issueWorkspaceMessages[otherLocale].serviceStopped);
+      expect(mockExecutionWorkspacesApi.controlRuntimeCommands).toHaveBeenCalledTimes(1);
+      const diagnostic = "This task is not attached to a workspace.";
+      mockExecutionWorkspacesApi.controlRuntimeCommands.mockRejectedValueOnce(new Error(diagnostic));
+      await act(() => container.querySelector<HTMLButtonElement>(`button[aria-label="${issueWorkspaceMessages[otherLocale].stop}"]`)!.click());
+      await waitForAssertion(() => expect(container.querySelector('[role="alert"]')?.textContent).toBe(diagnostic));
+      mockExecutionWorkspacesApi.controlRuntimeCommands.mockRejectedValueOnce(null);
+      await act(() => container.querySelector<HTMLButtonElement>(`button[aria-label="${issueWorkspaceMessages[otherLocale].stop}"]`)!.click());
+      await waitForAssertion(() => expect(container.querySelector('[role="alert"]')?.textContent).toBe(issueWorkspaceMessages[otherLocale].controlFailed));
+      await act(async () => { await i18n.changeLanguage(locale); });
+      expect(container.querySelector('[role="alert"]')?.textContent).toBe(messages.controlFailed);
+      expect(container.querySelector('a[href="https://workspace.example.test"]')).not.toBeNull();
+    } finally {
+      await act(() => root.unmount());
+    }
   });
 
   it("shows the workspace picker with no bound workspace", async () => {

@@ -1,3 +1,4 @@
+import { useTranslation } from "@/i18n";
 import type {
   WorkspaceCommandDefinition,
   RuntimeExposureStatus,
@@ -390,6 +391,7 @@ function CommandActionButtons({
   square?: boolean;
   iconOnly?: boolean;
 }) {
+  const { t } = useTranslation();
   const actions: WorkspaceRuntimeAction[] =
     item.kind === "job"
       ? ["run"]
@@ -402,13 +404,7 @@ function CommandActionButtons({
       {actions.map((action) => {
         const request = buildRequest(item, action);
         const Icon = action === "stop" ? Square : action === "restart" ? RotateCcw : Play;
-        const label = action === "run"
-          ? "Run"
-          : action === "start"
-            ? "Start"
-            : action === "stop"
-              ? "Stop"
-              : "Restart";
+        const label = t(`issueWorkspaceUi.${action}`);
         const showSpinner = isPending && requestMatchesPending(pendingRequest, request);
         const disabled =
           isPending

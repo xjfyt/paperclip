@@ -403,7 +403,7 @@ export function IssueProperties({
   const [monitorNotesInput, setMonitorNotesInput] = useState(executionPolicy?.monitor?.notes ?? "");
   const [monitorServiceInput, setMonitorServiceInput] = useState(executionPolicy?.monitor?.serviceName ?? "");
   const [runtimeActionMessage, setRuntimeActionMessage] = useState<string | null>(null);
-  const [runtimeActionErrorMessage, setRuntimeActionErrorMessage] = useState<string | null>(null);
+  const [runtimeActionErrorMessage, setRuntimeActionErrorMessage] = useState<{ key: string } | { message: string } | null>(null);
   const [unarchiveErrorMessage, setUnarchiveErrorMessage] = useState<string | null>(null);
   const [watchdogOpen, setWatchdogOpen] = useState(false);
   const [watchdogAgentInput, setWatchdogAgentInput] = useState(issue.watchdog?.watchdogAgentId ?? "");
@@ -586,10 +586,10 @@ export function IssueProperties({
     (workspace) => workspace.id === issue.executionWorkspaceId,
   ) ?? issue.currentExecutionWorkspace ?? null;
   const workspaceTriggerLabel = activeWorkspacePickerMode === "isolated"
-    ? "New isolated workspace"
+    ? t("issueWorkspaceUi.newIsolated")
     : activeWorkspacePickerMode === "reuse"
-      ? boundWorkspace?.name ?? "Reuse existing workspace"
-      : "Default";
+      ? boundWorkspace?.name ?? t("issueWorkspaceUi.reuseExisting")
+      : t("issueWorkspaceUi.default");
   const workspaceTriggerTitle = activeWorkspacePickerMode === "reuse"
     ? boundWorkspace?.branchName ?? undefined
     : undefined;
@@ -628,10 +628,11 @@ export function IssueProperties({
     workspaceRuntimeSections.services.length > 0
     || workspaceRuntimeSections.otherServices.length > 0
   );
+  const noAttachedWorkspaceError = useMemo(() => new Error("This task is not attached to a workspace."), []);
   const controlWorkspaceRuntime = useMutation({
     mutationFn: (request: WorkspaceRuntimeControlRequest) => {
       const workspaceId = issue.currentExecutionWorkspace?.id ?? issue.executionWorkspaceId;
-      if (!workspaceId) throw new Error("This task is not attached to a workspace.");
+      if (!workspaceId) throw noAttachedWorkspaceError;
       return executionWorkspacesApi.controlRuntimeCommands(workspaceId, request.action, request);
     },
     onSuccess: (result, request) => {
@@ -647,17 +648,19 @@ export function IssueProperties({
       setRuntimeActionErrorMessage(null);
       setRuntimeActionMessage(
         request.action === "run"
-          ? "Workspace job completed."
+          ? "issueWorkspaceUi.jobCompleted"
           : request.action === "stop"
-            ? "Workspace service stopped."
+            ? "issueWorkspaceUi.serviceStopped"
             : request.action === "restart"
-              ? "Workspace service restarted."
-              : "Workspace service started.",
+              ? "issueWorkspaceUi.serviceRestarted"
+              : "issueWorkspaceUi.serviceStarted",
       );
     },
     onError: (error) => {
       setRuntimeActionMessage(null);
-      setRuntimeActionErrorMessage(error instanceof Error ? error.message : "Failed to control workspace commands.");
+      setRuntimeActionErrorMessage(error === noAttachedWorkspaceError
+        ? { key: "issueWorkspaceUi.notAttached" }
+        : error instanceof Error ? { message: error.message } : { key: "issueWorkspaceUi.controlFailed" });
     },
   });
   const pendingWorkspaceRuntimeAction = controlWorkspaceRuntime.isPending ? controlWorkspaceRuntime.variables ?? null : null;
@@ -2792,8 +2795,8 @@ export function IssueProperties({
                       onClick={() => saveWorkspaceSelection(null)}
                     >
                       <span className="min-w-0 flex-1">
-                        <span className="block text-sm">Default</span>
-                        <span className="block text-xs text-muted-foreground">Use the project workspace policy</span>
+                        <span className="block text-sm">{t("issueWorkspaceUi.default")}</span>
+                        <span className="block text-xs text-muted-foreground">{t("issueWorkspaceUi.useProjectPolicy")}</span>
                       </span>
                       {activeWorkspacePickerMode === "default" ? <Check className="h-3.5 w-3.5 shrink-0" /> : null}
                     </button>
@@ -2803,8 +2806,8 @@ export function IssueProperties({
                       onClick={() => saveWorkspaceSelection("isolated_workspace")}
                     >
                       <span className="min-w-0 flex-1">
-                        <span className="block text-sm">New isolated workspace</span>
-                        <span className="block text-xs text-muted-foreground">Create a fresh workspace on the next run</span>
+                        <span className="block text-sm">{t("issueWorkspaceUi.newIsolated")}</span>
+                        <span className="block text-xs text-muted-foreground">{t("issueWorkspaceUi.freshNextRun")}</span>
                       </span>
                       {activeWorkspacePickerMode === "isolated" ? <Check className="h-3.5 w-3.5 shrink-0" /> : null}
                     </button>
@@ -2814,14 +2817,14 @@ export function IssueProperties({
                       onClick={() => setWorkspacePickerStep("reuse")}
                     >
                       <span className="min-w-0 flex-1">
-                        <span className="block text-sm">Reuse existing workspace…</span>
-                        <span className="block text-xs text-muted-foreground">Pick a workspace to reuse</span>
+                        <span className="block text-sm">{t("issueWorkspaceUi.reuseOption")}</span>
+                        <span className="block text-xs text-muted-foreground">{t("issueWorkspaceUi.pickWorkspace")}</span>
                       </span>
                       {activeWorkspacePickerMode === "reuse" ? <Check className="h-3.5 w-3.5 shrink-0" /> : null}
                     </button>
                   </div>
                   <div className="mt-1 border-t border-border px-2 py-1.5 text-xs text-muted-foreground">
-                    {issue.executionWorkspaceId ? "Current workspace stays active. Applies on the next run." : "Applies on the next run."}
+                    {issue.executionWorkspaceId ? t("issueWorkspaceUi.currentStays") : t("issueWorkspaceUi.nextRun")}
                   </div>
                 </>
               ) : (
@@ -2831,30 +2834,30 @@ export function IssueProperties({
                       type="button"
                       className="inline-flex items-center gap-1 rounded px-1 py-1 text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground"
                       onClick={() => setWorkspacePickerStep("mode")}
-                      aria-label="Back to workspace options"
+                      aria-label={t("issueWorkspaceUi.back")}
                     >
                       <ChevronLeft className="h-3.5 w-3.5" />
-                      Workspace mode
+                      {t("issueWorkspaceUi.mode")}
                     </button>
                     <input
                       className="block w-full bg-transparent px-2 py-1.5 text-xs outline-none placeholder:text-muted-foreground/50"
-                      placeholder="Search workspaces..."
+                      placeholder={t("issueWorkspaceUi.search")}
                       value={workspaceSearch}
                       onChange={(event) => setWorkspaceSearch(event.target.value)}
                       autoFocus={!inline}
-                      aria-label="Search reusable workspaces"
+                      aria-label={t("issueWorkspaceUi.searchReusable")}
                     />
                   </div>
                   <div className="max-h-48 overflow-y-auto overscroll-contain py-1">
                     {reusableExecutionWorkspacesLoading ? (
-                      <div className="px-2 py-2 text-xs text-muted-foreground">Loading workspaces...</div>
+                      <div className="px-2 py-2 text-xs text-muted-foreground">{t("issueWorkspaceUi.loading")}</div>
                     ) : reusableExecutionWorkspacesError ? (
-                      <div className="px-2 py-2 text-xs text-destructive">Failed to load workspaces.</div>
+                      <div className="px-2 py-2 text-xs text-destructive">{t("issueWorkspaceUi.loadFailed")}</div>
                     ) : reusableWorkspaceOptions.length === 0 ? (
-                      <div className="px-2 py-2 text-xs text-muted-foreground">No matching workspaces.</div>
+                      <div className="px-2 py-2 text-xs text-muted-foreground">{t("issueWorkspaceUi.noMatching")}</div>
                     ) : reusableWorkspaceOptions.map((group) => (
                       <div key={group.id} className="py-1">
-                        <div className="px-2 pb-1 text-xs font-medium text-muted-foreground">{group.label}</div>
+                        <div className="px-2 pb-1 text-xs font-medium text-muted-foreground">{t(group.id === "recent" ? "issueWorkspaceUi.recent" : "issueWorkspaceUi.all")}</div>
                         {group.options.map((option) => (
                           <button
                             key={option.key}
@@ -2873,7 +2876,7 @@ export function IssueProperties({
                     ))}
                   </div>
                   <div className="border-t border-border px-2 py-1.5 text-xs text-muted-foreground">
-                    {issue.executionWorkspaceId ? "Current workspace stays active. Applies on the next run." : "Applies on the next run."}
+                    {issue.executionWorkspaceId ? t("issueWorkspaceUi.currentStays") : t("issueWorkspaceUi.nextRun")}
                   </div>
                 </>
               )}
@@ -2886,7 +2889,7 @@ export function IssueProperties({
                 className="text-sm text-primary hover:underline inline-flex min-w-0 items-center gap-1.5"
               >
                 <HardDrive className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                View workspace
+                {t("issueWorkspaceUi.view")}
                 <ArrowUpRight className="h-3 w-3 shrink-0" />
               </Link>
             </PropertyRow>
@@ -2904,10 +2907,10 @@ export function IssueProperties({
                   iconOnly
                 />
                 {runtimeActionMessage ? (
-                  <span className="text-xs text-muted-foreground" role="status">{runtimeActionMessage}</span>
+                  <span className="text-xs text-muted-foreground" role="status">{t(runtimeActionMessage)}</span>
                 ) : null}
                 {runtimeActionErrorMessage ? (
-                  <span className="text-xs text-destructive" role="alert">{runtimeActionErrorMessage}</span>
+                  <span className="text-xs text-destructive" role="alert">{"key" in runtimeActionErrorMessage ? t(runtimeActionErrorMessage.key) : runtimeActionErrorMessage.message}</span>
                 ) : null}
               </div>
             </PropertyRow>
