@@ -40,7 +40,7 @@
 6. `ui/src/lib/company-routes.ts`: 添加 `"skill-evaluations"`；两套 Sidebar 添加路径 `/skill-evaluations`，标签 `t("evaluationUi.pageTitle")`，复用现有 `ListChecks` 图标。
 7. 从 `ui/src/i18n/contributions/evaluationUi/{en,zh-CN,es,ja}.json` 通过现有合并脚本生成四语 locales。
 8. 请求日志策略将 `skill-evaluations` 视为敏感区；预期输出和运行内容不得进入 HTTP 请求体日志。审计只写 ID/哈希。
-9. 生成并检查迁移（两个新增表及关联/索引）；本工作树未修改 migration journal 或生成迁移。
+9. 生成并检查迁移（两个新增表及关联/索引）；先建 datasets 表及 `(company_id,id)` 唯一索引，再添加 comparisons 的复合数据集外键。`company_skills`/`company_skill_versions`/`companies` 已存在。比较版本 FK 与数据集 FK 使用 RESTRICT；无级联删除证据。本工作树未修改 migration journal 或生成迁移。
 10. 集成后运行全链路类型检查、迁移/数据库幂等与跨公司测试、浏览器交互验收。单测和 React 测试不替代这些验证。
 
 ## 本切片已运行验证
@@ -49,3 +49,5 @@
 - React/jsdom三项通过：四语未知成本与禁止恢复提示、无权限隐藏表单、公司切换清除报告。
 - token gates 全通过。
 - 尚未在本工作树运行全量类型检查、构建、数据库迁移或真实浏览器；按并行内存预算由父工作树统一执行。
+
+- 新增 `tests/mimouse/evaluation.spec.ts` 六项真实可丢弃数据库/API fixture（父工作树运行）：并发幂等、输入冻结、JSONB报告哈希、跨公司/技能/版本边界、复合FK、缺失/失败/上下文不一致证据、成本未知/小数/晚到记录，以及实际表上的显式session actor路由合同。此文件尚未执行；local_trusted fixture 中注入actor不代表真实登录/SSO验收。
