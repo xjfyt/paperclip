@@ -1,3 +1,4 @@
+import { navigateTopLevel } from "@/lib/browserNavigation";
 import { useEffect, useRef, useState } from "react";
 import type { CloudInstanceHealthStatus } from "@/api/health";
 import { cloudStackEntryUrl } from "@/lib/cloudLinks";
@@ -28,7 +29,12 @@ export function CloudSignIn({ cloud, returnTo }: { cloud: CloudInstanceHealthSta
       </p>
       {entryUrl && (
         <Button asChild>
-          <a href={entryUrl} onClick={clearCloudSignInAttempt}>Continue to Paperclip Cloud</a>
+          <a href={entryUrl} onClick={(event) => {
+            clearCloudSignInAttempt();
+            if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+              event.preventDefault(); navigateTopLevel(entryUrl);
+            }
+          }}>Continue to Paperclip Cloud</a>
         </Button>
       )}
     </div>

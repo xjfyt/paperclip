@@ -1,3 +1,4 @@
+import { navigateTopLevel } from "@/lib/browserNavigation";
 import { useTranslation } from "@/i18n";
 import { useEffect, useId, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -27,7 +28,7 @@ export function ProfileSettings() {
   const capabilities = useQuery({ queryKey: ["auth-capabilities"], queryFn: authApi.capabilities });
   const linkCasdoor = useMutation({
     mutationFn: () => authApi.signInCasdoor(window.location.pathname, true),
-    onSuccess: url => window.location.assign(url),
+    onSuccess: url => navigateTopLevel(url),
   });
   const { setBreadcrumbs } = useBreadcrumbs();
   const { selectedCompanyId, selectedCompany } = useCompany();

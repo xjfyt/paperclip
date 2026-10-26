@@ -37,3 +37,9 @@
 02:40 UTC注销故障路径：新增定向红测试确认，health刷新永不返回时，即便本地sign-out已经成功，旧hook仍持续pending且不跳转IdP。改为非阻塞附带刷新，4文件55项回归及UI类型/构建通过；本地退出API失败仍保留原缓存和Cloud行为。回环IdP另增不含身份/令牌的注销回跳计数，2项实际HTTP协议测试通过。
 
 真实Chrome用Owner登录后退出，IdP有效logoutRedirects由0到1，浏览器回到/auth登录页，证明这次确实到达了提供方注销端点；不由登录页URL单独推断。该夹具不维护真实Casdoor会话，不证明真实租户全局停用。重建UI之后的首次SSO点击曾回到原/auth，重试正常进入IdP；需继续核对ServiceWorker升级和显式导航交互，暂不归因或宣称已消除此现象。
+
+02:53 UTC导航与更新竞争：ServiceWorker在可见页面接管后，会在下一次hidden时刷新；浏览器导航本身也可触发hidden（MDN visibilitychange说明）。新增两项红测试复现显式导航仍被reload覆盖。登录/绑定、Cloud自动与手动入口、既有退出共用顶层导航标记，更新逻辑保留延后刷新但不覆盖正在离开的文档；BFCache恢复清除标记，初始pageshow不误清除，导航抛错恢复旧状态。7文件57项通过，另有Cloud普通/修饰键点击5项通过；后者首次测试误用了未安装的testing-library，改为仓库已有React DOM测试方式，不新增依赖。生产构建通过，保留上游构建警告。
+
+真实Chrome加载新构建后，首次点击Casdoor即进入回环IdP，Owner授权后恢复待处理邀请并显示“已加入此组织”，打开组织后退出，IdP有效回跳计数1到2且回到/auth。此次未再出现首次点击被刷新覆盖；这是一轮真实路径验证，不声称覆盖所有升级时序或真实Casdoor。默认SW回调与真实导航helper的集成单元测试另验证BFCache返回后恢复延后更新。
+
+边界：用户手动取消一个未抛错的顶层导航时，保守保留标记直到文档重载/BFCache恢复；可能推迟自动更新，不阻止手动刷新。此处不使用超时猜测认证已结束，也不保留URL或扩大重定向白名单。参考：https://developer.mozilla.org/en-US/docs/Web/API/Document/visibilitychange_event 、https://developer.mozilla.org/en-US/docs/Web/API/Window/pageshow_event 。

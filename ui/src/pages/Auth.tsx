@@ -1,3 +1,4 @@
+import { navigateTopLevel } from "@/lib/browserNavigation";
 import { useTranslation } from "@/i18n";
 import { LanguageSelector } from "@/components/LanguageSelector";
 import { useEffect, useMemo, useState } from "react";
@@ -86,7 +87,7 @@ export function AuthPage() {
   });
   const sso = useMutation({
     mutationFn: () => authApi.signInCasdoor(nextPath),
-    onSuccess: (url) => window.location.assign(url),
+    onSuccess: (url) => navigateTopLevel(url),
     onError: () => setError(t("auth.failed")),
   });
   const canSubmit =

@@ -1,3 +1,5 @@
+import { isTopLevelNavigationPending } from "./browserNavigation";
+
 /**
  * Registers `/sw.js` and keeps the installed worker fresh on a long-lived tab.
  *
@@ -26,6 +28,7 @@ export function startServiceWorkerUpdates(
     documentRef?: Document;
     reload?: () => void;
     updateIntervalMs?: number;
+    navigationPending?: () => boolean;
   } = {},
 ): () => void {
   const container =
@@ -39,6 +42,7 @@ export function startServiceWorkerUpdates(
   const documentRef = options.documentRef ?? document;
   const reload = options.reload ?? (() => window.location.reload());
   const updateIntervalMs = options.updateIntervalMs ?? DEFAULT_UPDATE_INTERVAL_MS;
+  const navigationPending = options.navigationPending ?? isTopLevelNavigationPending;
 
   // Only a page that is already worker-controlled is running
   // potentially-stale code when the controller changes; a first-ever
@@ -51,6 +55,10 @@ export function startServiceWorkerUpdates(
   let reloadPending = false;
   const applyUpdate = () => {
     if (reloaded) return;
+    if (navigationPending()) {
+      reloadPending = true;
+      return;
+    }
     reloaded = true;
     reload();
   };

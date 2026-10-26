@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { navigateTopLevel } from "./browserNavigation";
 import { startServiceWorkerUpdates } from "./service-worker-updates";
 
 type Listener = () => void;
@@ -48,6 +49,7 @@ describe("startServiceWorkerUpdates", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
   });
 
   it("registers /sw.js", async () => {
@@ -167,4 +169,34 @@ describe("startServiceWorkerUpdates", () => {
   it("is a no-op without a service worker container", () => {
     expect(() => startServiceWorkerUpdates({ reload: vi.fn() })()).not.toThrow();
   });
+  it.each(["visible", "hidden"] as const)("does not overwrite an explicit authentication navigation during an update (%s)", visibility => {
+    const { container, emit } = fakeContainer({ controlled: true });
+    const docState = fakeDocument(visibility), reload = vi.fn();
+    let navigating = true;
+    startServiceWorkerUpdates({ container, documentRef: docState.doc, reload, navigationPending: () => navigating });
+    emit("controllerchange"); docState.doc.visibilityState = "hidden"; docState.emit("visibilitychange");
+    expect(reload).not.toHaveBeenCalled();
+    navigating = false; docState.emit("visibilitychange");
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses the real navigation guard and resumes deferred updates after BFCache restoration", () => {
+    const lifecycle = new EventTarget();
+    vi.stubGlobal("window", { location: { assign: vi.fn() }, addEventListener: lifecycle.addEventListener.bind(lifecycle) });
+    const { container, emit } = fakeContainer({ controlled: true });
+    const docState = fakeDocument(), reload = vi.fn();
+    const stop = startServiceWorkerUpdates({ container, documentRef: docState.doc, reload });
+    emit("controllerchange");
+    navigateTopLevel("https://id.example/authorize");
+    docState.doc.visibilityState = "hidden"; docState.emit("visibilitychange");
+    expect(reload).not.toHaveBeenCalled();
+    const restored = new Event("pageshow"); Object.defineProperty(restored, "persisted", { value: true });
+    lifecycle.dispatchEvent(restored);
+    docState.doc.visibilityState = "visible"; docState.emit("visibilitychange");
+    expect(reload).not.toHaveBeenCalled();
+    docState.doc.visibilityState = "hidden"; docState.emit("visibilitychange");
+    expect(reload).toHaveBeenCalledTimes(1);
+    stop();
+  });
+
 });

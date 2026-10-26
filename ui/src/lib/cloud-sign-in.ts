@@ -1,3 +1,5 @@
+import { replaceTopLevel } from "./browserNavigation";
+
 const RECOVERY_KEY = "paperclip.cloud-sign-in-attempt";
 const RECOVERY_WINDOW_MS = 5 * 60 * 1000;
 
@@ -19,6 +21,6 @@ export function beginCloudSignIn(url: string): boolean {
     // Without durable tab state we cannot safely bound automatic navigation.
     return false;
   }
-  window.location.replace(url);
+  replaceTopLevel(url);
   return true;
 }
