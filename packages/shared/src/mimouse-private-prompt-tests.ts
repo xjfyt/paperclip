@@ -15,7 +15,21 @@ export const createPrivatePromptTestSchema = z.object({
   confirmPossibleCharges: z.literal(true),
 }).strict();
 export type CreatePrivatePromptTest = z.infer<typeof createPrivatePromptTestSchema>;
-export type PrivatePromptTestStatus = "pending_harness" | "pending_wake" | "queued" | "prepared" | "spawned" | "completed" | "failed" | "unknown" | "cancelled";
+/** Metadata-only snapshot preparation. This endpoint cannot dispatch execution. */
+export const preparePrivatePromptTestSchema = createPrivatePromptTestSchema.omit({
+  confirmRestrictedProfile: true, confirmExecution: true, confirmPossibleCharges: true,
+});
+export type PreparePrivatePromptTest = z.infer<typeof preparePrivatePromptTestSchema>;
+export const executePrivatePromptTestSchema = z.object({
+  approvalDigest: z.string().regex(/^[a-f0-9]{64}$/),
+  executionProfile: z.literal("claude_cli_bare_api_key_v1"),
+  confirmRestrictedProfile: z.literal(true), confirmExecution: z.literal(true), confirmPossibleCharges: z.literal(true),
+}).strict();
+export type ExecutePrivatePromptTest = z.infer<typeof executePrivatePromptTestSchema>;
+export const cancelPrivatePromptTestSchema = executePrivatePromptTestSchema.pick({ approvalDigest: true });
+export type CancelPrivatePromptTest = z.infer<typeof cancelPrivatePromptTestSchema>;
+
+export type PrivatePromptTestStatus = "awaiting_confirmation" | "pending_harness" | "pending_wake" | "queued" | "prepared" | "spawned" | "completed" | "failed" | "unknown" | "cancelled";
 export interface PrivatePromptPreparedWitness {
   schemaVersion: 1;
   testId: string; attemptId: string; companyId: string; issueId: string; heartbeatRunId: string;
@@ -28,6 +42,8 @@ export interface PrivatePromptPreparedWitness {
 }
 export interface PrivatePromptTestRecord {
   id: string; promptId: string; revisionId: string; agentId: string;
+  requestId: string; headReceiptId: string | null; approvalDigest: string;
+  executionProfile: "claude_cli_bare_api_key_v1";
   datasetId: string; caseId: string; skillVersionId: string;
   status: PrivatePromptTestStatus; issueId: string | null; heartbeatRunId: string | null;
   prepared: PrivatePromptPreparedWitness | null; spawnedAt: string | null;
