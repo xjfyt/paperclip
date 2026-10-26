@@ -72,17 +72,31 @@ async function main() {
     }
     completed++;
     const plan = JSON.parse(readFileSync(resolve(directory, 'package-lock.json'), 'utf8'));
+    const pending = [];
     for (const [path, pkg] of Object.entries(plan.packages ?? {})) {
       if (!path || !hostMatches(pkg.os, process.platform) || !hostMatches(pkg.cpu, process.arch)) continue;
       if (pkg.resolved && !pkg.resolved.startsWith('https://registry.npmjs.org/')) throw new Error('Resolved package is not on the official npm registry; review before caching');
-      if (!pkg.resolved || urls.has(pkg.resolved)) continue;
-      await new Promise((yes, no) => {
-        const p = spawn('npm', ['cache', 'add', pkg.resolved, '--ignore-scripts'], { cwd: fixture, env, stdio: 'inherit', timeout: 120_000 });
-        p.on('error', no); p.on('exit', code => code === 0 ? yes() : no(new Error(`Cache download failed (${code}); stopped without rerouting`)));
-      });
-      urls.add(pkg.resolved);
-      if (++count % 25 === 0) console.log(`Cached ${count} unique host-compatible tarballs`);
+      if (!pkg.resolved || urls.has(pkg.resolved) || pending.includes(pkg.resolved)) continue;
+      pending.push(pkg.resolved);
     }
+    for (let offset = 0; offset < pending.length; offset += 4) {
+      const batch = pending.slice(offset, offset + 4);
+      // First verify existing bytes offline. A partial batch retries with
+      // prefer-offline enabled, so only missing cache content uses the network.
+      const cached = spawnSync('npm', ['cache', 'add', ...batch, '--ignore-scripts', '--offline'], { cwd: fixture, env, encoding: 'utf8', timeout: 120_000, maxBuffer: 4 * 1024 * 1024 });
+      if (cached.error) throw cached.error;
+      if (cached.status !== 0) {
+        if (!/ENOTCACHED/.test(`${cached.stdout}\n${cached.stderr}`)) throw new Error(`Offline cache check failed: ${cached.stderr}`);
+        await new Promise((yes, no) => {
+          const p = spawn('npm', ['cache', 'add', ...batch, '--ignore-scripts'], { cwd: fixture, env, stdio: 'inherit', timeout: 120_000 });
+          p.on('error', no); p.on('exit', code => code === 0 ? yes() : no(new Error(`Cache download failed (${code}); stopped without rerouting`)));
+        });
+      }
+      for (const url of batch) urls.add(url);
+      count += batch.length;
+      console.log(`Cached/verified ${count} unique host-compatible tarballs`);
+    }
+
   }
   writeFileSync(resolve(fixture, 'CACHE-COVERAGE.json'), JSON.stringify({ source, packageNames: packages.map(p => p.name), requestedEdges: edges.length, resolvedEdges: completed, tarballs: urls.size, unresolved: failures, platform: process.platform, arch: process.arch }, null, 2));
   console.log(`Cache preparation coverage: ${completed}/${edges.length} direct edges, ${urls.size} tarballs, ${failures.length} unresolved metadata branches. Strict offline install/start smoke has NOT run.`);

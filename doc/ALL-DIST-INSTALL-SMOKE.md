@@ -88,7 +88,9 @@ official registry through existing routing.
 This metadata-only fixture enumerates the canonical server release closure,
 resolves each declared external edge separately with strict
 `npm install --package-lock-only --ignore-scripts`, and
-serially caches official npm-registry tarballs compatible with this host. It does
+caches official npm-registry tarballs compatible with this host in batches of at
+most four. Each batch is checked offline first; only missing content is fetched
+with prefer-offline semantics. It does
 not install node_modules, run package lifecycle scripts, build code, start the
 server/database, or invoke agent/provider executables. Direct-version
 variants get separate metadata fixtures, never a merged dependency union or
