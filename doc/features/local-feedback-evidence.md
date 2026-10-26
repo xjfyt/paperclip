@@ -21,7 +21,10 @@ path automatically merges records or creates tasks.
 
 Each request scans at most 50 eligible same-product/version rows plus one
 pagination sentinel. Pages are descending `(createdAt, id)`; a cursor is
-resolved only inside the authorized company. Newer inserted rows cannot
+resolved only inside the authorized company and evidence product/version scope.
+Timestamp comparison stays inside PostgreSQL to preserve microsecond precision
+(including batches whose timestamps collapse to the same JavaScript millisecond).
+A missing/deleted cursor returns not-found rather than restarting traversal. Newer inserted rows cannot
 shift subsequent pages; this is a live listing, not a frozen transaction
 snapshot. Empty match pages can still have a next cursor. Clients must
 follow that cursor to continue; no response claims an inbox-wide total.
@@ -45,3 +48,9 @@ actual excerpts, inert instruction text, text/scan limits and no network
 calls. The feedback UI suite includes inert rendering/no-reproduction
 coverage. DB/auth integration, UI tests and aggregate build/typecheck must
 be run by the integrating owner; helper tests alone do not verify them.
+
+The PostgreSQL regression fixture
+`mimouse-feedback-pagination.integration.test.ts` covers a 55-row microsecond
+batch, a second timestamp in that same millisecond, insertion of a newer row
+between pages, and company/product/version/deleted cursor rejection. It is
+prepared but was not executed under the parent resource restriction.

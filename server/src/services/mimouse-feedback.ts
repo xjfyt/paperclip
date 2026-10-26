@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, desc, eq, lt, ne, or } from "drizzle-orm";
+import { and, desc, eq, lt, ne, or, sql } from "drizzle-orm";
 import { mimouseFeedbackInbox as inbox, type Db } from "@paperclipai/db";
 import { feedbackImportSchema, type FeedbackImportInput, type FeedbackInboxItem } from "@paperclipai/shared";
 import { conflict, notFound } from "../errors.js";
@@ -42,6 +42,12 @@ export function feedbackInboxService(db: Db) {
     const [row] = await db.select().from(inbox).where(and(eq(inbox.companyId, companyId), eq(inbox.id, id)));
     if (!row) throw notFound("Feedback candidate not found"); return row;
   }
+  // Keep PostgreSQL's microsecond precision in the database. A JS Date cursor
+  // truncates it and can skip an entire same-millisecond import batch.
+  function beforeCursor(companyId: string, beforeId: string) {
+    const timestamp = sql`(select cursor_row.created_at from mimouse_feedback_inbox as cursor_row where cursor_row.company_id = ${companyId} and cursor_row.id = ${beforeId})`;
+    return or(lt(inbox.createdAt, timestamp), and(eq(inbox.createdAt, timestamp), lt(inbox.id, beforeId)));
+  }
   return {
     async import(companyId: string, raw: FeedbackImportInput, actorId: string) {
       const input = prepareFeedbackImport(raw);
@@ -53,18 +59,19 @@ export function feedbackInboxService(db: Db) {
     },
     async list(companyId: string, limit = 50, beforeId?: string) {
       const before = beforeId ? await load(companyId, beforeId) : null;
-      const rows = await db.select().from(inbox).where(and(eq(inbox.companyId, companyId), before ? or(lt(inbox.createdAt, before.createdAt), and(eq(inbox.createdAt, before.createdAt), lt(inbox.id, before.id))) : undefined))
+      const rows = await db.select().from(inbox).where(and(eq(inbox.companyId, companyId), before ? beforeCursor(companyId, before.id) : undefined))
         .orderBy(desc(inbox.createdAt), desc(inbox.id)).limit(limit + 1);
       const page = rows.slice(0, limit); return { items: page.map(publicItem), nextBeforeId: rows.length > limit ? page.at(-1)!.id : null };
     },
     async get(companyId: string, id: string) { return publicItem(await load(companyId, id)); },
     async evidence(companyId: string, id: string, beforeId?: string) {
       const source = publicItem(await load(companyId, id));
-      if (!feedbackEvidence(source).fingerprint) return feedbackEvidencePage(source, [], null);
       const before = beforeId ? await load(companyId, beforeId) : null;
+      if (before && (before.product !== source.product || before.softwareVersion !== source.softwareVersion || before.id === source.id)) throw notFound("Feedback evidence cursor not found");
+      if (!feedbackEvidence(source).fingerprint) return feedbackEvidencePage(source, [], null);
       // Cursor and every scanned row remain inside this company. No task/trace fetches.
       const rows = await db.select().from(inbox).where(and(eq(inbox.companyId, companyId), eq(inbox.product, source.product), eq(inbox.softwareVersion, source.softwareVersion), ne(inbox.id, id),
-        before ? or(lt(inbox.createdAt, before.createdAt), and(eq(inbox.createdAt, before.createdAt), lt(inbox.id, before.id))) : undefined))
+        before ? beforeCursor(companyId, before.id) : undefined))
         .orderBy(desc(inbox.createdAt), desc(inbox.id)).limit(FEEDBACK_EVIDENCE_SCAN_LIMIT + 1);
       const page = rows.slice(0, FEEDBACK_EVIDENCE_SCAN_LIMIT);
       return feedbackEvidencePage(source, page.map(publicItem), rows.length > FEEDBACK_EVIDENCE_SCAN_LIMIT ? page.at(-1)!.id : null);
