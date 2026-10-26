@@ -43,7 +43,7 @@
 
 ## 本地验证证据
 
-- 单 worker / 512 MB 测试 35/35 通过：30 项纯证据测试及 5 项 jsdom 身份/缓存/晚到请求隔离回归。合成完整 USD fixture 仍必须阻断上下文资格；见 `server/src/services/cost-routing-preview/preview.test.ts`。
+- 单 worker / 512 MB 测试 44/44 通过：30 项纯证据、5 项 jsdom 身份隔离、7 项 HTTP 日志隐私、2 项真实 API client 传输隔离测试。合成完整 USD fixture 仍必须阻断上下文资格；见 `server/src/services/cost-routing-preview/preview.test.ts`。
 - UI token gates 已通过。修改/新增 TS/TSX 文件 esbuild syntax transform 通过（不是语义类型检查）。
 - 最初尝试 TypeScript transpile API 因仓库 TS 7 原生包不提供 `ScriptTarget` 失败；已改用 esbuild 做语法检查，不把失败算作 typecheck 成功。
 - 为避免与总控全量构建竞争，未运行安装、完整 typecheck/build、DB migration/HTTP/真实浏览器或真实模型测试。集成与下列手工测试仍待执行，不能声称生产路由完成。
@@ -53,3 +53,8 @@
 - run-bound 实际 dispatch witness：证明固定提示词/输入/上下文与实际执行绑定，不能只比较预创建 hash 或当前 config；在建立该证明前保持全量阻断。
 - 中央迁移/挂载/词典与 DB/HTTP 集成测试、完整类型检查/构建仍由集成阶段验证。
 - UI 以 company + user + session 隔离，session/policy 重验期间卸载编辑器；403/401 清除草稿/结果，身份变化丢弃晚到 mutation。jsdom 不等于真实浏览器验收。
+
+## 二次审查边界修复
+
+- `cost-routing` 整个命名空间进入 HTTP 私密请求分类，包括 malformed/rejected/unknown 路由与 400/401/403/404/422/500；请求 body、headers、query、异常回显均不进入日志。
+- 当前策略读取通过 `requestResponse` + `readApiJson` 发独立 GET，不使用 `api.get` 的仅 URL in-flight 合并。`cache:no-store` 只是浏览器缓存策略，不能作为身份隔离。真实 client 回归保留旧会话观察者的 pending request，新会话必须发起自己的请求并只获得新响应。

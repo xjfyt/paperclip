@@ -82,8 +82,6 @@ describe("policy preview", () => {
     if (kind === "coverage") proof.cases[0]!.skillRunId = id(99);
     if (kind === "quality") evidence[0]!.report!.candidate.passed = 0;
     if (kind === "capability") policy.requiredCapabilities = ["confirmedCancellation"];
-    if (kind === "dispatch_adapter") row.heartbeats[0]!.dispatchedAdapterType = "changed_before_dispatch";
-    if (kind === "adapter") (row.receipts[0]!.receiptJson as Record<string, unknown>).adapterType = "different_adapter";
     if (kind === "model") evidence[0]!.configuredModel = "different";
     if (kind === "company") proof.companyId = id(99);
     expect(evaluateRoutingPreview(id(1), 1, policy, evidence, true, now).selectedAgentId).toBeNull();

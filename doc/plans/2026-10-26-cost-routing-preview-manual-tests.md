@@ -6,6 +6,7 @@
 
 - 建两个公司 A/B、普通 board、A 管理员、A Agent token。普通 board/Agent 对四个端点均应 403；A 管理员对 B 应 403/404，不泄露 B 的 report/agent/receipt 是否存在。
 - policy 使用 B 的 agent/report，保存应拒绝；加入 `price`、`score`、`routingEvidenceV1`、config、未知字段应 400；超过 20 candidate、重复 agent/capability、非法 UUID/hash、敏感 model/provider 标识应拒绝。
+- malformed JSON、未知路径、400/401/403/404/422/500（含大小写/absolute-form URL）的 HTTP 日志必须隐藏完整 body、任意 headers、query 和错误回显。
 - 响应、日志、activity audit、receipt 表不含 adapterConfig、runtimeConfig、token、密码、完整 receipt JSON、source URL。审计只保留 digest/revision/权限为 false 标识。
 
 ## 2. CAS、幂等与不可变
@@ -37,6 +38,7 @@
 
 - en/zh-CN/ja/es：标题、风险说明、按钮、错误消息完整；技术 receipt 字段/原因码保留稳定机器标识。
 - 切公司、同公司切用户、同用户切 session/注销或卸载期间，晚到请求不能回填旧身份；session/policy 重验时隐藏旧管理员数据，403 后不恢复缓存。加载失败不得把未知状态当 revision=0 保存。
+- 保留另一观察者的旧会话同 URL 请求未返回，再切会话读取策略：新读取必须单独发 GET，不能因 URL-only 合并接收旧管理员响应；no-store 本身不构成隔离。
 - 连点保存/预览不重复创建；网络超时后重试复用 requestId；冲突明确提示刷新。
 - 改动 JSON 未保存时禁用预览；保存规范化后可预览；失败清除旧结果，不展示旧推荐作为本次成功。
 - Back/Forward、刷新、会话失效、非管理员、非法 JSON、超长输入；不泄露接口原始错误/敏感配置。
