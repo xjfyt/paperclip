@@ -29,6 +29,27 @@ test("artifact API hashes local bytes without upgrading signature or release cla
     expect(response.ok(), await response.text()).toBeTruthy(); const manifest = await response.json();
     expect(manifest.uploaded).toBe(false); expect(manifest.productionReleased).toBe(false);
     expect(manifest.artifacts[0]).toMatchObject({ signatureStatus: "unknown", testStatus: "not_run", sizeBytes: 23 }); expect(manifest.artifacts[0].sha256).toMatch(/^[a-f0-9]{64}$/);
+    const matrixResponse = await request.get(`/api/companies/${company.id}/coding/${delivery.id}/build-matrix`);
+    expect(matrixResponse.ok()).toBe(true); const matrix = await matrixResponse.json();
+    expect(matrix).toMatchObject({ companyId: company.id, deliveryId: delivery.id, projectId: 1, commitSha: head, readyForRelease: false });
+    expect(matrix.targets).toHaveLength(6);
+    expect(matrix.targets[4]).toMatchObject({ platform: "linux", arch: "x86_64", artifactEvidence: "local_bytes_hashed", status: "blocked", runnerVerified: false });
+    expect(matrix.targets.filter((item: { artifactEvidence: string }) => item.artifactEvidence === "none")).toHaveLength(5);
+    expect((await request.get(`/api/companies/${company.id}/coding/not-a-uuid/build-matrix`)).status()).toBe(404);
+    const otherCompany = await (await request.post("/api/companies", { data: { name: "matrix other company" } })).json();
+    expect((await request.get(`/api/companies/${otherCompany.id}/coding/${delivery.id}/build-matrix`)).status()).toBe(404);
+    const otherIssue = await (await request.post(`/api/companies/${company.id}/issues`, { data: { title: "Second project matrix", status: "backlog" } })).json();
+    const [secondProject] = await db.insert(projects).values({ companyId: company.id, name: "Second matrix project" }).returning();
+    const [secondWorkspace] = await db.insert(executionWorkspaces).values({ companyId: company.id, projectId: secondProject.id, sourceIssueId: otherIssue.id,
+      mode: "isolated", strategyType: "git_worktree", providerType: "local_fs", status: "active", name: "second matrix", branchName: "paperclip/second",
+      repoUrl: "https://git.example/group/second.git", cwd: root }).returning();
+    const [otherProjectDelivery] = await db.insert(deliveries).values({ companyId: company.id, issueId: otherIssue.id, workspaceId: secondWorkspace.id, secretRef: secret.id,
+      gitlabOrigin: "https://git.example", projectId: 2, sourceBranch: workspace.branchName!, targetBranch: "main", baseSha: head, headSha: head,
+      artifactManifest: manifest }).returning();
+    const otherProjectMatrix = await (await request.get(`/api/companies/${company.id}/coding/${otherProjectDelivery.id}/build-matrix`)).json();
+    expect(otherProjectMatrix.targets.every((item: { blockers: string[]; artifacts: unknown[] }) => item.blockers.includes("manifest_identity_mismatch") && item.artifacts.length === 0)).toBe(true);
+    const listing = await (await request.get(`/api/companies/${company.id}/coding`)).json();
+    expect(listing.deliveries.find((item: { id: string }) => item.id === delivery.id).buildMatrix).toEqual(matrix);
     const again = await request.post(`/api/companies/${company.id}/coding/${delivery.id}/artifacts`, { data: body }); expect(again.ok()).toBe(true);
     expect(await db.select().from(notices).where(eq(notices.companyId, company.id))).toHaveLength(1);
     await symlink("/etc/hostname", path.join(root, "escape"));

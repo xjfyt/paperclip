@@ -17,15 +17,15 @@ function app(actor: Express.Request["actor"]) {
   return { server, select };
 }
 describe("new integration route authorization boundary", () => {
-  it.each(["notifications", "coding", "integrations/workbuddy"])("denies other-company %s before reading resources", async route => {
+  it.each(["notifications", "coding", "coding/33333333-3333-4333-8333-333333333333/build-matrix", "integrations/workbuddy"])("denies other-company %s before reading resources", async route => {
     const { server, select } = app({ type: "board", source: "session", userId: "owner", companyIds: ["other"], memberships: [{ companyId: "other", membershipRole: "owner", status: "active" }] });
     expect((await request(server).get(`/companies/${companyId}/${route}`)).status).toBe(403); expect(select).not.toHaveBeenCalled();
   });
-  it.each(["notifications", "coding"])("denies ordinary members access to %s administration", async route => {
+  it.each(["notifications", "coding", "coding/33333333-3333-4333-8333-333333333333/build-matrix"])("denies ordinary members access to %s administration", async route => {
     const { server, select } = app({ type: "board", source: "session", userId: "member", companyIds: [companyId], memberships: [{ companyId, membershipRole: "member", status: "active" }] });
     expect((await request(server).get(`/companies/${companyId}/${route}`)).status).toBe(403); expect(select).not.toHaveBeenCalled();
   });
-  it.each(["notifications", "coding", "integrations/workbuddy"])("does not grant an Agent the %s owner settings view", async route => {
+  it.each(["notifications", "coding", "coding/33333333-3333-4333-8333-333333333333/build-matrix", "integrations/workbuddy"])("does not grant an Agent the %s owner settings view", async route => {
     const { server, select } = app({ type: "agent", source: "agent_jwt", companyId, agentId: "33333333-3333-4333-8333-333333333333", runId: "44444444-4444-4444-8444-444444444444" });
     expect((await request(server).get(`/companies/${companyId}/${route}`)).status).toBe(403); expect(select).not.toHaveBeenCalled();
   });

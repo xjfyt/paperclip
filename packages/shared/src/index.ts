@@ -2879,3 +2879,4 @@ export type { NotificationEndpointDto, NotificationRevisionDto, NotificationRevi
 
 export type { CompanySetupCapabilities } from "./mimouse-access.js";
 export { revokeLocalAuthSchema, type RevokeLocalAuthInput, type AuthRevocationDto } from "./mimouse-auth-revocations.js";
+export { MIMOUSE_BUILD_TARGETS, type MimouseBuildTarget, type MimouseMatrixBlocker, type MimouseBuildMatrix } from "./mimouse-build-matrix.js";

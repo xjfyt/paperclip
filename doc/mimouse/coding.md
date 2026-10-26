@@ -59,3 +59,15 @@ worker 在数据库事务中预留尝试，调用现有 routineService.runPipeli
 - GET `/api/companies/:companyId/coding/:deliveryId/repairs`：读取脱敏策略、诊断与尝试记录。
 
 10 项真实隔离 PostgreSQL 测试覆盖并发、实际例行子任务创建、工作区/私有继承、限制熔断、版本锁定、未知唤醒不重发、撤销/到期/环境错误/费用边界、两次 worker tick 去重及服务/数据库跨公司拒绝。唤醒为测试替身，未调用付费模型。
+
+## 六项构建证据清单（只读、未接Runner）
+
+GET `/api/companies/:companyId/coding/:id/build-matrix` 和交付列表的 `buildMatrix` 返回 Windows/macOS/Linux × x86_64/arm64 六个固定目标。沿用公司管理员、交付公司及任务隐私检查，未知/其他公司交付统一404；无权限请求在查询资源前403。
+
+矩阵从当前交付和manifest实时推导，不接受调用方直接写一个成功矩阵。manifest的项目ID和commit必须匹配；格式错误/旧SHA/其他项目不展示为有效产物。多个同目标文件可以列出。只有本地SHA-256与字节数、文件名和声明的buildJob进入这一摘要，不复制本地路径或下载URL。
+
+重要：当前本地产物平台/架构与job名称是声明，不证明Runner运行或目标架构。每个目标仍为blocked，区分manifest_missing、manifest_invalid、manifest_identity_mismatch、artifact_missing、runner_evidence_missing。客户端伪造testStatus、signatureStatus、uploaded、productionReleased或buildMatrix成功字段不能升级证据。上传固定blocked/upload_contract_missing；不发外部请求。旧的MR/CI候选门禁不是完整矩阵发布门禁。
+
+本切片C2：服务端3文件30项通过；真实隔离数据库/API覆盖六目标、本地hash不升级、其他公司404、同公司第二项目错配拒绝、列表与详情一致。首次跨公司404断言发现既有load抛普通集成错误产生500，已在路由边界精准映射404，保留其他异常。第二次夹具误复用同issue/head触发原唯一约束，改成真实独立任务/项目/工作区，不修改约束。共享包标准构建通过；整套server类型/构建等待当前完整UI回归结束后串行复验，尚不以定向测试代替。
+
+后续仍需实际Runner回执的可信采集/固定SHA绑定、目标工具链和签名验证、上传合同及UI矩阵展示。此接口是可用的证据缺口清单，不是已经完成六平台构建。
