@@ -2004,7 +2004,8 @@ export function IssueProperties({
           .filter((option) => {
             if (!projectSearch.trim()) return true;
             const q = projectSearch.toLowerCase();
-            return option.name.toLowerCase().includes(q);
+            return option.name.toLowerCase().includes(q)
+              || (option.kind === "none" && t("issuePropertyControlsUi.noProject").toLowerCase().includes(q));
           })
           .map((option) => (
             <button

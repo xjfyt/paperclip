@@ -6,14 +6,14 @@
 - 第一片：标签新增/搜索/颜色及折叠计数、项目空选项显示、父任务/阻塞/子任务固定提示。贡献域 `issuePropertyControlsUi`，四语源文件由主集成统一合成，未编辑正式 locale。
 - 第二片：属性/子任务/引用/计划/产物 tabs、关闭/重开 aria、路径复制 aria 和反馈。保留原始 tab value 与剪贴板值。
 - `PropertyRow` / `PropertySection` 已经由 `property-labels` 翻译，保留其英文稳定输入及 `data-property-label`，不机械重复抽取。
-- 项目名称、标签名称、任务正文/标题/标识不翻译；项目空选项仍以原始 `No project` 参与现有过滤，只有显示文本本地化，避免暗改筛选契约。
+- 项目名称、标签名称、任务正文/标题/标识不翻译；项目空选项额外匹配当前可见译文，保留原始 `No project` 英文搜索兼容；真实项目名称仍只匹配原名，不改变排序、请求或清空 payload。此窄兼容修正经独立审阅发现并获集成确认。
 - 不变更权限、API、查询 key、请求/确认/写入处理及 hooks 依赖。原始错误/未知诊断保持原样。
 
 ## 自动化验证
 
 - 使用本工作树 `ui/vitest.config.ts`，`@` 映射到本工作树 `ui/src`；依赖链接复用主树安装，不修改共享 node_modules。
 - `NODE_OPTIONS=--max-old-space-size=512 ../node_modules/.bin/vitest run --config vitest.config.ts src/components/IssueProperties.test.tsx --maxWorkers=1`：第一片 97/97 通过；两片最终组件 101/101，贡献契约 4/4，共 105/105 通过。
-- 四语真实组件测试验证标签/项目/父任务/阻塞提示、原始用户名称与 ID 写入，以及原地切换语言不新增读取/写入调用。
+- 四语真实组件测试验证标签/项目/父任务/阻塞提示、原始用户名称与 ID 写入，以及原地切换语言不新增读取/写入调用。四语测试同时验证“无项目”可见译文/原英文都可搜索，清空仍提交原五个 null 字段，真实项目名仍逐字匹配。
 - 新增四语 tabs/复制测试：关闭子任务 tab 后切换语言仍保持关闭，可用新语言菜单重新打开；复制包含中文的路径逐字保持，tab 操作不写入任务且不额外刷新 work products。既有分配中断/确认等回归随完整属性组件套件通过。
 - `node scripts/check-token-gates.mjs` 与 `git diff --check` 通过。
 - 磁盘不足 1 GB，遵循集成资源约束，未运行全量测试、类型检查、build；上述定向测试不等于全仓或浏览器验收通过。

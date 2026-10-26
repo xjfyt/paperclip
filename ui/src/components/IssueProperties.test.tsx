@@ -1258,6 +1258,31 @@ describe("IssueProperties", () => {
         const button = Array.from(container.querySelectorAll("button")).find(item => item.textContent === text)!;
         await act(() => button.click());
       };
+      const projectSearch = container.querySelector<HTMLInputElement>(`input[placeholder="${messages.searchProjects}"]`)!;
+      const setProjectSearch = async (value: string) => {
+        await act(() => {
+          Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(projectSearch, value);
+          projectSearch.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+        await flush();
+      };
+      const projectReads = mockProjectsApi.list.mock.calls.length;
+      for (const query of [messages.noProject, "No project"]) {
+        await setProjectSearch(query);
+        expect(projectSearch.nextElementSibling?.textContent).toContain(messages.noProject);
+        expect(projectSearch.nextElementSibling?.textContent).not.toContain("Project 用户名");
+      }
+      expect(onUpdate).not.toHaveBeenCalled();
+      expect(mockProjectsApi.list).toHaveBeenCalledTimes(projectReads);
+      await click(messages.noProject);
+      expect(onUpdate).toHaveBeenLastCalledWith({
+        projectId: null, projectWorkspaceId: null, executionWorkspaceId: null,
+        executionWorkspacePreference: null, executionWorkspaceSettings: null,
+      });
+      await setProjectSearch("Project 用户名");
+      expect(projectSearch.nextElementSibling?.textContent).toContain("Project 用户名");
+      expect(projectSearch.nextElementSibling?.textContent).not.toContain(messages.noProject);
+      await setProjectSearch("");
       await click("Bug 用户ラベル");
       expect(onUpdate).toHaveBeenLastCalledWith({ labelIds: ["label-1"] });
       await click(messages.noParent);
