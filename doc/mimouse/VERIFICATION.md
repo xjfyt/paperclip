@@ -103,3 +103,13 @@ server编译除tsc --singleThreaded之外仍执行package.json中的所有资源
 1331键UI源码摘要37ff8682c13f75bed1a3e2678b97ba1ddfd43cc7184dd98f5b195a338384f66e：736文件、74批、8289项全部通过，零失败/跳过，执行期间源码未变。server标准资源串行构建及UI生产构建通过；server build-info对应064da700af3cf6ef5760825e995e50f79461eab3，编译入口48项HTTP/DB通过（仍使用workspace TS依赖loader）。
 
 随后独立authenticated/private实例的真实Chrome测试已完成本地测试IdP的签名回调、首位管理员认领、未受邀拒绝、Viewer邀请及读写隔离、旧密码账号显式绑定并以SSO回到同一userId。详见OIDC-BROWSER-20261026.md。真实流程发现三项UI缺口，正修复；以上整套快照不是这些修复后的结论。所有供应商C3仍未验收。
+
+## 2026-10-26 01:40 UTC 1396键集成快照
+
+- UI源码摘要`3139e17325711bd029b9662892f20553c4f9a8c0259759e3ecbb03cfbce693bd`，739文件、74批、8315项全部通过，零失败/跳过，执行期间UI源码未变。词典1396键一致不等于四语全覆盖；37个高频文件另有500条待人工复核语法候选清单。
+- 当前16个服务端定向文件149项通过；Qoder17、WorkBuddy5及本地IdP HTTP协议2项通过；既有核心10文件223项在助手云桌面隔离数据库复验通过，无跳过。定向集合不是全服务端测试全集。
+- source入口54项API/DB与compiled server入口54项分别通过；编译产物build-info为4f14b427fa04af98c1647d86ab0468148455e5ee。编译入口仍使用workspace TS依赖loader，不是完整npm all-dist安装证明。后续审计工具/文档提交不改变该应用代码快照。
+- server标准构建步骤按资源限制串行执行，runner校验、Rust二进制、资源复制与build stamp完成；shared/DB标准构建、server完整类型和UI类型/构建通过。Rust7条既有警告、Vite大chunk及配置兼容提示保留。之前35个工作区包检查是历史基线；本次重建受影响shared/db/server/UI，不把历史结果说成本次根命令单次全过。
+- 0344增量迁移在既有测试库及独立SSO实例均通过；迁移编号与安全门禁通过，所有既有journal项保持不变。
+- 真实Chrome增加本地IdP首次管理员、未邀请隔离、Viewer邀请/读写、旧账号显式绑定、logout、中文/西语SSO-only邀请和管理员撤销。真实OAuth旧session及Board key撤销后401、Owner200；实际Casdoor租户仍未连接。详细失败/修复/复验见OIDC-BROWSER-20261026.md。
+- 此快照是增量候选，不是原v2全部要求完成。P1余项及P2-P5实现范围见REMAINING与验收CSV，真实外部账号/目标授权另列blocked。仍未推送实现到GitHub，也未合并/tag/生产部署。

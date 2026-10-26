@@ -2,9 +2,9 @@ id,level,scope,status,evidence,remaining
 BASE-01,C1,固定上游与独立分支,passed,v2026.1023.0 1b4c803816e82b0265c8422e1a804327a7ed8c54,远端开发提交同步另行核验
 I18N-01,C1,四语资源结构与占位符,passed,compose-mimouse-locales --check,不等于全页面翻译覆盖
 I18N-02,C2,语言选择与数字日期格式,passed,ui/src/i18n 和格式化回归,实际字体布局未验收
-I18N-03,C2,全 UI 回归快照,passed,976键快照734文件8248项 74批全部通过,真实浏览器另计
+I18N-03,C2,全 UI 回归快照,passed,1396键快照739文件8315项 74批全部通过 源码摘要3139e17325711bd0,真实供应商与IME另计，不等于所有文案覆盖
 I18N-04,C2,命令面板中文输入法 Enter,passed,CommandPalette.test.tsx composition 测试,真实输入法浏览器待验收
-I18N-05,C3,四语浏览器关键路径,partial,助手云桌面Chrome已验证引导任务详情审批及通知暂停,真实供应商登录及实际IME未全量验收
+I18N-05,C2,四语浏览器关键路径,partial,助手云桌面Chrome的隔离本地应用四语任务/审批/暂停通知和本地OIDC路径,实际供应商租户及真实IME未全量验收
 AUTH-01,C2,OIDC 配置和签名令牌拒绝矩阵,passed,Casdoor 与 ID token 协议测试,实际 Casdoor 版本及 claims
 AUTH-02,C2,错误state重放与同邮箱不合并,passed,真实内存 OAuth 流测试,真实公司邀请与多用户会话
 AUTH-03,C3,Casdoor 登录绑定注销停用,blocked,未提供实际租户凭据和测试身份,本地退出不等于 IdP 停用传播
@@ -28,7 +28,7 @@ CODE-05,C4,跨平台签名发布,not_run,首轮未接入真实构建矩阵,Windo
 BUILD-01,C1,UI类型和生产构建,passed,UI typecheck build与token gates,大chunk警告保留
 BUILD-02,C1,Rust runner构建,passed,固定1.97.1构建,上游7条警告保留
 BUILD-03,C1,完整server类型,passed,tsc --noEmit --singleThreaded 完整检查通过,早期SIGKILL和事务类型错误已修正 不代替全仓构建
-DB-01,C2,新增迁移落地并启动实际服务,passed,0334至0342已应用 源码入口44项 编译入口上一候选40项,生产备份升级演练未完成
+DB-01,C2,新增迁移落地并启动实际服务,passed,0334至0344已应用；当前源入口54项及编译server入口54项通过,编译入口使用workspace TS依赖；生产备份升级演练未完成
 RELEASE-01,C4,全部需求生产验收,blocked,存在上述阻断项,不可宣称全功能完成
 QODER-04,C2,实际核心任务至CLI运行链路,passed,qoder-runtime.spec 安装适配器和真实Agent生命周期 heartbeat回执,假CLI 不证明真实账号或工具JWT
 WB-05,C2,私有令牌和刷新竞争,passed,0338专用密文及四项实际数据库测试,旧连接重新授权 实际租户仍待验证
@@ -42,3 +42,9 @@ BUILD-05,C1,所有工作区包分批构建与类型,passed,35个非根包分别�
 CORE-01,C2,既有例行任务与适配器兼容,passed,真实数据库核心回归10文件223项无跳过,不等于全仓所有server测试
 NOTIFY-07,C2,渠道并发修订与历史快照,passed,4项真实DB用例和17项通知UI测试 旧目标不转投,云端Chrome完成本地假渠道改名和v1/v2历史核验 外发始终关闭
 NOTIFY-08,C2,投递人工核对及幂等依据,passed,4项真实DB用例 19项通知UI 15项路由权限,不是供应商自动查询或C3证明
+AUTH-04,C2,本地真实浏览器身份与权限,passed,OIDC-BROWSER-20261026：邀请/未邀请隔离、Viewer读写、旧账号显式绑定、退出,本地IdP，不代替实际Casdoor租户
+AUTH-05,C2,仅SSO邀请入口与恢复,passed,中文西语真实浏览器无密码表单；4文件43项定向UI通过,邀请存量文案仍未全量翻译
+AUTH-06,C2,管理员撤销会话和个人Board keys,passed,真实本地OAuth：旧会话/key401、其他账号200、Viewer403；API54及路由6/UI10,不封禁新登录、不撤销MCP或连接器、不终止在途任务
+P3-01,C1,反馈日志候选与人审转任务,not_run,一手协议及已有纯脱敏/任务服务已核对,业务入站、去重聚类、人工确认机制尚未实现
+P4-01,C1,调研运营可追溯与dry-run,not_run,可复用routines；写入需具体接口与授权,来源候选、差异预览、审核与对账尚未完整实现
+P5-01,C1,固定集版本评估与受控提升回滚,not_run,可复用paperclip-eval-kernel,业务版本台账与发布回滚、成本路由尚未完整实现
