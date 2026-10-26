@@ -31,3 +31,8 @@ test('allows compiled dist/src layout but rejects package-root source and traver
   assert.doesNotThrow(() => assertRuntimeExports({ '.': { import: './dist/src/index.js', types: './dist/src/index.d.ts' } }));
   assert.throws(() => assertRuntimeExports('./dist/../src/index.js'), /Non-dist/);
 });
+
+test('canonical unified release version prevents SDK workspace edges requesting unpublished versions', () => {
+  const manifest = materializePublishManifest({ name: '@paperclipai/plugin-sdk', version: '0.3.1', dependencies: { '@paperclipai/shared': 'workspace:*' } });
+  assert.equal(manifest.dependencies['@paperclipai/shared'], manifest.version);
+});

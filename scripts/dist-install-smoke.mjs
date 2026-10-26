@@ -76,13 +76,17 @@ function main() {
     if (p.error || p.status !== 0) throw new Error(`${command} failed (${p.status}): ${p.error?.message ?? 'see output; offline cache/native payload may be incomplete'}`);
   };
   const packages = releaseClosure(getReleasePackages());
+  // release.sh normalizes every public package to one release version before
+  // packing; do the same only in disposable manifests, never in the checkout.
+  const releaseVersion = packages.find(p => p.name === '@paperclipai/server').pkg.version;
   const tarballs = {};
   for (const pkg of packages) {
     const src = resolve(source, pkg.dir);
     if (readFileSync(resolve(src, 'package.json'), 'utf8') !== readFileSync(pkg.pkgPath, 'utf8')) {
       throw new Error(`Source manifest differs from smoke checkout: ${pkg.dir}`);
     }
-    const manifest = materializePublishManifest(pkg.pkg);
+    const stagedManifest = { ...pkg.pkg, version: releaseVersion };
+    const manifest = materializePublishManifest(stagedManifest);
     assertRuntimeExports(manifest.exports); assertRuntimeExports(manifest.main, 'main');
     const staged = resolve(fixture, 'producer', pkg.dir); mkdirSync(staged, { recursive: true });
     for (const entry of new Set([...(pkg.pkg.files ?? []), 'README.md', 'LICENSE', 'LICENSE.md'])) {
@@ -97,7 +101,7 @@ function main() {
       }
       cpSync(from, resolve(staged, entry), { recursive: true, dereference: true });
     }
-    writeFileSync(resolve(staged, 'package.json'), JSON.stringify(pkg.pkg, null, 2));
+    writeFileSync(resolve(staged, 'package.json'), JSON.stringify(stagedManifest, null, 2));
     let packDir = staged;
     if ((pkg.pkg.bundleDependencies ?? pkg.pkg.bundledDependencies ?? []).length) {
       packDir = resolve(fixture, 'bundled', pkg.dir); mkdirSync(dirname(packDir), { recursive: true });

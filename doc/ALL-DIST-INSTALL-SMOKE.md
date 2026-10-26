@@ -26,7 +26,10 @@ separate step if required; do not copy credentials into the fixture.
 The server's complete release-enabled first-party dependency closure is selected
 using `release-package-map.mjs`, including optional and peer edges. Private runner
 and evaluation packages must remain vendored, not become npm runtime dependencies.
-The canonical `prepare-bundled-package.mjs` producer handles patches and platform
+As in the release version-rewrite step, all disposable package manifests get
+the server version before packing; mixed source versions (for example SDK1.0.0
+versus server0.3.1) must not generate nonexistent runtime edges. Source manifests
+remain untouched. The canonical `prepare-bundled-package.mjs` producer handles patches and platform
 optional-dependency delegation. Other packages use its
 `materializePublishManifest` helper before scripts-disabled npm packing. As in
 `release.sh`, root skills are copied to server/Claude/Codex staging directories;
