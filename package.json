@@ -96,7 +96,7 @@
     "test:lifecycle-baseline:support": "node --test tests/lifecycle-baseline/report.test.mjs",
     "test:lifecycle-baseline:typecheck": "tsc -p tests/lifecycle-baseline/tsconfig.json",
     "test:mimouse:ui": "node scripts/test-mimouse-ui.mjs",
-    "test:mimouse:api": "playwright test --config tests/mimouse/playwright.config.ts api.spec.ts auth-revocations.spec.ts artifacts.spec.ts feedback-inbox.spec.ts feedback-promotion.spec.ts budget-notification.spec.ts coding.spec.ts coding-poll.spec.ts coding-repair.spec.ts notification-tokens.spec.ts notification-revisions.spec.ts notification-reviews.spec.ts outbox.spec.ts workbuddy.spec.ts qoder-runtime.spec.ts"
+    "test:mimouse:api": "playwright test --config tests/mimouse/playwright.config.ts api.spec.ts auth-revocations.spec.ts artifacts.spec.ts feedback-inbox.spec.ts feedback-promotion.spec.ts operations-preview.spec.ts budget-notification.spec.ts coding.spec.ts coding-poll.spec.ts coding-repair.spec.ts notification-tokens.spec.ts notification-revisions.spec.ts notification-reviews.spec.ts outbox.spec.ts workbuddy.spec.ts qoder-runtime.spec.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",

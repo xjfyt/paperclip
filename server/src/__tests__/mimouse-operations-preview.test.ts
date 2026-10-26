@@ -1,0 +1,27 @@
+import { test } from "vitest";
+import assert from "node:assert/strict";
+import { operationPreview } from "../services/mimouse-operations/preview.js";
+import { createOperationPreviewSchema, type OperationPreviewInput as PreviewInput } from "@paperclipai/shared";
+const input: PreviewInput = { companyId: "11111111-1111-4111-8111-111111111111", period: "2026-10", timeZone: "Asia/Shanghai", sourceInstance: "source-a", targetInstance: "target-a", mapping: [{ sourceField: "amount", targetField: "amount" }],
+  sourceRecords: [{ sourceId: "event-a", targetId: "row-a", occurredAt: "2026-09-30T16:00:00Z", values: { amount: "123.40" } }], targetRecords: [{ targetId: "row-a", version: "etag-1", values: { amount: "100.00", untouched: "Keep" } }] };
+test("local month boundary is explicit and scalar decimal strings remain exact", () => { const result = operationPreview(input); assert.equal(result.counts.update, 1); assert.equal(result.operations[0].after.amount, "123.40"); assert.equal(result.operations[0].after.untouched, "Keep"); assert.equal(result.externalWrites, 0); assert.equal(operationPreview({ ...input, timeZone: "UTC" }).counts.excluded, 1); });
+test("row and mapping order do not change the approval digest", () => { const sourceRecords = [...input.sourceRecords, { ...input.sourceRecords[0], sourceId: "event-b", targetId: "row-b" }]; const first = operationPreview({ ...input, sourceRecords }); const second = operationPreview({ ...input, sourceRecords: [...sourceRecords].reverse() }); assert.equal(first.previewHash, second.previewHash); assert.equal(first.counts.insert, 1); });
+test("changed data invalidates approval but retains the operation idempotency identity", () => { const a = operationPreview(input); const b = operationPreview({ ...input, sourceRecords: [{ ...input.sourceRecords[0], values: { amount: "125.50" } }] }); assert.notEqual(a.previewHash, b.previewHash); assert.equal(a.operations[0].key, b.operations[0].key); assert.notEqual(a.operations[0].sourceHash, b.operations[0].sourceHash); });
+test("company, period and target scope have distinct operation identities", () => { const a = operationPreview(input).operations[0].key; for (const patch of [{ companyId: "company-b" }, { targetInstance: "target-b" }, { sourceInstance: "source-b" }]) assert.notEqual(operationPreview({ ...input, ...patch }).operations[0].key, a); });
+test("unchanged values are noops and target version changes invalidate the preview", () => { const targets = [{ ...input.targetRecords[0], values: { amount: "123.40" } }]; const a = operationPreview({ ...input, targetRecords: targets }); assert.equal(a.counts.noop, 1); const b = operationPreview({ ...input, targetRecords: [{ ...targets[0], version: "etag-2" }] }); assert.notEqual(a.previewHash, b.previewHash); });
+test("rejects ambiguous duplicates, source-field omissions and multiple writes to one target", () => { assert.throws(() => operationPreview({ ...input, sourceRecords: [input.sourceRecords[0], input.sourceRecords[0]] }), /duplicate_source/); assert.throws(() => operationPreview({ ...input, sourceRecords: [input.sourceRecords[0], { ...input.sourceRecords[0], sourceId: "other" }] }), /multiple_sources/); assert.throws(() => operationPreview({ ...input, mapping: [{ sourceField: "missing", targetField: "amount" }] }), /missing_source/); assert.throws(() => operationPreview({ ...input, mapping: [input.mapping[0], input.mapping[0]] }), /duplicate_target_field/); });
+test("rejects invalid dates, missing zones, unsupported fields and inexact numeric decimals", () => { for (const occurredAt of ["2026-02-30T00:00:00Z", "2026-10-01T00:00:00", "2026-10-01T25:00:00Z"]) assert.throws(() => operationPreview({ ...input, sourceRecords: [{ ...input.sourceRecords[0], occurredAt }] })); assert.throws(() => operationPreview({ ...input, timeZone: "Not/AZone" }), /timezone/); assert.throws(() => operationPreview({ ...input, sourceRecords: [{ ...input.sourceRecords[0], values: { amount: 1.23 } }] }), /decimal_string/); assert.throws(() => operationPreview({ ...input, mapping: [{ sourceField: "amount", targetField: "password" }] }), /sensitive/); });
+test("does not mutate source or target objects and never creates delete operations", () => { const before = JSON.stringify(input); const result = operationPreview(input); result.operations[0].after.amount = "local-change"; assert.equal(JSON.stringify(input), before); assert.ok(result.operations.every(item => item.action !== ("delete" as string))); });
+
+test("supports non-secret Chinese business field names without translating their values", () => {
+  const result = operationPreview({ ...input, mapping: [{ sourceField: "金额", targetField: "金额" }], sourceRecords: [{ ...input.sourceRecords[0], values: { 金额: "123.40" } }], targetRecords: [] });
+  assert.equal(result.operations[0].after.金额, "123.40");
+  assert.throws(() => operationPreview({ ...input, mapping: [{ sourceField: "amount", targetField: "密码" }] }), /sensitive/);
+});
+test("public contract rejects client company scope and executable fields", () => {
+  const { companyId: _companyId, ...body } = input;
+  const valid = { ...body, requestId: "22222222-2222-4222-8222-222222222222" };
+  assert.equal(createOperationPreviewSchema.safeParse(valid).success, true);
+  assert.equal(createOperationPreviewSchema.safeParse({ ...valid, companyId: _companyId }).success, false);
+  assert.equal(createOperationPreviewSchema.safeParse({ ...valid, execute: true }).success, false);
+});
