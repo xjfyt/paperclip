@@ -19,5 +19,8 @@
   "casdoor": "使用 Casdoor 登录",
   "linkCasdoor": "绑定 Casdoor 账号",
   "linkHelp": "显式绑定当前登录账号，不会仅因邮箱相同而自动合并账号。",
-  "ssoHelp": "使用组织单点登录访问此实例。"
+  "ssoHelp": "使用组织单点登录访问此实例。",
+  "localSignOutComplete": "已退出此应用。",
+  "globalSignOutUnconfirmed": "如果你使用了 Casdoor，全局退出尚未确认，其会话可能仍然有效。如果身份提供方无法访问，请返回此页。在共享设备上切换账号前，请确认也已退出 Casdoor。",
+  "dismissSignOutNotice": "关闭退出提示"
 }

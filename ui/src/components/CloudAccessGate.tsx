@@ -17,6 +17,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CloudSignIn } from "@/components/CloudSignIn";
 import { clearCloudSignInAttempt } from "@/lib/cloud-sign-in";
+import { LocalSignOutNotice } from "@/components/LocalSignOutNotice";
+import { clearLocalSignOutNotice } from "@/lib/local-sign-out-notice";
 
 const RECONNECT_INTERVAL_MS = 5_000;
 
@@ -97,7 +99,10 @@ export function CloudAccessGate({ allowMembershipRequest = false }: { allowMembe
   });
 
   useEffect(() => {
-    if (sessionQuery.data) clearCloudSignInAttempt();
+    if (sessionQuery.data) {
+      clearCloudSignInAttempt();
+      clearLocalSignOutNotice();
+    }
   }, [sessionQuery.data]);
 
   const boardAccessQuery = useQuery({
@@ -156,17 +161,20 @@ export function CloudAccessGate({ allowMembershipRequest = false }: { allowMembe
 
   if (blockingError || (isServerStarting && !hasOpenedBoard)) {
     return (
-      <CloudAccessError
-        temporary={blockingError ? isTemporaryApiError(blockingError) : true}
-        retrying={activeQueries.some((query) => query.isFetching)}
-        onRetry={() => {
-          for (const query of activeQueries) {
-            if (query.error || (query === healthQuery && isServerStarting)) {
-              void query.refetch({ cancelRefetch: false });
+      <>
+        {!healthQuery.data?.cloud && !sessionQuery.data && <LocalSignOutNotice className="mx-auto mt-6" />}
+        <CloudAccessError
+          temporary={blockingError ? isTemporaryApiError(blockingError) : true}
+          retrying={activeQueries.some((query) => query.isFetching)}
+          onRetry={() => {
+            for (const query of activeQueries) {
+              if (query.error || (query === healthQuery && isServerStarting)) {
+                void query.refetch({ cancelRefetch: false });
+              }
             }
-          }
-        }}
-      />
+          }}
+        />
+      </>
     );
   }
 

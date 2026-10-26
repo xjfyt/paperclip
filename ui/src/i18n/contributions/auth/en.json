@@ -19,5 +19,8 @@
   "casdoor": "Sign in with Casdoor",
   "linkCasdoor": "Link Casdoor account",
   "linkHelp": "Explicitly link your signed-in account. Matching email addresses never automatically merge accounts.",
-  "ssoHelp": "Use your organization’s single sign-on to access this instance."
+  "ssoHelp": "Use your organization’s single sign-on to access this instance.",
+  "localSignOutComplete": "Signed out of this app.",
+  "globalSignOutUnconfirmed": "If you used Casdoor, global sign-out is unconfirmed and its session may still be active. If the identity provider is unavailable, return to this page. Before switching accounts on a shared device, check that you are also signed out of Casdoor.",
+  "dismissSignOutNotice": "Dismiss sign-out notice"
 }

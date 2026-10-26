@@ -16,6 +16,8 @@ import { AsciiArtAnimation } from "@/components/AsciiArtAnimation";
 import { PaperclipLoading } from "@/components/AnimatedPaperclipIcon";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { PaperclipLockup } from "../components/PaperclipLockup";
+import { LocalSignOutNotice } from "@/components/LocalSignOutNotice";
+import { clearLocalSignOutNotice } from "@/lib/local-sign-out-notice";
 
 type AuthMode = "sign_in" | "sign_up";
 
@@ -49,6 +51,7 @@ export function AuthPage() {
   useEffect(() => {
     if (session) {
       clearCloudSignInAttempt();
+      clearLocalSignOutNotice();
       navigate(nextPath, { replace: true });
     }
   }, [session, navigate, nextPath]);
@@ -94,10 +97,12 @@ export function AuthPage() {
     email.trim().length > 0 &&
     password.trim().length > 0 &&
     (mode === "sign_in" || (name.trim().length > 0 && password.trim().length >= 8));
+  const signOutNotice = !session && !healthQuery.data?.cloud ? <LocalSignOutNotice /> : null;
 
   if (healthQuery.isLoading || isSessionLoading || session || (healthQuery.data && !healthQuery.data.cloud && capabilities.isPending)) {
     return (
-      <div className="fixed inset-0 flex items-center justify-center">
+      <div className="fixed inset-0 flex flex-col items-center justify-center gap-4 p-6">
+        {signOutNotice}
         <PaperclipLoading className="min-h-0" />
       </div>
     );
@@ -105,7 +110,10 @@ export function AuthPage() {
 
   // A health/session failure must not be mistaken for a self-hosted instance.
   if (healthQuery.error || sessionError || capabilities.error) {
-    return <p role="alert" className="p-6 text-sm text-destructive">{t("auth.unavailable")}</p>;
+    return <div className="space-y-4 p-6">
+      {signOutNotice}
+      <p role="alert" className="text-sm text-destructive">{t("auth.unavailable")}</p>
+    </div>;
   }
 
   if (healthQuery.data?.cloud) {
@@ -124,6 +132,8 @@ export function AuthPage() {
           <div className="mb-8">
             <PaperclipLockup className="h-5 w-auto" />
           </div>
+
+          {signOutNotice}
 
           <h1 className="text-xl font-semibold">
             {mode === "sign_in" ? t("auth.signInTitle") : t("auth.signUpTitle")}

@@ -49,6 +49,26 @@ describe("authApi.getSession", () => {
 });
 
 describe("authApi.signOut", () => {
+  it.each([null, {}, { success: false }, { success: "true" }, { redirect: true, url: "https://id.example/logout" }])(
+    "rejects a response without explicit local success: %j", async payload => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(payload)));
+      await expect(authApi.signOut()).rejects.toThrow("Local sign-out was not confirmed");
+    },
+  );
+
+  it.each(["javascript:alert(1)", "data:text/html,test", "https://user:password@id.example/logout", "http://id.example/logout"])(
+    "keeps local success without navigating an unsafe IdP URL: %s", async url => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ success: true, redirect: true, url })));
+      await expect(authApi.signOut()).resolves.toEqual({ success: true, redirect: true });
+    },
+  );
+
+  it("preserves a server-issued allowed IdP logout URL", async () => {
+    const url = "https://id.example/logout?id_token_hint=not-persisted";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ success: true, redirect: true, url })));
+    await expect(authApi.signOut()).resolves.toEqual({ success: true, redirect: true, url });
+  });
+
   it("returns the managed deployment redirect from the response", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ success: true, redirectTo: "/cloud/logout" }), {

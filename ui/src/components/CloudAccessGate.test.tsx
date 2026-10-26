@@ -7,6 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CloudAccessGate } from "./CloudAccessGate";
 import { queryKeys } from "@/lib/queryKeys";
 import { ApiUnavailableError } from "@/api/response";
+import "@/i18n/auth-test-resources";
+import { clearLocalSignOutNotice, hasLocalSignOutNotice, rememberLocalSignOut } from "@/lib/local-sign-out-notice";
 
 vi.mock("@/lib/router", () => ({
   useLocation: () => ({ pathname: "/CON/agents/conan/instructions", search: "?tab=edit", hash: "#draft" }),
@@ -41,6 +43,7 @@ describe("CloudAccessGate restart recovery", () => {
   const fetchMock = vi.fn();
 
   beforeEach(() => {
+    clearLocalSignOutNotice();
     vi.useFakeTimers();
     failingPath = null;
     failure = () => new Response("<!doctype html><h1>Restarting</h1>", { status: 200 });
@@ -64,6 +67,7 @@ describe("CloudAccessGate restart recovery", () => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.clearAllMocks();
+    clearLocalSignOutNotice();
   });
 
   async function flushReact() {
@@ -75,6 +79,22 @@ describe("CloudAccessGate restart recovery", () => {
     flushSync(() => root.render(<QueryClientProvider client={client}><CloudAccessGate /></QueryClientProvider>));
     await flushReact();
   }
+
+  it("keeps completed logout visible when health fails before the auth redirect", async () => {
+    rememberLocalSignOut();
+    failingPath = "/api/health";
+    await render();
+    expect(container.textContent).toContain("Signed out of this app");
+    expect(container.textContent).toContain("global sign-out is unconfirmed");
+    expect(container.textContent).toContain("Reconnecting");
+  });
+
+  it("clears a previous logout notice after confirmed login returning directly to the board", async () => {
+    rememberLocalSignOut();
+    await render();
+    expect(container.querySelector("textarea")).not.toBeNull();
+    expect(hasLocalSignOutNotice()).toBe(false);
+  });
 
   it.each(checks)("recovers from an HTML response on %s without navigating", async (path) => {
     failingPath = path;

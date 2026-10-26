@@ -26,6 +26,10 @@ sso-only 在服务端关闭密码认证，不只隐藏按钮。先在 dual 测�
 
 自托管退出清除账户查询缓存，消费 Better Auth 的 url/redirect；Cloud 继续使用原路径。浏览器跳转 IdP 不等于确认 IdP 全局退出；IdP 无响应时本地 session 已清除，全局结果仍待验证。关闭 Casdoor 用户不会自动撤销本地存量 session；管理员仍需撤销本地成员授权、session 和个人 token。当前未实现 back-channel logout。
 
+本地退出 API 必须明确返回 `success: true` 才显示“已退出此应用”；HTTP 200、空响应或 `success: false` 不算确认。之后登录页会以中英西日四语提示：如果使用了 Casdoor，全局退出尚未确认，其会话可能仍有效。健康/会话/认证能力检查失败时也保留已完成的本地退出提示。已有可信 IdP 跳转继续执行；跳转抛错不再被误报为本地退出失败。
+
+提示只在当前标签页的 `sessionStorage` 保存固定状态枚举，不保存账号、URL、token 或回调参数；存储不可用时降级为当前文档内存提示。刷新/返回保留提示，手动关闭或读取到新的已登录会话后清除；它不参与授权判断。任意 query、IdP 回跳、HTTP 导航结果都不能把它升级为“全局已退出”。浏览器自身的 IdP 网络错误页无法显示本站内容，用户返回本站后才看到说明；未改为确认页、弹窗或后台 IdP 探测。真实断线验证与证据边界见 [注销手测清单](checklists/CASDOOR-LOGOUT-20261026.md)。
+
 ## 验证边界
 
 配置、真实 RSA 签名的 provider 流水线、PKCE/nonce、错误 issuer/audience/expiry/签名、缺失 token、错误/重复 state、相同邮箱不隐式合并：本地协议测试。公司访问另有既有 authz 回归。UI 类型/构建需随集成重跑；真实 Casdoor、双身份邀请、全局退出和停用均未实连。完整 server 类型检查已通过（迁移内存盘缓存并修正事务类型后复验）；这不等于真实 IdP 或全仓构建验收。

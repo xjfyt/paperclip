@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-quer
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { queryKeys } from "@/lib/queryKeys";
 import { isAccountScopedQueryKey, useSignOut } from "./useSignOut";
+import { clearLocalSignOutNotice, hasLocalSignOutNotice } from "@/lib/local-sign-out-notice";
 
 const mockAuthApi = vi.hoisted(() => ({ signOut: vi.fn() }));
 const mockNavigateTopLevel = vi.hoisted(() => vi.fn());
@@ -29,6 +30,7 @@ describe("useSignOut", () => {
   let queryClient: QueryClient;
 
   beforeEach(() => {
+    clearLocalSignOutNotice();
     captured = null;
     container = document.createElement("div");
     document.body.appendChild(container);
@@ -36,6 +38,7 @@ describe("useSignOut", () => {
   });
 
   afterEach(() => {
+    clearLocalSignOutNotice();
     queryClient.clear();
     container.remove();
     vi.clearAllMocks();
@@ -72,14 +75,15 @@ describe("useSignOut", () => {
     expect(mockNavigateTopLevel).toHaveBeenCalledWith("/cloud/logout");
     expect(onSignedOut).toHaveBeenCalledOnce();
     expect(mockAuthApi.signOut).not.toHaveBeenCalled();
+    expect(hasLocalSignOutNotice()).toBe(false);
 
     flushSync(() => root.unmount());
   });
 
   it("keeps self-hosted sign-out pending until the local request finishes, then clears account caches", async () => {
     let resolveSignOut: (() => void) | undefined;
-    mockAuthApi.signOut.mockImplementation(() => new Promise<void>((resolve) => {
-      resolveSignOut = resolve;
+    mockAuthApi.signOut.mockImplementation(() => new Promise((resolve) => {
+      resolveSignOut = () => resolve({ success: true });
     }));
     queryClient.setQueryData(queryKeys.health, { status: "ok", deploymentMode: "authenticated" });
     queryClient.setQueryData(queryKeys.auth.session, { session: { id: "session-1" } });
@@ -101,11 +105,13 @@ describe("useSignOut", () => {
     expect(mockAuthApi.signOut).toHaveBeenCalledOnce();
     expect(mockNavigateTopLevel).not.toHaveBeenCalled();
     expect(onSignedOut).not.toHaveBeenCalled();
+    expect(hasLocalSignOutNotice()).toBe(false);
 
     resolveSignOut?.();
     await vi.waitFor(() => expect(captured?.isPending).toBe(false));
 
     expect(captured?.error).toBeNull();
+    expect(hasLocalSignOutNotice()).toBe(true);
     expect(onSignedOut).toHaveBeenCalledOnce();
 
     // Account-scoped entries are gone outright, not merely marked stale. An
@@ -134,7 +140,7 @@ describe("useSignOut", () => {
     // is final — and under `invalidateQueries` the observer would still be
     // holding A's list, which consumers read as "this account owns these
     // companies".
-    mockAuthApi.signOut.mockResolvedValue(undefined);
+    mockAuthApi.signOut.mockResolvedValue({ success: true });
     queryClient.setQueryData(queryKeys.health, { status: "ok", deploymentMode: "authenticated" });
 
     const companiesQueryFn = vi
@@ -210,6 +216,7 @@ describe("useSignOut", () => {
     await vi.waitFor(() => expect(captured?.error?.message).toBe("Sign-out request failed"));
     expect(captured?.isPending).toBe(false);
     expect(onSignedOut).not.toHaveBeenCalled();
+    expect(hasLocalSignOutNotice()).toBe(false);
     // The account is still signed in, so its caches must survive intact —
     // a failed sign-out must not blank the app the user is still using.
     expect(queryClient.getQueryData(queryKeys.auth.session)).toEqual({ session: { id: "session-1" } });
@@ -281,6 +288,39 @@ describe("useSignOut", () => {
       flushSync(() => captured?.mutate()); await vi.waitFor(() => expect(captured?.isSuccess).toBe(true));
       expect(captured?.error).toBeNull(); expect(queryClient.getQueryData(queryKeys.auth.session)).toBeUndefined();
       expect(mockNavigateTopLevel).toHaveBeenCalledExactlyOnceWith("https://id.example/logout");
+    } finally { flushSync(() => root.unmount()); }
+  });
+
+  it("keeps local success and cleared caches when the IdP navigation throws", async () => {
+    const destination = "https://id.example/logout?id_token_hint=do-not-store";
+    mockAuthApi.signOut.mockResolvedValue({ success: true, redirect: true, url: destination });
+    queryClient.setQueryData(queryKeys.health, { status: "ok", deploymentMode: "authenticated" });
+    queryClient.setQueryData(queryKeys.auth.session, { session: { id: "old-session" } });
+    queryClient.setQueryData(queryKeys.issues.list("company-a"), [{ id: "private-issue" }]);
+    mockNavigateTopLevel.mockImplementationOnce(() => {
+      expect(hasLocalSignOutNotice()).toBe(true);
+      expect(queryClient.getQueryData(queryKeys.auth.session)).toBeUndefined();
+      throw new Error("browser blocked navigation");
+    });
+    const root = renderHarness();
+    try {
+      flushSync(() => captured?.mutate());
+      await vi.waitFor(() => expect(captured?.isSuccess).toBe(true));
+      expect(captured?.error).toBeNull();
+      expect(queryClient.getQueryData(queryKeys.issues.list("company-a"))).toBeUndefined();
+      expect(mockNavigateTopLevel).toHaveBeenCalledExactlyOnceWith(destination);
+      expect(hasLocalSignOutNotice()).toBe(true);
+      expect(JSON.stringify(window.sessionStorage)).not.toContain("do-not-store");
+    } finally { flushSync(() => root.unmount()); }
+  });
+
+  it("keeps unconfirmed global state when navigation returns without proving IdP logout", async () => {
+    mockAuthApi.signOut.mockResolvedValue({ success: true, redirect: true, url: "https://id.example/logout" });
+    const root = renderHarness();
+    try {
+      flushSync(() => captured?.mutate());
+      await vi.waitFor(() => expect(captured?.isSuccess).toBe(true));
+      expect(hasLocalSignOutNotice()).toBe(true);
     } finally { flushSync(() => root.unmount()); }
   });
 

@@ -19,5 +19,8 @@
   "casdoor": "Acceder con Casdoor",
   "linkCasdoor": "Vincular cuenta de Casdoor",
   "linkHelp": "Vincula explícitamente tu cuenta actual. Un correo coincidente nunca fusiona cuentas automáticamente.",
-  "ssoHelp": "Usa el inicio de sesión único de tu organización para acceder a esta instancia."
+  "ssoHelp": "Usa el inicio de sesión único de tu organización para acceder a esta instancia.",
+  "localSignOutComplete": "Se ha cerrado la sesión de esta aplicación.",
+  "globalSignOutUnconfirmed": "Si usaste Casdoor, no se ha confirmado el cierre de sesión global y su sesión podría seguir activa. Si el proveedor de identidad no está disponible, vuelve a esta página. Antes de cambiar de cuenta en un dispositivo compartido, comprueba que también has cerrado la sesión de Casdoor.",
+  "dismissSignOutNotice": "Cerrar aviso de cierre de sesión"
 }

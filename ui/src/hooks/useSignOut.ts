@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { authApi } from "@/api/auth";
 import { navigateTopLevel } from "@/lib/browserNavigation";
 import { queryKeys } from "@/lib/queryKeys";
+import { rememberLocalSignOut } from "@/lib/local-sign-out-notice";
 import { useCloudInstance } from "./useCloudInstance";
 
 const CLOUD_SIGN_OUT_PATH = "/cloud/logout";
@@ -58,6 +59,7 @@ export function useSignOut({ onSignedOut }: UseSignOutOptions = {}) {
     onSuccess: async (target) => {
       if (target === "cloud") return;
 
+      rememberLocalSignOut();
       onSignedOut?.();
 
       // Drop every account-scoped cache entry, rather than invalidating a
@@ -109,7 +111,14 @@ export function useSignOut({ onSignedOut }: UseSignOutOptions = {}) {
       // ancillary to the already-completed logout: a stalled/offline health
       // probe must not prevent IdP navigation or keep local logout pending.
       void queryClient.invalidateQueries({ queryKey: queryKeys.health }).catch(() => undefined);
-      if (target.result?.redirect && target.result.url) navigateTopLevel(target.result.url);
+      if (target.result.redirect && target.result.url) {
+        // The local session is already gone. An unavailable/blocked IdP must
+        // not turn that completed operation into a misleading local failure.
+        // Browsers do not report cross-origin navigation success; the notice
+        // remains unconfirmed even after a return, and contains no logout URL.
+        try { navigateTopLevel(target.result.url); }
+        catch { /* Keep the local/unknown-global notice for the auth page. */ }
+      }
     },
   });
 }

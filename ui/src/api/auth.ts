@@ -19,7 +19,7 @@ type AuthErrorBody =
   | null;
 
 export interface SignOutResult {
-  success?: boolean;
+  success: true;
   redirectTo?: string;
   url?: string;
   redirect?: boolean;
@@ -212,13 +212,17 @@ export const authApi = {
   updateProfile: async (input: UpdateCurrentUserProfile): Promise<CurrentUserProfile> =>
     authPatch("/profile", input, (payload) => currentUserProfileSchema.parse(payload)),
 
-  signOut: async (): Promise<SignOutResult | null> => {
+  signOut: async (): Promise<SignOutResult> => {
     const payload = await authPost("/sign-out", {});
-    if (!payload || typeof payload !== "object") return null;
+    // A successful HTTP response alone is not confirmation that local logout
+    // completed (for example, a proxy may have returned an unrelated body).
+    if (!payload || typeof payload !== "object" || (payload as Record<string, unknown>).success !== true) {
+      throw new Error("Local sign-out was not confirmed");
+    }
 
     const result = payload as Record<string, unknown>;
     return {
-      ...(typeof result.success === "boolean" ? { success: result.success } : {}),
+      success: true,
       ...(oidcNavigationUrl(result.url) ? { url: oidcNavigationUrl(result.url)! } : {}),
       ...(typeof result.redirect === "boolean" ? { redirect: result.redirect } : {}),
       ...(typeof result.redirectTo === "string" ? { redirectTo: result.redirectTo } : {}),

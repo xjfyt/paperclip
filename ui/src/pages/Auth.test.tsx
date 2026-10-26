@@ -7,6 +7,9 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { queryKeys } from "../lib/queryKeys";
 import { AuthPage } from "./Auth";
+import "@/i18n/auth-test-resources";
+import { i18n } from "@/i18n";
+import { clearLocalSignOutNotice, hasLocalSignOutNotice, rememberLocalSignOut } from "@/lib/local-sign-out-notice";
 
 const capabilitiesMock = vi.hoisted(() => vi.fn());
 const getSessionMock = vi.hoisted(() => vi.fn());
@@ -94,6 +97,8 @@ describe("AuthPage", () => {
   let container: HTMLDivElement;
 
   beforeEach(() => {
+    clearLocalSignOutNotice();
+    void i18n.changeLanguage("en");
     container = document.createElement("div");
     document.body.appendChild(container);
     capabilitiesMock.mockResolvedValue({ password: true, providers: [] });
@@ -105,6 +110,8 @@ describe("AuthPage", () => {
   });
 
   afterEach(() => {
+    clearLocalSignOutNotice();
+    void i18n.changeLanguage("en");
     container.remove();
     document.body.innerHTML = "";
     vi.clearAllMocks();
@@ -129,6 +136,7 @@ describe("AuthPage", () => {
   }
 
   it.each(["https://my.paperclip.app", "https://my-staging.paperclip.app"])("recovers Cloud auth through %s without rendering an instance form", async (origin) => {
+    rememberLocalSignOut();
     healthMock.mockResolvedValue({ cloud: { managed: true, managedBy: "paperclip-cloud", cloudBaseUrl: origin, stackSlug: "team" } });
     const { root } = await mount("/auth?next=%2FTEST%2Fissues%2FTEST-1%3Ftab%3Dactivity%23comment");
     await vi.waitFor(() => expect(beginCloudSignInMock).toHaveBeenCalledTimes(1));
@@ -137,6 +145,67 @@ describe("AuthPage", () => {
     expect(target.pathname).toBe("/v1/stacks/team/entry-redirect");
     expect(target.searchParams.get("returnTo")).toBe("/TEST/issues/TEST-1?tab=activity#comment");
     expect(container.querySelector("form")).toBeNull();
+    expect(container.textContent).not.toContain("Signed out of this app");
+    await act(() => root.unmount());
+  });
+
+  it.each([
+    ["en", "Signed out of this app.", "global sign-out is unconfirmed"],
+    ["zh-CN", "已退出此应用。", "全局退出尚未确认"],
+    ["es", "Se ha cerrado la sesión de esta aplicación.", "no se ha confirmado el cierre de sesión global"],
+    ["ja", "このアプリからログアウトしました。", "全体のログアウトは未確認"],
+  ])("shows separate local/unknown-global results in %s", async (locale, local, global) => {
+    await i18n.changeLanguage(locale);
+    rememberLocalSignOut();
+    const { root } = await mount("/auth?global_logout=success&returnURL=https%3A%2F%2Fid.example");
+    expect(container.querySelector('[role="status"]')?.textContent).toContain(local);
+    expect(container.querySelector('[role="status"]')?.textContent).toContain(global);
+    expect(container.textContent).not.toContain("auth.globalSignOutUnconfirmed");
+    await act(() => root.unmount());
+  });
+
+  it("does not invent a sign-out result from query parameters", async () => {
+    const { root } = await mount("/auth?logout=success&global_logout=success&localSignOut=complete");
+    expect(container.textContent).not.toContain("Signed out of this app");
+    expect(hasLocalSignOutNotice()).toBe(false);
+    await act(() => root.unmount());
+  });
+
+  it("keeps the notice across a return/revisit and clears it only when dismissed", async () => {
+    rememberLocalSignOut();
+    const first = await mount();
+    expect(container.textContent).toContain("global sign-out is unconfirmed");
+    await act(() => first.root.unmount());
+    const returned = await mount();
+    expect(container.textContent).toContain("global sign-out is unconfirmed");
+    const dismiss = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Dismiss sign-out notice");
+    await act(() => dismiss?.click());
+    expect(hasLocalSignOutNotice()).toBe(false);
+    expect(container.textContent).not.toContain("Signed out of this app");
+    await act(() => returned.root.unmount());
+    const revisited = await mount();
+    expect(container.textContent).not.toContain("Signed out of this app");
+    await act(() => revisited.root.unmount());
+  });
+
+  it.each(["health", "session", "capabilities"])("keeps local completion visible if %s is unavailable after returning", async service => {
+    rememberLocalSignOut();
+    const mock = service === "health" ? healthMock : service === "session" ? getSessionMock : capabilitiesMock;
+    mock.mockRejectedValue(new Error("offline"));
+    const { root } = await mount();
+    await vi.waitFor(() => expect(container.textContent).toContain("Unable to check sign-in"));
+    expect(container.querySelector('[role="status"]')?.textContent).toContain("Signed out of this app");
+    expect(container.textContent).toContain("global sign-out is unconfirmed");
+    expect(container.querySelector("form")).toBeNull();
+    await act(() => root.unmount());
+  });
+
+  it("clears the old notice after a confirmed authenticated session", async () => {
+    rememberLocalSignOut();
+    getSessionMock.mockResolvedValue({ session: { id: "new-session" }, user: { id: "new-user" } });
+    const { root } = await mount();
+    await vi.waitFor(() => expect(hasLocalSignOutNotice()).toBe(false));
+    expect(container.textContent).not.toContain("Signed out of this app");
     await act(() => root.unmount());
   });
 
