@@ -11,7 +11,7 @@ export const feedbackImportSchema = z.object({
 export type FeedbackImportInput = z.infer<typeof feedbackImportSchema>;
 export interface FeedbackInboxItem {
   id: string; companyId: string; sourceKind: FeedbackImportInput["sourceKind"];
-  sourceInstance: string; externalId: string; ingestionMode: "manual_import" | "provider_fetch";
+  sourceInstance: string; externalId: string; ingestionMode: "manual_import" | "provider_fetch" | "provider_push";
   sourceUrl?: string | null; sourceTrust?: { preset: "low_trust_review"; disposition: "quarantined" };
   title: string; text: string; product: string; softwareVersion: string; commitSha: string | null; traceId: string | null;
   occurredAt: string; createdAt: string; actorId: string; redacted: boolean; redactionVersion: 1;

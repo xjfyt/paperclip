@@ -20,7 +20,7 @@ export const mimouseFeedbackInbox = pgTable("mimouse_feedback_inbox", {
   sourceEvent: uniqueIndex("mimouse_feedback_source_event").on(t.companyId, t.sourceKind, t.sourceInstance, t.externalId),
   page: index("mimouse_feedback_page").on(t.companyId, t.createdAt, t.id),
   candidates: index("mimouse_feedback_candidates").on(t.companyId, t.candidateKey, t.createdAt),
-  shape: check("mimouse_feedback_shape", sql`${t.ingestionMode} IN ('manual_import','provider_fetch') AND ${t.status}='candidate' AND ${t.redactionVersion}=1 AND ${t.sourceKind} IN ('manual','application_log','langfuse','wecom_smart_bot') AND length(${t.title}) BETWEEN 1 AND 240 AND length(${t.body}) BETWEEN 1 AND 32000`),
+  shape: check("mimouse_feedback_shape", sql`${t.ingestionMode} IN ('manual_import','provider_fetch','provider_push') AND ${t.status}='candidate' AND ${t.redactionVersion}=1 AND ${t.sourceKind} IN ('manual','application_log','langfuse','wecom_smart_bot') AND length(${t.title}) BETWEEN 1 AND 240 AND length(${t.body}) BETWEEN 1 AND 32000`),
 }));
 
 /** Immutable human confirmation and the task created in the same transaction. */
