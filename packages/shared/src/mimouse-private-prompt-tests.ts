@@ -40,10 +40,23 @@ export interface PrivatePromptPreparedWitness {
   providerConsumed: false;
   stdinWritten: false;
 }
+/** Server-owned, non-secret preparation summary; not a complete execution context. */
+export const privatePromptApprovalSnapshotSchema = z.object({
+  schemaVersion: z.literal(1), executionProfile: z.literal("claude_cli_bare_api_key_v1"),
+  adapterType: z.literal("claude_local"), engine: z.literal("cli"),
+  model: z.string().max(256).regex(/^claude-[a-zA-Z0-9.-]+$/), configuredCwd: z.string().min(1).max(4096).nullable(),
+  environment: z.object({ source: z.enum(["agent", "instance", "implicit"]), id: uuid, driver: z.literal("local") }).strict(),
+  credential: z.object({ kind: z.literal("pinned_company_secret"), secretId: uuid, version: z.number().int().positive() }).strict(),
+  configDigest: z.string().regex(/^[a-f0-9]{64}$/),
+  freshSession: z.literal(true), toolsEnabled: z.literal(false), paperclipCredentialsEnabled: z.literal(false),
+  completeContextCaptured: z.literal(false),
+}).strict();
+export type PrivatePromptApprovalSnapshot = z.infer<typeof privatePromptApprovalSnapshotSchema>;
 export interface PrivatePromptTestRecord {
   id: string; companyId: string; actorUserId: string; promptId: string; revisionId: string; agentId: string;
   requestId: string; headReceiptId: string | null; approvalDigest: string;
   executionProfile: "claude_cli_bare_api_key_v1";
+  approvalSnapshot: PrivatePromptApprovalSnapshot | null;
   datasetId: string; caseId: string; skillVersionId: string;
   status: PrivatePromptTestStatus; issueId: string | null; heartbeatRunId: string | null;
   prepared: PrivatePromptPreparedWitness | null; spawnedAt: string | null;
