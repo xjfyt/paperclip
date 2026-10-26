@@ -91,6 +91,7 @@ function PrivateTestSession(props: Props) {
       {detail && <div className="space-y-2">
         <p className="break-all font-mono">{detail.item.id} · {status(detail.item.status)}</p>
         {detail.item.prepared && <><p>{label("preparedBoundary")}</p><p className="break-all font-mono">SHA-256: {detail.item.prepared.promptHash}</p></>}
+        {detail.item.prepared && "runtimeConfigHash" in detail.item.prepared && typeof detail.item.prepared.runtimeConfigHash === "string" && <p className="break-all font-mono">{label("runtimeHash")}: {detail.item.prepared.runtimeConfigHash}</p>}
         {detail.item.spawnedAt && <p>{label("spawnedBoundary")}</p>}
         {detail.item.status === "completed" && <p>{label("completedBoundary")}</p>}
         {detail.item.errorCode && <p role="alert">{label("resultUnavailable")}</p>}

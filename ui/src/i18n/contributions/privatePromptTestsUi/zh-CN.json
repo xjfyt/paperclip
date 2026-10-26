@@ -1,7 +1,7 @@
 {
   "title": "私有提示词执行测试",
   "boundary": "这是独立执行，会将数据发送给外部模型，可能产生费用。它不选择、提升或发布版本。私有访问控制不是 Agent、CLI 或文件系统沙箱。",
-  "profile": "仅支持：内置 Claude CLI bare 模式与显式配置的 API key，legacy／本地／全新会话；不提供 Paperclip token、运行工具、MCP 或 bridge。订阅登录、外部覆盖、ACP/native、远程及恢复会话均不支持，也不回退。",
+  "profile": "仅支持：内置 Claude CLI bare 模式与显式配置、固定版本的公司凭据库 API key，legacy／本地／全新会话；不提供 Paperclip token、运行工具、MCP 或 bridge。订阅登录、外部覆盖、ACP/native、远程及恢复会话均不支持，也不回退。",
   "contextBoundary": "批准绑定固定 Agent 配置、版本及数据集案例。派生执行配置仅有 hash 见证；不代表完整捕获或预先批准所有隐藏模型上下文。",
   "revision": "精确版本",
   "receipt": "预期 head 回执",
@@ -38,5 +38,6 @@
   "status_completed": "适配器已完成",
   "status_failed": "失败",
   "status_unknown": "未知 — 不要重跑",
-  "status_cancelled": "已取消"
+  "status_cancelled": "已取消",
+  "runtimeHash": "派生配置 hash（非完整上下文）"
 }

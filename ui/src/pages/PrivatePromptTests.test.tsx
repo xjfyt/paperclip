@@ -16,7 +16,7 @@ vi.mock("@/api/private-prompt-tests", () => ({ privatePromptTestsApi: () => call
 const registry = vi.hoisted(() => ({ list: vi.fn(), revisions: vi.fn(), receipts: vi.fn(), content: vi.fn(), create: vi.fn(), select: vi.fn() }));
 vi.mock("@/api/prompt-registry", () => ({ promptRegistryApi: () => registry }));
 const id = "22222222-2222-4222-8222-222222222222";
-const item = { id: "test", promptId: "prompt", revisionId: id, status: "completed", prepared: { promptHash: "hash" }, spawnedAt: "2026-10-26", errorCode: null };
+const item = { id: "test", promptId: "prompt", revisionId: id, status: "completed", prepared: { promptHash: "hash", runtimeConfigHash: "derived-hash" }, spawnedAt: "2026-10-26", errorCode: null };
 let host: HTMLDivElement, root: Root;
 const pending = vi.fn(), denied = vi.fn();
 const text = (key: string) => i18n.t(`privatePromptTestsUi.${key}`);
@@ -40,7 +40,7 @@ it("requires all three confirmations and fixed UUID references; never starts aut
   await approve(); expect(button("execute").disabled).toBe(false); await click(button("execute"));
   expect(calls.create).toHaveBeenCalledExactlyOnceWith("prompt", expect.objectContaining({ revisionId: id, expectedHeadReceiptId: null, executionProfile: "claude_cli_bare_api_key_v1", confirmRestrictedProfile: true, confirmExecution: true, confirmPossibleCharges: true }));
   expect(pending).toHaveBeenCalledWith(true); expect(pending).toHaveBeenLastCalledWith(false);
-  expect(host.textContent).toContain(text("completedBoundary")); expect(host.querySelector("script")).toBeNull();
+  expect(host.textContent).toContain(text("completedBoundary")); expect(host.textContent).toContain(`${text("runtimeHash")}: derived-hash`); expect(host.querySelector("script")).toBeNull();
   expect(host.querySelector("pre")?.textContent).toContain("<script>not executed</script>");
 });
 it("shows all four languages with the same warning and status keys", async () => {

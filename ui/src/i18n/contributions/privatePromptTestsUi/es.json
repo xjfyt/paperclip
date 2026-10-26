@@ -1,7 +1,7 @@
 {
   "title": "Prueba privada de ejecución del prompt",
   "boundary": "Es una ejecución independiente que envía datos a un modelo externo y puede generar cargos. No selecciona, promociona ni publica versiones. El acceso privado no es un sandbox del agente, CLI o sistema de archivos.",
-  "profile": "Solo se admite Claude CLI integrado en modo bare con una clave API configurada explícitamente, ejecución legacy/local y sesión nueva; sin token, herramientas, MCP ni bridge de Paperclip. No admite suscripciones, overrides, ACP/native, remoto o reanudación; no hay fallback.",
+  "profile": "Solo se admite Claude CLI integrado en modo bare con una clave API de la bóveda de la empresa con versión fija configurada explícitamente, ejecución legacy/local y sesión nueva; sin token, herramientas, MCP ni bridge de Paperclip. No admite suscripciones, overrides, ACP/native, remoto o reanudación; no hay fallback.",
   "contextBoundary": "La aprobación vincula la configuración fija del agente, la versión y el caso del conjunto. La configuración derivada solo tiene evidencia hash; no captura ni aprueba previamente todo el contexto oculto del modelo.",
   "revision": "Versión exacta",
   "receipt": "Recibo head esperado",
@@ -38,5 +38,6 @@
   "status_completed": "Adaptador completado",
   "status_failed": "Fallido",
   "status_unknown": "Desconocido — no repetir",
-  "status_cancelled": "Cancelado"
+  "status_cancelled": "Cancelado",
+  "runtimeHash": "Hash de configuración derivada (no es todo el contexto)"
 }

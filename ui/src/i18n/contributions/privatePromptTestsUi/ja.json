@@ -1,7 +1,7 @@
 {
   "title": "非公開プロンプト実行テスト",
   "boundary": "外部モデルへデータを送り、課金される可能性のある独立した実行です。バージョンの選択・昇格・公開はしません。非公開アクセス制御は Agent・CLI・ファイルシステムのサンドボックスではありません。",
-  "profile": "明示的な API key を設定した組み込み Claude CLI bare モードの legacy・ローカル・新規セッションのみ対応します。Paperclip token・実行ツール・MCP・bridge は使いません。サブスクリプションログイン・外部 override・ACP/native・リモート・再開は非対応で、フォールバックしません。",
+  "profile": "明示的に固定バージョンの会社ボールト API key を設定した組み込み Claude CLI bare モードの legacy・ローカル・新規セッションのみ対応します。Paperclip token・実行ツール・MCP・bridge は使いません。サブスクリプションログイン・外部 override・ACP/native・リモート・再開は非対応で、フォールバックしません。",
   "contextBoundary": "承認は固定 Agent 設定・バージョン・データセットのケースに結び付きます。派生実行設定は hash の証跡のみで、隠れたモデルコンテキスト全体の取得や事前承認ではありません。",
   "revision": "対象バージョン",
   "receipt": "期待する head レシート",
@@ -38,5 +38,6 @@
   "status_completed": "アダプター完了",
   "status_failed": "失敗",
   "status_unknown": "不明 — 再実行禁止",
-  "status_cancelled": "キャンセル済み"
+  "status_cancelled": "キャンセル済み",
+  "runtimeHash": "派生設定 hash（全コンテキストではありません）"
 }

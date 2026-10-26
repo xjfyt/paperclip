@@ -24,6 +24,10 @@
 - 明示仅 builtin Claude CLI bare / API-key / legacy / local / fresh；无 Paperclip
   token、tools、MCP、bridge。订阅登录、override、ACP/native、remote、resume 不回退。
   私有 ACL 不是 Agent/CLI/文件系统沙箱；派生配置只有 hash，不承诺完整上下文。
+- 凭据配置进一步限定为固定版本的 `local_encrypted` 公司 `secret_ref`
+  `ANTHROPIC_API_KEY`；禁止 latest、订阅 OAuth、其他 env、路由器及额外 args。
+  UI 不新增凭据编辑入口。实际 `runtimeConfigHash` 若存在，仅作为派生配置 hash 显示。
+  通用 422 `prompt_registry_operation_failed` 可能发生在提交后或 wake 未知，保留同 key。
 
 ## 隔离与未知请求
 
