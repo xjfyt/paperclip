@@ -1,0 +1,15 @@
+{
+  "welcomeTitle": "Te damos la bienvenida a Paperclip",
+  "organizationHelp": "Las organizaciones separan las tareas, los ajustes y el acceso. Crea una cuando quieras; puedes configurar agentes y conexiones de modelos más adelante desde el panel.",
+  "agentHelp": "La configuración de agentes es opcional. Puedes volver al panel en cualquier momento y configurar un agente cuando quieras.",
+  "addAgentTitle": "Configurar un agente para {{name}}",
+  "createAnotherOrganization": "Crear otra organización",
+  "createOrganization": "Crear organización",
+  "createAndOpen": "Crear y abrir el panel",
+  "configureLater": "Configurar más tarde",
+  "openDashboard": "Ir al panel",
+  "noAgents": "Todavía no hay agentes. Puedes explorar esta organización y configurar un agente cuando quieras.",
+  "configureAgent": "Configurar agente",
+  "createdPending": "La organización se ha creado, pero su panel aún no está disponible en esta sesión. Intenta abrirlo de nuevo o cancela para volver a la página principal. Reintentar no creará otra organización.",
+  "retryOpen": "Reintentar abrir el panel"
+}

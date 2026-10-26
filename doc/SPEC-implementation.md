@@ -34,7 +34,7 @@ These decisions close open questions from `SPEC.md` for V1.
 | Topic | V1 Decision |
 |---|---|
 | Tenancy | Single-tenant deployment, multi-company data model |
-| Company model | Company is first-order; all business entities are company-scoped |
+| Company model | Company is first-order; all business entities are company-scoped. An organization may have zero agents: its dashboard remains accessible, and agent setup is optional, explicit, and postponable. |
 | Board | Single human board operator per deployment |
 | Org graph | Strict tree (`reports_to` nullable root); no multi-manager reporting |
 | Visibility | Issues remain company-open by default. Opt-in `private` issues use task ACLs; deployment exposure flags remain independent of work-object privacy. |

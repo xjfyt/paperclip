@@ -17,6 +17,7 @@ import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import type {
   AdapterEnvironmentTestResult,
   AgentRole,
+  Company,
   ClaudeOAuthTokenStatusResponse,
   Environment,
   InstanceSettings,
@@ -64,7 +65,8 @@ import { useDialog } from "../context/DialogContext";
 import { useCompany } from "../context/CompanyContext";
 import { ApiError } from "../api/client";
 import { companiesApi } from "../api/companies";
-import { useCompanyListQuery } from "../api/companies-query";
+import { cacheCreatedCompanyForAccount, isCompanyCreationAccountCurrent, resolveAccountUserId, useCompanyListQuery, type CompanyCreationOrigin } from "../api/companies-query";
+import type { authApi } from "../api/auth";
 import { goalsApi } from "../api/goals";
 import { agentsApi } from "../api/agents";
 import { approvalsApi } from "../api/approvals";
@@ -743,6 +745,7 @@ function OnboardingWizardInner({
   // either, because it is not set until the request it guards has resolved. A
   // ref is written before the request goes out, so the second caller sees it.
   const creatingCompanyRef = useRef(false);
+  const pendingCompanyCreationRef = useRef<{ company: Company; origin: CompanyCreationOrigin } | null>(null);
   // Same shape for the hire. Greptile (round-3 PR): with "Test now" gone the
   // Connect handler re-runs a cached failed probe — and two overlapping
   // submissions could then both pass the fresh probe and both hire. `loading`
@@ -784,11 +787,6 @@ function OnboardingWizardInner({
   const initialStepRef = useRef<Step | undefined>(undefined);
   initialStepRef.current = effectiveOnboardingOptions.initialStep;
 
-  // Reset the route-dismissed flag when navigating to a different path.
-  useEffect(() => {
-    setRouteDismissed(false);
-  }, [location.pathname]);
-
   /**
    * Forget everything that describes one particular company.
    *
@@ -829,6 +827,15 @@ function OnboardingWizardInner({
       setEntryStep(initialStepRef.current);
     }
     const routeCompanyId = effectiveOnboardingOptions.companyId ?? null;
+    if (!routeCompanyId && initialStepRef.current === 1) {
+      // New Organization is distinct from resuming an authorized agent draft.
+      // In particular, never let a restored company short-circuit its POST.
+      createdCompanyIdRef.current = null;
+      setCreatedCompanyId(null);
+      routeCompanyIdRef.current = null;
+      clearCompanyScopedState();
+      return;
+    }
     if (routeCompanyId) {
       // Claim ownership only when the route *introduces* a company. A route
       // that merely names the one already in hand - the wizard created it,
@@ -1650,7 +1657,25 @@ function OnboardingWizardInner({
     setCreatedIssueRef(null);
   }
 
+  const wizardAttemptRef = useRef(0);
+  const previousPathRef = useRef(location.pathname);
+  useEffect(() => {
+    if (previousPathRef.current !== location.pathname && onboardingOpen) handleClose();
+    previousPathRef.current = location.pathname;
+  }, [location.pathname, onboardingOpen]);
+  useEffect(() => () => {
+    wizardAttemptRef.current++;
+    connectAttemptRef.current++;
+  }, []);
+
   function handleClose() {
+    pendingCompanyCreationRef.current = null;
+    wizardAttemptRef.current++;
+    // Invalidate any pending connection/probe continuation before leaving.
+    // An already-submitted server mutation cannot be rolled back here.
+    connectAttemptRef.current++;
+    hiringAgentRef.current = null;
+    createdCompanyIdRef.current = null;
     reset();
     closeOnboarding();
     // On the /onboarding route the wizard is also kept open by the route
@@ -1658,6 +1683,17 @@ function OnboardingWizardInner({
     // effectiveOnboardingOpen stays true and the wizard re-renders instead of
     // handing off to the launcher card (PAP-52).
     setRouteDismissed(true);
+  }
+
+  function finishAtDashboard(companyId: string, prefix: string | null) {
+    handleClose();
+    setSelectedCompanyId(companyId, { source: "route_sync" });
+    navigate(prefix ? `/${prefix}/dashboard` : "/dashboard", { replace: true });
+  }
+
+  function handleConfigureLater() {
+    if (createdCompanyId) finishAtDashboard(createdCompanyId, createdCompanyPrefix);
+    else handleClose();
   }
 
   /**
@@ -1702,12 +1738,15 @@ function OnboardingWizardInner({
       setError(INCOMPLETE_ONBOARDING_STATE_MESSAGE);
       return;
     }
+    const attempt = wizardAttemptRef.current;
+    const isCurrent = () => wizardAttemptRef.current === attempt && stillTheSameCompany(createdCompanyId);
     setLoading(true);
     setError(null);
     try {
       let goalId = createdCompanyGoalId;
       if (!goalId) {
         const goals = await goalsApi.list(createdCompanyId);
+        if (!isCurrent()) return;
         goalId = selectDefaultCompanyGoalId(goals);
         if (stillTheSameCompany(createdCompanyId)) setCreatedCompanyGoalId(goalId);
       }
@@ -1715,6 +1754,7 @@ function OnboardingWizardInner({
       let projectId = createdProjectId;
       if (!projectId) {
         const projects = await projectsApi.list(createdCompanyId);
+        if (!isCurrent()) return;
         const existingOnboardingProject = selectReusableOnboardingProject(projects);
         if (existingOnboardingProject) {
           projectId = existingOnboardingProject.id;
@@ -1723,6 +1763,7 @@ function OnboardingWizardInner({
             createdCompanyId,
             buildOnboardingProjectPayload(goalId)
           );
+          if (!isCurrent()) return;
           projectId = project.id;
           queryClient.invalidateQueries({
             queryKey: queryKeys.projects.list(createdCompanyId)
@@ -1731,6 +1772,7 @@ function OnboardingWizardInner({
         if (stillTheSameCompany(createdCompanyId)) setCreatedProjectId(projectId);
       }
 
+      if (!isCurrent()) return;
       let issueRef = createdIssueRef;
       if (!issueRef) {
         const issue = await issuesApi.create(
@@ -1742,8 +1784,9 @@ function OnboardingWizardInner({
             goalId
           })
         );
+        if (!isCurrent()) return;
         issueRef = issue.identifier ?? issue.id;
-        if (stillTheSameCompany(createdCompanyId)) setCreatedIssueRef(issueRef);
+        setCreatedIssueRef(issueRef);
         queryClient.invalidateQueries({
           queryKey: queryKeys.issues.list(createdCompanyId)
         });
@@ -1755,7 +1798,7 @@ function OnboardingWizardInner({
       // and navigating. None of that is right for a customer who has moved to
       // another company in the meantime: it would take them back, and `reset()`
       // would discard the progress they had started there.
-      if (!stillTheSameCompany(createdCompanyId)) return;
+      if (!isCurrent()) return;
 
       const prefix = createdCompanyPrefix;
       // Select the new company as a route sync, not a manual switch: the
@@ -1763,15 +1806,14 @@ function OnboardingWizardInner({
       // "restore last page" (which falls back to /dashboard) must not fire and
       // clobber the first-task URL. See PAP-404.
       setSelectedCompanyId(createdCompanyId, { source: "route_sync" });
-      reset();
-      closeOnboarding();
+      handleClose();
       // Drop the user straight into the first task's detail page (not the
       // dashboard) so they land on the conversation the agent will start in.
       navigate(prefix ? `/${prefix}/issues/${issueRef}` : `/issues/${issueRef}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to launch first task");
+      if (isCurrent()) setError(err instanceof Error ? err.message : "Failed to launch first task");
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
   }
 
@@ -1974,15 +2016,11 @@ function OnboardingWizardInner({
     }
   }
 
-  // Step 1 → 3 ("Name your organization"): create the organization, then go
-  // straight to the first agent. There is no mission step between them anymore.
-  //
-  // No goal is written here: the mission is collected later, in the chat with
-  // the first agent, so writing an empty one now would only give the
-  // organization a goal it did not choose.
+  // Organization is the data/authorization scope, not a promise to run an
+  // agent. Create only the explicitly named organization, then enter its UI.
   async function handleCreateCompany() {
     if (createdCompanyId) {
-      setStep(3);
+      finishAtDashboard(createdCompanyId, createdCompanyPrefix);
       return;
     }
     if (creatingCompanyRef.current) return;
@@ -1990,28 +2028,50 @@ function OnboardingWizardInner({
     setLoading(true);
     setError(null);
     const companyIdAtStart = createdCompanyIdRef.current;
+    const attempt = wizardAttemptRef.current;
     try {
-      const company = await companiesApi.create({ name: companyName.trim() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.companies.all });
+      let pending = pendingCompanyCreationRef.current;
+      if (!pending) {
+        const userId = await resolveAccountUserId(queryClient);
+        if (wizardAttemptRef.current !== attempt) return;
+        const session = queryClient.getQueryData<Awaited<ReturnType<typeof authApi.getSession>>>(queryKeys.auth.session);
+        if ((session?.user.id ?? null) !== userId) return;
+        const origin = { userId, sessionId: session?.session.id ?? null };
+        const company = await companiesApi.create({ name: companyName.trim() });
+        if (wizardAttemptRef.current !== attempt) return;
+        // Preserve the successful POST if opening must wait for a session
+        // refresh. Retrying this screen must never create another company.
+        pending = { company, origin };
+        pendingCompanyCreationRef.current = pending;
+      } else {
+        // Retry a failed session lookup, but never repeat a successful POST.
+        await resolveAccountUserId(queryClient);
+        if (wizardAttemptRef.current !== attempt) return;
+      }
+      const { company, origin } = pending;
       // Nothing was in hand when this started, so "unchanged" means still
       // nothing. A route that supplied a company while the request was open has
       // taken over the wizard, and adopting the company just created would
       // fight it — and would leave the customer on a company they never
       // navigated to.
+      if (wizardAttemptRef.current !== attempt) return;
       if (!canCommitCreatedCompany(companyIdAtStart, company.id)) return;
-      setCreatedCompanyId(company.id);
-      // Keep the mirror current rather than waiting for the next render:
-      // anything downstream that asks `stillTheSameCompany` in this tick would
-      // otherwise be told no.
-      createdCompanyIdRef.current = company.id;
-      setCreatedCompanyPrefix(company.issuePrefix);
-      setSelectedCompanyId(company.id);
-      setStep(3);
+      const cached = await cacheCreatedCompanyForAccount(queryClient, company, origin,
+        () => wizardAttemptRef.current === attempt && canCommitCreatedCompany(companyIdAtStart, company.id));
+      if (wizardAttemptRef.current !== attempt) return;
+      if (!cached || !isCompanyCreationAccountCurrent(queryClient, origin)
+        || !canCommitCreatedCompany(companyIdAtStart, company.id)) {
+        setError(t("optionalOnboarding.createdPending"));
+        return;
+      }
+      finishAtDashboard(company.id, company.issuePrefix);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create organization");
+      if (wizardAttemptRef.current === attempt) {
+        setError(err instanceof Error ? err.message : "Failed to create organization");
+      }
     } finally {
       creatingCompanyRef.current = false;
-      setLoading(false);
+      if (wizardAttemptRef.current === attempt) setLoading(false);
     }
   }
 
@@ -2309,6 +2369,11 @@ function OnboardingWizardInner({
     // caller reads the value the first one has not written yet. Two companies,
     // one keystroke.
     if (e.defaultPrevented || e.nativeEvent.isComposing) return;
+    if (e.key === "Escape") {
+      e.preventDefault();
+      handleClose();
+      return;
+    }
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       // Every button below is disabled while a request is in flight. The
@@ -2460,7 +2525,7 @@ function OnboardingWizardInner({
                   Step 2 is absent: onboarding no longer asks for the mission, so
                   a segment for it would be one the run can never fill, and the
                   count would visibly skip from 1 to 3. */}
-              {!showsAgentArcStepper && (
+              {!showsAgentArcStepper && step !== 1 && (
                 <Stepper
                   step={onboardingStepPositionFor(step)}
                   total={ONBOARDING_WIZARD_STEPS.length}
@@ -2613,6 +2678,7 @@ function OnboardingWizardInner({
                       className="h-(--sz-44px) rounded-lg border-transparent bg-muted shadow-none dark:bg-muted"
                       placeholder={t("onboarding.organizationPlaceholder")}
                       value={companyName}
+                      disabled={Boolean(pendingCompanyCreationRef.current)}
                       onChange={(e) => setCompanyName(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && !e.nativeEvent.isComposing && companyName.trim()) {
@@ -2622,6 +2688,7 @@ function OnboardingWizardInner({
                       }}
                       autoFocus
                     />
+                    <p className="text-sm text-muted-foreground">{t("optionalOnboarding.organizationHelp")}</p>
                   </div>
                 </motion.div>
               )}
@@ -3075,6 +3142,9 @@ function OnboardingWizardInner({
                   `canGoBackFromOnboardingStep` returns false for it. */}
               {(isAgentArcStep || step === 1) && (
                 <FooterNav
+                  onExit={handleConfigureLater}
+                  exitLabel={t(createdCompanyId ? "optionalOnboarding.configureLater" : "common.cancel")}
+                  exitDisabled={loading}
                   onBack={
                     // On the connect step Back unwinds the sign-in first, and
                     // only means "the previous step" once nothing is running.
@@ -3090,7 +3160,7 @@ function OnboardingWizardInner({
                   // prototype's own local flow draws with "Next".
                   primaryLabel={
                     step === 1
-                      ? t("onboarding.continue")
+                      ? t(pendingCompanyCreationRef.current ? "optionalOnboarding.retryOpen" : "optionalOnboarding.createAndOpen")
                       : step === 5
                         ? t("onboarding.getStarted")
                         : step === 4

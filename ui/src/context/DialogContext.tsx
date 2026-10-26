@@ -50,9 +50,8 @@ interface DialogContextValue {
   onboardingOptions: OnboardingOptions;
   openOnboarding: (options?: OnboardingOptions) => void;
   closeOnboarding: () => void;
-  // Whether the user has dismissed the route-driven onboarding wizard (the one
-  // that auto-opens on /onboarding). Shared so the route launcher can hand off
-  // fully to the wizard instead of remaining interactive behind it.
+  // Route launchers start dismissed: only an explicit setup action opens the
+  // wizard. Keep the dismissal shared so navigation/reload never reopens it.
   onboardingRouteDismissed: boolean;
   setOnboardingRouteDismissed: (dismissed: boolean) => void;
 }
@@ -84,7 +83,7 @@ export function DialogProvider({ children }: { children: ReactNode }) {
   const [newAgentOpen, setNewAgentOpen] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [onboardingOptions, setOnboardingOptions] = useState<OnboardingOptions>({});
-  const [onboardingRouteDismissed, setOnboardingRouteDismissed] = useState(false);
+  const [onboardingRouteDismissed, setOnboardingRouteDismissed] = useState(true);
 
   const openNewIssue = useCallback((defaults: NewIssueDefaults = {}) => {
     setNewIssueDefaults(defaults);
@@ -123,7 +122,8 @@ export function DialogProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const openOnboarding = useCallback((options: OnboardingOptions = {}) => {
-    setOnboardingOptions(options);
+    // A create launcher is a fresh organization intent, never an old agent draft.
+    setOnboardingOptions({ initialStep: options.companyId ? 3 : 1, ...options });
     setOnboardingOpen(true);
   }, []);
 

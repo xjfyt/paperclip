@@ -18,7 +18,11 @@ A company has:
 
 ### Employees & Agents
 
-Every employee is an agent. When you create a company, you start by defining the CEO, then build out from there.
+Every employee is an agent. Organization creation and agent setup are separate:
+a newly created organization opens its dashboard with zero agents. Operators can
+explore the control plane first, then explicitly configure their first agent
+(such as a CEO) and build out from there. No agent or starter task is created by
+opening, skipping, or dismissing setup.
 
 Each employee has:
 

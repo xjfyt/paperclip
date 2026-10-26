@@ -128,7 +128,7 @@ export function Layout() {
     isMobile,
     setForceCollapsed,
   } = useSidebar();
-  const { openNewIssue, openOnboarding } = useDialogActions();
+  const { openNewIssue } = useDialogActions();
   const { togglePanelVisible } = usePanel();
   // Optional: Layout also renders in harnesses without a ToastProvider.
   const pushToast = useOptionalToastActions()?.pushToast ?? null;
@@ -174,7 +174,6 @@ export function Layout() {
   // The Skills Store renders its own secondary (category) sidebar, so the main
   // app nav collapses to its rail throughout the Skills Store section (PAP-10879).
   const isSkillsRoute = isSkillsStoreRoute(location.pathname, companyPrefix);
-  const onboardingTriggered = useRef(false);
   const previousPathname = useRef<string | null>(null);
   const mainContentRef = useRef<HTMLElement | null>(null);
   const scrollMemory = useRef(new NavigationScrollMemory());
@@ -266,23 +265,6 @@ export function Layout() {
     return () => setForceCollapsed(false);
   }, [forceRailCollapsed, setForceCollapsed]);
 
-  useEffect(() => {
-    if (companiesLoading || onboardingTriggered.current) return;
-    if (health?.deploymentMode === "authenticated") return;
-    // Cloud provisions the single company for a stack, and POST /companies is a
-    // 403 floor there — auto-opening the wizard could only dead-end.
-    if (health?.cloud) return;
-    if (companies.length === 0) {
-      onboardingTriggered.current = true;
-      openOnboarding();
-    }
-  }, [
-    companies,
-    companiesLoading,
-    openOnboarding,
-    health?.cloud,
-    health?.deploymentMode,
-  ]);
 
   useEffect(() => {
     if (!companyPrefix || companiesLoading || companies.length === 0) return;

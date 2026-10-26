@@ -149,3 +149,44 @@ export async function fetchCompanyListForCurrentAccount(
     staleTime: 0,
   });
 }
+
+export type CompanyCreationOrigin = { userId: string | null; sessionId: string | null };
+
+export function isCompanyCreationAccountCurrent(queryClient: QueryClient, origin: CompanyCreationOrigin): boolean {
+  const session = queryClient.getQueryState<Awaited<ReturnType<typeof authApi.getSession>>>(queryKeys.auth.session);
+  return session?.status === "success"
+    && !session.isInvalidated
+    && session.fetchStatus !== "fetching"
+    && (session.data?.user.id ?? null) === origin.userId
+    && (session.data?.session.id ?? null) === origin.sessionId;
+}
+
+/**
+ * Make the POST result routable before entering its dashboard. Cancel a list
+ * fetched before creation so its old empty result cannot overwrite this one.
+ * Both the initiating session and current UI intent must match after each
+ * await. A benign focus refetch may settle; another account may never inherit
+ * this result. Callers recheck the same boundary before navigation.
+ */
+export async function cacheCreatedCompanyForAccount(
+  queryClient: QueryClient,
+  company: Company,
+  origin: CompanyCreationOrigin,
+  isCurrent: () => boolean,
+): Promise<boolean> {
+  if (!isCurrent()) return false;
+  if (queryClient.getQueryState(queryKeys.auth.session)?.fetchStatus === "fetching") {
+    try { await queryClient.fetchQuery({ ...sessionQueryOptions, staleTime: 0 }); }
+    catch { return false; }
+  }
+  const ownsResult = () => isCurrent() && isCompanyCreationAccountCurrent(queryClient, origin);
+  if (!ownsResult()) return false;
+  const queryKey = queryKeys.companies.list(origin.userId);
+  await queryClient.cancelQueries({ queryKey, exact: true });
+  if (!ownsResult()) return false;
+  queryClient.setQueryData<CompanyListResult>(queryKey, (previous) => ({
+    companies: [...(previous?.companies ?? []).filter((item) => item.id !== company.id), company],
+    unauthorized: false,
+  }));
+  return true;
+}

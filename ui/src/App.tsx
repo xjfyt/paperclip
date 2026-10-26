@@ -9,7 +9,7 @@ import { MimouseWorkbuddy } from "./pages/MimouseWorkbuddy";
 import { MimouseNotifications } from "./pages/MimouseNotifications";
 import { lazy, Suspense, type ReactNode } from "react";
 import type { ToolConnectionCredentialSource } from "@paperclipai/shared";
-import { Navigate, Outlet, Route, Routes, useActiveCompanyPrefix, useLocation, useParams } from "@/lib/router";
+import { Link, Navigate, Outlet, Route, Routes, useActiveCompanyPrefix, useLocation, useParams } from "@/lib/router";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/i18n";
 import { Layout } from "./components/Layout";
@@ -122,7 +122,6 @@ import { TASK_VIEW_PARAM, taskViewForInboxTab, type TaskViewKey } from "./lib/ta
 import {
   isOnboardingWizardActive,
   onboardingStepForCompany,
-  shouldRedirectCompanylessRouteToOnboarding,
 } from "./lib/onboarding-route";
 import { filterHiddenInstanceSettingsPath, normalizeRememberedInstanceSettingsPath } from "./lib/instance-settings";
 import { useCloudInstance } from "./hooks/useCloudInstance";
@@ -574,14 +573,6 @@ function LegacySettingsRedirect() {
     null;
 
   if (!targetCompany) {
-    if (
-      shouldRedirectCompanylessRouteToOnboarding({
-        pathname: location.pathname,
-        hasCompanies: false,
-      })
-    ) {
-      return <Navigate to="/onboarding" replace />;
-    }
     return <NoCompaniesStartPage />;
   }
 
@@ -628,11 +619,11 @@ export function OnboardingRoutePage() {
   const createStackUrl = cloudStackCreateUrl(cloudInstance?.cloudBaseUrl ?? null);
   const { onboardingOpen, onboardingRouteDismissed } = useDialogState();
   const { companyPrefix } = useParams<{ companyPrefix?: string }>();
-  const matchedCompany = companyPrefix
-    ? companies.find((company) => company.issuePrefix.toUpperCase() === companyPrefix.toUpperCase()) ?? null
-    : null;
-  // The OnboardingWizard auto-opens on this route (and can also be opened
-  // explicitly). While it is showing it covers the whole screen, so the
+  const matchedCompany = (companyPrefix
+    ? companies.find((company) => company.issuePrefix.toUpperCase() === companyPrefix.toUpperCase())
+    : null) ?? (cloudInstance && companies.length === 1 ? companies[0] : null);
+  // Onboarding starts only after an explicit action. While the wizard is
+  // showing it covers the whole screen, so the
   // launcher card below must not stay interactive behind it — otherwise users
   // can tab/click through to the form behind the modal (PAP-52). The launcher
   // only needs to render as a re-entry point once the wizard is dismissed.
@@ -641,22 +632,25 @@ export function OnboardingRoutePage() {
   }
 
   const title = matchedCompany
-    ? `Add another agent to ${matchedCompany.name}`
+    ? t("optionalOnboarding.addAgentTitle", { name: matchedCompany.name })
     : companies.length > 0
-      ? "Create another organization"
-      : "Create your first organization";
+      ? t("optionalOnboarding.createAnotherOrganization")
+      : t("optionalOnboarding.welcomeTitle");
   const description = matchedCompany
-    ? "Run onboarding again to add an agent and a starter task for this organization."
-    : companies.length > 0
-      ? "Run onboarding again to create another organization and seed its first agent."
-      : "Get started by creating an organization and your first agent.";
+    ? t("optionalOnboarding.agentHelp")
+    : t("optionalOnboarding.organizationHelp");
 
   return (
     <div className="mx-auto max-w-xl py-10">
       <div className="rounded-lg border border-border bg-card p-6">
         <h1 className="text-xl font-semibold">{title}</h1>
         <p className="mt-2 text-sm text-muted-foreground">{description}</p>
-        <div className="mt-4">
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          {matchedCompany && (
+            <Button variant="outline" asChild>
+              <Link to={`/${matchedCompany.issuePrefix}/dashboard`}>{t("optionalOnboarding.openDashboard")}</Link>
+            </Button>
+          )}
           {/* On a managed stack whose Cloud origin is unknown there is nowhere
               to send this click: creation lives on Cloud, and in-app creation
               is a 403 floor. A button that does nothing is worse than none, so
@@ -687,7 +681,7 @@ export function OnboardingRoutePage() {
                     : openOnboarding()
               }
             >
-              {matchedCompany ? "Add Agent" : "Start Onboarding"}
+              {matchedCompany ? t("optionalOnboarding.configureAgent") : t("optionalOnboarding.createOrganization")}
             </Button>
           )}
         </div>
@@ -698,7 +692,6 @@ export function OnboardingRoutePage() {
 
 function CompanyRootRedirect() {
   const { companies, selectedCompany, loading } = useCompany();
-  const location = useLocation();
 
   if (loading) {
     return <PaperclipLoading />;
@@ -706,14 +699,6 @@ function CompanyRootRedirect() {
 
   const targetCompany = selectedCompany ?? companies[0] ?? null;
   if (!targetCompany) {
-    if (
-      shouldRedirectCompanylessRouteToOnboarding({
-        pathname: location.pathname,
-        hasCompanies: false,
-      })
-    ) {
-      return <Navigate to="/onboarding" replace />;
-    }
     return <NoCompaniesStartPage />;
   }
 
@@ -751,14 +736,6 @@ function UnprefixedBoardRedirect() {
 
   const targetCompany = selectedCompany ?? companies[0] ?? null;
   if (!targetCompany) {
-    if (
-      shouldRedirectCompanylessRouteToOnboarding({
-        pathname: location.pathname,
-        hasCompanies: false,
-      })
-    ) {
-      return <Navigate to="/onboarding" replace />;
-    }
     return <NoCompaniesStartPage />;
   }
 
@@ -770,7 +747,7 @@ function UnprefixedBoardRedirect() {
   );
 }
 
-function NoCompaniesStartPage() {
+export function NoCompaniesStartPage() {
   const { openOnboarding } = useDialogActions();
   const { t } = useTranslation();
   // A managed stack with no visible companies is a loading or error state, not
@@ -782,10 +759,10 @@ function NoCompaniesStartPage() {
     <div className="mx-auto max-w-xl py-10">
       <div className="rounded-lg border border-border bg-card p-6">
         <h1 className="text-xl font-semibold">
-          {t("app.noCompanies.title", { defaultValue: "Create your first organization" })}
+          {t("optionalOnboarding.welcomeTitle")}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          {t("app.noCompanies.description", { defaultValue: "Get started by creating an organization." })}
+          {t("optionalOnboarding.organizationHelp")}
         </p>
         <div className="mt-4">
           {/* Same as the onboarding route: no Cloud origin means nowhere to

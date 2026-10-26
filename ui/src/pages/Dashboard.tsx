@@ -2,12 +2,6 @@ import { useCompanyAgentCreationAccess } from "@/hooks/useCompanyAgentCreationAc
 import { useTranslation } from "@/i18n";
 import { AgentIdentity } from "../components/AgentIdentity";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation } from "@/lib/router";
-import {
-  onboardingStepForCompany,
-  shouldRouteAgentlessCompanyToOnboarding,
-} from "../lib/onboarding-route";
-import { claimOnboardingOffer } from "../lib/onboarding-auto-open";
 import { Link } from "@/lib/router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { dashboardApi } from "../api/dashboard";
@@ -76,16 +70,14 @@ export function Dashboard() {
   const { t } = useTranslation();
   const { selectedCompanyId, companies } = useCompany();
   const { openOnboarding } = useDialogActions();
-  const location = useLocation();
   const { setBreadcrumbs } = useBreadcrumbs();
   const [animatedActivityIds, setAnimatedActivityIds] = useState<Set<string>>(new Set());
   const seenActivityIdsRef = useRef<Set<string>>(new Set());
   const hydratedActivityRef = useRef(false);
   const activityAnimationTimersRef = useRef<number[]>([]);
 
-  // `isFetching` is read alongside the data: a cached list is served while its
-  // refetch runs, and an empty one from before the first hire must not pass
-  // for the company's current state — see `shouldRouteAgentlessCompanyToOnboarding`.
+  // A cached empty list may predate the first hire; wait for its refresh
+  // before offering the optional setup banner.
   const agentCreation = useCompanyAgentCreationAccess(selectedCompanyId);
 
   const { data: agents, isFetching: agentsRefreshing } = useQuery({
@@ -118,46 +110,6 @@ export function Dashboard() {
       ]);
     },
   });
-
-  // A company with no agent cannot do anything — no runs, no tasks, nothing
-  // to show. The banner below already says so and offers a link; this takes
-  // the customer there instead of asking them to notice.
-  //
-  // It also closes the gap a Cloud-provisioned stack falls into. Cloud creates
-  // the company before the tenant boots, so the companyless redirect never
-  // fires and a seeded customer lands here, on an empty dashboard, straight
-  // out of signup.
-  //
-  // Opened as the dialog rather than navigated to: the wizard is already
-  // mounted globally, so there is no route to race and no redirect to loop.
-  // Placed with the other hooks — the early returns below mean anything
-  // further down would be called conditionally.
-  //
-  // The company and the step are both passed. Opening with empty options would
-  // start the wizard at the front door with no company, and the new-company
-  // path there would create a *second* company instead of giving this one an
-  // agent.
-  const shouldOpenOnboarding = shouldRouteAgentlessCompanyToOnboarding({
-    pathname: location.pathname,
-    agentsLoaded: agents !== undefined,
-    agentsRefreshing,
-    agentCount: agents?.length ?? 0,
-  });
-  // Auto-open once per company. Every input to the effect sits behind a query,
-  // so a refetch re-runs it, and the customer can also navigate away and come
-  // back — both would otherwise call `openOnboarding` again and reopen a
-  // wizard that was deliberately closed. `claimOnboardingOffer` holds the
-  // companies already offered; see it for why that outlives this component.
-  useEffect(() => {
-    if (!shouldOpenOnboarding || !selectedCompanyId || !agentCreation.allowed) return;
-    if (!claimOnboardingOffer(selectedCompanyId)) return;
-    openOnboarding({
-      companyId: selectedCompanyId,
-      initialStep: onboardingStepForCompany(),
-    });
-    // No mission lookup to wait on any more: the step this opens is the same
-    // whatever the goals say, so waiting only delayed the open.
-  }, [shouldOpenOnboarding, selectedCompanyId, openOnboarding, agentCreation.allowed]);
 
   useEffect(() => {
     setBreadcrumbs([{ label: t("navigation.dashboard") }]);
@@ -317,9 +269,7 @@ export function Dashboard() {
     return <PageSkeleton variant="dashboard" />;
   }
 
-  // Same rule as the auto-offer above: a list still being refreshed may be the
-  // empty one cached before the first hire, and the banner's "Create one here"
-  // opens the same agent step the offer does.
+  // Configuration is an explicit action, never a prerequisite for this page.
   const hasNoAgents = agents !== undefined && !agentsRefreshing && agents.length === 0;
   const pausedBanner = derivePausedAgentBanner(agents);
   const pausedImportedCount =
@@ -367,14 +317,14 @@ export function Dashboard() {
           <div className="flex items-center gap-2.5">
             <Bot className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
             <p className="text-sm text-amber-900 dark:text-amber-100">
-              {t("liveUi.noAgents")}
+              {t("optionalOnboarding.noAgents")}
             </p>
           </div>
           {agentCreation.allowed ? <button
             onClick={() => openOnboarding({ initialStep: 3, companyId: selectedCompanyId! })}
             className="text-sm font-medium text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-100 underline underline-offset-2 shrink-0"
           >
-            {t("liveUi.createAgentHere")}
+            {t("optionalOnboarding.configureAgent")}
           </button> : <p className="text-sm text-muted-foreground">{t(agentCreation.failed ? "authGate.setupAccessFailed" : agentCreation.pending ? "common.loading" : "authGate.askAdmin")}</p>}
         </div>
       )}

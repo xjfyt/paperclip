@@ -24,6 +24,9 @@ export type FooterPrimaryIcon = "arrow" | "spinner" | "none";
  */
 export function FooterNav({
   onBack,
+  onExit,
+  exitLabel,
+  exitDisabled,
   primaryLabel,
   primaryDisabled,
   loading,
@@ -32,6 +35,9 @@ export function FooterNav({
   onPrimary,
 }: {
   onBack?: () => void;
+  onExit?: () => void;
+  exitLabel?: string;
+  exitDisabled?: boolean;
   primaryLabel: string;
   primaryDisabled?: boolean;
   loading?: boolean;
@@ -51,7 +57,13 @@ export function FooterNav({
   const icon: FooterPrimaryIcon = primaryIcon ?? (loading ? "spinner" : "arrow");
 
   return (
-    <div className="flex items-center justify-between pt-9">
+    <div className="flex flex-wrap items-center justify-between gap-3 pt-9">
+      <div className="flex items-center gap-2">
+      {onExit && (
+        <Button variant="ghost" onClick={onExit} disabled={exitDisabled}>
+          {exitLabel}
+        </Button>
+      )}
       {onBack ? (
         // Same size as the primary, not a tier down. Back is ghost until you
         // point at it, and a shorter pill made the hover surface read as a
@@ -73,6 +85,7 @@ export function FooterNav({
       ) : (
         <span />
       )}
+      </div>
       {/*
         `layout` on the button and `popLayout` on its contents are what make the
         width ease rather than jump: the outgoing label leaves the flow at once,
