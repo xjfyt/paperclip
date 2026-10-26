@@ -1,3 +1,4 @@
+import { MimouseEvaluationRestore } from "./MimouseEvaluationRestore";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createEvaluationComparisonSchema, createEvaluationDatasetSchema, type EvaluationDatasetRecord, type EvaluationComparisonRecord } from "@paperclipai/shared/mimouse-evaluation";
@@ -86,7 +87,7 @@ function EvaluationCompany({ companyId, userId }: { companyId: string; userId: s
       <p>{t(selected.report.eligibleForHumanReview ? "evaluationUi.reviewable" : "evaluationUi.blocked")}</p>
       <ul>{selected.report.blockers.map(blocker => <li key={blocker}>{t(`evaluationUi.${blocker}`)}</li>)}</ul>
       <details><summary>{t("evaluationUi.results")}</summary><ul>{selected.report.results.map(result => <li key={`${result.versionId}:${result.caseId}`} className="break-all text-xs">{result.caseId} · {result.versionId} · {result.runId ?? "—"} · {result.supersededAt && `${t("evaluationUi.historicalRun")} · `}{t(`evaluationUi.${result.blocked ?? (result.passed ? "passed" : "failed")}`)}</li>)}</ul></details>
-      <p>{t("evaluationUi.restoreBlocked")}</p>
+      <MimouseEvaluationRestore key={selected.id} companyId={companyId} userId={userId} comparison={selected} />
     </section>}
   </div>;
 }

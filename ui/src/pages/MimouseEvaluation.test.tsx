@@ -10,6 +10,7 @@ import es from "@/i18n/contributions/evaluationUi/es.json";
 import ja from "@/i18n/contributions/evaluationUi/ja.json";
 import { MimouseEvaluation } from "./MimouseEvaluation";
 const calls = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), companyId: "company-a", breadcrumbs: vi.fn() }));
+vi.mock("./MimouseEvaluationRestore", () => ({ MimouseEvaluationRestore: () => <div data-testid="restore-panel" /> }));
 vi.mock("@/api/client", () => ({ api: { get: calls.get, post: calls.post } }));
 vi.mock("@/api/auth", () => ({ authApi: { getSession: async () => ({ user: { id: "owner" } }) } }));
 vi.mock("@/context/CompanyContext", () => ({ useCompany: () => ({ selectedCompanyId: calls.companyId }) }));
@@ -26,12 +27,12 @@ beforeEach(async () => {
   host = document.createElement("div"); document.body.append(host); root = createRoot(host);
 });
 afterEach(async () => { await act(async () => root.unmount()); client.clear(); host.remove(); });
-it("shows unknown costs and unavailable restore in every locale without executing", async () => {
+it("shows unknown costs and the separate controlled-restore panel in every locale without executing", async () => {
   await mount(); const button = [...host.querySelectorAll("button")].find(item => item.textContent === "report-a")!;
   await act(async () => button.click()); await flush();
   for (const locale of ["en", "zh-CN", "es", "ja"]) {
     await act(async () => { await i18n.changeLanguage(locale); });
-    expect(host.textContent).toContain(i18n.t("evaluationUi.unknown")); expect(host.textContent).toContain(i18n.t("evaluationUi.restoreBlocked"));
+    expect(host.textContent).toContain(i18n.t("evaluationUi.unknown")); expect(host.querySelector('[data-testid="restore-panel"]')).not.toBeNull();
     expect(host.textContent).toContain(i18n.t("evaluationUi.candidate_cost_unknown"));
   }
   expect(calls.post).not.toHaveBeenCalled();

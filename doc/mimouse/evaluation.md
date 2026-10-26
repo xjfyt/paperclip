@@ -19,16 +19,16 @@
 
 报告保留固定分母、通过/阻塞数、费用未知数、通过数变化、逐用例运行ID及输出哈希。只有完整证据、候选全部通过且不退步、满足可选记录费用上限才标记 `eligibleForHumanReview`；这**不是执行授权或提升成功**。
 
-## 提升/回滚的准确缺口
+## 提升/回滚边界与后续受控入口
 
-当前 readiness 明确 `promotionSupported=false`、`rollbackSupported=false`、`atomic_version_snapshot_restore_not_implemented`。没有提升/回滚/执行 API，也不修改 `currentVersionId`。
+原始评测 readiness 保留直接 promotion/rollback 不可用的兼容响应；评测 compare 本身始终不执行、不修改 `currentVersionId`。后续新增独立的人类 session 受控文件恢复入口及页内面板，详见 [整树恢复协议与限制](evaluation-restore.md)。仅支持已经暂停、未被代理使用的 managed-local 技能；不是通用活跃 rollout。旧 readiness 中历史 blocker 不能作为新 restore readiness 的能力判断。
 
 上游 `company-skills.ts` 已有：
 - 私有 `materializeVersionSnapshot`：在 `__versions__/skill/version` 创建不可变运行目录，校验完整文件清单、字节与可执行位；**并非**恢复可编辑 live skill 文件。
 - 私有 `withSkillFileMutation`：slug advisory lock、技能行锁与重读身份。
 - 公共 `updateFile`：单文件 CAS、内容与模式回滚、重新生成版本；多次调用不能构成整树原子恢复，不能处理额外文件删除与崩溃中断一致性。
 
-安全的后续切片必须在上游文件变更边界增加审计过的整树恢复入口：校验来源可编辑性与路径/符号链接/执行文件安全，验证目标完整清单，锁与 expected-current-version CAS，处理新增/删除/二进制/可执行位，协调元数据/技能版本/文件交换与失败补偿，覆盖进程中断恢复；人类会话和策略权限、过期报告、重复确认、并发编辑及失败恢复均需真实文件系统/数据库测试。不能仅设置版本指针来假装完成回滚。
+受控恢复切片在上游文件变更边界增加整树恢复入口，需独立审阅/集成验证：校验来源可编辑性与路径/符号链接/执行文件安全，验证目标完整清单，锁与 expected-current-version CAS，处理新增/删除/二进制/可执行位，协调元数据/技能版本/文件交换与失败补偿，覆盖进程中断恢复；人类会话和策略权限、过期报告、重复确认、并发编辑及失败恢复均需真实文件系统/数据库测试。不能仅设置版本指针来假装完成回滚。
 
 ## 集成清单（父工作树负责共享文件）
 
