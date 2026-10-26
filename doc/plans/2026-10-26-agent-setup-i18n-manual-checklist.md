@@ -199,11 +199,33 @@ NODE_OPTIONS=--max-old-space-size=512 node ../node_modules/vitest/vitest.mjs run
 
 - 手测追加：在测试环境触发 handoff 过期、无权限、暂时不可用、无效供应商地址与重复近期登录恢复，切四语检查语义和返回/重试按钮；切语言不应重新交换 session、清草稿或导航。主动重试沿用既有流程。原始网络诊断不承诺翻译；拒绝 URL 的提示不得泄露 URL 内凭据。
 
+## 第十片：远程 MCP controller 本地错误与登录状态（2026-10-26）
+
+- 实际入口为 `/apps/connect?source=zapier|arcade|composio|executor` 和任务宿主，经 `ConnectionSetupFlow` 分派至 `RemoteMcpProductionSetup`，渲染 `RemoteMcpConnectionSetup` 或复用账户的 `RemoteMcpAccountChoice`。本片不替代标准 OAuth controller，不把设计示例当生产流程证据。
+- 本地 header/console URL guard、保存凭据提示、blocked popup、非 Error fallback 和账户复用 fallback 使用既有描述符；`notice`/`choiceError` 在 render 翻译。共享 URL 拒绝明确消费 `translationKey`，真实外部 Error.message 与设计示例传入的自定义 notice 仍原样。未改认证/权限/状态枚举、request payload、用户输入或消息 effect 依赖；没有新增轮询。
+- 独立 `remoteMcpStatusUi` 四语贡献，覆盖等待/取消/错误状态及账户复用说明，保留“复用不代表已验证下游应用权限”的安全含义。登录恢复链接用安全数字 React 槽，href/target/rel 与原 onClick 不变，不把URL或账户名称送入翻译标记解析。
+- 四语受控渲染测试包括 rejected/unreachable，但不声称生产请求会发出这些状态。实际 AppsConnect 用例覆盖五种 local guard/未知失败/raw诊断/URL拒绝，先显示错误再切四语，DOM字段值、sessionStorage 与 connect/startOAuth/finish/install 记录不变；三种 blocked popup 和三个提供商失败回调切语言不重复认证，随后主动点击当前原生登录链接/重试仍沿用原 draft/interaction 语义。
+- 最终专注回归 **7 文件 / 330 用例通过**；独立审阅、资源/合成器安全规则、token gates、调色板/角色同步与 diff 检查通过。真实供应商登录、跨窗口消息/弹窗策略和浏览器布局仍待用户测试；本片未执行完整类型检查/构建、数据库或真实网络。
+- 复现命令（`ui/`，纯 mock/jsdom、512 MB、单 worker）：
+
+```sh
+NODE_OPTIONS=--max-old-space-size=512 node ../node_modules/vitest/vitest.mjs run \
+  src/i18n/remote-mcp-status-surfaces.test.tsx \
+  src/i18n/connection-access-remote.test.tsx \
+  src/i18n/connection-handoff-surfaces.test.tsx \
+  src/pages/apps/AppsConnect.test.tsx \
+  src/features/connections/ConnectionSetupFlow.oauth.test.ts \
+  src/features/connections/ConnectionSetupFlow.architecture.test.ts \
+  src/features/connections/ConnectionIntentInteractionBody.test.tsx --maxWorkers=1
+```
+
+- 手测追加：四提供商从 page/dialog 进入，分别测试已有账户复用、新连接、错误 header/console URL、已保存凭据留空、取消/失败回调和弹窗阻止。错误后切语言确认草稿、身份和授权范围不丢，未知服务端诊断保持原文；恢复链接不重复打开窗口或变更 URL；切语言后检查当前链接的键盘焦点、Tab顺序与激活（翻译可能重建链接节点）。实际权限验收仍须测试账户和服务端验证，不能以提示文字或UI禁用状态代替。
+
 ## 已知剩余范围（不是本片已完成项）
 
 - 真实登录、剪贴板权限及浏览器布局尚未四语验收。系统提示已抽取不代表外部交互已通过。
 - `AdapterLoginPanel` 与 `useLocalAiLogin` 本片指定显示层已补；`environmentDisplayLabel` 仅拼用户环境名和原始 driver 标识，保留为用户内容/技术值。此前确认的三个共享权限摘要/选择组件已由第六片补齐，三行摘要和完成页由第七片补齐；`ConnectionSetupFlow` 标准 OAuth 状态屏和自身本地错误缓存由第八片补齐，但其它分支（如校验/错误缓存、密钥表单）以及远程 MCP 独立 controller 的其它认证/管理/错误文案仍未包含，不能据此声称整个连接流程四语完成。所有切片均未更改权限判定或真实授权语义。
-- 第九片已给 `oauthHandoff.ts` / `authorizationUrl.ts` 明确本地异常增加描述符并接通最小宿主；`ConnectionSetupFlow.openConnectorEnrollment` 仍使用 `target.message`，`RemoteMcpProductionSetup` 仍以 `new Error(target.message)` 包装；PasteConfigTab、AppDetail/AdvancedPanel toast 等其它宿主也未消费全部描述符。现有 toast 只保存字符串，不能承诺已显示 toast 随语言更新；本片不扩展共享 toast。真实网络原始诊断不按错误码猜测翻译。
+- 第九片已给 `oauthHandoff.ts` / `authorizationUrl.ts` 明确本地异常增加描述符并接通最小宿主；`ConnectionSetupFlow.openConnectorEnrollment` 仍使用 `target.message`，远程 MCP 的对应 URL catch 已由第十片接通；PasteConfigTab、AppDetail/AdvancedPanel toast 等其它宿主也未消费全部描述符。现有 toast 只保存字符串，不能承诺已显示 toast 随语言更新；本片不扩展共享 toast。真实网络原始诊断不按错误码猜测翻译。
 - 第四片审计发现的 `OnboardingWizard` 本机 connect 错误宿主已由第五片接通；向导的其他硬编码校验/错误及尚未审计的系统文案，不在本次 Agent 创建切片完成结论内。
 - 服务端/适配器 `Error.message`、运行检查结果以及用户/组织/环境名称保持原始内容，不能以纯英文扫描结果判定它们都应翻译。
 - 基线 `6bee5bc` 的 `optionalOnboarding.configureAgent` 三语使用“智能体/agente/エージェント”；本片创建按钮使用独立 Agent 术语键，不覆盖其他域片段。并行 core 切片已修中文 Agent 术语，其他语种与最终集成状态以合并后的资源为准。

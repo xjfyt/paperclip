@@ -506,14 +506,58 @@ describe("AppsConnect — Connect with a link (M4 frame)", () => {
     expect(onComplete).not.toHaveBeenCalled();
     await act(async () => message(window.location.origin, "intent-inline", "failed"));
     expect(container.textContent).toContain("Authorization did not complete");
+    const calls = () => JSON.stringify([connectAppMock.mock.calls, startOAuthMock.mock.calls, putConnectionInstallsMock.mock.calls, finishAppMock.mock.calls, popup.location.assign.mock.calls, onPhaseChange.mock.calls]);
+    const before = calls();
+    for (const locale of ["ja", "zh-CN", "es", "en"]) {
+      await act(async () => { await i18n.changeLanguage(locale); });
+      expect(container.textContent).toContain(i18n.t("connectionOAuthUi.callbackIncomplete"));
+      expect(calls()).toBe(before); expect(onComplete).not.toHaveBeenCalled();
+    }
     await act(async () => buttonByText("Try again")!.click());
     await vi.waitFor(() => expect(startOAuthMock).toHaveBeenCalledTimes(2));
     expect(connectAppMock).toHaveBeenLastCalledWith("company-1", expect.objectContaining({ resumeConnectionId: connection.id }));
     await act(async () => message(window.location.origin, "intent-inline", "connected"));
-    expect(onComplete).toHaveBeenCalledWith({ resolvedByCallback: true });
+    expect(onComplete).toHaveBeenCalledExactlyOnceWith({ resolvedByCallback: true });
     await act(async () => root.unmount());
     mountedRoot = null;
     expect(popup.close).toHaveBeenCalled();
+  });
+
+  it.each(["headers", "console", "raw", "unknown", "url"])("retranslates remote MCP %s errors without losing the draft or repeating requests", async kind => {
+    mockSearch.value = "source=executor";
+    if (kind === "raw") connectAppMock.mockRejectedValue(new Error("Remote provider diagnostic <raw>"));
+    if (kind === "unknown") connectAppMock.mockRejectedValue({ unknown: true });
+    if (kind === "url") {
+      connectAppMock.mockResolvedValue({ connectionId: "remote-draft", connection: { id: "remote-draft", status: "draft", credentialPolicy: "per_user" }, catalog: [], auth: { kind: "oauth" } });
+      startOAuthMock.mockResolvedValue({ authorizationUrl: "javascript:private_payload" });
+    }
+    await render();
+    await act(async () => setInputValue(container.querySelector<HTMLInputElement>('input[id$="-url"]')!, "https://provider.example/mcp?keep=1"));
+    if (kind === "console") await act(async () => setInputValue(container.querySelector<HTMLInputElement>('input[id$="-management"]')!, "http://console.example/private"));
+    if (kind === "headers") {
+      await openAccessAdvanced();
+      await act(async () => {
+        const select = container.querySelector<HTMLSelectElement>('select[id$="-auth"]')!;
+        select.value = "headers"; select.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+      await act(async () => buttonByText("Add header")!.click());
+      await act(async () => setInputValue(container.querySelector<HTMLInputElement>('input[id$="-name"]')!, "X-User-Header"));
+    }
+    await act(async () => buttonByText("Connect Executor")!.click());
+    await flushReact(); await flushReact();
+    const key = kind === "headers" ? "remoteMcpStatusUi.headersRequired" : kind === "console" ? "remoteMcpStatusUi.consoleUrlInvalid" : kind === "url" ? "connectionHandoffUi.urlScheme" : "remoteMcpStatusUi.connectFailed";
+    const calls = () => JSON.stringify([connectAppMock.mock.calls, startOAuthMock.mock.calls, finishAppMock.mock.calls, putConnectionInstallsMock.mock.calls]);
+    const values = () => Array.from(container.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input, select'), input => input.value);
+    const before = calls(), draft = values(), saved = JSON.stringify({ ...sessionStorage });
+    for (const locale of ["ja", "zh-CN", "es", "en"]) {
+      await act(async () => { await i18n.changeLanguage(locale); });
+      expect(container.textContent).toContain(kind === "raw" ? "Remote provider diagnostic <raw>" : i18n.t(key));
+      expect(calls()).toBe(before); expect(values()).toEqual(draft); expect(JSON.stringify({ ...sessionStorage })).toBe(saved);
+      expect(navigateTopLevelMock).not.toHaveBeenCalled();
+    }
+    expect(connectAppMock).toHaveBeenCalledTimes(["headers", "console"].includes(kind) ? 0 : 1);
+    expect(startOAuthMock).toHaveBeenCalledTimes(kind === "url" ? 1 : 0);
+    expect(finishAppMock).not.toHaveBeenCalled();
   });
 
   it.each(["blocked", "throws", "closed"])("keeps inline Composio sign-in recoverable when its popup is %s", async (failure) => {
@@ -534,8 +578,17 @@ describe("AppsConnect — Connect with a link (M4 frame)", () => {
     expect(link.href).toBe("https://mcp.notion.com/authorize?state=resumed");
     expect(link.rel).toBe("noopener noreferrer");
     expect(onPhaseChange).toHaveBeenCalledWith("needs_retry");
+    const calls = () => JSON.stringify([open.mock.calls, connectAppMock.mock.calls, startOAuthMock.mock.calls, finishAppMock.mock.calls, putConnectionInstallsMock.mock.calls, onPhaseChange.mock.calls]);
+    const before = calls();
+    for (const locale of ["ja", "zh-CN", "es", "en"]) {
+      await act(async () => { await i18n.changeLanguage(locale); });
+      expect(container.textContent).toContain(i18n.t("remoteMcpStatusUi.openBlocked"));
+      expect(container.textContent).toContain(i18n.t("remoteMcpStatusUi.waitingHelp"));
+      expect(container.querySelector('a[target="_blank"]')?.getAttribute('href')).toBe("https://mcp.notion.com/authorize?state=resumed");
+      expect(calls()).toBe(before); expect(onComplete).not.toHaveBeenCalled();
+    }
     const click = new MouseEvent("click", { bubbles: true, cancelable: true });
-    await act(async () => link.dispatchEvent(click));
+    await act(async () => container.querySelector<HTMLAnchorElement>('a[target="_blank"]')!.dispatchEvent(click));
     expect(click.defaultPrevented).toBe(false);
     expect(onPhaseChange).toHaveBeenLastCalledWith("authorizing");
     expect(container.textContent).not.toContain("Paperclip couldn’t open sign-in");

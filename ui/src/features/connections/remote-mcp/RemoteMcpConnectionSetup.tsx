@@ -1,3 +1,4 @@
+import { Trans } from "react-i18next";
 import { useTranslation } from "@/i18n";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { CheckCircle2, ExternalLink, HelpCircle, Loader2, Plus, Trash2 } from "lucide-react";
@@ -55,6 +56,7 @@ export function RemoteMcpConnectionSetup({ provider, state: s, actions: a, agent
   agents: { id: string; name: string }[];
 }) {
   const { t } = useTranslation();
+  const notice = typeof s.notice === "string" ? s.notice : s.notice ? t(s.notice.key) : null;
   const uid = useId();
   const heading = useRef<HTMLHeadingElement>(null);
   const previousStep = useRef(s.step);
@@ -114,10 +116,10 @@ export function RemoteMcpConnectionSetup({ provider, state: s, actions: a, agent
     preserveAgentAccess={s.setupComplete}
   />;
 
-  const error = s.connectStatus === "invalid_url" ? { title: "Enter a valid MCP URL", body: "Paste the complete server URL, including https:// or http://. A dashboard page is not an MCP endpoint." }
-    : s.connectStatus === "oauth_failed" ? { title: `${provider.name} couldn’t connect`, body: "Authorization did not complete. Your saved connection is still here, so you can try again." }
-    : s.connectStatus === "rejected" ? { title: "Credentials were rejected", body: `Check or replace the credentials from ${provider.name}, then reconnect. Your agent access and tool choices are preserved.` }
-    : s.connectStatus === "unreachable" ? { title: "Paperclip could not reach this server", body: "Check that the endpoint is running and reachable from Paperclip, then try again. Your draft is still here." }
+  const error = s.connectStatus === "invalid_url" ? { title: t("remoteMcpStatusUi.invalidUrlTitle"), body: t("remoteMcpStatusUi.invalidUrlBody", { httpsScheme: "https://", httpScheme: "http://" }) }
+    : s.connectStatus === "oauth_failed" ? { title: t("connectionOAuthUi.errorTitle", { serverName: provider.name }), body: t("connectionOAuthUi.callbackIncomplete") }
+    : s.connectStatus === "rejected" ? { title: t("remoteMcpStatusUi.credentialsRejected"), body: t("remoteMcpStatusUi.credentialsRejectedHelp", { provider: provider.name }) }
+    : s.connectStatus === "unreachable" ? { title: t("remoteMcpStatusUi.unreachable"), body: t("remoteMcpStatusUi.unreachableHelp") }
     : null;
   const urlField = <div className="space-y-2">
     <div className="flex items-center gap-2"><Label htmlFor={`${uid}-url`}>MCP server URL</Label><FieldHelp label="MCP server URL">{provider.urlHelp}</FieldHelp></div>
@@ -136,7 +138,7 @@ export function RemoteMcpConnectionSetup({ provider, state: s, actions: a, agent
       step={currentStep >= 0 && !s.setupComplete ? "key" : "gallery"} activeIndex={currentStep} labels={steps.map(() => "Connect")} onCancel={busy || s.step === "management" || s.step === "permissions" || s.step === "draft" ? undefined : onCancel ?? a.saveExit} />
     <main className="space-y-6">
         {upstreamServiceName && <InlineBanner compact>{provider.name} handles the connection and requests to {upstreamServiceName}. {provider.id === "composio" ? "After connecting this account, sign in to the app in Composio." : "Manage app sign-in in the provider, then refresh your gateway here."}</InlineBanner>}
-        {s.notice && <p role="status" className="text-sm text-muted-foreground">{s.notice}</p>}
+        {notice && <p role="status" className="text-sm text-muted-foreground">{notice}</p>}
 
         {s.step === "access" && <AccessStepContent agents={agents} lockedAgentId={lockedAgentId} authKind="oauth" grantKinds={fixedGrantKind ? [fixedGrantKind] : undefined} grantKind={s.grantKind} setGrantKind={(grantKind) => { if (grantKind !== "agent") change({ grantKind }); }}
           installChoice={s.allAgents ? "all" : "specific"} setInstallChoice={(choice) => change({ allAgents: choice === "all" })}
@@ -160,14 +162,14 @@ export function RemoteMcpConnectionSetup({ provider, state: s, actions: a, agent
             {external("setup", `Open ${provider.name} setup guide`)}
           </div>
           {s.connectStatus === "sign_in" && provider.supportsBrowserAuth ? <>
-            <div role="status"><InlineBanner title={`Finish signing in to ${provider.name}`}>
-              Complete sign-in in the provider window, then return here. Paperclip is waiting for confirmation.
+            <div role="status"><InlineBanner title={t("remoteMcpStatusUi.finishSignIn", { provider: provider.name })}>
+              {t("remoteMcpStatusUi.waitingHelp")}
             </InlineBanner></div>
-            <p className="text-sm text-muted-foreground">If a window did not open, {authorizationUrl ? <a className="text-current underline" href={authorizationUrl} onClick={() => a.openProvider("sign_in")} target="_blank" rel="noopener noreferrer">open sign-in again</a> : external("sign_in", "open sign-in again")}.</p>
-            {footer(<><Button variant="outline" onClick={a.cancelConnect}>Cancel sign-in</Button><Button disabled>Waiting for sign-in</Button></>)}
+            <p className="text-sm text-muted-foreground"><Trans t={t} i18nKey="remoteMcpStatusUi.openAgainHelp" components={[authorizationUrl ? <a className="text-current underline" href={authorizationUrl} onClick={() => a.openProvider("sign_in")} target="_blank" rel="noopener noreferrer">{t("remoteMcpStatusUi.openAgain")}</a> : external("sign_in", t("remoteMcpStatusUi.openAgain"))]} /></p>
+            {footer(<><Button variant="outline" onClick={a.cancelConnect}>{t("remoteMcpStatusUi.cancelSignIn")}</Button><Button disabled>{t("remoteMcpStatusUi.waiting")}</Button></>)}
           </> : <form className="space-y-6" onSubmit={(event) => { event.preventDefault(); a.connect(); }}>
             {error && <div role="alert"><InlineBanner tone="danger" title={error.title}>{error.body}</InlineBanner></div>}
-            {s.connectStatus === "cancelled" && <p role="status" className="text-sm text-muted-foreground">Connection cancelled. Your setup details are preserved; try again when you are ready.</p>}
+            {s.connectStatus === "cancelled" && <p role="status" className="text-sm text-muted-foreground">{t("remoteMcpStatusUi.cancelled")}</p>}
             <fieldset disabled={busy} className="min-w-0 space-y-5">
               {provider.defaultUrl ? <Collapsible open={sessionOpen || s.connectStatus === "invalid_url"} onOpenChange={setSessionOpen}>
                 <CollapsibleTrigger asChild><Button type="button" variant="link" className="h-auto p-0 text-sm text-muted-foreground underline underline-offset-2">Reuse an existing session</Button></CollapsibleTrigger>

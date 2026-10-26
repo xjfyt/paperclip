@@ -1,3 +1,5 @@
+import { useTranslation } from "@/i18n";
+import type { LocalizedUiMessage } from "@/lib/localized-ui-error";
 import { Button } from "@/components/ui/button";
 import { InlineBanner } from "@/components/InlineBanner";
 import { ConnectionChoiceList } from "../ConnectionChoiceList";
@@ -17,43 +19,41 @@ export function RemoteMcpAccountChoice({
   upstreamServiceName?: string;
   connections: { id: string; name: string }[];
   pendingId?: string | null;
-  error?: string | null;
+  error?: LocalizedUiMessage | null;
   onSelect: (id: string) => void;
   onCancel?: () => void;
   onConnectNew: () => void;
 }) {
+  const { t } = useTranslation();
+  const errorText = typeof error === "string" ? error : error ? t(error.key) : null;
   return (
     <div className="space-y-5">
       <div>
         <h1 className="text-xl font-bold">
           {upstreamServiceName
-            ? `Connect ${upstreamServiceName} through ${providerName}`
-            : `Connect ${providerName}`}
+            ? t("remoteMcpStatusUi.connectThrough", { app: upstreamServiceName, provider: providerName })
+            : t("connectionOAuthUi.headerConnect", { serverName: providerName })}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Use an existing connection or connect a new account. Existing access
-          stays unchanged.
+          {t("remoteMcpStatusUi.reuseHelp")}
         </p>
       </div>
       {upstreamServiceName && (
         <InlineBanner compact>
-          {providerName} is an external service that handles the connection and
-          requests to {upstreamServiceName}. Reusing this account does not yet
-          verify app access; the agent will check it and guide any additional
-          authorization.
+          {t("remoteMcpStatusUi.externalAccountHelp", { provider: providerName, app: upstreamServiceName })}
         </InlineBanner>
       )}
       <ConnectionChoiceList
         choices={connections.map((connection) => ({
           ...connection,
-          description: "Provider account available",
+          description: t("remoteMcpStatusUi.accountAvailable"),
         }))}
         pendingId={pendingId}
         onSelect={onSelect}
       />
-      {error && (
+      {errorText && (
         <p role="alert" className="text-sm text-destructive">
-          {error}
+          {errorText}
         </p>
       )}
       <div className="flex items-center justify-between gap-3">
@@ -62,10 +62,10 @@ export function RemoteMcpAccountChoice({
           disabled={Boolean(pendingId)}
           onClick={onCancel}
         >
-          Cancel
+          {t("common.cancel")}
         </Button>
         <Button disabled={Boolean(pendingId)} onClick={onConnectNew}>
-          Connect new
+          {t("remoteMcpStatusUi.connectNew")}
         </Button>
       </div>
     </div>
