@@ -1,0 +1,21 @@
+{
+  "addLabel": "Add label",
+  "searchLabels": "Search labels...",
+  "newLabel": "New label",
+  "creatingLabel": "Creating…",
+  "createLabel": "Create label",
+  "moreLabels": "+{{count}} more",
+  "labelColor": "Label color",
+  "searchProjects": "Search projects...",
+  "noProject": "No project",
+  "parentTask": "Parent task",
+  "searchTasks": "Search tasks...",
+  "noParent": "No parent",
+  "searchingTasks": "Searching tasks...",
+  "noMatchingTasks": "No matching tasks.",
+  "searchBlockers": "Search tasks to add as blockers",
+  "noBlockers": "No blockers",
+  "addBlocker": "Add blocker",
+  "noSubtasks": "No subtasks yet.",
+  "addSubtask": "Add subtask"
+}

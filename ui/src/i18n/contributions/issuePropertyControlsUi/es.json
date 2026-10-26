@@ -1,0 +1,21 @@
+{
+  "addLabel": "Añadir etiqueta",
+  "searchLabels": "Buscar etiquetas...",
+  "newLabel": "Nueva etiqueta",
+  "creatingLabel": "Creando…",
+  "createLabel": "Crear etiqueta",
+  "moreLabels": "+{{count}} más",
+  "labelColor": "Color de etiqueta",
+  "searchProjects": "Buscar proyectos...",
+  "noProject": "Sin proyecto",
+  "parentTask": "Tarea principal",
+  "searchTasks": "Buscar tareas...",
+  "noParent": "Sin tarea principal",
+  "searchingTasks": "Buscando tareas...",
+  "noMatchingTasks": "No hay tareas coincidentes.",
+  "searchBlockers": "Buscar tareas para añadir como bloqueos",
+  "noBlockers": "Sin bloqueos",
+  "addBlocker": "Añadir bloqueo",
+  "noSubtasks": "Aún no hay subtareas.",
+  "addSubtask": "Añadir subtarea"
+}

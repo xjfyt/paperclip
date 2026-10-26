@@ -1,0 +1,21 @@
+{
+  "addLabel": "添加标签",
+  "searchLabels": "搜索标签…",
+  "newLabel": "新标签",
+  "creatingLabel": "正在创建…",
+  "createLabel": "创建标签",
+  "moreLabels": "另有 {{count}} 个",
+  "labelColor": "标签颜色",
+  "searchProjects": "搜索项目…",
+  "noProject": "无项目",
+  "parentTask": "父任务",
+  "searchTasks": "搜索任务…",
+  "noParent": "无父任务",
+  "searchingTasks": "正在搜索任务…",
+  "noMatchingTasks": "没有匹配的任务。",
+  "searchBlockers": "搜索要添加为阻塞项的任务",
+  "noBlockers": "无阻塞项",
+  "addBlocker": "添加阻塞项",
+  "noSubtasks": "暂无子任务。",
+  "addSubtask": "添加子任务"
+}

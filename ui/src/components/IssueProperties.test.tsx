@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { i18n, coreTaskMessages } from "../i18n/core-task-test-resources";
+import { issuePropertyControlsMessages } from "../i18n/issue-property-controls-test-resources";
 
 import type { ComponentProps, ReactNode } from "react";
 import { flushSync } from "react-dom";
@@ -1185,6 +1186,46 @@ describe("IssueProperties", () => {
     expect(onUpdate).toHaveBeenCalledWith({ assigneeAgentId: "agent-2", assigneeUserId: null });
 
     act(() => root.unmount());
+  });
+
+  it.each(Object.entries(issuePropertyControlsMessages))("localizes property selectors and preserves user data and update IDs in %s", async (locale, messages) => {
+    await i18n.changeLanguage(locale);
+    mockIssuesApi.listLabels.mockResolvedValue([createLabel({ name: "Bug 用户ラベル" })]);
+    mockProjectsApi.list.mockResolvedValue([createProject({ name: "Project 用户名" })]);
+    const onUpdate = vi.fn();
+    const { root, queryClient } = renderPropertiesWithQueryClient(container, {
+      issue: createIssue(), childIssues: [], onUpdate,
+    });
+    try {
+      await flush(); await flush();
+      expect(container.querySelector(`input[placeholder="${messages.searchLabels}"]`)).not.toBeNull();
+      expect(container.querySelector(`input[placeholder="${messages.searchProjects}"]`)).not.toBeNull();
+      expect(container.querySelector(`input[aria-label="${messages.searchBlockers}"]`)).not.toBeNull();
+      expect(container.querySelector(`input[aria-label="${messages.labelColor}"]`)).not.toBeNull();
+      for (const value of [messages.noParent, messages.noBlockers, messages.noProject, "Bug 用户ラベル", "Project 用户名"]) {
+        expect(container.textContent).toContain(value);
+      }
+      const click = async (text: string) => {
+        const button = Array.from(container.querySelectorAll("button")).find(item => item.textContent === text)!;
+        await act(() => button.click());
+      };
+      await click("Bug 用户ラベル");
+      expect(onUpdate).toHaveBeenLastCalledWith({ labelIds: ["label-1"] });
+      await click(messages.noParent);
+      expect(onUpdate).toHaveBeenLastCalledWith({ parentId: null });
+      await click(messages.noBlockers);
+      expect(onUpdate).toHaveBeenLastCalledWith({ blockedByIssueIds: [] });
+      const mocks = [mockIssuesApi.listLabels, mockProjectsApi.list, mockAgentsApi.list];
+      const calls = mocks.map(mock => mock.mock.calls.length);
+      const writes = onUpdate.mock.calls.length;
+      await act(async () => { await i18n.changeLanguage(locale === "ja" ? "es" : "ja"); });
+      await flush();
+      const next = locale === "ja" ? issuePropertyControlsMessages.es : issuePropertyControlsMessages.ja;
+      expect(container.querySelector(`input[placeholder="${next.searchLabels}"]`)).not.toBeNull();
+      expect(container.textContent).toContain("Bug 用户ラベル");
+      expect(mocks.map(mock => mock.mock.calls.length)).toEqual(calls);
+      expect(onUpdate).toHaveBeenCalledTimes(writes);
+    } finally { act(() => root.unmount()); queryClient.clear(); }
   });
 
   it.each(Object.entries(coreTaskMessages))("localizes assignment pickers and searches translated labels in %s", async (locale, messages) => {

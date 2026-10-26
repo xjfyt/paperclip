@@ -1176,11 +1176,11 @@ export function IssueProperties({
       type="button"
       className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
       onClick={() => setLabelsOpen(true)}
-      aria-label="Add label"
-      title="Add label"
+      aria-label={t("issuePropertyControlsUi.addLabel")}
+      title={t("issuePropertyControlsUi.addLabel")}
     >
       <Plus className="h-3 w-3" />
-      Add label
+      {t("issuePropertyControlsUi.addLabel")}
     </button>
   ) : undefined;
   const watchdogContent = (
@@ -1638,7 +1638,7 @@ export function IssueProperties({
       ))}
       {selectedIssueLabels.length > 3 && (
         <Badge variant="outline" className="border-border text-muted-foreground">
-          +{selectedIssueLabels.length - 3} more
+          {t("issuePropertyControlsUi.moreLabels", { count: selectedIssueLabels.length - 3 })}
         </Badge>
       )}
     </div>
@@ -1649,7 +1649,7 @@ export function IssueProperties({
     <>
       <input
         className="w-full px-2 py-1.5 text-xs bg-transparent outline-none border-b border-border mb-1 placeholder:text-muted-foreground/50"
-        placeholder="Search labels..."
+        placeholder={t("issuePropertyControlsUi.searchLabels")}
         value={labelSearch}
         onChange={(e) => setLabelSearch(e.target.value)}
         autoFocus={!inline}
@@ -1683,12 +1683,13 @@ export function IssueProperties({
           <input
             className="h-7 w-7 p-0 rounded bg-transparent"
             type="color"
+            aria-label={t("issuePropertyControlsUi.labelColor")}
             value={newLabelColor}
             onChange={(e) => setNewLabelColor(e.target.value)}
           />
           <input
             className="flex-1 px-2 py-1.5 text-xs bg-transparent outline-none rounded placeholder:text-muted-foreground/50"
-            placeholder="New label"
+            placeholder={t("issuePropertyControlsUi.newLabel")}
             value={newLabelName}
             onChange={(e) => setNewLabelName(e.target.value)}
           />
@@ -1704,7 +1705,7 @@ export function IssueProperties({
           }
         >
           <Plus className="h-3 w-3" />
-          {createLabel.isPending ? "Creating…" : "Create label"}
+          {createLabel.isPending ? t("issuePropertyControlsUi.creatingLabel") : t("issuePropertyControlsUi.createLabel")}
         </button>
       </div>
     </>
@@ -1992,7 +1993,7 @@ export function IssueProperties({
     <>
       <input
         className="w-full px-2 py-1.5 text-xs bg-transparent outline-none border-b border-border mb-1 placeholder:text-muted-foreground/50"
-        placeholder="Search projects..."
+        placeholder={t("issuePropertyControlsUi.searchProjects")}
         value={projectSearch}
         onChange={(e) => setProjectSearch(e.target.value)}
         autoFocus={!inline}
@@ -2042,7 +2043,7 @@ export function IssueProperties({
                   size="xs"
                 />
               ) : null}
-              {option.name}
+              {option.kind === "none" ? t("issuePropertyControlsUi.noProject") : option.name}
             </button>
           ))}
       </div>
@@ -2133,7 +2134,7 @@ export function IssueProperties({
       issue={isLockedIssueStub(parentAncestor) ? parentAncestor : {
         id: issue.parentId,
         identifier: parentIdentifier ?? issue.parentId,
-        title: parentTitle ?? "Parent task",
+        title: parentTitle ?? t("issuePropertyControlsUi.parentTask"),
         status: parentAncestor?.status ?? currentParentIssue?.status,
       }}
       className="min-w-0 max-w-full"
@@ -2161,7 +2162,7 @@ export function IssueProperties({
     <>
       <input
         className="w-full px-2 py-1.5 text-xs bg-transparent outline-none border-b border-border mb-1 placeholder:text-muted-foreground/50"
-        placeholder="Search tasks..."
+        placeholder={t("issuePropertyControlsUi.searchTasks")}
         value={parentSearch}
         onChange={(e) => setParentSearch(e.target.value)}
         autoFocus={!inline}
@@ -2177,7 +2178,7 @@ export function IssueProperties({
             setParentOpen(false);
           }}
         >
-          No parent
+          {t("issuePropertyControlsUi.noParent")}
         </button>
         {parentOptions.map((candidate) => (
           <button
@@ -2199,9 +2200,9 @@ export function IssueProperties({
           </button>
         ))}
         {parentOptionsLoading ? (
-          <div className="px-2 py-2 text-xs text-muted-foreground">Searching tasks...</div>
+          <div className="px-2 py-2 text-xs text-muted-foreground">{t("issuePropertyControlsUi.searchingTasks")}</div>
         ) : parentOptions.length === 0 ? (
-          <div className="px-2 py-2 text-xs text-muted-foreground">No matching tasks.</div>
+          <div className="px-2 py-2 text-xs text-muted-foreground">{t("issuePropertyControlsUi.noMatchingTasks")}</div>
         ) : null}
       </div>
     </>
@@ -2247,11 +2248,11 @@ export function IssueProperties({
     <>
       <input
         className="w-full px-2 py-1.5 text-xs bg-transparent outline-none border-b border-border mb-1 placeholder:text-muted-foreground/50"
-        placeholder="Search tasks..."
+        placeholder={t("issuePropertyControlsUi.searchTasks")}
         value={blockedBySearch}
         onChange={(e) => setBlockedBySearch(e.target.value)}
         autoFocus={!inline}
-        aria-label="Search tasks to add as blockers"
+        aria-label={t("issuePropertyControlsUi.searchBlockers")}
       />
       <div className="max-h-48 overflow-y-auto overscroll-contain">
         <button
@@ -2265,7 +2266,7 @@ export function IssueProperties({
             setBlockedBySearch("");
           }}
         >
-          No blockers
+          {t("issuePropertyControlsUi.noBlockers")}
         </button>
         {blockerOptions.map((candidate) => {
           const selected = blockedByIds.includes(candidate.id);
@@ -2288,9 +2289,9 @@ export function IssueProperties({
           );
         })}
         {blockerOptionsLoading ? (
-          <div className="px-2 py-2 text-xs text-muted-foreground">Searching tasks...</div>
+          <div className="px-2 py-2 text-xs text-muted-foreground">{t("issuePropertyControlsUi.searchingTasks")}</div>
         ) : blockerOptions.length === 0 ? (
-          <div className="px-2 py-2 text-xs text-muted-foreground">No matching tasks.</div>
+          <div className="px-2 py-2 text-xs text-muted-foreground">{t("issuePropertyControlsUi.noMatchingTasks")}</div>
         ) : null}
       </div>
     </>
@@ -2302,7 +2303,7 @@ export function IssueProperties({
       onClick={onClick}
     >
       <Plus className="h-3 w-3" />
-      Add blocker
+      {t("issuePropertyControlsUi.addBlocker")}
     </button>
   );
   const subtasksContent = (
@@ -2323,7 +2324,7 @@ export function IssueProperties({
             </span>
           </Link>
         )) : (
-          <div className="px-2 py-2 text-xs text-muted-foreground">No subtasks yet.</div>
+          <div className="px-2 py-2 text-xs text-muted-foreground">{t("issuePropertyControlsUi.noSubtasks")}</div>
         )}
       </div>
       {onAddSubIssue ? (
@@ -2337,7 +2338,7 @@ export function IssueProperties({
             }}
           >
             <Plus className="h-3 w-3" />
-            Add subtask
+            {t("issuePropertyControlsUi.addSubtask")}
           </button>
         </div>
       ) : null}

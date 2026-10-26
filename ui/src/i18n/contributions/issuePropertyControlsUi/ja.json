@@ -1,0 +1,21 @@
+{
+  "addLabel": "ラベルを追加",
+  "searchLabels": "ラベルを検索…",
+  "newLabel": "新しいラベル",
+  "creatingLabel": "作成中…",
+  "createLabel": "ラベルを作成",
+  "moreLabels": "他 {{count}} 件",
+  "labelColor": "ラベルの色",
+  "searchProjects": "プロジェクトを検索…",
+  "noProject": "プロジェクトなし",
+  "parentTask": "親タスク",
+  "searchTasks": "タスクを検索…",
+  "noParent": "親タスクなし",
+  "searchingTasks": "タスクを検索中…",
+  "noMatchingTasks": "一致するタスクがありません。",
+  "searchBlockers": "ブロック元に追加するタスクを検索",
+  "noBlockers": "ブロック元なし",
+  "addBlocker": "ブロック元を追加",
+  "noSubtasks": "サブタスクはまだありません。",
+  "addSubtask": "サブタスクを追加"
+}
