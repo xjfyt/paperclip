@@ -1,3 +1,6 @@
+import { t as gateT, useTranslation } from "@/i18n";
+import { LanguageSelector } from "@/components/LanguageSelector";
+import { useSignOut } from "@/hooks/useSignOut";
 import { useEffect, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { Navigate, Outlet, useLocation } from "@/lib/router";
@@ -26,46 +29,44 @@ export function CloudAccessError({
   retrying: boolean;
   onRetry: () => void;
 }) {
+  useTranslation();
   return (
     <div className="mx-auto flex max-w-xl flex-col gap-4 px-4 py-16">
       <RefreshCw className="size-6 text-muted-foreground" aria-hidden="true" />
       <div className="flex flex-col gap-2" role="status">
         <h1 className="text-xl font-semibold">
-          {temporary ? "Reconnecting to Paperclip" : "Unable to load Paperclip"}
+          {temporary ? gateT("authGate.reconnecting") : gateT("authGate.loadFailed")}
         </h1>
         <p className="text-sm text-muted-foreground">
           {temporary
-            ? "The server may be restarting or your connection was interrupted. We’ll try again every few seconds and reconnect automatically."
-            : "We couldn’t check your access to this instance. Try again, or contact your instance administrator if this continues."}
+            ? gateT("authGate.retryHelp")
+            : gateT("authGate.accessError")}
         </p>
       </div>
       <div>
         <Button variant="outline" onClick={onRetry} disabled={retrying}>
-          {retrying ? "Connecting…" : "Try again"}
+          {retrying ? gateT("authGate.connecting") : gateT("authGate.retry")}
         </Button>
       </div>
     </div>
   );
 }
 
-function NoBoardAccessPage() {
-  return (
-    <div className="mx-auto max-w-xl py-10">
-      <Card className="block p-6">
-        <h1 className="text-xl font-semibold">No organization access</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          This account is signed in, but it does not have an active organization membership or instance-admin access on
-          this Paperclip instance.
-        </p>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Use an organization invite or sign in with an account that already belongs to this org.
-        </p>
-      </Card>
-    </div>
-  );
+export function NoBoardAccessPage({ onSignOut, signingOut = false, signOutFailed = false }: { onSignOut: () => void; signingOut?: boolean; signOutFailed?: boolean }) {
+  useTranslation();
+  return <div className="mx-auto max-w-xl py-10"><Card className="block p-6">
+    <div className="mb-4 flex justify-end"><LanguageSelector /></div>
+    <h1 className="text-xl font-semibold">{gateT("authGate.noAccess")}</h1>
+    <p className="mt-2 text-sm text-muted-foreground">{gateT("authGate.noAccessHelp")}</p>
+    <p className="mt-2 text-sm text-muted-foreground">{gateT("authGate.inviteHelp")}</p>
+    <Button className="mt-4 h-auto whitespace-normal" disabled={signingOut} onClick={onSignOut}>{gateT(signingOut ? "authGate.signingOut" : "authGate.switchAccount")}</Button>
+    {signOutFailed && <p role="alert" className="mt-2 text-sm text-destructive">{gateT("authGate.signOutError")}</p>}
+  </Card></div>;
 }
 
 export function CloudAccessGate({ allowMembershipRequest = false }: { allowMembershipRequest?: boolean } = {}) {
+  useTranslation();
+  const signOut = useSignOut();
   const location = useLocation();
   const queryClient = useQueryClient();
   const [hasOpenedBoard, setHasOpenedBoard] = useState(false);
@@ -195,6 +196,9 @@ export function CloudAccessGate({ allowMembershipRequest = false }: { allowMembe
         claimState={claimMutation.isSuccess ? "success" : claimMutation.isPending ? "claiming" : "idle"}
         claimError={claimError}
         onClaim={() => claimMutation.mutate()}
+        onSwitchAccount={() => signOut.mutate()}
+        switchingAccount={signOut.isPending}
+        signOutFailed={signOut.isError}
       />
     );
   }
@@ -207,7 +211,7 @@ export function CloudAccessGate({ allowMembershipRequest = false }: { allowMembe
   // Private invitation pages may let signed-in nonmembers request access.
   // Their token APIs still enforce membership before granting any authority.
   if (!hasBoardAccess) {
-    return <NoBoardAccessPage />;
+    return <NoBoardAccessPage onSignOut={() => signOut.mutate()} signingOut={signOut.isPending} signOutFailed={signOut.isError} />;
   }
 
   return (

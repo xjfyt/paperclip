@@ -1231,4 +1231,19 @@ describe("InviteLandingPage", () => {
       root.unmount();
     });
   });
+  it("waits for a delayed invite before auto-accepting an already signed-in account", async () => {
+    let resolveInvite!: (value: unknown) => void;
+    getInviteMock.mockImplementationOnce(() => new Promise(resolve => { resolveInvite = resolve; }));
+    getSessionMock.mockResolvedValue({ session: { id: "session-delayed", userId: "user-delayed" }, user: { id: "user-delayed", name: "Delayed", email: "delayed@example.invalid", image: null } });
+    acceptInviteMock.mockResolvedValue({ id: "join-delayed", status: "approved", requestType: "human", companyId: "company-1" });
+    const root = createRoot(container); const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    try {
+      await act(async () => root.render(<MemoryRouter initialEntries={["/invite/pcp_invite_delayed"]}><QueryClientProvider client={queryClient}><Routes><Route path="/invite/:token" element={<InviteLandingPage />} /><Route path="/" element={<p>Accepted destination</p>} /></Routes></QueryClientProvider></MemoryRouter>));
+      await flushReact(); await flushReact(); expect(acceptInviteMock).not.toHaveBeenCalled();
+      resolveInvite({ id: "invite-delayed", companyId: "company-1", companyName: "Delayed org", companyLogoUrl: null, inviteType: "company_join", allowedJoinTypes: "human", humanRole: "viewer", expiresAt: "2027-03-07T00:10:00.000Z" });
+      for (let i = 0; i < 6; i++) await flushReact();
+      expect(container.textContent).not.toContain("Invite not found"); expect(acceptInviteMock).toHaveBeenCalledExactlyOnceWith("pcp_invite_delayed", { requestType: "human" });
+    } finally { await act(async () => root.unmount()); queryClient.clear(); }
+  });
+
 });

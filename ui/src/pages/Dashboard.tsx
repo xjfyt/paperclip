@@ -1,3 +1,4 @@
+import { useCompanyAgentCreationAccess } from "@/hooks/useCompanyAgentCreationAccess";
 import { useTranslation } from "@/i18n";
 import { AgentIdentity } from "../components/AgentIdentity";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -85,6 +86,8 @@ export function Dashboard() {
   // `isFetching` is read alongside the data: a cached list is served while its
   // refetch runs, and an empty one from before the first hire must not pass
   // for the company's current state — see `shouldRouteAgentlessCompanyToOnboarding`.
+  const agentCreation = useCompanyAgentCreationAccess(selectedCompanyId);
+
   const { data: agents, isFetching: agentsRefreshing } = useQuery({
     queryKey: queryKeys.agents.list(selectedCompanyId!),
     queryFn: () => agentsApi.list(selectedCompanyId!),
@@ -146,7 +149,7 @@ export function Dashboard() {
   // wizard that was deliberately closed. `claimOnboardingOffer` holds the
   // companies already offered; see it for why that outlives this component.
   useEffect(() => {
-    if (!shouldOpenOnboarding || !selectedCompanyId) return;
+    if (!shouldOpenOnboarding || !selectedCompanyId || !agentCreation.allowed) return;
     if (!claimOnboardingOffer(selectedCompanyId)) return;
     openOnboarding({
       companyId: selectedCompanyId,
@@ -154,7 +157,7 @@ export function Dashboard() {
     });
     // No mission lookup to wait on any more: the step this opens is the same
     // whatever the goals say, so waiting only delayed the open.
-  }, [shouldOpenOnboarding, selectedCompanyId, openOnboarding]);
+  }, [shouldOpenOnboarding, selectedCompanyId, openOnboarding, agentCreation.allowed]);
 
   useEffect(() => {
     setBreadcrumbs([{ label: t("navigation.dashboard") }]);
@@ -367,12 +370,12 @@ export function Dashboard() {
               {t("liveUi.noAgents")}
             </p>
           </div>
-          <button
+          {agentCreation.allowed ? <button
             onClick={() => openOnboarding({ initialStep: 3, companyId: selectedCompanyId! })}
             className="text-sm font-medium text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-100 underline underline-offset-2 shrink-0"
           >
             {t("liveUi.createAgentHere")}
-          </button>
+          </button> : <p className="text-sm text-muted-foreground">{t(agentCreation.failed ? "authGate.setupAccessFailed" : agentCreation.pending ? "common.loading" : "authGate.askAdmin")}</p>}
         </div>
       )}
 

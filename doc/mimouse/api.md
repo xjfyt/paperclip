@@ -57,3 +57,7 @@
 - POST `/:id/artifacts`：headSha、version、artifacts（相对 path/platform/arch/buildJob）；服务端实际哈希，只记 unknown 签名/not_run 测试，不上传。
 
 具体 request schema 以 routes 源码为权威；未接入上游自动 OpenAPI 生成的条目不可冒充已在原接口目录发布。详见 [编码交付](coding.md)。
+
+## 设置引导权限
+
+GET `/companies/:companyId/setup-capabilities`：当前登录board的只读能力提示，现返回canCreateAgents。经现有公司边界和实际authorization service判定，响应private/no-store；不通过role名称猜测，不能作为后续修改请求的授权凭证。Dashboard在未知、刷新中、错误或明确拒绝时不自动打开Agent创建引导。

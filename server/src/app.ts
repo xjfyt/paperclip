@@ -1,3 +1,4 @@
+import { mimouseSetupAccessRoutes } from "./routes/mimouse-access.js";
 import { mimouseCodingRoutes } from "./routes/mimouse-coding.js";
 import { workbuddyRoutes } from "./routes/workbuddy.js";
 import { mimouseNotificationRoutes } from "./routes/mimouse-notifications.js";
@@ -891,6 +892,7 @@ export async function createApp(
   api.use(resourceMembershipRoutes(db));
   api.use(primaryAgentRoutes(db));
   api.use(inboxDismissalRoutes(db));
+  api.use(mimouseSetupAccessRoutes(db));
   api.use(mimouseNotificationRoutes(db));
   api.use(workbuddyRoutes(db));
   api.use(mimouseCodingRoutes(db));

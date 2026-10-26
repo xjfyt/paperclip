@@ -26,3 +26,12 @@ test("actual server serves the production HTML and its referenced local JS/CSS a
   }
   // This verifies delivery, not browser execution, layout or accessibility.
 });
+
+
+test("setup capability hints use the actual company and never stand in for mutation authorization", async ({ request }) => {
+  const company = await (await request.post("/api/companies", { data: { name: `setup capability fixture ${Date.now()}` } })).json();
+  const response = await request.get(`/api/companies/${company.id}/setup-capabilities`);
+  expect(response.ok(), await response.text()).toBe(true); expect(await response.json()).toEqual({ canCreateAgents: true });
+  expect(response.headers()["cache-control"]).toContain("no-store");
+  expect((await request.get("/api/companies/00000000-0000-4000-8000-000000000000/setup-capabilities")).status()).toBe(404);
+});

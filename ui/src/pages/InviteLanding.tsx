@@ -310,6 +310,7 @@ export function InviteLandingPage() {
     invite?.allowedJoinTypes !== "agent";
   const showsAgentForm = invite?.inviteType !== "bootstrap_ceo" && invite?.allowedJoinTypes === "agent";
   const shouldAutoAcceptHumanInvite =
+    Boolean(invite) && !inviteQuery.isPending && !inviteQuery.isError &&
     Boolean(sessionQuery.data) &&
     !showsAgentForm &&
     invite?.inviteType !== "bootstrap_ceo" &&

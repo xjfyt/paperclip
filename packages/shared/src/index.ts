@@ -2876,3 +2876,5 @@ export type { AgentLifecycleRequest, AgentLifecycleResult } from "./types/agent-
 export * from "./fast-response.js";
 
 export type { NotificationEndpointDto, NotificationRevisionDto, NotificationRevisionInput, NotificationReviewInput, NotificationReviewDto } from "./mimouse-notifications.js";
+
+export type { CompanySetupCapabilities } from "./mimouse-access.js";

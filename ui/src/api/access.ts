@@ -1,3 +1,4 @@
+import type { CompanySetupCapabilities } from "@paperclipai/shared";
 import type { AgentAdapterType, JoinRequest, PermissionKey } from "@paperclipai/shared";
 import { api } from "./client";
 
@@ -412,6 +413,8 @@ export const accessApi = {
 
   setUserCompanyAccess: (userId: string, companyIds: string[]) =>
     api.put<UserCompanyAccessResponse>(`/admin/users/${userId}/company-access`, { companyIds }),
+
+  getCompanySetupCapabilities: (companyId: string) => api.get<CompanySetupCapabilities>(`/companies/${companyId}/setup-capabilities`),
 
   getCurrentBoardAccess: () =>
     api.get<CurrentBoardAccess>("/cli-auth/me"),
