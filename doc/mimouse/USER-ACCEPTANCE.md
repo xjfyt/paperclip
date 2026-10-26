@@ -162,6 +162,12 @@ API 入口会核查专用标记及真实 data_directory，拒绝混用现有配�
 
 [详细手测步骤](../plans/2026-10-26-optional-agent-onboarding.md)；[已执行的隔离浏览器范围](checklists/OPTIONAL-ONBOARDING-BROWSER-20261026.md)。初始化可选不意味着认证/邀请/组织权限可以跳过。
 
+## 后续业务入口与安全边界
+
+退出提示已补齐，按 [CASDOOR-LOGOUT](checklists/CASDOOR-LOGOUT-20261026.md) 测本地成功/全局未确认、暖缓存和IdP不可达后回访；浏览器自己的错误页不是本站页面。产物清单已有明确确认表单，按 [AM1–AM10](../plans/2026-10-26-coding-artifact-manifest-ui.md) 测真实本地文件、固定SHA、未知结果和通知副作用；这不是构建/签名/上传入口。
+
+当前2875键仅宣称对应类型/构建/定向回归通过，最新完整UI结果以VERIFICATION为准。高级权限摘要及其它残余仍需逐路径核对。
+
 ## 3. 统一测试方式与权限矩阵
 
 准备浏览器独立配置或无痕窗口：A 公司 owner、A 公司 admin、A 公司 viewer、仅属于 B 的 admin、未获邀请者；另备 A 的纯测试 Agent key。owner 不自动等于实例管理员，实例管理员也不自动替代必须存在的公司 owner/admin 成员关系。

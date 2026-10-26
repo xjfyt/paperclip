@@ -54,4 +54,4 @@ P3-03,C2,Langfuse观测只读拉取,passed,35服务单测与9UI；7真实DB/API�
 NOTIFY-09,C2,订阅策略CAS与精确重复窗口,passed,9真实DB/API含双连接并发/审计回滚/失败运行触发器通过,真实平台策略及浏览器复验仍待完成
 CODE-08,C2,固定SHA差异与审阅摘要,passed,本地Git与HTTP/DB审阅回执通过；隐式promisor获取关闭并有对照回归,实际GitLab项目/Runner未验收；二进制/子模块/过大差异失败关闭
 I18N-07,C2,2354键冻结UI回归,passed,770文件8665项通过 sourceUnchanged=true SHA256 979d17c84647f5bd050bc5f8695334623d0e09d96c10b0aeff93214026530db5,不含后续漏译/IME修复；不是真实输入法或四语全覆盖
-AUTH-07,C1,全局退出未确认提示（原§5.4）,not_run,6bee5bc审计基点尚缺明确UI；修复切片开发中,本地session退出与IdP全局退出分开；合入后需定向回归和实际Casdoor不可达手测
+AUTH-07,C2,全局退出未确认提示（原§5.4）,passed,明确success:true、fresh-session epoch/暖缓存/BFCache及Cloud兼容夹具；中央2875键类型构建与定向集合通过,仅本地/回访UI可见；真实Casdoor不可达、IdP错误页返回及真实账号待验，不宣称全局退出成功
