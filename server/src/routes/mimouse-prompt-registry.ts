@@ -1,0 +1,47 @@
+import { Router, type Request } from "express";
+import { z } from "zod";
+import type { Db } from "@paperclipai/db";
+import { createPromptRevisionSchema, selectPromptRevisionSchema } from "@paperclipai/shared/mimouse-prompt-registry";
+import { assertBoard, assertCompanyAccess } from "./authz.js";
+import { forbidden, HttpError, unprocessable } from "../errors.js";
+import { validate } from "../middleware/validate.js";
+import { promptRegistryService } from "../services/mimouse-prompt-registry/service.js";
+const uuid = z.string().uuid(), page = z.object({ beforeId: uuid.optional() }).strict();
+export function mimousePromptRegistryRoutes(db: Db) {
+  const router = Router(), service = promptRegistryService(db), root = "/companies/:companyId/prompt-registry";
+  function human(req: Request) {
+    const companyId = uuid.parse(req.params.companyId); assertBoard(req); assertCompanyAccess(req, companyId);
+    if (req.actor.source !== "session" || !req.actor.userId) throw forbidden("prompt_signed_in_human_required");
+    const member = req.actor.memberships?.find(value => value.companyId === companyId);
+    if (!member || member.status !== "active" || !["owner", "admin"].includes(String(member.membershipRole))) throw forbidden("prompt_active_company_administrator_required");
+    return { companyId, userId: req.actor.userId };
+  }
+  async function safe<T>(action: () => Promise<T>) {
+    try { return await action(); } catch (error) {
+      if (error instanceof HttpError) throw error;
+      // Drizzle errors may embed bound SQL prompt contents. Never forward them.
+      throw unprocessable("prompt_registry_operation_failed");
+    }
+  }
+  router.use(root, (_req, res, next) => { res.setHeader("Cache-Control", "no-store"); next(); });
+  router.get(root, async (req, res) => { const { companyId, userId } = human(req);
+    res.json(await safe(() => service.list(companyId, userId, page.parse(req.query).beforeId))); });
+  router.post(`${root}/revisions`, validate(createPromptRevisionSchema), async (req, res) => {
+    const { companyId, userId } = human(req), result = await safe(() => service.create(companyId, userId, req.body));
+    res.status(result.duplicate ? 200 : 201).json(result);
+  });
+  for (const kind of ["revisions", "receipts"] as const) router.get(`${root}/:promptId/${kind}`, async (req, res) => {
+    const { companyId, userId } = human(req), promptId = uuid.parse(req.params.promptId), beforeId = page.parse(req.query).beforeId;
+    res.json(await safe(() => service.history(companyId, userId, promptId, kind, beforeId)));
+  });
+  router.get(`${root}/:promptId/revisions/:revisionId`, async (req, res) => {
+    const { companyId, userId } = human(req), promptId = uuid.parse(req.params.promptId), revisionId = uuid.parse(req.params.revisionId);
+    res.json(await safe(() => service.content(companyId, userId, promptId, revisionId)));
+  });
+  router.post(`${root}/:promptId/selections`, validate(selectPromptRevisionSchema), async (req, res) => {
+    const { companyId, userId } = human(req), promptId = uuid.parse(req.params.promptId);
+    const result = await safe(() => service.select(companyId, userId, promptId, req.body));
+    res.status(result.duplicate ? 200 : 201).json(result);
+  });
+  return router;
+}
