@@ -46,13 +46,27 @@ PAPERCLIP_GITLAB_POLL_ENABLED 默认关闭。操作者明确启用后，worker �
 - 本地适配器 Agent 就绪且空闲；项目启用硬预算与未知费用阻断，平台预算门禁同时生效。
 - 最新失败 pipeline 和失败 job 回执必须属于同一项目、pipeline 和固定 SHA。仅 script_failure 可自动进入修复；环境故障等交给人工，不伪装代码错误。
 
-单次授权允许 1–2 次尝试、1–60 分钟派发窗口及明确正整数费用上限（分）。同一失败指纹、已用尝试、未知费用、预算耗尽、过期或授权撤销都会停止新派发。指纹使用提交、阶段、job 名称及失败原因，不因流水线生成新的 job ID 就重置。
+单次授权允许 1–2 次尝试、1–60 分钟派发窗口及明确正整数费用上限（分）；同一不可延长的策略快照也用于初始修复运行的受控到期停止。同一失败指纹、已用尝试、未知费用、预算耗尽、过期或授权撤销都会停止新派发。指纹使用提交、阶段、job 名称及失败原因，不因流水线生成新的 job ID 就重置。
 
 worker 在数据库事务中预留尝试，调用现有 routineService.runPipelineStageEntryRoutine，并在例行任务事务锁内再次核验模板版本。子任务继承原隔离工作区和父任务私有边界。并发争抢不能产生两个相同 pipeline 的修复任务。
 
 派发结果未知时只读对账 routineRuns，不重复发起；迟到结果必须通过状态和租约 CAS。子任务完成后进入等待固定 SHA 审阅状态，不会自动 push、merge、tag 或发布。暂停只阻止后续派发，不能声称取消已开始的模型调用。
 
-重要限制：时间窗口限制的是新派发，不是对已经运行的供应商进程的强制截止；费用检查是派发前及累计账目门禁，不能保证单次供应商调用不超出剩余额度。真实供应商任务、费用及时性和远端终止仍需 C3/C4 验收。
+重要限制：这不是严格墙钟、全任务树或远端供应商强制截止。费用检查是派发前及累计账目门禁，不能保证单次供应商调用不超出剩余额度。真实供应商任务、费用及时性和远端终止仍需 C3/C4 验收。
+
+### 初始修复运行的受控到期停止（2026-10-26）
+
+新派发在调用 heartbeat 前，把初始子任务、Agent、工作区及专用 wakeKey 写入 attempt.snapshot。初始 wake 禁止并入旧运行，后续消息也不能合流进该专用运行。期限检查只约束经公司、例行版本/回执、子任务归属及唯一 wake/run 交叉核验的**初始运行**；不会扫描取消整个 Agent、项目、后代任务或用户后来手动续跑。
+
+到期后先持久化 elapsedObservedAt、确切 runId 与 stopRequestedAt，再调用既有 heartbeat.cancelRun。只有其执行取消 acknowledged 回执才记 local_stop_verified/stopVerifiedAt；单独的数据库 cancelled 不算停止证明。无 run 的排队项以精确 wake CAS 取消；skipped/failed 收敛为 queue_terminal，不冒充供应商停止。完成/失败本身用 execution_terminal 区分，remoteStopVerified 与 descendantsStopVerified 始终 false。GET repairs 返回这份有界 deadline 回执；不返回 dispatch 内部快照。
+
+任务提前标 done/blocked/cancelled 不会让仍运行或取消未确认的初始运行退出监控。取消抛错保留 deadline_stopping、相同 runId 和原请求时间；重启只重试该确切运行，目标更换、任务转移或历史记录缺少绑定转 deadline_unverified/needs_human。持久租约避免竞争 worker 同时拥有停止流程；过期租约可恢复，迟到写回必须匹配原租约。
+
+开关 false 与 task drain 只禁止新 reserve/dispatch，安全计时器仍对此前已授权的活动 attempt 对账/到期收敛；暖备及服务停止不执行扫描。默认关闭不会创建/唤醒任务。worker 五秒 tick、活动项三十秒复查，一轮只处理一个项，取消自身可能等待适配器；积压、暂停或故障都可能延迟，因此不承诺精确最大超时。重新启动后的未知进程所有权不靠旧 PID 强杀，也不把本地句柄终止当远端或脱离进程组后代已停止。自动重试产生的后继 run/后代传播及可信远端停止仍属 CODE-05 缺口。
+
+独立 `PAPERCLIP_CODING_REPAIR_WORKER_ENABLED=false` 可完全停用该后台计时器，默认不设置；这与“停止新派发”不同，会停止已有授权运行的自动到期收敛，不应在仍需受控截止时关闭。隔离 Playwright fixture 显式关闭该计时器及 `HEARTBEAT_SCHEDULER_ENABLED`，仅由注入替身手动调用 service/worker，避免真实后台抢租约或启动假运行。
+
+本切片无需数据库迁移。512 MiB 单 worker 的 deadline/worker、实际临时 Git 失败修复和固定差异共四文件 62 项定向通过；其中 deadline 是 query-chain/纯函数及源码接线合同夹具，不是 PostgreSQL 并发证明。`tests/mimouse/coding-repair.spec.ts` 已补真实隔离 DB/API 的提前 done、关闭派发、未知取消重启、同 run 恢复及后续用户 run 不受影响用例；本切片未运行该 API 用例、完整类型/构建或真实供应商。
 
 接口：
 - POST `/api/companies/:companyId/coding/:deliveryId/repair-settings`：`enabled`、`confirm:true`、`headSha`；启用额外提供 `routineId`、`expectedRoutineRevisionId`、`maxAttempts`、`maxDurationMinutes`、`maxCostCents`。
@@ -95,7 +109,7 @@ GET `/api/companies/:companyId/coding/:id/build-matrix` 和交付列表的 `buil
 MR/CI 同步不会把旧式 SHA 勾选升级为新回执，任何候选状态仍不代表六平台 Runner、签名或生产发布已验收。
 
 定向验证：实际临时 Git 仓库 27 项单测、差异交互 8 项 jsdom 测试通过；涵盖跨项目、旧摘要/旧 SHA、脏目录、非祖先、二进制、体积/文件数限制、取消/重开及身份切换。
-`tests/mimouse/coding-diff.spec.ts` 提供真实隔离数据库与 HTTP 路由测试，GitLab project 读取是注入夹具；须在集成迁移后运行，不代表真实 GitLab 联调。
+`tests/mimouse/coding-diff.spec.ts` 提供真实隔离数据库与 HTTP 路由测试，GitLab project 读取是注入夹具；旧快照已纳入后续 source/compiled API 回归，证据归属见 [VERIFICATION](VERIFICATION.md)，不能继续当作尚待接线，也不能转用为本切片或真实 GitLab 联调证明。
 
 审阅回执与 activity 审计同事务写入，事务成功后才发布 activity 事件；审计失败不会留下已确认审阅。注册/产物/修复使用的 `verifyLocalCodingHead` 与差异检查复用只读 Git 防护，不改变显式授权 push 的凭据环境或 hooks。
 

@@ -71,8 +71,8 @@ C1=实现/本地检查，C2=受控协议及故障夹具，C3=真实租户/版本
 | V2-CODE-01 | §8.1 目标模板到交付 | 部分 | mimouse-coding/service.ts 已有交付/审核；完整目标模板字段与真实端到端场景待逐项闭合 | T07 / 允许仓库/测试命令/预算 |
 | V2-CODE-02 | §8.2 workspace/显式发布 | 实现完成 | gitlab.ts、readonly-git.ts；固定项目/SHA、干净工作树、显式 push、未知结果不重试 | T07 / fixture |
 | V2-CODE-03 | §8.3 GitLab版本与MiWork | 部分 | 版本能力探测和固定项目隔离已实现；实际 CE 版本、MiWork Rust 项目/Runner 未验 | T07 / CE 网络/项目/权限 |
-| V2-CODE-04 | §8.4 CI轮询/有限修复 | 实现完成 | poller.ts、repair-worker.ts；默认关闭、有限轮数/预算、版本与工作区绑定 | T07 / 隔离 fixture |
-| V2-CODE-05 | §8.4 总时限约束 | 部分 | 派发窗口不能强制停止已运行模型；不把窗口当运行总时限 | T07 / 先补硬截止或明确受控终止机制 |
+| V2-CODE-04 | §8.4 CI轮询/有限修复 | 实现完成 | poller.ts、repair-worker.ts；新派发默认关闭、有限轮数/预算、版本与工作区绑定；此前授权项的安全对账不随派发开关关闭 | T07 / 隔离 fixture |
+| V2-CODE-05 | §8.4 总时限约束 | 部分 | repair-deadline.ts 已补初始专用 wake/run 的持久到期意图、受控取消、回执及重启同run收敛；不是严格墙钟/全后代/远端截止，自动后继传播仍缺 | T07 / 新增定向夹具；真实DB/API与供应商另验 |
 | V2-CODE-06 | §8.4 固定SHA审查/旧证据失效 | 实现完成 | diff-review.ts；真实本地差异/摘要/审阅人绑定，变更使旧审阅失效 | T07 / 固定提交 |
 | V2-CODE-07 | §8.5 六目标可信构建/签名 | 部分 | build-matrix.ts 与 UI 已有六格缺口，全部 blocked；缺真实 Runner 回执采集/验证代码和机器 | T07 仅验拒绝；Runner/签名条件另供 |
 | V2-CODE-08 | §8.5 产物manifest | 实现完成 | artifacts.ts及确认UI；项目/SHA/字节/hash，拒绝符号链接；未知POST不自动重发，声明不等于目标平台证明 | T07 / 临时产物 |
