@@ -1,6 +1,6 @@
 {
   "pageTitle": "Candidatos de investigación",
-  "boundary": "Solo importación manual de evidencia. Sin consultas web, investigación programada, llamadas a modelos ni desarrollo automático.",
+  "boundary": "Importe evidencia manualmente o active de forma explícita rutinas de investigación existentes. Las nuevas rutinas comienzan pausadas y sin aceptar informes. Guardar un candidato no consulta fuentes, llama a modelos ni inicia desarrollo; las fuentes siguen sin verificar.",
   "createTitle": "Importar candidato",
   "title": "Título",
   "product": "Producto aplicable",

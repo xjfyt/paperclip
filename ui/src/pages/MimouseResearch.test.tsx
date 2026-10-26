@@ -57,7 +57,10 @@ it("rejects malformed source JSON and preserves the request identity across fail
 });
 it.each(["en", "zh-CN", "es", "ja"])("renders source evidence as inert text and preserves hash/time in %s", async locale => {
   await i18n.changeLanguage(locale); calls.search = new URLSearchParams({ candidate: id }); await mount();
-  expect(i18n.exists("researchUi.unverified")).toBe(true); expect(host.textContent).toContain(i18n.t("researchUi.unverified"));
+  expect(i18n.exists("researchRoutineUi.manual")).toBe(true);
+  expect(host.textContent).toContain(i18n.t("researchRoutineUi.manual"));
+  expect(host.textContent).not.toContain(i18n.t("researchRoutineUi.report"));
+  expect(host.textContent).toContain(i18n.t("researchUi.boundary"));
   expect(host.textContent).toContain(hash); expect(host.textContent).toContain("2026-10-25T04:00:00.000Z"); expect(host.querySelector("script")).toBeNull();
   expect(host.textContent).toContain("<script>untrusted()</script>"); expect(calls.post).not.toHaveBeenCalled();
 });

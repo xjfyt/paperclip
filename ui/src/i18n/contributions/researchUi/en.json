@@ -1,6 +1,6 @@
 {
   "pageTitle": "Research candidates",
-  "boundary": "Manual evidence imports only. No web retrieval, scheduled research, model call or automatic development dispatch.",
+  "boundary": "Import evidence manually below, or opt into existing research routines. New routines start paused with report acceptance disabled. Saving a candidate does not retrieve sources, call models or dispatch development; source claims remain unverified.",
   "createTitle": "Import a research candidate",
   "title": "Title",
   "product": "Applicable product",
