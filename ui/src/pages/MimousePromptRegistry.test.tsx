@@ -10,6 +10,7 @@ import es from "@/i18n/contributions/promptRegistryUi/es.json";
 import ja from "@/i18n/contributions/promptRegistryUi/ja.json";
 import { MimousePromptRegistry } from "./MimousePromptRegistry";
 const calls = vi.hoisted(() => ({ list: vi.fn(), revisions: vi.fn(), receipts: vi.fn(), content: vi.fn(), create: vi.fn(), select: vi.fn() }));
+vi.mock("./PrivatePromptTests", () => ({ PrivatePromptTests: () => null }));
 vi.mock("@/api/prompt-registry", () => ({ promptRegistryApi: () => calls }));
 const head = { id: "prompt", promptKey: "reviewer", companyId: "company", selectedRevisionId: "selected", headReceiptId: "head", runtimeApplied: false };
 const revision = { id: "candidate", promptId: "prompt", contentHash: "hash", companyId: "company" };

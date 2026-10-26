@@ -1,6 +1,6 @@
 {
   "title": "Registro de prompts",
-  "boundary": "Solo selecciona una revisión del registro. No aplica archivos, configuración del modelo ni cambios en ejecución. No guarde credenciales.",
+  "boundary": "La selección del registro por sí sola no aplica archivos del agente, configuración del modelo ni cambios de ejecución. Las pruebas privadas requieren autorización explícita por separado. No guarde credenciales.",
   "denied": "Se requiere una sesión de administrador de la empresa. Los datos se ocultan ante cualquier error de lectura.",
   "order": "Las páginas se ordenan por UUID, no por fecha. Solo la revisión seleccionada y el recibo actual son autoritativos.",
   "key": "Clave del prompt",

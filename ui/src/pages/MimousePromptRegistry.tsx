@@ -4,6 +4,7 @@ import { ApiError } from "@/api/client";
 import { promptRegistryApi, type PromptDetail } from "@/api/prompt-registry";
 import { useTranslation } from "@/i18n";
 import { Button } from "@/components/ui/button";
+import { PrivatePromptTests } from "./PrivatePromptTests";
 type Identity = { companyId: string; userId: string; sessionId: string };
 type Intent = { kind: "create"; body: CreatePromptRevision } | { kind: "select"; promptId: string; body: SelectPromptRevision };
 /** Mount only with actual session identity, never an API key/implicit fallback.
@@ -13,7 +14,7 @@ export function MimousePromptRegistry(props: Identity) {
   if (!props.companyId || !props.userId || !props.sessionId) return <p role="alert">{t("promptRegistryUi.denied")}</p>;
   return <RegistrySession key={JSON.stringify([props.companyId, props.userId, props.sessionId])} {...props} />;
 }
-function RegistrySession({ companyId }: Identity) {
+function RegistrySession({ companyId, userId, sessionId }: Identity) {
   const { t } = useTranslation(), live = useRef(true), controller = useMemo(() => new AbortController(), []);
   const api = useMemo(() => promptRegistryApi(companyId, controller.signal), [companyId, controller]);
   const [heads, setHeads] = useState<PromptRegistryHead[]>([]), [headNext, setHeadNext] = useState<string | null>(null);
@@ -22,6 +23,7 @@ function RegistrySession({ companyId }: Identity) {
   const [promptKey, setPromptKey] = useState(""), [content, setContent] = useState(""), [target, setTarget] = useState("");
   const [action, setAction] = useState<"promote" | "rollback">("promote"), [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(true), [failed, setFailed] = useState(false), [notice, setNotice] = useState("");
+  const [privatePending, setPrivatePending] = useState(false);
   const [intent, setIntent] = useState<Intent | null>(null), writeLock = useRef(false), readGeneration = useRef(0);
   useEffect(() => { live.current = true; void refresh(); return () => { live.current = false; queueMicrotask(() => { if (!live.current) controller.abort(); }); }; }, []);
   useEffect(() => {
@@ -85,7 +87,7 @@ function RegistrySession({ companyId }: Identity) {
     {notice && <p role="status">{notice.startsWith("saved:") ? `${label("saved")} ${notice.slice(6)}` : label(notice)}</p>}
     {failed ? <p role="alert">{label("denied")}</p> : <>
       <p className="text-sm text-muted-foreground">{label("order")}</p>
-      <fieldset disabled={busy || Boolean(intent)} className="space-y-2">
+      <fieldset disabled={busy || Boolean(intent) || privatePending} className="space-y-2">
         <label className="block">{label("key")}<input aria-label={label("key")} className="block rounded-md border border-border bg-background p-2" value={promptKey} onChange={event => setPromptKey(event.target.value)} /></label>
         <label className="block">{label("content")}<textarea aria-label={label("content")} className="block w-full rounded-md border border-border bg-background p-2 font-mono" value={content} onChange={event => setContent(event.target.value)} /></label>
         <Button disabled={!/^[a-z][a-z0-9_-]{0,79}$/.test(promptKey) || !content} onClick={() => void submit({ kind: "create", body: { requestId: crypto.randomUUID(), promptKey, content } })}>{label("create")}</Button>
@@ -108,8 +110,9 @@ function RegistrySession({ companyId }: Identity) {
           {receiptNext && <Button variant="outline" onClick={() => void readMore("receipts")}>{label("moreReceipts")}</Button>}
         </div>}
       </fieldset>
+      {head && detail && !intent && <PrivatePromptTests {...{ companyId, userId, sessionId }} promptId={head.id} revisionId={detail.id} headReceiptId={head.headReceiptId} onPendingChange={setPrivatePending} onAccessLost={() => invalidate(new ApiError("forbidden", 403, null))} />}
       {intent && <div className="space-y-2"><p>{label("unknown")}</p><p className="break-all">{intent.body.requestId}</p><Button disabled={busy} onClick={() => void submit(intent)}>{label("recover")}</Button></div>}
     </>}
-    <Button variant="outline" disabled={busy} onClick={() => void refresh()}>{label("refresh")}</Button>
+    <Button variant="outline" disabled={busy || privatePending} onClick={() => void refresh()}>{label("refresh")}</Button>
   </section>;
 }

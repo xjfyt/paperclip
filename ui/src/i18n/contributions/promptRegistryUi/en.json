@@ -1,6 +1,6 @@
 {
   "title": "Prompt registry",
-  "boundary": "Registry selection only. This never applies agent files, model configuration or runtime changes. Do not store credentials.",
+  "boundary": "Registry selection alone never applies agent files, model configuration or runtime changes. Private execution tests require separate explicit authorization. Do not store credentials.",
   "denied": "An active company administrator session is required. Data is hidden after any read failure.",
   "order": "Pages use UUID order, not chronology. Only selected revision and head receipt are authoritative.",
   "key": "Prompt key",
