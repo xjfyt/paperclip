@@ -128,8 +128,8 @@ export function createHttpLogger(baseLogger: Logger) {
         },
       ) {
         // A provider error may also be reflected in response headers. Keep the
-        // same content-free contract on both sides of a webhook request.
-        return res.raw?.req && (isPrivateWebhook(res.raw.req) || isPrivateAgentCommentaryHttpRequest(requestClassificationUrl(res.raw.req)))
+        // same content-free contract for private integrations and webhook requests.
+        return res.raw?.req && (isPrivateIntegrationHttpRequest(requestClassificationUrl(res.raw.req)) || isPrivateWebhook(res.raw.req) || isPrivateAgentCommentaryHttpRequest(requestClassificationUrl(res.raw.req)))
           ? { statusCode: res.statusCode }
           : res;
       },

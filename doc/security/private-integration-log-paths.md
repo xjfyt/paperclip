@@ -28,3 +28,11 @@ NODE_OPTIONS=--max-old-space-size=512 pnpm exec vitest run src/__tests__/private
 没有启动 HTTP server、数据库、provider 连接或重型 build。父集成/用户可在可丢弃环境中补充真实 pino HTTP 输出验收：仅使用合成 canary，向上述私有路径发送格式错误 ID 的请求，确认完整日志输出（包括 `req.url` 与 `msg`）只含静态命名空间；不使用真实 secret 验证。禁止把“正文已脱敏”当作完整 URL 路径安全的证明。
 
 本切片实际结果：上述 5 个纯测试文件 **52 tests passed**；`git diff --check` 通过。首次从仓库根目录调用 server config 因测试根目录不匹配未发现文件；改从 server 目录执行后通过，不把该次空运行计为验证。未运行真实 HTTP/DB、全量类型检查或 build。
+
+## 响应侧补强
+
+私有集成响应序列化也使用闭合的 `{statusCode}` 投影：任意响应 header 可能反射 URL/正文，不能只依赖 `Location` 等个别 header 名称脱敏。新增全部 14 个命名空间的 `res.raw.req.originalUrl`（含 absolute-form、大小写及改写后的 `url`）覆盖。
+
+另用实际安装的 pino 与 pino-http 构造 logger 并直接写入内存流，**没有创建 HTTP server/socket**，验证完整 JSON 日志中的请求及响应都不包含合成 canary。pino-http 默认 `wrapSerializers=true`；其标准 request serializer 优先把 Express `req.originalUrl` 放入序列化后的 `url`，随后才调用本项目 serializer。因此即使 Express 改写 `req.url`，私有命名空间仍被识别；回归测试直接验证这个真实标准 serializer 行为。
+
+补强后的同 5 个定向测试文件 **67 tests passed**；其他全量/真实 HTTP/DB 验证仍未运行。

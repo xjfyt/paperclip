@@ -4,7 +4,7 @@ vi.mock("pino-http", () => ({ pinoHttp: (options: unknown) => options }));
 import { createHttpLogger } from "../middleware/logger.js";
 import { privateIntegrationHttpLogUrl } from "../middleware/http-log-policy.js";
 const options = createHttpLogger({} as never) as unknown as {
-  serializers: { req: (req: unknown) => unknown };
+  serializers: { req: (req: unknown) => unknown; res: (res: unknown) => unknown };
   customSuccessMessage: (req: unknown, res: unknown) => string;
   customErrorMessage: (req: unknown, res: unknown, error: unknown) => string;
   customProps: (req: unknown, res: unknown) => unknown;
@@ -38,4 +38,29 @@ it("does not misclassify namespace-prefix lookalikes or change ordinary diagnost
   expect(privateIntegrationHttpLogUrl("/api/companies/id/prompt-registry-other/route")).toBeNull();
   expect(options.serializers.req({ id: 1, method: "GET", url: "/api/health?key=QUERY_CANARY" }))
     .toMatchObject({ url: "/api/health" });
+});
+it.each(namespaces)("drops reflected headers/body from %s response serialization", namespace => {
+  for (const originalUrl of [`/api/companies/COMPANY_CANARY/${namespace}/PATH_CANARY`, `https://HOST_CANARY/API/COMPANIES/COMPANY_CANARY/${namespace.toUpperCase()}/PATH_CANARY`]) {
+    const response = { statusCode: 403, headers: { "x-reflected-path": originalUrl, "x-reflected-body": "BODY_CANARY" }, body: "BODY_CANARY",
+      raw: { req: { method: "POST", originalUrl, url: "/PATH_CANARY" }, reflected: "BODY_CANARY" } };
+    expect(options.serializers.res(response)).toEqual({ statusCode: 403 });
+  }
+});
+it("real pino-http standard serializers select originalUrl and redact reflected response metadata without networking", async () => {
+  const { default: pino } = await vi.importActual<typeof import("pino")>("pino");
+  const { pinoHttp } = await vi.importActual<typeof import("pino-http")>("pino-http");
+  const chunks: string[] = [];
+  const baseLogger = pino({ level: "info" }, { write: (chunk: string) => { chunks.push(chunk); } });
+  // Constructing the middleware/logger does not create a server or socket.
+  const middleware = pinoHttp({ ...options, logger: baseLogger } as import("pino-http").Options);
+  const req = { id: 1, method: "POST", originalUrl: "https://HOST_CANARY/API/companies/COMPANY_CANARY/PROMPT-REGISTRY/PATH_CANARY?value=QUERY_CANARY",
+    url: "/PATH_CANARY", headers: { "x-reflected": "HEADER_CANARY" }, body: "BODY_CANARY", params: { id: "PATH_CANARY" }, query: { value: "QUERY_CANARY" } };
+  expect(pino.stdSerializers.req(req as never).url).toBe(req.originalUrl);
+  const res = { req, statusCode: 403, headersSent: true, getHeaders: () => ({ "x-reflected-url": req.originalUrl, "x-reflected-body": "BODY_CANARY" }) };
+  middleware.logger.info({ req, res }, options.customErrorMessage(req, res, new Error("ERROR_CANARY")));
+  const output = chunks.join("");
+  for (const canary of canaries) expect(output).not.toContain(canary);
+  const logged = JSON.parse(output);
+  expect(logged.req).toEqual({ id: 1, method: "POST", url: "/api/companies/:companyId/prompt-registry/:redacted" });
+  expect(logged.res).toEqual({ statusCode: 403 });
 });
