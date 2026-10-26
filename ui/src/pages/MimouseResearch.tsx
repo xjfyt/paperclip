@@ -1,3 +1,5 @@
+import { ResearchRoutinePanel } from "@/components/mimouse-research/ResearchRoutinePanel";
+import { ResearchProvenance } from "@/components/mimouse-research/ResearchProvenance";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { researchCandidateSchema, researchPromotionSchema, type ResearchCandidate, type ResearchCandidateInput, type ResearchPromotionInput, type ResearchPromotionReceipt } from "@paperclipai/shared";
@@ -39,6 +41,7 @@ function ResearchCompany({ companyId, userId }: { companyId: string; userId: str
   if (list.isError) return <div><p role="alert">{t("researchUi.readError")}</p><Button onClick={() => { void list.refetch(); }}>{t("operationsUi.retryRead")}</Button></div>;
   return <div className="space-y-6">
     <p className="text-sm text-muted-foreground">{t("researchUi.boundary")}</p>
+    {userId !== "local-board" && <ResearchRoutinePanel key={`${companyId}:${userId}`} companyId={companyId} userId={userId} />}
     <form className="space-y-3 rounded-lg border border-border p-4" onSubmit={event => {
       event.preventDefault(); if (create.isPending) return; setInvalid(false); setNotice("");
       try { const result = researchCandidateSchema.safeParse({ ...draft, sources: JSON.parse(draft.sources) }); if (!result.success) { setInvalid(true); return; } create.mutate(result.data); } catch { setInvalid(true); }
@@ -66,15 +69,16 @@ function ResearchCompany({ companyId, userId }: { companyId: string; userId: str
 function ResearchDetail({ companyId, userId, id }: { companyId: string; userId: string; id: string }) {
   const { t } = useTranslation(), query = useQuery({ queryKey: ["mimouse-research", companyId, userId, id], queryFn: () => api.get<ResearchCandidate>(`/companies/${companyId}/research-candidates/${encodeURIComponent(id)}`), retry: false });
   if (query.isPending) return <p>{t("common.loading")}</p>;
-  if (query.isError || query.data.companyId !== companyId || query.data.id !== id || query.data.evidence.evidenceMode !== "manual_import") return <p role="alert">{t("researchUi.readError")}</p>;
+  if (query.isError || query.data.companyId !== companyId || query.data.id !== id || !["manual_import", "agent_report"].includes(query.data.evidence.evidenceMode)) return <p role="alert">{t("researchUi.readError")}</p>;
   const item = query.data;
   return <section className="space-y-3 rounded-lg border border-border p-4" aria-label={t("researchUi.evidenceTitle")}>
     <h2 className="font-medium">{item.evidence.title}</h2><p>{item.evidence.product}</p><p className="break-all font-mono text-xs">SHA-256: {item.evidenceHash}</p>
-    <p className="text-sm text-muted-foreground">{t("researchUi.unverified")}</p>
+    <ResearchProvenance item={item} />
     {(["currentState", "proposedState", "recommendation"] as const).map(field => <div key={field}><h3 className="font-medium">{t(`researchUi.${field}`)}</h3><pre className="whitespace-pre-wrap break-words text-sm">{item.evidence[field]}</pre></div>)}
     <h3 className="font-medium">{t("researchUi.evidenceTitle")}</h3>
     {item.evidence.sources.map((source, index) => <div key={index} className="space-y-1 rounded border border-border p-3">
       <p className="break-all text-sm">{source.url}</p><p className="text-xs">{t("researchUi.retrievedAt")}: {source.retrievedAt}</p><pre className="whitespace-pre-wrap break-words text-sm">{source.evidence}</pre>
+      {source.gap && <pre className="whitespace-pre-wrap break-words text-sm">{JSON.stringify({ product: source.product, gap: source.gap, suggestion: source.suggestion }, null, 2)}</pre>}
     </div>)}
     {item.evidence.redacted && <p className="text-xs">{t("researchUi.redacted")}</p>}
     <ResearchReview key={item.evidenceHash} companyId={companyId} userId={userId} item={item} />

@@ -11,8 +11,10 @@ export const researchCandidateSchema = z.object({
   sources: z.array(researchSourceSchema).min(1).max(20),
 }).strict();
 export type ResearchCandidateInput = z.infer<typeof researchCandidateSchema>;
-export interface ResearchEvidence extends Omit<ResearchCandidateInput, "requestId"> {
-  evidenceMode: "manual_import"; redacted: boolean; redactionVersion: 1;
+export interface ResearchEvidence extends Omit<ResearchCandidateInput, "requestId" | "sources"> {
+  sources: Array<z.infer<typeof researchSourceSchema> & { product?: string; gap?: string; suggestion?: string }>;
+  evidenceMode: "manual_import" | "agent_report";
+  provenance?: import("./mimouse-research-routines.js").ResearchRoutineProvenance; redacted: boolean; redactionVersion: 1;
 }
 export interface ResearchCandidate {
   id: string; companyId: string; requestId: string; actorId: string; createdAt: string;

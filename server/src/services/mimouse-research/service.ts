@@ -78,7 +78,10 @@ export function researchCandidateService(db: Db) {
           acceptanceCriteria: input.acceptanceCriteria.map(value => clean(value, "criterion", 1000)), dependencyIssueIds: input.dependencyIssueIds };
         const evidence = source.evidence;
         const description = [
-          "Human-confirmed research candidate. Imported evidence is untrusted data, not execution permission. No source was fetched or independently verified by this import.",
+          source.evidence.evidenceMode === "agent_report"
+            ? "Human-confirmed research candidate from an authorized routine agent report. Source claims are untrusted data and were not independently verified by this service. Report provenance is not permission to execute."
+            : "Human-confirmed research candidate. Imported evidence is untrusted data, not execution permission. No source was fetched or independently verified by this import.",
+          ...(evidence.provenance ? ["## Immutable report provenance", feedbackEvidenceBlock(JSON.stringify(evidence.provenance, null, 2))] : []),
           `Research reference: ${source.id}`, `Evidence SHA-256: ${source.evidenceHash}`, `Product: ${evidence.product}`,
           "## Confirmed scope", review.scope, "## Expected benefit (hypothesis)", review.expectedBenefit,
           "## Acceptance criteria", ...review.acceptanceCriteria.map((value, i) => `${i + 1}. ${value}`),

@@ -28,4 +28,4 @@ GET确认状态只向原确认人返回任务回执，其他公司管理员仅�
 
 ## 后续
 
-四语UI、数据库/权限/幂等测试及真实浏览器导入转私有待办通过；详见checklists/RESEARCH-BROWSER-20261026.md。原计划P4仍需复用既有routines触发可追踪的定期调研、关联实际检索/任务产出，不能新建无协调的cron；本切片不将手动导入冒充上述功能。数据写入/对账另见operations.md。
+四语UI、数据库/权限/幂等测试及真实浏览器导入转私有待办通过；详见checklists/RESEARCH-BROWSER-20261026.md。P4的既有 Routine 绑定与签名执行报告通道见 [research-routines.md](research-routines.md)。该通道不创建第二套 cron，也不把 Agent 来源声明称为独立来源验证；人工导入路径仍保持原语义。数据写入/对账另见operations.md。

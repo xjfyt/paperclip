@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { i18n } from "@/i18n";
 import { MimouseResearch } from "./MimouseResearch";
 const calls = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), session: vi.fn(), breadcrumbs: vi.fn(), companyId: "company-a", search: new URLSearchParams(), setSearch: vi.fn() }));
+vi.mock("@/components/mimouse-research/ResearchRoutinePanel", () => ({ ResearchRoutinePanel: () => null }));
 vi.mock("@/api/client", () => ({ api: { get: calls.get, post: calls.post } }));
 vi.mock("@/api/auth", () => ({ authApi: { getSession: calls.session } }));
 vi.mock("@/context/CompanyContext", () => ({ useCompany: () => ({ selectedCompanyId: calls.companyId }) }));
