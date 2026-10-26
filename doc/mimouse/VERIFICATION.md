@@ -2,11 +2,17 @@
 
 核验日期：2026-10-25 UTC。基线为 v2026.1023.0 / 1b4c803816e82b0265c8422e1a804327a7ed8c54。开发分支 mimouse。此记录是可审查候选版的本地证据，不是全部需求完成或生产上线证明。
 
+## 2924键最终完整回归（2026-10-26 15:44 UTC）
+
+应用代码 `0346fee6c88c97382c000ca30981759dca620cec`：785文件、79批、9065项全部通过，无失败/跳过/todo，sourceUnchanged=true。源码摘要 `c95867fefc205096d8942ec80a8dceec1a154ae3bec569d9d583c984301e8b46`，清单 `test-results/mimouse-ui/2026-10-26T15-20-47-936Z-56/manifest.json`。首轮失败与修复经过保留在下节；第67批由1失败/117通过变为126通过，含新增8项修复设置回归。
+
+完整UI类型、生产构建、2924键四语合成检查也通过。本段不覆盖随后通知验证、反馈来源链或OAuth新切片，不等于真实供应商、浏览器布局或全部原计划已验收。
+
 ## 2924键完整回归首轮及夹具修正（2026-10-26 14:36 UTC）
 
 高级连接身份/范围摘要已合入，2924键完整UI类型、生产构建、7文件275项定向及资源门禁通过；身份/授权值、URL和请求未改变，原生权限/越权及布局仍待用户实测。
 
-应用 `45a234e289b14fd5a8177a61bc69f2be6368bcc3` 的全UI首轮：785文件79批，8939项通过、1项失败；sourceUnchanged=true，摘要 `b6bd6991cc3c97fafbe2acc6f1c435708546b65d2b03751497c6001d4f1aad04`。失败为第67批 MimouseCodingRepair.test 的父页owner切换用例，旧夹具只mock api.get，未跟上父页独立requestResponse读取，导致未找到修复按钮。原日志保留在 `test-results/mimouse-ui/2026-10-26T13-49-54-773Z-82`，不计整套通过。
+应用 `45a234e289b14fd5a8177a61bc69f2be6368bcc3` 的全UI首轮：785文件79批，9056项通过、1项失败（包含失败批次内117项通过；早期汇总漏计该部分，已按逐批日志更正）；sourceUnchanged=true，摘要 `b6bd6991cc3c97fafbe2acc6f1c435708546b65d2b03751497c6001d4f1aad04`。失败为第67批 MimouseCodingRepair.test 的父页owner切换用例，旧夹具只mock api.get，未跟上父页独立requestResponse读取，导致未找到修复按钮。原日志保留在 `test-results/mimouse-ui/2026-10-26T13-49-54-773Z-82`，不计整套通过。
 
 `0a5bba8` 修正夹具为真实客户端+fetch响应，使用明确session及独立no-store/AbortSignal断言，保留清草稿/不提交约束；该文件8项、原失败整批10文件118项及完整UI类型复验通过。未跳过或删除用例，仍需最终完整复跑。
 
