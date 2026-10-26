@@ -51,7 +51,7 @@ function CodingCompany({ companyId, userId, sessionId, authEpoch }: { companyId:
     {query.data?.deliveries.filter(row => !form.issueId || row.issueId === form.issueId).map(row => <section key={row.id} className="rounded-lg border border-border p-4 space-y-3">
       <p className="font-mono text-sm break-all">{row.headSha}</p><p>{t("coding.operationState")}: {row.operationState}</p>
       <MimouseCodingDiffReview companyId={companyId} userId={userId} sessionId={sessionId} authEpoch={authEpoch} deliveryId={row.id} headSha={row.headSha} onReviewed={() => client.invalidateQueries({ queryKey: key })} />
-      <MimouseCodingRepair key={`${row.id}:${row.headSha}`} companyId={companyId} userId={userId} issueId={row.issueId} deliveryId={row.id} headSha={row.headSha} />
+      <MimouseCodingRepair key={`${row.id}:${row.headSha}`} companyId={companyId} userId={userId} sessionId={sessionId} authEpoch={authEpoch} issueId={row.issueId} deliveryId={row.id} headSha={row.headSha} />
       <MimouseCodingArtifacts companyId={companyId} userId={userId} sessionId={sessionId} deliveryId={row.id} projectId={row.projectId} headSha={row.headSha} onRefresh={async () => {
         const result = await query.refetch();
         if (result.error) throw result.error;

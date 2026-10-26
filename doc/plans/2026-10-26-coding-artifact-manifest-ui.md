@@ -95,3 +95,44 @@ fetch响应夹具，特意保留旧 `api.get` 观察者；没有发送外部请�
 最初的 `pnpm exec` 因当前pnpm自动尝试依赖状态安装、无法创建
 `/home/agent/.local/share/pnpm` 而立即失败；未安装依赖，未改锁文件，改用已安装
 Vitest入口。该失败不计为测试通过，也未以权限提升或重新安装绕过。
+
+## 修复设置面板的读取与确认补充（2026-10-26）
+
+仅补齐 `MimouseCodingRepair` 的 UI 状态闭环：父页传递 session/authEpoch，
+两条既有 GET 使用独立 `readCodingEvidence`、AbortSignal 和 no-store；查询与
+确认绑定同一认证范围。挂载/重开读取不能沿用无限新鲜缓存；重新读取期间或失败后
+不展示保留的候选，修复读取失败/等待时不展示保留的状态与历史。确认和启用/暂停
+按钮等待当前证据；403 后即使返回完全相同数据，也须重新显式确认。
+
+这是前端证据新鲜度与确认状态缺口，不是已证明的跨 owner 授权绕过：父页 Coding
+和 `/repairs` 仍执行原管理员及任务 ACL 检查，routine 列表仍为公司范围。后端权限、
+local_trusted 合法读取与真实登录写入要求不变；未修改 repair-settings POST 字段、
+修复调度/派发、次数/时长/费用限制或超时语义。
+
+以下手工项目**均未执行**，在授权的可丢弃公司进行，通知/Runner/修复派发继续关闭：
+
+| 编号 | 操作 | 预期 |
+| --- | --- | --- |
+| CR1 | 同用户旧 session 的 repairs 或 routines GET 延迟，重新登录/复核认证后打开 | 新身份独立 no-store 读取；旧响应不能恢复候选、历史或确认，不自动 POST |
+| CR2 | 已选候选并确认，再让 routines 复核返回 403 | 候选及其固定 revision 隐藏，确认清除，启用/暂停/输入禁用，显示既有错误文案 |
+| CR3 | CR2 后恢复原权限，返回完全相同的 routine/revision | 可见新读取结果但确认仍未勾选；只有重新明确勾选才可启用 |
+| CR4 | 已确认时分别延迟 repairs/routines 刷新；连续点击启用或暂停 | 等待中禁用确认、输入和启停，无 POST；repair 刷新时旧状态/历史也隐藏 |
+| CR5 | 关闭重开/重新挂载面板，保留 React Query 缓存 | 必须重新读取，不能沿用旧确认；本地隐式访问仍可读但不能启停 |
+| CR6 | 四语依次执行上述等待/失败/恢复路径 | 复用既有 loading/error/确认文案，无裸翻译键；真实布局与真实会话权限另行验收 |
+
+纯 jsdom 回归使用真实客户端 GET 与 fetch 响应夹具，不连接网络、数据库、服务或
+供应商；保留原有 8 项（含父页 owner 切换真实读取断言）并新增 8 项会话、认证复核、
+403、等待（含离线暂停）及挂载新鲜度测试。定向测试不等于真实浏览器验收、完整类型检查或生产构建。
+
+最终定向结果：6 文件 74 项通过，其中 Repair 16 项（原 8 + 新 8）；内存上限
+512MB、单 worker，4 项 token gates 与 `git diff --check` 通过。命令从 `ui` 执行：
+
+```sh
+NODE_OPTIONS=--max-old-space-size=512 ../node_modules/.bin/vitest run --config vitest.config.ts \
+  src/pages/MimouseCodingRepair.test.tsx \
+  src/components/MimouseCodingArtifacts.test.tsx \
+  src/pages/MimouseCoding.artifacts.test.tsx \
+  src/components/MimouseCodingDiffReview.test.tsx \
+  src/components/MimouseCodingDiffReview.transport.test.tsx \
+  src/components/MimouseBuildMatrix.test.tsx --maxWorkers=1 --pool=forks
+```
