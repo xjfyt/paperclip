@@ -20,7 +20,7 @@ export function cacheEnvironment(parent, home, cache, fixture) {
   return { ...env, HOME: home, TMPDIR: fixture, npm_config_cache: cache,
     npm_config_userconfig: resolve(fixture, 'user.npmrc'), npm_config_globalconfig: resolve(fixture, 'global.npmrc'),
     npm_config_registry: 'https://registry.npmjs.org', npm_config_ignore_scripts: 'true', npm_config_audit: 'false', npm_config_fund: 'false',
-    npm_config_fetch_retries: '0', npm_config_fetch_timeout: '60000', npm_config_offline: 'false' };
+    npm_config_prefer_offline: 'true', npm_config_fetch_retries: '0', npm_config_fetch_timeout: '60000', npm_config_offline: 'false' };
 }
 async function main() {
   const args = process.argv.slice(2), option = name => { const i = args.indexOf(name); return i < 0 ? undefined : args[i + 1]; };

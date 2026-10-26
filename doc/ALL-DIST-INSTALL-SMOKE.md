@@ -80,6 +80,11 @@ node scripts/prepare-dist-smoke-cache.mjs \
   --cache /absolute/path/to/existing/npm-cache
 ```
 
+Use a disk-backed scratch parent/cache on memory-constrained hosts; `/tmp` may
+be tmpfs and large native tarballs would consume the build memory budget. Existing
+cached metadata/tarballs are preferred, while missing entries still use the
+official registry through existing routing.
+
 This metadata-only fixture enumerates the canonical server release closure,
 resolves each declared external edge separately with strict
 `npm install --package-lock-only --ignore-scripts`, and
