@@ -1675,6 +1675,112 @@ describe("AppsConnect — Connect with a link (M4 frame)", () => {
     expect(navigateTopLevelMock).not.toHaveBeenCalled();
   });
 
+  it.each(["page", "dialog"].flatMap(host =>
+    ["back", "cancel", "unmount", "company", "provider", "intent", "agent", "user", "session", "signout"].map(change => ({ host: host as "page" | "dialog", change })),
+  ))("ignores late enrollment after $change in the $host host", async ({ host, change }) => {
+    enrollmentFixture();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const session = { user: { id: "board-user" }, session: { id: "session-1" } };
+    client.setQueryData(queryKeys.auth.session, session);
+    const popup = { closed: false, location: { assign: vi.fn() }, focus: vi.fn(), close: vi.fn() };
+    vi.spyOn(window, "open").mockReturnValue(popup as unknown as Window);
+    let finish!: (value: unknown) => void;
+    startCloudConnectorEnrollmentMock.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    const onCancel = vi.fn();
+    const flow = (overrides: { serviceSlug?: string; interactionId?: string; requestedAgentId?: string } = {}) => <ConnectionSetupFlow host={host} serviceSlug="gmail" interactionId="intent-1" requestedAgentId="agent-1" onCancel={onCancel} {...overrides} />;
+    const root = await render(client, false, flow());
+    await act(async () => buttonByText("Connect with Paperclip")!.click());
+    expect(startCloudConnectorEnrollmentMock).toHaveBeenCalledOnce();
+    if (change === "back") await act(async () => buttonByText("Back")!.click());
+    else if (change === "cancel") await act(async () => buttonByText("Cancel")!.click());
+    else if (change === "unmount") { await act(async () => root.unmount()); mountedRoot = null; }
+    else if (["user", "session", "signout"].includes(change)) {
+      await act(async () => { client.setQueryData(queryKeys.auth.session, change === "signout" ? null : { user: { id: change === "user" ? "new-user" : "board-user" }, session: { id: change === "session" ? "session-2" : "session-1" } }); });
+    } else {
+      if (change === "company") mockCompany.value = { selectedCompanyId: "company-2", selectedCompany: { id: "company-2", name: "New company" } };
+      await act(async () => root.render(<QueryClientProvider client={client}><TooltipProvider>{flow(change === "provider" ? { serviceSlug: "github" } : change === "intent" ? { interactionId: "intent-2" } : change === "agent" ? { requestedAgentId: "agent-2" } : {})}</TooltipProvider></QueryClientProvider>));
+      await flushReact();
+    }
+    const previousNavigations = mockNavigate.mock.calls.length;
+    await act(async () => finish({ status: "pending", verificationUrl: "https://auth.example.test/enroll?state=stale" }));
+    await flushReact();
+    expect(navigateTopLevelMock).not.toHaveBeenCalled();
+    expect(popup.location.assign).not.toHaveBeenCalled();
+    expect(mockNavigate).toHaveBeenCalledTimes(previousNavigations);
+    expect(container.querySelector('a[href*="state=stale"]')).toBeNull();
+    expect(connectAppMock).not.toHaveBeenCalled();
+    expect(startOAuthMock).not.toHaveBeenCalled();
+    if (host === "dialog") expect(popup.close).toHaveBeenCalledOnce();
+    if (change === "cancel") expect(onCancel).toHaveBeenCalledOnce();
+  });
+
+  it("coalesces same-turn enrollment clicks without changing the request", async () => {
+    enrollmentFixture();
+    startCloudConnectorEnrollmentMock.mockReturnValue(new Promise(() => {}));
+    await render();
+    const button = buttonByText("Connect with Paperclip")!;
+    await act(async () => { button.click(); button.click(); });
+    expect(startCloudConnectorEnrollmentMock).toHaveBeenCalledExactlyOnceWith("company-1", "Paperclip", "/apps/connect?source=gmail&stage=setup&intent=intent-1");
+  });
+
+  it.each(["success", "error"])("keeps a newer enrollment popup and payload when the old request ends with %s", async outcome => {
+    enrollmentFixture();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const oldPopup = { closed: false, location: { assign: vi.fn() }, focus: vi.fn(), close: vi.fn() };
+    const newPopup = { closed: false, location: { assign: vi.fn() }, focus: vi.fn(), close: vi.fn() };
+    vi.spyOn(window, "open").mockReturnValueOnce(oldPopup as unknown as Window).mockReturnValueOnce(newPopup as unknown as Window);
+    const pending: Array<{ resolve: (value: unknown) => void; reject: (error: Error) => void }> = [];
+    startCloudConnectorEnrollmentMock.mockImplementation(() => new Promise((resolve, reject) => pending.push({ resolve, reject })));
+    const flow = <ConnectionSetupFlow host="dialog" serviceSlug="gmail" interactionId="intent-1" requestedAgentId="agent-1" />;
+    const root = await render(client, false, flow);
+    await act(async () => buttonByText("Connect with Paperclip")!.click());
+    mockCompany.value = { selectedCompanyId: "company-2", selectedCompany: { id: "company-2", name: "New company" } };
+    await act(async () => root.render(<QueryClientProvider client={client}><TooltipProvider><ConnectionSetupFlow host="dialog" serviceSlug="gmail" interactionId="intent-2" requestedAgentId="agent-2" /></TooltipProvider></QueryClientProvider>));
+    await flushReact();
+    expect(oldPopup.close).toHaveBeenCalledOnce();
+    await act(async () => buttonByText("Connect with Paperclip")!.click());
+    expect(startCloudConnectorEnrollmentMock).toHaveBeenNthCalledWith(2, "company-2", "New company", "/apps/connect?source=gmail&stage=setup&intent=intent-2&enrollment_host=dialog");
+    await act(async () => {
+      if (outcome === "success") pending[0]!.resolve({ status: "pending", verificationUrl: "https://auth.example.test/old" });
+      else pending[0]!.reject(new Error("STALE_ENROLLMENT_FAILURE"));
+    });
+    await flushReact();
+    expect(newPopup.close).not.toHaveBeenCalled();
+    expect(newPopup.location.assign).not.toHaveBeenCalled();
+    expect(container.textContent).not.toContain("STALE_ENROLLMENT_FAILURE");
+    expect(buttonByText("Connect with Paperclip")?.disabled).toBe(true);
+    await act(async () => pending[1]!.resolve({ status: "pending", verificationUrl: "https://auth.example.test/new?state=preserved" }));
+    await flushReact();
+    expect(newPopup.location.assign).toHaveBeenCalledExactlyOnceWith("https://auth.example.test/new?state=preserved");
+    expect(oldPopup.location.assign).not.toHaveBeenCalled();
+    expect(navigateTopLevelMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps same-session refresh compatible and stops enrollment polling after Back", async () => {
+    enrollmentFixture();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(queryKeys.auth.session, { user: { id: "board-user" }, session: { id: "session-1" } });
+    const popup = { closed: false, location: { assign: vi.fn() }, focus: vi.fn(), close: vi.fn() };
+    vi.spyOn(window, "open").mockReturnValue(popup as unknown as Window);
+    let finish!: (value: unknown) => void;
+    startCloudConnectorEnrollmentMock.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    await render(client, false, <ConnectionSetupFlow host="dialog" serviceSlug="gmail" interactionId="intent-1" requestedAgentId="agent-1" />);
+    await act(async () => buttonByText("Connect with Paperclip")!.click());
+    await act(async () => { client.setQueryData(queryKeys.auth.session, { user: { id: "board-user", name: "Refreshed display name" }, session: { id: "session-1" } }); });
+    expect(popup.close).not.toHaveBeenCalled();
+    await act(async () => finish({ status: "pending", verificationUrl: "https://auth.example.test/current" }));
+    await flushReact();
+    expect(popup.location.assign).toHaveBeenCalledExactlyOnceWith("https://auth.example.test/current");
+    await act(async () => buttonByText("Back")!.click());
+    expect(popup.close).toHaveBeenCalledOnce();
+    const galleryReads = listGalleryMock.mock.calls.length;
+    await act(async () => { client.setQueryData(["cloud-connector", "enrollment"], { configured: true, status: "active" }); });
+    await flushReact();
+    expect(listGalleryMock).toHaveBeenCalledTimes(galleryReads);
+    expect(container.querySelector('a[href="https://auth.example.test/current"]')).toBeNull();
+    expect(connectAppMock).not.toHaveBeenCalled();
+  });
+
   it("prompts for one-time Cloud registration inside Gmail when managed methods are not yet advertised", async () => {
     mockParams.appKey = "gmail";
     listGalleryMock.mockResolvedValue({

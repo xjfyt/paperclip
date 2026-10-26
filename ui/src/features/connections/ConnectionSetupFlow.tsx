@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import type {
   AppDefinition,
+  AuthSession,
   ConnectionGrantKind,
   ConnectionIntentSetupConnection,
   ConnectionMethodDef,
@@ -114,6 +115,16 @@ import { autoExtendNotice, INSTALL_ALL_WARNING, installInfoNotice, installPayloa
 
 type Step = "gallery" | "key" | "success";
 export type OAuthConnectPhase = "entry" | "starting" | "redirecting" | "error";
+
+type EnrollmentAttempt = {
+  scope: string;
+  session: string;
+  pending: boolean;
+  popup: Window | null;
+  companyId: string;
+  label: string | undefined;
+  returnTo: string | undefined;
+};
 
 type EnrollmentAccessState = {
   companyId: string;
@@ -990,6 +1001,7 @@ function StandardConnectionSetupFlow({
   };
 
   const backToGallery = () => {
+    cancelConnectorEnrollment();
     // Back is a wizard transition, so keep the selected app and entered draft
     // intact. Picking another connector will replace that state explicitly.
     setStep("gallery");
@@ -1075,8 +1087,43 @@ function StandardConnectionSetupFlow({
     ),
   });
   const [connectorEnrollmentError, setConnectorEnrollmentError] = useState<LocalizedUiMessage | null>(null);
+  // Enrollment is a prerequisite owned by this exact UI intent, not authority
+  // for a response to navigate a later screen or another signed-in session.
+  const enrollmentScope = JSON.stringify([
+    selectedCompanyId, requestedAppKey, host, credentialSource, connectionIntentId,
+    requestedAgentId, resumeConnectionId, reconnectConnectionId, routeStage, step,
+    connectionMethodKey, grantKind, installChoice, [...installAgentIds].sort(),
+  ]);
+  const enrollmentScopeRef = useRef(enrollmentScope);
+  enrollmentScopeRef.current = enrollmentScope;
+  const enrollmentAttemptRef = useRef<EnrollmentAttempt | null>(null);
+  const enrollmentSession = useCallback(() => {
+    const state = queryClient.getQueryState<AuthSession | null>(queryKeys.auth.session);
+    return JSON.stringify([state?.status, state?.isInvalidated, state?.data?.user.id, state?.data?.session.id]);
+  }, [queryClient]);
+  const discardEnrollmentAttempt = useCallback((attempt = enrollmentAttemptRef.current) => {
+    if (!attempt || enrollmentAttemptRef.current !== attempt) return;
+    enrollmentAttemptRef.current = null;
+    attempt.popup?.close();
+    if (oauthPopupRef.current === attempt.popup) oauthPopupRef.current = null;
+    attempt.popup = null;
+  }, []);
+  const cancelConnectorEnrollment = useCallback(() => {
+    discardEnrollmentAttempt();
+    setEnrollmentAuthorizationUrl(null);
+    setConnectorEnrollmentError(null);
+  }, [discardEnrollmentAttempt]);
+  const enrollmentAttemptIsCurrent = useCallback((attempt: EnrollmentAttempt) => {
+    if (enrollmentAttemptRef.current === attempt
+      && attempt.scope === enrollmentScopeRef.current
+      && attempt.session === enrollmentSession()) return true;
+    discardEnrollmentAttempt(attempt);
+    return false;
+  }, [discardEnrollmentAttempt, enrollmentSession]);
   const closeEnrollmentPopup = useCallback(() => {
     oauthPopupRef.current?.close();
+    const attempt = enrollmentAttemptRef.current;
+    if (attempt && attempt.popup === oauthPopupRef.current) attempt.popup = null;
     oauthPopupRef.current = null;
     setEnrollmentAuthorizationUrl(null);
   }, []);
@@ -1110,25 +1157,19 @@ function StandardConnectionSetupFlow({
   }, [host, closeEnrollmentPopup]);
   useEffect(() => {
     if (!enrollmentAuthorizationUrl || connectorEnrollmentQuery.data?.status !== "active") return;
+    if (!enrollmentAttemptRef.current || !enrollmentAttemptIsCurrent(enrollmentAttemptRef.current)) return;
     // Enrollment is only a prerequisite. Re-read the server catalog and keep
     // the task's access selection and interaction binding in this dialog.
     closeEnrollmentPopup();
     setConnectorEnrollmentError(null);
     void galleryQuery.refetch();
-  }, [enrollmentAuthorizationUrl, connectorEnrollmentQuery.data?.status, galleryQuery.refetch, closeEnrollmentPopup]);
+  }, [enrollmentAuthorizationUrl, connectorEnrollmentQuery.data?.status, galleryQuery.refetch, closeEnrollmentPopup, enrollmentAttemptIsCurrent]);
   const startConnectorEnrollment = useMutation({
-    mutationFn: () => toolsApi.startCloudConnectorEnrollment(
-      selectedCompanyId!,
-      selectedCompany?.name,
-      requestedAppKey
-        ? appConnectHref(requestedAppKey, "key", credentialSource, {
-            resumeConnectionId,
-            reconnectConnectionId,
-            interactionId: connectionIntentId,
-          }) + (host === "dialog" ? "&enrollment_host=dialog" : "")
-        : undefined,
+    mutationFn: (attempt: EnrollmentAttempt) => toolsApi.startCloudConnectorEnrollment(
+      attempt.companyId, attempt.label, attempt.returnTo,
     ),
-    onSuccess: (status) => {
+    onSuccess: (status, attempt) => {
+      if (!enrollmentAttemptIsCurrent(attempt)) return;
       if (!status.verificationUrl) {
         closeEnrollmentPopup();
         setConnectorEnrollmentError({ key: "connectionEnrollmentUi.linkMissing" });
@@ -1136,13 +1177,54 @@ function StandardConnectionSetupFlow({
       }
       openConnectorEnrollment(status.verificationUrl);
     },
-    onError: (error) => {
+    onError: (error, attempt) => {
+      if (!enrollmentAttemptIsCurrent(attempt)) return;
       closeEnrollmentPopup();
       setConnectorEnrollmentError(
         localizedUiErrorMessage(error, "connectionEnrollmentUi.cloudUnreachable"),
       );
     },
+    onSettled: (_data, _error, attempt) => { attempt.pending = false; },
   });
+  const resetEnrollmentMutation = startConnectorEnrollment.reset;
+  useEffect(() => {
+    cancelConnectorEnrollment();
+    resetEnrollmentMutation();
+    return () => discardEnrollmentAttempt();
+  }, [enrollmentScope, cancelConnectorEnrollment, discardEnrollmentAttempt, resetEnrollmentMutation]);
+  useEffect(() => queryClient.getQueryCache().subscribe(event => {
+    if (JSON.stringify(event.query.queryKey) !== JSON.stringify(queryKeys.auth.session)) return;
+    const attempt = enrollmentAttemptRef.current;
+    if (attempt && attempt.session !== enrollmentSession()) {
+      cancelConnectorEnrollment();
+      resetEnrollmentMutation();
+    }
+  }), [queryClient, enrollmentSession, cancelConnectorEnrollment, resetEnrollmentMutation]);
+
+  function beginConnectorEnrollment() {
+    // React's pending render is not a synchronous lock: two clicks can share it.
+    if (!selectedCompanyId || enrollmentAttemptRef.current?.pending) return;
+    setConnectorEnrollmentError(null);
+    reserveOAuthPopup();
+    preserveEnrollmentAccess();
+    const attempt: EnrollmentAttempt = {
+      scope: enrollmentScopeRef.current,
+      session: enrollmentSession(),
+      pending: true,
+      popup: host === "dialog" ? oauthPopupRef.current : null,
+      companyId: selectedCompanyId,
+      label: selectedCompany?.name,
+      returnTo: requestedAppKey
+        ? appConnectHref(requestedAppKey, "key", credentialSource, {
+            resumeConnectionId, reconnectConnectionId, interactionId: connectionIntentId,
+          }) + (host === "dialog" ? "&enrollment_host=dialog" : "")
+        : undefined,
+    };
+    enrollmentAttemptRef.current = attempt;
+    // Reuse a live server enrollment or replace an expired one; never reuse a
+    // cached verification URL, and never claim the remote enrollment is canceled.
+    startConnectorEnrollment.mutate(attempt);
+  }
   const applicationsQuery = useQuery({
     queryKey: queryKeys.tools.applications(selectedCompanyId ?? "__none__"),
     queryFn: () => toolsApi.listApplications(selectedCompanyId!),
@@ -2400,7 +2482,10 @@ function StandardConnectionSetupFlow({
                 : undefined
             }
             unverifiedHost={!entry && !zapierSource && step !== "gallery" ? endpointHost(linkUrl) : null}
-            onCancel={onCancel ?? (() => navigate("/apps"))}
+            onCancel={() => {
+              cancelConnectorEnrollment();
+              (onCancel ?? (() => navigate("/apps")))();
+            }}
           />
         )
       )}
@@ -2503,14 +2588,7 @@ function StandardConnectionSetupFlow({
               <Button
                 type="button"
                 disabled={connectorEnrollmentQuery.isLoading || startConnectorEnrollment.isPending}
-                onClick={() => {
-                  setConnectorEnrollmentError(null);
-                  reserveOAuthPopup();
-                  preserveEnrollmentAccess();
-                  // Let the server reuse a live enrollment or replace an expired
-                  // one. A cached verification URL may expire while this page is open.
-                  startConnectorEnrollment.mutate();
-                }}
+                onClick={beginConnectorEnrollment}
               >
                 {startConnectorEnrollment.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 {connectorEnrollmentQuery.data?.status === "pending"
