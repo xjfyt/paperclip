@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { PgDialect } from "drizzle-orm/pg-core";
-import { DEFAULT_NOTIFICATION_POLICY, evaluateNotificationPolicy, notificationMergeKey, notificationMergeWindow, notificationPolicySchema } from "../services/mimouse-notifications/policy.js";
+import { notificationPolicyUpdateSchema, updateNotificationPolicy, DEFAULT_NOTIFICATION_POLICY, evaluateNotificationPolicy, notificationMergeKey, notificationMergeWindow, notificationPolicySchema } from "../services/mimouse-notifications/policy.js";
 
 const policy = { minimumSeverity: "critical", mergeWindowSeconds: 300 };
 const snapshot = { configVersion: 2, locale: "en", secretRef: "secret", secretVersion: 1, target: "recipient", title: "Ready", text: "Resource 1", templateData: { first: { value: "same" } } };
@@ -53,5 +53,44 @@ describe("frozen notification policies", () => {
     const execute = vi.fn();
     await expect(notificationMergeWindow({ execute } as never, "company", key(), 301)).rejects.toThrow();
     expect(execute).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("policy compare-and-swap transaction contract (mock transaction, not DB evidence)", () => {
+  const input = { minimumSeverity: "warning" as const, mergeWindowSeconds: 30, expectedVersion: 1 };
+  it("requires an explicit positive expected version", () => {
+    expect(notificationPolicyUpdateSchema.safeParse({ minimumSeverity: "info", mergeWindowSeconds: 0 }).success).toBe(false);
+    expect(notificationPolicyUpdateSchema.safeParse({ ...input, expectedVersion: 0 }).success).toBe(false);
+  });
+  it("updates within the audit transaction and scopes the CAS to company, id and version", async () => {
+    const row = { id: "subscription", policyVersion: 2, policy: { minimumSeverity: "warning", mergeWindowSeconds: 30 } };
+    const tx = { execute: vi.fn().mockResolvedValue([row]) }; const audit = vi.fn().mockResolvedValue(undefined);
+    const transaction = vi.fn(async callback => callback(tx));
+    expect(await updateNotificationPolicy({ transaction } as never, "company", "subscription", input, audit)).toEqual(row);
+    expect(audit).toHaveBeenCalledWith(tx, 2);
+    const query = new PgDialect().sqlToQuery(tx.execute.mock.calls[0][0]);
+    expect(query.sql).toContain("policy_version=policy_version+1"); expect(query.sql).toContain("company_id="); expect(query.sql).toContain("AND id="); expect(query.sql).toContain("AND policy_version=");
+    expect(query.params).toEqual([JSON.stringify(row.policy), "company", "subscription", 1]);
+  });
+  it("rejects a stale version with current version and never audits or overwrites", async () => {
+    const execute = vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([{ policyVersion: 2 }]); const audit = vi.fn();
+    const db = { transaction: async (callback: (tx: unknown) => Promise<unknown>) => callback({ execute }) };
+    await expect(updateNotificationPolicy(db as never, "company", "subscription", input, audit)).rejects.toMatchObject({ status: 409, details: { currentVersion: 2 } });
+    expect(audit).not.toHaveBeenCalled(); expect(execute).toHaveBeenCalledTimes(2);
+  });
+  it("rejects foreign/missing subscriptions without exposing another company version", async () => {
+    const execute = vi.fn().mockResolvedValue([]); const audit = vi.fn();
+    const db = { transaction: async (callback: (tx: unknown) => Promise<unknown>) => callback({ execute }) };
+    await expect(updateNotificationPolicy(db as never, "other-company", "subscription", input, audit)).rejects.toMatchObject({ status: 404 }); expect(audit).not.toHaveBeenCalled();
+  });
+  it("propagates failed audit before transaction commit (rollback boundary fixture)", async () => {
+    const tx = { execute: vi.fn().mockResolvedValue([{ id: "subscription", policyVersion: 2, policy: input }]) };
+    let committed = false; let rolledBack = false;
+    const db = { transaction: async (callback: (tx: unknown) => Promise<unknown>) => {
+      try { const row = await callback(tx); committed = true; return row; } catch (error) { rolledBack = true; throw error; }
+    } };
+    await expect(updateNotificationPolicy(db as never, "company", "subscription", input, async () => { throw Error("audit failed"); })).rejects.toThrow("audit failed");
+    expect(committed).toBe(false); expect(rolledBack).toBe(true);
   });
 });

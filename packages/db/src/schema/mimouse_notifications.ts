@@ -23,9 +23,10 @@ export const mimouseNotificationSubscriptions = pgTable("mimouse_notification_su
   endpointId: uuid("endpoint_id").notNull(),
   eventType: text("event_type").notNull(),
   locale: text("locale").notNull().default("en"),
+  policyVersion: integer("policy_version").notNull().default(1),
   policy: jsonb("policy").$type<{ minimumSeverity: "info" | "warning" | "critical"; mergeWindowSeconds: number }>().notNull().default({ minimumSeverity: "info", mergeWindowSeconds: 0 }),
   enabled: boolean("enabled").notNull().default(true),
-}, t => ({ endpoint: foreignKey({ columns: [t.companyId, t.endpointId], foreignColumns: [mimouseNotificationEndpoints.companyId, mimouseNotificationEndpoints.id] }).onDelete("cascade"), identity: uniqueIndex("mimouse_notification_subscription_company_identity").on(t.companyId, t.id), unique: uniqueIndex("mimouse_notification_subscription_unique").on(t.companyId, t.endpointId, t.eventType) }));
+}, t => ({ policyVersionPositive: check("mimouse_notification_policy_version_positive", sql`${t.policyVersion}>0`), endpoint: foreignKey({ columns: [t.companyId, t.endpointId], foreignColumns: [mimouseNotificationEndpoints.companyId, mimouseNotificationEndpoints.id] }).onDelete("cascade"), identity: uniqueIndex("mimouse_notification_subscription_company_identity").on(t.companyId, t.id), unique: uniqueIndex("mimouse_notification_subscription_unique").on(t.companyId, t.endpointId, t.eventType) }));
 
 export const mimouseNotificationDeliveries = pgTable("mimouse_notification_deliveries", {
   id: uuid("id").primaryKey().defaultRandom(),

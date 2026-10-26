@@ -11,5 +11,7 @@
   "state_filtered": "Filtrado por gravedad",
   "delayed": "Recopilando duplicados exactos hasta {{until}}",
   "mergedHelp": "No se envió por separado; consulta el resultado original:",
-  "filteredHelp": "No se envió porque no alcanzó el umbral de la suscripción fijado al crear el evento."
+  "filteredHelp": "No se envió porque no alcanzó el umbral de la suscripción fijado al crear el evento.",
+  "conflict": "La política cambió en otra sesión. Se conserva tu borrador. Recarga la política actual (descartando el borrador) antes de editar de nuevo.",
+  "reload": "Descartar borrador y recargar política"
 }

@@ -1,3 +1,4 @@
+import { conflict, notFound } from "../../errors.js";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
@@ -26,7 +27,7 @@ export function evaluateNotificationPolicy(eventType: string, raw: unknown) {
 }
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
-  if (value && typeof value === "object") return `{${Object.entries(value).filter(([, v]) => v !== undefined).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${JSON.stringify(k)}:${canonical(v)}`).join(",")}}`;
+  if (value && typeof value === "object") return `{${Object.entries(value).filter(([, v]) => v !== undefined).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([k, v]) => `${JSON.stringify(k)}:${canonical(v)}`).join(",")}}`;
   return JSON.stringify(value) ?? "null";
 }
 /** Includes ALL frozen transport/render fields and the logical resource boundary. */
@@ -48,4 +49,26 @@ export async function notificationMergeWindow(tx: Transaction, companyId: string
   const clock = await tx.execute(sql`SELECT clock_timestamp()+${seconds}*interval '1 second' AS until`);
   const until = new Date((clock as unknown as { until: Date | string }[])[0].until);
   return { mergeKey: key, mergeUntil: until, nextAttemptAt: until };
+}
+
+export const notificationPolicyUpdateSchema = notificationPolicySchema.extend({ expectedVersion: z.number().int().positive() });
+/** Compare-and-swap and audit use one transaction: audit failure must reject the change. */
+export async function updateNotificationPolicy(db: Pick<Db, "transaction">, companyId: string, id: string,
+  input: z.infer<typeof notificationPolicyUpdateSchema>,
+  audit: (tx: Parameters<Parameters<Db["transaction"]>[0]>[0], version: number) => Promise<unknown>) {
+  const { expectedVersion, ...policy } = notificationPolicyUpdateSchema.parse(input);
+  return db.transaction(async tx => {
+    const rows = await tx.execute(sql`UPDATE mimouse_notification_subscriptions
+      SET policy=${JSON.stringify(policy)}::jsonb, policy_version=policy_version+1
+      WHERE company_id=${companyId} AND id=${id} AND policy_version=${expectedVersion}
+      RETURNING id, policy, policy_version AS "policyVersion"`);
+    const row = (rows as unknown as { id: string; policy: NotificationPolicy; policyVersion: number }[])[0];
+    if (!row) {
+      const current = await tx.execute(sql`SELECT policy_version AS "policyVersion" FROM mimouse_notification_subscriptions WHERE company_id=${companyId} AND id=${id}`);
+      if (!current.length) throw notFound("Notification subscription not found");
+      throw conflict("Notification policy changed; reload before saving", { currentVersion: (current[0] as unknown as { policyVersion: number }).policyVersion });
+    }
+    await audit(tx, row.policyVersion);
+    return row;
+  });
 }

@@ -11,5 +11,7 @@
   "state_filtered": "Filtered by severity",
   "delayed": "Collecting exact duplicates until {{until}}",
   "mergedHelp": "Not sent separately; inspect the original delivery outcome:",
-  "filteredHelp": "Not sent because the frozen subscription threshold excluded this event."
+  "filteredHelp": "Not sent because the frozen subscription threshold excluded this event.",
+  "conflict": "The notification policy changed elsewhere. Your draft is preserved. Reload the current policy (discarding this draft) before editing again.",
+  "reload": "Discard draft and reload policy"
 }

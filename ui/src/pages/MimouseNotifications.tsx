@@ -101,9 +101,10 @@ function NotificationCompany({ companyId }: { companyId: string }) {
                 {enabled && subscription.locale !== i18n.language && <Button variant="outline" disabled={mutation.isPending} onClick={() => mutation.mutate(() => notificationApi.subscribe(companyId, endpoint.id, eventType, i18n.language))}>{t("notifications.useCurrentLanguage")}</Button>}
               </div>
                 {subscription && <details><summary className="text-sm">{t("notificationPolicy.title")}</summary>
-                  <MimouseNotificationPolicy scope={`${companyId}:${subscription.id}`} policy={subscription.policy ?? { minimumSeverity: "info", mergeWindowSeconds: 0 }} pending={mutation.isPending}
-                    onSave={policy => mutation.mutate(() => notificationApi.policy(companyId, subscription.id, policy))}
-                    labels={{ severity: t("notificationPolicy.severity"), info: t("notificationPolicy.info"), warning: t("notificationPolicy.warning"), critical: t("notificationPolicy.critical"), window: t("notificationPolicy.window"), help: t("notificationPolicy.help"), save: t("notificationPolicy.save"), cancel: t("common.cancel") }} />
+                  <MimouseNotificationPolicy scope={`${companyId}:${subscription.id}`} policyVersion={subscription.policyVersion ?? 1} policy={subscription.policy ?? { minimumSeverity: "info", mergeWindowSeconds: 0 }} pending={mutation.isPending}
+                    onSave={policy => mutation.mutateAsync(() => notificationApi.policy(companyId, subscription.id, policy))}
+                    onReload={async () => { const fresh = await query.refetch({ throwOnError: true }); const current = fresh.data?.subscriptions.find(row => row.id === subscription.id); if (!current) throw Error("subscription_missing"); return { policy: current.policy ?? { minimumSeverity: "info", mergeWindowSeconds: 0 }, policyVersion: current.policyVersion ?? 1 }; }}
+                    labels={{ severity: t("notificationPolicy.severity"), info: t("notificationPolicy.info"), warning: t("notificationPolicy.warning"), critical: t("notificationPolicy.critical"), window: t("notificationPolicy.window"), help: t("notificationPolicy.help"), save: t("notificationPolicy.save"), cancel: t("common.cancel"), conflict: t("notificationPolicy.conflict"), reload: t("notificationPolicy.reload"), error: t("notifications.operationError") }} />
                 </details>}
               </div>;
             })}

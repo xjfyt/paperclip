@@ -1,4 +1,4 @@
-import { notificationPolicySchema } from "../services/mimouse-notifications/policy.js";
+import { notificationPolicyUpdateSchema, updateNotificationPolicy } from "../services/mimouse-notifications/policy.js";
 import { notificationReconciliation } from "../services/mimouse-notifications/reconciliation.js";
 import { notificationConfiguration } from "../services/mimouse-notifications/configuration.js";
 import { renderTemplateData } from "../services/mimouse-notifications/render.js";
@@ -9,7 +9,7 @@ import { mimouseNotificationDeliveries as deliveries, mimouseNotificationEndpoin
 import { assertBoard, assertCompanyAccess, getActorInfo } from "./authz.js";
 import { conflict, forbidden, notFound, unprocessable } from "../errors.js";
 import { validate } from "../middleware/validate.js";
-import { logActivity } from "../services/activity-log.js";
+import { logActivity, publishActivity, type ActivityPublication } from "../services/activity-log.js";
 import { CONNECTED_NOTIFICATION_EVENTS, NOTIFICATION_TOPIC } from "../services/mimouse-notifications/outbox.js";
 const kinds = ["wecom_webhook", "feishu_webhook", "dingtalk_webhook_legacy", "dingtalk_app", "wechat_official_account"] as const;
 const configSchema = z.object({ brand: z.enum(["feishu", "lark"]).optional(), target: z.string().max(500).optional(), robotCode: z.string().max(200).optional(), templateId: z.string().max(200).optional(), templateData: z.record(z.string(), z.object({ value: z.string().max(1000) }).strict()).optional() }).strict();
@@ -83,13 +83,15 @@ export function mimouseNotificationRoutes(db: Db) {
     const actor = getActorInfo(req); await logActivity(db, { companyId, actorType: actor.actorType, actorId: actor.actorId, action: "notification.subscription.toggled", entityType: "notification_subscription", entityId: subscription.id, details: { enabled: subscription.enabled } });
     res.json({ id: subscription.id, enabled: subscription.enabled });
   });
-  router.patch(`${path}/subscriptions/:id/policy`, validate(notificationPolicySchema), async (req, res) => {
+  router.patch(`${path}/subscriptions/:id/policy`, validate(notificationPolicyUpdateSchema), async (req, res) => {
     const companyId = String(req.params.companyId); companyAdmin(req, companyId);
-    const policy = notificationPolicySchema.parse(req.body);
-    const [subscription] = await db.update(subscriptions).set({ policy }).where(and(eq(subscriptions.companyId, companyId), eq(subscriptions.id, String(req.params.id)))).returning();
-    if (!subscription) throw notFound("Notification subscription not found");
-    const actor = getActorInfo(req); await logActivity(db, { companyId, actorType: actor.actorType, actorId: actor.actorId, action: "notification.subscription.policy_updated", entityType: "notification_subscription", entityId: subscription.id, details: { policy, appliesToNewEventsOnly: true } });
-    res.json({ id: subscription.id, policy: subscription.policy });
+    const input = notificationPolicyUpdateSchema.parse(req.body); const actor = getActorInfo(req);
+    const publications: ActivityPublication[] = [];
+    const row = await updateNotificationPolicy(db, companyId, String(req.params.id), input, async (tx, policyVersion) => {
+      await logActivity(tx as unknown as Db, { companyId, actorType: actor.actorType, actorId: actor.actorId, action: "notification.subscription.policy_updated", entityType: "notification_subscription", entityId: String(req.params.id), details: { policy: { minimumSeverity: input.minimumSeverity, mergeWindowSeconds: input.mergeWindowSeconds }, previousVersion: input.expectedVersion, policyVersion, appliesToNewEventsOnly: true } }, publications);
+    });
+    publications.forEach(publishActivity);
+    res.json(row);
   });
   router.get(`${path}/deliveries/:id/reviews`, async (req, res) => {
     const companyId = String(req.params.companyId); companyAdmin(req, companyId);

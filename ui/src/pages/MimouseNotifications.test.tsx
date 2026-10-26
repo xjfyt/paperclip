@@ -116,7 +116,7 @@ async function fillPolicy(value: string) {
 it("saves policy alone without enabling, testing or retrying and rejects out-of-range windows", async () => {
   await mount(); await fillPolicy("301"); expect((button("Save notification policy") as HTMLButtonElement).disabled).toBe(true);
   await fillPolicy("30"); await click(button("Save notification policy"));
-  expect(api.policy).toHaveBeenCalledWith("company-a", "subscription-1", { minimumSeverity: "info", mergeWindowSeconds: 30 });
+  expect(api.policy).toHaveBeenCalledWith("company-a", "subscription-1", { minimumSeverity: "info", mergeWindowSeconds: 30, expectedVersion: 1 });
   expect(api.toggle).not.toHaveBeenCalled(); expect(api.subscribe).not.toHaveBeenCalled(); expect(api.test).not.toHaveBeenCalled(); expect(api.retry).not.toHaveBeenCalled();
 });
 it("keeps a policy draft on failure for explicit retry and resets it on company switch", async () => {
@@ -140,4 +140,17 @@ it("shows delayed, merged and filtered ledger rows without retry controls", asyn
 });
 it.each([["en", "Notification policy", "always bypass"], ["zh-CN", "通知策略", "始终绕过"], ["es", "Política de notificaciones", "nunca se filtran"], ["ja", "通知ポリシー", "常にフィルター"]])("localizes severity policy and critical guard in %s", async (locale, title, guard) => {
   await i18n.changeLanguage(locale); await mount(); expect(host.textContent).toContain(title); expect(host.textContent).toContain(guard); expect(host.textContent).not.toContain("notificationPolicy.");
+});
+
+it("preserves the conflicting policy draft through polls and requires explicit reload before another write", async () => {
+  api.policy.mockRejectedValueOnce(Object.assign(Error("conflict"), { status: 409 })); await mount(); await fillPolicy("40"); await click(button("Save notification policy"));
+  expect(host.textContent).toContain("Your draft is preserved"); expect((button("Save notification policy") as HTMLButtonElement).disabled).toBe(true);
+  const fresh = { ...data(), subscriptions: [{ ...data().subscriptions[0], policyVersion: 2, policy: { minimumSeverity: "warning", mergeWindowSeconds: 20 } }] };
+  await act(async () => { client.setQueryData(["mimouse-notifications", "company-a"], fresh); });
+  expect((host.querySelector('input[aria-label="Exact duplicate window (seconds, 0–300)"]') as HTMLInputElement).value).toBe("40");
+  expect(api.policy).toHaveBeenCalledTimes(1); api.get.mockResolvedValue(fresh);
+  await click(button("Discard draft and reload policy")); expect((host.querySelector('input[aria-label="Exact duplicate window (seconds, 0–300)"]') as HTMLInputElement).value).toBe("20");
+  await fillPolicy("25"); await click(button("Save notification policy"));
+  expect(api.policy).toHaveBeenLastCalledWith("company-a", "subscription-1", { minimumSeverity: "warning", mergeWindowSeconds: 25, expectedVersion: 2 });
+  expect(api.toggle).not.toHaveBeenCalled(); expect(api.test).not.toHaveBeenCalled(); expect(api.retry).not.toHaveBeenCalled();
 });

@@ -15,7 +15,7 @@ export const CONNECTED_NOTIFICATION_EVENTS = ["approval.requested", "run.failed"
 // the shared query surface, not an unsafe cast to Drizzle transaction internals.
 type Transaction = Pick<Parameters<Parameters<Db["transaction"]>[0]>[0], "select" | "insert" | "execute">;
 interface EventInput { companyId: string; eventId: string; type: string; resourceId: string; title?: string; text?: string }
-interface Snapshot extends NotificationSnapshot { policy?: unknown; severity?: string; policyEvent?: string; policyResourceId?: string; configVersion?: number; secretRef: string; secretVersion: number; targetKey: string; locale: string; renderVersion: number; renderEvent?: string; renderResourceId?: string; renderCompanyPrefix?: string; rendered?: boolean }
+interface Snapshot extends NotificationSnapshot { policy?: unknown; policyVersion?: number; severity?: string; policyEvent?: string; policyResourceId?: string; configVersion?: number; secretRef: string; secretVersion: number; targetKey: string; locale: string; renderVersion: number; renderEvent?: string; renderResourceId?: string; renderCompanyPrefix?: string; rendered?: boolean }
 interface DeliveryRow { id: string; company_id: string; endpoint_id: string; subscription_id: string; snapshot: Snapshot; lease: string; attempt: number; created_at: Date }
 
 /** Called inside the exact business transaction. Never run a provider request here. */
@@ -43,7 +43,7 @@ export async function enqueueNotification(tx: Transaction, event: EventInput): P
     }
     const snapshot: Snapshot = {
       ...endpoint.config,
-      policy: decision.policy, severity: decision.severity, policyEvent: event.type, policyResourceId: event.resourceId,
+      policy: decision.policy, policyVersion: subscription.policyVersion, severity: decision.severity, policyEvent: event.type, policyResourceId: event.resourceId,
       kind: endpoint.kind as NotificationSnapshot["kind"], ...rendered,
       ...(templateData ? { templateData } : {}),
       secretRef: endpoint.secretRef, secretVersion: endpoint.secretVersion, configVersion: endpoint.configVersion,
