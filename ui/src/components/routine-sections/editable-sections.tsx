@@ -1,3 +1,5 @@
+import { Trans } from "react-i18next";
+import { useTranslation, i18n } from "@/i18n";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { useMemo, useState } from "react";
 import {
@@ -32,6 +34,12 @@ import { RoutineVariablesEditor, RoutineVariablesHint } from "../RoutineVariable
 import { EnvironmentVariablesEditor } from "../environment-variables-editor";
 import { useRoutineDetail } from "./context";
 import type { EnvBinding, RoutineDetail as RoutineDetailType } from "@paperclipai/shared";
+
+const routineRunStatusKeys: Record<string, string> = {
+  received: "managementUi.routineStatusReceived", coalesced: "managementUi.routineStatusCoalesced",
+  skipped: "managementUi.routineStatusSkipped", issue_created: "managementUi.routineStatusIssueCreated",
+  completed: "managementUi.routineStatusCompleted", failed: "statuses.failed",
+};
 
 const concurrencyPolicyOptions = [
   {
@@ -96,6 +104,7 @@ export function OverviewSection({
 }: {
   defaultDescriptionAnnotationsOpen?: boolean;
 } = {}) {
+  const { t } = useTranslation();
   const ctx = useRoutineDetail();
   const {
     routine,
@@ -128,9 +137,11 @@ export function OverviewSection({
       .filter((trigger) => trigger.kind === "schedule" && trigger.nextRunAt)
       .map((trigger) => new Date(trigger.nextRunAt as Date))
       .sort((a, b) => a.getTime() - b.getTime())[0];
-    return upcoming ? upcoming.toLocaleString() : null;
-  }, [routine.triggers]);
+    return upcoming ? upcoming.toLocaleString(i18n.language) : null;
+  }, [routine.triggers, i18n.language]);
   const lastRun = (routineRuns ?? [])[0] ?? null;
+  const lastRunStatus = lastRun ? (routineRunStatusKeys[lastRun.status]
+    ? t(routineRunStatusKeys[lastRun.status]) : lastRun.status.replaceAll("_", " ")) : "";
   const recentActivity = (activity ?? []).slice(0, 5);
 
   return (
@@ -138,16 +149,16 @@ export function OverviewSection({
       {/* Assignment row */}
       <div className="overflow-x-auto overscroll-x-contain">
         <div className="inline-flex min-w-full flex-wrap items-center gap-2 text-sm text-muted-foreground sm:min-w-max sm:flex-nowrap">
-          <span>For</span>
+          <span>{t("routineOps.for")}</span>
           <InlineEntitySelector
             ref={assigneeSelectorRef}
             value={editDraft.assigneeAgentId}
             options={assigneeOptions}
             recentOptionIds={recentAssigneeIds}
-            placeholder="Responsible"
-            noneLabel="No responsible"
-            searchPlaceholder="Search responsible..."
-            emptyMessage="No responsible found."
+            placeholder={t("commonUi.responsible")}
+            noneLabel={t("routineOps.noResponsible")}
+            searchPlaceholder={t("routineOps.searchResponsible")}
+            emptyMessage={t("workflow.noResponsibleFound")}
             onChange={(assigneeAgentId) =>
               setEditDraft((current) => ({ ...current, assigneeAgentId }))
             }
@@ -169,7 +180,7 @@ export function OverviewSection({
                   <span className="truncate">{option.label}</span>
                 )
               ) : (
-                <span className="text-muted-foreground">Responsible</span>
+                <span className="text-muted-foreground">{t("commonUi.responsible")}</span>
               )
             }
             renderOption={(option) => {
@@ -185,16 +196,16 @@ export function OverviewSection({
               );
             }}
           />
-          <span>in</span>
+          <span>{t("managementUi.routineIn")}</span>
           <InlineEntitySelector
             ref={projectSelectorRef}
             value={editDraft.projectId}
             options={projectOptions}
             recentOptionIds={recentProjectIds}
-            placeholder="Project"
-            noneLabel="No project"
-            searchPlaceholder="Search projects..."
-            emptyMessage="No projects found."
+            placeholder={t("commonUi.project")}
+            noneLabel={t("commonUi.noProject")}
+            searchPlaceholder={t("routineOps.searchProjects")}
+            emptyMessage={t("workflow.noProjects")}
             onChange={(projectId) => setEditDraft((current) => ({ ...current, projectId }))}
             onConfirm={() => descriptionEditorRef.current?.focus()}
             renderTriggerValue={(option) =>
@@ -207,7 +218,7 @@ export function OverviewSection({
                   <span className="truncate">{option.label}</span>
                 </>
               ) : (
-                <span className="text-muted-foreground">Project</span>
+                <span className="text-muted-foreground">{t("commonUi.project")}</span>
               )
             }
             renderOption={(option) => {
@@ -229,8 +240,7 @@ export function OverviewSection({
 
       {!routine.assigneeAgentId ? (
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm text-amber-900 dark:text-amber-200">
-          Default agent required. This routine can stay as a draft and still run manually, but
-          automation stays paused until you assign a default agent.
+          {t("managementUi.routineDefaultRequired")}
         </div>
       ) : null}
 
@@ -264,7 +274,7 @@ export function OverviewSection({
               ref={descriptionEditorRef}
               value={editDraft.description}
               onChange={(description) => setEditDraft((current) => ({ ...current, description }))}
-              placeholder="Add instructions..."
+              placeholder={t("commonUi.instructions")}
               bordered={false}
               contentClassName="min-h-(--sz-120px) text-sm leading-7"
               mentions={mentionOptions}
@@ -280,7 +290,7 @@ export function OverviewSection({
             ref={descriptionEditorRef}
             value={editDraft.description}
             onChange={(description) => setEditDraft((current) => ({ ...current, description }))}
-            placeholder="Add instructions..."
+            placeholder={t("commonUi.instructions")}
             bordered={false}
             contentClassName="min-h-(--sz-120px) text-sm leading-7"
             mentions={mentionOptions}
@@ -308,29 +318,29 @@ export function OverviewSection({
       <div className="grid gap-3 sm:grid-cols-2">
         <SummaryCard
           icon={Clock3}
-          label="Triggers"
-          value={activeTriggers === 0 ? "None" : `${activeTriggers} active`}
-          hint={nextFire ? `Next fire ${nextFire}` : "No schedule"}
+          label={t("routineScheduleUi.triggers")}
+          value={activeTriggers === 0 ? t("liveUi.none") : t("managementUi.routineActiveCount", { count: activeTriggers })}
+          hint={nextFire ? t("managementUi.routineNextFire", { time: nextFire }) : t("managementUi.routineNoSchedule")}
           to={() => navigateToSection("triggers")}
-          ariaLabel={`${activeTriggers} triggers. Open triggers.`}
+          ariaLabel={t("managementUi.routineTriggers", { count: activeTriggers })}
         />
         <SummaryCard
           icon={Play}
-          label="Last run"
-          value={lastRun ? lastRun.status.replaceAll("_", " ") : "No runs"}
-          hint={lastRun ? timeAgo(lastRun.triggeredAt) : "Trigger a run"}
+          label={t("routineOps.lastRun")}
+          value={lastRun ? lastRunStatus : t("browserQa.noRuns")}
+          hint={lastRun ? timeAgo(lastRun.triggeredAt) : t("managementUi.routineTriggerRun")}
           to={() => navigateToSection("runs")}
-          ariaLabel={lastRun ? `Last run ${lastRun.status}. Open runs.` : "No runs. Open runs."}
+          ariaLabel={lastRun ? t("managementUi.routineLastRun", { status: lastRunStatus }) : t("managementUi.routineNoRuns")}
         />
       </div>
 
       {/* Recent activity */}
       <div className="space-y-2">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Recent activity
+          {t("liveUi.recentActivity")}
         </p>
         {recentActivity.length === 0 ? (
-          <p className="text-xs text-muted-foreground">No activity yet.</p>
+          <p className="text-xs text-muted-foreground">{t("managementUi.routineNoActivity")}</p>
         ) : (
           <div className="divide-y divide-border/60">
             {recentActivity.map((event) => (
@@ -351,7 +361,7 @@ export function OverviewSection({
               onClick={() => navigateToSection("activity")}
               className="flex items-center gap-1 pt-2 text-xs text-muted-foreground hover:text-foreground"
             >
-              View all activity <ArrowRight className="h-3 w-3" />
+              {t("managementUi.routineAllActivity")} <ArrowRight className="h-3 w-3" />
             </button>
           </div>
         )}
@@ -395,6 +405,7 @@ function SummaryCard({
 export { RoutineTriggers as TriggersSection } from "../routine-triggers/RoutineTriggers";
 
 export function VariablesSection() {
+  const { t } = useTranslation();
   const ctx = useRoutineDetail();
   const { editDraft, setEditDraft, navigateToSection } = ctx;
   const hasVariables = editDraft.variables.length > 0;
@@ -403,13 +414,11 @@ export function VariablesSection() {
     <div className="space-y-4">
       <div className="flex items-center gap-3 rounded-md border border-border bg-muted/20 px-4 py-3 text-xs">
         <span className="flex-1 text-muted-foreground">
-          Variables are auto-detected from <code className="font-mono">{"{{placeholders}}"}</code> in
-          the title &amp; instructions. The variable name is read-only — rename by editing the
-          placeholder.
+          <Trans i18nKey="managementUi.routineVariablesHelp" values={{ example: "{{placeholders}}" }} components={[<code className="font-mono" />]} />
         </span>
         <Button variant="secondary" size="sm" onClick={() => navigateToSection("overview")}>
           <Edit3 className="mr-1.5 h-3.5 w-3.5" />
-          Edit instructions
+          {t("managementUi.routineEditInstructions")}
         </Button>
       </div>
 
@@ -423,8 +432,8 @@ export function VariablesSection() {
       ) : (
         <EmptyState
           icon={Braces}
-          message="No variables yet. Add a {{placeholder}} in the title or instructions to create one."
-          action="Edit instructions"
+          message={t("managementUi.routineNoVariables", { example: "{{placeholder}}" })}
+          action={t("managementUi.routineEditInstructions")}
           onAction={() => navigateToSection("overview")}
         />
       )}
@@ -433,6 +442,7 @@ export function VariablesSection() {
 }
 
 export function SecretsSection() {
+  const { t } = useTranslation();
   const ctx = useRoutineDetail();
   const { editDraft, setEditDraft, availableSecrets, createSecret } = ctx;
 
@@ -454,8 +464,7 @@ export function SecretsSection() {
   return (
     <div className="space-y-4">
       <div className="rounded-md border border-border bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
-        Routine secrets apply to every task this routine creates. They override matching keys in
-        project and agent env. <span className="font-mono">PAPERCLIP_*</span> names are reserved.
+        <Trans i18nKey="managementUi.routineSecretsHelp" components={[<span className="font-mono" />]} />
       </div>
 
 
