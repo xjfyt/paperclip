@@ -200,3 +200,53 @@ it("recovers old uppercase metadata with a lowercase receipt while retrying the 
   expect(stored()).toEqual(expect.objectContaining({ ...old, operationId: expect.any(String), phase: "awaiting_confirmation", testId: ids.test, approvalDigest: "a".repeat(64) }));
   expect(button("execute").disabled).toBe(true); expect(calls.execute).not.toHaveBeenCalled();
 });
+
+const preparationMarker = () => marker({ phase: "prepare_pending", testId: null, approvalDigest: null });
+it("explicit local abandonment sends no requests and only a later Prepare creates a new identity", async () => {
+  const old = preparationMarker(); replacePrivatePromptJournal(old, null); await mount();
+  const random = vi.spyOn(crypto, "randomUUID"); await click(button("abandonPrepare"));
+  expect(stored()).toBeNull(); expect(pending).toHaveBeenLastCalledWith(false); expect(random).not.toHaveBeenCalled();
+  for (const call of [calls.prepare, calls.execute, calls.cancel]) expect(call).not.toHaveBeenCalled();
+  expect(host.textContent).toContain(text("prepareAbandoned"));
+  await prepare(); expect(calls.prepare).toHaveBeenCalledTimes(1); expect(stored()?.requestId).not.toBe(old.requestId);
+});
+it.each(["awaiting_confirmation", "execute_pending", "cancel_pending", "accepted"] as const)("does not offer abandonment for %s", async phase => {
+  replacePrivatePromptJournal(marker({ phase }), null); await mount(); expect(button("abandonPrepare")).toBeUndefined();
+});
+it("cannot abandon while access is pending or a read failed", async () => {
+  replacePrivatePromptJournal(preparationMarker(), null); await mount(); await mount({ authPending: true });
+  expect(button("abandonPrepare").disabled).toBe(true); await click(button("abandonPrepare")); expect(stored()).not.toBeNull();
+  calls.capabilities.mockRejectedValue(new ApiError("forbidden", 403, {})); await mount({ authPending: false });
+  expect(button("abandonPrepare").disabled).toBe(true); expect(stored()).not.toBeNull();
+});
+it.each(["phase", "operation", "corrupt", "owner", "delete"])("retains local lock on abandonment race/failure: %s", async change => {
+  const old = preparationMarker(); replacePrivatePromptJournal(old, null); await mount();
+  const key = privatePromptJournalKey(ids.company, "user");
+  if (change === "phase") replacePrivatePromptJournal(marker({ phase: "awaiting_confirmation" }), old.operationId);
+  if (change === "operation") replacePrivatePromptJournal({ ...old, operationId: ids.ref }, old.operationId);
+  if (change === "corrupt") sessionStorage.setItem(key, "corrupt");
+  if (change === "owner") sessionStorage.setItem(key, JSON.stringify({ ...old, userId: "other" }));
+  if (change === "delete") vi.spyOn(Storage.prototype, "removeItem").mockImplementation(() => {});
+  const before = sessionStorage.getItem(key); await click(button("abandonPrepare"));
+  expect(sessionStorage.getItem(key)).toBe(before); expect(pending).toHaveBeenLastCalledWith(true);
+  expect(host.textContent).toContain(text("storageFailed"));
+  for (const call of [calls.prepare, calls.execute, calls.cancel]) expect(call).not.toHaveBeenCalled();
+});
+it("disables abandonment during Prepare and ignores its late prior-epoch response after abandonment and a new marker", async () => {
+  let finish!: (value: unknown) => void;
+  calls.prepare.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  await mount(); await prepare(); const old = stored()!;
+  expect(button("abandonPrepare").disabled).toBe(true); await click(button("abandonPrepare")); expect(stored()).toEqual(old);
+  await mount({ authPending: true }); await mount({ authPending: false });
+  await click(button("abandonPrepare")); expect(stored()).toBeNull();
+  await prepare(); const next = stored(); expect(next?.requestId).not.toBe(old.requestId);
+  await act(async () => finish({ item: record({ requestId: old.requestId, id: letterUuid }), duplicate: false })); await flush();
+  expect(stored()).toEqual(next); expect(host.textContent).not.toContain(letterUuid);
+  expect(calls.execute).not.toHaveBeenCalled(); expect(calls.cancel).not.toHaveBeenCalled();
+});
+it.each([404, 422])("allows explicit metadata-only abandonment after %s without claiming server cancellation", async status => {
+  calls.prepare.mockRejectedValueOnce(new ApiError("rejected", status, {})); await mount(); await prepare();
+  expect(stored()?.phase).toBe("prepare_pending"); expect(host.textContent).toContain(text("abandonPrepareBoundary"));
+  await click(button("abandonPrepare")); expect(stored()).toBeNull(); expect(calls.prepare).toHaveBeenCalledTimes(1);
+  expect(calls.execute).not.toHaveBeenCalled(); expect(calls.cancel).not.toHaveBeenCalled();
+});

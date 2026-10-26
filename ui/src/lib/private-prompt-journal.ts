@@ -39,6 +39,15 @@ export function clearPrivatePromptJournal(expected: PrivatePromptJournal) {
   sessionStorage.removeItem(privatePromptJournalKey(expected.companyId, expected.userId));
   if (sessionStorage.getItem(privatePromptJournalKey(expected.companyId, expected.userId)) !== null) throw Error("private_journal_clear_unconfirmed");
 }
+/** Metadata-only prepare never authorizes execution; do not generalize this to paid/known tickets. */
+export function abandonPrivatePromptPreparation(expected: PrivatePromptJournal) {
+  const value = parseJournal(expected), current = readPrivatePromptJournal(value.companyId, value.userId);
+  const metadataOnly = (entry: PrivatePromptJournal) => entry.phase === "prepare_pending" && entry.testId === null && entry.approvalDigest === null;
+  if (!metadataOnly(value) || !current || !metadataOnly(current) || current.operationId !== value.operationId) throw Error("private_journal_changed");
+  // Synchronous read/check/remove: a same-operation transition to a known ticket must not be erased.
+  sessionStorage.removeItem(privatePromptJournalKey(value.companyId, value.userId));
+  if (sessionStorage.getItem(privatePromptJournalKey(value.companyId, value.userId)) !== null) throw Error("private_journal_clear_unconfirmed");
+}
 export function verifyPrivatePromptBinding(raw: unknown, pending: PrivatePromptJournal): VerifiedPrivatePromptRecord {
   const row = privatePromptRecordSchema.parse(raw);
   pending = parseJournal(pending);

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { PreparePrivatePromptTest } from "@paperclipai/shared/mimouse-private-prompt-tests";
 import { ApiError } from "@/api/client";
 import { privatePromptTestsApi, privatePromptDetailSchema, privatePromptResponseSchema, type VerifiedPrivatePromptDetail, type VerifiedPrivatePromptRecord } from "@/api/private-prompt-tests";
-import { readPrivatePromptJournal, replacePrivatePromptJournal, clearPrivatePromptJournal, verifyPrivatePromptBinding, type PrivatePromptJournal } from "@/lib/private-prompt-journal";
+import { readPrivatePromptJournal, replacePrivatePromptJournal, clearPrivatePromptJournal, abandonPrivatePromptPreparation, verifyPrivatePromptBinding, type PrivatePromptJournal } from "@/lib/private-prompt-journal";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/i18n";
 type Props = { companyId: string; userId: string; sessionId: string; promptId: string | null; revisionId: string | null; headReceiptId: string | null; authPending?: boolean; onPendingChange: (pending: boolean) => void; onAccessLost: () => void };
@@ -124,6 +124,15 @@ function PrivateTestSession(props: Props) {
       // No HTTP status, malformed body or binding mismatch can discard the journal.
     } finally { if (writeLock.current === saved.operationId) writeLock.current = null; if (active()) setBusy(false); }
   }
+  function abandonPreparation() {
+    if (!active() || busy || failed || writeLock.current || storageFailed || !journal ||
+      journal.companyId !== props.companyId || journal.userId !== props.userId ||
+      journal.phase !== "prepare_pending" || journal.testId !== null || journal.approvalDigest !== null) return;
+    try {
+      abandonPrivatePromptPreparation(journal);
+      ++generation.current; adopt(null); setDetail(null); setItems([]); setChecks([false, false, false]); setNotice("prepareAbandoned");
+    } catch { storageFailure(); }
+  }
   function adoptHistoryTicket() {
     if (!detail || journal || storageFailed || detail.item.status !== "awaiting_confirmation" || !detail.item.approvalSnapshot) return;
     const row = detail.item;
@@ -178,6 +187,10 @@ function PrivateTestSession(props: Props) {
       {!journal && <><h3 className="font-medium">{label("history")}</h3><p className="text-sm text-muted-foreground">{label("order")}</p><ul>{items.map(item => <li key={item.id} className="break-all"><Button variant="outline" disabled={busy} onClick={() => void inspect(item.id)}>{item.id}</Button> {status(item.status)}</li>)}</ul>{nextPage && <Button variant="outline" disabled={busy} onClick={() => void refresh(true)}>{label("more")}</Button>}</>}
     </>}
     {journal?.phase === "prepare_pending" && <Button disabled={busy || storageFailed || props.authPending} onClick={() => void post("prepare", journal)}>{label("recoverPrepare")}</Button>}
+    {journal?.phase === "prepare_pending" && journal.testId === null && journal.approvalDigest === null && <>
+      <p className="text-sm text-muted-foreground">{label("abandonPrepareBoundary")}</p>
+      <Button variant="outline" disabled={busy || failed || storageFailed || props.authPending} onClick={abandonPreparation}>{label("abandonPrepare")}</Button>
+    </>}
     <Button variant="outline" disabled={busy || props.authPending} onClick={() => void refresh()}>{label("refresh")}</Button>
   </section>;
 }

@@ -2142,3 +2142,23 @@ Chromium. The test starts its own loopback Vite server and mocks API responses;
 it needs no running Paperclip instance or provider credentials. The same spec lives
 in the default `test:e2e` discovery tree, so the existing Chrome CI shards run it
 on pull requests.
+
+### Private prompt preparation recovery
+
+New private-test form UUIDs are lowercased before the metadata-only prepare
+request is journaled. Existing journals and retry bodies retain their original
+spelling because the server request digest includes that spelling. Receipt
+binding compares validated UUIDs semantically; actor IDs, session identity,
+approval hashes and operation compare-and-swap tokens remain case-sensitive.
+
+An explicit **Abandon local preparation and edit** action is available only for
+an unresolved `prepare_pending` marker with no test ID or approval digest, after
+access is validated and while no request is active. It synchronously rechecks
+owner/company, operation ID, phase and null ticket fields before removing the
+local marker. Failed storage deletion keeps the UI locked. It sends no request
+and generates no new request ID; a later explicit Prepare starts a new request.
+The safety basis is that Prepare never authorizes model execution, **not** that
+a 404/422 or failed response proves no server-side effect. An unapproved server
+ticket may remain; the UI does not claim it was cancelled. Known tickets and all
+execute/cancel/accepted journals, including uncertain paid outcomes, cannot use
+this escape hatch. Late old responses cannot adopt or clear a newer marker.

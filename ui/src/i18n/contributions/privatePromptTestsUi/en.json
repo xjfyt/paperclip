@@ -61,5 +61,8 @@
   "snapshotRestrictions": "This saved profile requires a fresh session, disables tools and Paperclip credentials, and does not capture complete context. It does not authorize later Agent configuration changes.",
   "snapshotUnavailable": "This historical record has no validated approval snapshot. It is read-only; execution cannot be authorized.",
   "continueExecution": "Continue this same execution admission",
-  "snapshotCwdUnresolved": "Resolved at runtime — not determined yet"
+  "snapshotCwdUnresolved": "Resolved at runtime — not determined yet",
+  "abandonPrepare": "Abandon local preparation and edit",
+  "abandonPrepareBoundary": "This only forgets a metadata-only preparation in this tab. It does not cancel a server ticket; a ticket awaiting separate execution approval may remain. No model execution was authorized by Prepare.",
+  "prepareAbandoned": "Local preparation forgotten. Edit the references, then explicitly prepare a new ticket if needed. No server cancellation or execution was requested."
 }

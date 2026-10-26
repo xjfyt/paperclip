@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { ids, marker, record } from "@/test/private-prompt-fixtures";
-import { clearPrivatePromptJournal, privatePromptJournalKey, readPrivatePromptJournal, replacePrivatePromptJournal, verifyPrivatePromptBinding } from "./private-prompt-journal";
-afterEach(() => sessionStorage.clear());
+import { abandonPrivatePromptPreparation, clearPrivatePromptJournal, privatePromptJournalKey, readPrivatePromptJournal, replacePrivatePromptJournal, verifyPrivatePromptBinding } from "./private-prompt-journal";
+afterEach(() => { vi.restoreAllMocks(); sessionStorage.clear(); });
 it("persists only strict non-secret metadata and isolates company/user scopes", () => {
   const value = marker(); replacePrivatePromptJournal(value, null);
   expect(readPrivatePromptJournal(ids.company, "user")).toEqual(value);
@@ -54,4 +54,30 @@ it("preserves opaque identity, hash and operation CAS case sensitivity", () => {
 it("rejects malformed records and journals before semantic UUID binding", () => {
   expect(() => verifyPrivatePromptBinding(record({ agentId: "not-a-uuid" }), marker({ agentId: "NOT-A-UUID" }))).toThrow();
   expect(() => verifyPrivatePromptBinding(record(), { ...marker(), extra: true } as never)).toThrow();
+});
+
+const metadataOnly = () => marker({ phase: "prepare_pending", testId: null, approvalDigest: null });
+it("abandons only the same metadata-only operation", () => {
+  const pending = metadataOnly(); replacePrivatePromptJournal(pending, null);
+  abandonPrivatePromptPreparation(pending); expect(readPrivatePromptJournal(ids.company, "user")).toBeNull();
+});
+it.each(["awaiting_confirmation", "execute_pending", "cancel_pending", "accepted"] as const)("never abandons %s even with the same operation ID", phase => {
+  const pending = metadataOnly(); const changed = marker({ phase }); replacePrivatePromptJournal(changed, null);
+  expect(() => abandonPrivatePromptPreparation(pending)).toThrow();
+  expect(() => abandonPrivatePromptPreparation(changed)).toThrow();
+  expect(readPrivatePromptJournal(ids.company, "user")).toEqual(changed);
+});
+it.each(["userId", "companyId", "operationId"] as const)("does not abandon changed %s", field => {
+  const pending = metadataOnly(); replacePrivatePromptJournal(pending, null);
+  expect(() => abandonPrivatePromptPreparation({ ...pending, [field]: ids.ref })).toThrow();
+  expect(readPrivatePromptJournal(ids.company, "user")).toEqual(pending);
+});
+it.each(["bad JSON", JSON.stringify({ ...metadataOnly(), userId: "other" }), JSON.stringify({ ...metadataOnly(), companyId: ids.ref }), JSON.stringify({ ...metadataOnly(), testId: ids.test })])("retains corrupt or wrong-owner storage: %s", raw => {
+  const key = privatePromptJournalKey(ids.company, "user"); sessionStorage.setItem(key, raw);
+  expect(() => abandonPrivatePromptPreparation(metadataOnly())).toThrow(); expect(sessionStorage.getItem(key)).toBe(raw);
+});
+it.each([true, false])("fails closed when deletion throws or silently fails: %s", throws => {
+  const pending = metadataOnly(); replacePrivatePromptJournal(pending, null);
+  vi.spyOn(Storage.prototype, "removeItem").mockImplementation(() => { if (throws) throw Error("blocked"); });
+  expect(() => abandonPrivatePromptPreparation(pending)).toThrow(); expect(readPrivatePromptJournal(ids.company, "user")).toEqual(pending);
 });
