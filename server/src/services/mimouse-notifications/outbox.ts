@@ -1,3 +1,4 @@
+import { evaluateNotificationPolicy, notificationMergeKey, notificationMergeWindow } from "./policy.js";
 import { appCredential, NotificationTokenError } from "./app-credentials.js";
 import { notificationTokenCache } from "./token-cache.js";
 import { renderNotification, renderTemplateData, type NotificationEventType } from "./render.js";
@@ -12,9 +13,9 @@ export const NOTIFICATION_TOPIC = "mimouse-notifications";
 export const CONNECTED_NOTIFICATION_EVENTS = ["approval.requested", "run.failed", "coding.mr_ready", "coding.ci_failed", "coding.artifact_ready", "budget.threshold_reached"] as const;
 // Accounting services expose their existing transaction as Db; require only
 // the shared query surface, not an unsafe cast to Drizzle transaction internals.
-type Transaction = Pick<Parameters<Parameters<Db["transaction"]>[0]>[0], "select" | "insert">;
+type Transaction = Pick<Parameters<Parameters<Db["transaction"]>[0]>[0], "select" | "insert" | "execute">;
 interface EventInput { companyId: string; eventId: string; type: string; resourceId: string; title?: string; text?: string }
-interface Snapshot extends NotificationSnapshot { configVersion?: number; secretRef: string; secretVersion: number; targetKey: string; locale: string; renderVersion: number; renderEvent?: string; renderResourceId?: string; renderCompanyPrefix?: string; rendered?: boolean }
+interface Snapshot extends NotificationSnapshot { policy?: unknown; severity?: string; policyEvent?: string; policyResourceId?: string; configVersion?: number; secretRef: string; secretVersion: number; targetKey: string; locale: string; renderVersion: number; renderEvent?: string; renderResourceId?: string; renderCompanyPrefix?: string; rendered?: boolean }
 interface DeliveryRow { id: string; company_id: string; endpoint_id: string; subscription_id: string; snapshot: Snapshot; lease: string; attempt: number; created_at: Date }
 
 /** Called inside the exact business transaction. Never run a provider request here. */
@@ -27,7 +28,8 @@ export async function enqueueNotification(tx: Transaction, event: EventInput): P
   const [company] = await tx.select({ prefix: companies.issuePrefix }).from(companies).where(eq(companies.id, event.companyId));
   if (!company) throw Error("notification_company_missing");
   await signalDatabaseWork(tx, NOTIFICATION_TOPIC);
-  for (const { subscription, endpoint } of targets) {
+  for (const { subscription, endpoint } of targets.sort((a, b) => a.subscription.id.localeCompare(b.subscription.id))) {
+    const decision = evaluateNotificationPolicy(event.type, subscription.policy);
     let renderFailed = false;
     let rendered: { title: string; text: string; detailUrl?: string };
     let templateData: Record<string, { value: string }> | undefined;
@@ -41,12 +43,16 @@ export async function enqueueNotification(tx: Transaction, event: EventInput): P
     }
     const snapshot: Snapshot = {
       ...endpoint.config,
+      policy: decision.policy, severity: decision.severity, policyEvent: event.type, policyResourceId: event.resourceId,
       kind: endpoint.kind as NotificationSnapshot["kind"], ...rendered,
       ...(templateData ? { templateData } : {}),
       secretRef: endpoint.secretRef, secretVersion: endpoint.secretVersion, configVersion: endpoint.configVersion,
       targetKey: endpoint.targetKey, locale: subscription.locale, renderVersion: 2,
     };
-    await tx.insert(deliveries).values({ companyId: event.companyId, eventId: event.eventId, subscriptionId: subscription.id, endpointId: endpoint.id, snapshot: snapshot as unknown as Record<string, unknown>, ...(renderFailed ? { state: "rejected", lastCode: "snapshot_render_failed" } : {}) }).onConflictDoNothing();
+    const merge = !renderFailed && !decision.filtered && decision.mergeWindowSeconds > 0
+      ? await notificationMergeWindow(tx, event.companyId, notificationMergeKey(event.companyId, subscription.id, event.type, event.resourceId, snapshot as unknown as Record<string, unknown>), decision.mergeWindowSeconds)
+      : {};
+    await tx.insert(deliveries).values({ ...merge, ...(decision.filtered ? { state: "filtered", lastCode: "severity_filtered" } : {}), companyId: event.companyId, eventId: event.eventId, subscriptionId: subscription.id, endpointId: endpoint.id, snapshot: snapshot as unknown as Record<string, unknown>, ...(renderFailed ? { state: "rejected", lastCode: "snapshot_render_failed" } : {}) }).onConflictDoNothing();
   }
 }
 export function retryDelay(attempt: number, retryAfterMs = 0, random = Math.random()): number {

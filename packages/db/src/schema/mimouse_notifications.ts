@@ -23,6 +23,7 @@ export const mimouseNotificationSubscriptions = pgTable("mimouse_notification_su
   endpointId: uuid("endpoint_id").notNull(),
   eventType: text("event_type").notNull(),
   locale: text("locale").notNull().default("en"),
+  policy: jsonb("policy").$type<{ minimumSeverity: "info" | "warning" | "critical"; mergeWindowSeconds: number }>().notNull().default({ minimumSeverity: "info", mergeWindowSeconds: 0 }),
   enabled: boolean("enabled").notNull().default(true),
 }, t => ({ endpoint: foreignKey({ columns: [t.companyId, t.endpointId], foreignColumns: [mimouseNotificationEndpoints.companyId, mimouseNotificationEndpoints.id] }).onDelete("cascade"), identity: uniqueIndex("mimouse_notification_subscription_company_identity").on(t.companyId, t.id), unique: uniqueIndex("mimouse_notification_subscription_unique").on(t.companyId, t.endpointId, t.eventType) }));
 
@@ -34,6 +35,9 @@ export const mimouseNotificationDeliveries = pgTable("mimouse_notification_deliv
   endpointId: uuid("endpoint_id").notNull(),
   snapshot: jsonb("snapshot").$type<Record<string, unknown>>().notNull(),
   state: text("state").notNull().default("pending"),
+  mergeKey: text("merge_key"),
+  mergeUntil: timestamp("merge_until", { withTimezone: true }),
+  mergedInto: uuid("merged_into"),
   attempt: integer("attempt").notNull().default(0),
   lease: uuid("lease"),
   leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
@@ -47,8 +51,11 @@ export const mimouseNotificationDeliveries = pgTable("mimouse_notification_deliv
   endpoint: foreignKey({ columns: [t.companyId, t.endpointId], foreignColumns: [mimouseNotificationEndpoints.companyId, mimouseNotificationEndpoints.id] }),
   unique: uniqueIndex("mimouse_notification_delivery_unique").on(t.companyId, t.eventId, t.subscriptionId),
   companyIdentity: uniqueIndex("mimouse_notification_delivery_company_identity").on(t.companyId, t.id),
+  mergedLeader: foreignKey({ columns: [t.companyId, t.mergedInto], foreignColumns: [t.companyId, t.id] }),
+  mergeWindow: index("mimouse_notification_delivery_merge_window").on(t.companyId, t.mergeKey, t.mergeUntil),
+  mergeShape: check("mimouse_notification_delivery_merge_shape", sql`(${t.mergedInto} IS NULL OR (${t.state}='merged' AND ${t.mergedInto}<>${t.id})) AND (${t.state}<>'merged' OR ${t.mergedInto} IS NOT NULL)`),
   pending: index("mimouse_notification_delivery_pending").on(t.state, t.nextAttemptAt),
-  stateCheck: check("mimouse_notification_delivery_state", sql`${t.state} IN ('pending','claimed','sending','accepted','rejected','retryable','indeterminate','paused')`),
+  stateCheck: check("mimouse_notification_delivery_state", sql`${t.state} IN ('pending','claimed','sending','accepted','rejected','retryable','indeterminate','paused','filtered','merged')`),
 }));
 
 export const mimouseNotificationRateLimits = pgTable("mimouse_notification_rate_limits", {

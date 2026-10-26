@@ -1,3 +1,4 @@
+import { notificationPolicySchema } from "../services/mimouse-notifications/policy.js";
 import { notificationReconciliation } from "../services/mimouse-notifications/reconciliation.js";
 import { notificationConfiguration } from "../services/mimouse-notifications/configuration.js";
 import { renderTemplateData } from "../services/mimouse-notifications/render.js";
@@ -35,7 +36,7 @@ export function mimouseNotificationRoutes(db: Db) {
     const companyId = String(req.params.companyId); companyAdmin(req, companyId);
     const channelRows = await db.select().from(endpoints).where(eq(endpoints.companyId, companyId));
     const subscriptionRows = await db.select().from(subscriptions).where(eq(subscriptions.companyId, companyId));
-    const deliveryRows = await db.select({ id: deliveries.id, eventId: deliveries.eventId, endpointId: deliveries.endpointId, state: deliveries.state, attempt: deliveries.attempt, lastCode: deliveries.lastCode, createdAt: deliveries.createdAt }).from(deliveries).where(eq(deliveries.companyId, companyId)).orderBy(desc(deliveries.createdAt)).limit(100);
+    const deliveryRows = await db.select({ id: deliveries.id, eventId: deliveries.eventId, endpointId: deliveries.endpointId, state: deliveries.state, attempt: deliveries.attempt, lastCode: deliveries.lastCode, mergedInto: deliveries.mergedInto, mergeUntil: deliveries.mergeUntil, createdAt: deliveries.createdAt }).from(deliveries).where(eq(deliveries.companyId, companyId)).orderBy(desc(deliveries.createdAt)).limit(100);
     res.json({ enabled: process.env.PAPERCLIP_NOTIFICATIONS_ENABLED === "true", dispatchEnabled: process.env.PAPERCLIP_NOTIFICATIONS_ENABLED === "true" && process.env.PAPERCLIP_NOTIFICATIONS_WORKER_ENABLED !== "false", connectedEvents: CONNECTED_NOTIFICATION_EVENTS,
       unconnectedEvents: [],
       verification: { implemented: true, contractTested: false, liveVerified: false, scenarioVerified: false },
@@ -81,6 +82,14 @@ export function mimouseNotificationRoutes(db: Db) {
     if (!subscription) throw notFound("Notification subscription not found");
     const actor = getActorInfo(req); await logActivity(db, { companyId, actorType: actor.actorType, actorId: actor.actorId, action: "notification.subscription.toggled", entityType: "notification_subscription", entityId: subscription.id, details: { enabled: subscription.enabled } });
     res.json({ id: subscription.id, enabled: subscription.enabled });
+  });
+  router.patch(`${path}/subscriptions/:id/policy`, validate(notificationPolicySchema), async (req, res) => {
+    const companyId = String(req.params.companyId); companyAdmin(req, companyId);
+    const policy = notificationPolicySchema.parse(req.body);
+    const [subscription] = await db.update(subscriptions).set({ policy }).where(and(eq(subscriptions.companyId, companyId), eq(subscriptions.id, String(req.params.id)))).returning();
+    if (!subscription) throw notFound("Notification subscription not found");
+    const actor = getActorInfo(req); await logActivity(db, { companyId, actorType: actor.actorType, actorId: actor.actorId, action: "notification.subscription.policy_updated", entityType: "notification_subscription", entityId: subscription.id, details: { policy, appliesToNewEventsOnly: true } });
+    res.json({ id: subscription.id, policy: subscription.policy });
   });
   router.get(`${path}/deliveries/:id/reviews`, async (req, res) => {
     const companyId = String(req.params.companyId); companyAdmin(req, companyId);

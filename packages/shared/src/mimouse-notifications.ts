@@ -20,3 +20,9 @@ export interface NotificationReviewDto {
   id: string; deliveryId: string; companyId: string; requestId: string; outcome: "accepted" | "not_accepted" | "unknown";
   evidence: string; actorId: string; observedState: string; observedAttempt: number; createdAt: string;
 }
+
+/** Applied only to newly enqueued events; critical alerts always bypass filtering/merging. */
+export interface NotificationPolicyDto {
+  minimumSeverity: "info" | "warning" | "critical";
+  mergeWindowSeconds: number;
+}
