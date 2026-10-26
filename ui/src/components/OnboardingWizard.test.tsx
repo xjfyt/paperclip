@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
 
 import "../i18n/optional-onboarding-test-resources";
+import "../i18n/agent-setup-test-resources";
+import { LocalizedUiError } from "../lib/localized-ui-error";
+import * as localLoginModule from "./ai-connections/useLocalAiLogin";
 
 import { act } from "react";
 import { i18n } from "../i18n";
@@ -3307,6 +3310,42 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
         expect(document.body.textContent).not.toContain("Run this in a terminal");
         expect(document.body.textContent).not.toContain("Start sign-in again");
       }
+
+      it.each(["local", "external"])("preserves the draft and does not reconnect when translating a %s connect error", async kind => {
+        const useLocalAiLogin = localLoginModule.useLocalAiLogin;
+        const localGuard = vi.fn(() => { throw new LocalizedUiError("agentSetupLoginUi.prepareLocal", "Prepare local sign-in before connecting."); });
+        // Inject the hook's guarded failure at the host boundary; the hook's
+        // real guards are exercised separately in useLocalAiLogin.test.tsx.
+        const hookSpy = kind === "local" ? vi.spyOn(localLoginModule, "useLocalAiLogin").mockImplementation((...args) => ({ ...useLocalAiLogin(...args), connect: localGuard })) : null;
+        if (kind === "external") managedApi.connectLocal.mockRejectedValueOnce(new Error("Provider raw connect diagnostic"));
+        const { root } = await openStep4({ adapterType: "codex_local", agentName: "客户 Agent 草稿", model: "customer/model-id" });
+        try {
+          await act(async () => { await i18n.changeLanguage("ja"); });
+          await pickSource(/OpenAI/);
+          await detected();
+          const message = () => kind === "local" ? i18n.t("agentSetupLoginUi.prepareLocal") : "Provider raw connect diagnostic";
+          expect(document.body.textContent).toContain(message());
+          const before = window.localStorage.getItem(ONBOARDING_STORAGE_KEY);
+          expect(JSON.parse(before!)).toMatchObject({ agentName: "客户 Agent 草稿", model: "customer/model-id", step: 4 });
+          const starts = managedApi.startLocalLogin.mock.calls.length;
+          const checks = managedApi.checkLocalLogin.mock.calls.length;
+          await act(async () => { await i18n.changeLanguage("zh-CN"); });
+          await settle();
+          expect(document.body.textContent).toContain(message());
+          expect(window.localStorage.getItem(ONBOARDING_STORAGE_KEY)).toBe(before);
+          expect(managedApi.startLocalLogin).toHaveBeenCalledTimes(starts);
+          expect(managedApi.checkLocalLogin).toHaveBeenCalledTimes(checks);
+          expect(managedApi.cancelLocalLogin).not.toHaveBeenCalled();
+          expect(mockAgentsApi.testEnvironment).not.toHaveBeenCalled();
+          expect(mockAgentsApi.hire).not.toHaveBeenCalled();
+          expect(localGuard).toHaveBeenCalledTimes(kind === "local" ? 1 : 0);
+          expect(managedApi.connectLocal).toHaveBeenCalledTimes(kind === "external" ? 1 : 0);
+        } finally {
+          await act(async () => root.unmount());
+          hookSpy?.mockRestore();
+          await i18n.changeLanguage("en");
+        }
+      });
 
       it.each(providers)("automatically verifies detected %s once through connection refreshes and advances", async (adapterType, provider, label) => {
         let finish!: (result: typeof passed) => void;

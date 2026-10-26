@@ -165,3 +165,27 @@ it("retranslates sanitized submit errors without repeating the authorization req
   expect(api.cancelLocalLogin).not.toHaveBeenCalled();
   expect(api.connectLocal).not.toHaveBeenCalled();
 });
+
+it.each([
+  [null, "connect", "chooseCompany"],
+  ["company", "connect", "prepareLocal"],
+  ["company", "submitCode", "startBeforeCode"],
+] as const)("carries the real %s/%s guard as a local descriptor without requests", async (companyId, action, key) => {
+  let login!: ReturnType<typeof useLocalAiLogin>;
+  function GuardHarness() {
+    login = useLocalAiLogin(companyId, { provider: "openai", method: "subscription", name: "Customer draft", ownership: "personal", agentIds: [], allAgents: true }, false);
+    return null;
+  }
+  flushSync(() => root.render(<GuardHarness />));
+  let caught: unknown;
+  try {
+    if (action === "connect") await login.connect();
+    else await login.submitCode("fixture-code");
+  } catch (error) { caught = error; }
+  expect(caught).toBeInstanceOf(Error);
+  expect(caught).toMatchObject({ translationKey: `agentSetupLoginUi.${key}` });
+  expect(api.startLocalLogin).not.toHaveBeenCalled();
+  expect(api.checkLocalLogin).not.toHaveBeenCalled();
+  expect(api.connectLocal).not.toHaveBeenCalled();
+  expect(api.submitLocalLoginCode).not.toHaveBeenCalled();
+});

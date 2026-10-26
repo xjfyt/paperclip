@@ -87,11 +87,30 @@ NODE_OPTIONS=--max-old-space-size=512 node ../node_modules/vitest/vitest.mjs run
 
 - 手测追加：登录等待中、失败后、验证码已填入后切换四语，核对请求数/草稿和原定轮询节奏；在非 onboarding 面板及 onboarding 两个入口分别用真实中文/日文 IME 确认候选；验证 HTTP 明文警告四语可读，截图必须遮盖验证码/账号信息。
 
+## 第五片：向导中的本机登录错误宿主（2026-10-26）
+
+- 仅补 `OnboardingWizard` 创建步骤对 `localLogin.connect()` 的本地错误宿主：已定义的 `LocalizedUiError` 存为 key，显示时翻译；派生 `error`/`visibleError` 仍为字符串或 null。未知服务端 `Error.message` 和原有其他兜底不变。
+- 没有改变 attempt/session、重复创建、取消、导航保护及 effect 依赖；这不是整个首次向导文案的再实现，也不代表其他向导错误全部可动态重译。
+- 新增真实 hook 的三个本地 guard 单测；宿主回归在 connect 边界注入同类 guard（不冒充真实供应商授权），验证先出现日语错误，再切中文，完整保存草稿包含 Agent 名称/模型/步骤仍不变，不额外 connect/start/check/cancel/hire。另验证未知服务端诊断在切语言后仍原样。
+- 最终相关回归 **6 文件 / 158 用例通过**（512 MB、单 worker），token gates、调色板/角色同步及 diff 检查通过。复现（`ui/`）：
+
+```sh
+NODE_OPTIONS=--max-old-space-size=512 node ../node_modules/vitest/vitest.mjs run \
+  src/components/OnboardingWizard.test.tsx \
+  src/components/OnboardingWizard.adapters.test.tsx \
+  src/components/OnboardingWizard.company-integration.test.tsx \
+  src/components/OnboardingWizard.step.test.tsx \
+  src/components/OnboardingWizardVariant.test.tsx \
+  src/components/ai-connections/useLocalAiLogin.test.tsx --maxWorkers=1
+```
+
+- 手测追加：在受控测试条件下模拟本机登录尚未准备好的连接错误，再切换语言；检查错误翻译、现有 Agent 名称与模型草稿、按钮恢复及网络请求数。不要为观察错误而使用生产密钥或破坏真实账户会话。
+
 ## 已知剩余范围（不是本片已完成项）
 
 - 真实登录、剪贴板权限及浏览器布局尚未四语验收。系统提示已抽取不代表外部交互已通过。
 - `AdapterLoginPanel` 与 `useLocalAiLogin` 本片指定显示层已补；`environmentDisplayLabel` 仅拼用户环境名和原始 driver 标识，保留为用户内容/技术值。高级连接的 `ConnectionSetupFlow` 中 `connectionDefaultSummarySentence`、`ConnectionAccessDefaults`、`AccessStepContent` 仍有权限摘要与 Change 等英文，需独立切片；本片没有更改权限语义。
-- `OnboardingWizard` 是 `useLocalAiLogin` 的另一个宿主，其创建 catch 仍直接使用 `err.message`（基线约 2161/2300 行）；本片的显式 local throw 在该路径仍显示英文兼容值，不应声称 hook 的所有宿主错误均已完成动态翻译。向导自身其他文案也不在此次 Agent 创建切片覆盖结论内。
+- 第四片审计发现的 `OnboardingWizard` 本机 connect 错误宿主已由第五片接通；向导的其他硬编码校验/错误及尚未审计的系统文案，不在本次 Agent 创建切片完成结论内。
 - 服务端/适配器 `Error.message`、运行检查结果以及用户/组织/环境名称保持原始内容，不能以纯英文扫描结果判定它们都应翻译。
 - 基线 `6bee5bc` 的 `optionalOnboarding.configureAgent` 三语使用“智能体/agente/エージェント”；本片创建按钮使用独立 Agent 术语键，不覆盖其他域片段。并行 core 切片已修中文 Agent 术语，其他语种与最终集成状态以合并后的资源为准。
 

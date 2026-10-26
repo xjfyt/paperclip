@@ -1,3 +1,4 @@
+import { LocalizedUiError, type LocalizedUiMessage } from "@/lib/localized-ui-error";
 import { useTranslation } from "@/i18n";
 import { LanguageSelector } from "./LanguageSelector";
 import { healthApi } from "@/api/health";
@@ -571,7 +572,8 @@ function OnboardingWizardInner({
   const lastStep = useRef(step);
   useEffect(() => { lastStep.current = step; }, [step]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [errorMessage, setError] = useState<LocalizedUiMessage | null>(null);
+  const error = typeof errorMessage === "string" ? errorMessage : errorMessage ? t(errorMessage.key) : null;
   const [modelOpen, setModelOpen] = useState(false);
   const [modelSearch, setModelSearch] = useState("");
 
@@ -2297,7 +2299,9 @@ function OnboardingWizardInner({
       setStep(5);
     } catch (err) {
       if (!isCurrent()) return;
-      setError(err instanceof Error ? err.message : "Failed to create agent");
+      setError(err instanceof LocalizedUiError
+        ? { key: err.translationKey }
+        : err instanceof Error ? err.message : "Failed to create agent");
     } finally {
       if (hiringAgentRef.current === attempt) hiringAgentRef.current = null;
       if (isCurrent()) setLoading(false);
