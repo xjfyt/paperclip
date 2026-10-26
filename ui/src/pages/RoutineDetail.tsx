@@ -88,13 +88,13 @@ export function buildRoutineProjectOptions(
 }
 
 const SECTION_TITLES: Record<RoutineSectionKey, string> = {
-  overview: "Overview",
-  triggers: "Triggers",
-  variables: "Variables",
-  secrets: "Secrets",
-  delivery: "Delivery",
-  runs: "Runs",
-  activity: "Activity",
+  overview: "commonUi.overview",
+  triggers: "routineScheduleUi.triggers",
+  variables: "stabilizationUi.variables",
+  secrets: "settingsUi.secrets",
+  delivery: "routineShellUi.delivery",
+  runs: "browserQa.runs",
+  activity: "workflow.activity",
   history: "Version history",
 };
 
@@ -688,12 +688,12 @@ export function RoutineDetail() {
   const automationToggleDisabled = updateRoutineStatus.isPending || routine.status === "archived";
   const automationLabel =
     routine.status === "archived"
-      ? "Archived"
+      ? mimouseT("propertyLabels.archived")
       : !routine.assigneeAgentId
-        ? "Draft"
+        ? mimouseT("statuses.draft")
         : automationEnabled
           ? mimouseT("commonUi.active")
-          : "Paused";
+          : mimouseT("statuses.paused");
   const automationLabelClassName =
     routine.status === "archived"
       ? "text-muted-foreground"
@@ -871,7 +871,7 @@ export function RoutineDetail() {
                 checked={automationEnabled}
                 onCheckedChange={contextValue.onToggleAutomation}
                 disabled={automationToggleDisabled}
-                aria-label={automationEnabled ? "Pause automatic triggers" : "Enable automatic triggers"}
+                aria-label={mimouseT(automationEnabled ? "routineShellUi.pause" : "routineShellUi.enable")}
               />
               <span className={`text-sm font-medium ${automationLabelClassName}`}>{automationLabel}</span>
             </div>
@@ -894,7 +894,7 @@ export function RoutineDetail() {
             }
           >
             <RoutineSectionHeading
-              title={SECTION_TITLES[section]}
+              title={mimouseT(SECTION_TITLES[section])}
               copyText={section === "overview"
                 ? routineOverviewCopyText({
                     editing: overviewEditing,

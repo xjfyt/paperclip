@@ -1,0 +1,12 @@
+{
+  "navigation": "Navegación de la rutina",
+  "sections": "Secciones de la rutina",
+  "section": "Sección de la rutina",
+  "operate": "Operaciones",
+  "delivery": "Entrega",
+  "unsaved": "Cambios sin guardar",
+  "pause": "Pausar disparadores automáticos",
+  "enable": "Activar disparadores automáticos",
+  "copy": "Copiar descripción",
+  "copied": "Descripción copiada"
+}

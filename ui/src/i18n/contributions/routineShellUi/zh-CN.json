@@ -1,0 +1,12 @@
+{
+  "navigation": "例行任务导航",
+  "sections": "例行任务分区",
+  "section": "例行任务分区",
+  "operate": "运行管理",
+  "delivery": "交付",
+  "unsaved": "未保存的更改",
+  "pause": "暂停自动触发器",
+  "enable": "启用自动触发器",
+  "copy": "复制描述",
+  "copied": "描述已复制"
+}
