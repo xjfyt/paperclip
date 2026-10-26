@@ -2,11 +2,12 @@ import { createHash } from "node:crypto";
 import { and, desc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 import { activityLog, companies, companySkills, companySkillVersions, companySkillTestInputs, companySkillTestRuns, costEvents,
   mimouseEvaluationDatasets as datasets, mimouseEvaluationComparisons as comparisons, type Db } from "@paperclipai/db";
-import { createEvaluationComparisonSchema, createEvaluationDatasetSchema, type CreateEvaluationComparison, type CreateEvaluationDataset } from "@paperclipai/shared/mimouse-evaluation";
+import { createEvaluationComparisonSchema, createEvaluationDatasetSchema, type CreateEvaluationComparison, type CreateEvaluationDataset, previewEvaluationFeedbackSchema, type PreviewEvaluationFeedback, type EvaluationFixedCase } from "@paperclipai/shared/mimouse-evaluation";
 import { conflict, notFound, unprocessable } from "../../errors.js";
 import { canonical } from "../mimouse-operations/preview.js";
 import { compareRecordedSkillRuns, type RecordedSkillRun } from "./compare.js";
 import { captureRoutingEvidence } from "../cost-routing-preview/capture.js";
+import { assertFeedbackReviewer, loadFeedbackPreview } from "./feedback-lineage.js";
 import { recordedEvaluationCost } from "./cost.js";
 const hash = (value: unknown) => createHash("sha256").update(canonical(value)).digest("hex");
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
@@ -41,19 +42,33 @@ export function evaluationService(db: Db) {
       const runs = await db.select({ id: companySkillTestRuns.id, inputId: companySkillTestRuns.inputId, versionId: companySkillTestRuns.skillVersionId, status: companySkillTestRuns.status, supersededAt: companySkillTestRuns.supersededAt, harnessIssueDeletedAt: companySkillTestRuns.harnessIssueDeletedAt }).from(companySkillTestRuns).where(and(eq(companySkillTestRuns.companyId, companyId), eq(companySkillTestRuns.skillId, skillId), isNull(companySkillTestRuns.deletedAt))).orderBy(desc(companySkillTestRuns.createdAt)).limit(200);
       return { skill, versions, inputs, runs, limits: { versions: 100, inputs: 100, runs: 200 } };
     },
+    async previewFeedback(companyId: string, raw: PreviewEvaluationFeedback, actorId: string) {
+      const input = previewEvaluationFeedbackSchema.parse(raw);
+      return db.transaction(async tx => {
+        await assertFeedbackReviewer(tx, companyId, actorId);
+        return loadFeedbackPreview(tx, companyId, actorId, input);
+      });
+    },
     async createDataset(companyId: string, raw: CreateEvaluationDataset, actorId: string) {
       const input = createEvaluationDatasetSchema.parse(raw); input.cases.sort((a, b) => a.inputId.localeCompare(b.inputId)); const requestDigest = hash(input);
       return db.transaction(async tx => {
         await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${companyId}:eval-dataset:${input.requestId}`}, 0))`);
+        if (input.cases.some(item => item.feedback)) await assertFeedbackReviewer(tx, companyId, actorId);
         const [existing] = await tx.select().from(datasets).where(and(eq(datasets.companyId, companyId), eq(datasets.requestId, input.requestId)));
-        if (existing) { if (existing.requestDigest !== requestDigest) throw conflict("Request ID already used with different input"); return { item: datasetRecord(existing), duplicate: true }; }
+        if (existing) { if (existing.requestDigest !== requestDigest || (input.cases.some(item => item.feedback) && existing.actorId !== actorId)) throw conflict("Request ID already used with different input"); return { item: datasetRecord(existing), duplicate: true }; }
         await activeCompany(tx, companyId);
-        const rows = await tx.select().from(companySkillTestInputs).where(and(eq(companySkillTestInputs.companyId, companyId), eq(companySkillTestInputs.skillId, input.skillId), isNull(companySkillTestInputs.deletedAt), inArray(companySkillTestInputs.id, input.cases.map(item => item.inputId))));
+        const rows = await tx.select().from(companySkillTestInputs).where(and(eq(companySkillTestInputs.companyId, companyId), eq(companySkillTestInputs.skillId, input.skillId), isNull(companySkillTestInputs.deletedAt), inArray(companySkillTestInputs.id, input.cases.map(item => item.inputId)))).for("share");
         if (rows.length !== input.cases.length) throw notFound("Skill test input not found");
         // Match createTestRun's exact input boundary: trim only the outside,
         // retain interior whitespace and the original source snapshot for audit.
-        const cases = input.cases.map(item => { const sourceInputSnapshot = rows.find(row => row.id === item.inputId)!.content;
+        const cases: EvaluationFixedCase[] = input.cases.map(item => { const sourceInputSnapshot = rows.find(row => row.id === item.inputId)!.content;
           return { id: item.inputId, input: sourceInputSnapshot.trim(), sourceInputSnapshot, expected: item.expected }; });
+        for (const item of input.cases) {
+          if (!item.feedback) continue;
+          const preview = await loadFeedbackPreview(tx, companyId, actorId, { skillId: input.skillId, inputId: item.inputId, expected: item.expected, feedbackId: item.feedback.feedbackId });
+          if (preview.previewDigest !== item.feedback.previewDigest) throw conflict("Feedback review is stale; preview and review the current snapshots again");
+          cases.find(value => value.id === item.inputId)!.feedbackSource = { ...preview.source, previewDigest: preview.previewDigest, reviewedBy: actorId };
+        }
         if (cases.some(item => !item.input || item.input.length > 32000) || Buffer.byteLength(JSON.stringify(cases)) > 1_000_000) throw unprocessable("Dataset input exceeds snapshot limits");
         const datasetHash = hash(cases);
         const [row] = await tx.insert(datasets).values({ companyId, skillId: input.skillId, requestId: input.requestId, requestDigest, name: input.name, cases, datasetHash, actorId }).returning();

@@ -1,7 +1,7 @@
 import { Router, type Request } from "express";
 import { z } from "zod";
 import type { Db } from "@paperclipai/db";
-import { createEvaluationComparisonSchema, createEvaluationDatasetSchema } from "@paperclipai/shared/mimouse-evaluation";
+import { createEvaluationComparisonSchema, createEvaluationDatasetSchema, previewEvaluationFeedbackSchema } from "@paperclipai/shared/mimouse-evaluation";
 import { assertBoard, assertCompanyAccess, getActorInfo } from "./authz.js";
 import { forbidden } from "../errors.js";
 import { validate } from "../middleware/validate.js";
@@ -15,8 +15,13 @@ export function mimouseEvaluationRoutes(db: Db) {
     if (req.actor.source !== "local_implicit" && !req.actor.isInstanceAdmin && !(member?.status === "active" && ["owner", "admin"].includes(String(member.membershipRole)))) throw forbidden("Company administrator required");
     return companyId;
   }
+  function human(req: Request) {
+    if (req.actor.type !== "board" || req.actor.source !== "session" || !req.actor.userId) throw forbidden("A signed-in human must review feedback provenance");
+    return req.actor.userId;
+  }
+  router.post(`${root}/datasets/feedback-preview`, validate(previewEvaluationFeedbackSchema), async (req, res) => res.json(await service.previewFeedback(admin(req), req.body, human(req))));
   router.get(`${root}/datasets`, async (req, res) => res.json(await service.listDatasets(admin(req), page.parse(req.query).beforeId)));
-  router.post(`${root}/datasets`, validate(createEvaluationDatasetSchema), async (req, res) => { const result = await service.createDataset(admin(req), req.body, getActorInfo(req).actorId); res.status(result.duplicate ? 200 : 201).json(result); });
+  router.post(`${root}/datasets`, validate(createEvaluationDatasetSchema), async (req, res) => { const companyId = admin(req); const actorId = req.body.cases.some((item: { feedback?: unknown }) => item.feedback) ? human(req) : getActorInfo(req).actorId; const result = await service.createDataset(companyId, req.body, actorId); res.status(result.duplicate ? 200 : 201).json(result); });
   router.get(`${root}/comparisons`, async (req, res) => res.json(await service.listComparisons(admin(req), page.parse(req.query).beforeId)));
   router.post(`${root}/comparisons`, validate(createEvaluationComparisonSchema), async (req, res) => { const result = await service.compare(admin(req), req.body, getActorInfo(req).actorId); res.status(result.duplicate ? 200 : 201).json(result); });
   router.get(`${root}/comparisons/:id`, async (req, res) => res.json(await service.getComparison(admin(req), z.string().uuid().parse(req.params.id))));

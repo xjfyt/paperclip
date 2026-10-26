@@ -49,5 +49,17 @@
   "failed": "Failed",
   "execution_context_unknown": "Execution context missing",
   "execution_context_mismatch": "Execution contexts differ",
-  "historicalRun": "Historical superseded run"
+  "historicalRun": "Historical superseded run",
+  "feedbackTitle": "Link a feedback source (optional)",
+  "feedbackBoundary": "Signed-in administrators can reference quarantined feedback using a separately written test input. No feedback text is copied or executed. A reference is not reproduction, test success, or proof of safety. Add a reviewed case below, then freeze the dataset explicitly.",
+  "feedbackInputId": "Existing test input ID",
+  "feedbackId": "Feedback ID",
+  "feedbackExpected": "Exact expected output (review for sensitive data)",
+  "feedbackPreview": "Preview exact snapshots",
+  "feedbackReview": "I reviewed this exact input, expected output and source reference, declare the test content redacted, and understand the feedback remains quarantined and not reproduced.",
+  "feedbackAdd": "Add reviewed case to draft",
+  "feedbackError": "Unable to add this reference. Check administrator session, IDs, duplicate input, JSON draft and current snapshots; preview again after changes.",
+  "feedbackUnknown": "The save outcome is unknown. This draft is locked; retry the same request below. Before reloading or creating another request, inspect dataset history to avoid duplicates. Nothing was dispatched.",
+  "feedbackRetry": "Retry the exact same request",
+  "feedbackStoredRefs": "Frozen feedback source references"
 }

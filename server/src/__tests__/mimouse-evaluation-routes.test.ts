@@ -5,7 +5,7 @@ import type { Db } from "@paperclipai/db";
 import { mimouseEvaluationRoutes } from "../routes/mimouse-evaluation.js";
 import { HttpError } from "../errors.js";
 const calls = vi.hoisted(() => ({ list: vi.fn(async () => ({ items: [] })), create: vi.fn() }));
-vi.mock("../services/mimouse-evaluation/service.js", () => ({ evaluationService: () => ({ listDatasets: calls.list, listComparisons: calls.list, createDataset: calls.create, compare: calls.create, getComparison: calls.list, evidence: calls.list }) }));
+vi.mock("../services/mimouse-evaluation/service.js", () => ({ evaluationService: () => ({ listDatasets: calls.list, listComparisons: calls.list, createDataset: calls.create, previewFeedback: calls.create, compare: calls.create, getComparison: calls.list, evidence: calls.list }) }));
 const companyId = "22222222-2222-4222-8222-222222222222", id = "33333333-3333-4333-8333-333333333333";
 function app(actor: Express.Request["actor"]) {
   const server = express(); server.use(express.json()); server.use((req, _res, next) => { req.actor = actor; next(); });
@@ -44,4 +44,20 @@ it("local implicit evaluation discovery does not grant human restore authority o
   expect(response.status).toBe(200);
   expect(response.body.controlledRestore).toMatchObject({ implemented: true, requiresHumanSession: true, readiness: null, authorityGranted: false });
   expect(calls.create).not.toHaveBeenCalled(); expect(calls.list).not.toHaveBeenCalled();
+});
+
+it("feedback provenance needs a real human session for preview and freeze; legacy datasets remain unchanged", async () => {
+  const base = `/companies/${companyId}/skill-evaluations/datasets`, body = { skillId: id, inputId: id, expected: "answer", feedbackId: id };
+  const linked = { requestId: id, skillId: id, name: "fixed", cases: [{ inputId: id, expected: "answer", feedback: { feedbackId: id, previewDigest: "a".repeat(64), reviewed: true } }] };
+  calls.create.mockClear();
+  for (const actor of [{ ...owner, source: "local_implicit" }, { ...owner, source: "session", userId: undefined }]) {
+    expect((await request(app(actor as Express.Request["actor"])).post(`${base}/feedback-preview`).send(body)).status).toBe(403);
+    expect((await request(app(actor as Express.Request["actor"])).post(base).send(linked)).status).toBe(403);
+  }
+  expect(calls.create).not.toHaveBeenCalled();
+  calls.create.mockResolvedValue({ duplicate: false });
+  expect((await request(app(owner)).post(`${base}/feedback-preview`).send(body)).status).toBe(200);
+  expect(calls.create).toHaveBeenLastCalledWith(companyId, body, "owner");
+  expect((await request(app(owner)).post(base).send(linked)).status).toBe(201);
+  expect((await request(app({ ...owner, source: "local_implicit" })).post(base).send({ ...linked, cases: [{ inputId: id, expected: "answer" }] })).status).toBe(201);
 });
