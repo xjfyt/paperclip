@@ -1,0 +1,11 @@
+{
+  "title": "Cost routing policy preview",
+  "chooseCompany": "Choose a company.",
+  "warning": "Preview only: no execution, model probe, budget reservation or dispatch authority. Legacy evaluation snapshots cannot prove model identity or currency; manual capability receipts are operator claims, not machine verification.",
+  "error": "Cannot complete request. Check policy format, administrator access and current revision; reload after a conflict.",
+  "policy": "Policy JSON (non-sensitive identifiers only)",
+  "revision": "Revision",
+  "save": "Save policy revision",
+  "preview": "Record preview",
+  "receipt": "Immutable preview receipt"
+}

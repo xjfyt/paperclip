@@ -6,6 +6,7 @@ import { createEvaluationComparisonSchema, createEvaluationDatasetSchema, type C
 import { conflict, notFound, unprocessable } from "../../errors.js";
 import { canonical } from "../mimouse-operations/preview.js";
 import { compareRecordedSkillRuns, type RecordedSkillRun } from "./compare.js";
+import { captureRoutingEvidence } from "../cost-routing-preview/capture.js";
 import { recordedEvaluationCost } from "./cost.js";
 const hash = (value: unknown) => createHash("sha256").update(canonical(value)).digest("hex");
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
@@ -65,6 +66,8 @@ export function evaluationService(db: Db) {
         await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${companyId}:eval-comparison:${input.requestId}`}, 0))`);
         const [existing] = await tx.select().from(comparisons).where(and(eq(comparisons.companyId, companyId), eq(comparisons.requestId, input.requestId)));
         if (existing) { if (existing.requestDigest !== requestDigest) throw conflict("Request ID already used with different input"); return { item: comparisonRecord(existing), duplicate: true }; }
+        // Share the accounting writer lock before reading the ledger/proof chain.
+        await tx.select({ id: companies.id }).from(companies).where(eq(companies.id, companyId)).for("no key update");
         await activeCompany(tx, companyId);
         const [dataset] = await tx.select().from(datasets).where(and(eq(datasets.companyId, companyId), eq(datasets.id, input.datasetId)));
         if (!dataset) throw notFound("Evaluation dataset not found");
@@ -84,7 +87,8 @@ export function evaluationService(db: Db) {
         catch (error) { throw unprocessable(error instanceof Error && /^[a-z_]+$/.test(error.message) ? error.message : "invalid_evaluation_evidence"); }
         if (report.datasetHash !== dataset.datasetHash) throw conflict("Dataset integrity check failed");
         // Retain minimal exact evidence; never persist agent config, credentials or mutable issue documents.
-        const evidenceSnapshot = { runs, ledger, versionHashes: versions.map(version => ({ id: version.id, hash: hash(version.fileInventory) })), capturedAt: new Date().toISOString() };
+        const routingEvidenceV1 = await captureRoutingEvidence(tx, companyId, rows.filter(row => row.skillVersionId === input.candidateVersionId));
+        const evidenceSnapshot = { runs, ledger, routingEvidenceV1, versionHashes: versions.map(version => ({ id: version.id, hash: hash(version.fileInventory) })), capturedAt: new Date().toISOString() };
         const [row] = await tx.insert(comparisons).values({ companyId, datasetId: dataset.id, baselineVersionId: input.baselineVersionId, candidateVersionId: input.candidateVersionId, requestId: input.requestId, requestDigest, report, evidenceSnapshot, actorId }).returning();
         await audit(tx, companyId, actorId, "comparison", row!.id, report.reportHash); return { item: comparisonRecord(row!), duplicate: false };
       });

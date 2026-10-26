@@ -1,0 +1,11 @@
+{
+  "title": "Vista previa de política de costes",
+  "chooseCompany": "Selecciona una empresa.",
+  "warning": "Solo vista previa: sin ejecución, sondeo de modelos, reserva presupuestaria ni autorización de despacho. Las evaluaciones antiguas no prueban identidad del modelo o moneda; los recibos manuales son declaraciones del operador, no verificaciones automáticas.",
+  "error": "No se pudo completar. Revisa el formato, los permisos de administrador y la revisión; recarga tras un conflicto.",
+  "policy": "Política JSON (solo identificadores no sensibles)",
+  "revision": "Revisión",
+  "save": "Guardar revisión",
+  "preview": "Registrar vista previa",
+  "receipt": "Recibo inmutable de vista previa"
+}
