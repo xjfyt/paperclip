@@ -5,5 +5,9 @@
   "assignee": "负责人",
   "searchAssignees": "搜索负责人",
   "searchPlaceholder": "搜索负责人…",
-  "noMatches": "无匹配结果。"
+  "noMatches": "无匹配结果。",
+  "self": "我",
+  "messageUnassigned": "描述你希望完成的工作…",
+  "askUnassigned": "输入你的问题…",
+  "planUnassigned": "描述你希望制定的计划…"
 }

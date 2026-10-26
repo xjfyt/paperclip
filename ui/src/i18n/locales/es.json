@@ -889,7 +889,11 @@
     "assignee": "Responsable",
     "searchAssignees": "Buscar responsables",
     "searchPlaceholder": "Buscar responsables…",
-    "noMatches": "No hay coincidencias."
+    "noMatches": "No hay coincidencias.",
+    "self": "Yo",
+    "messageUnassigned": "Describe lo que quieres hacer…",
+    "askUnassigned": "Haz una pregunta…",
+    "planUnassigned": "Describe lo que quieres planificar…"
   },
   "connectionAccessUi": {
     "requestingAgent": "el Agent solicitante",

@@ -5,5 +5,9 @@
   "assignee": "担当者",
   "searchAssignees": "担当者を検索",
   "searchPlaceholder": "担当者を検索…",
-  "noMatches": "一致する項目がありません。"
+  "noMatches": "一致する項目がありません。",
+  "self": "自分",
+  "messageUnassigned": "取り組みたいことを入力…",
+  "askUnassigned": "質問を入力…",
+  "planUnassigned": "計画したいことを入力…"
 }

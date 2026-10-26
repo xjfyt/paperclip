@@ -18,6 +18,8 @@ import {
   saveDraft,
   saveDraftSubmission,
 } from "../../lib/composer-draft";
+import { commentSelfAssigneeOption } from "../../lib/composer-assignee-copy";
+import { useTranslation } from "../../i18n";
 import { CommentSubmissionUnknownError } from "../../lib/comment-submit-result";
 
 /**
@@ -61,11 +63,13 @@ vi.mock("@mdxeditor/editor", async () => {
       onChange,
       readOnly,
       contentEditableClassName,
+      placeholder,
     }: {
       markdown: string;
       onChange?: (value: string) => void;
       readOnly?: boolean;
       contentEditableClassName?: string;
+      placeholder?: string;
     },
     forwardedRef: React.ForwardedRef<MockHandle | null>,
   ) {
@@ -108,6 +112,7 @@ vi.mock("@mdxeditor/editor", async () => {
       <div
         ref={editableRef}
         data-testid="mdx-editor"
+        data-placeholder={placeholder}
         data-content-class-name={contentEditableClassName}
         contentEditable={!readOnly}
         suppressContentEditableWarning
@@ -299,6 +304,61 @@ function autocompleteOption(matchText: string) {
 }
 
 describe("TaskChatComposer", () => {
+  it.each([false, true])("updates unassigned copy and preserves real names across all locales (mobile=%s)", async (mobile) => {
+    const onAdd = vi.fn();
+    for (const mode of ["standard", "ask", "planning"] as const) {
+      for (const selection of [null, "", "user:other", "agent:other"] as const) {
+        render(<TaskChatComposer key={`${mode}:${selection}`} onAdd={onAdd} workMode={mode} mobile={mobile}
+          currentAssigneeValue={selection ?? undefined} reassignOptions={[
+            { id: "user:other", label: "Me" }, { id: "agent:other", label: "Me" },
+          ]} />);
+        for (const [locale, messages] of Object.entries(composerAssigneeMessages)) {
+          await act(async () => { await i18n.changeLanguage(locale); });
+          const key = mode === "planning" ? "plan" : mode === "ask" ? "ask" : "message";
+          expect(editable().dataset.placeholder).toBe(selection
+            ? i18n.t(`browserQa.${key}${mobile ? "Mobile" : ""}`, { agent: "Me" })
+            : messages[`${key}Unassigned`]);
+        }
+      }
+    }
+    expect(onAdd).not.toHaveBeenCalled();
+  });
+
+  it("refreshes the explicit self option on locale changes without renaming people or changing selection payloads", async () => {
+    const onAdd = vi.fn(), onPendingAssigneeChange = vi.fn();
+    function Host() {
+      useTranslation();
+      return <TaskChatComposer onAdd={onAdd} workMode="standard" enableReassign
+        currentAssigneeValue="user:other" onPendingAssigneeChange={onPendingAssigneeChange}
+        reassignOptions={[commentSelfAssigneeOption("self"), { id: "user:other", label: "Me" }, { id: "agent:other", label: "Me" }]} />;
+    }
+    render(<Host />);
+    flushSync(() => container.querySelector<HTMLButtonElement>('[data-testid="task-chat-composer-assignee"]')!.click());
+    await flushAsync();
+    for (const [locale, messages] of Object.entries(composerAssigneeMessages)) {
+      await act(async () => { await i18n.changeLanguage(locale); });
+      expect(container.querySelector('[data-testid="task-chat-composer-assignee"]')?.textContent).toContain("Me");
+      const search = document.querySelector<HTMLInputElement>(`input[placeholder="${messages.searchPlaceholder}"]`)!;
+      for (const query of ["Me", messages.self]) {
+        flushSync(() => {
+          Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(search, query);
+          search.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+        expect(document.querySelector('[data-assignee-option-avatar="user:self"]')?.closest("button")?.textContent).toContain(messages.self);
+      }
+    }
+    expect(onPendingAssigneeChange).not.toHaveBeenCalled();
+    expect(onAdd).not.toHaveBeenCalled();
+    const self = document.querySelector('[data-assignee-option-avatar="user:self"]')!.closest("button")!;
+    flushSync(() => self.click());
+    expect(onPendingAssigneeChange).toHaveBeenCalledExactlyOnceWith("user:self");
+    typeText("unchanged body");
+    flushSync(() => sendButton().click());
+    await flushAsync();
+    expect(onAdd).toHaveBeenCalledWith("unchanged body", undefined, { assigneeAgentId: null, assigneeUserId: "self" }, undefined, expect.any(String));
+  });
+
+
   it("keeps creation images inline and prevents submission during their upload", async () => {
     let resolveUpload!: (url: string) => void;
     const onImageUpload = vi.fn().mockReturnValue(new Promise<string>((resolve) => { resolveUpload = resolve; }));

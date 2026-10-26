@@ -889,7 +889,11 @@
     "assignee": "Assignee",
     "searchAssignees": "Search assignees",
     "searchPlaceholder": "Search assignees…",
-    "noMatches": "No matches."
+    "noMatches": "No matches.",
+    "self": "Me",
+    "messageUnassigned": "Describe what you want to get done…",
+    "askUnassigned": "Ask a question…",
+    "planUnassigned": "Describe what you want to plan…"
   },
   "connectionAccessUi": {
     "requestingAgent": "the requesting agent",

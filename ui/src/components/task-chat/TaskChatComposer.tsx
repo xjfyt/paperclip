@@ -1,3 +1,4 @@
+import { composerModePlaceholder } from "@/lib/composer-assignee-copy";
 import { systemLabel } from "@/i18n/system-labels";
 import { t as mimouseUiT, useTranslation as useMimouseUiTranslation } from "@/i18n";
 import { AgentAvatar } from "../AgentAvatar";
@@ -297,12 +298,6 @@ function AssigneeIdentityAvatar({
   }
 
   return null;
-}
-
-/** v7 per-mode placeholder copy; `{agent}` is the pending assignee's name. */
-function modePlaceholder(mode: IssueWorkMode, agentName: string, mobile: boolean): string {
-  const key = mode === "planning" ? "plan" : mode === "ask" ? "ask" : "message";
-  return mimouseUiT(`browserQa.${key}${mobile ? "Mobile" : ""}`, { agent: agentName });
 }
 
 type ComposerAttachment = {
@@ -634,10 +629,10 @@ export function TaskChatComposer({
   const assigneeLabel =
     reassignOptions?.find((o) => o.id === assigneeValue)?.label ?? mimouseUiT("liveUi.unassigned");
   const assigneeName =
-    assigneeLabel === "Unassigned" ? "the agent" : assigneeLabel;
+    assigneeValue ? reassignOptions?.find((o) => o.id === assigneeValue)?.label ?? null : null;
   const effectivePlaceholder = queuedEdit
     ? "Edit queued message…"
-    : (placeholder ?? modePlaceholder(pendingMode, assigneeName, mobile));
+    : (placeholder ?? composerModePlaceholder(pendingMode, assigneeName, mobile));
   const goalUnavailable = runnerGoalCapability?.availability !== "available";
   const goalCommandOption: ActionCommandOption = {
     id: "action:goal",

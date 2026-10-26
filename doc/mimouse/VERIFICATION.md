@@ -2,6 +2,12 @@
 
 核验日期：2026-10-25 UTC。基线为 v2026.1023.0 / 1b4c803816e82b0265c8422e1a804327a7ed8c54。开发分支 mimouse。此记录是可审查候选版的本地证据，不是全部需求完成或生产上线证明。
 
+## 3197键 self 与无负责人占位语（2026-10-26 19:33 UTC）
+
+实际IssueDetail以currentUserId构造的系统self选项已四语化并保留Me搜索别名；真正无负责人按空身份选择通顺通用占位语，standard/ask/planning与mobile/desktop均覆盖。真实名为Me、Unassigned、未分配的用户/Agent不按字符串替换，原ID与提交payload不变。
+
+中央专项3文件115项通过，3197键四语合成检查、完整UI类型和生产构建通过。初轮类型检查发现新测试把null直接传给string|undefined prop，已按真实合同映射undefined后完整重跑通过，未放宽生产类型或删除断言。日志 `/tmp/paperclip-3197-central-tests.log`、`/tmp/paperclip-3197-types.log`（原失败）、`/tmp/paperclip-3197-types-recheck.log`、`/tmp/paperclip-3197-build.log`。本轮未做新的真实Chrome/IME/窄屏验证，未重跑全UI，不沿用3186全量结果。
+
 ## UI 分段验证工具 v2（2026-10-26 19:27 UTC）
 
 新增显式批次范围与严格聚合，解决长测试会话中断后无法可靠续验的问题。说明及命令见 [分段验证指南](../mimouse-ui-verification.md)。原生 v2 记录相关源码/配置/依赖清单摘要及每批实际 Vitest JSON 报告；缺批、重复、漂移、跳过、未完成或失败均拒绝全量通过。历史 v1 记录不自动转换，不覆盖旧日志。

@@ -1,3 +1,4 @@
+import { commentSelfAssigneeOption } from "@/lib/composer-assignee-copy";
 import { MimouseCodingLink } from "@/components/MimouseCodingLink";
 import { t as mimouseT, useTranslation as useMimouseTranslation } from "@/i18n";
 import { WorkspaceBaseRefRecoveryProvider } from "../components/WorkspaceBaseRefRecovery";
@@ -3830,10 +3831,10 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       options.push({ id: `agent:${agent.id}`, label: agent.name });
     }
     if (currentUserId) {
-      options.push({ id: `user:${currentUserId}`, label: "Me" });
+      options.push(commentSelfAssigneeOption(currentUserId));
     }
     return options;
-  }, [agents, companyMembers?.users, currentUserId]);
+  }, [agents, companyMembers?.users, currentUserId, breadcrumbLocale]);
 
   const actualAssigneeValue = useMemo(
     () => assigneeValueFromSelection(issue ?? {}),
