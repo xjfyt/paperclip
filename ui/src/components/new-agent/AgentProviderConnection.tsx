@@ -1,3 +1,4 @@
+import { useTranslation } from "@/i18n";
 import { healthApi } from "@/api/health";
 import { aiConnectionsApi } from "@/api/ai-connections";
 import { useLocalAiLogin } from "../ai-connections/useLocalAiLogin";
@@ -69,6 +70,7 @@ export function AgentProviderConnection({
     onComplete: (result: { connectionId: string; grantId: string; method: "subscription" | "api_key" }) => void;
   };
 }) {
+  const { t } = useTranslation();
   const health = useQuery({ queryKey: queryKeys.health, queryFn: healthApi.get, enabled: localEnvironment });
   const canUseLocalLogin = localEnvironment && (health.data?.localAiLoginSupported ?? health.data?.deploymentMode === "local_trusted");
   const epoch = useRef(0);
@@ -94,7 +96,8 @@ export function AgentProviderConnection({
   const phaseBeforeSubmit = useRef<"ready" | "waiting">("ready");
   const [apiKey, setApiKey] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | { key: string } | null>(null);
+  const errorText = typeof error === "string" ? error : error ? t(error.key) : null;
   const [storedConnection, setStoredConnection] =
     useState<ProviderConnection | null>(null);
   const provider = adapterType === "claude_local" ? "Claude" : adapterType === "grok_local" ? "Grok" : "OpenAI";
@@ -213,16 +216,14 @@ export function AgentProviderConnection({
       if (run !== epoch.current) return;
       if (connected) onConnected(connection);
       else
-        setError(
-          "The provider did not respond. Check the connection and try again.",
-        );
+        setError({ key: "agentSetupUi.providerNoResponse" });
     } catch (cause) {
       if (run !== epoch.current) return;
       if (managedAccount) setApiKey("");
       setError(
         cause instanceof Error
           ? cause.message
-          : "Could not connect to the provider.",
+          : { key: "agentSetupUi.providerConnectFailed" },
       );
     } finally {
       if (run === epoch.current) setBusy(false);
@@ -251,11 +252,11 @@ export function AgentProviderConnection({
   return (
     <div className="min-w-0 max-w-full">
       <ModelSourceTiles
-        label={advancedConnection ? "Connection type" : "Connect your model provider"}
+        label={advancedConnection ? t("agentSetupUi.connectionType") : t("agentSetupUi.connectProvider")}
         sources={advancedConnection ? [
           { id: "subscription", label: provider, icon: <AdapterMark type={adapterType} />, credentialMode: "subscription" },
           { id: "api", label: provider, icon: <AdapterMark type={adapterType} />, credentialMode: "api" },
-          { id: "advanced", label: "Advanced", icon: <Cable className="size-6 text-muted-foreground" />, credentialMode: "advanced" },
+          { id: "advanced", label: t("workflow.advanced"), icon: <Cable className="size-6 text-muted-foreground" />, credentialMode: "advanced" },
         ] : [
           {
             id: adapterType,
@@ -281,7 +282,7 @@ export function AgentProviderConnection({
         <div className="pt-5">{advancedConnection.content}</div>
         <FooterNav
           onBack={onBack}
-          primaryLabel="Use connection"
+          primaryLabel={t("agentSetupUi.useConnection")}
           primaryDisabled={!advancedConnection.value}
           onPrimary={() => {
             if (advancedConnection.value) onConnected({ env: {}, aiConnection: advancedConnection.value });
@@ -290,8 +291,7 @@ export function AgentProviderConnection({
       </> : <>
       {!opened && savedKeys.options.length > 0 && (
         <p className="mt-2 text-sm text-muted-foreground">
-          {savedKeys.options.length} saved API{" "}
-          {savedKeys.options.length === 1 ? "key available" : "keys available"}.
+          {t("agentSetupUi.savedKeys", { count: savedKeys.options.length })}
         </p>
       )}
       {method === "subscription" &&
@@ -320,8 +320,8 @@ export function AgentProviderConnection({
               <OnboardingLoginCard
                 instruction={
                   savedKeys.options.length
-                    ? "Choose a saved API key or enter a new one"
-                    : `Provide your ${provider} API key to connect`
+                    ? t("agentSetupUi.chooseApiKey")
+                    : t("agentSetupUi.provideApiKey", { provider })
                 }
               >
                 <SavedProviderKeySelect
@@ -338,14 +338,14 @@ export function AgentProviderConnection({
                 />
                 {!selectedKey && (
                   <OnboardingCardField
-                    label="API key"
+                    label={t("agentSetupUi.apiKey")}
                     masked
                     autoFocus
                     value={apiKey}
                     placeholder={
                       storedConnection
-                        ? "Key entered. Retry the connection."
-                        : "Enter API key here"
+                        ? t("agentSetupUi.keyEntered")
+                        : t("agentSetupUi.enterApiKey")
                     }
                     onChange={(value) => {
                       onDraftChanged?.();
@@ -380,7 +380,7 @@ export function AgentProviderConnection({
                 }}
                 onConnected={(sessionId) => {
                   if (managedAccount) {
-                    if (!sessionId) { setError("The login did not return a saved connection. Try again."); return; }
+                    if (!sessionId) { setError({ key: "agentSetupUi.loginConnectionMissing" }); return; }
                     const run = epoch.current;
                     setLoginPhase("connecting");
                     void aiConnectionsApi.loginResult(companyId, sessionId).then((result) => {
@@ -388,7 +388,7 @@ export function AgentProviderConnection({
                     }).catch(() => {
                       if (run !== epoch.current) return;
                       setLoginPhase("ready");
-                      setError("Could not retrieve the saved connection. Go back and retry.");
+                      setError({ key: "agentSetupUi.savedConnectionFailed" });
                     });
                     return;
                   }
@@ -402,10 +402,10 @@ export function AgentProviderConnection({
             ) : (
               <p className="text-sm text-muted-foreground">
                 {storedLogin.data
-                  ? "Use your saved Claude subscription for this agent."
+                  ? t("agentSetupUi.savedClaudeHelp")
                   : canLogin
-                    ? "Use the existing provider connection for this environment."
-                    : "This environment does not support browser sign-in. Choose a sign-in environment or connect with an API key."}
+                    ? t("agentSetupUi.existingConnectionHelp")
+                    : t("agentSetupUi.browserLoginUnsupported")}
               </p>
             )}
           </div>
@@ -413,16 +413,16 @@ export function AgentProviderConnection({
       </motion.div>
       {method === "subscription" && storedLogin.isError && (
         <p role="alert" className="mt-4 text-sm text-destructive">
-          Could not check your saved Claude subscription. Try again.
+          {t("agentSetupUi.savedClaudeCheckFailed")}
         </p>
       )}
       {error && (
         <p role="alert" className="mt-4 text-sm text-destructive">
-          {testError ?? error}
+          {testError ?? errorText}
         </p>
       )}
       {localEnvironment && health.isError && (
-        <p role="alert" className="mt-4 text-sm text-destructive">Could not prepare sign-in. Reload this page to try again.</p>
+        <p role="alert" className="mt-4 text-sm text-destructive">{t("agentSetupUi.prepareLoginFailed")}</p>
       )}
       <FooterNav
         onBack={() => {
@@ -431,17 +431,17 @@ export function AgentProviderConnection({
         }}
         primaryLabel={
           opened && needsLogin
-            ? loginPhase === "waiting" ? "Waiting for code"
-              : loginPhase === "connecting" ? "Connecting"
-              : `Sign in to ${provider}`
+            ? loginPhase === "waiting" ? t("agentSetupUi.waitingForCode")
+              : loginPhase === "connecting" ? t("onboarding.connecting")
+              : t("agentSetupUi.signInProvider", { provider })
             : busy
-            ? "Connecting"
+            ? t("onboarding.connecting")
             : method === "subscription" &&
                 (storedLogin.data || savedSubscription)
-              ? "Use saved subscription"
+              ? t("agentSetupUi.useSavedSubscription")
               : method === "api" && selectedKey
-                ? "Use saved API key"
-                : "Connect"
+                ? t("agentSetupUi.useSavedApiKey")
+                : t("onboarding.connect")
         }
         primaryDisabled={
           managedAccount?.disabled ||

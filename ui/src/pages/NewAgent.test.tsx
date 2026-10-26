@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import "@/i18n/agent-setup-test-resources";
+import { i18n } from "@/i18n";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -6,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { queryKeys } from "@/lib/queryKeys";
 import { NewAgent } from "./NewAgent";
+import { AgentBasicsDialog } from "@/components/new-agent/AgentBasicsDialog";
 import { ApiError } from "@/api/client";
 
 const api = vi.hoisted(() => ({
@@ -35,9 +38,11 @@ const secrets = vi.hoisted(() => ({
 }));
 const state = vi.hoisted(() => ({
   params: new URLSearchParams(),
+  companyId: "company-1" as string | null,
   adapters: [] as object[],
   navigate: vi.fn(),
   openNewIssue: vi.fn(),
+  setBreadcrumbs: vi.fn(),
 }));
 const managedApi = vi.hoisted(() => ({
   list: vi.fn(async () => ({ currentUserId: "user-1", canManageConnections: true, connections: [] })),
@@ -53,10 +58,10 @@ vi.mock("@/api/adapters", () => ({
   adaptersApi: { list: async () => state.adapters },
 }));
 vi.mock("@/context/CompanyContext", () => ({
-  useCompany: () => ({ selectedCompanyId: "company-1" }),
+  useCompany: () => ({ selectedCompanyId: state.companyId }),
 }));
 vi.mock("../context/BreadcrumbContext", () => ({
-  useBreadcrumbs: () => ({ setBreadcrumbs: vi.fn() }),
+  useBreadcrumbs: () => ({ setBreadcrumbs: state.setBreadcrumbs }),
 }));
 vi.mock("@/context/DialogContext", () => ({
   useDialogActions: () => ({ openNewIssue: state.openNewIssue }),
@@ -157,6 +162,7 @@ const pass = {
 };
 beforeEach(() => {
   vi.clearAllMocks();
+  state.companyId = "company-1";
   managedApi.list.mockResolvedValue({ currentUserId: "user-1", canManageConnections: true, connections: [] });
   container = document.createElement("div");
   document.body.append(container);
@@ -198,6 +204,7 @@ afterEach(async () => {
   await act(async () => root.unmount());
   cache.clear();
   container.remove();
+  await i18n.changeLanguage("en");
 });
 describe("New agent setup", () => {
   it("creates Dot through its independent choice without CLI or model setup, then routes to pairing", async () => {
@@ -784,6 +791,14 @@ describe("New agent setup", () => {
     await click("Finish setup");
     expect(container.textContent).toContain("Agent quota exceeded");
     expect(container.textContent).toContain("Could not remove an unused setup credential");
+    for (const locale of ["ja", "zh-CN"]) {
+      await act(async () => { await i18n.changeLanguage(locale); });
+      expect(container.textContent).toContain("Agent quota exceeded");
+      expect(container.textContent).toContain(i18n.t("agentSetupUi.credentialCleanupFailed"));
+      expect(container.textContent).not.toContain("Could not remove an unused setup credential");
+    }
+    expect(api.hire).toHaveBeenCalledTimes(1);
+    expect(secrets.remove).toHaveBeenCalledTimes(1);
   });
   it("requires an explicit provider/model for Pi", async () => {
     await render();
@@ -835,4 +850,111 @@ describe("New agent setup", () => {
       applyStoredClaudeLogin: true,
     });
   });
+});
+
+
+describe("live agent setup language", () => {
+  it.each(["en", "zh-CN", "es", "ja"])("renders configuration, accessible fields, validation and confirmation in %s", async locale => {
+    await i18n.changeLanguage(locale);
+    await render("cursor_cloud");
+    expect(state.setBreadcrumbs).toHaveBeenLastCalledWith([
+      { label: i18n.t("commonUi.agents"), href: "/agents" },
+      { label: i18n.t("commonUi.newAgent") },
+    ]);
+    expect(container.querySelector("h2")?.textContent).toBe(i18n.t("agentSetupUi.configureAgent"));
+    expect(container.querySelector("nav")?.getAttribute("aria-label")).toBe(i18n.t("agentSetupUi.steps"));
+    const repository = container.querySelector<HTMLInputElement>(`[aria-label="${i18n.t("agentSetupUi.githubRepository")}"]`)!;
+    expect(repository.placeholder).toBe("https://github.com/your-org/repo");
+    expect(container.querySelector<HTMLInputElement>(`[aria-label="${i18n.t("propertyLabels.branch")}"]`)?.placeholder).toBe(i18n.t("agentSetupUi.repositoryDefault"));
+    expect(container.querySelector<HTMLInputElement>('[aria-label="CURSOR_API_KEY"]')?.placeholder).toBe(i18n.t("agentSetupUi.required"));
+    await click(i18n.t("agentSetupUi.finishSetup"));
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe(i18n.t("agentSetupUi.repositoryRequired"));
+    expect(api.hire).not.toHaveBeenCalled();
+    await fill(i18n.t("agentSetupUi.githubRepository"), "https://github.com/example/customer-repo");
+    await fill("CURSOR_API_KEY", "fixture-secret");
+    await click(i18n.t("agentSetupUi.finishSetup"));
+    expect(api.hire).toHaveBeenCalledWith("company-1", expect.objectContaining({
+      name: "Atlas", adapterType: "cursor_cloud", adapterConfig: expect.objectContaining({ repoUrl: "https://github.com/example/customer-repo" }),
+    }));
+    expect(container.textContent).toContain(i18n.t("agentSetupUi.agentReady"));
+    expect(container.textContent).toContain(i18n.t("agentSetupUi.assignTask", { name: "Atlas" }));
+    expect(container.textContent).not.toContain("agentSetupUi.");
+  });
+
+  it("updates breadcrumbs and configuration labels in place without changing the draft", async () => {
+    await render("cursor_cloud");
+    await fill("GitHub repository", "https://github.com/example/keep-draft");
+    await act(async () => { await i18n.changeLanguage("ja"); });
+    expect(state.setBreadcrumbs).toHaveBeenLastCalledWith([
+      { label: i18n.t("commonUi.agents"), href: "/agents" },
+      { label: i18n.t("commonUi.newAgent") },
+    ]);
+    expect(container.querySelector<HTMLInputElement>(`[aria-label="${i18n.t("agentSetupUi.githubRepository")}"]`)?.value).toBe("https://github.com/example/keep-draft");
+    expect(container.querySelector("h2")?.textContent).toBe(i18n.t("agentSetupUi.configureAgent"));
+    expect(api.hire).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("live agent basics language", () => {
+  it.each(["en", "zh-CN", "es", "ja"])("renders both basics steps in %s and preserves names and runner values", async locale => {
+    await i18n.changeLanguage(locale);
+    const onContinue = vi.fn();
+    const onClose = vi.fn();
+    await act(async () => root.render(
+      <QueryClientProvider client={cache}>
+        <AgentBasicsDialog open initialAdapter="paperclip_runner" onClose={onClose} onContinue={onContinue} onInvite={() => {}} />
+      </QueryClientProvider>,
+    ));
+    await settle();
+    const dialog = document.querySelector('[role="dialog"]')!;
+    expect(dialog.textContent).toContain(i18n.t("agentSetupUi.meetAgent"));
+    expect(dialog.textContent).toContain(i18n.t("agentSetupUi.inviteExternal"));
+    expect(dialog.querySelector(`[aria-label="${i18n.t("agentSetupUi.progress")}"]`)).not.toBeNull();
+    const input = dialog.querySelector<HTMLInputElement>("input")!;
+    expect(input.placeholder).toBe(i18n.t("agentSetupUi.namePlaceholder"));
+    expect(dialog.querySelector("label")?.textContent).toBe(i18n.t("onboarding.agentName"));
+    const customerName = "<Atlas> 客户";
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, customerName);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => dialog.querySelector<HTMLFormElement>("form")!.requestSubmit());
+    expect(dialog.textContent).toContain(i18n.t("agentSetupUi.adapterHelp", { name: customerName }));
+    expect(dialog.querySelector("atlas")).toBeNull();
+    expect(dialog.querySelector('input[value="paperclip_runner"]')).not.toBeNull();
+    const runner = dialog.querySelector<HTMLSelectElement>("select")!;
+    expect(runner.value).toBe("codex");
+    expect(runner.options[0].textContent).toBe(i18n.t("agentSetupUi.codexAppServer"));
+    expect(dialog.textContent).toContain(i18n.t("agentSetupUi.configureAgentAction"));
+    await act(async () => dialog.querySelector<HTMLFormElement>("form")!.requestSubmit());
+    expect(onContinue).toHaveBeenCalledExactlyOnceWith({ name: customerName, adapterType: "paperclip_runner", runnerProvider: "codex" });
+    expect(onClose).not.toHaveBeenCalled();
+    expect(api.hire).not.toHaveBeenCalled();
+  });
+
+  it.each(["en", "zh-CN", "es", "ja"])("renders the missing-organization state in %s without creating anything", async locale => {
+    state.companyId = null;
+    await i18n.changeLanguage(locale);
+    await render();
+    expect(container.textContent).toBe(i18n.t("agentSetupUi.selectOrganization"));
+    expect(api.hire).not.toHaveBeenCalled();
+    expect(secrets.create).not.toHaveBeenCalled();
+  });
+});
+
+
+it("retranslates a displayed setup validation error without resubmitting or clearing fields", async () => {
+  await render("cursor_cloud");
+  await fill("GitHub repository", "customer draft URL");
+  await click("Finish setup");
+  expect(container.querySelector('[role="alert"]')?.textContent).toBe(i18n.t("agentSetupUi.repositoryRequired"));
+  for (const locale of ["ja", "zh-CN"]) {
+    await act(async () => { await i18n.changeLanguage(locale); });
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe(i18n.t("agentSetupUi.repositoryRequired"));
+    expect(container.querySelector<HTMLInputElement>(`[aria-label="${i18n.t("agentSetupUi.githubRepository")}"]`)?.value).toBe("customer draft URL");
+  }
+  expect(api.hire).not.toHaveBeenCalled();
+  expect(api.testEnvironment).not.toHaveBeenCalled();
+  expect(secrets.create).not.toHaveBeenCalled();
 });

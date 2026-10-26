@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import "@/i18n/agent-setup-test-resources";
+import { i18n } from "@/i18n";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -38,11 +40,12 @@ vi.mock("../AgentConfigForm", () => ({
 let root: Root;
 let host: HTMLDivElement;
 let client: QueryClient;
-afterEach(() => {
+afterEach(async () => {
   flushSync(() => root?.unmount());
   host?.remove();
   client?.clear();
   vi.resetAllMocks();
+  await i18n.changeLanguage("en");
 });
 async function mount(
   adapterType: "claude_local" | "codex_local" | "grok_local" = "claude_local",
@@ -135,7 +138,7 @@ async function mount(
   );
   await vi.waitFor(() => expect(mocks.personal).toHaveBeenCalled());
   await vi.waitFor(() => expect(client.isFetching()).toBe(0));
-  if (savedApiKeys && !managedAccount && !advancedConnection) await vi.waitFor(() => expect(host.textContent).toContain("2 saved API keys"));
+  if (savedApiKeys && !managedAccount && !advancedConnection) await vi.waitFor(() => expect(host.textContent).toContain(i18n.t("agentSetupUi.savedKeys", { count: 2 })));
   return { test, connected, key };
 }
 function click(text: string) {
@@ -584,4 +587,54 @@ describe("AgentProviderConnection reuse", () => {
     expect(host.textContent).not.toContain("ChatGPT account");
   });
 
+});
+
+
+describe("live provider connection language", () => {
+  it.each(["en", "zh-CN", "es", "ja"])("renders saved-key counts and fallback errors in %s", async locale => {
+    await i18n.changeLanguage(locale);
+    const { test, connected } = await mount();
+    expect(host.textContent).toContain(i18n.t("agentSetupUi.savedKeys", { count: 2 }));
+    expect(host.querySelector('[role="radiogroup"]')?.getAttribute("aria-label")).toBe(i18n.t("agentSetupUi.connectProvider"));
+    openProvider();
+    expect(host.textContent).toContain(i18n.t("agentSetupUi.chooseApiKey"));
+    expect(host.textContent).toContain("Company key");
+    test.mockRejectedValueOnce(null);
+    click(i18n.t("agentSetupUi.useSavedApiKey"));
+    await vi.waitFor(() => expect(host.querySelector('[role="alert"]')?.textContent).toBe(i18n.t("agentSetupUi.providerConnectFailed")));
+    expect(connected).not.toHaveBeenCalled();
+    expect(host.textContent).not.toContain("agentSetupUi.");
+  });
+
+  it.each(["en", "zh-CN", "es", "ja"])("renders provider interpolation and key placeholders in %s", async locale => {
+    await i18n.changeLanguage(locale);
+    await mount("codex_local", false, true, false, false, false, {
+      intent: { provider: "openai", method: "api_key", name: "Customer account", ownership: "personal", agentIds: [], allAgents: true },
+      initialMethod: "api_key", onComplete: vi.fn(),
+    });
+    expect(host.textContent).toContain(i18n.t("agentSetupUi.provideApiKey", { provider: "OpenAI" }));
+    const input = host.querySelector<HTMLInputElement>('input[type="password"]')!;
+    expect(input.placeholder).toBe(i18n.t("agentSetupUi.enterApiKey"));
+    expect(input.getAttribute("aria-label")).toBe(i18n.t("agentSetupUi.apiKey"));
+    expect(host.textContent).toContain("OpenAI");
+    expect(managedApi.create).not.toHaveBeenCalled();
+  });
+});
+
+
+it("retranslates an existing local provider error without sending another connection request", async () => {
+  const { test, connected } = await mount();
+  openProvider();
+  test.mockRejectedValueOnce(null);
+  click("Use saved API key");
+  await vi.waitFor(() => expect(host.querySelector('[role="alert"]')?.textContent).toBe(i18n.t("agentSetupUi.providerConnectFailed")));
+  const selection = host.querySelector<HTMLSelectElement>("select")?.value;
+  for (const locale of ["ja", "zh-CN"]) {
+    await i18n.changeLanguage(locale);
+    await vi.waitFor(() => expect(host.querySelector('[role="alert"]')?.textContent).toBe(i18n.t("agentSetupUi.providerConnectFailed")));
+    expect(host.querySelector<HTMLSelectElement>("select")?.value).toBe(selection);
+  }
+  expect(test).toHaveBeenCalledTimes(1);
+  expect(connected).not.toHaveBeenCalled();
+  expect(managedApi.create).not.toHaveBeenCalled();
 });
