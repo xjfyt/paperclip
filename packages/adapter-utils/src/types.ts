@@ -282,6 +282,14 @@ export interface AdapterExecutionContext {
    */
   onDispatch?: () => void;
   onSpawn?: (meta: { pid: number; processGroupId: number | null; startedAt: string }) => Promise<void>;
+  /** Server-owned in-memory capability. Never accept this through config/context. */
+  privatePromptTest?: {
+    literalRevision: string;
+    fixedContext: string;
+    apiKey: string;
+    /** Must durably commit a hash-only prepared witness before returning. */
+    prepare: (finalPrompt: string) => Promise<void>;
+  };
   authToken?: string;
   /**
    * The injected OpenTelemetry startup trace context (tracer + root

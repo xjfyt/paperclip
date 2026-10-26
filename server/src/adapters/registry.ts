@@ -1032,6 +1032,13 @@ export function requireServerAdapter(type: string): ServerAdapterModule {
   return adapter;
 }
 
+/** Object identity is server-owned. An external adapter cannot self-attest this lane. */
+export function privatePromptTestImplementation(adapter: ServerAdapterModule): string | null {
+  return adapter === claudeLocalAdapter && adapter.execute === claudeExecute &&
+    findActiveServerAdapter("claude_local") === adapter
+    ? "paperclip.builtin.claude-local.cli.literal.v1" : null;
+}
+
 export function getServerAdapter(type: string): ServerAdapterModule {
   return findActiveServerAdapter(type) ?? processAdapter;
 }

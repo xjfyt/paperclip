@@ -273,6 +273,8 @@ export interface PreparedAdapterExecutionTargetRuntime {
 }
 
 export interface AdapterExecutionTargetProcessOptions {
+  /** Local-only; remote transports must reject rather than weaken isolation. */
+  inheritEnv?: boolean;
   cwd: string;
   env: Record<string, string>;
   stdin?: string;
@@ -862,6 +864,7 @@ export async function runAdapterExecutionTargetProcess(
   args: string[],
   options: AdapterExecutionTargetProcessOptions,
 ): Promise<RunProcessResult> {
+  if (options.inheritEnv === false && target?.kind === "remote") throw new Error("isolated_environment_requires_local_target");
   if (target?.kind === "remote" && target.transport === "sandbox") {
     const runner = requireSandboxRunner(target);
     const env = sanitizeRemoteExecutionEnv(options.env);
@@ -921,6 +924,7 @@ export async function runAdapterExecutionTargetProcess(
   const result = await runChildProcess(runId, command, args, {
     cwd: options.cwd,
     env,
+    inheritEnv: options.inheritEnv,
     stdin: options.stdin,
     timeoutSec: options.timeoutSec,
     graceSec: options.graceSec,
