@@ -17,6 +17,7 @@ export async function captureRoutingEvidence(tx: Tx, companyId: string,
     billingType: costEvents.billingType, costStatus: costEvents.costStatus, amount: sql<string>`${costEvents.costCents}::text` }).from(costEvents).where(and(eq(costEvents.companyId, companyId), inArray(costEvents.issueId, candidateRuns.map(r => r.issueId)))).limit(101);
   if (costs.length > 100) return null;
   const runs = await tx.select({ id: heartbeatRuns.id, companyId: heartbeatRuns.companyId, agentId: heartbeatRuns.agentId,
+    dispatchedAdapterType: sql<string | null>`${heartbeatRuns.runnerProfileJson}->'adapterDispatch'->>'adapterType'`,
     issueId: heartbeatRuns.issueId, status: heartbeatRuns.status, costAccountingPending: heartbeatRuns.costAccountingPending,
     costAccountedAt: heartbeatRuns.costAccountedAt, finishedAt: heartbeatRuns.finishedAt, usageJson: heartbeatRuns.usageJson })
     .from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId), inArray(heartbeatRuns.issueId, candidateRuns.map(r => r.issueId)))).limit(101);
@@ -27,7 +28,7 @@ export async function captureRoutingEvidence(tx: Tx, companyId: string,
     receiptHash: runUsageReceipts.receiptHash, complete: runUsageReceipts.complete, receiptJson: runUsageReceipts.receiptJson }).from(runUsageReceipts)
     .where(and(eq(runUsageReceipts.companyId, companyId), inArray(runUsageReceipts.id, receiptIds)));
   return qualifyRoutingCapture(companyId, candidateRuns.map(row => ({ caseId: row.inputId!, skillRunId: row.id,
-    companyId: row.companyId, agentId: row.agentId, issueId: row.issueId, configHash: routingConfigHash(row.agentConfigSnapshot),
+    companyId: row.companyId, agentId: row.agentId, adapterType: typeof row.agentConfigSnapshot.adapterType === "string" ? row.agentConfigSnapshot.adapterType : "", issueId: row.issueId, configHash: routingConfigHash(row.agentConfigSnapshot),
     executionContextHash: hash({ agent: row.agentConfigSnapshot, template: row.templateBody }),
     costs: costs.filter(c => c.issueId === row.issueId).map(c => ({ ...c, costCents: String(c.amount) })), heartbeats: runs, receipts })));
 }

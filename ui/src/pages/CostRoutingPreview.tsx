@@ -1,4 +1,8 @@
 import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { authApi } from "@/api/auth";
+import { healthApi } from "@/api/health";
+import { queryKeys } from "@/lib/queryKeys";
 import { useCompany } from "@/context/CompanyContext";
 import { useTranslation } from "@/i18n";
 import { Button } from "@/components/ui/button";
@@ -6,24 +10,34 @@ import { costRoutingPreviewApi as api } from "@/api/cost-routing-preview";
 import { routingPolicySchema, type RoutingPolicyRecord, type RoutingPreviewRecord } from "@paperclipai/shared/cost-routing-preview";
 export function CostRoutingPreview() {
   const { selectedCompanyId } = useCompany(), { t } = useTranslation();
+  const session = useQuery({ queryKey: queryKeys.auth.session, queryFn: authApi.getSession, retry: false });
+  const userId = session.data?.user?.id ?? session.data?.session?.userId;
+  const health = useQuery({ queryKey: queryKeys.health, queryFn: healthApi.get, enabled: session.isSuccess && !userId });
   if (!selectedCompanyId) return <p>{t("costRoutingPreview.chooseCompany")}</p>;
-  return <CompanyPolicy key={selectedCompanyId} companyId={selectedCompanyId} />;
+  if (session.isError) return <p role="alert">{t("costRoutingPreview.error")}</p>;
+  if (!session.isSuccess || session.isFetching) return <p role="status">{t("costRoutingPreview.loading")}</p>;
+  const identity = userId ? `${userId}:${session.data?.session?.id ?? "session"}`
+    : health.isSuccess && !health.isFetching && health.data.deploymentMode === "local_trusted" ? "local-board" : null;
+  if (!identity) return <p role="alert">{t("costRoutingPreview.error")}</p>;
+  return <CompanyPolicy key={`${selectedCompanyId}:${identity}`} companyId={selectedCompanyId} identity={identity} />;
 }
-function CompanyPolicy({ companyId }: { companyId: string }) {
+function CompanyPolicy({ companyId, identity }: { companyId: string; identity: string }) {
+  const { t } = useTranslation();
+  const query = useQuery({ queryKey: ["cost-routing-preview", companyId, identity],
+    queryFn: ({ signal }) => api.current(companyId, signal), retry: false, staleTime: 0, gcTime: 0 });
+  // Never display a cached admin policy during/after failed authorization refresh.
+  if (query.isError) return <p role="alert">{t("costRoutingPreview.error")}</p>;
+  if (!query.isSuccess || query.isFetching) return <p role="status">{t("costRoutingPreview.loading")}</p>;
+  return <PolicyEditor key={query.dataUpdatedAt} companyId={companyId} initialPolicy={query.data} />;
+}
+function PolicyEditor({ companyId, initialPolicy }: { companyId: string; initialPolicy: RoutingPolicyRecord | null }) {
   const { t } = useTranslation(), active = useRef(true);
-  const [policy, setPolicy] = useState<RoutingPolicyRecord | null>(null), [draft, setDraft] = useState("");
-  const [result, setResult] = useState<RoutingPreviewRecord | null>(null), [busy, setBusy] = useState(true);
-  const [error, setError] = useState(false), [loaded, setLoaded] = useState(false);
+  const [policy, setPolicy] = useState(initialPolicy), [draft, setDraft] = useState(initialPolicy ? JSON.stringify(initialPolicy.policy, null, 2) : "");
+  const [result, setResult] = useState<RoutingPreviewRecord | null>(null), [busy, setBusy] = useState(false);
+  const [error, setError] = useState(false), [loaded, setLoaded] = useState(true);
   const saveRetry = useRef<{ text: string; revision: number; requestId: string } | null>(null);
   const previewRetry = useRef<{ revision: number; requestId: string } | null>(null);
-  useEffect(() => {
-    active.current = true; const controller = new AbortController();
-    api.current(companyId, controller.signal).then(value => {
-      if (!active.current) return;
-      setPolicy(value); setDraft(value ? JSON.stringify(value.policy, null, 2) : ""); setLoaded(true);
-    }).catch(() => { if (active.current) setError(true); }).finally(() => { if (active.current) setBusy(false); });
-    return () => { active.current = false; controller.abort(); };
-  }, [companyId]);
+  useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
   async function act(kind: "save" | "preview") {
     if (busy || !loaded) return;
     setBusy(true); setError(false); setResult(null);
@@ -38,9 +52,15 @@ function CompanyPolicy({ companyId }: { companyId: string }) {
         const receipt = await api.preview(companyId, { requestId: previewRetry.current.requestId, policyRevision: policy.revision });
         if (active.current) { setResult(receipt); previewRetry.current = null; }
       }
-    } catch { if (active.current) setError(true); }
+    } catch (failure) { if (active.current) {
+      setError(true);
+      if (failure && typeof failure === "object" && "status" in failure && [401, 403].includes(Number(failure.status))) {
+        setDraft(""); setPolicy(null); setResult(null); setLoaded(false);
+      }
+    } }
     finally { if (active.current) setBusy(false); }
   }
+  if (!loaded) return <p role="alert">{t("costRoutingPreview.error")}</p>;
   return <section className="space-y-4">
     <h1 className="text-xl font-semibold">{t("costRoutingPreview.title")}</h1>
     <p className="text-sm text-muted-foreground">{t("costRoutingPreview.warning")}</p>

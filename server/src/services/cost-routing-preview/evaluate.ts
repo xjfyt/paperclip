@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import { compareCents } from "@paperclipai/shared/money";
 import { routingEvidenceV1Schema } from "@paperclipai/shared/cost-routing-preview";
 import type { EvaluationReport } from "@paperclipai/shared/mimouse-evaluation";
 import { capabilityBaseline } from "@paperclipai/shared/capability-evidence";
@@ -8,8 +7,8 @@ export interface RoutingEvidence {
   agentId: string; available: boolean; adapterType: string; configuredModel: string | null;
   report: EvaluationReport | null; createdAt: string | null; executionContextHashes: string[]; configHash: string | null; routingEvidenceV1: unknown;
 }
-/** Nonbinding recommendation from exact, server-captured accounting evidence only.
- * Manual capability attestations never qualify a required capability. */
+/** Evidence preview only. Current accounting evidence has no run-bound witness
+ * linking dispatched prompt/input/context to the pre-wake test snapshot. */
 export function evaluateRoutingPreview(companyId: string, revision: number, policy: RoutingPolicy,
   evidence: RoutingEvidence[], companyActive: boolean, now: Date): RoutingPreview {
   const result: RoutingPreview = { schemaVersion: 1, companyId, policyRevision: revision, evaluatedAt: now.toISOString(),
@@ -47,7 +46,12 @@ export function evaluateRoutingPreview(companyId: string, revision: number, poli
       if (!proof.success) blockers.push("agent_model_mapping_unverified", "cost_currency_unit_unverified");
       else {
         const value = proof.data;
-        if (value.companyId !== companyId || value.agentId !== candidate.agentId || value.model !== candidate.model || value.provider !== candidate.provider) blockers.push("agent_model_mapping_unverified");
+        // The harness snapshots config at test creation, before wake/dispatch.
+        // Restoring that config later cannot prove which config/instructions ran.
+        // Existing usage receipts do not bind the dispatched effective-context
+        // fingerprint to this test snapshot; never infer that binding.
+        blockers.push("execution_context_unverified");
+        if (value.adapterType !== source?.adapterType || value.companyId !== companyId || value.agentId !== candidate.agentId || value.model !== candidate.model || value.provider !== candidate.provider) blockers.push("agent_model_mapping_unverified");
         if (value.configHash !== source?.configHash || value.cases.some(c => c.executionContextHash !== candidate.executionContextHash)) blockers.push("evidence_context_changed");
         const results = report?.results.filter(r => r.versionId === report.candidate.versionId) ?? [];
         if (value.cases.length !== report?.candidate.cases || value.cases.length !== results.length
@@ -59,10 +63,7 @@ export function evaluateRoutingPreview(companyId: string, revision: number, poli
         blockers.push(baseline === "unsupported" ? "capability_unsupported" : "capability_unverified");
       }
       return { agentId: candidate.agentId, reportId: candidate.reportId, blockers: [...new Set(blockers)], observedPassRate, evidenceHash: proof.success ? createHash("sha256").update(JSON.stringify(proof.data)).digest("hex") : null,
-        comparableCost: proof.success && !blockers.length ? { currency: "USD" as const, unit: "cent" as const, amount: proof.data.costCents } : null };
+        comparableCost: null };
     }) };
-  const eligible = result.candidates.filter(c => c.comparableCost && !c.blockers.length);
-  eligible.sort((a, b) => compareCents(a.comparableCost!.amount, b.comparableCost!.amount) || (a.agentId < b.agentId ? -1 : 1));
-  if (eligible.length) { result.outcome = "recommended_for_review"; result.selectedAgentId = eligible[0]!.agentId; result.reason = "lowest_recorded_qualifying_cost"; }
   return result;
 }

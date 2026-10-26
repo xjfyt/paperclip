@@ -27,21 +27,22 @@ export type CreateRoutingPreview = z.infer<typeof createRoutingPreviewSchema>;
 export const routingBlockers = ["company_inactive", "agent_unavailable", "configured_model_mismatch", "report_missing",
   "report_pin_mismatch", "dataset_mismatch", "evidence_stale", "evidence_future", "quality_below_threshold",
   "report_not_qualifying", "execution_context_mismatch", "agent_model_mapping_unverified",
-  "cost_currency_unit_unverified", "cost_unknown", "capability_unsupported", "capability_unverified", "evidence_context_changed", "evidence_coverage_mismatch"] as const;
+  "cost_currency_unit_unverified", "cost_unknown", "capability_unsupported", "capability_unverified", "evidence_context_changed", "evidence_coverage_mismatch", "execution_context_unverified"] as const;
 export type RoutingBlocker = typeof routingBlockers[number];
 export interface RoutingPreview {
   schemaVersion: 1; companyId: string; policyRevision: number; evaluatedAt: string;
-  outcome: "blocked" | "recommended_for_review"; selectedAgentId: string | null;
+  outcome: "blocked"; selectedAgentId: null;
   candidates: Array<{ agentId: string; reportId: string; blockers: RoutingBlocker[];
-    observedPassRate: number | null; evidenceHash: string | null; comparableCost: { currency: "USD"; unit: "cent"; amount: string } | null }>;
+    observedPassRate: number | null; evidenceHash: string | null; comparableCost: null }>;
   executionStarted: false; budgetReserved: false; dispatchAuthority: false;
-  reason: "trusted_routing_evidence_unavailable" | "lowest_recorded_qualifying_cost";
+  reason: "trusted_routing_evidence_unavailable";
 }
 export interface RoutingPolicyRecord { revision: number; policy: RoutingPolicy; createdAt: string }
 export interface RoutingPreviewRecord { id: string; receiptHash: string; preview: RoutingPreview }
 /** Internal, backend-produced evidence. Never accepted by policy/preview requests. */
 export const routingEvidenceV1Schema = z.object({
-  version: z.literal(1), companyId: uuid, agentId: uuid, provider: model, model, configHash: digest,
+  version: z.literal(1), executionContextVerification: z.literal("unverified_test_creation_snapshot"),
+  companyId: uuid, agentId: uuid, adapterType: model, provider: model, model, configHash: digest,
   currency: z.literal("USD"), unit: z.literal("cent"), costCents: z.string().regex(/^\d+\.\d{7}$/),
   basis: z.literal("accounted_per_run_provider_reported_usd"), oldestFinishedAt: z.string().datetime(), newestFinishedAt: z.string().datetime(),
   cases: z.array(z.object({ caseId: uuid, skillRunId: uuid, heartbeatRunId: uuid, costEventId: uuid,

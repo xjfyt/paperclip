@@ -2,13 +2,13 @@
 
 ## 实际范围
 
-这是 **非绑定的策略预览**，不是生产路由器。保存不可变策略版本，检查当前公司的候选 Agent/provider/model、固定评估报告和相同数据集，在可信历史证据完整时按精确 USD 成本推荐人工复核对象。价格相同按 Agent UUID 排序。不调用 Agent/模型，不探测凭据，不改变执行、权限、预算或 `decision-models.ts`。不估算未来任务价格、不预留预算；推荐不能绕过执行时预算硬停。
+这是 **策略与证据预览基础设施**，不是已完成的成本路由器。保存不可变策略版本，检查当前公司的候选 Agent/provider/model、固定评估报告和相同数据集。当前所有结果均为 blocked、selectedAgentId=null、comparableCost=null，绝不输出推荐。不调用 Agent/模型，不探测凭据，不改变执行、权限、预算或 `decision-models.ts`。不估算未来任务价格、不预留预算、不绕过执行时预算硬停。
 
-既有报告保持原状且缺失 `routingEvidenceV1` 时阻断。未来比较在原事务内额外采集：候选版本的每个测试 case 必须对应唯一测试 run/issue、唯一已成功且已结算 heartbeat、唯一已报告的 metered API 账本行，以及该 heartbeat 明确引用的完整 `paperclip/accounting-receipt/v1` per-run USD 凭据。Agent、公司、provider、model、精确金额逐项相等；configHash 和执行上下文 hash 匹配；任何多次尝试/混合模型/订阅包含/credits/未知/估算/缺失/未结算均不资格化。不用当前配置猜实际模型。
+既有报告保持原状且缺失 `routingEvidenceV1` 时阻断。未来比较在原事务内额外采集：候选版本的每个测试 case 必须对应唯一测试 run/issue、唯一已成功且已结算 heartbeat、唯一已报告的 metered API 账本行，以及该 heartbeat 明确引用的完整 `paperclip/accounting-receipt/v1` per-run USD 凭据。Agent、公司、provider、model、精确金额逐项相等；configHash 和执行上下文 hash 匹配；任何多次尝试/混合模型/订阅包含/credits/未知/估算/缺失/未结算均不资格化。receipt envelope.adapterType 必须等于测试创建快照与 heartbeat.runnerProfileJson.adapterDispatch.adapterType，不用当前配置猜实际模型/适配器。
 
 新增采集只存允许字段、ID、hash 和明确 USD/cent 单位，不复制配置、密钥、receipt 自由文本或源 URL。比较在读账本前使用现有 accounting 的 company `NO KEY UPDATE` 锁顺序；查询上限 100 case/101 sentinel rows。旧比较结果、评分算法和 reportHash 不改。快照表示当时已记录成本，不自动吸收后来的账单校正。
 
-`requiredCapabilities` 非空时，本片段不会把 C2 实现声明或 C3/C4 人工台账提升为机器验证，因此仍然阻断（unsupported/unverified）。这不是取消/工作区往返能力已经可用的声明。空能力列表明确表示本次预览不要求能力证明。执行上下文目前是配置/模板快照 hash，不是机器运行环境的独立认证。
+`requiredCapabilities` 非空时，本片段不会把 C2 实现声明或 C3/C4 人工台账提升为机器验证，因此仍然阻断（unsupported/unverified）。这不是取消/工作区往返能力已经可用的声明。空能力列表明确表示本次预览不要求能力证明。执行上下文目前是 **测试创建时（wake/dispatch 之前）** 的配置/模板快照 hash。heartbeat.resultJson 中虽有 configFreshness.session.nextFingerprint，但没有可证明该实际调度指纹等于固定测试输入/提示词/上下文的可信绑定。创建后修改配置/指令再在预览前恢复，不能通过 hash 相等洗成真实执行证明。因此新 routingEvidenceV1 明确标为 unverified_test_creation_snapshot，始终追加 execution_context_unverified；保留 USD 链仅作后台诊断，删除了推荐选择路径。后续需独立设计 run-bound execution witness；本片段不修改 heartbeat/adapter/receipt 写入逻辑。
 
 ## 中央集成项（本工作树未改）
 
@@ -43,7 +43,13 @@
 
 ## 本地验证证据
 
-- 单 worker / 512 MB 的纯测试覆盖正向后端合成 fixture 与失败关闭边界；见 `server/src/services/cost-routing-preview/preview.test.ts`。
-- UI token gates 已通过。9 个修改/新增 TS/TSX 文件 esbuild syntax transform 通过（不是语义类型检查）。
+- 单 worker / 512 MB 测试 35/35 通过：30 项纯证据测试及 5 项 jsdom 身份/缓存/晚到请求隔离回归。合成完整 USD fixture 仍必须阻断上下文资格；见 `server/src/services/cost-routing-preview/preview.test.ts`。
+- UI token gates 已通过。修改/新增 TS/TSX 文件 esbuild syntax transform 通过（不是语义类型检查）。
 - 最初尝试 TypeScript transpile API 因仓库 TS 7 原生包不提供 `ScriptTarget` 失败；已改用 esbuild 做语法检查，不把失败算作 typecheck 成功。
-- 为避免与总控全量构建竞争，未运行安装、完整 typecheck/build、DB migration/HTTP/浏览器或真实模型测试。集成与下列手工测试仍待执行，不能声称生产路由完成。
+- 为避免与总控全量构建竞争，未运行安装、完整 typecheck/build、DB migration/HTTP/真实浏览器或真实模型测试。集成与下列手工测试仍待执行，不能声称生产路由完成。
+
+## 剩余工作（不得记为已完成路由）
+
+- run-bound 实际 dispatch witness：证明固定提示词/输入/上下文与实际执行绑定，不能只比较预创建 hash 或当前 config；在建立该证明前保持全量阻断。
+- 中央迁移/挂载/词典与 DB/HTTP 集成测试、完整类型检查/构建仍由集成阶段验证。
+- UI 以 company + user + session 隔离，session/policy 重验期间卸载编辑器；403/401 清除草稿/结果，身份变化丢弃晚到 mutation。jsdom 不等于真实浏览器验收。

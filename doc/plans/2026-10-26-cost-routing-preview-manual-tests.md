@@ -16,12 +16,13 @@
 - 发布策略新版本后用旧 policyRevision 创建新 preview 应 409。读取已存在旧 receipt 必须仍一致。
 - 模拟 audit 插入失败：策略/receipt 同事务回滚。数据库 UPDATE/DELETE 两个历史表应被 trigger 拒绝。跨公司 FK 不可引用别公司的策略版本。
 
-## 3. 正向历史证据与精确成本
+## 3. 有效成本诊断也必须阻断执行上下文
 
 - 本地 fixture：每个 candidate case 各一个成功测试 run/issue、一个已结算 heartbeat、一个 metered_api reported cost 行、一个 heartbeat 引用的完整 per_run provider_reported USD receipt；company/agent/provider/model/金额与 config/context 一致，使用同一 dataset。
 - 新建比较应保存 `routingEvidenceV1`；读取数据库只含允许字段，不含原始配置/receipt 文本。
-- 空 requiredCapabilities、质量全部通过、证据在 TTL 内：preview `recommended_for_review`，按精确字符串 cents 的整数货币算法选低价；同价按 UUID 稳定排序。显式零美元凭据可为零；无凭据绝不当零。
-- 任意结果均 `executionStarted=false`, `budgetReserved=false`, `dispatchAuthority=false`。观察 heartbeat、issue assignee、预算 reservation/额度、provider 网络调用数完全不变。
+- 空 requiredCapabilities、质量全部通过、USD 证据在 TTL 内也必须 `blocked`、`selectedAgentId=null`、`comparableCost=null`，包含 `execution_context_unverified`。显式零美元可作为后台成本诊断；无凭据绝不当零。
+- 测试创建后改变 adapter/config/runtime/instructions，实际执行后再恢复创建配置：必须仍阻断。receipt adapter 与 dispatch adapter/test snapshot 任一不符，诊断 proof 不资格化。nextFingerprint 存在也不能自动证明它等于固定测试输入/提示词。
+- 所有结果均 `executionStarted=false`, `budgetReserved=false`, `dispatchAuthority=false`。观察 heartbeat、issue assignee、预算 reservation/额度、provider 网络调用数完全不变。
 
 ## 4. 必须失败关闭
 
@@ -30,12 +31,12 @@
 - reportHash/datasetHash/context pin 不匹配、当前 configHash 改变、当前配置模型改动、候选暂停/未 ready、公司不 active、质量未达阈值都阻断；不得暗中换 provider/model。
 - fresh report 引用陈旧 heartbeat：按最老实际 finishedAt，而不是 report 创建时间，仍应 stale；未来时间应 future。
 - 添加 required confirmedCancellation/workspaceRoundTrip，或在 capability ledger 录入 C3/C4 passed、过期、撤销、不同环境/版本记录：均不能把人工记录转为本策略的机器验证资格。
-- 预算已耗尽也不能因 receipt 有推荐而执行：预览不授予执行权；实际执行路径仍保留原有预算硬停（本功能不调用该路径）。
+- 预算已耗尽不得执行：预览不推荐、不授予执行权；实际执行路径仍保留原有预算硬停（本功能不调用该路径）。
 
 ## 5. UI 和四语言
 
 - en/zh-CN/ja/es：标题、风险说明、按钮、错误消息完整；技术 receipt 字段/原因码保留稳定机器标识。
-- 切公司/卸载期间晚到请求不能回填旧公司。加载失败不得把未知状态当 revision=0 保存。
+- 切公司、同公司切用户、同用户切 session/注销或卸载期间，晚到请求不能回填旧身份；session/policy 重验时隐藏旧管理员数据，403 后不恢复缓存。加载失败不得把未知状态当 revision=0 保存。
 - 连点保存/预览不重复创建；网络超时后重试复用 requestId；冲突明确提示刷新。
 - 改动 JSON 未保存时禁用预览；保存规范化后可预览；失败清除旧结果，不展示旧推荐作为本次成功。
 - Back/Forward、刷新、会话失效、非管理员、非法 JSON、超长输入；不泄露接口原始错误/敏感配置。
