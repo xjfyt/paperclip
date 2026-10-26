@@ -1,15 +1,16 @@
 import { formatMonitorEta, formatMonitorEtaLabel } from "../lib/issue-monitor";
-import { formatNumber, i18n, t } from "./index";
+import { i18n } from "./index";
 
 /** Display only. Scheduling, due/overdue gates and countdown cadence stay in issue-monitor. */
-export function monitorEtaDisplay(nextCheckAt: Date | string, now: Date | string, title = false): string {
+export function monitorEtaDisplay(nextCheckAt: Date | string, now: Date | string, title = false, locale = i18n.language): string {
+  const t = i18n.getFixedT(locale);
   // Keep the existing English compact display, including its validated dates.
   const english = title ? formatMonitorEtaLabel(nextCheckAt, now) : formatMonitorEta(nextCheckAt, now);
-  if (i18n.language === "en") return english;
+  if (locale === "en") return english;
   const delta = new Date(nextCheckAt).getTime() - new Date(now).getTime();
   if (delta <= 0 && delta > -60_000) return t("issueMonitorUi.dueNow");
   const ms = Math.abs(delta);
-  const unit = (key: string, value: number) => t(`issueMonitorUi.${key}`, { value: formatNumber(value) });
+  const unit = (key: string, value: number) => t(`issueMonitorUi.${key}`, { value: new Intl.NumberFormat(locale).format(value) });
   let duration: string;
   if (ms < 60_000) duration = unit("seconds", Math.max(1, Math.ceil(ms / 1_000)));
   else if (ms < 3_600_000) duration = unit("minutes", Math.floor(ms / 60_000));

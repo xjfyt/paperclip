@@ -4597,17 +4597,17 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       invalidateIssueRunState();
       invalidateIssueCollections();
       pushToast({
-        title: "Monitor check queued",
+        title: mimouseT("monitorSurfaceUi.checkQueued"),
         tone: "success",
       });
     },
     onError: (err) => {
       pushToast({
-        title: "Monitor check failed",
+        title: mimouseT("monitorSurfaceUi.checkFailed"),
         body:
           err instanceof Error
             ? err.message
-            : "Unable to trigger the monitor right now",
+            : mimouseT("monitorSurfaceUi.triggerFailed"),
         tone: "error",
       });
     },

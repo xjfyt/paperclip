@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 
 import { act } from "react";
+import { i18n } from "../i18n";
+import { monitorSurfaceMessages } from "../i18n/monitor-surface-test-resources";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import type { Issue, IssueWorkProduct } from "@paperclipai/shared";
@@ -125,14 +127,16 @@ describe("buildMonitorSurfaceCopy", () => {
 describe("IssueMonitorBanner / IssueMonitorComposerStrip rendering", () => {
   let container: HTMLDivElement;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await i18n.changeLanguage("en");
     vi.useFakeTimers();
     vi.setSystemTime(NOW);
     container = document.createElement("div");
     document.body.appendChild(container);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await i18n.changeLanguage("en");
     vi.useRealTimers();
     container.remove();
   });
@@ -145,6 +149,79 @@ describe("IssueMonitorBanner / IssueMonitorComposerStrip rendering", () => {
       scheduledRetry: null,
     } as unknown as Issue;
   }
+
+  it("updates memoized monitor titles and metadata in place across all four languages", async () => {
+    const issue = issueWithMonitor(new Date(NOW.getTime() + 120_000).toISOString());
+    issue.executionState!.monitor!.serviceName = "service 原名";
+    const onCheckNow = vi.fn();
+    const root = createRoot(container);
+    await act(async () => root.render(<><IssueMonitorBanner issue={issue} onCheckNow={onCheckNow} checkError="Provider 原始诊断" /><IssueMonitorComposerStrip issue={issue} onCheckNow={onCheckNow} /></>));
+    try {
+      for (const [locale, messages] of Object.entries(monitorSurfaceMessages)) {
+        await act(async () => { await i18n.changeLanguage(locale); });
+        expect(container.textContent).toContain(messages.replyHint);
+        expect(container.textContent).toContain(messages.watching.replace("{{service}}", "service 原名"));
+        expect(container.textContent).toContain("Provider 原始诊断");
+        expect(container.textContent).not.toContain("monitorSurfaceUi.");
+        expect(container.querySelector("button")?.textContent).toBe(messages.checkNow);
+        expect(onCheckNow).not.toHaveBeenCalled();
+      }
+      await act(async () => container.querySelector("button")!.click());
+      expect(onCheckNow).toHaveBeenCalledTimes(1);
+    } finally {
+      await act(async () => root.unmount());
+    }
+  });
+
+  it.each(Object.entries(monitorSurfaceMessages))("localizes monitor cancellation without resending on language changes in %s", async (locale, messages) => {
+    await i18n.changeLanguage(locale);
+    let reject!: (reason: unknown) => void;
+    const onCancel = vi.fn().mockImplementationOnce(() => new Promise((_resolve, fail) => { reject = fail; }))
+      .mockRejectedValueOnce(new Error("Original cancel error 原文"));
+    const root = createRoot(container);
+    await act(async () => root.render(<IssueMonitorBanner issue={issueWithMonitor(new Date(NOW.getTime() + 60_000).toISOString())} onCancelMonitor={onCancel} />));
+    try {
+      await act(async () => container.querySelector<HTMLButtonElement>(`[aria-label="${messages.cancel}"]`)!.click());
+      expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain(messages.cancelDescription);
+      await act(async () => Array.from(document.querySelectorAll("button")).find((button) => button.textContent === messages.keep)!.click());
+      expect(onCancel).not.toHaveBeenCalled();
+      await act(async () => container.querySelector<HTMLButtonElement>(`[aria-label="${messages.cancel}"]`)!.click());
+      await act(async () => Array.from(document.querySelectorAll("button")).find((button) => button.textContent === messages.cancel)!.click());
+      const pending = Array.from(document.querySelectorAll("button")).find((button) => button.textContent === messages.cancelling)!;
+      expect(pending.disabled).toBe(true);
+      await act(async () => pending.click());
+      expect(onCancel).toHaveBeenCalledTimes(1);
+      await act(async () => reject(null));
+      expect(document.querySelector('[role="alert"]')?.textContent).toBe(messages.cancelFailed);
+      const otherLocale = locale === "ja" ? "en" : "ja";
+      await act(async () => { await i18n.changeLanguage(otherLocale); });
+      expect(document.querySelector('[role="alert"]')?.textContent).toBe(monitorSurfaceMessages[otherLocale].cancelFailed);
+      expect(onCancel).toHaveBeenCalledTimes(1);
+      await act(async () => Array.from(document.querySelectorAll("button")).find((button) => button.textContent === monitorSurfaceMessages[otherLocale].cancel)!.click());
+      expect(document.querySelector('[role="alert"]')?.textContent).toBe("Original cancel error 原文");
+    } finally {
+      await act(async () => root.unmount());
+    }
+  });
+
+  it.each(Object.entries(monitorSurfaceMessages))("localizes special waits while keeping controls and timing in %s", async (locale, messages) => {
+    await i18n.changeLanguage(locale);
+    const root = createRoot(container);
+    try {
+      for (const [reason, title, hint] of [
+        ["workspace_busy", messages.waitingWorkspace, messages.workspaceHint],
+        ["ai_connection_pool_wait", messages.poolExhausted, messages.poolStripHint],
+      ]) {
+        const issue = { status: "in_progress", scheduledRetry: { status: "scheduled_retry", scheduledRetryReason: reason, scheduledRetryAt: NOW.toISOString() } } as Issue;
+        await act(async () => root.render(<IssueMonitorComposerStrip issue={issue} onCheckNow={vi.fn()} />));
+        expect(container.textContent).toContain(title);
+        expect(container.textContent).toContain(hint);
+        expect(container.querySelector("button") === null).toBe(reason === "workspace_busy");
+      }
+    } finally {
+      await act(async () => root.unmount());
+    }
+  });
 
   it("requires confirmation, keeps the monitor on dismissal, and reports cancellation errors", async () => {
     const issue = issueWithMonitor(new Date(NOW.getTime() + 60_000).toISOString());

@@ -1,3 +1,5 @@
+import { i18n } from "../i18n";
+import { monitorSurfaceMessages } from "../i18n/monitor-surface-test-resources";
 import { AgentAvatar } from "../components/AgentAvatar";
 import { TaskChatPausedTakeover, type TaskComposerPause } from "../components/task-chat/TaskChatPausedTakeover";
 // @vitest-environment jsdom
@@ -1421,6 +1423,30 @@ describe("IssueDetail", () => {
     mockLocation.state = null;
     mockRouteParams.issueId = "PAP-1";
     mockRouteParams.companyPrefix = "PAP";
+  });
+
+  it.each(Object.entries(monitorSurfaceMessages))("localizes actual monitor host feedback without changing requests in %s", async (locale, messages) => {
+    await i18n.changeLanguage(locale);
+    const issue = createIssue({ status: "in_progress", executionState: { monitor: { status: "scheduled", nextCheckAt: new Date(Date.now() + 60_000).toISOString(), attemptCount: 1 } } as Issue["executionState"] });
+    mockIssuesApi.get.mockResolvedValue(issue);
+    mockIssuesApi.checkMonitorNow.mockResolvedValueOnce({});
+    try {
+      await act(async () => root.render(<QueryClientProvider client={queryClient}><IssueDetail /></QueryClientProvider>));
+      let button: HTMLButtonElement | undefined;
+      await waitForAssertion(() => {
+        button = Array.from(container.querySelectorAll("button")).find((item) => item.textContent === messages.checkNow);
+        expect(button).toBeTruthy();
+      });
+      await act(async () => button!.click());
+      await waitForAssertion(() => expect(mockPushToast).toHaveBeenCalledWith({ title: messages.checkQueued, tone: "success" }));
+      expect(mockIssuesApi.checkMonitorNow).toHaveBeenCalledWith("PAP-1");
+      mockIssuesApi.checkMonitorNow.mockRejectedValueOnce(new Error("Monitor 原始诊断"));
+      await waitForAssertion(() => expect(button!.disabled).toBe(false));
+      await act(async () => button!.click());
+      await waitForAssertion(() => expect(mockPushToast).toHaveBeenCalledWith({ title: messages.checkFailed, body: "Monitor 原始诊断", tone: "error" }));
+    } finally {
+      await act(async () => { await i18n.changeLanguage("en"); });
+    }
   });
 
   it("clears only the monitor after confirmation and refreshes the task", async () => {
