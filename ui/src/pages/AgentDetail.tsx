@@ -1,3 +1,4 @@
+import { CapabilityEvidenceLedger } from "@/components/CapabilityEvidenceLedger";
 import { MimouseAdapterCapabilities } from "@/components/MimouseAdapterCapabilities";
 import { systemLabel } from "@/i18n/system-labels";
 import { t as mimouseT, useTranslation as useMimouseTranslation, i18n as mimouseI18n } from "@/i18n";
@@ -1808,6 +1809,7 @@ export function AgentOverview({
         </section>
 
         <MimouseAdapterCapabilities adapterType={agent.adapterType} />
+        {["qoder_cn", "workbuddy"].includes(agent.adapterType) && <CapabilityEvidenceLedger companyId={agent.companyId} adapterType={agent.adapterType} />}
 
         <section className="rounded-lg border border-border p-4" aria-labelledby="agent-skills-heading">
           <div className="mb-3 flex items-center justify-between gap-3">

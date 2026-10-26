@@ -332,6 +332,30 @@
     "artifact_missing": "Sin artefacto para este destino",
     "runner_evidence_missing": "Falta el comprobante verificado del Runner"
   },
+  "capabilityEvidence": {
+    "title": "Registro de verificación manual",
+    "disclaimer": "Solo declaraciones del operador, no verificación automática independiente. Las pruebas C2 permanecen separadas. Entorno de ejecución, versión, entorno, cuenta y commit deben coincidir exactamente. Las pruebas ausentes, caducadas o revocadas nunca habilitan la ejecución. Registre y sustituya mediante la API de administración; use solo alias no sensibles.",
+    "loading": "Cargando comprobantes…",
+    "loadError": "No se puede cargar el registro. Se requiere acceso de administrador de la empresa.",
+    "refresh": "Actualizar",
+    "more": "Cargar más comprobantes",
+    "empty": "No hay comprobantes manuales.",
+    "passed": "Correcto (declaración del operador)",
+    "failed": "Fallido",
+    "blocked": "Bloqueado",
+    "manualActive": "Declaración manual activa solo para este contexto exacto",
+    "notActive": "Declaración no activa (o historial incompleto)",
+    "context": "Runtime / versión / entorno / cuenta",
+    "source": "Recurso / ejecución de origen",
+    "commit": "Commit probado",
+    "validity": "Prueba / caducidad",
+    "reviewer": "Registrado por / fecha",
+    "receipt": "Comprobante / revisión",
+    "revoke": "Revocar comprobante",
+    "confirm": "¿Revocar permanentemente este comprobante? El historial se conserva para auditoría.",
+    "cancel": "Cancelar",
+    "writeError": "Escritura no confirmada. Reintente la misma solicitud o actualice tras un conflicto de revisión."
+  },
   "coding": {
     "title": "Entrega de código",
     "boundary": "Las pruebas se vinculan a un commit fijo. Un candidato no autoriza fusionar, etiquetar ni desplegar.",
@@ -685,6 +709,23 @@
     "execution_context_unknown": "Falta contexto de ejecución",
     "execution_context_mismatch": "Los contextos de ejecución difieren",
     "historicalRun": "Ejecución histórica sustituida"
+  },
+  "feedbackEvidence": {
+    "title": "Evidencia local de errores",
+    "boundary": "Solo coincidencias exactas de errores y pilas en texto ya anonimizado. Las referencias no están verificadas; no se fusionan registros, crean tareas, llaman modelos ni leen fuentes externas.",
+    "missing": "Falta",
+    "openSource": "Abrir evidencia original",
+    "noFingerprint": "Evidencia insuficiente para agrupar",
+    "checklist": "Lista de evidencia de reproducción",
+    "versionReference": "Referencia de producto/versión",
+    "commitReference": "Referencia de commit",
+    "traceReference": "Referencia de traza",
+    "errorStackExcerpt": "Extracto de error y pila",
+    "present": "Presente (sin verificar)",
+    "notReproduced": "No se ha realizado una reproducción. El comportamiento esperado y las pruebas de regresión requieren revisión humana.",
+    "pageScope": "Esta página examinó {{count}} registros, no toda la bandeja.",
+    "noMatches": "No hay evidencia coincidente en esta página.",
+    "nextPage": "Examinar página siguiente"
   },
   "feedbackUi": {
     "pageTitle": "Bandeja de comentarios",
@@ -1646,6 +1687,18 @@
     "atMinute": "en el minuto",
     "on": "el",
     "onDay": "el día"
+  },
+  "routineShellUi": {
+    "navigation": "Navegación de la rutina",
+    "sections": "Secciones de la rutina",
+    "section": "Sección de la rutina",
+    "operate": "Operaciones",
+    "delivery": "Entrega",
+    "unsaved": "Cambios sin guardar",
+    "pause": "Pausar disparadores automáticos",
+    "enable": "Activar disparadores automáticos",
+    "copy": "Copiar descripción",
+    "copied": "Descripción copiada"
   },
   "settingsUi": {
     "settings": "Ajustes",

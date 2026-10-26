@@ -332,6 +332,30 @@
     "artifact_missing": "No artifact for this target",
     "runner_evidence_missing": "Verified Runner receipt missing"
   },
+  "capabilityEvidence": {
+    "title": "Manual verification ledger",
+    "disclaimer": "Operator attestations only, not independent machine verification. C2 fixtures stay separate. Exact runtime, version, environment, account and commit must match. Missing, expired or revoked receipts never qualify execution. Record and supersede through the administrator API; use non-sensitive aliases only.",
+    "loading": "Loading receipts…",
+    "loadError": "Cannot load ledger. Company administrator access is required.",
+    "refresh": "Refresh",
+    "more": "Load more receipts",
+    "empty": "No manual receipts recorded.",
+    "passed": "Passed (operator claim)",
+    "failed": "Failed",
+    "blocked": "Blocked",
+    "manualActive": "Active manual attestation for this exact recorded context only",
+    "notActive": "Not an active attestation (or history incomplete)",
+    "context": "Runtime / version / environment / account",
+    "source": "Source resource / run",
+    "commit": "Tested commit",
+    "validity": "Tested / expires",
+    "reviewer": "Recorded by / at",
+    "receipt": "Receipt / revision",
+    "revoke": "Revoke receipt",
+    "confirm": "Revoke this receipt permanently? History remains auditable.",
+    "cancel": "Cancel",
+    "writeError": "Write not confirmed. Retry the same request, or refresh after a revision conflict."
+  },
   "coding": {
     "title": "Coding delivery",
     "boundary": "Evidence is bound to a fixed commit. A release candidate is not permission to merge, tag or deploy.",
@@ -685,6 +709,23 @@
     "execution_context_unknown": "Execution context missing",
     "execution_context_mismatch": "Execution contexts differ",
     "historicalRun": "Historical superseded run"
+  },
+  "feedbackEvidence": {
+    "title": "Local error evidence",
+    "boundary": "Exact error and stack matches from already-redacted inbox text only. References are unverified; no merging, task creation, model calls or external reads.",
+    "missing": "Missing",
+    "openSource": "Open source evidence",
+    "noFingerprint": "Insufficient evidence for grouping",
+    "checklist": "Reproduction evidence checklist",
+    "versionReference": "Product/version reference",
+    "commitReference": "Commit reference",
+    "traceReference": "Trace reference",
+    "errorStackExcerpt": "Error and stack excerpt",
+    "present": "Present (not verified)",
+    "notReproduced": "Reproduction has not been performed. Expected behavior and regression tests require human review.",
+    "pageScope": "This page scanned {{count}} records, not the entire inbox.",
+    "noMatches": "No matching evidence on this page.",
+    "nextPage": "Scan next page"
   },
   "feedbackUi": {
     "pageTitle": "Feedback inbox",
@@ -1646,6 +1687,18 @@
     "atMinute": "at minute",
     "on": "on",
     "onDay": "on day"
+  },
+  "routineShellUi": {
+    "navigation": "Routine navigation",
+    "sections": "Routine sections",
+    "section": "Routine section",
+    "operate": "Operate",
+    "delivery": "Delivery",
+    "unsaved": "Unsaved changes",
+    "pause": "Pause automatic triggers",
+    "enable": "Enable automatic triggers",
+    "copy": "Copy description",
+    "copied": "Description copied"
   },
   "settingsUi": {
     "settings": "Settings",

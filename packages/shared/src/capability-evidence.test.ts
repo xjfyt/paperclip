@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendCapabilityEvidenceSchema, capabilityReceiptSchema, capabilityBaseline, evaluateCapabilityEvidence, type CapabilityEvidenceEvent, type CapabilityReceipt } from "./capability-evidence";
+import { appendCapabilityEvidenceSchema, capabilityReceiptSchema, capabilityBaseline, evaluateCapabilityEvidence, type CapabilityEvidenceEvent, type CapabilityReceipt } from "./capability-evidence.js";
 const now = Date.parse("2026-10-26T10:00:00Z");
 const receipt: CapabilityReceipt = {
   adapterType: "qoder_cn", capability: "localExecution", runtime: "qoder", runtimeVersion: "1.0.0",

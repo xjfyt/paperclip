@@ -332,6 +332,30 @@
     "artifact_missing": "该目标没有产物",
     "runner_evidence_missing": "缺少已验证的 Runner 回执"
   },
+  "capabilityEvidence": {
+    "title": "人工验证台账",
+    "disclaimer": "仅为操作员声明，并非独立机器验证；C2 测试证据保持独立。运行时、版本、环境、账号及提交必须精确匹配。缺失、过期或撤销的凭据不构成执行资格。通过管理员 API 登记或替代，仅填写非敏感别名。",
+    "loading": "正在加载凭据…",
+    "loadError": "无法加载台账，需要公司管理员权限。",
+    "refresh": "刷新",
+    "more": "加载更多凭据",
+    "empty": "尚无人工验证凭据。",
+    "passed": "通过（操作员声明）",
+    "failed": "失败",
+    "blocked": "阻塞",
+    "manualActive": "仅对该精确记录上下文有效的人工声明",
+    "notActive": "非有效声明（或历史未加载完整）",
+    "context": "运行时 / 版本 / 环境 / 账号",
+    "source": "来源资源 / 运行",
+    "commit": "实测提交",
+    "validity": "实测 / 到期",
+    "reviewer": "登记人 / 时间",
+    "receipt": "凭据 / 修订",
+    "revoke": "撤销凭据",
+    "confirm": "永久撤销此凭据？历史仍保留可审计。",
+    "cancel": "取消",
+    "writeError": "写入未确认。可重试相同请求；修订冲突后请刷新。"
+  },
   "coding": {
     "title": "编码交付",
     "boundary": "证据绑定固定提交。发布候选不代表获准合并、打标签或上线。",
@@ -685,6 +709,23 @@
     "execution_context_unknown": "执行上下文缺失",
     "execution_context_mismatch": "执行上下文不一致",
     "historicalRun": "已被后续运行替代的历史记录"
+  },
+  "feedbackEvidence": {
+    "title": "本地错误证据",
+    "boundary": "仅精确匹配收件箱中已脱敏的错误与堆栈文本。引用尚未核验；不会合并、创建任务、调用模型或读取外部数据。",
+    "missing": "缺失",
+    "openSource": "查看源证据",
+    "noFingerprint": "证据不足，无法分组",
+    "checklist": "复现证据核对清单",
+    "versionReference": "产品／版本引用",
+    "commitReference": "提交引用",
+    "traceReference": "Trace 引用",
+    "errorStackExcerpt": "错误与堆栈摘录",
+    "present": "已提供（未核验）",
+    "notReproduced": "尚未执行复现。预期行为和回归测试仍需人工审核。",
+    "pageScope": "本页扫描了 {{count}} 条记录，并非整个收件箱。",
+    "noMatches": "本页未发现匹配证据。",
+    "nextPage": "扫描下一页"
   },
   "feedbackUi": {
     "pageTitle": "反馈收件箱",
@@ -1646,6 +1687,18 @@
     "atMinute": "分钟",
     "on": "星期",
     "onDay": "日期"
+  },
+  "routineShellUi": {
+    "navigation": "例行任务导航",
+    "sections": "例行任务分区",
+    "section": "例行任务分区",
+    "operate": "运行管理",
+    "delivery": "交付",
+    "unsaved": "未保存的更改",
+    "pause": "暂停自动触发器",
+    "enable": "启用自动触发器",
+    "copy": "复制描述",
+    "copied": "描述已复制"
   },
   "settingsUi": {
     "settings": "设置",

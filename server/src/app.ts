@@ -1,3 +1,4 @@
+import { capabilityEvidenceRoutes } from "./routes/capability-evidence.js";
 import { mimouseResearchRoutineRoutes } from "./routes/mimouse-research-routines.js";
 import { mimouseEvaluationRestoreRoutes } from "./routes/mimouse-evaluation-restore.js";
 import { mimouseLangfuseRoutes } from "./routes/mimouse-langfuse.js";
@@ -911,6 +912,7 @@ export async function createApp(
   api.use(mimouseResearchRoutes(db));
   api.use(mimouseEvaluationRoutes(db));
   api.use(mimouseEvaluationRestoreRoutes(db));
+  api.use(capabilityEvidenceRoutes(db));
   api.use(mimouseResearchRoutineRoutes(db));
   api.use(instanceSettingsRoutes(db, workerManager, opts.prepareIdleDatabaseBackup));
   if (opts.databaseBackupService) {
