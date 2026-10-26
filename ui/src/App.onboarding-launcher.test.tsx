@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
 
+import "./i18n/optional-onboarding-test-resources";
+
 import { act } from "react";
+import { MemoryRouter } from "react-router-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -64,13 +67,13 @@ vi.mock("@/lib/router", async () => {
   };
 });
 
+const companyState = vi.hoisted(() => ({ companies: [{ id: "company-1", name: "Acme", issuePrefix: "PC1" }] }));
+const cloudState = vi.hoisted(() => ({ value: null as null | { cloudBaseUrl: string | null } }));
+const navigateTopLevel = vi.hoisted(() => vi.fn());
+vi.mock("./hooks/useCloudInstance", () => ({ useCloudInstance: () => cloudState.value }));
+vi.mock("@/lib/browserNavigation", () => ({ navigateTopLevel }));
 vi.mock("./context/CompanyContext", () => ({
-  useCompany: () => ({
-    companies: [{ id: "company-1", name: "Acme", issuePrefix: "PC1" }],
-    selectedCompanyId: "company-1",
-    loading: false,
-    error: null,
-  }),
+  useCompany: () => ({ ...companyState, selectedCompanyId: "company-1", loading: false, error: null }),
 }));
 
 vi.mock("./context/DialogContext", () => ({
@@ -83,7 +86,7 @@ vi.mock("./context/DialogContext", () => ({
 
 vi.mock("./api/goals", () => ({ goalsApi: mockGoalsApi }));
 
-const { OnboardingRoutePage } = await import("./App");
+const { OnboardingRoutePage, NoCompaniesStartPage } = await import("./App");
 
 const COMPANY_GOAL = {
   id: "goal-1",
@@ -103,12 +106,12 @@ describe("the onboarding launcher's Add Agent button", () => {
   let queryClient: QueryClient;
   let root: Root | null = null;
 
-  async function render() {
+  async function render(noCompanies = false) {
     root = createRoot(container);
     await act(async () => {
       root!.render(
         <QueryClientProvider client={queryClient}>
-          <OnboardingRoutePage />
+          <MemoryRouter>{noCompanies ? <NoCompaniesStartPage /> : <OnboardingRoutePage />}</MemoryRouter>
         </QueryClientProvider>,
       );
     });
@@ -124,7 +127,7 @@ describe("the onboarding launcher's Add Agent button", () => {
 
   function addAgentButton(): HTMLButtonElement {
     const button = [...container.querySelectorAll("button")].find((b) =>
-      b.textContent?.includes("Add Agent"),
+      b.textContent?.includes("Configure agent"),
     );
     // Asserted rather than optional-chained: a lookup that silently matches
     // nothing turns the click below into a no-op and the test into decoration.
@@ -136,6 +139,8 @@ describe("the onboarding launcher's Add Agent button", () => {
     container = document.createElement("div");
     document.body.appendChild(container);
     queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    companyState.companies = [{ id: "company-1", name: "Acme", issuePrefix: "PC1" }];
+    cloudState.value = null;
     routeState.companyPrefix = "PC1";
     dialogState.onboardingOpen = false;
     dialogState.onboardingRouteDismissed = true;
@@ -197,7 +202,7 @@ describe("the onboarding launcher's Add Agent button", () => {
     await settle();
 
     const start = [...container.querySelectorAll("button")].find((b) =>
-      b.textContent?.includes("Start Onboarding"),
+      b.textContent?.includes("Create organization"),
     );
     expect(start).toBeDefined();
     await act(async () => {
@@ -206,4 +211,37 @@ describe("the onboarding launcher's Add Agent button", () => {
 
     expect(dialogState.openOnboarding).toHaveBeenCalledWith();
   });
+  it("shows an explicit launcher and a dashboard escape on the onboarding URL", async () => {
+    await render();
+    expect(dialogState.openOnboarding).not.toHaveBeenCalled();
+    expect(container.querySelector('a[href="/PC1/dashboard"]')?.textContent).toBe("Go to dashboard");
+  });
+
+  it("keeps the no-company welcome useful without opening or creating anything", async () => {
+    companyState.companies = [];
+    await render(true);
+    expect(container.textContent).toContain("Welcome to Paperclip");
+    expect(container.textContent).toContain("configured later");
+    expect(dialogState.openOnboarding).not.toHaveBeenCalled();
+    await act(async () => container.querySelector("button")!.click());
+    expect(dialogState.openOnboarding).toHaveBeenCalledExactlyOnceWith();
+  });
+
+  it("keeps Cloud company creation external and refuses an unavailable Cloud destination", async () => {
+    companyState.companies = [];
+    cloudState.value = { cloudBaseUrl: null };
+    await render(true);
+    expect(container.querySelector("button")).toBeNull();
+    expect(dialogState.openOnboarding).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("Cloud portfolio");
+  });
+
+  it("offers the managed stack's existing company agent setup, never in-app company creation", async () => {
+    cloudState.value = { cloudBaseUrl: null };
+    routeState.companyPrefix = undefined;
+    await render();
+    await act(async () => addAgentButton().click());
+    expect(dialogState.openOnboarding).toHaveBeenCalledExactlyOnceWith({ companyId: "company-1", initialStep: ONBOARDING_AGENT_STEP });
+  });
+
 });

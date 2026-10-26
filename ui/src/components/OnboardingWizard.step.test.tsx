@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 
+import "../i18n/optional-onboarding-test-resources";
+
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -51,6 +53,7 @@ const mockInstanceSettingsApi = vi.hoisted(() => ({
   getExperimental: vi.fn(),
 }));
 
+const mockNavigate = vi.hoisted(() => vi.fn());
 const routerState = vi.hoisted(() => ({ pathname: "/" }));
 const dialogState = vi.hoisted(() => ({
   onboardingOpen: false,
@@ -68,6 +71,7 @@ const companyState = vi.hoisted(() => ({
   setSelectedCompanyId: vi.fn(),
 }));
 
+vi.mock("../api/auth", () => ({ authApi: { getSession: async () => ({ user: { id: "user-1" }, session: { id: "session-1" } }) } }));
 vi.mock("../api/goals", () => ({ goalsApi: mockGoalsApi }));
 vi.mock("@/api/adapters", () => ({ adaptersApi: mockAdaptersApi }));
 vi.mock("../api/companies", () => ({ companiesApi: mockCompaniesApi }));
@@ -80,7 +84,7 @@ vi.mock("../api/instanceSettings", () => ({ instanceSettingsApi: mockInstanceSet
 
 vi.mock("@/lib/router", () => ({
   useLocation: () => ({ pathname: routerState.pathname }),
-  useNavigate: () => vi.fn(),
+  useNavigate: () => mockNavigate,
   useParams: () => ({}),
 }));
 
@@ -175,6 +179,8 @@ describe("OnboardingWizard — which step it lands on", () => {
     // an earlier case would decide the next one.
     localStorage.clear();
     routerState.pathname = "/";
+    dialogState.closeOnboarding.mockImplementation(() => { dialogState.onboardingOpen = false; });
+    dialogState.setOnboardingRouteDismissed.mockImplementation((dismissed: boolean) => { dialogState.onboardingRouteDismissed = dismissed; });
     dialogState.onboardingOpen = false;
     dialogState.onboardingOptions = {};
     dialogState.onboardingRouteDismissed = false;
@@ -377,13 +383,14 @@ describe("OnboardingWizard — which step it lands on", () => {
     await settle();
     await act(async () => {
       [...document.body.querySelectorAll("button")]
-        .find((b) => b.textContent?.trim() === "Continue")!
+        .find((b) => b.textContent?.trim() === "Create and open dashboard")!
         .dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     await settle();
     await settle();
     expect(mockCompaniesApi.create).toHaveBeenCalled();
-    expect(currentStep()).toBe("agent");
+    expect(currentStep()).toBe("closed");
+    expect(mockNavigate).toHaveBeenCalledExactlyOnceWith("/PC1/dashboard", { replace: true });
 
     // Its own onboarding path, then back to the unprefixed one.
     routerState.pathname = "/PC1/onboarding";
@@ -395,7 +402,8 @@ describe("OnboardingWizard — which step it lands on", () => {
 
     // Back at the organization-name step with nothing carried over.
     const nameAfter = document.body.querySelector("input") as HTMLInputElement | null;
-    expect(nameAfter?.value).toBe("");
+    expect(nameAfter).toBeNull();
+    expect(currentStep()).toBe("closed");
   });
 
   it("does not adopt a company it created once a route has supplied one", async () => {
@@ -420,7 +428,7 @@ describe("OnboardingWizard — which step it lands on", () => {
     setControlledValue(nameInput, "Initech");
     await settle();
     const next = [...document.body.querySelectorAll("button")].find(
-      (b) => b.textContent?.trim() === "Continue",
+      (b) => b.textContent?.trim() === "Create and open dashboard",
     )!;
     await act(async () => {
       next.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -469,7 +477,7 @@ describe("OnboardingWizard — which step it lands on", () => {
     setControlledValue(nameInput, "Initech");
     await settle();
     const next = [...document.body.querySelectorAll("button")].find(
-      (button) => button.textContent?.trim() === "Continue",
+      (button) => button.textContent?.trim() === "Create and open dashboard",
     )!;
     await act(async () => {
       next.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -485,8 +493,9 @@ describe("OnboardingWizard — which step it lands on", () => {
     await act(async () => resolveCreate({ id: "company-created", issuePrefix: "INI" }));
     await settle();
 
-    expect(currentStep()).toBe("agent");
-    expect(companyState.setSelectedCompanyId).toHaveBeenCalledWith("company-created");
+    expect(currentStep()).toBe("closed");
+    expect(mockNavigate).toHaveBeenCalledExactlyOnceWith("/INI/dashboard", { replace: true });
+    expect(companyState.setSelectedCompanyId).toHaveBeenCalledWith("company-created", { source: "route_sync" });
     expect(mockCompaniesApi.create).toHaveBeenCalledTimes(1);
   });
 

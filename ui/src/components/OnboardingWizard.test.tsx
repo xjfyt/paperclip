@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 
+import "../i18n/optional-onboarding-test-resources";
+
 import { act } from "react";
 import { i18n } from "../i18n";
+import type { CompanyListResult } from "../api/companies-query";
 import type { LocalAiLoginStatus } from "@paperclipai/shared";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -168,9 +171,12 @@ const mockAdapterRegistry = vi.hoisted(() => ({
   disabled: new Set<string>(),
 }));
 
+const mockNavigate = vi.hoisted(() => vi.fn());
+const mockRouterState = vi.hoisted(() => ({ pathname: "/" }));
+
 vi.mock("@/lib/router", () => ({
-  useLocation: () => ({ pathname: "/", search: "", hash: "", state: null }),
-  useNavigate: () => vi.fn(),
+  useLocation: () => ({ pathname: mockRouterState.pathname, search: "", hash: "", state: null }),
+  useNavigate: () => mockNavigate,
   useParams: () => ({}),
 }));
 vi.mock("../context/DialogContext", () => ({
@@ -341,6 +347,9 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
     mockSecretsApi.listMyUserSecrets.mockResolvedValue([]);
     mockSecretsApi.removeUserSecretDefinition.mockResolvedValue({ ok: true });
     window.localStorage.clear();
+    mockRouterState.pathname = "/";
+    mockDialog.closeOnboarding.mockImplementation(() => { mockDialog.onboardingOpen = false; });
+    mockDialog.setOnboardingRouteDismissed.mockImplementation((dismissed: boolean) => { mockDialog.onboardingRouteDismissed = dismissed; });
     mockDialog.onboardingOpen = true;
     mockDialog.onboardingOptions = {};
     mockDialog.onboardingRouteDismissed = false;
@@ -402,21 +411,18 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
     vi.clearAllMocks();
   });
 
-  describe("step 1 leads straight to the agent — there is no mission step 2", () => {
-    // One path now: Name your organization → Name your agent → Connect → Get
-    // started. The Build / Grow front door and both mission screens are gone,
-    // so "Continue" on step 1 creates the organization and lands on the agent
-    // step with no mission question in between.
-
-    async function openStepOne() {
+  describe("organization first, optional agent setup later", () => {
+    async function openStepOne({ agent = false, step = 3 } = {}) {
       window.localStorage.setItem(
         ONBOARDING_STORAGE_KEY,
-        JSON.stringify({ step: 1, companyName: "Initech" }),
+        JSON.stringify(agent
+          ? { step, companyName: "Initech", createdCompanyId: "company-new", createdAgentId: step === 5 ? "agent-1" : undefined }
+          : { step: 1, companyName: "Initech" }),
       );
-      mockDialog.onboardingOptions = {};
-      mockCompany.companies = [];
+      mockDialog.onboardingOptions = agent ? { companyId: "company-new", initialStep: step } : {};
+      mockCompany.companies = agent ? [{ id: "company-new", name: "Initech", issuePrefix: "INI" }] : [];
       mockCompany.loading = false;
-      mockCompaniesApi.list.mockResolvedValue([]);
+      mockCompaniesApi.list.mockResolvedValue(mockCompany.companies);
 
       // The model step needs tiles to pick from, and this suite's default
       // registry is empty.
@@ -432,7 +438,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
         });
       await renderTree();
       await flushReact();
-      return { root, renderTree };
+      return { root, renderTree, queryClient };
     }
 
     async function clickByText(match: (text: string) => boolean) {
@@ -451,7 +457,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       try {
         expect(document.body.textContent).toContain(i18n.t("onboarding.organizationQuestion"));
         const selector = document.body.querySelector(`select[aria-label="${i18n.t("common.language")}"]`) as HTMLSelectElement;
-        expect(selector.value).toBe(locale); expect(document.body.textContent).toContain(i18n.t("onboarding.continue"));
+        expect(selector.value).toBe(locale); expect(document.body.textContent).toContain(i18n.t("optionalOnboarding.createAndOpen"));
         expect(mockCompaniesApi.create).not.toHaveBeenCalled();
       } finally { await act(async () => root.unmount()); await i18n.changeLanguage("en"); }
     });
@@ -471,15 +477,19 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       } finally { await act(async () => root.unmount()); }
     });
 
-    it("creates the organization on Continue and lands on the agent step, no mission", async () => {
+    it("creates only the named organization and opens its dashboard without an agent", async () => {
       mockCompaniesApi.create.mockResolvedValue({ id: "company-new", issuePrefix: "INI" });
       const { root } = await openStepOne();
-      await clickByText((t) => t.startsWith("Continue"));
+      await clickByText((t) => t.startsWith("Create and open dashboard"));
 
       expect(mockCompaniesApi.create).toHaveBeenCalledWith({ name: "Initech" });
-      expect(document.body.textContent).toContain("Create your first agent");
-      expect(document.body.textContent).not.toContain("Define your mission");
-      expect(document.body.textContent).not.toContain("Tell us about your team");
+      expect(mockNavigate).toHaveBeenCalledExactlyOnceWith("/INI/dashboard", { replace: true });
+      expect(mockCompany.setSelectedCompanyId).toHaveBeenCalledWith("company-new", { source: "route_sync" });
+      expect(document.querySelector('[data-testid="onboarding-wizard"]')).toBeNull();
+      expect(mockAgentsApi.hire).not.toHaveBeenCalled();
+      expect(mockProjectsApi.create).not.toHaveBeenCalled();
+      expect(mockIssuesApi.create).not.toHaveBeenCalled();
+      expect(mockGoalsApi.create).not.toHaveBeenCalled();
 
       await act(async () => root.unmount());
     });
@@ -492,8 +502,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       // render unchecked. Both asserted against positive anchors so an
       // unrendered step cannot pass as an absence.
       mockCompaniesApi.create.mockResolvedValue({ id: "company-new", issuePrefix: "INI" });
-      const { root } = await openStepOne();
-      await clickByText((t) => t.startsWith("Continue"));
+      const { root } = await openStepOne({ agent: true });
       expect(document.body.textContent).toContain("Create your first agent");
 
       // Step 3 → 4 needs an agent name — the one field the step has now.
@@ -533,10 +542,10 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       // one way — with nothing in its state to say the hire happened. The
       // server numbers a repeat name, so without this the walk produced
       // "Ada" and "Ada 2". Same name on the same source is the same agent.
-      mockDialog.onboardingOptions = {};
-      mockCompany.companies = [];
+      mockDialog.onboardingOptions = { initialStep: 3, companyId: "company-new" };
+      mockCompany.companies = [{ id: "company-new", name: "Initech", issuePrefix: "INI" }];
       mockCompany.loading = false;
-      mockCompaniesApi.list.mockResolvedValue([]);
+      mockCompaniesApi.list.mockResolvedValue(mockCompany.companies);
       mockCompaniesApi.create.mockResolvedValue({ id: "company-new", issuePrefix: "INI" });
       mockAgentsApi.list.mockResolvedValueOnce([
         { id: "agent-existing", name: "Ada", adapterType: "claude_local" },
@@ -562,24 +571,6 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
         await flushReact();
       };
 
-      const nameField = document.body.querySelector(
-        "#onboarding-company-name",
-      ) as HTMLInputElement | null;
-      if (nameField) {
-        await act(async () => {
-          setControlledValue(nameField, "Initech");
-        });
-        await flushReact();
-      } else {
-        const anyName = document.body.querySelector(
-          'input[placeholder="e.g. Northwind Labs"]',
-        ) as HTMLInputElement;
-        await act(async () => {
-          setControlledValue(anyName, "Initech");
-        });
-        await flushReact();
-      }
-      await clickText((t) => t.startsWith("Continue"));
       const agentField = document.body.querySelector(
         "#onboarding-agent-name",
       ) as HTMLInputElement;
@@ -606,12 +597,12 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       // through a restored draft instead of a fresh one.
       window.localStorage.setItem(
         ONBOARDING_STORAGE_KEY,
-        JSON.stringify({ step: 1, companyName: "Initech", agentRole: "" }),
+        JSON.stringify({ step: 3, companyName: "Initech", agentRole: "", createdCompanyId: "company-new" }),
       );
-      mockDialog.onboardingOptions = {};
-      mockCompany.companies = [];
+      mockDialog.onboardingOptions = { initialStep: 3, companyId: "company-new" };
+      mockCompany.companies = [{ id: "company-new", name: "Initech", issuePrefix: "INI" }];
       mockCompany.loading = false;
-      mockCompaniesApi.list.mockResolvedValue([]);
+      mockCompaniesApi.list.mockResolvedValue(mockCompany.companies);
       mockCompaniesApi.create.mockResolvedValue({ id: "company-new", issuePrefix: "INI" });
 
       // The model step needs tiles to pick from, and this suite's default
@@ -639,7 +630,6 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
         await flushReact();
       };
 
-      await clickText((t) => t.startsWith("Continue"));
       const agentField = document.body.querySelector(
         "#onboarding-agent-name",
       ) as HTMLInputElement;
@@ -673,8 +663,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
         }),
       );
       mockCompaniesApi.create.mockResolvedValue({ id: "company-new", issuePrefix: "INI" });
-      const { root } = await openStepOne();
-      await clickByText((t) => t.startsWith("Continue"));
+      const { root } = await openStepOne({ agent: true });
       const agentField = document.body.querySelector(
         "#onboarding-agent-name",
       ) as HTMLInputElement;
@@ -723,7 +712,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       await flushReact();
 
       expect(mockCompaniesApi.create).toHaveBeenCalledTimes(1);
-      expect(document.body.textContent).toContain("Create your first agent");
+      expect(mockNavigate).toHaveBeenCalledExactlyOnceWith("/INI/dashboard", { replace: true });
 
       await act(async () => root.unmount());
     });
@@ -758,24 +747,169 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
 
       await act(async () => resolveCreate({ id: "company-new", issuePrefix: "INI" }));
       await flushReact();
-      expect(document.body.textContent).toContain("Create your first agent");
+      expect(mockNavigate).toHaveBeenCalledExactlyOnceWith("/INI/dashboard", { replace: true });
 
       await act(async () => root.unmount());
     });
 
-    it("sends Back to the screen the run actually came from", async () => {
-      // A create run reached the agent step from step 1, so Back owes it step 1 —
-      // not the mission screen it never saw.
-      mockCompaniesApi.create.mockResolvedValue({ id: "company-new", issuePrefix: "INI" });
-      const { root } = await openStepOne();
-      await clickByText((t) => t.startsWith("Continue"));
-      expect(document.body.textContent).toContain("Create your first agent");
+    it.each(["en", "zh-CN", "es", "ja"])("can skip agent setup without creating or starting work in %s", async locale => {
+      await i18n.changeLanguage(locale);
+      const { root } = await openStepOne({ agent: true });
+      try {
+        await clickByText(text => text === i18n.t("optionalOnboarding.configureLater"));
+        expect(mockNavigate).toHaveBeenCalledExactlyOnceWith("/INI/dashboard", { replace: true });
+        expect(document.querySelector('[data-testid="onboarding-wizard"]')).toBeNull();
+        expect(mockCompaniesApi.create).not.toHaveBeenCalled();
+        expect(mockAgentsApi.hire).not.toHaveBeenCalled();
+        expect(mockProjectsApi.create).not.toHaveBeenCalled();
+        expect(mockIssuesApi.create).not.toHaveBeenCalled();
+      } finally { await act(async () => root.unmount()); await i18n.changeLanguage("en"); }
+    });
 
-      await clickByText((t) => t.includes("Back"));
+    it("can leave the connection step before choosing any provider", async () => {
+      const { root } = await openStepOne({ agent: true });
+      await act(async () => setControlledValue(document.querySelector("#onboarding-agent-name") as HTMLInputElement, "Ada"));
+      await clickByText(text => text === "Next");
+      expect(document.body.textContent).toContain("Connect a model");
+      await clickByText(text => text === "Configure later");
+      expect(mockNavigate).toHaveBeenCalledExactlyOnceWith("/INI/dashboard", { replace: true });
+      expect(mockAgentsApi.hire).not.toHaveBeenCalled();
+      expect(mockIssuesApi.create).not.toHaveBeenCalled();
+      expect(managedApi.startLocalLogin).not.toHaveBeenCalled();
+      await act(async () => root.unmount());
+    });
 
-      expect(document.body.textContent).toContain("What is the name of your organization?");
-      expect(document.body.textContent).not.toContain("Define your mission");
+    it("can leave a restored ready-agent step without launching its starter task", async () => {
+      const { root } = await openStepOne({ agent: true, step: 5 });
+      await clickByText(text => text === "Configure later");
+      expect(mockNavigate).toHaveBeenCalledExactlyOnceWith("/INI/dashboard", { replace: true });
+      expect(mockProjectsApi.create).not.toHaveBeenCalled();
+      expect(mockIssuesApi.create).not.toHaveBeenCalled();
+      await act(async () => root.unmount());
+    });
 
+    it("does not continue a starter-task launch after Escape during its prerequisite read", async () => {
+      let resolveProjects!: (projects: never[]) => void;
+      mockProjectsApi.list.mockReturnValueOnce(new Promise(resolve => { resolveProjects = resolve; }));
+      const { root } = await openStepOne({ agent: true, step: 5 });
+      await clickByText(text => text === i18n.t("onboarding.getStarted"));
+      expect(mockProjectsApi.list).toHaveBeenCalledWith("company-new");
+      await act(async () => document.querySelector('[data-testid="onboarding-wizard"]')!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+      await act(async () => resolveProjects([]));
+      await flushReact();
+      expect(mockNavigate).not.toHaveBeenCalled();
+      expect(mockProjectsApi.create).not.toHaveBeenCalled();
+      expect(mockIssuesApi.create).not.toHaveBeenCalled();
+      await act(async () => root.unmount());
+    });
+
+    it("ignores an old starter-task response after reopening the same company", async () => {
+      let resolveIssue!: (issue: { id: string; identifier: string }) => void;
+      mockProjectsApi.list.mockResolvedValueOnce([{ id: "project-1", name: "Getting Started" }] as never[]);
+      mockProjectsApi.create.mockResolvedValueOnce({ id: "project-1" });
+      mockIssuesApi.create.mockReturnValueOnce(new Promise(resolve => { resolveIssue = resolve; }));
+      const { root, renderTree } = await openStepOne({ agent: true, step: 5 });
+      await clickByText(text => text === i18n.t("onboarding.getStarted"));
+      expect(mockIssuesApi.create).toHaveBeenCalledTimes(1);
+      await act(async () => document.querySelector('[data-testid="onboarding-wizard"]')!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+      mockDialog.onboardingOpen = true;
+      mockDialog.onboardingOptions = { companyId: "company-new", initialStep: 3 };
+      await renderTree(); await flushReact();
+      await act(async () => resolveIssue({ id: "old-task", identifier: "INI-OLD" }));
+      await flushReact();
+      const draft = JSON.parse(localStorage.getItem(ONBOARDING_STORAGE_KEY) ?? "{}");
+      expect(draft.createdIssueRef).not.toBe("INI-OLD");
+      expect(document.querySelector("#onboarding-agent-name")).not.toBeNull();
+      expect(mockNavigate).not.toHaveBeenCalled();
+      await act(async () => root.unmount());
+    });
+
+    it("does not navigate after close/reopen while company-cache cancellation is pending", async () => {
+      const { root, queryClient, renderTree } = await openStepOne();
+      let resolveCancel!: () => void;
+      vi.spyOn(queryClient, "cancelQueries").mockImplementationOnce(() => new Promise(resolve => { resolveCancel = resolve; }));
+      await clickByText(text => text === "Create and open dashboard");
+      expect(mockCompaniesApi.create).toHaveBeenCalledTimes(1);
+      await act(async () => document.querySelector('[data-testid="onboarding-wizard"]')!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+      mockCompany.companies = [{ id: "created", name: "Created Co", issuePrefix: "CRE" }];
+      mockDialog.onboardingOpen = true;
+      mockDialog.onboardingOptions = { companyId: "created", initialStep: 3 };
+      await renderTree(); await flushReact();
+      await act(async () => resolveCancel());
+      await flushReact();
+      expect(mockNavigate).not.toHaveBeenCalled();
+      expect(document.querySelector("#onboarding-agent-name")).not.toBeNull();
+      expect(queryClient.getQueryData<CompanyListResult>(queryKeys.companies.list(SESSION_USER_ID))?.companies ?? []).toEqual([]);
+      await act(async () => root.unmount());
+    });
+
+    it.each(["same session", "failed refresh"])("reconciles a successful create during %s without a duplicate POST", async scenario => {
+      let resolveSession!: (session: unknown) => void;
+      let rejectSession!: (error: Error) => void;
+      const { root, queryClient } = await openStepOne();
+      mockAuthApi.getSession.mockReturnValueOnce(new Promise((resolve, reject) => { resolveSession = resolve; rejectSession = reject; }));
+      const refresh = queryClient.fetchQuery({ queryKey: queryKeys.auth.session, queryFn: () => mockAuthApi.getSession(), staleTime: 0 }).catch(() => undefined);
+      await clickByText(text => text === "Create and open dashboard");
+      expect(mockCompaniesApi.create).toHaveBeenCalledTimes(1);
+      expect(mockNavigate).not.toHaveBeenCalled();
+      if (scenario === "same session") {
+        await act(async () => resolveSession({ user: { id: SESSION_USER_ID }, session: { id: "session-b" } }));
+      } else {
+        await act(async () => rejectSession(new Error("session unavailable")));
+        await flushReact();
+        expect(document.body.textContent).toContain(i18n.t("optionalOnboarding.createdPending"));
+        expect((document.querySelector("#onboarding-company-name") as HTMLInputElement).disabled).toBe(true);
+        await clickByText(text => text === i18n.t("optionalOnboarding.retryOpen"));
+      }
+      await refresh; await flushReact();
+      expect(mockCompaniesApi.create).toHaveBeenCalledTimes(1);
+      expect(mockNavigate).toHaveBeenCalledExactlyOnceWith("/CRE/dashboard", { replace: true });
+      await act(async () => root.unmount());
+    });
+
+    it.each(["escape", "navigation"])("does not navigate or start work after a pending create is dismissed by %s", async dismissal => {
+      let resolveCreate!: (company: { id: string; issuePrefix: string }) => void;
+      mockCompaniesApi.create.mockReturnValue(new Promise(resolve => { resolveCreate = resolve; }));
+      const { root, renderTree } = await openStepOne();
+      await clickByText(text => text === "Create and open dashboard");
+      expect(mockCompaniesApi.create).toHaveBeenCalledTimes(1);
+      if (dismissal === "escape") {
+        await act(async () => document.querySelector('[data-testid="onboarding-wizard"]')!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+      } else {
+        mockRouterState.pathname = "/elsewhere";
+        await renderTree();
+      }
+      await act(async () => resolveCreate({ id: "company-new", issuePrefix: "INI" }));
+      await flushReact();
+      expect(mockNavigate).not.toHaveBeenCalled();
+      expect(mockCompany.setSelectedCompanyId).not.toHaveBeenCalled();
+      expect(mockAgentsApi.hire).not.toHaveBeenCalled();
+      expect(mockIssuesApi.create).not.toHaveBeenCalled();
+      expect(document.querySelector('[data-testid="onboarding-wizard"]')).toBeNull();
+      await act(async () => root.unmount());
+    });
+
+    it.each(["/", "/onboarding", "/INI/onboarding", "/INI/dashboard"])("never auto-opens on a fresh/reloaded %s even with a saved draft", async pathname => {
+      mockRouterState.pathname = pathname;
+      mockDialog.onboardingOpen = false;
+      mockDialog.onboardingRouteDismissed = true;
+      const { root } = await openStepOne({ agent: true });
+      expect(document.querySelector('[data-testid="onboarding-wizard"]')).toBeNull();
+      expect(mockNavigate).not.toHaveBeenCalled();
+      expect(mockCompaniesApi.create).not.toHaveBeenCalled();
+      expect(mockAgentsApi.hire).not.toHaveBeenCalled();
+      expect(mockIssuesApi.create).not.toHaveBeenCalled();
+      await act(async () => root.unmount());
+    });
+
+    it("Back stays inside optional agent setup and cannot create another organization", async () => {
+      const { root } = await openStepOne({ agent: true });
+      await act(async () => setControlledValue(document.querySelector("#onboarding-agent-name") as HTMLInputElement, "Ada"));
+      await clickByText((text) => text === "Next");
+      await clickByText((text) => text === "Back");
+      expect(document.querySelector("#onboarding-agent-name")).not.toBeNull();
+      expect(document.querySelector("#onboarding-company-name")).toBeNull();
+      expect(mockCompaniesApi.create).not.toHaveBeenCalled();
       await act(async () => root.unmount());
     });
   });
@@ -791,12 +925,12 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       mockCompaniesApi.create.mockResolvedValue({ id: "company-new", issuePrefix: "INI" });
       window.localStorage.setItem(
         ONBOARDING_STORAGE_KEY,
-        JSON.stringify({ step: 1, companyName: "Initech" }),
+        JSON.stringify({ step: 3, companyName: "Initech", createdCompanyId: "company-new" }),
       );
-      mockDialog.onboardingOptions = {};
-      mockCompany.companies = [];
+      mockDialog.onboardingOptions = { initialStep: 3, companyId: "company-new" };
+      mockCompany.companies = [{ id: "company-new", name: "Initech", issuePrefix: "INI" }];
       mockCompany.loading = false;
-      mockCompaniesApi.list.mockResolvedValue([]);
+      mockCompaniesApi.list.mockResolvedValue(mockCompany.companies);
 
       const { root, queryClient } = render();
       await act(async () => {
@@ -818,7 +952,6 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
         await flushReact();
       };
 
-      await clickByText((t) => t.startsWith("Continue"));
       const agentField = document.body.querySelector(
         "#onboarding-agent-name",
       ) as HTMLInputElement;
@@ -1395,7 +1528,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
     });
   });
 
-  it("keeps the live wizard mounted while a post-create company-list refetch runs", async () => {
+  it("finishes organization creation even while its company-list refetch runs", async () => {
     // The authorization fetch needs to delay the first mount when a draft
     // exists. Once the customer has typed, though, invalidating that query is
     // normal background work. Unmounting for the refetch remounted the wizard
@@ -1432,16 +1565,20 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
 
     const companyNameInput = document.querySelector("input") as HTMLInputElement;
     setControlledValue(companyNameInput, "Created Co");
+    // A list request that began before creation must not replace the POST result.
+    await act(async () => { void queryClient.invalidateQueries({ queryKey: queryKeys.companies.all }); });
+    await flushReact();
     await act(async () => {
       [...document.body.querySelectorAll("button")]
-        .find((button) => button.textContent?.trim() === "Continue")!
+        .find((button) => button.textContent?.trim() === "Create and open dashboard")!
         .dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     await flushReact();
 
     expect(mockCompaniesApi.create).toHaveBeenCalledWith({ name: "Created Co" });
     expect(mockCompaniesApi.list).toHaveBeenCalledTimes(2);
-    expect(document.querySelector("#onboarding-agent-name")).not.toBeNull();
+    expect(mockNavigate).toHaveBeenCalledExactlyOnceWith("/CRE/dashboard", { replace: true });
+    expect(document.querySelector('[data-testid="onboarding-wizard"]')).toBeNull();
 
     await act(async () => {
       resolveRefetch([{ id: "created", name: "Created Co", issuePrefix: "CRE" }]);
