@@ -88,3 +88,14 @@ no sensitive text in projections, same-request retry and stale UI/session state.
 PostgreSQL migration/constraint concurrency, full typecheck/build and live
 reproduction remain separate integration checks; mocked advisory-lock tests are
 not a substitute for real database concurrency validation.
+
+The disposable PostgreSQL integration specification is
+`tests/mimouse/feedback-verification.spec.ts`. Its `createFixtureDb()` data-directory
+identity guard runs before every database fixture mutation. It exercises real
+promotion, private-task ACL, coding-check rows, API/service transactions,
+three-column foreign keys, independent-client concurrent replay, stale snapshots,
+revocation while waiting on a real advisory lock, historical corrections and
+audit-failure rollback. Session actors and coding results are explicit fixtures,
+not live login or defect-reproduction evidence. The integrating owner must run
+this spec after applying the generated migration; authoring or discovering the
+spec is not evidence that PostgreSQL assertions passed.
