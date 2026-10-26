@@ -1,0 +1,17 @@
+{
+  "title": "Local error evidence",
+  "boundary": "Exact error and stack matches from already-redacted inbox text only. References are unverified; no merging, task creation, model calls or external reads.",
+  "missing": "Missing",
+  "openSource": "Open source evidence",
+  "noFingerprint": "Insufficient evidence for grouping",
+  "checklist": "Reproduction evidence checklist",
+  "versionReference": "Product/version reference",
+  "commitReference": "Commit reference",
+  "traceReference": "Trace reference",
+  "errorStackExcerpt": "Error and stack excerpt",
+  "present": "Present (not verified)",
+  "notReproduced": "Reproduction has not been performed. Expected behavior and regression tests require human review.",
+  "pageScope": "This page scanned {{count}} records, not the entire inbox.",
+  "noMatches": "No matching evidence on this page.",
+  "nextPage": "Scan next page"
+}

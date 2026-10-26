@@ -1,0 +1,17 @@
+{
+  "title": "Evidencia local de errores",
+  "boundary": "Solo coincidencias exactas de errores y pilas en texto ya anonimizado. Las referencias no están verificadas; no se fusionan registros, crean tareas, llaman modelos ni leen fuentes externas.",
+  "missing": "Falta",
+  "openSource": "Abrir evidencia original",
+  "noFingerprint": "Evidencia insuficiente para agrupar",
+  "checklist": "Lista de evidencia de reproducción",
+  "versionReference": "Referencia de producto/versión",
+  "commitReference": "Referencia de commit",
+  "traceReference": "Referencia de traza",
+  "errorStackExcerpt": "Extracto de error y pila",
+  "present": "Presente (sin verificar)",
+  "notReproduced": "No se ha realizado una reproducción. El comportamiento esperado y las pruebas de regresión requieren revisión humana.",
+  "pageScope": "Esta página examinó {{count}} registros, no toda la bandeja.",
+  "noMatches": "No hay evidencia coincidente en esta página.",
+  "nextPage": "Examinar página siguiente"
+}

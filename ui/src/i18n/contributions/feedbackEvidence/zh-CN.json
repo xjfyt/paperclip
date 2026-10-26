@@ -1,0 +1,17 @@
+{
+  "title": "本地错误证据",
+  "boundary": "仅精确匹配收件箱中已脱敏的错误与堆栈文本。引用尚未核验；不会合并、创建任务、调用模型或读取外部数据。",
+  "missing": "缺失",
+  "openSource": "查看源证据",
+  "noFingerprint": "证据不足，无法分组",
+  "checklist": "复现证据核对清单",
+  "versionReference": "产品／版本引用",
+  "commitReference": "提交引用",
+  "traceReference": "Trace 引用",
+  "errorStackExcerpt": "错误与堆栈摘录",
+  "present": "已提供（未核验）",
+  "notReproduced": "尚未执行复现。预期行为和回归测试仍需人工审核。",
+  "pageScope": "本页扫描了 {{count}} 条记录，并非整个收件箱。",
+  "noMatches": "本页未发现匹配证据。",
+  "nextPage": "扫描下一页"
+}

@@ -1,3 +1,4 @@
+import { MimouseFeedbackEvidence } from "@/components/MimouseFeedbackEvidence";
 import { MimouseLangfusePanel } from "@/components/MimouseLangfusePanel";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -73,6 +74,7 @@ function FeedbackDetail({ companyId, userId, id, onSelect }: { companyId: string
     <h3 className="font-medium">{t("feedbackUi.candidates")}</h3><p className="text-xs text-muted-foreground">{t("feedbackUi.candidateBoundary")}</p>
     {candidates.isPending ? <p>{t("common.loading")}</p> : candidates.isError ? <p role="alert">{t("feedbackUi.readError")}</p> : candidates.data.items.length ? candidates.data.items.map(item => <Button key={item.id} variant="outline" className="h-auto whitespace-normal" onClick={() => onSelect(item.id)}>{item.title} · {item.sourceInstance}</Button>) : <p>{t("feedbackUi.noCandidates")}</p>}
     {candidates.data?.hasMore && <p>{t("feedbackUi.moreCandidates")}</p>}
+    <MimouseFeedbackEvidence key={id} companyId={companyId} userId={userId} id={id} onSelect={onSelect} />
     <FeedbackReview companyId={companyId} userId={userId} item={source.data} />
   </section>;
 }

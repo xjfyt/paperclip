@@ -1,0 +1,17 @@
+{
+  "title": "ローカルエラー証拠",
+  "boundary": "受信箱の秘匿処理済みエラーとスタックの完全一致のみ。参照は未検証です。統合、タスク作成、モデル呼び出し、外部読み取りは行いません。",
+  "missing": "不足",
+  "openSource": "元の証拠を開く",
+  "noFingerprint": "グループ化に必要な証拠が不足しています",
+  "checklist": "再現証拠チェックリスト",
+  "versionReference": "製品／バージョン参照",
+  "commitReference": "コミット参照",
+  "traceReference": "トレース参照",
+  "errorStackExcerpt": "エラーとスタックの抜粋",
+  "present": "あり（未検証）",
+  "notReproduced": "再現は実行されていません。期待される動作と回帰テストには人間のレビューが必要です。",
+  "pageScope": "このページでは {{count}} 件を走査しました。受信箱全体ではありません。",
+  "noMatches": "このページに一致する証拠はありません。",
+  "nextPage": "次のページを走査"
+}

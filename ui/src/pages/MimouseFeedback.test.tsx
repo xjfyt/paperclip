@@ -13,6 +13,8 @@ vi.mock("@/context/CompanyContext", () => ({ useCompany: () => ({ selectedCompan
 vi.mock("@/context/BreadcrumbContext", () => ({ useBreadcrumbs: () => ({ setBreadcrumbs: calls.breadcrumbs }) }));
 vi.mock("@/lib/router", () => ({ Link: ({ to, children, ...props }: { to: string; children: ReactNode }) => <a href={to} {...props}>{children}</a> }));
 const source = { id: "source-a", companyId: "company-a", sourceKind: "manual", sourceInstance: "test-source", externalId: "event-1", title: "Customer crash", text: "Untrusted customer observation", product: "Customer App", softwareVersion: "1.0", commitSha: null, traceId: null, occurredAt: "2026-10-26T00:00:00Z", createdAt: "2026-10-26T00:00:01Z", actorId: "owner-a", redacted: true, redactionVersion: 1, ingestionMode: "manual_import", status: "candidate" };
+const evidenceRecord = { feedbackId: source.id, sourceKind: source.sourceKind, sourceInstance: source.sourceInstance, externalId: source.externalId, product: source.product, softwareVersion: source.softwareVersion, commitSha: null, traceId: null, occurredAt: source.occurredAt, fingerprint: null, excerpts: [{ line: 1, text: "Error: <img src=x onerror=alert(1)>" }], checklist: { versionReference: true, commitReference: false, traceReference: false, errorStackExcerpt: false, reproduction: "not_performed", expectedBehavior: "requires_review", regressionTest: "requires_review" } };
+const evidencePage = { algorithmVersion: "redacted-error-stack-v1", autoMerged: false, source: evidenceRecord, items: [], scanned: 0, scanLimit: 50, nextBeforeId: null };
 const receipt = { requestId: "request-original", feedbackId: "source-a", issueId: "created-task", actorUserId: "owner-a", createdAt: "2026-10-26T00:00:02Z", initialStatus: "backlog", initialVisibility: "private", agentDispatched: false };
 let host: HTMLDivElement, root: Root, client: QueryClient, recorded: boolean;
 async function flush() { await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); }); }
@@ -31,6 +33,7 @@ beforeEach(async () => {
   await i18n.changeLanguage("en"); calls.companyId = "company-a"; recorded = false; vi.clearAllMocks();
   calls.session.mockResolvedValue({ user: { id: "owner-a" }, session: { userId: "owner-a" } });
   calls.get.mockImplementation(async (url: string) => url.endsWith("/promotion") ? { recorded, receipt: recorded ? receipt : null }
+    : url.endsWith("/evidence") || url.includes("/evidence?") ? evidencePage
     : url.endsWith("/candidates") ? { items: [], hasMore: false, autoMerged: false }
     : url.endsWith("/source-a") ? source
     : { items: calls.companyId === "company-b" ? [] : [source], nextBeforeId: null });
@@ -57,7 +60,8 @@ it("retries an unknown result with the exact frozen payload and request ID", asy
 });
 it("reads a persisted confirmation after reload without submitting again", async () => { recorded = true; await mount(); await openReview(); expect(host.querySelector('a[href="/issues/created-task"]')).not.toBeNull(); expect(calls.post).not.toHaveBeenCalled(); expect(host.querySelectorAll("form")).toHaveLength(1); });
 it("does not disclose another reviewer's private receipt or offer a second creation", async () => {
-  calls.get.mockImplementation(async (url: string) => url.endsWith("/promotion") ? { recorded: true, receipt: null } : url.endsWith("/candidates") ? { items: [], autoMerged: false } : url.endsWith("/source-a") ? source : { items: [source], nextBeforeId: null });
+  calls.get.mockImplementation(async (url: string) => url.endsWith("/promotion") ? { recorded: true, receipt: null } : url.endsWith("/evidence") || url.includes("/evidence?") ? evidencePage
+    : url.endsWith("/candidates") ? { items: [], autoMerged: false } : url.endsWith("/source-a") ? source : { items: [source], nextBeforeId: null });
   await mount(); await openReview(); expect(host.textContent).toContain(i18n.t("feedbackUi.alreadyConfirmed")); expect(host.querySelectorAll("form")).toHaveLength(1); expect(host.querySelector('a[href="/issues/created-task"]')).toBeNull();
 });
 it("keeps late import replies scoped to the previous company", async () => {
@@ -91,6 +95,7 @@ it.each(["en", "zh-CN", "es", "ja"])("distinguishes fetched quarantined evidence
   await i18n.changeLanguage(locale);
   const fetched = { ...source, sourceKind: "langfuse", ingestionMode: "provider_fetch", sourceUrl: "https://langfuse.example.invalid/project/p/traces/t" };
   calls.get.mockImplementation(async (url: string) => url.endsWith("/promotion") ? { recorded: false, receipt: null }
+    : url.endsWith("/evidence") || url.includes("/evidence?") ? evidencePage
     : url.endsWith("/candidates") ? { items: [], autoMerged: false } : url.endsWith("/source-a") ? fetched : { items: [fetched], nextBeforeId: null });
   await mount(); await openReview();
   expect(i18n.exists("feedbackUi.providerFetched")).toBe(true);
@@ -98,5 +103,14 @@ it.each(["en", "zh-CN", "es", "ja"])("distinguishes fetched quarantined evidence
   expect(host.textContent).not.toContain(i18n.t("feedbackUi.manualOnly"));
   expect(host.textContent).toContain(fetched.sourceUrl);
   expect(host.querySelector('[data-testid="langfuse-panel"]')?.textContent).toBe("company-a");
+  expect(calls.post).not.toHaveBeenCalled();
+});
+
+it("shows local evidence as inert text and never claims reproduction or creates a task", async () => {
+  await mount(); await openReview();
+  expect(host.textContent).toContain("redacted-error-stack-v1");
+  expect(host.textContent).toContain(evidenceRecord.excerpts[0].text);
+  expect(host.querySelector("img")).toBeNull();
+  expect(host.textContent).toContain(i18n.t("feedbackEvidence.notReproduced"));
   expect(calls.post).not.toHaveBeenCalled();
 });
