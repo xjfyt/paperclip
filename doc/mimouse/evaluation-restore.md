@@ -43,7 +43,7 @@
 
 ## 并发边界补强
 
-恢复、技能文件变更及清理采用 **company accounting row → slug advisory → skill row** 顺序；先拿公司锁，再查实际代理引用。恢复每次 apply/compensate 都重复此检查。代理生命周期的普通配置、直接 adapterConfig、revision rollback、hire/approval 在事务内拒绝任何 proposed pending 技能引用；解除引用不受阻。运行时读取的 missing 状态不是持久配置权限，提交检查不能省略。
+恢复、技能文件变更及清理采用 **company accounting row → slug advisory → skill row** 顺序；先拿公司锁，再查实际代理引用。恢复每次 apply/compensate 都重复此检查。代理生命周期的普通配置、直接 adapterConfig、revision rollback、hire/approval 在事务内拒绝任何 proposed pending 技能引用；解除引用不受阻。引用解析器仍允许读取 pending 的旧引用（sync 路由在移除前会先解析 current）；授权检查位于最终 proposed adapterConfig 提交边界，而不是禁止解析旧值。运行时读取的 missing 状态不是持久配置权限，提交检查不能省略。
 
 少数内部配置事务可能先持有 agent row；提交 guard 对 company 使用 NOWAIT，遇到相反锁顺序立即409并回滚，而非等待形成死锁；上游标准生命周期已先持有公司 accounting lock，不受此快速失败影响。
 

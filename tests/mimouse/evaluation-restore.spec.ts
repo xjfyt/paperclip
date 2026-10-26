@@ -122,6 +122,9 @@ test("attachment winning company lock prevents restore; pending direct assignmen
     // Imported pre-existing bad attachment can still be detached; recovery never
     // assumes pending implies no references without checking actual usage.
     await f.db.update(agents).set({ adapterConfig: attached }).where(eq(agents.id, f.agent.id));
+    // The sync route resolves its CURRENT references before removing them.
+    // Resolution must remain readable; only final proposed config grants use.
+    expect((await f.skills.resolveRequestedSkillEntries(f.companyId, [f.skill.key], { tolerateUnknownReferences: true })).resolved.map(entry => entry.key)).toContain(f.skill.key);
     await expect(recover(f, receipt, "apply")).rejects.toMatchObject({ status: 409 });
     await agentSvc.update(f.agent.id, { adapterConfig: {} }); expect((await recover(f, receipt, "compensate")).status).toBe("compensated");
   } finally { pause.release(); await f.db.$client.end({ timeout: 1 }); }

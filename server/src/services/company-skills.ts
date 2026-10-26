@@ -2280,7 +2280,6 @@ async function resolveRequestedSkillEntriesOrThrow(
         missing.add(selection.key);
         continue;
       }
-      if (skill.metadata?.mimouseRestorePending) throw conflict("restore_pending_skill_assignment");
       const selectedVersionId = selection.versionId ?? null;
       await assertVersionMatchesSkill(db, companyId, skill.id, selectedVersionId);
       if (!resolved.has(skill.key)) {
