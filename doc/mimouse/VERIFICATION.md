@@ -2,6 +2,16 @@
 
 核验日期：2026-10-25 UTC。基线为 v2026.1023.0 / 1b4c803816e82b0265c8422e1a804327a7ed8c54。开发分支 mimouse。此记录是可审查候选版的本地证据，不是全部需求完成或生产上线证明。
 
+## 3260键私有试运行中央进展（2026-10-26 19:58 UTC）
+
+代码及server标准构建印章 `94c7c51ad65579480ed8da1a3d42acf25444b700`。shared/DB构建、迁移安全检查、schema snapshot drift通过；server完整类型及标准构建、UI完整类型/生产构建通过。0357正式迁移下42项（含真实重复键整文件/journal回滚、原数据保留、重迁移成功）、adapter与既有registry路由20项通过。UI最终定向5文件89项通过。
+
+初轮UI类型检查发现witness必需runtimeConfigHash被当可选，已收紧解析并增加7个坏摘要负例；复验又发现测试把严格record强转任意索引对象，改为独立对象副本而不放宽生产类型。最终完整类型/构建通过，初次失败日志保留。正式迁移安全gate最初阻止大表非并发索引，现保留原子事务并按明确维护窗口/5秒锁等待/每语句120秒限制处理，精确例外经独立审核，不是静默忽略。
+
+source API145项（50.6秒）与编译server入口同套145项（48.1秒）通过；编译入口仍为workspace TS依赖且部分fixture直接导入源码，不是all-dist安装证明。日志 `/tmp/paperclip-private-source-api.log`、`/tmp/paperclip-private-compiled-api.log`。
+
+实际Chrome完成准备→整页刷新恢复同票据→四语切换→原子取消→刷新历史；无真实模型调用，前后DB运行/唤醒/执行授权均0，详见[浏览器记录](checklists/PRIVATE-PROMPT-BROWSER-20261026.md)。20:15 UTC新版分段UI严格聚合通过：799文件、80批、9317项，无失败/skip/todo，8个完整分片覆盖库存恰好一次。证据 `test-results/mimouse-ui/aggregate-2026-10-26T20-15-38-055Z-7Imr4z/aggregate.json`；verificationInputs SHA-256 `ec602e0ed6a536644a532fe4b4c9fec7413059b63ab1b41dddbcdc6f211dc5b1`，UI source SHA-256 `91d21e56184affd2e4b6619f4008695e5c40789b540dd964431f18be9fcbbc25`。这是同输入分片聚合，不是一次无中断调用；后续UUID恢复及私有比较改动须重新验证，不能外推该结果。私有试运行不解锁普通运行时应用、提示词双版本评分或成本路由。
+
 ## 3197键 self 与无负责人占位语（2026-10-26 19:33 UTC）
 
 实际IssueDetail以currentUserId构造的系统self选项已四语化并保留Me搜索别名；真正无负责人按空身份选择通顺通用占位语，standard/ask/planning与mobile/desktop均覆盖。真实名为Me、Unassigned、未分配的用户/Agent不按字符串替换，原ID与提交payload不变。

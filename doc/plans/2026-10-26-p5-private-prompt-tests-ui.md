@@ -110,3 +110,7 @@ effective local environment ID/source只是已知目标，不是完整context。
    cancel仅取消尚未执行ticket，不是正在运行的进程终止按钮。
 9. 真实CLI/API-key/费用/进程树仅由用户另行授权后人工验收。本地mock成功不构成真实
    账号验证，也不授权订阅切换API计费。
+
+### CLI 安装并非 prepare 检测项
+
+执行的固定PATH及人工安装前置见[服务端手册](2026-10-26-p5-private-prompt-tests.md#真实-cli-发现前置未由-node-夹具证明)。prepare仅准备固定元数据，不代表本机已能发现claude或其Node依赖；默认用户目录安装可能不在受限PATH内。本轮没有用真实CLI/账号证明安装成功，不自动继承环境补救，也不自动重试未知执行。

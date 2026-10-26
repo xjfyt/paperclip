@@ -220,3 +220,9 @@ execute/cancel完整绑定与重复不重派。fixture actor注入不是OIDC/真
 正式迁移为 `0357_deep_nehzno.sql`，统一迁移链创建私有表和保留前缀的全生命周期唯一唤醒约束；测试不再额外执行 `doc/integration/private-prompt-tests.sql` 历史方案。新功能默认关闭不代表可以跳过迁移：核心队列的私有任务防绕过检查需要这张表。先备份并停止本实例应用/worker、排空旧事务，在维护窗口通过正常迁移工具升级，再启动新版本。不要用运行中的旧/新混合worker跳过该前置。
 
 该文件保持原有per-file事务，私有表与唤醒唯一索引原子提交。既有 `agent_wakeup_requests` 即使没有新前缀，也需要扫描来创建partial index；不是零锁/零成本在线升级。本文件设置事务局部 `lock_timeout=5s`、每语句 `statement_timeout=120s`，不是整个文件或迁移 advisory lock 等待的总截止。竞争锁、超时或已有重复前缀导致整个文件回滚，不删除历史、不放弃唯一性。大型库如超时，应在维护窗口检查规模/锁与失败原因，另行审核迁移策略，不能直接删除超时或安全检查。迁移安全检查中的这一项精确例外记录上述理由，不覆盖其它规则。
+
+## 真实 CLI 发现前置（未由 Node 夹具证明）
+
+受限执行不继承宿主 PATH。进程帮助器的 POSIX 固定搜索路径为 `/usr/local/bin:/opt/homebrew/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin`；Windows仅系统目录（System32、Windows、Wbem）。只安装在 `~/.local/bin`、nvm或自定义npm prefix的Claude CLI可能找不到；CLI包装器依赖的Node也必须在受限路径可解析。管理员启用前须核验实际CLI及依赖目标、版本、bare参数行为，并在固定搜索路径提供经核验的安装。不能直接照抄软链接命令掩盖目标或用继承全环境回退。
+
+当前受控夹具使用 `process.execPath` 绝对路径启动无网络Node，不证明真实claude发现成功或开箱可用。元数据prepare也不是CLI安装探测；缺CLI可能直到执行时才返回unknown/failure，此票据不能自动重新收费。未来若支持显式CLI绝对路径，必须另行纳入配置白名单、固定快照、批准digest和派发复验，不能偷偷继承普通Agent的command/extra args。真实Windows和用户常用安装目录仍待验收。
