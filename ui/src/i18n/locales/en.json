@@ -26,6 +26,21 @@
     "noRemoteStop": "Stopping the local bridge does not prove that the remote provider stopped.",
     "denyToolApproval": "Permission requests are denied by default; no qualified human-approval round trip."
   },
+  "agentSelect": {
+    "placeholder": "Select agent…",
+    "empty": "No agents yet.",
+    "filter": "Filter agents",
+    "select": "Select {{name}}",
+    "allow": "Allow {{name}}",
+    "noMatches": "No matches.",
+    "selectAgents": "Select agents",
+    "selected_one": "{{total}} agent selected",
+    "selected_other": "{{total}} agents selected",
+    "noneSelected": "No agents selected",
+    "selectedTotal": "{{total}} selected",
+    "done": "Done",
+    "more": "and {{total}} more"
+  },
   "app": {
     "noCompanies": {
       "title": "Create your first organization",
@@ -597,6 +612,27 @@
     "kindCount_other": "{{count}} kinds",
     "billerCount_one": "{{count}} biller",
     "billerCount_other": "{{count}} billers"
+  },
+  "inboxPolicy": {
+    "title": "Let agents tidy my inbox",
+    "help": "Choose whether the agents you manage may archive tasks out of your inbox on your behalf. You can undo any archive, and every agent archive is attributed in the task's properties.",
+    "any": "Any of my agents",
+    "anyHelp": "Let any agent you manage archive tasks out of your inbox.",
+    "chosen": "Only chosen agents",
+    "chosenHelp": "Restrict inbox tidying to the agents you pick below.",
+    "off": "Off",
+    "offHelp": "Agents can never archive tasks from your inbox.",
+    "policyLabel": "Inbox agent archiving policy",
+    "allowed": "Agents allowed to tidy my inbox",
+    "selectAgents": "Select agents",
+    "selected_one": "{{total}} agent selected",
+    "selected_other": "{{total}} agents selected",
+    "noAgents": "You don’t manage any agents yet.",
+    "loadFailed": "Failed to load inbox agent policy.",
+    "loading": "Loading inbox agent policy…",
+    "saveFailed": "Failed to save inbox agent policy.",
+    "saved": "Saved",
+    "noCompany": "Select an organization to manage inbox agent archiving."
   },
   "inviteAuth": {
     "checking": "Checking sign-in methods…",

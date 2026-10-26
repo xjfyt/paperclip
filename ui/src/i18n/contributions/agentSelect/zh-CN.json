@@ -1,0 +1,15 @@
+{
+  "placeholder": "选择 Agent…",
+  "empty": "暂无 Agent。",
+  "filter": "筛选 Agent",
+  "select": "选择 {{name}}",
+  "allow": "允许 {{name}}",
+  "noMatches": "无匹配结果。",
+  "selectAgents": "选择 Agent",
+  "selected_one": "已选择 {{total}} 个 Agent",
+  "selected_other": "已选择 {{total}} 个 Agent",
+  "noneSelected": "未选择 Agent",
+  "selectedTotal": "已选择 {{total}} 个",
+  "done": "完成",
+  "more": "另有 {{total}} 个"
+}

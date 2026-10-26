@@ -1,0 +1,21 @@
+{
+  "title": "Permitir que los Agents organicen mi bandeja de entrada",
+  "help": "Elige si los Agents que gestionas pueden archivar tareas de tu bandeja en tu nombre. Puedes deshacer cualquier archivo y el Agent responsable queda registrado en las propiedades de la tarea.",
+  "any": "Cualquiera de mis Agents",
+  "anyHelp": "Permite que cualquier Agent que gestionas archive tareas de tu bandeja.",
+  "chosen": "Solo los Agents elegidos",
+  "chosenHelp": "Limita la organización de la bandeja a los Agents que elijas abajo.",
+  "off": "Desactivado",
+  "offHelp": "Los Agents no pueden archivar tareas de tu bandeja.",
+  "policyLabel": "Política de archivado de Agents",
+  "allowed": "Agents autorizados para organizar mi bandeja",
+  "selectAgents": "Seleccionar Agents",
+  "selected_one": "{{total}} Agent seleccionado",
+  "selected_other": "{{total}} Agents seleccionados",
+  "noAgents": "Todavía no gestionas ningún Agent.",
+  "loadFailed": "No se pudo cargar la política de Agents.",
+  "loading": "Cargando política de Agents…",
+  "saveFailed": "No se pudo guardar la política de Agents.",
+  "saved": "Guardado",
+  "noCompany": "Selecciona una organización para gestionar el archivado de Agents."
+}

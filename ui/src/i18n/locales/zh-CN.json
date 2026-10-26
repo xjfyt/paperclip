@@ -26,6 +26,21 @@
     "noRemoteStop": "停止本地桥接不代表远端供应商已经停止。",
     "denyToolApproval": "权限请求默认拒绝，尚无已验收的人工批准往返流程。"
   },
+  "agentSelect": {
+    "placeholder": "选择 Agent…",
+    "empty": "暂无 Agent。",
+    "filter": "筛选 Agent",
+    "select": "选择 {{name}}",
+    "allow": "允许 {{name}}",
+    "noMatches": "无匹配结果。",
+    "selectAgents": "选择 Agent",
+    "selected_one": "已选择 {{total}} 个 Agent",
+    "selected_other": "已选择 {{total}} 个 Agent",
+    "noneSelected": "未选择 Agent",
+    "selectedTotal": "已选择 {{total}} 个",
+    "done": "完成",
+    "more": "另有 {{total}} 个"
+  },
   "app": {
     "noCompanies": {
       "title": "创建您的第一家公司",
@@ -597,6 +612,27 @@
     "kindCount_other": "{{count}} 个类别",
     "billerCount_one": "{{count}} 个计费方",
     "billerCount_other": "{{count}} 个计费方"
+  },
+  "inboxPolicy": {
+    "title": "允许 Agent 整理我的收件箱",
+    "help": "选择是否允许你管理的 Agent 代为归档收件箱任务。归档操作可以撤销，执行归档的 Agent 会记录在任务属性中。",
+    "any": "我管理的任意 Agent",
+    "anyHelp": "允许你管理的任意 Agent 归档收件箱任务。",
+    "chosen": "仅选定的 Agent",
+    "chosenHelp": "仅允许下方选定的 Agent 整理收件箱。",
+    "off": "关闭",
+    "offHelp": "不允许 Agent 归档收件箱任务。",
+    "policyLabel": "收件箱 Agent 归档策略",
+    "allowed": "获准整理收件箱的 Agent",
+    "selectAgents": "选择 Agent",
+    "selected_one": "已选择 {{total}} 个 Agent",
+    "selected_other": "已选择 {{total}} 个 Agent",
+    "noAgents": "你尚未管理任何 Agent。",
+    "loadFailed": "无法加载收件箱 Agent 策略。",
+    "loading": "正在加载收件箱 Agent 策略…",
+    "saveFailed": "无法保存收件箱 Agent 策略。",
+    "saved": "已保存",
+    "noCompany": "请选择组织后管理收件箱 Agent 归档策略。"
   },
   "inviteAuth": {
     "checking": "正在检查登录方式…",

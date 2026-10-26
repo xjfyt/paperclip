@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { i18n } from "@/i18n";
 
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
@@ -184,4 +185,29 @@ describe("AgentMultiSelect", () => {
 
     expect(onSave).toHaveBeenCalledWith(new Set(agents.map((agent) => agent.id)));
   });
+  it.each(["en", "zh-CN", "es", "ja"])("localizes multi-select controls while preserving custom names and IDs in %s", async locale => {
+    await i18n.changeLanguage(locale); const onChange = vi.fn(); root = createRoot(container);
+    try {
+      act(() => root!.render(<AgentMultiSelect agents={[{ id: "agent-stable", name: "客户 Agent Custom" }]} selectedAgentIds={new Set()} onChange={onChange} />));
+      expect(container.textContent).toBe(i18n.t("agentSelect.selectAgents"));
+      act(() => container.querySelector("button")!.click()); await flush();
+      expect(document.body.querySelector("input")?.getAttribute("placeholder")).toBe(i18n.t("agentSelect.filter"));
+      expect(document.body.querySelector("input")?.getAttribute("aria-label")).toBe(i18n.t("agentSelect.filter"));
+      expect(document.body.textContent).toContain("客户 Agent Custom");
+      const choice = [...document.body.querySelectorAll<HTMLButtonElement>('[role="checkbox"]')].find(node => node.getAttribute("aria-label") === i18n.t("agentSelect.allow", { name: "客户 Agent Custom" }));
+      expect(choice).toBeDefined(); act(() => choice!.click()); await flush();
+      expect(onChange).toHaveBeenCalledWith(new Set(["agent-stable"]));
+    } finally { act(() => root!.unmount()); root = null; await i18n.changeLanguage("en"); }
+  });
+  it.each(["en", "zh-CN", "es", "ja"])("localizes single-agent defaults and preserves explicit custom labels in %s", async locale => {
+    await i18n.changeLanguage(locale); root = createRoot(container);
+    try {
+      act(() => root!.render(<AgentSelect agents={[]} value="" onChange={() => {}} />));
+      expect(container.textContent).toContain(i18n.t("agentSelect.placeholder"));
+      act(() => container.querySelector("button")!.click()); await flush(); expect(document.body.textContent).toContain(i18n.t("agentSelect.empty"));
+      act(() => root!.render(<AgentSelect agents={[]} value="" onChange={() => {}} placeholder="Custom placeholder" emptyMessage="Custom empty message" />)); await flush();
+      expect(container.textContent).toContain("Custom placeholder"); expect(document.body.textContent).toContain("Custom empty message");
+    } finally { act(() => root!.unmount()); root = null; await i18n.changeLanguage("en"); }
+  });
+
 });

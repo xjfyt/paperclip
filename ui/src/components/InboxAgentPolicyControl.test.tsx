@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { i18n } from "@/i18n";
 
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -209,4 +210,57 @@ describe("InboxAgentPolicyControl", () => {
 
     act(() => root.unmount());
   });
+  it.each(["en", "zh-CN", "es", "ja"])("localizes policy text without changing the persisted mode in %s", async locale => {
+    await i18n.changeLanguage(locale); const root = render(container);
+    try {
+      await waitForAssertion(() => expect(optionByTitle(container, i18n.t("inboxPolicy.off"))).toBeDefined());
+      expect(container.textContent).toContain(i18n.t("inboxPolicy.help"));
+      await act(async () => optionByTitle(container, i18n.t("inboxPolicy.off"))!.click());
+      const save = [...container.querySelectorAll("button")].find(button => button.textContent === i18n.t("common.save"))!;
+      await act(async () => save.click());
+      await waitForAssertion(() => expect(mockInboxAgentPolicyApi.updateMine).toHaveBeenCalledWith("company-1", { mode: "disabled", allowedAgentIds: [] }));
+      await waitForAssertion(() => expect(container.querySelector('[role="status"]')?.textContent).toBe(i18n.t("inboxPolicy.saved")));
+    } finally { await act(async () => root.unmount()); await i18n.changeLanguage("en"); }
+  });
+
+  it("shows a choose-organization recovery instead of an endless loading state", async () => {
+    const root = createRoot(container), client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    try {
+      await act(async () => root.render(<QueryClientProvider client={client}><InboxAgentPolicyControl companyId={null} /></QueryClientProvider>)); await flush();
+      expect(container.textContent).toContain(i18n.t("inboxPolicy.noCompany")); expect(container.textContent).not.toContain("Loading");
+      expect(mockInboxAgentPolicyApi.getMine).not.toHaveBeenCalled(); expect(mockAgentsApi.list).not.toHaveBeenCalled();
+    } finally { await act(async () => root.unmount()); client.clear(); }
+  });
+
+  it("does not carry an unsaved policy into another organization", async () => {
+    mockInboxAgentPolicyApi.getMine.mockImplementation(async (companyId: string) => policy({ companyId, mode: "open" }));
+    const root = createRoot(container), client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const view = (companyId: string) => <QueryClientProvider client={client}><InboxAgentPolicyControl companyId={companyId} /></QueryClientProvider>;
+    try {
+      await act(async () => root.render(view("company-1"))); await waitForAssertion(() => expect(optionByTitle(container, "Off")).toBeDefined());
+      await act(async () => optionByTitle(container, "Off")!.click());
+      expect(optionByTitle(container, "Off")?.getAttribute("aria-checked")).toBe("true");
+      await act(async () => root.render(view("company-2"))); await flush(); await flush();
+      await waitForAssertion(() => expect(optionByTitle(container, "Any of my agents")?.getAttribute("aria-checked")).toBe("true"));
+      expect(mockInboxAgentPolicyApi.updateMine).not.toHaveBeenCalled();
+    } finally { await act(async () => root.unmount()); client.clear(); }
+  });
+
+  it("does not apply an old organization save response to a newly selected organization", async () => {
+    mockInboxAgentPolicyApi.getMine.mockImplementation(async (companyId: string) => policy({ companyId, mode: "open" }));
+    let resolveSave!: (value: InboxAgentPolicy) => void;
+    mockInboxAgentPolicyApi.updateMine.mockImplementation(() => new Promise(resolve => { resolveSave = resolve; }));
+    const root = createRoot(container), client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const view = (companyId: string) => <QueryClientProvider client={client}><InboxAgentPolicyControl companyId={companyId} /></QueryClientProvider>;
+    try {
+      await act(async () => root.render(view("company-1"))); await waitForAssertion(() => expect(optionByTitle(container, "Off")).toBeDefined());
+      await act(async () => optionByTitle(container, "Off")!.click());
+      await act(async () => [...container.querySelectorAll("button")].find(button => button.textContent === "Save")!.click());
+      await waitForAssertion(() => expect(mockInboxAgentPolicyApi.updateMine).toHaveBeenCalledWith("company-1", { mode: "disabled", allowedAgentIds: [] }));
+      await act(async () => root.render(view("company-2"))); await waitForAssertion(() => expect(optionByTitle(container, "Any of my agents")?.getAttribute("aria-checked")).toBe("true"));
+      await act(async () => resolveSave(policy({ companyId: "company-1", mode: "disabled" }))); await flush();
+      expect(optionByTitle(container, "Any of my agents")?.getAttribute("aria-checked")).toBe("true"); expect(mockInboxAgentPolicyApi.updateMine).toHaveBeenCalledTimes(1);
+    } finally { await act(async () => root.unmount()); client.clear(); }
+  });
+
 });

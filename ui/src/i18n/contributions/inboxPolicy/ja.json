@@ -1,0 +1,21 @@
+{
+  "title": "Agent に受信トレイの整理を許可",
+  "help": "管理している Agent が代わりに受信トレイのタスクをアーカイブできるか選択します。アーカイブは取り消せます。実行した Agent はタスクのプロパティに記録されます。",
+  "any": "管理するすべての Agent",
+  "anyHelp": "管理しているどの Agent でも受信トレイのタスクをアーカイブできます。",
+  "chosen": "選択した Agent のみ",
+  "chosenHelp": "下で選択した Agent のみに受信トレイの整理を許可します。",
+  "off": "オフ",
+  "offHelp": "Agent は受信トレイのタスクをアーカイブできません。",
+  "policyLabel": "受信トレイの Agent アーカイブポリシー",
+  "allowed": "受信トレイの整理を許可する Agent",
+  "selectAgents": "Agent を選択",
+  "selected_one": "{{total}} 件の Agent を選択済み",
+  "selected_other": "{{total}} 件の Agent を選択済み",
+  "noAgents": "管理している Agent はまだありません。",
+  "loadFailed": "受信トレイの Agent ポリシーを読み込めませんでした。",
+  "loading": "受信トレイの Agent ポリシーを読み込み中…",
+  "saveFailed": "受信トレイの Agent ポリシーを保存できませんでした。",
+  "saved": "保存しました",
+  "noCompany": "組織を選択して受信トレイの Agent アーカイブ設定を管理してください。"
+}

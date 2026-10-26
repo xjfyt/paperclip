@@ -1,0 +1,21 @@
+{
+  "title": "允许 Agent 整理我的收件箱",
+  "help": "选择是否允许你管理的 Agent 代为归档收件箱任务。归档操作可以撤销，执行归档的 Agent 会记录在任务属性中。",
+  "any": "我管理的任意 Agent",
+  "anyHelp": "允许你管理的任意 Agent 归档收件箱任务。",
+  "chosen": "仅选定的 Agent",
+  "chosenHelp": "仅允许下方选定的 Agent 整理收件箱。",
+  "off": "关闭",
+  "offHelp": "不允许 Agent 归档收件箱任务。",
+  "policyLabel": "收件箱 Agent 归档策略",
+  "allowed": "获准整理收件箱的 Agent",
+  "selectAgents": "选择 Agent",
+  "selected_one": "已选择 {{total}} 个 Agent",
+  "selected_other": "已选择 {{total}} 个 Agent",
+  "noAgents": "你尚未管理任何 Agent。",
+  "loadFailed": "无法加载收件箱 Agent 策略。",
+  "loading": "正在加载收件箱 Agent 策略…",
+  "saveFailed": "无法保存收件箱 Agent 策略。",
+  "saved": "已保存",
+  "noCompany": "请选择组织后管理收件箱 Agent 归档策略。"
+}

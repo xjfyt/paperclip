@@ -1,0 +1,15 @@
+{
+  "placeholder": "Seleccionar Agent…",
+  "empty": "Todavía no hay Agents.",
+  "filter": "Filtrar Agents",
+  "select": "Seleccionar {{name}}",
+  "allow": "Permitir {{name}}",
+  "noMatches": "Sin coincidencias.",
+  "selectAgents": "Seleccionar Agents",
+  "selected_one": "{{total}} Agent seleccionado",
+  "selected_other": "{{total}} Agents seleccionados",
+  "noneSelected": "Ningún Agent seleccionado",
+  "selectedTotal": "{{total}} seleccionados",
+  "done": "Listo",
+  "more": "y {{total}} más"
+}
