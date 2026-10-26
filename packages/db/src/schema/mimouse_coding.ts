@@ -9,6 +9,7 @@ export const mimouseCodingDeliveries = pgTable("mimouse_coding_deliveries", {
   issueId: uuid("issue_id").notNull().references(() => issues.id), workspaceId: uuid("workspace_id").notNull().references(() => executionWorkspaces.id),
   gitlabOrigin: text("gitlab_origin").notNull(), projectId: integer("project_id").notNull(), secretRef: uuid("secret_ref").notNull().references(() => companySecrets.id),
   baseSha: text("base_sha").notNull(), headSha: text("head_sha").notNull(), sourceBranch: text("source_branch").notNull(), targetBranch: text("target_branch").notNull(),
+  reviewReceipt: jsonb("review_receipt").$type<Record<string, unknown>>(),
   reviewedSha: text("reviewed_sha"), reviewerUserId: text("reviewer_user_id"), mrIid: integer("mr_iid"), pipelineId: integer("pipeline_id"),
   operationState: text("operation_state").notNull().default("local"), operationLease: uuid("operation_lease"),
   repairPolicy: jsonb("repair_policy").$type<Record<string, unknown>>(), repairStatus: text("repair_status").notNull().default("disabled"), repairLastCode: text("repair_last_code"),

@@ -1,0 +1,59 @@
+import { test, expect } from "@playwright/test";
+import { createRequire } from "node:module";
+import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { execFileSync } from "node:child_process";
+import { createFixtureDb } from "./fixture-db.js";
+import { projects, issues, executionWorkspaces, mimouseCodingDeliveries as deliveries } from "../../packages/db/src/index.js";
+import { codingService } from "../../server/src/services/mimouse-coding/service.js";
+import { mimouseCodingRoutes } from "../../server/src/routes/mimouse-coding.js";
+import { secretService } from "../../server/src/services/secrets.js";
+import { reviewedHead } from "../../server/src/services/mimouse-coding/diff-review.js";
+const require = createRequire(new URL("../../server/package.json", import.meta.url));
+const express = require("express"); const supertest = require("supertest"); const { eq } = await import(require.resolve("drizzle-orm"));
+// Real disposable DB + real local Git + real HTTP router. Only GitLab project GET
+// is injected; no provider writes, credentials, Runner or CI execution occur.
+test("fixed-SHA diff HTTP review binds consent, denies stale/foreign/member/agent access", async ({ request }) => {
+  const db = await createFixtureDb(); const cwd = await mkdtemp(path.join(tmpdir(), "coding-review-api-"));
+  const git = (...args: string[]) => execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
+  git("init", "-b", "paperclip/review"); git("config", "user.name", "Fixture"); git("config", "user.email", "fixture@example.test"); git("remote", "add", "origin", "https://git.example/team/review.git");
+  await writeFile(path.join(cwd, "code.txt"), "before\n"); git("add", "."); git("commit", "-m", "base"); const baseSha = git("rev-parse", "HEAD");
+  await writeFile(path.join(cwd, "code.txt"), "after\n"); git("add", "."); git("commit", "-m", "head"); const headSha = git("rev-parse", "HEAD");
+  const company = await (await request.post("/api/companies", { data: { name: "Diff review fixture" } })).json();
+  const other = await (await request.post("/api/companies", { data: { name: "Other diff company" } })).json();
+  const issue = await (await request.post(`/api/companies/${company.id}/issues`, { data: { title: "Diff review task", status: "backlog" } })).json();
+  try {
+    const [project] = await db.insert(projects).values({ companyId: company.id, name: "Diff project" }).returning();
+    const [second] = await db.insert(projects).values({ companyId: company.id, name: "Second project" }).returning();
+    const [workspace] = await db.insert(executionWorkspaces).values({ companyId: company.id, projectId: project.id, sourceIssueId: issue.id, mode: "isolated", strategyType: "git_worktree", providerType: "local_fs", status: "active", name: "diff fixture", branchName: "paperclip/review", repoUrl: "https://git.example/team/review.git", cwd }).returning();
+    await db.update(issues).set({ projectId: project.id, executionWorkspaceId: workspace.id }).where(eq(issues.id, issue.id));
+    const secret = await secretService(db).create(company.id, { name: "diff-fixture", provider: "local_encrypted", value: JSON.stringify({ token: "fixture-never-sent" }) });
+    const [row] = await db.insert(deliveries).values({ companyId: company.id, issueId: issue.id, workspaceId: workspace.id, secretRef: secret.id, gitlabOrigin: "https://git.example", projectId: 9, sourceBranch: "paperclip/review", targetBranch: "main", baseSha, headSha }).returning();
+    let projectReads = 0;
+    const service = codingService(db, { client: (() => ({ project: async () => { projectReads++; return { id: 9, http_url_to_repo: workspace.repoUrl, ssh_url_to_repo: "", default_branch: "main" }; } })) as any });
+    let actor: any = { type: "board", source: "session", userId: "fixture-reviewer", isInstanceAdmin: true };
+    const app = express(); app.use(express.json()); app.use((req: any, _res: any, next: any) => { req.actor = actor; next(); }); app.use("/api", mimouseCodingRoutes(db, { service }));
+    app.use((error: any, _req: any, res: any, _next: any) => res.status(error.status ?? 500).json({ error: error.message }));
+    const http = supertest(app); const url = `/api/companies/${company.id}/coding/${row.id}`;
+    const response = await http.get(`${url}/diff`); expect(response.status).toBe(200); expect(response.headers["cache-control"]).toBe("no-store");
+    const diff = response.body; expect(diff.patch).toContain("+after"); expect(diff.complete).toBe(true); expect(JSON.stringify(diff)).not.toContain("fixture-never-sent");
+    const consent = { headSha, baseSha, digest: diff.digest, confirm: true };
+    expect((await http.post(`${url}/review`).send({ headSha, confirm: true })).status).toBe(400);
+    expect((await http.post(`${url}/review`).send(consent)).status).toBe(200);
+    let [saved] = await db.select().from(deliveries).where(eq(deliveries.id, row.id)); expect(reviewedHead(saved)).toBe(headSha);
+    await db.update(deliveries).set({ artifactManifest: { changed: "artifact bytes digest" } }).where(eq(deliveries.id, row.id));
+    expect((await http.post(`${url}/review`).send(consent)).status).toBe(422);
+    [saved] = await db.select().from(deliveries).where(eq(deliveries.id, row.id)); expect(reviewedHead(saved)).toBeNull();
+    actor = { type: "board", source: "local_implicit" };
+    expect((await http.post(`${url}/review`).send(consent)).status).toBe(403);
+    const before = projectReads;
+    expect((await http.get(`/api/companies/${other.id}/coding/${row.id}/diff`)).status).toBe(404);
+    await db.update(issues).set({ projectId: second.id }).where(eq(issues.id, issue.id));
+    expect((await http.get(`${url}/diff`)).status).toBe(422); expect(projectReads).toBe(before);
+    actor = { type: "agent", source: "agent_key", companyId: company.id };
+    expect((await http.get(`${url}/diff`)).status).toBe(403); expect((await http.post(`${url}/review`).send(consent)).status).toBe(403);
+    actor = { type: "board", source: "session", userId: "member", companyIds: [company.id], memberships: [{ companyId: company.id, status: "active", membershipRole: "member" }] };
+    expect((await http.get(`${url}/diff`)).status).toBe(403); expect((await http.post(`${url}/review`).send(consent)).status).toBe(403); expect(projectReads).toBe(before);
+  } finally { await db.$client.end({ timeout: 1 }); await rm(cwd, { recursive: true, force: true }); }
+});

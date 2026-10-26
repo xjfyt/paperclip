@@ -1,3 +1,4 @@
+import { reviewBinding } from "../../server/src/services/mimouse-coding/diff-review.js";
 import { createFixtureDb } from "./fixture-db.js";
 import { expect, test } from "@playwright/test";
 import { createRequire } from "node:module";
@@ -36,6 +37,11 @@ test("durable SCM: unknown MR creation is not repeated; new SHA invalidates revi
     listed = [{ iid: 1, sha: head, state: "opened" }];
     expect((await service.openMr(company.id, delivery.id, head, "Fixture")).iid).toBe(1); expect(creations).toBe(1);
     await db.update(deliveries).set({ reviewedSha: head, evidence: [{ commitSha: head, command: "fixture check", exitCode: 0, startedAt: "2026-10-25T00:00:00Z", finishedAt: "2026-10-25T00:01:00Z", logRef: "fixture/log", status: "passed" }] }).where(eq(deliveries.id, delivery.id));
+    // Legacy bare-SHA approvals no longer count as code-diff review.
+    expect((await service.sync(company.id, delivery.id)).gate.readyForReleaseCandidate).toBe(false);
+    const [reviewRow] = await db.select().from(deliveries).where(eq(deliveries.id, delivery.id));
+    await db.update(deliveries).set({ reviewerUserId: "fixture-reviewer", reviewReceipt: { version: 1, reviewerUserId: "fixture-reviewer", binding: reviewBinding(reviewRow), headSha: head, digest: "d".repeat(64) } }).where(eq(deliveries.id, delivery.id));
+    // Fixture receipt only; source-pinned review is exercised separately.
     expect((await service.sync(company.id, delivery.id)).gate.readyForReleaseCandidate).toBe(true);
     pipelineStatus = "failed";
     await service.sync(company.id, delivery.id); await service.sync(company.id, delivery.id);

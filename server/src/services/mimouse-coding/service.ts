@@ -1,9 +1,10 @@
+import { fixedCommitDiff, reviewedHead } from "./diff-review.js";
 import { enqueueNotification } from "../mimouse-notifications/outbox.js";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createHash, randomUUID } from "node:crypto";
 import { and, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
-import { executionWorkspaces, mimouseCodingDeliveries as deliveries, type Db } from "@paperclipai/db";
+import { issues, executionWorkspaces, mimouseCodingDeliveries as deliveries, type Db } from "@paperclipai/db";
 import { secretService } from "../secrets.js";
 import { deliveryGate, gitlabClient, GitLabError, type CheckEvidence, type GitLabMergeRequest, type GitLabPipeline } from "./gitlab.js";
 const exec = promisify(execFile);
@@ -41,11 +42,11 @@ export function codingService(db: Db, deps: { client?: typeof gitlabClient } = {
   }
   async function saveRemote(row: typeof deliveries.$inferSelect, mr: GitLabMergeRequest | null, pipeline: GitLabPipeline | null, syncLease?: string) {
     const remoteEvidence = { mr, pipeline, checkedAt: new Date().toISOString() };
-    let observedReview = row.reviewedSha; let observedEvidence = row.evidence;
+    let observedReview = reviewedHead(row); let observedEvidence = row.evidence;
     await db.transaction(async tx => {
-      const saved = await tx.update(deliveries).set({ remoteEvidence, ...(syncLease ? { syncLease: null, syncLeaseExpiresAt: null, syncLastCode: null, nextSyncAt: mr && ["closed", "merged"].includes(mr.state) ? null : new Date(Date.now() + 60000) } : {}), ...(mr ? { mrIid: mr.iid } : {}), ...(pipeline ? { pipelineId: pipeline.id } : {}), ...(mr && mr.sha !== row.headSha ? { reviewedSha: null, reviewerUserId: null } : {}), updatedAt: new Date() }).where(and(eq(deliveries.id, row.id), eq(deliveries.headSha, row.headSha), ...(syncLease ? [eq(deliveries.syncLease, syncLease), gt(deliveries.syncLeaseExpiresAt, new Date())] : []))).returning();
+      const saved = await tx.update(deliveries).set({ remoteEvidence, ...(syncLease ? { syncLease: null, syncLeaseExpiresAt: null, syncLastCode: null, nextSyncAt: mr && ["closed", "merged"].includes(mr.state) ? null : new Date(Date.now() + 60000) } : {}), ...(mr ? { mrIid: mr.iid } : {}), ...(pipeline ? { pipelineId: pipeline.id } : {}), ...(mr && mr.sha !== row.headSha ? { reviewedSha: null, reviewerUserId: null, reviewReceipt: null } : {}), updatedAt: new Date() }).where(and(eq(deliveries.id, row.id), eq(deliveries.headSha, row.headSha), ...(syncLease ? [eq(deliveries.syncLease, syncLease), gt(deliveries.syncLeaseExpiresAt, new Date())] : []))).returning();
       if (syncLease && !saved.length) throw new GitLabError("sync_lease_lost", true);
-      observedReview = saved[0]?.reviewedSha ?? null; observedEvidence = saved[0]?.evidence ?? [];
+      observedReview = saved[0] ? reviewedHead(saved[0]) : null; observedEvidence = saved[0]?.evidence ?? [];
       if (saved.length && process.env.PAPERCLIP_NOTIFICATIONS_ENABLED === "true") {
         if (mr?.state === "opened" && mr.sha === row.headSha) await enqueueNotification(tx, { companyId: row.companyId, eventId: `coding-mr:${row.id}:${mr.iid}:${mr.sha}`, type: "coding.mr_ready", resourceId: row.id });
         if (pipeline?.sha === row.headSha && pipeline.status === "failed") await enqueueNotification(tx, { companyId: row.companyId, eventId: `coding-ci:${row.id}:${pipeline.id}:${pipeline.sha}`, type: "coding.ci_failed", resourceId: row.id });
@@ -55,6 +56,15 @@ export function codingService(db: Db, deps: { client?: typeof gitlabClient } = {
   }
   return {
     load,
+    reviewDiff: async (companyId: string, id: string) => {
+      const row = await load(companyId, id);
+      const [workspace] = await db.select().from(executionWorkspaces).where(and(eq(executionWorkspaces.id, row.workspaceId), eq(executionWorkspaces.companyId, companyId)));
+      if (!workspace?.cwd || !workspace.repoUrl || workspace.status !== "active" || workspace.providerType !== "local_fs" || workspace.branchName !== row.sourceBranch) throw new GitLabError("workspace_not_reviewable");
+      const [issue] = await db.select().from(issues).where(and(eq(issues.id, row.issueId), eq(issues.companyId, companyId)));
+      if (!issue || issue.executionWorkspaceId !== workspace.id || issue.projectId !== workspace.projectId) throw new GitLabError("workspace_task_project_mismatch");
+      const api = await client(row, AbortSignal.timeout(30000));
+      return fixedCommitDiff(row, { cwd: workspace.cwd, repoUrl: workspace.repoUrl, branchName: row.sourceBranch }, await api.project());
+    },
     publish: async (companyId: string, id: string, approvedSha: string) => {
       if (process.env.PAPERCLIP_GITLAB_PUBLISH_ENABLED !== "true") throw new GitLabError("operator_publish_disabled");
       const row = await load(companyId, id); if (row.headSha !== approvedSha || row.sourceBranch === row.targetBranch) throw new GitLabError("publication_confirmation_stale");

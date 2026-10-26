@@ -1,0 +1,12 @@
+{
+  "title": "Revisar diferencias del commit fijo",
+  "boundary": "Lea el parche real entre base y head. La aprobación vincula las diferencias, las pruebas y el manifiesto; no autoriza publicar ni desplegar.",
+  "error": "No se pudo verificar la diferencia o cambió. Cierre y vuelva a abrir para revisarla.",
+  "files": "Archivos modificados: {{count}}",
+  "incomplete": "Diferencia incompleta: aprobación bloqueada",
+  "empty": "No hay parche de texto disponible.",
+  "confirm": "He revisado esta diferencia exacta y sus evidencias.",
+  "save": "Registrar revisión",
+  "evidence": "Pruebas y manifiesto de artefactos vinculados",
+  "loginRequired": "Inicie sesión como administrador de la empresa para registrar la revisión."
+}

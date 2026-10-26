@@ -1,3 +1,4 @@
+import { reviewBinding, reviewReceipt, reviewedHead } from "../services/mimouse-coding/diff-review.js";
 import { buildMatrixInventory } from "../services/mimouse-coding/build-matrix.js";
 import { codingRepairService } from "../services/mimouse-coding/repairs.js";
 import { repairSettingsSchema } from "../services/mimouse-coding/repair-policy.js";
@@ -16,11 +17,12 @@ import { deliveryGate, gitlabOrigin, GitLabError, type CheckEvidence, type GitLa
 import { logActivity } from "../services/activity-log.js";
 const sha = z.string().regex(/^[a-f0-9]{40}$/);
 const createSchema = z.object({ issueId: z.string().uuid(), workspaceId: z.string().uuid(), gitlabOrigin: z.string().url(), projectId: z.number().int().positive(), secretRef: z.string().uuid(), baseSha: sha, headSha: sha, targetBranch: z.string().min(1).max(200) }).strict();
+const reviewSchema = z.object({ headSha: sha, baseSha: sha, digest: z.string().regex(/^[a-f0-9]{64}$/), confirm: z.literal(true) }).strict();
 const confirmSchema = z.object({ headSha: sha, confirm: z.literal(true), title: z.string().min(1).max(200).optional() }).strict();
 const evidenceSchema = z.object({ headSha: sha, checks: z.array(z.object({ commitSha: sha, command: z.string().min(1).max(2000), exitCode: z.number().int().nullable(), startedAt: z.string().datetime(), finishedAt: z.string().datetime(), logRef: z.string().min(1).max(2000), status: z.enum(["passed", "failed", "blocked", "not_run"]) }).strict()).max(100) }).strict();
 const artifactsSchema = z.object({ headSha: sha, version: z.string().min(1).max(100), artifacts: z.array(z.object({ path: z.string().min(1).max(1000), platform: z.enum(["windows", "macos", "linux"]), arch: z.enum(["x86_64", "arm64"]), buildJob: z.string().min(1).max(200) }).strict()).min(1).max(30) }).strict();
-export function mimouseCodingRoutes(db: Db) {
-  const router = Router(); const service = codingService(db); const root = "/companies/:companyId/coding";
+export function mimouseCodingRoutes(db: Db, deps: { service?: ReturnType<typeof codingService> } = {}) {
+  const router = Router(); const service = deps.service ?? codingService(db); const root = "/companies/:companyId/coding";
   function admin(req: Request) {
     const companyId = String(req.params.companyId); assertBoard(req); assertCompanyAccess(req, companyId);
     const role = req.actor.memberships?.find(item => item.companyId === companyId);
@@ -64,7 +66,7 @@ export function mimouseCodingRoutes(db: Db) {
       const [issue] = await db.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, row.issueId)));
       if (!issue || !await canActorReadIssuePrivacy(db, req.actor, issue)) continue;
       const { secretRef: _secretRef, operationLease: _lease, ...publicRow } = row;
-      visible.push({ ...publicRow, buildMatrix: buildMatrixInventory(row), gate: deliveryGate({ headSha: row.headSha, reviewedSha: row.reviewedSha, mr: row.remoteEvidence.mr as GitLabMergeRequest ?? null, pipeline: row.remoteEvidence.pipeline as GitLabPipeline ?? null, evidence: row.evidence as unknown as CheckEvidence[] }) });
+      visible.push({ ...publicRow, buildMatrix: buildMatrixInventory(row), gate: deliveryGate({ headSha: row.headSha, reviewedSha: reviewedHead(row), mr: row.remoteEvidence.mr as GitLabMergeRequest ?? null, pipeline: row.remoteEvidence.pipeline as GitLabPipeline ?? null, evidence: row.evidence as unknown as CheckEvidence[] }) });
     }
     res.json({ deliveries: visible, publishEnabled: process.env.PAPERCLIP_GITLAB_PUBLISH_ENABLED === "true", liveVerified: false, automaticRepairEnabled: false });
   });
@@ -75,7 +77,7 @@ export function mimouseCodingRoutes(db: Db) {
   router.post(root, validate(createSchema), async (req, res) => {
     const companyId = admin(req); const input = createSchema.parse(req.body); const issue = await issueAccess(req, companyId, input.issueId);
     const [workspace] = await db.select().from(executionWorkspaces).where(and(eq(executionWorkspaces.id, input.workspaceId), eq(executionWorkspaces.companyId, companyId)));
-    if (!workspace?.cwd || !workspace.repoUrl || !workspace.branchName || workspace.status !== "active" || workspace.providerType !== "local_fs" || issue.executionWorkspaceId !== workspace.id) throw unprocessable("Task must reference an active local execution workspace");
+    if (!workspace?.cwd || !workspace.repoUrl || !workspace.branchName || workspace.status !== "active" || workspace.providerType !== "local_fs" || issue.executionWorkspaceId !== workspace.id || issue.projectId !== workspace.projectId) throw unprocessable("Task must reference an active local execution workspace");
     if (input.targetBranch === workspace.branchName) throw unprocessable("Source and target branches must differ");
     const [secret] = await db.select({ id: companySecrets.id }).from(companySecrets).where(and(eq(companySecrets.id, input.secretRef), eq(companySecrets.companyId, companyId), eq(companySecrets.scope, "company"), eq(companySecrets.status, "active")));
     if (!secret) throw notFound("GitLab credential not found");
@@ -87,7 +89,7 @@ export function mimouseCodingRoutes(db: Db) {
   router.post(`${root}/:id/evidence`, validate(evidenceSchema), async (req, res) => {
     const row = await load(req); const input = evidenceSchema.parse(req.body);
     if (row.headSha !== input.headSha || input.checks.some(check => check.commitSha !== row.headSha)) throw unprocessable("Evidence must match the recorded commit");
-    await db.update(deliveries).set({ evidence: input.checks, reviewedSha: null, reviewerUserId: null, updatedAt: new Date() }).where(and(eq(deliveries.id, row.id), eq(deliveries.headSha, input.headSha)));
+    await db.update(deliveries).set({ evidence: input.checks, reviewReceipt: null, reviewedSha: null, reviewerUserId: null, updatedAt: new Date() }).where(and(eq(deliveries.id, row.id), eq(deliveries.headSha, input.headSha)));
     await audit(req, "coding.evidence.recorded", row.id); res.json({ recorded: true, reviewRequired: true });
   });
   router.post(`${root}/:id/artifacts`, validate(artifactsSchema), async (req, res) => {
@@ -99,15 +101,27 @@ export function mimouseCodingRoutes(db: Db) {
     // These are local bytes, not a signed or independently verified build receipt.
     const manifest = await safe(() => artifactManifest({ project: String(row.projectId), version: input.version, commitSha: row.headSha, root: workspace.cwd!, artifacts: input.artifacts.map(item => ({ ...item, signatureStatus: "unknown" as const, testStatus: "not_run" as const })) }));
     await db.transaction(async tx => {
-      const changed = await tx.update(deliveries).set({ artifactManifest: manifest, updatedAt: new Date() }).where(and(eq(deliveries.id, row.id), eq(deliveries.headSha, input.headSha))).returning();
+      const changed = await tx.update(deliveries).set({ artifactManifest: manifest, reviewedSha: null, reviewerUserId: null, reviewReceipt: null, updatedAt: new Date() }).where(and(eq(deliveries.id, row.id), eq(deliveries.headSha, input.headSha))).returning();
       if (!changed.length) throw unprocessable("Delivery changed while hashing");
       if (process.env.PAPERCLIP_NOTIFICATIONS_ENABLED === "true") await enqueueNotification(tx, { companyId: row.companyId, eventId: `coding-artifact:${row.id}:${row.headSha}`, type: "coding.artifact_ready", resourceId: row.id });
     });
     await audit(req, "coding.artifacts.recorded", row.id); res.json(manifest);
   });
-  router.post(`${root}/:id/review`, validate(confirmSchema), async (req, res) => {
-    const row = await load(req); const input = confirmSchema.parse(req.body); if (input.headSha !== row.headSha) throw unprocessable("Review SHA is stale");
-    await db.update(deliveries).set({ reviewedSha: input.headSha, reviewerUserId: req.actor.userId ?? "local-board", updatedAt: new Date() }).where(and(eq(deliveries.id, row.id), eq(deliveries.headSha, input.headSha)));
+  router.get(`${root}/:id/diff`, async (req, res) => {
+    const row = await load(req); res.setHeader("Cache-Control", "no-store"); res.json(await safe(() => service.reviewDiff(row.companyId, row.id)));
+  });
+  router.post(`${root}/:id/review`, validate(reviewSchema), async (req, res) => {
+    if (req.actor.type !== "board" || req.actor.source !== "session" || !req.actor.userId) throw forbidden("A signed-in administrator is required for code review");
+    const reviewerUserId = req.actor.userId;
+    const row = await load(req); const input = reviewSchema.parse(req.body);
+    if (input.headSha !== row.headSha || input.baseSha !== row.baseSha) throw unprocessable("Review SHA is stale");
+    const diff = await safe(() => service.reviewDiff(row.companyId, row.id));
+    const receipt = await safe(async () => reviewReceipt(row, diff, input.digest, reviewerUserId));
+    await db.transaction(async tx => {
+      const [current] = await tx.select().from(deliveries).where(and(eq(deliveries.companyId, row.companyId), eq(deliveries.id, row.id))).for("update");
+      if (!current || reviewBinding(current) !== diff.binding) throw unprocessable("Review changed while confirming");
+      await tx.update(deliveries).set({ reviewReceipt: receipt, reviewedSha: input.headSha, reviewerUserId, updatedAt: new Date() }).where(and(eq(deliveries.companyId, row.companyId), eq(deliveries.id, row.id)));
+    });
     await audit(req, "coding.head.reviewed", row.id); res.json({ reviewedSha: input.headSha, productionReleaseAuthorized: false });
   });
   router.post(`${root}/:id/publish`, validate(confirmSchema), async (req, res) => {

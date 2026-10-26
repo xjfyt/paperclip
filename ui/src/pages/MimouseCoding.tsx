@@ -1,3 +1,4 @@
+import { MimouseCodingDiffReview } from "@/components/MimouseCodingDiffReview";
 import type { MimouseBuildMatrix as BuildMatrix } from "@paperclipai/shared";
 import { MimouseBuildMatrix } from "@/components/MimouseBuildMatrix";
 import { useEffect as usePageEffect } from "react";
@@ -44,6 +45,7 @@ function CodingCompany({ companyId, userId }: { companyId: string; userId: strin
     </form>
     {query.data?.deliveries.filter(row => !form.issueId || row.issueId === form.issueId).map(row => <section key={row.id} className="rounded-lg border border-border p-4 space-y-3">
       <p className="font-mono text-sm break-all">{row.headSha}</p><p>{t("coding.operationState")}: {row.operationState}</p>
+      <MimouseCodingDiffReview companyId={companyId} userId={userId} deliveryId={row.id} headSha={row.headSha} onReviewed={() => client.invalidateQueries({ queryKey: key })} />
       <MimouseCodingRepair key={`${row.id}:${row.headSha}`} companyId={companyId} userId={userId} issueId={row.issueId} deliveryId={row.id} headSha={row.headSha} />
       <MimouseBuildMatrix matrix={row.buildMatrix} companyId={companyId} deliveryId={row.id} commitSha={row.headSha} />
       <p className="text-xs text-muted-foreground">{t("buildMatrixUi.codeGate")}</p>
@@ -51,7 +53,7 @@ function CodingCompany({ companyId, userId }: { companyId: string; userId: strin
       {row.gate.blockers.map(blocker => <p key={blocker} className="text-sm">{t(`coding.${blocker}`, { defaultValue: blocker })}</p>)}
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" disabled={mutation.isPending} onClick={() => mutation.mutate(() => api.post(`${root}/${row.id}/sync`, {}))}>{t("coding.sync")}</Button>
-        {["review", "merge-request", "evidence", ...(query.data!.publishEnabled ? ["publish"] : [])].map(action => <Button key={action} variant="outline" disabled={mutation.isPending} onClick={() => { setConfirmation({ id: row.id, headSha: row.headSha, action }); setEvidence("[]"); }}>{t(`coding.${action}`)}</Button>)}
+        {["merge-request", "evidence", ...(query.data!.publishEnabled ? ["publish"] : [])].map(action => <Button key={action} variant="outline" disabled={mutation.isPending} onClick={() => { setConfirmation({ id: row.id, headSha: row.headSha, action }); setEvidence("[]"); }}>{t(`coding.${action}`)}</Button>)}
       </div>
     </section>)}
     {confirmation && <section className="rounded-lg border border-border p-4 space-y-3">

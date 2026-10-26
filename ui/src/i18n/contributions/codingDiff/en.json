@@ -1,0 +1,12 @@
+{
+  "title": "Review fixed-commit diff",
+  "boundary": "Read the actual base-to-head patch. Approval binds this diff, test evidence and artifact manifest; it never authorizes publishing or production release.",
+  "error": "Diff could not be verified or changed. Close and reopen to review again.",
+  "files": "Changed files: {{count}}",
+  "incomplete": "Incomplete diff — approval is blocked",
+  "empty": "No text patch available.",
+  "confirm": "I reviewed this exact diff and its evidence snapshot.",
+  "save": "Record review",
+  "evidence": "Bound test evidence and artifact manifest",
+  "loginRequired": "Sign in as a company administrator to record a review."
+}
