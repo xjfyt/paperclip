@@ -17,7 +17,6 @@
   "historyBackfill": false,
   "modelOrAgentExecution": false,
   "integrationPending": [
-    "2341-key full UI aggregate regression in progress at documented snapshot",
     "Separately authorized real-tenant qualification; no delivery or history-completeness claim"
   ],
   "manualGuide": "doc/connections/MIMOUSE-WECOM.md",
@@ -35,6 +34,7 @@
     "Bounded worker wired to shutdown, standby and task admission lifecycle",
     "Seven isolated database/API cases passed without provider connection",
     "Full server/UI types and production builds; source132 and compiled-server132 API cases passed at documented snapshots",
-    "Four-language receive-only admin UI, pinned company-secret metadata, explicit enable confirmation and session isolation; focused UI55 and production build passed"
+    "Four-language receive-only admin UI, pinned company-secret metadata, explicit enable confirmation and session isolation; focused UI55 and production build passed",
+    "2341-key full UI regression:766files/77batches/8637passed, source unchanged, documented SHA16be872"
   ]
 }
