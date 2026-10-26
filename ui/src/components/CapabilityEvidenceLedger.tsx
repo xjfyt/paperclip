@@ -1,26 +1,40 @@
 import { useEffect, useState } from "react";
-import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { evaluateCapabilityEvidence, type AppendCapabilityEvidence } from "@paperclipai/shared/capability-evidence";
 import { capabilityEvidenceApi } from "@/api/capability-evidence";
 import { useTranslation } from "@/i18n";
+import { authApi } from "@/api/auth";
+import { healthApi } from "@/api/health";
+import { queryKeys } from "@/lib/queryKeys";
 import { Button } from "@/components/ui/button";
 
 /** Admin inspection surface. Does not alter the fixture panel or execution controls. */
 export function CapabilityEvidenceLedger({ companyId, adapterType }: { companyId: string; adapterType: string }) {
-  // Remount on company change, so a pending confirmation cannot cross tenants.
-  return <Ledger key={`${companyId}:${adapterType}`} companyId={companyId} adapterType={adapterType} />;
+  const { t } = useTranslation();
+  const session = useQuery({ queryKey: queryKeys.auth.session, queryFn: authApi.getSession });
+  const userId = session.data?.user?.id ?? session.data?.session?.userId;
+  const health = useQuery({ queryKey: queryKeys.health, queryFn: healthApi.get, enabled: session.isSuccess && !userId });
+  // A null authenticated session is not a local-board identity. Gate all reads
+  // until identity settles; session revalidation unmounts pending confirmation.
+  if (!session.isSuccess || session.isFetching) return <p role="status">{t("capabilityEvidence.loading")}</p>;
+  const identity = userId ? `${userId}:${session.data?.session?.id ?? "session"}`
+    : health.isSuccess && health.data.deploymentMode === "local_trusted" ? "local-board" : null;
+  if (!identity) return <p role="alert">{t("capabilityEvidence.loadError")}</p>;
+  return <Ledger key={`${companyId}:${adapterType}:${identity}`} companyId={companyId} adapterType={adapterType} identity={identity} />;
 }
-function Ledger({ companyId, adapterType }: { companyId: string; adapterType: string }) {
+function Ledger({ companyId, adapterType, identity }: { companyId: string; adapterType: string; identity: string }) {
   const { t } = useTranslation();
   const client = useQueryClient();
-  const queryKey = ["capability-evidence", companyId];
+  const queryKey = ["capability-evidence", companyId, identity];
   const [confirmation, setConfirmation] = useState<AppendCapabilityEvidence | null>(null);
   const query = useInfiniteQuery({ queryKey, initialPageParam: 0,
-    queryFn: ({ pageParam }) => capabilityEvidenceApi.list(companyId, pageParam),
+    queryFn: ({ pageParam, signal }) => capabilityEvidenceApi.list(companyId, pageParam, signal),
     getNextPageParam: page => page.nextRevision ?? undefined,
-    staleTime: 0,
+    staleTime: 0, retry: false, gcTime: 0,
   });
-  const events = query.data?.pages.flatMap(page => page.events) ?? [];
+  const readable = query.isSuccess && !query.isFetching;
+  const events = readable ? query.data.pages.flatMap(page => page.events) : [];
+  useEffect(() => { if (!readable) setConfirmation(null); }, [readable]);
   const [now, setNow] = useState(Date.now);
   const nextExpiry = Math.min(...events.flatMap(event => event.receipt ? [Date.parse(event.receipt.expiresAt)] : []).filter(time => time > now));
   useEffect(() => {
@@ -29,7 +43,10 @@ function Ledger({ companyId, adapterType }: { companyId: string; adapterType: st
     return () => clearTimeout(timer);
   }, [nextExpiry]);
   const complete = query.isSuccess && !query.hasNextPage && !query.isFetching;
-  const mutation = useMutation({ mutationFn: (input: AppendCapabilityEvidence) => capabilityEvidenceApi.append(companyId, input),
+  const mutation = useMutation({ mutationFn: (input: AppendCapabilityEvidence) => {
+    if (!readable) throw new Error("Evidence access is not confirmed");
+    return capabilityEvidenceApi.append(companyId, input);
+  },
     onSuccess: async () => { setConfirmation(null); await client.invalidateQueries({ queryKey }); },
   });
   return <section className="space-y-3 rounded-lg border border-border p-4" aria-label={t("capabilityEvidence.title")}>
@@ -60,7 +77,7 @@ function Ledger({ companyId, adapterType }: { companyId: string; adapterType: st
         }}>{t("capabilityEvidence.revoke")}</Button>
       </li>;
     })}</ul>
-    {confirmation && <div className="space-y-3" role="group" aria-label={t("capabilityEvidence.confirm")}>
+    {readable && confirmation && <div className="space-y-3" role="group" aria-label={t("capabilityEvidence.confirm")}>
       <p>{t("capabilityEvidence.confirm")}</p>
       <div className="flex items-center justify-between gap-2">
         <Button variant="outline" disabled={mutation.isPending} onClick={() => { setConfirmation(null); mutation.reset(); }}>{t("capabilityEvidence.cancel")}</Button>

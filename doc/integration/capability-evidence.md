@@ -44,3 +44,9 @@ The append-only table intentionally blocks physical company deletion while evide
 ## Verification scope
 
 Pure Vitest single worker / 512 MB: shared contract and transactional service doubles, including isolation, unsupported capability, exact context, expiry/future time, revocation/supersession, bounded fields, CAS, idempotency and simulated audit rollback. No DB/server/build/install or external account used. Logs: `/tmp/capability-ledger-pure.log`; token gate log `/tmp/capability-ledger-token-gates.log`. Full integration validation remains pending with parent to avoid concurrent heavy work.
+
+### Privacy hardening after review
+
+Ledger identity is scoped to authenticated user **and session**, plus company. A null session is accepted only when health explicitly establishes local-trusted mode. Identity loading/revalidation unmounts the ledger and clears pending confirmation; request cancellation and zero inactive cache retention prevent old-scope reuse. Read errors (including same-user permission-revocation 403) and revalidation hide all receipt metadata and clear pending confirmation. Retry cannot restore a prior confirmation. HTTP logging classifies the entire capability-evidence namespace as private: invalid/forbidden payload aliases and error messages are omitted, rather than relying on field-name redaction.
+
+Focused regressions reuse one QueryClient for A→B, exercise same-user success→403→success and null-session transition, and inspect logger hooks for 400/403/422 containing sensitive alias values. Normal explicit sign-out already clears the broader application cache; these regressions cover in-place auth/permission changes without relying on that path.
