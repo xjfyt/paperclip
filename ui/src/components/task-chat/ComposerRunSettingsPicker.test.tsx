@@ -99,7 +99,12 @@ describe("composer assignee picker", () => {
     const onAssigneeChange = vi.fn(), onSettingsChange = vi.fn();
     const loadModels = vi.spyOn(agentsApi, "adapterModels").mockResolvedValue([{ id: "gpt-6-sol", label: "Private 用户model" }]);
     render(onAssigneeChange, onSettingsChange, true);
-    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+    // React Query notifies on a later task; one zero-delay tick can still show
+    // the model ID fallback under load. Wait for the visible catalog result.
+    await vi.waitFor(async () => {
+      await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+      expect(container!.querySelector('[data-testid="task-chat-composer-model-label"]')?.textContent).toBe("Private 用户model");
+    });
     expect(container!.querySelector('[data-testid="task-chat-composer-assignee-label"]')?.textContent).toBe("Clippy");
     expect(container!.querySelector('[data-testid="task-chat-composer-model-label"]')?.textContent).toBe("Private 用户model");
     const requests = loadModels.mock.calls.length;
