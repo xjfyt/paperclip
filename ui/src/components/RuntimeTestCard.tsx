@@ -1,3 +1,4 @@
+import { useTranslation } from "@/i18n";
 import {
   CircleCheck,
   CircleAlert,
@@ -12,38 +13,38 @@ export type TestState = "idle" | "running" | "pass" | "fail";
 
 const copy = {
   idle: {
-    title: "Test your agent",
-    description: "Check that your runtime and model can respond.",
-    action: "Run test",
+    title: "agentSetupSharedUi.testAgent",
+    description: "agentSetupSharedUi.testHelp",
+    action: "agentSetupSharedUi.runTest",
   },
   running: {
-    title: "Testing connection",
-    description: "Checking the runtime and waiting for a model response…",
-    action: "Testing…",
+    title: "agentSetupSharedUi.testingConnection",
+    description: "agentSetupSharedUi.testingHelp",
+    action: "agentSetupSharedUi.testing",
   },
   pass: {
-    title: "Connection successful",
-    description: "Your runtime checks passed. Review the details below.",
-    action: "Test again",
+    title: "agentSetupSharedUi.connectionSuccessful",
+    description: "agentSetupSharedUi.checksPassedHelp",
+    action: "agentSetupSharedUi.testAgain",
   },
   warn: {
-    title: "Connection needs attention",
-    description: "Review the test details before running your agent.",
-    action: "Test again",
+    title: "agentSetupSharedUi.connectionAttention",
+    description: "agentSetupSharedUi.reviewTestHelp",
+    action: "agentSetupSharedUi.testAgain",
   },
   fail: {
-    title: "Couldn't connect",
-    description: "Check your model and provider connection, then try again.",
-    action: "Retry test",
+    title: "agentSetupSharedUi.couldNotConnect",
+    description: "agentSetupSharedUi.retryConnectionHelp",
+    action: "agentSetupSharedUi.retryTest",
   },
 } as const;
 
 const prerequisiteCopy = {
-  idle: { title: "Check prerequisites", description: "Check instance settings and public connection configuration.", action: "Check setup" },
-  running: { title: "Checking prerequisites", description: "Checking instance settings and public connection configuration…", action: "Checking…" },
-  pass: { title: "Setup checks passed", description: "Review the setup details before assigning work.", action: "Check again" },
-  warn: { title: "Pairing required", description: "Create this agent, then pair it and verify event delivery.", action: "Check again" },
-  fail: { title: "Prerequisite check failed", description: "Review the setup details and retry.", action: "Retry check" },
+  idle: { title: "agentSetupSharedUi.checkPrerequisites", description: "agentSetupSharedUi.prerequisitesHelp", action: "agentSetupSharedUi.checkSetup" },
+  running: { title: "agentSetupSharedUi.checkingPrerequisites", description: "agentSetupSharedUi.checkingPrerequisitesHelp", action: "agentSetupSharedUi.checking" },
+  pass: { title: "agentSetupSharedUi.setupChecksPassed", description: "agentSetupSharedUi.reviewSetupHelp", action: "agentSetupSharedUi.checkAgain" },
+  warn: { title: "agentSetupSharedUi.pairingRequired", description: "agentSetupSharedUi.pairingRequiredHelp", action: "agentSetupSharedUi.checkAgain" },
+  fail: { title: "agentSetupSharedUi.prerequisitesFailed", description: "agentSetupSharedUi.prerequisitesFailedHelp", action: "agentSetupSharedUi.retryCheck" },
 } as const;
 
 export function RuntimeTestCard({
@@ -61,6 +62,7 @@ export function RuntimeTestCard({
   disabled?: boolean;
   variant?: "connection" | "prerequisites";
 }) {
+  const { t } = useTranslation();
   const content = (variant === "prerequisites" ? prerequisiteCopy : copy)[state];
   const Icon =
     state === "running"
@@ -72,7 +74,7 @@ export function RuntimeTestCard({
           : Play;
   return (
     <section
-      aria-label="Runtime test"
+      aria-label={t("agentSetupSharedUi.runtimeTest")}
       className="rounded-lg border border-border bg-card"
     >
       <div className="flex items-start gap-3 p-4 sm:items-center">
@@ -100,9 +102,9 @@ export function RuntimeTestCard({
             aria-atomic="true"
             className="min-w-0 space-y-1"
           >
-            <h3 className="text-sm font-medium">{content.title}</h3>
+            <h3 className="text-sm font-medium">{t(content.title)}</h3>
             <p className="text-xs leading-relaxed text-muted-foreground">
-              {state === "fail" && error ? error : content.description}
+              {state === "fail" && error ? error : t(content.description)}
             </p>
           </div>
           <Button
@@ -113,7 +115,7 @@ export function RuntimeTestCard({
             disabled={disabled || state === "running"}
             onClick={onTest}
           >
-            {content.action}
+            {t(content.action)}
           </Button>
         </div>
       </div>
@@ -127,7 +129,7 @@ export function RuntimeTestCard({
               aria-hidden="true"
               className="size-3 transition-transform group-open:rotate-90"
             />
-            Test details
+            {t("agentSetupSharedUi.testDetails")}
           </summary>
           <ul className="space-y-3 px-4 pb-4">
             {result.checks.map((check) => (

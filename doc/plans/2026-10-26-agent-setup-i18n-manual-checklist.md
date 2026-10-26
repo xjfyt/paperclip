@@ -46,11 +46,20 @@ NODE_OPTIONS=--max-old-space-size=512 node ../node_modules/vitest/vitest.mjs run
 | 失败后凭据清理 | 在受控测试条件下模拟创建失败与清理失败；原始诊断保留，清理提示为所选语言；核查是否有残留凭据再重试 | 待手测 |
 | 西语/日语布局与无障碍 | 窄屏/200% 缩放下长按钮、进度条、帮助文字无裁切；日语换行可读；可见标签与 aria-label 一致；屏幕阅读器顺序合理 | 待手测，无浏览器布局验收 |
 
+## 第二片：共享配置控件（2026-10-26）
+
+- 已补 `RuntimeTestCard` 两个变体的全部本地状态、说明、动作、详情和 aria-label；原始检查 message/detail/hint 保持不变。
+- 已补 `AdapterLoginChrome` 的准备/复制/输入授权码、浏览器与本机指引；授权 URL、授权码和 CLI 命令保持不变，没有发起真实登录。
+- 已补 `AgentConfigForm` 中 `ModelDropdown` 的 native/searchable 两种呈现、自定义模型、搜索空状态和帮助；模型 ID、品牌、调用方自定义文案与模型排序保持不变。
+- 已补 `AiConnectionField` 自身的连接/权限弹窗与 `SecretPicker` 的缺失、非活动状态、浏览/搜索及创建入口；权限、绑定、名称和账户保存语义不变。
+- 专注回归：7 文件 / 161 用例通过（512 MB，单 worker）；覆盖共享控件的四语实际渲染、全部运行状态、输入占位符、切语言保留模型值、名称/授权码/URL/命令不翻译。仍不代表浏览器布局、IME 或真实登录验收。
+- 原计划 §4.4 单独安全补齐：`OnboardingCardField` 在组合输入或 keyCode 229 时不提交、不 preventDefault；未屏蔽普通输入，普通 Enter 保持提交语义。新增非掩码授权码与掩码 API key 两种回归。真实 IME 仍待上表手测。
+- token gates、调色板/角色同步、diff 检查通过。测试命令在上一命令基础上增加 `src/components/AdapterLoginChrome.test.tsx`、`src/components/ModelDropdown.test.tsx`、`src/components/ai-connections/AiConnectionField.test.tsx`、`src/i18n/agent-setup-shared-surfaces.test.tsx`。
+
 ## 已知剩余范围（不是本片已完成项）
 
-- `RuntimeTestCard.tsx` 仍有运行连接测试/前置检查的标题、说明、动作和 `Runtime test` aria-label；本片未修改该共享组件。
-- `AdapterLoginChrome.tsx` 仍有登录准备、授权码、复制/提交、账户切换、本机 CLI 指引等系统文案；其真实登录与剪贴板流程尚未四语验收。
-- 继续审计 `AgentConfigForm` 的模型选择/登录面板、`AiConnectionField`、`SavedProviderKeySelect`、`SecretPicker` 及环境显示辅助函数的实际渲染；共享组件被调用不等于其文案已覆盖。
+- 真实登录、剪贴板权限及浏览器布局尚未四语验收。系统提示已抽取不代表外部交互已通过。
+- 下一片继续审计 `AgentConfigForm` 的 `AdapterLoginPanel`、`AiConnectionSelect`、`AiProviderSetup`、`AiConnectionCredentialStep`、已保存凭据标签来源及环境显示辅助函数。`AiConnectionField` 的子组件被调用不等于其文案已覆盖；高级连接中的访问默认值共享组件也须单独核对。
 - 服务端/适配器 `Error.message`、运行检查结果以及用户/组织/环境名称保持原始内容，不能以纯英文扫描结果判定它们都应翻译。
 - 基线 `6bee5bc` 的 `optionalOnboarding.configureAgent` 三语使用“智能体/agente/エージェント”；本片创建按钮使用独立 Agent 术语键，不覆盖其他域片段。并行 core 切片已修中文 Agent 术语，其他语种与最终集成状态以合并后的资源为准。
 

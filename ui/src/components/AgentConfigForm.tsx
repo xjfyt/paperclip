@@ -1,3 +1,4 @@
+import { useTranslation } from "@/i18n";
 import { useConnectionModels } from "./ai-connections/useConnectionModels";
 import { aiRoutingHarness } from "@paperclipai/shared";
 import { AiConnectionField } from "./ai-connections/AiConnectionField";
@@ -3804,6 +3805,7 @@ export function ModelDropdown({
   defaultLabel?: string;
   presentation?: "searchable" | "native";
 }) {
+  const { t } = useTranslation();
   const [modelSearch, setModelSearch] = useState("");
   const [enteringCustomModel, setEnteringCustomModel] = useState(false);
   const [detectingModel, setDetectingModel] = useState(false);
@@ -3878,9 +3880,9 @@ export function ModelDropdown({
     const customOption = "__paperclip_custom_model__";
     const extraModels = [...new Set([value, ...promotedModelIds])].filter(id => id && (!models.some(model => model.id === id) || promotedModelIds.has(id)));
     return (
-      <Field label="Model" hint={help.model}>
+      <Field label={t("workflow.model")} hint={t("agentSetupSharedUi.modelHelp")}>
         <NativeSelect
-          aria-label="Model"
+          aria-label={t("workflow.model")}
           aria-busy={loadingModels || refreshingModels}
           value={enteringCustomModel ? customOption : value}
           required={required && !enteringCustomModel}
@@ -3891,32 +3893,32 @@ export function ModelDropdown({
           }}
         >
           <option value="" disabled={!allowDefault}>
-            {allowDefault ? (defaultLabel ?? "Default") : loadingModels ? "Loading models…" : required ? "Select model (required)" : "Select model"}
+            {allowDefault ? (defaultLabel ?? t("agentSetupUi.defaultModel")) : loadingModels ? t("agentSetupSharedUi.loadingModels") : required ? t("agentSetupSharedUi.selectModelRequired") : t("agentSetupSharedUi.selectModel")}
           </option>
           {extraModels.map(id => <option key={id} value={id}>{models.find(model => model.id === id)?.label ?? id}</option>)}
           {groupedModels.map(({ provider, entries }) => groupByProvider ? (
-            <optgroup key={provider} label={provider}>
+            <optgroup key={provider} label={provider === "other" ? t("agentSetupSharedUi.otherProviders") : provider}>
               {entries.map(model => <option key={model.id} value={model.id}>{model.label}</option>)}
             </optgroup>
           ) : entries.map(model => <option key={model.id} value={model.id}>{model.label}</option>))}
-          {creatable && <option value={customOption}>Enter custom model…</option>}
+          {creatable && <option value={customOption}>{t("agentSetupSharedUi.customModel")}</option>}
         </NativeSelect>
         {enteringCustomModel && (
           <label className="mt-3 block space-y-1 text-xs text-muted-foreground">
-            Model ID
-            <Input aria-label="Model ID" value={value} onChange={event => onChange(event.target.value)}
-              placeholder="Enter model ID or alias" autoFocus required={required} />
+            {t("agentSetupSharedUi.modelId")}
+            <Input aria-label={t("agentSetupSharedUi.modelId")} value={value} onChange={event => onChange(event.target.value)}
+              placeholder={t("agentSetupSharedUi.modelIdPlaceholder")} autoFocus required={required} />
           </label>
         )}
-        {loadingModels && <p role="status" className="mt-2 text-xs text-muted-foreground">Loading models…</p>}
+        {loadingModels && <p role="status" className="mt-2 text-xs text-muted-foreground">{t("agentSetupSharedUi.loadingModels")}</p>}
         {onRefreshModels && <Button type="button" variant="ghost" size="sm" disabled={refreshingModels}
-          onClick={() => void onRefreshModels()}>{refreshingModels ? "Refreshing…" : "Refresh models"}</Button>}
+          onClick={() => void onRefreshModels()}>{refreshingModels ? t("agentSetupSharedUi.refreshingModels") : t("agentSetupSharedUi.refreshModels")}</Button>}
       </Field>
     );
   }
 
   return (
-    <Field label="Model" hint={help.model}>
+    <Field label={t("workflow.model")} hint={t("agentSetupSharedUi.modelHelp")}>
       <Popover
         open={open}
         onOpenChange={(nextOpen) => {
@@ -3934,7 +3936,7 @@ export function ModelDropdown({
               {selected
                 ? selected.label
                 : value
-                  || (allowDefault ? (defaultLabel ?? "Default") : required ? "Select model (required)" : "Select model")}
+                  || (allowDefault ? (defaultLabel ?? t("agentSetupUi.defaultModel")) : required ? t("agentSetupSharedUi.selectModelRequired") : t("agentSetupSharedUi.selectModel"))}
             </span>
             <ChevronDown className="size-4 opacity-50" />
           </button>
@@ -3943,7 +3945,7 @@ export function ModelDropdown({
           <div className="relative mb-1">
             <input
               className="w-full px-2 py-1.5 pr-6 text-xs bg-transparent outline-none border-b border-border placeholder:text-muted-foreground/50"
-              placeholder={creatable ? "Search models... (type to create)" : "Search models..."}
+              placeholder={creatable ? t("agentSetupSharedUi.searchModelsCreate") : t("agentSetupSharedUi.searchModels")}
               value={modelSearch}
               onChange={(e) => setModelSearch(e.target.value)}
               autoFocus
@@ -3952,6 +3954,7 @@ export function ModelDropdown({
               <button
                 type="button"
                 className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label={t("agentSetupSharedUi.clearModelSearch")}
                 onClick={() => setModelSearch("")}
               >
                 <svg aria-hidden="true" focusable="false" className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -3974,7 +3977,7 @@ export function ModelDropdown({
                 <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
                 <path d="M3 3v5h5" />
               </svg>
-              {detectingModel ? "Detecting..." : detectedModel ? (detectModelLabel?.replace(/^Detect\b/, "Re-detect") ?? "Re-detect from config") : (detectModelLabel ?? "Detect from config")}
+              {detectingModel ? t("agentSetupSharedUi.detecting") : detectedModel ? (detectModelLabel?.replace(/^Detect\b/, "Re-detect") ?? t("agentSetupSharedUi.redetectConfig")) : (detectModelLabel ?? t("agentSetupSharedUi.detectConfig"))}
             </button>
           )}
           {onRefreshModels && !modelSearch.trim() && (
@@ -3992,7 +3995,7 @@ export function ModelDropdown({
                 <path d="M21 12a9 9 0 0 1-15.28 6.36L3 16" />
                 <path d="M8 16H3v5" />
               </svg>
-              {refreshingModels ? "Refreshing..." : "Refresh models"}
+              {refreshingModels ? t("agentSetupSharedUi.refreshingModels") : t("agentSetupSharedUi.refreshModels")}
             </button>
           )}
           {value && (!models.some((m) => m.id === value) || promotedModelIds.has(value)) && (
@@ -4009,7 +4012,7 @@ export function ModelDropdown({
                 {models.find((m) => m.id === value)?.label ?? value}
               </span>
               <Badge variant="outline" className="ml-auto text-(length:--text-nano) px-1.5 bg-green-500/15 text-green-400 border-green-500/20">
-                current
+                {t("agentSetupSharedUi.currentModel")}
               </Badge>
             </button>
           )}
@@ -4028,7 +4031,7 @@ export function ModelDropdown({
                 {models.find((m) => m.id === detectedModel)?.label ?? detectedModel}
               </span>
               <Badge variant="outline" className="ml-auto text-(length:--text-nano) px-1.5 bg-blue-500/15 text-blue-400 border-blue-500/20">
-                detected
+                {t("agentSetupSharedUi.detectedModel")}
               </Badge>
             </button>
           )}
@@ -4052,7 +4055,7 @@ export function ModelDropdown({
                     {entry?.label ?? candidate}
                   </span>
                   <Badge variant="outline" className="ml-auto text-(length:--text-nano) px-1.5 bg-sky-500/15 text-sky-400 border-sky-500/20">
-                    config
+                    {t("agentSetupSharedUi.configModel")}
                   </Badge>
                 </button>
               );
@@ -4070,7 +4073,7 @@ export function ModelDropdown({
                   onOpenChange(false);
                 }}
               >
-                Default
+                {t("agentSetupUi.defaultModel")}
               </button>
             )}
             {canCreateManualModel && (
@@ -4083,7 +4086,7 @@ export function ModelDropdown({
                   setModelSearch("");
                 }}
               >
-                <span>Use manual model</span>
+                <span>{t("agentSetupSharedUi.manualModel")}</span>
                 <span className="text-xs font-mono text-muted-foreground">{manualModel}</span>
               </button>
             )}
@@ -4091,7 +4094,7 @@ export function ModelDropdown({
               <div key={group.provider} className="mb-1 last:mb-0">
                 {groupByProvider && (
                   <div className="px-2 py-1 text-(length:--text-nano) uppercase tracking-wide text-muted-foreground">
-                    {group.provider} ({group.entries.length})
+                    {group.provider === "other" ? t("agentSetupSharedUi.otherProviders") : group.provider} ({group.entries.length})
                   </div>
                 )}
                 {group.entries.map((m) => (
@@ -4117,9 +4120,9 @@ export function ModelDropdown({
             {filteredModels.length === 0 && !canCreateManualModel && promotedModelIds.size === 0 && (
               <div className="px-2 py-2 space-y-2">
                 <p className="text-xs text-muted-foreground">
-                  {loadingModels ? "Loading models…" : onDetectModel
-                    ? (emptyDetectHint ?? "No model detected yet. Enter a provider/model manually.")
-                    : "No models found."}
+                  {loadingModels ? t("agentSetupSharedUi.loadingModels") : onDetectModel
+                    ? (emptyDetectHint ?? t("agentSetupSharedUi.noDetectedModel"))
+                    : t("agentSetupSharedUi.noModels")}
                 </p>
               </div>
             )}

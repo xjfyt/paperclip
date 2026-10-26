@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import "@/i18n/agent-setup-test-resources";
 
 import { createRoot, type Root } from "react-dom/client";
 import { flushSync } from "react-dom";
@@ -252,4 +253,27 @@ describe("the displayed code's auto-copy", () => {
       restore();
     }
   });
+});
+
+
+it.each([false, true])("does not submit or swallow IME confirmation in shared login fields (masked=%s)", async masked => {
+  const onSubmit = vi.fn();
+  const onChange = vi.fn();
+  const container = await render(<OnboardingCardField masked={masked} value="正在输入" onChange={onChange} onSubmit={onSubmit} />);
+  const input = container.querySelector("input")!;
+  for (const properties of [{ key: "Enter", isComposing: true }, { key: "Enter", keyCode: 229 }]) {
+    const event = new KeyboardEvent("keydown", { ...properties, bubbles: true, cancelable: true });
+    await act(() => { input.dispatchEvent(event); });
+    expect(event.defaultPrevented).toBe(false);
+    expect(onSubmit).not.toHaveBeenCalled();
+  }
+  await act(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "中文输入");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  expect(onChange).toHaveBeenCalledWith("中文输入");
+  const enter = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+  await act(() => { input.dispatchEvent(enter); });
+  expect(enter.defaultPrevented).toBe(true);
+  expect(onSubmit).toHaveBeenCalledExactlyOnceWith();
 });

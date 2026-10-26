@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import "@/i18n/agent-setup-test-resources";
+import { i18n } from "@/i18n";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -70,7 +72,7 @@ beforeEach(() => {
   root = createRoot(container);
   client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
 });
-afterEach(() => { flushSync(() => root.unmount()); client.clear(); container.remove(); });
+afterEach(async () => { flushSync(() => root.unmount()); client.clear(); container.remove(); await i18n.changeLanguage("en"); });
 
 it("reconnects the unavailable personal default in place", async () => {
   await mount([account()]);
@@ -146,4 +148,21 @@ it("uses the server's connection-manager permission for company-wide access", as
   await mount([], true);
   await click("Connect another account");
   expect(credentialProps).toMatchObject({ allAgents: true });
+});
+
+
+it.each(["en", "zh-CN", "es", "ja"])("localizes the live account dialog in %s without rewriting the saved name or granting access", async locale => {
+  await i18n.changeLanguage(locale);
+  await mount([account({ name: "Customer subscription" })]);
+  // The account chooser itself is a separate component; exercise this field's modal.
+  await click("Reconnect account");
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain(i18n.t("agentSetupSharedUi.reconnectAccount"));
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain(i18n.t("agentSetupSharedUi.repairAccountHelp"));
+  expect(credentialProps?.name).toBe("Customer subscription");
+  await i18n.changeLanguage(locale === "ja" ? "zh-CN" : "ja");
+  await settle();
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain(i18n.t("agentSetupSharedUi.repairAccountHelp"));
+  expect(credentialProps?.name).toBe("Customer subscription");
+  expect(onChange).not.toHaveBeenCalled();
+  expect(mocks.setDefault).not.toHaveBeenCalled();
 });
