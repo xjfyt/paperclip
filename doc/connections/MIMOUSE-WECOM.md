@@ -161,7 +161,7 @@ Secret 必须已在该公司 vault 中保存为可用的公司级凭据，固定
 
 ## 本次离线验证记录
 
-2026-10-26：5 个纯 fixture 测试文件、74 个测试通过；涵盖协议认证/范围/投影、
+2026-10-26：5 个纯 fixture 测试文件、75 个测试通过；涵盖协议认证/范围/投影、
 fake socket 收取与取消/溢出/重连预算、mock store 拒绝路径/脱敏、管理鉴权及日志策略。
 内存上限 512 MiB、单 worker，未启动数据库或服务，也未建立供应商连接。
 `node scripts/check-token-gates.mjs` 四项 UI token gate 均通过；`git diff --check` 通过。
@@ -202,7 +202,10 @@ const { drained } = await wecomWorker.stop();
 候选竞争不绕过全库 Bot 预留、租约及 activation fencing。worker 没有启用/修改配置能力。
 
 只有管理员从 disabled→enabled 的明确操作才生成新 activation_token；重复 enabled=true
-不改变 token。每个进程保留最多 1024 个尝试过的激活 token，达到上限停止派发并输出固定
+不改变 token。尚未调用 receiver/acquire 前发生的门控取消不消耗激活 token，门控恢复后可继续同一未使用授权；
+已进入 receiver 的取消仍按终止路径禁用。每个进程保留最多 1024 个尝试过的激活 token，
+这是进程生命周期的派发上限而非供应商限额；达到上限不会改写 queued 配置，运营人员应关注
+wecom_worker_activation_budget 告警并安排重启。达到上限停止派发并输出固定
 预算事件，需运营人员重启 worker；它不自动重置单次重连预算。终止后的旧候选、displaced、
 未知 release 结果均不会用同一 token 再开连接。获取租约失败不等于已运行，仍可受原有
 租约约束重试；已过期但保留旧 lease 的崩溃激活则标 interrupted/缺口并禁用，必须显式

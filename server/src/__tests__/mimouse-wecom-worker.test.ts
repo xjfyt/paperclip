@@ -76,3 +76,17 @@ it("duplicate supervisors defer global exclusivity to receiver lease acquisition
   const b = startWecomWorker(db, f.gate, { ...f.deps, receive }); await tick();
   expect(admitted).toBe(1); await Promise.all([a.stop(), b.stop()]);
 });
+
+it("a gate flip before deferred acquisition preserves the untouched activation", async () => {
+  const f = fixture(); let allowed = true, checks = 0;
+  f.candidates.mockResolvedValue([row("one", "untouched")]);
+  // Initial gate, post-query gate and loop gate pass; the deferred invocation sees standby.
+  const gate = () => { checks++; if (checks === 4) allowed = false; return allowed; };
+  const worker = startWecomWorker(db, gate, f.deps); await tick();
+  expect(f.receive).not.toHaveBeenCalled();
+  allowed = true; await worker.reconcile(); await tick();
+  expect(f.receive).toHaveBeenCalledTimes(1);
+  expect(f.candidates.mock.calls.at(-1)?.[0]).toEqual([]);
+  await worker.reconcile(); expect(f.receive).toHaveBeenCalledTimes(1);
+  await worker.stop();
+});

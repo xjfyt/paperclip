@@ -55,7 +55,8 @@ export function startWecomWorker(db: Db, mayRun: () => boolean, testOnly?: Wecom
         attempted.add(token);
         // Defer invocation until ownership is registered, including synchronous fake errors.
         const done = Promise.resolve().then(() => {
-          if (!permitted() || controller.signal.aborted) return { stopped: "cancelled" } as Result;
+          // No receiver/lease was acquired: preserve the untouched operator activation.
+          if (!permitted() || controller.signal.aborted) return { stopped: "disabled" } as Result;
           return receive(row.companyId, row.id, controller.signal);
         }).then(result => {
           // Failed acquisition is not a terminal run; the DB lease prevents duplication.
