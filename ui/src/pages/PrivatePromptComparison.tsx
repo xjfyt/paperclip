@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { comparePrivatePromptTestsSchema, type PrivatePromptComparison as Comparison } from "@paperclipai/shared/mimouse-private-prompt-comparison";
+import type { PromptApplicationEvidence } from "@/api/prompt-applications";
 import { ApiError } from "@/api/client";
 import { privatePromptComparisonApi, verifyPrivatePromptComparison } from "@/api/private-prompt-comparison";
 import { privateComparisonBlockerLabel } from "@/lib/private-prompt-comparison-blockers";
@@ -8,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { formatNumber, useTranslation } from "@/i18n";
 
-type Props = { companyId: string; userId: string; sessionId: string; promptId: string | null; authPending?: boolean; onAccessLost: () => void };
+type Props = { companyId: string; userId: string; sessionId: string; promptId: string | null; authPending?: boolean; onAccessLost: () => void; onReview?: (value: PromptApplicationEvidence | null) => void };
 const fields = ["datasetId", "baselineRevisionId", "candidateRevisionId"] as const;
 const empty = { datasetId: "", baselineRevisionId: "", candidateRevisionId: "", testIds: "", maxCandidateCostCents: "" };
 /** Every identity, prompt and authorization transition destroys private local state. */
@@ -21,7 +22,7 @@ function ComparisonSession(props: Props & { promptId: string }) {
   const [draft, setDraft] = useState(empty), [result, setResult] = useState<Comparison | null>(null), [busy, setBusy] = useState(false), [notice, setNotice] = useState("");
   const generation = useRef(0), controller = useRef<AbortController | null>(null), live = useRef(true);
   useEffect(() => { live.current = true; return () => { live.current = false; generation.current++; controller.current?.abort(); }; }, []);
-  function clearResult() { generation.current++; controller.current?.abort(); controller.current = null; setResult(null); setBusy(false); setNotice(""); }
+  function clearResult() { props.onReview?.(null); generation.current++; controller.current?.abort(); controller.current = null; setResult(null); setBusy(false); setNotice(""); }
   function edit(key: keyof typeof empty, value: string) { clearResult(); setDraft(old => ({ ...old, [key]: value })); }
   const parsed = comparePrivatePromptTestsSchema.safeParse({ ...draft,
     testIds: draft.testIds.trim() ? draft.testIds.trim().split(/[\s,]+/) : [],
@@ -55,6 +56,7 @@ function ComparisonSession(props: Props & { promptId: string }) {
     </div>
     {busy && <p role="status">{label("loading")}</p>}{notice && <p role="alert">{label(notice)}</p>}
     {result && <div className="space-y-2" aria-label={label("result")}>
+      {props.onReview && result.eligibleForHumanReview && parsed.success && <Button variant="outline" onClick={() => props.onReview?.({ comparison: parsed.data, report: result })}>{t("promptApplicationsUi.useEvidence")}</Button>}
       <p role="status">{label(result.eligibleForHumanReview ? "reviewable" : "blocked")}</p>
       <p className="text-sm text-muted-foreground">{label("costBoundary")}</p>
       {["baseline", "candidate"].map(side => { const summary = side === "baseline" ? result.baseline : result.candidate; return <div key={side} className="space-y-1">

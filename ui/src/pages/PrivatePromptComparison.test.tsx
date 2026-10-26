@@ -106,3 +106,10 @@ it("shows readable global and case blockers with their original codes; locale sw
     expect(compare).toHaveBeenCalledTimes(1);
   }
 });
+it("hands verified evidence to application review only after an explicit click, and clears it on editing", async () => {
+  const review = vi.fn(); await mount({ onReview: review }); await ready(); await click("compare");
+  expect(review.mock.calls.some(([value]) => value !== null)).toBe(false);
+  await act(async () => [...host.querySelectorAll("button")].find(value => value.textContent === i18n.t("promptApplicationsUi.useEvidence"))!.click());
+  expect(review).toHaveBeenLastCalledWith({ comparison: input, report: report() });
+  await fill("maxCandidateCostCents", "2"); expect(review).toHaveBeenLastCalledWith(null); expect(compare).toHaveBeenCalledTimes(1);
+});

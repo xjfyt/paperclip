@@ -6,6 +6,8 @@ import { useTranslation } from "@/i18n";
 import { Button } from "@/components/ui/button";
 import { PrivatePromptTests } from "./PrivatePromptTests";
 import { PrivatePromptComparison } from "./PrivatePromptComparison";
+import { PromptApplications } from "./PromptApplications";
+import type { PromptApplicationEvidence } from "@/api/prompt-applications";
 type Identity = { companyId: string; userId: string; sessionId: string; authPending?: boolean; authEpoch?: number };
 type Intent = { kind: "create"; body: CreatePromptRevision } | { kind: "select"; promptId: string; body: SelectPromptRevision };
 /** Mount only with actual session identity, never an API key/implicit fallback.
@@ -24,8 +26,10 @@ function RegistrySession({ companyId, userId, sessionId, authPending }: Identity
   const [promptKey, setPromptKey] = useState(""), [content, setContent] = useState(""), [target, setTarget] = useState("");
   const [action, setAction] = useState<"promote" | "rollback">("promote"), [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(true), [failed, setFailed] = useState(false), [notice, setNotice] = useState("");
-  const [privatePending, setPrivatePending] = useState(false);
+  const [privatePending, setPrivatePending] = useState(false), [applicationPending, setApplicationPending] = useState(false);
+  const [applicationEvidence, setApplicationEvidence] = useState<PromptApplicationEvidence | null>(null);
   const [intent, setIntent] = useState<Intent | null>(null), writeLock = useRef(false), readGeneration = useRef(0);
+  useEffect(() => { setApplicationEvidence(null); }, [head?.id, authPending]);
   useEffect(() => { live.current = true; void refresh(); return () => { live.current = false; queueMicrotask(() => { if (!live.current) controller.abort(); }); }; }, []);
   useEffect(() => {
     if (!intent) return;
@@ -35,7 +39,7 @@ function RegistrySession({ companyId, userId, sessionId, authPending }: Identity
   }, [intent]);
   function invalidate(error: unknown) {
     if (!live.current) return;
-    setFailed(true); setHeads([]); setHead(null); setRevisions([]); setReceipts([]); setDetail(null); setTarget(""); setConfirmed(false);
+    setApplicationEvidence(null); setFailed(true); setHeads([]); setHead(null); setRevisions([]); setReceipts([]); setDetail(null); setTarget(""); setConfirmed(false);
     if (error instanceof ApiError && [401, 403].includes(error.status)) { setContent(""); setPromptKey(""); setIntent(null); }
     setNotice("denied");
   }
@@ -88,7 +92,7 @@ function RegistrySession({ companyId, userId, sessionId, authPending }: Identity
     {notice && <p role="status">{notice.startsWith("saved:") ? `${label("saved")} ${notice.slice(6)}` : label(notice)}</p>}
     {failed ? <p role="alert">{label("denied")}</p> : <>
       <p className="text-sm text-muted-foreground">{label("order")}</p>
-      <fieldset disabled={busy || Boolean(intent) || privatePending || authPending} className="space-y-2">
+      <fieldset disabled={busy || Boolean(intent) || privatePending || applicationPending || authPending} className="space-y-2">
         <label className="block">{label("key")}<input aria-label={label("key")} className="block rounded-md border border-border bg-background p-2" value={promptKey} onChange={event => setPromptKey(event.target.value)} /></label>
         <label className="block">{label("content")}<textarea aria-label={label("content")} className="block w-full rounded-md border border-border bg-background p-2 font-mono" value={content} onChange={event => setContent(event.target.value)} /></label>
         <Button disabled={!/^[a-z][a-z0-9_-]{0,79}$/.test(promptKey) || !content} onClick={() => void submit({ kind: "create", body: { requestId: crypto.randomUUID(), promptKey, content } })}>{label("create")}</Button>
@@ -114,7 +118,8 @@ function RegistrySession({ companyId, userId, sessionId, authPending }: Identity
       {intent && <div className="space-y-2"><p>{label("unknown")}</p><p className="break-all">{intent.body.requestId}</p><Button disabled={busy} onClick={() => void submit(intent)}>{label("recover")}</Button></div>}
     </>}
     <PrivatePromptTests {...{ companyId, userId, sessionId, authPending }} promptId={head?.id ?? null} revisionId={detail?.id ?? null} headReceiptId={head?.headReceiptId ?? null} onPendingChange={setPrivatePending} onAccessLost={() => invalidate(new ApiError("forbidden", 403, null))} />
-    {!failed && <PrivatePromptComparison {...{ companyId, userId, sessionId, authPending }} promptId={head?.id ?? null} onAccessLost={() => invalidate(new ApiError("forbidden", 403, null))} />}
-    <Button variant="outline" disabled={busy || privatePending || authPending} onClick={() => void refresh()}>{label("refresh")}</Button>
+    {!failed && <PrivatePromptComparison {...{ companyId, userId, sessionId, authPending }} promptId={head?.id ?? null} onAccessLost={() => invalidate(new ApiError("forbidden", 403, null))} onReview={setApplicationEvidence} />}
+    {!failed && <PromptApplications {...{ companyId, userId, sessionId, authPending }} promptId={head?.id ?? null} evidence={applicationEvidence} onPendingChange={setApplicationPending} onAccessLost={() => invalidate(new ApiError("forbidden", 403, null))} />}
+    <Button variant="outline" disabled={busy || privatePending || applicationPending || authPending} onClick={() => void refresh()}>{label("refresh")}</Button>
   </section>;
 }

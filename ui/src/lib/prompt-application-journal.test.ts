@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, expect, it, vi } from "vitest";
-import { applicationJournalKey, readApplicationJournal, startApplicationJournal, clearApplicationJournal, type PromptApplicationJournal } from "./prompt-application-journal";
+import { applicationJournalKey, readApplicationJournal, startApplicationJournal, clearApplicationJournal, abandonApplicationPreparation, type PromptApplicationJournal } from "./prompt-application-journal";
 import { applicationId as id, applicationEvidence as evidence } from "@/test/prompt-application-fixtures";
 const entry = (): PromptApplicationJournal => ({ version: 1, companyId: id(1), userId: "user", originSessionId: "session", promptId: id(7), requestId: id(21), agentId: id(9), action: "prepare", expectedGeneration: 0, applicationId: null, approvalDigest: null, proposal: { comparison: evidence.comparison, approvalValidForMinutes: 60 } });
 beforeEach(() => { vi.restoreAllMocks(); sessionStorage.clear(); });
@@ -24,4 +24,13 @@ it("fails closed when storage cannot confirm a write or contains another identit
 it("requires a known application and digest for approve/rollback recovery", () => {
   for (const action of ["approve", "rollback"] as const) expect(() => startApplicationJournal({ ...entry(), action })).toThrow();
   const value = startApplicationJournal({ ...entry(), action: "approve", applicationId: id(20), approvalDigest: "f".repeat(64), proposal: null }); expect(readApplicationJournal(id(1), "user")).toEqual(value);
+});
+
+it("allows only exact-CAS local abandonment of metadata preparation, never approval or rollback", () => {
+  const value = startApplicationJournal(entry()); expect(() => abandonApplicationPreparation({ ...value, requestId: id(99) })).toThrow();
+  abandonApplicationPreparation(value); expect(readApplicationJournal(id(1), "user")).toBeNull();
+  for (const action of ["approve", "rollback"] as const) {
+    const known = startApplicationJournal({ ...entry(), action, applicationId: id(20), approvalDigest: "f".repeat(64), proposal: null });
+    expect(() => abandonApplicationPreparation(known)).toThrow(); clearApplicationJournal(known);
+  }
 });

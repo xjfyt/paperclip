@@ -42,3 +42,9 @@ export function clearApplicationJournal(expected: PromptApplicationJournal) {
   const key = applicationJournalKey(expected.companyId, expected.userId); sessionStorage.removeItem(key);
   if (sessionStorage.getItem(key) !== null) throw Error("prompt_application_journal_clear_unconfirmed");
 }
+/** Preparation only stores metadata server-side. This does not cancel the server proposal. */
+export function abandonApplicationPreparation(expected: PromptApplicationJournal) {
+  const value = parse(expected);
+  if (value.action !== "prepare" || value.applicationId !== null || value.approvalDigest !== null) throw Error("prompt_application_not_metadata_only");
+  clearApplicationJournal(value);
+}
