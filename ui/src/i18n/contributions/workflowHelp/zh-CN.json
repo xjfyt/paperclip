@@ -37,7 +37,7 @@
   "keyCreated": "API 密钥已创建，请立即复制；之后将不会再次显示。",
   "keyHelp": "API 密钥允许此 Agent 对 Paperclip 服务器调用进行身份验证。",
   "keyName": "密钥名称（例如 production）",
-  "approvalNotified": "已通知发起请求的 Agent 审查此审批及关联任务。",
+  "approvalRecorded": "审批决定已保存；后续处理请查看关联任务及其权限。",
   "decisionNote": "决策备注：",
   "decisionNotePlaceholder": "填写决策备注。",
   "linkedTasksOpen": "关联任务将保持未关闭状态，直到发起请求的 Agent 跟进并关闭它们。",

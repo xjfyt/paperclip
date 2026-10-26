@@ -37,7 +37,7 @@
   "keyCreated": "API キーを作成しました。再表示されないため、今すぐコピーしてください。",
   "keyHelp": "API キーにより、この Agent は Paperclip サーバーへの呼び出しを認証できます。",
   "keyName": "キー名（例：production）",
-  "approvalNotified": "申請元の Agent に、この承認と関連タスクを確認するよう通知しました。",
+  "approvalRecorded": "承認の判断を保存しました。後続の処理については、関連タスクとその権限を確認してください。",
   "decisionNote": "判断のメモ：",
   "decisionNotePlaceholder": "判断のメモ。",
   "linkedTasksOpen": "関連タスクは、申請元の Agent が対応して閉じるまで未完了のままです。",

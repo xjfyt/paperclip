@@ -1,4 +1,4 @@
-import { isTopLevelNavigationPending } from "./browserNavigation";
+import { isTopLevelNavigationPending, watchNativeTopLevelNavigations } from "./browserNavigation";
 
 /**
  * Registers `/sw.js` and keeps the installed worker fresh on a long-lived tab.
@@ -43,6 +43,7 @@ export function startServiceWorkerUpdates(
   const reload = options.reload ?? (() => window.location.reload());
   const updateIntervalMs = options.updateIntervalMs ?? DEFAULT_UPDATE_INTERVAL_MS;
   const navigationPending = options.navigationPending ?? isTopLevelNavigationPending;
+  const stopNativeNavigationWatch = watchNativeTopLevelNavigations(documentRef);
 
   // Only a page that is already worker-controlled is running
   // potentially-stale code when the controller changes; a first-ever
@@ -105,5 +106,6 @@ export function startServiceWorkerUpdates(
     container.removeEventListener("controllerchange", onControllerChange);
     documentRef.removeEventListener("visibilitychange", onVisibilityChange);
     clearInterval(intervalId);
+    stopNativeNavigationWatch();
   };
 }

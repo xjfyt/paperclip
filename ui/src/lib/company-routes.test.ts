@@ -161,3 +161,10 @@ it("keeps the feedback inbox in the selected company shell and preserves deep-li
   expect(applyCompanyPrefix("/feedback-inbox?view=recent#review", "OID")).toBe("/OID/feedback-inbox?view=recent#review");
   expect(toCompanyRelativePath("/OID/feedback-inbox")).toBe("/feedback-inbox");
 });
+
+it("keeps data previews and review deep links inside the selected company", () => {
+  expect(isBoardPathWithoutPrefix("/data-operations")).toBe(true);
+  expect(extractCompanyPrefixFromPath("/data-operations")).toBeNull();
+  expect(applyCompanyPrefix("/data-operations?preview=fixture", "OID")).toBe("/OID/data-operations?preview=fixture");
+  expect(toCompanyRelativePath("/OID/data-operations?preview=fixture")).toBe("/data-operations?preview=fixture");
+});

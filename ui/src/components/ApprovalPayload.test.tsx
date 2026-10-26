@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { renderToStaticMarkup } from "react-dom/server";
+import { i18n } from "@/i18n";
 
 import { act } from "react";
 import { createRoot } from "react-dom/client";
@@ -209,4 +211,12 @@ describe("ApprovalPayloadRenderer", () => {
       root.unmount();
     });
   });
+});
+
+afterEach(async () => { await i18n.changeLanguage("en"); });
+it.each(["en", "zh-CN", "es", "ja"])("localizes the post-approval heading without translating authored review content in %s", async locale => {
+  await i18n.changeLanguage(locale);
+  const html = renderToStaticMarkup(<ThemeProvider><ApprovalPayloadRenderer type="request_board_approval" payload={{ title: "Customer review", nextActionOnApproval: "Author-owned review only; no external writes." }} /></ThemeProvider>);
+  expect(html).toContain(i18n.t("browserQa.onApproval"));
+  expect(html).toContain("Author-owned review only; no external writes.");
 });

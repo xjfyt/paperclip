@@ -1,3 +1,4 @@
+import { MimouseOperations } from "./pages/MimouseOperations";
 import { MimouseFeedback } from "./pages/MimouseFeedback";
 import { MimouseCoding } from "./pages/MimouseCoding";
 import { MimouseWorkbuddy } from "./pages/MimouseWorkbuddy";
@@ -159,6 +160,7 @@ function boardRoutes(streamlinedUiEnabled: boolean, combinedInboxTasksEnabled: b
     <>
       <Route index element={<Navigate to="dashboard" replace />} />
       <Route path="integrations/workbuddy" element={<MimouseWorkbuddy />} />
+      <Route path="data-operations" element={<MimouseOperations />} />
       <Route path="feedback-inbox" element={<MimouseFeedback />} />
       <Route path="coding" element={<MimouseCoding />} />
       <Route path="notifications" element={<MimouseNotifications />} />
@@ -838,6 +840,7 @@ export function App() {
           <Route path="instance/settings/*" element={<LegacySettingsRedirect />} />
           <Route path="companies" element={<UnprefixedBoardRedirect />} />
           <Route path="integrations/workbuddy" element={<UnprefixedBoardRedirect />} />
+          <Route path="data-operations" element={<UnprefixedBoardRedirect />} />
           <Route path="feedback-inbox" element={<UnprefixedBoardRedirect />} />
           <Route path="coding" element={<UnprefixedBoardRedirect />} />
           <Route path="notifications" element={<UnprefixedBoardRedirect />} />

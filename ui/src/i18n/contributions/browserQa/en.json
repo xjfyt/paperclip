@@ -133,5 +133,6 @@
   "openTabs": "Open tabs",
   "close": "Close",
   "openActions": "Open actions for {{name}}",
-  "switchTabs": "Switch tabs, {{count}} open"
+  "switchTabs": "Switch tabs, {{count}} open",
+  "onApproval": "On approval"
 }

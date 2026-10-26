@@ -133,5 +133,6 @@
   "openTabs": "已打开的标签页",
   "close": "关闭",
   "openActions": "打开{{name}}的操作菜单",
-  "switchTabs": "切换标签页，已打开{{count}}个"
+  "switchTabs": "切换标签页，已打开{{count}}个",
+  "onApproval": "审批通过后"
 }

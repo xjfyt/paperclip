@@ -37,7 +37,7 @@
   "keyCreated": "API key created — copy it now, it will not be shown again.",
   "keyHelp": "API keys allow this agent to authenticate calls to the Paperclip server.",
   "keyName": "Key name (e.g. production)",
-  "approvalNotified": "Requesting agent was notified to review this approval and linked tasks.",
+  "approvalRecorded": "The approval decision is saved. Check linked tasks and their permissions for follow-up actions.",
   "decisionNote": "Decision note:",
   "decisionNotePlaceholder": "Decision note.",
   "linkedTasksOpen": "Linked tasks remain open until the requesting agent follows up and closes them.",

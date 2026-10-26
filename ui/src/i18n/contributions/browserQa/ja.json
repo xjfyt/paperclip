@@ -133,5 +133,6 @@
   "openTabs": "開いているタブ",
   "close": "閉じる",
   "openActions": "{{name}} の操作を開く",
-  "switchTabs": "タブを切り替え（{{count}} 件）"
+  "switchTabs": "タブを切り替え（{{count}} 件）",
+  "onApproval": "承認後"
 }

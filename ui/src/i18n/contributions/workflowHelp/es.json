@@ -37,7 +37,7 @@
   "keyCreated": "Clave de API creada: cópiala ahora, no volverá a mostrarse.",
   "keyHelp": "Las claves de API permiten a este Agent autenticar llamadas al servidor de Paperclip.",
   "keyName": "Nombre de la clave (p. ej., production)",
-  "approvalNotified": "Se notificó al Agent solicitante para que revise esta aprobación y las tareas vinculadas.",
+  "approvalRecorded": "La decisión de aprobación se ha guardado. Consulta las tareas vinculadas y sus permisos para las acciones posteriores.",
   "decisionNote": "Nota de decisión:",
   "decisionNotePlaceholder": "Nota de decisión.",
   "linkedTasksOpen": "Las tareas vinculadas permanecen abiertas hasta que el Agent solicitante las siga y cierre.",

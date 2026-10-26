@@ -133,5 +133,6 @@
   "openTabs": "Pestañas abiertas",
   "close": "Cerrar",
   "openActions": "Abrir acciones de {{name}}",
-  "switchTabs": "Cambiar pestañas, abiertas: {{count}}"
+  "switchTabs": "Cambiar pestañas, abiertas: {{count}}",
+  "onApproval": "Tras la aprobación"
 }

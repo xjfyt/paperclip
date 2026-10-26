@@ -24,6 +24,7 @@ const keys: Record<string, string> = {
   "Summary": "summary",
   "Recommended action": "recommendedAction",
   "Risks": "risks",
+  "On approval": "onApproval",
   "Proposed comment": "proposedComment",
   "Back to approvals": "backToApprovals",
   "Review linked tasks": "reviewLinkedTasks",

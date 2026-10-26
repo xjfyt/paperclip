@@ -186,7 +186,7 @@ export function ApprovalDetail() {
               </div>
               <div>
                 <p className="text-sm text-green-800 dark:text-green-100 font-medium">{mimouseT("workflow.approvalConfirmed")}</p>
-                <p className="text-xs text-green-700 dark:text-green-200/90">{mimouseT("workflowHelp.approvalNotified")}</p>
+                <p className="text-xs text-green-700 dark:text-green-200/90">{mimouseT("workflowHelp.approvalRecorded")}</p>
               </div>
             </div>
             <Button
