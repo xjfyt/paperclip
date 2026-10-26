@@ -29,7 +29,10 @@ it("requires sources, timestamp, fixed scope and human confirmation rather than 
   for (const patch of [{ sources: [] }, { companyId: randomUUID() }, { execute: true }, { sources: [{ ...raw.sources[0], retrievedAt: "yesterday" }] }]) expect(researchCandidateSchema.safeParse({ ...raw, ...patch }).success).toBe(false);
   const review = { requestId: randomUUID(), confirm: true, expectedEvidenceHash: "a".repeat(64), title: "Reviewed scope", scope: "Only this change", expectedBenefit: "Less coordination", acceptanceCriteria: ["Pass fixed test"], dependencyIssueIds: [] };
   expect(researchPromotionSchema.safeParse(review).success).toBe(true);
-  for (const patch of [{ confirm: false }, { acceptanceCriteria: [] }, { expectedEvidenceHash: "unknown" }, { dependencyIssueIds: ["bad"] }, { assigneeAgentId: randomUUID() }]) expect(researchPromotionSchema.safeParse({ ...review, ...patch }).success).toBe(false);
+  const dependency = randomUUID();
+  for (const patch of [{ confirm: false }, { scope: "  " }, { expectedBenefit: "  " }, { acceptanceCriteria: [] }, { acceptanceCriteria: ["  "] },
+    { expectedEvidenceHash: "unknown" }, { dependencyIssueIds: ["bad"] }, { dependencyIssueIds: [dependency, dependency] },
+    { assigneeAgentId: randomUUID() }]) expect(researchPromotionSchema.safeParse({ ...review, ...patch }).success).toBe(false);
 });
 
 it("canonicalizes JSONB object key order without sorting evidence arrays", () => {

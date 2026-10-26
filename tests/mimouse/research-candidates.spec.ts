@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 const require = createRequire(new URL("../../server/package.json", import.meta.url));
 const { and, eq } = await import(require.resolve("drizzle-orm"));
-import { authUsers, companyMemberships, issues, issueRelations, mimouseResearchCandidates as candidates, mimouseResearchPromotions as promotions } from "../../packages/db/src/index.js";
+import { authUsers, companyMemberships, issues, issueRelations, agentWakeupRequests, heartbeatRuns, mimouseResearchCandidates as candidates, mimouseResearchPromotions as promotions } from "../../packages/db/src/index.js";
 import { createFixtureDb } from "./fixture-db.js";
 import { researchCandidateService } from "../../server/src/services/mimouse-research/service.js";
 import { issueService } from "../../server/src/services/issues.js";
@@ -34,15 +34,26 @@ test("one human confirmation creates one private task with real dependency edges
   try {
     const actor = await member(db, companyId), svc = researchCandidateService(db), candidate = (await svc.create(companyId, body(), actor)).item;
     const dependency = await issueService(db).create(companyId, { title: "Owned prerequisite", status: "backlog", visibility: "private", createdByUserId: actor, responsibleUserId: actor, actorResponsibleUserId: actor });
-    const input = { ...review(candidate.evidenceHash), dependencyIssueIds: [dependency.id] };
+    const input = { ...review(candidate.evidenceHash), acceptanceCriteria: ["Fixed regression passes", "Existing permissions remain unchanged"], dependencyIssueIds: [dependency.id] };
     const [a,b] = await Promise.all([svc.promote(companyId, candidate.id, actor, input), svc.promote(companyId, candidate.id, actor, input)]);
     expect(a).toEqual(b); expect(a).toMatchObject({ initialStatus: "backlog", initialVisibility: "private", agentDispatched: false });
     expect((await svc.status(companyId, candidate.id, actor)).receipt).toEqual(a);
     const [issue] = await db.select().from(issues).where(eq(issues.id, a.issueId));
     expect(issue).toMatchObject({ status: "backlog", visibility: "private", responsibleUserId: actor, assigneeAgentId: null, assigneeUserId: null, sourceTrust: { preset: "low_trust_review", disposition: "quarantined" } });
     expect(issue.description).toContain(candidate.evidenceHash); expect(issue.description).toContain("2026-10-25T04:00:00.000Z"); expect(issue.description).not.toContain("fixture-only-secret");
-    expect(await db.select().from(promotions).where(eq(promotions.companyId, companyId))).toHaveLength(1);
+    expect(issue.title).toBe(input.title);
+    expect(issue.description).toContain(`## Confirmed scope\n\n${input.scope}`);
+    expect(issue.description).toContain(`## Expected benefit (hypothesis)\n\n${input.expectedBenefit}`);
+    expect(issue.description).toContain(`1. ${input.acceptanceCriteria[0]}\n\n2. ${input.acceptanceCriteria[1]}`);
+    const saved = await db.select().from(promotions).where(eq(promotions.companyId, companyId));
+    expect(saved).toHaveLength(1);
+    expect(saved[0].review).toEqual({ title: input.title, scope: input.scope, expectedBenefit: input.expectedBenefit,
+      acceptanceCriteria: input.acceptanceCriteria, dependencyIssueIds: input.dependencyIssueIds });
+    // A new service instance recovers the persisted receipt, not in-memory state.
+    expect((await researchCandidateService(db).status(companyId, candidate.id, actor)).receipt).toEqual(a);
     expect(await db.select().from(issueRelations).where(and(eq(issueRelations.issueId, dependency.id), eq(issueRelations.relatedIssueId, a.issueId), eq(issueRelations.type, "blocks")))).toHaveLength(1);
+    expect(await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.companyId, companyId))).toHaveLength(0);
+    expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, companyId))).toHaveLength(0);
     await expect(svc.promote(companyId, candidate.id, actor, { ...input, scope: "Changed scope" })).rejects.toThrow("different content");
     await expect(svc.promote(companyId, candidate.id, actor, { ...input, requestId: randomUUID() })).rejects.toThrow("already has");
   } finally { await db.$client.end({ timeout: 1 }); }
