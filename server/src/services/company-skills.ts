@@ -3149,9 +3149,10 @@ export function companySkillService(db: Db) {
       fileInventory: normalizeFileInventory(row),
       metadata: isPlainRecord(row.metadata) ? row.metadata : null,
     }));
-    const missingIds = new Set(await findMissingLocalSkillIds(skills));
+    const missingIds = new Set(await findMissingLocalSkillIds(skills.filter(skill => !skill.metadata?.mimouseRestorePending)));
 
     for (const skill of skills) {
+      if (skill.metadata?.mimouseRestorePending) continue;
       if (skill.sourceType !== "local_path") continue;
       if (isPaperclipBundledSkillKey(skill.key) || asString(skill.metadata?.sourceKind) === "paperclip_bundled") continue;
 
@@ -3175,7 +3176,7 @@ export function companySkillService(db: Db) {
               metadata,
               updatedAt: new Date(),
             })
-            .where(eq(companySkills.id, skill.id));
+            .where(and(eq(companySkills.id, skill.id), sql`${companySkills.metadata}->>'mimouseRestorePending' is null`));
         }
         continue;
       }
@@ -3190,14 +3191,16 @@ export function companySkillService(db: Db) {
           await db
             .update(companySkills)
             .set({ metadata, updatedAt: new Date() })
-            .where(eq(companySkills.id, skill.id));
+            .where(and(eq(companySkills.id, skill.id), sql`${companySkills.metadata}->>'mimouseRestorePending' is null`));
         }
         continue;
       }
 
       await removeRuntimeSkillCache(resolveManagedSkillsRoot(companyId), skill.id, async () => {
+        const [latest] = await db.select({ metadata: companySkills.metadata }).from(companySkills).where(eq(companySkills.id, skill.id));
+        if (latest?.metadata?.mimouseRestorePending) return;
         await fs.rm(resolveRuntimeSkillMaterializedPath(companyId, skill), { recursive: true, force: true });
-        await db.delete(companySkills).where(eq(companySkills.id, skill.id));
+        await db.delete(companySkills).where(and(eq(companySkills.id, skill.id), sql`${companySkills.metadata}->>'mimouseRestorePending' is null`));
       });
     }
   }
@@ -3374,12 +3377,13 @@ export function companySkillService(db: Db) {
     return rows as CompanySkillReferenceRow[];
   }
 
-  async function getById(companyId: string, id: string, database: DbOrTransaction = db) {
+  async function getById(companyId: string, id: string, database: DbOrTransaction = db, allowPendingRestore = false) {
     const row = await database
       .select(selectCompanySkillColumns())
       .from(companySkills)
       .where(and(eq(companySkills.companyId, companyId), eq(companySkills.id, id)))
       .then((rows) => rows[0] ?? null);
+    if (row?.metadata?.mimouseRestorePending && !allowPendingRestore) throw conflict("Skill restoration is pending; use its recovery receipt before editing or running it.");
     return row ? enrichFolderPath(companyId, toCompanySkill(row)) : null;
   }
 
@@ -3389,6 +3393,7 @@ export function companySkillService(db: Db) {
       .from(companySkills)
       .where(and(eq(companySkills.companyId, companyId), eq(companySkills.key, key)))
       .then((rows) => rows[0] ?? null);
+    if (row?.metadata?.mimouseRestorePending) throw conflict("Skill restoration is pending; recover it before importing or editing.");
     return row ? enrichFolderPath(companyId, toCompanySkill(row)) : null;
   }
 
@@ -3397,6 +3402,7 @@ export function companySkillService(db: Db) {
       .select(selectCompanySkillColumns())
       .from(companySkills)
       .where(and(eq(companySkills.companyId, companyId), eq(companySkills.slug, slug)));
+    if (rows.length === 1 && rows[0]?.metadata?.mimouseRestorePending) throw conflict("Skill restoration is pending; recover it before importing or editing.");
     return rows.length === 1 ? enrichFolderPath(companyId, toCompanySkill(rows[0]!)) : null;
   }
 
@@ -4452,7 +4458,7 @@ export function companySkillService(db: Db) {
     const row = await db
       .update(companySkills)
       .set(values)
-      .where(and(eq(companySkills.id, skillId), eq(companySkills.companyId, companyId)))
+      .where(and(eq(companySkills.id, skillId), eq(companySkills.companyId, companyId), sql`${companySkills.metadata}->>'mimouseRestorePending' is null`))
       .returning()
       .then((rows) => rows[0] ?? null);
     if (!row) throw notFound("Skill not found");
@@ -4643,6 +4649,50 @@ export function companySkillService(db: Db) {
       if (!skill) throw notFound("Skill not found");
       if (skill.slug !== initial.slug) throw conflict("Skill was renamed. Retry the operation.");
       return mutate(skill, tx);
+    });
+  }
+
+  async function managedRestoreSupport(companyId: string, skillId: string) {
+    const skill = await getById(companyId, skillId, db, true);
+    if (!skill) throw notFound("Skill not found");
+    const blockers: string[] = [];
+    if (!isPaperclipManagedRenameTarget(skill) || !deriveSkillSourceInfo(skill).editable || skill.metadata?.skillSourceId) blockers.push("restore_source_type_unsupported");
+    if ((await usage(companyId, skill.key)).length) blockers.push("restore_skill_still_assigned");
+    if (skill.metadata?.mimouseRestorePending) blockers.push("restore_pending_recovery");
+    return { sourceType: skill.sourceType, sourceKind: skill.metadata?.sourceKind ?? null, currentVersionId: skill.currentVersionId,
+      lastRestoreId: typeof skill.metadata?.mimouseLastRestoreId === "string" ? skill.metadata.mimouseLastRestoreId : null,
+      pendingOperationId: typeof skill.metadata?.mimouseRestorePending === "string" ? skill.metadata.mimouseRestorePending : null, blockers };
+  }
+
+  async function withManagedRestoreLock<T>(companyId: string, skillId: string, operationId: string | null,
+    work: (context: { skill: CompanySkill; tx: DbOrTransaction; root: string; directory: string;
+      identityFor: (version: CompanySkillVersion) => { name: string; description: string | null };
+      complete: (version: CompanySkillVersion | null, identity?: { name: string; description: string | null }) => Promise<void> }) => Promise<T>): Promise<T> {
+    const initial = await getById(companyId, skillId, db, true);
+    if (!initial) throw notFound("Skill not found");
+    return db.transaction(async tx => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${companyId}:${initial.slug}`}, 0))`);
+      await tx.execute(sql`select ${companySkills.id} from ${companySkills} where ${companySkills.id}=${skillId} and ${companySkills.companyId}=${companyId} for update`);
+      const skill = await getById(companyId, skillId, tx, true);
+      if (!skill || skill.slug !== initial.slug) throw conflict("Skill identity changed during restoration");
+      if (!isPaperclipManagedRenameTarget(skill) || !deriveSkillSourceInfo(skill).editable || skill.metadata?.skillSourceId) throw unprocessable("restore_source_type_unsupported");
+      if (skill.metadata?.mimouseRestorePending && skill.metadata.mimouseRestorePending !== operationId) throw conflict("restore_pending_operation_mismatch");
+      if ((await usage(companyId, skill.key)).length) throw conflict("restore_skill_still_assigned");
+      const identityFor = (version: CompanySkillVersion) => {
+        const parsed = parseFrontmatterMarkdown(version.fileInventory.find(file => file.path === "SKILL.md")?.content ?? "");
+        return { name: asString(parsed.frontmatter.name) ?? skill.name, description: asString(parsed.frontmatter.description) ?? skill.description };
+      };
+      const complete = async (version: CompanySkillVersion | null, identity?: { name: string; description: string | null }) => {
+        const metadata = { ...(skill.metadata ?? {}) }; delete metadata.mimouseRestorePending;
+        if (!version) { await tx.update(companySkills).set({ metadata, updatedAt: new Date() }).where(eq(companySkills.id, skillId)); return; }
+        if (version.companyId !== companyId || version.companySkillId !== skillId) throw conflict("restore_foreign_version");
+        const markdown = version.fileInventory.find(file => file.path === "SKILL.md")?.content;
+        if (markdown === undefined) throw unprocessable("restore_skill_markdown_required");
+        await tx.update(companySkills).set({ markdown, ...(identity ?? identityFor(version)), currentVersionId: version.id,
+          fileInventory: serializeFileInventory(version.fileInventory), trustLevel: deriveTrustLevel(version.fileInventory),
+          metadata: { ...metadata, mimouseLastRestoreId: operationId, userModifiedAt: new Date().toISOString() }, updatedAt: new Date() }).where(eq(companySkills.id, skillId));
+      };
+      return work({ skill, tx, root: resolveManagedSkillsRoot(companyId), directory: normalizeSkillDirectory(skill)!, identityFor, complete });
     });
   }
 
@@ -5985,6 +6035,7 @@ export function companySkillService(db: Db) {
     skill: CompanySkill,
     options: RuntimeSkillEntryOptions,
   ): Promise<RuntimeSkillSourceResolution | null> {
+    if (skill.metadata?.mimouseRestorePending) return { status: "missing", source: "", detail: "Skill restoration is pending human recovery; runtime use is blocked." };
     const selectedVersionId = options.versionSelections?.get(skill.key)
       ?? (skill.metadata?.skillSourceId && skill.metadata?.snapshotHash ? skill.currentVersionId : null);
     if (selectedVersionId) {
@@ -6304,7 +6355,7 @@ export function companySkillService(db: Db) {
         ? await database
           .update(companySkills)
           .set(values)
-          .where(eq(companySkills.id, existing.id))
+          .where(and(eq(companySkills.id, existing.id), sql`${companySkills.metadata}->>'mimouseRestorePending' is null`))
           .returning()
           .then((rows) => rows[0] ?? null)
         : await database
@@ -7210,6 +7261,8 @@ export function companySkillService(db: Db) {
   }
 
   return {
+    withManagedRestoreLock,
+    managedRestoreSupport,
     list,
     listFull,
     getById,
