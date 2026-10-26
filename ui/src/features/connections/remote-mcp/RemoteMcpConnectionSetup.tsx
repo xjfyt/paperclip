@@ -1,3 +1,4 @@
+import { useTranslation } from "@/i18n";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { CheckCircle2, ExternalLink, HelpCircle, Loader2, Plus, Trash2 } from "lucide-react";
 import { InlineBanner } from "@/components/InlineBanner";
@@ -53,6 +54,7 @@ export function RemoteMcpConnectionSetup({ provider, state: s, actions: a, agent
   actions: RemoteMcpSetupActions;
   agents: { id: string; name: string }[];
 }) {
+  const { t } = useTranslation();
   const uid = useId();
   const heading = useRef<HTMLHeadingElement>(null);
   const previousStep = useRef(s.step);
@@ -94,7 +96,7 @@ export function RemoteMcpConnectionSetup({ provider, state: s, actions: a, agent
       installCount: s.agentIds.length,
       lockedAgentId,
       preserveAgentAccess: s.setupComplete,
-    })}
+    }, t)}
     extra={extra}
     // Something inside is load-bearing: the operator has already chosen a
     // non-default sign-in method, or the provider just rejected a credential.

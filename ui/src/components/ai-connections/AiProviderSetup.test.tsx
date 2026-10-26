@@ -164,7 +164,7 @@ it.each(["en", "zh-CN", "es", "ja"])("keeps provider-step state and saved identi
     const chooseLocal = container.querySelector<HTMLButtonElement>(`[aria-label="${i18n.t("agentSetupConnectionUi.localName")}"]`)!;
     await act(async () => chooseLocal.click());
     expect(container.querySelector("h2")?.textContent).toBe(i18n.t("agentSetupConnectionUi.connectProviderName", { provider: i18n.t("agentSetupConnectionUi.localName") }));
-    const change = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Change")!;
+    const change = Array.from(container.querySelectorAll("button")).find(button => button.textContent === i18n.t("connectionAccessUi.change"))!;
     await act(async () => change.click());
     const fill = async (label: string, value: string) => {
       const input = container.querySelector<HTMLInputElement>(`[aria-label="${label}"]`)!;

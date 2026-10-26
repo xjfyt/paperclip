@@ -260,7 +260,7 @@ export function AiProviderSetup({
       companyId={companyId}
       extra={advanced ? modelSettings : undefined}
       agents={agents.data ?? []}
-      sentence={connectionDefaultSummarySentence({ grantKind: ownership === "shared" ? "organization" : "user", authKind: auth === "none" ? "none" : "api_key", installChoice: allAgents ? "all" : "specific", installCount: agentIds.size })}
+      sentence={connectionDefaultSummarySentence({ grantKind: ownership === "shared" ? "organization" : "user", authKind: auth === "none" ? "none" : "api_key", installChoice: allAgents ? "all" : "specific", installCount: agentIds.size }, t)}
       capabilities={{ canCreateOrganizationGrant: canManageConnections, canSetCompanyInstall: canManageConnections }}
       authKind={auth === "none" ? "none" : "api_key"}
       grantKind={ownership === "shared" ? "organization" : "user"}

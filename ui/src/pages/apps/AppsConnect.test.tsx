@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import "@/i18n/agent-setup-test-resources";
+import { i18n } from "@/i18n";
 
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -947,6 +949,32 @@ describe("AppsConnect — Connect with a link (M4 frame)", () => {
     if (!taskRepair) expect(mockNavigate).toHaveBeenCalledWith("/apps/anthropic-ai-account/permissions");
     expect(connectAppMock).not.toHaveBeenCalled();
     expect(container.textContent).not.toContain("Connect for tool access instead");
+  });
+
+  it.each(["en", "zh-CN", "es", "ja"])("retranslates standard connection access from %s without changing reach or requests", async locale => {
+    await i18n.changeLanguage(locale);
+    mockParams.appKey = "github";
+    listGalleryMock.mockResolvedValue({ apps: [GITHUB_MANAGED] });
+    try {
+      await render();
+      expect(container.textContent).toContain(i18n.t("connectionAccessUi.summaryPersonal"));
+      expect(container.textContent).toContain(i18n.t("connectionAccessUi.summaryAll"));
+      await act(async () => buttonByText(i18n.t("connectionAccessUi.change"))!.click());
+      await act(async () => radioContaining(i18n.t("connectionAccessUi.onlyChosenAgents"))!.click());
+      const galleryReads = listGalleryMock.mock.calls.length;
+      const agentReads = listAgentsMock.mock.calls.length;
+      await act(async () => { await i18n.changeLanguage(locale === "ja" ? "zh-CN" : "ja"); });
+      expect(container.textContent).toContain(i18n.t("connectionAccessUi.summaryPersonal"));
+      expect(container.textContent).toContain(i18n.t("connectionAccessUi.summaryNoneSelected"));
+      expect(radioContaining(i18n.t("connectionAccessUi.onlyChosenAgents"))?.getAttribute("aria-checked")).toBe("true");
+      expect(radioContaining(i18n.t("connectionAccessUi.myGithub"))?.getAttribute("aria-checked")).toBe("true");
+      expect(buttonByText(i18n.t("connectionAccessUi.change"))?.getAttribute("aria-expanded")).toBe("true");
+      expect(listGalleryMock).toHaveBeenCalledTimes(galleryReads);
+      expect(listAgentsMock).toHaveBeenCalledTimes(agentReads);
+      expect(connectAppMock).not.toHaveBeenCalled();
+      expect(startOAuthMock).not.toHaveBeenCalled();
+      expect(putConnectionInstallsMock).not.toHaveBeenCalled();
+    } finally { await act(async () => { await i18n.changeLanguage("en"); }); }
   });
 
   it("states the GitHub identity default and keeps its controls one click away", async () => {
