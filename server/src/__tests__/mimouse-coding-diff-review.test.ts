@@ -1,3 +1,4 @@
+import { verifyLocalCodingHead } from "../services/mimouse-coding/readonly-git.js";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { mkdtemp, writeFile, rm, chmod, access } from "node:fs/promises";
@@ -50,6 +51,7 @@ describe("source-pinned coding review", () => {
   });
   it("rejects dirty trees and later commits", async () => {
     const f = await fixture(); await writeFile(path.join(f.cwd, "source.txt"), "unreviewed\n"); await expect(f.diff()).rejects.toThrow("workspace_not_clean");
+    await expect(verifyLocalCodingHead(f.workspace, f.row.baseSha, f.row.headSha)).rejects.toThrow("workspace_not_clean");
     await f.git("add", "."); await f.git("commit", "-m", "later"); await expect(f.diff()).rejects.toThrow("workspace_head_changed");
   });
   it("rejects an incorrect or non-ancestor base", async () => {
@@ -72,15 +74,21 @@ describe("source-pinned coding review", () => {
     const f = await fixture();
     const hook = path.join(f.cwd, ".git", "fixture-monitor"); const marker = path.join(f.cwd, ".git", "monitor-ran");
     await writeFile(hook, `#!/bin/sh\ntouch '${marker}'\n`); await chmod(hook, 0o755); await f.git("config", "core.fsmonitor", hook);
-    expect((await f.diff()).complete).toBe(true); await expect(access(marker)).rejects.toThrow();
+    expect((await f.diff()).complete).toBe(true); await verifyLocalCodingHead(f.workspace, f.row.baseSha, f.row.headSha); await expect(access(marker)).rejects.toThrow();
   });
-  it("never invokes configured clean filters while refreshing status", async () => {
+  it.each(["clean", "process"])("never invokes configured %s filters while refreshing status", async driver => {
     const f = await fixture("changed\n", async cwd => { await writeFile(path.join(cwd, ".gitattributes"), "source.txt filter=unsafe\n"); });
     const marker = path.join(f.cwd, ".git", "filter-ran"); const hook = path.join(f.cwd, ".git", "fixture-filter");
     await writeFile(hook, `#!/bin/sh\ntouch '${marker}'\ncat\n`); await chmod(hook, 0o755);
-    await f.git("config", "filter.unsafe.clean", hook); await f.git("config", "filter.unsafe.required", "true");
+    await f.git("config", `filter.unsafe.${driver}`, hook); await f.git("config", "filter.unsafe.required", "true");
     await writeFile(path.join(f.cwd, "source.txt"), "changed\n");
-    expect((await f.diff()).complete).toBe(true); await expect(access(marker)).rejects.toThrow();
+    expect((await f.diff()).complete).toBe(true); await verifyLocalCodingHead(f.workspace, f.row.baseSha, f.row.headSha); await expect(access(marker)).rejects.toThrow();
+  });
+  it("blocks nested gitlink workspaces before running recursive status", async () => {
+    const f = await fixture(); await f.git("update-index", "--add", "--cacheinfo", `160000,${f.row.baseSha},nested`);
+    await f.git("commit", "-m", "gitlink"); f.row.headSha = await f.git("rev-parse", "HEAD");
+    await expect(f.diff()).rejects.toThrow("submodule_workspace_requires_external_review");
+    await expect(verifyLocalCodingHead(f.workspace, f.row.baseSha, f.row.headSha)).rejects.toThrow("submodule_workspace_requires_external_review");
   });
   it("does not execute configured external diff commands", async () => {
     const f = await fixture(); await f.git("config", "diff.external", "command-that-must-not-exist"); expect((await f.diff()).complete).toBe(true);

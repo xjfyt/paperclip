@@ -81,7 +81,7 @@ GET `/api/companies/:companyId/coding/:id/build-matrix` 和交付列表的 `buil
 
 差异严格使用台账 `baseSha` → `headSha`；两个值必须是完整 commit SHA、base 是 head 祖先，当前工作区干净、分支及 HEAD 精确匹配。
 不会 fetch、checkout、推送或执行 textconv/外部 diff，禁用 Git replacement/graft 对象、fsmonitor 及 clean/process filter 命令。补丁作为纯文本呈现。
-最多 200 个文件及 512 KiB 命令输出；二进制、子模块或超限显示 incomplete 并拒绝确认，不截断后宣称完整，也不提供跳过门禁按钮。
+最多 200 个文件及 512 KiB 命令输出；二进制或超限显示 incomplete 并拒绝确认；含子模块 gitlink 的工作区在 status 前拒绝并提示需外部审阅（避免执行嵌套仓库过滤器），不截断后宣称完整，也不提供跳过门禁按钮。
 
 `POST .../coding/:id/review` 现在要求 `confirm:true`、完整 `baseSha`、`headSha` 和界面显示的 64 位 SHA-256 `digest`。
 必须是真实登录的公司管理员；local_trusted 隐式身份不能确认审阅。
@@ -94,5 +94,7 @@ GET `/api/companies/:companyId/coding/:id/build-matrix` 和交付列表的 `buil
 回执绑定的是已记录的产物 SHA-256 清单，不是持续监控磁盘文件；后续上传/发布必须重新核验实际字节，当前没有授权上传或发布。
 MR/CI 同步不会把旧式 SHA 勾选升级为新回执，任何候选状态仍不代表六平台 Runner、签名或生产发布已验收。
 
-定向验证：实际临时 Git 仓库 24 项单测、差异交互 8 项 jsdom 测试通过；涵盖跨项目、旧摘要/旧 SHA、脏目录、非祖先、二进制、体积/文件数限制、取消/重开及身份切换。
+定向验证：实际临时 Git 仓库 26 项单测、差异交互 8 项 jsdom 测试通过；涵盖跨项目、旧摘要/旧 SHA、脏目录、非祖先、二进制、体积/文件数限制、取消/重开及身份切换。
 `tests/mimouse/coding-diff.spec.ts` 提供真实隔离数据库与 HTTP 路由测试，GitLab project 读取是注入夹具；须在集成迁移后运行，不代表真实 GitLab 联调。
+
+审阅回执与 activity 审计同事务写入，事务成功后才发布 activity 事件；审计失败不会留下已确认审阅。注册/产物/修复使用的 `verifyLocalCodingHead` 与差异检查复用只读 Git 防护，不改变显式授权 push 的凭据环境或 hooks。

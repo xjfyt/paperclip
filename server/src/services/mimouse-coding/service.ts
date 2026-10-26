@@ -1,3 +1,5 @@
+import { verifyLocalCodingHead, type CodingWorkspace } from "./readonly-git.js";
+export { verifyLocalCodingHead, type CodingWorkspace } from "./readonly-git.js";
 import { fixedCommitDiff, reviewedHead } from "./diff-review.js";
 import { enqueueNotification } from "../mimouse-notifications/outbox.js";
 import { execFile } from "node:child_process";
@@ -8,16 +10,6 @@ import { issues, executionWorkspaces, mimouseCodingDeliveries as deliveries, typ
 import { secretService } from "../secrets.js";
 import { deliveryGate, gitlabClient, GitLabError, type CheckEvidence, type GitLabMergeRequest, type GitLabPipeline } from "./gitlab.js";
 const exec = promisify(execFile);
-export interface CodingWorkspace { cwd: string; repoUrl: string; branchName: string }
-export async function verifyLocalCodingHead(workspace: CodingWorkspace, baseSha: string, headSha: string) {
-  if (!/^[a-f0-9]{40}$/.test(headSha) || !/^[a-f0-9]{40}$/.test(baseSha)) throw new GitLabError("invalid_commit_sha");
-  const options = { cwd: workspace.cwd, timeout: 30000, maxBuffer: 65536 };
-  const [head, branch, status] = await Promise.all([exec("git", ["rev-parse", "HEAD"], options), exec("git", ["branch", "--show-current"], options), exec("git", ["status", "--porcelain"], options)]);
-  if (head.stdout.trim() !== headSha || branch.stdout.trim() !== workspace.branchName) throw new GitLabError("workspace_head_changed");
-  if (status.stdout.trim()) throw new GitLabError("workspace_not_clean");
-  await exec("git", ["check-ref-format", "--branch", workspace.branchName], options);
-  await exec("git", ["merge-base", "--is-ancestor", baseSha, headSha], options);
-}
 export async function publishCodingHead(workspace: CodingWorkspace, baseSha: string, headSha: string, approvedRepoUrls: string[]) {
   if (process.env.PAPERCLIP_GITLAB_PUBLISH_ENABLED !== "true") throw new GitLabError("operator_publish_disabled");
   if (!approvedRepoUrls.includes(workspace.repoUrl)) throw new GitLabError("repository_identity_mismatch");

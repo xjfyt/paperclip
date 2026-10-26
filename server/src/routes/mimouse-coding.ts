@@ -14,7 +14,7 @@ import { validate } from "../middleware/validate.js";
 import { canActorReadIssuePrivacy } from "../services/authorization.js";
 import { codingService, verifyLocalCodingHead } from "../services/mimouse-coding/service.js";
 import { deliveryGate, gitlabOrigin, GitLabError, type CheckEvidence, type GitLabMergeRequest, type GitLabPipeline } from "../services/mimouse-coding/gitlab.js";
-import { logActivity } from "../services/activity-log.js";
+import { logActivity, publishActivity, type ActivityPublication } from "../services/activity-log.js";
 const sha = z.string().regex(/^[a-f0-9]{40}$/);
 const createSchema = z.object({ issueId: z.string().uuid(), workspaceId: z.string().uuid(), gitlabOrigin: z.string().url(), projectId: z.number().int().positive(), secretRef: z.string().uuid(), baseSha: sha, headSha: sha, targetBranch: z.string().min(1).max(200) }).strict();
 const reviewSchema = z.object({ headSha: sha, baseSha: sha, digest: z.string().regex(/^[a-f0-9]{64}$/), confirm: z.literal(true) }).strict();
@@ -117,12 +117,14 @@ export function mimouseCodingRoutes(db: Db, deps: { service?: ReturnType<typeof 
     if (input.headSha !== row.headSha || input.baseSha !== row.baseSha) throw unprocessable("Review SHA is stale");
     const diff = await safe(() => service.reviewDiff(row.companyId, row.id));
     const receipt = await safe(async () => reviewReceipt(row, diff, input.digest, reviewerUserId));
+    const publications: ActivityPublication[] = []; const actor = getActorInfo(req);
     await db.transaction(async tx => {
       const [current] = await tx.select().from(deliveries).where(and(eq(deliveries.companyId, row.companyId), eq(deliveries.id, row.id))).for("update");
       if (!current || reviewBinding(current) !== diff.binding) throw unprocessable("Review changed while confirming");
       await tx.update(deliveries).set({ reviewReceipt: receipt, reviewedSha: input.headSha, reviewerUserId, updatedAt: new Date() }).where(and(eq(deliveries.companyId, row.companyId), eq(deliveries.id, row.id)));
+      await logActivity(tx, { companyId: row.companyId, actorType: actor.actorType, actorId: actor.actorId, action: "coding.head.reviewed", entityType: "coding_delivery", entityId: row.id, details: {} }, publications);
     });
-    await audit(req, "coding.head.reviewed", row.id); res.json({ reviewedSha: input.headSha, productionReleaseAuthorized: false });
+    publications.forEach(publishActivity); res.json({ reviewedSha: input.headSha, productionReleaseAuthorized: false });
   });
   router.post(`${root}/:id/publish`, validate(confirmSchema), async (req, res) => {
     const row = await load(req); const input = confirmSchema.parse(req.body); const result = await safe(() => service.publish(row.companyId, row.id, input.headSha)); await audit(req, "coding.branch.published", row.id); res.json(result);

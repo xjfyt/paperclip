@@ -1,8 +1,6 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { readonlyCodingGit } from "./readonly-git.js";
 import { createHash } from "node:crypto";
 import { GitLabError } from "./gitlab.js";
-const exec = promisify(execFile);
 const MAX_PATCH_BYTES = 512 * 1024;
 const MAX_FILES = 200;
 export interface ReviewDelivery {
@@ -47,15 +45,7 @@ export async function fixedCommitDiff(row: ReviewDelivery, workspace: { cwd: str
   });
   if (!allowed.includes(workspace.repoUrl)) throw new GitLabError("repository_identity_mismatch");
   if (!/^[a-f0-9]{40}$/.test(row.baseSha) || !/^[a-f0-9]{40}$/.test(row.headSha)) throw new GitLabError("invalid_commit_sha");
-  const options = { cwd: workspace.cwd, timeout: 15000, maxBuffer: MAX_PATCH_BYTES, env: { PATH: process.env.PATH, HOME: process.env.HOME, SYSTEMROOT: process.env.SYSTEMROOT, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null", GIT_NO_REPLACE_OBJECTS: "1", GIT_GRAFT_FILE: "/dev/null", GIT_TERMINAL_PROMPT: "0", LC_ALL: "C" } };
-  const disabledFilters: string[] = [];
-  const git = async (args: string[]) => (await exec("git", ["--no-pager", "-c", "core.fsmonitor=false", "-c", "color.ui=false", ...disabledFilters, ...args], options)).stdout;
-  // status may refresh the index and invoke clean/process filters. Disable every
-  // configured driver without interpreting its command or running a shell.
-  try {
-    const keys = await git(["config", "--null", "--name-only", "--get-regexp", "^filter\\..*\\.(clean|process|required)$"]);
-    for (const key of keys.split("\0").filter(Boolean)) disabledFilters.push("-c", `${key}=${key.endsWith(".required") ? "false" : ""}`);
-  } catch (error) { if ((error as { code?: number }).code !== 1) throw error; }
+  const git = await readonlyCodingGit(workspace.cwd, MAX_PATCH_BYTES);
   // No fetch, external diff, textconv or checkout. Only immutable local objects.
   const checkIdentity = async () => {
     if ((await git(["remote", "get-url", "origin"])).trim() !== workspace.repoUrl) throw new GitLabError("repository_identity_mismatch");
