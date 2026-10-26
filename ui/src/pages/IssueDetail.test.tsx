@@ -1,3 +1,4 @@
+import { issueRetryMessages } from "../i18n/issue-retry-test-resources";
 import { i18n } from "../i18n";
 import { monitorSurfaceMessages } from "../i18n/monitor-surface-test-resources";
 import { AgentAvatar } from "../components/AgentAvatar";
@@ -57,6 +58,9 @@ const mockIssuesApi = vi.hoisted(() => ({
   listAttachments: vi.fn(),
   listWorkProducts: vi.fn(),
   checkMonitorNow: vi.fn(),
+  retryScheduledRetryNow: vi.fn(),
+  listApprovals: vi.fn(),
+  getCostSummary: vi.fn(),
   listFeedbackVotes: vi.fn(),
   listInteractions: vi.fn(),
   getQueuedComments: vi.fn(),
@@ -1335,6 +1339,9 @@ describe("IssueDetail", () => {
     mockIssuesApi.listAttachments.mockResolvedValue([]);
     mockIssuesApi.listWorkProducts.mockResolvedValue([]);
     mockIssuesApi.checkMonitorNow.mockReset();
+    mockIssuesApi.retryScheduledRetryNow.mockReset();
+    mockIssuesApi.listApprovals.mockReset().mockResolvedValue([]);
+    mockIssuesApi.getCostSummary.mockReset().mockResolvedValue(null);
     mockIssuesApi.listFeedbackVotes.mockResolvedValue([]);
     mockIssuesApi.listInteractions.mockResolvedValue([]);
     mockIssuesApi.getQueuedComments.mockResolvedValue(
@@ -1423,6 +1430,32 @@ describe("IssueDetail", () => {
     mockLocation.state = null;
     mockRouteParams.issueId = "PAP-1";
     mockRouteParams.companyPrefix = "PAP";
+  });
+
+  it.each(Object.entries(issueRetryMessages))("localizes the actual activity-tab scheduled retry host and keeps its request identity in %s", async (locale, messages) => {
+    await i18n.changeLanguage(locale);
+    const scheduledRetry = {
+      runId: "run-retry", status: "scheduled_retry" as const, agentId: "agent-1", agentName: "Agent 原名",
+      retryOfRunId: "original-run-123", scheduledRetryAt: new Date(Date.now() + 900_000).toISOString(),
+      scheduledRetryAttempt: 2, scheduledRetryReason: "transient_failure", retryExhaustedReason: null, error: "Original failure 原文", errorCode: "provider_code",
+    };
+    // The standalone retry card belongs to the classic Activity tab, not the chat header.
+    mockLocation.hash = "#document-continuation-summary";
+    mockInstanceSettingsApi.getExperimental.mockResolvedValue({ enableClassicTaskInterface: true });
+    mockIssuesApi.get.mockResolvedValue(createIssue({ status: "in_progress", scheduledRetry }));
+    mockIssuesApi.retryScheduledRetryNow.mockReset().mockResolvedValueOnce({ outcome: "gate_suppressed", message: "Server gate 原文", scheduledRetry });
+    try {
+      await act(async () => root.render(<QueryClientProvider client={queryClient}><IssueDetail /></QueryClientProvider>));
+      const button = () => container.querySelector<HTMLButtonElement>('[data-testid="issue-scheduled-retry-card-retry-now"]')!;
+      await waitForAssertion(() => expect(button()?.textContent).toBe(messages.retryNow));
+      expect(container.textContent).toContain(messages.retryScheduled);
+      expect(container.textContent).toContain(scheduledRetry.error);
+      await act(async () => button().click());
+      await waitForAssertion(() => expect(mockPushToast).toHaveBeenCalledWith({ title: messages.couldNotRetry, body: "Server gate 原文", tone: "error" }));
+      expect(mockIssuesApi.retryScheduledRetryNow).toHaveBeenCalledWith("issue-1");
+      await waitForAssertion(() => expect(container.querySelector('[data-testid="issue-scheduled-retry-error-band"]')?.textContent).toContain("Server gate 原文"));
+      expect(button().disabled).toBe(false);
+    } finally { await act(async () => { await i18n.changeLanguage("en"); }); }
   });
 
   it.each(Object.entries(monitorSurfaceMessages))("localizes actual monitor host feedback without changing requests in %s", async (locale, messages) => {

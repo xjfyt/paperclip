@@ -54,11 +54,10 @@ import {
   formatMonitorAbsolute,
   formatMonitorAbsoluteFull,
   formatMonitorEta,
-  formatMonitorOffset,
   useMonitorCountdown,
 } from "../../lib/issue-monitor";
 import { extractProviderIdWithFallback } from "../../lib/model-utils";
-import { formatRetryReason } from "../../lib/runRetryState";
+import { retryReasonDisplay, retryScheduleDisplay } from "../../i18n/retry-display";
 import { useRetryNowMutation } from "../../hooks/useRetryNowMutation";
 import { RetryErrorBand } from "../IssueScheduledRetryCard";
 import { StatusIcon } from "../StatusIcon";
@@ -1420,16 +1419,15 @@ export function IssueProperties({
   const scheduledRetryDueAtIso = scheduledRetry?.scheduledRetryAt
     ? new Date(scheduledRetry.scheduledRetryAt).toISOString()
     : null;
-  const scheduledRetryRelative = scheduledRetryDueAtIso
-    ? formatMonitorOffset(scheduledRetryDueAtIso)
-    : null;
+  const scheduledRetrySchedule = retryScheduleDisplay(scheduledRetryDueAtIso);
+  const scheduledRetryRelative = scheduledRetrySchedule.offset;
   const scheduledRetryAbsolute = scheduledRetry?.scheduledRetryAt
     ? formatDateTime(scheduledRetry.scheduledRetryAt)
     : null;
   const scheduledRetryShortDate = scheduledRetry?.scheduledRetryAt
     ? formatDate(new Date(scheduledRetry.scheduledRetryAt))
     : null;
-  const scheduledRetryReasonLabel = formatRetryReason(scheduledRetry?.scheduledRetryReason);
+  const scheduledRetryReasonLabel = retryReasonDisplay(scheduledRetry?.scheduledRetryReason);
   const scheduledRetryAttempt =
     typeof scheduledRetry?.scheduledRetryAttempt === "number"
     && Number.isFinite(scheduledRetry.scheduledRetryAttempt)
@@ -1438,16 +1436,13 @@ export function IssueProperties({
       : null;
   const scheduledRetryIsContinuation =
     scheduledRetry?.scheduledRetryReason === "max_turns_continuation";
-  const scheduledRetryRelativeLabel = (() => {
-    if (!scheduledRetryRelative) return "Pending schedule";
-    const action = scheduledRetryIsContinuation ? "Continuation" : "Retry";
-    if (scheduledRetryRelative === "now") return `${action} due now`;
-    return `${action} ${scheduledRetryRelative}`;
-  })();
+  const scheduledRetryRelativeLabel = scheduledRetryRelative
+    ? t(scheduledRetryIsContinuation ? "issueRetryUi.continuationWhen" : "issueRetryUi.retryWhen", { when: scheduledRetrySchedule.when })
+    : t("issueRetryUi.pendingSchedule");
   const scheduledRetryRetryNowSuccess = retryNow.isSuccess
     && (retryNow.data?.outcome === "promoted" || retryNow.data?.outcome === "already_promoted");
   const scheduledRetryAttemptBadge = scheduledRetryAttempt !== null ? (
-    <span className="whitespace-nowrap shrink-0 text-xs text-muted-foreground">Attempt {scheduledRetryAttempt}</span>
+    <span className="whitespace-nowrap shrink-0 text-xs text-muted-foreground">{t("issueRetryUi.attempt", { attempt: formatNumber(scheduledRetryAttempt) })}</span>
   ) : null;
   const scheduledRetryTrigger = (
     <span className="inline-flex min-w-0 items-center gap-1.5">
@@ -1469,24 +1464,24 @@ export function IssueProperties({
     <div className="flex w-full flex-col gap-2 p-2 text-xs">
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium text-foreground">
-          {scheduledRetryIsContinuation ? "Scheduled continuation" : "Scheduled retry"}
+          {t(scheduledRetryIsContinuation ? "issueRetryUi.scheduledContinuation" : "issueRetryUi.scheduledRetry")}
         </span>
         {scheduledRetryAttempt !== null ? (
           <span className="text-xs text-muted-foreground">
-            Attempt {scheduledRetryAttempt}
+            {t("issueRetryUi.attempt", { attempt: formatNumber(scheduledRetryAttempt) })}
           </span>
         ) : null}
       </div>
       <dl className="grid grid-cols-(--gtc-15) gap-y-1">
         {scheduledRetryReasonLabel ? (
           <>
-            <dt className="text-muted-foreground">Reason</dt>
+            <dt className="text-muted-foreground">{t("issueRetryUi.reason")}</dt>
             <dd className="text-foreground">{scheduledRetryReasonLabel}</dd>
           </>
         ) : null}
         {scheduledRetryAbsolute ? (
           <>
-            <dt className="text-muted-foreground">Next attempt</dt>
+            <dt className="text-muted-foreground">{t("issueRetryUi.nextAttempt")}</dt>
             <dd className="text-foreground">
               {scheduledRetryAbsolute}
               {scheduledRetryRelative ? (
@@ -1497,7 +1492,7 @@ export function IssueProperties({
         ) : null}
         {scheduledRetry.retryOfRunId ? (
           <>
-            <dt className="text-muted-foreground">Replaces run</dt>
+            <dt className="text-muted-foreground">{t("issueRetryUi.replacesRun")}</dt>
             <dd className="text-foreground">
               <Link
                 to={`/agents/${scheduledRetry.agentId}/runs/${scheduledRetry.retryOfRunId}`}
@@ -1510,7 +1505,7 @@ export function IssueProperties({
         ) : null}
         {scheduledRetry.agentName ? (
           <>
-            <dt className="text-muted-foreground">Agent</dt>
+            <dt className="text-muted-foreground">{t("issueRetryUi.agent")}</dt>
             <dd className="text-foreground">
               <Link
                 to={`/agents/${scheduledRetry.agentId}`}
@@ -1523,7 +1518,7 @@ export function IssueProperties({
         ) : null}
         {scheduledRetry.error ? (
           <>
-            <dt className="text-muted-foreground">Last error</dt>
+            <dt className="text-muted-foreground">{t("issueRetryUi.lastError")}</dt>
             <dd className="text-foreground break-words">{scheduledRetry.error}</dd>
           </>
         ) : null}
@@ -1548,32 +1543,32 @@ export function IssueProperties({
           {retryNow.isPending ? (
             <span className="inline-flex items-center gap-1.5">
               <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-              Retrying…
+              {t("issueRetryUi.retrying")}
             </span>
           ) : scheduledRetryRetryNowSuccess ? (
             <span className="inline-flex items-center gap-1.5">
               <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
-              {retryNow.data?.outcome === "already_promoted" ? "Already promoted" : "Promoted"}
+              {t(retryNow.data?.outcome === "already_promoted" ? "issueRetryUi.alreadyPromoted" : "issueRetryUi.promoted")}
             </span>
           ) : (
             <span className="inline-flex items-center gap-1.5">
               <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
-              Retry now
+              {t("issueRetryUi.retryNow")}
             </span>
           )}
         </Button>
         <span className="text-right text-xs text-muted-foreground">
           {retryNow.isPending
-            ? "Promoting scheduled retry"
+            ? t("issueRetryUi.promoting")
             : scheduledRetryRetryNowSuccess
               ? retryNow.data?.outcome === "already_promoted"
-                ? "Already promoted — run starting"
-                : "Promoted — run starting"
+                ? t("issueRetryUi.alreadyPromotedStarting")
+                : t("issueRetryUi.promotedStarting")
               : retryNow.data?.outcome === "waiting" && retryNow.data.scheduledRetry?.runId === scheduledRetry.runId
                 ? retryNow.data.message
                 : scheduledRetryIsContinuation
-                  ? "Pulls continuation forward immediately"
-                  : "Pulls retry forward immediately"}
+                  ? t("issueRetryUi.pullContinuation")
+                  : t("issueRetryUi.pullRetry")}
         </span>
       </div>
     </div>
@@ -2707,7 +2702,7 @@ export function IssueProperties({
 
         {showScheduledRetryRow && scheduledRetry?.scheduledRetryReason === "workspace_busy" ? (
           <PropertyRow label="Workspace">
-            <span className="text-sm text-muted-foreground">Waiting for workspace</span>
+            <span className="text-sm text-muted-foreground">{t("issueRetryUi.waitingWorkspace")}</span>
           </PropertyRow>
         ) : showScheduledRetryRow && scheduledRetryContent ? (
           <PropertyPicker

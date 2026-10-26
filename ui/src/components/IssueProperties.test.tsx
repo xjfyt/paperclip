@@ -2,6 +2,7 @@
 
 import { i18n, coreTaskMessages } from "../i18n/core-task-test-resources";
 import { issuePropertyControlsMessages } from "../i18n/issue-property-controls-test-resources";
+import { issueRetryMessages } from "../i18n/issue-retry-test-resources";
 import { issueWorkspaceMessages } from "../i18n/issue-workspace-test-resources";
 import { issueMonitorMessages } from "../i18n/issue-monitor-test-resources";
 import { issueModelMessages } from "../i18n/issue-model-test-resources";
@@ -49,6 +50,7 @@ const mockIssuesApi = vi.hoisted(() => ({
   listInteractions: vi.fn(),
   listLabels: vi.fn(),
   createLabel: vi.fn(),
+  retryScheduledRetryNow: vi.fn(),
   upsertWatchdog: vi.fn(),
   deleteWatchdog: vi.fn(),
   unarchiveFromInbox: vi.fn(),
@@ -3452,6 +3454,68 @@ describe("IssueProperties", () => {
     } as unknown as NonNullable<Issue["watchdog"]>;
   }
 
+  it("keeps the open scheduled retry properties and in-flight request across all four languages", async () => {
+    const scheduledRetry = {
+      runId: "run-retry-original", status: "scheduled_retry" as const, agentId: "agent-retry", agentName: "Agent 原名",
+      retryOfRunId: "original-run-123", scheduledRetryAt: "2099-01-01T12:00:00.000Z", scheduledRetryAttempt: 4,
+      scheduledRetryReason: "transient_failure", retryExhaustedReason: null, error: "Original diagnostic 原文", errorCode: "raw_error",
+    };
+    let resolve!: (value: unknown) => void;
+    mockIssuesApi.retryScheduledRetryNow.mockReset().mockReturnValueOnce(new Promise((done) => { resolve = done; }));
+    const onUpdate = vi.fn();
+    const root = renderProperties(container, { issue: createIssue({ scheduledRetry }), childIssues: [], onUpdate, inline: true });
+    try {
+      await flush();
+      await act(() => findRowTrigger(container, "Scheduled retry")!.click());
+      const button = () => container.querySelector<HTMLButtonElement>('[data-testid="issue-scheduled-retry-properties-retry-now"]')!;
+      for (const [locale, messages] of Object.entries(issueRetryMessages)) {
+        await act(async () => { await i18n.changeLanguage(locale); });
+        for (const key of ["scheduledRetry", "reason", "nextAttempt", "replacesRun", "agent", "lastError", "transient_failure", "pullRetry"] as const) expect(container.textContent).toContain(messages[key]);
+        expect(button().textContent).toBe(messages.retryNow);
+        expect(container.textContent).toContain("Agent 原名");
+        expect(container.textContent).toContain(scheduledRetry.error);
+        expect(container.querySelector('a[href="/agents/agent-retry/runs/original-run-123"]')).not.toBeNull();
+      }
+      await act(() => button().click());
+      for (const [locale, messages] of Object.entries(issueRetryMessages)) {
+        await act(async () => { await i18n.changeLanguage(locale); });
+        await waitForAssertion(() => expect(button().textContent).toBe(messages.retrying));
+        expect(button().disabled).toBe(true);
+        await act(() => button().click());
+      }
+      expect(mockIssuesApi.retryScheduledRetryNow).toHaveBeenCalledTimes(1);
+      expect(mockIssuesApi.retryScheduledRetryNow).toHaveBeenCalledWith("issue-1");
+      await act(() => resolve({ outcome: "already_promoted", message: "Backend original", scheduledRetry: { ...scheduledRetry, status: "queued" } }));
+      for (const [locale, messages] of Object.entries(issueRetryMessages)) {
+        await act(async () => { await i18n.changeLanguage(locale); });
+        await waitForAssertion(() => expect(button().textContent).toBe(messages.alreadyPromoted));
+        expect(button().disabled).toBe(true);
+        expect(container.textContent).toContain(messages.alreadyPromotedStarting);
+      }
+      await act(() => findRowTrigger(container, "Scheduled retry")!.click());
+      expect(button()).toBeNull();
+      await act(() => findRowTrigger(container, "Scheduled retry")!.click());
+      expect(button().disabled).toBe(true);
+      expect(onUpdate).not.toHaveBeenCalled();
+      expect(scheduledRetry.status).toBe("scheduled_retry");
+      expect(scheduledRetry.scheduledRetryAt).toBe("2099-01-01T12:00:00.000Z");
+    } finally { await act(() => root.unmount()); }
+  });
+
+  it.each(Object.entries(issueRetryMessages))("keeps scheduled retry workspace contention control-free in %s", async (locale, messages) => {
+    await i18n.changeLanguage(locale);
+    const root = renderProperties(container, { issue: createIssue({ scheduledRetry: {
+      runId: "run-wait", status: "scheduled_retry", agentId: "agent-1", agentName: "Original", retryOfRunId: null,
+      scheduledRetryAt: null, scheduledRetryAttempt: 1, scheduledRetryReason: "workspace_busy", retryExhaustedReason: null, error: null, errorCode: null,
+    } }), childIssues: [], onUpdate: vi.fn(), inline: true });
+    try {
+      await flush();
+      expect(container.textContent).toContain(messages.waitingWorkspace);
+      expect(findRowTrigger(container, "Scheduled retry")).toBeFalsy();
+      expect(container.querySelector('[data-testid="issue-scheduled-retry-properties-retry-now"]')).toBeNull();
+    } finally { await act(() => root.unmount()); }
+  });
+
   it.each(Object.entries(issueWatchdogMessages))("localizes the watchdog editor and keeps values in %s", async (locale, messages) => {
     await i18n.changeLanguage(locale);
     mockAgentsApi.list.mockResolvedValue([{ ...watchdogAgent, name: "No watchdog agent" }]);
@@ -4270,7 +4334,10 @@ describe("IssueProperties", () => {
     await i18n.changeLanguage(locale);
     mockProjectsApi.list.mockResolvedValue([createProject()]);
     const workspace = createExecutionWorkspace({
-      config: { workspaceRuntime: { services: [{ name: "web", command: "pnpm dev" }] } } as ExecutionWorkspace["config"],
+      config: {
+        provisionCommand: null, teardownCommand: null, cleanupCommand: null, desiredState: null,
+        workspaceRuntime: { services: [{ name: "web", command: "pnpm dev" }] },
+      },
       runtimeServices: [createRuntimeService({ status: "running", configIndex: 0, url: "https://workspace.example.test" })],
     });
     mockExecutionWorkspacesApi.controlRuntimeCommands.mockResolvedValue({ workspace, operation: {} });
