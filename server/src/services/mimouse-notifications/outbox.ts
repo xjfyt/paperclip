@@ -16,7 +16,7 @@ export const CONNECTED_NOTIFICATION_EVENTS = ["approval.requested", "run.failed"
 // the shared query surface, not an unsafe cast to Drizzle transaction internals.
 type Transaction = Pick<Parameters<Parameters<Db["transaction"]>[0]>[0], "select" | "insert" | "execute">;
 interface EventInput { companyId: string; eventId: string; type: string; resourceId: string; title?: string; text?: string }
-interface Snapshot extends NotificationSnapshot { digestVersion?: number; digestEnvelope?: unknown; policy?: unknown; policyVersion?: number; severity?: string; policyEvent?: string; policyResourceId?: string; configVersion?: number; secretRef: string; secretVersion: number; targetKey: string; locale: string; renderVersion: number; renderEvent?: string; renderResourceId?: string; renderCompanyPrefix?: string; rendered?: boolean }
+interface Snapshot extends NotificationSnapshot { digestVersion?: number; digestEnvelope?: unknown; policy?: unknown; policyVersion?: number; severity?: string; policyEvent?: string; policyResourceId?: string; configVersion?: number; verificationEpoch?: number; secretRef: string; secretVersion: number; targetKey: string; locale: string; renderVersion: number; renderEvent?: string; renderResourceId?: string; renderCompanyPrefix?: string; rendered?: boolean }
 interface DeliveryRow { id: string; company_id: string; endpoint_id: string; subscription_id: string; snapshot: Snapshot; lease: string; merge_key?: string | null; attempt: number; created_at: Date }
 
 /** Called inside the exact business transaction. Never run a provider request here. */
@@ -50,6 +50,8 @@ export async function enqueueNotification(tx: Transaction, event: EventInput): P
       kind: endpoint.kind as NotificationSnapshot["kind"], ...rendered,
       ...(templateData ? { templateData } : {}),
       secretRef: endpoint.secretRef, secretVersion: endpoint.secretVersion, configVersion: endpoint.configVersion,
+      // Freeze before hashing: the INSERT trigger otherwise adds this field after admission.
+      verificationEpoch: endpoint.verificationEpoch,
       targetKey: endpoint.targetKey, locale: subscription.locale, renderVersion: 2,
     };
     const merge = !renderFailed && !decision.filtered && decision.mergeWindowSeconds > 0

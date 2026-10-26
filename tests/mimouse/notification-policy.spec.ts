@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import { agents, heartbeatRuns, activityLog, companySecrets, mimouseNotificationEndpoints as endpoints, mimouseNotificationSubscriptions as subscriptions, mimouseNotificationDeliveries as deliveries, mimouseNotificationRateLimits as limits } from "../../packages/db/src/index.js";
 import { createFixtureDb } from "./fixture-db.js";
-import { freezeNotificationDigest } from "../../server/src/services/mimouse-notifications/digest.js";
+import { freezeNotificationDigest, notificationDigestKey } from "../../server/src/services/mimouse-notifications/digest.js";
 import { enqueueNotification, notificationOutbox } from "../../server/src/services/mimouse-notifications/outbox.js";
 const require = createRequire(new URL("../../server/package.json", import.meta.url));
 const { and, eq } = await import(require.resolve("drizzle-orm"));
@@ -178,6 +178,10 @@ test("digest concurrent producers cap each frozen group at ten and retain the el
     const events = Array.from({ length: 11 }, () => ({ ...f.event, eventId: randomUUID(), resourceId: randomUUID() }));
     await Promise.all(events.map((event, index) => (index % 2 ? other : f.db).transaction(tx => enqueueNotification(tx, event))));
     const rows = await f.rows(); expect(rows).toHaveLength(11);
+    for (const row of rows) {
+      expect(row.snapshot.verificationEpoch).toBe(f.endpoint.verificationEpoch);
+      expect(row.mergeKey).toBe(notificationDigestKey(row.companyId, row.subscriptionId, row.snapshot));
+    }
     const leaders = rows.filter(row => row.state === "pending"); expect(leaders).toHaveLength(2);
     expect(rows.filter(row => row.state === "merged")).toHaveLength(9);
     expect(leaders.map(leader => 1 + rows.filter(row => row.mergedInto === leader.id).length).sort((a, b) => a - b)).toEqual([1, 10]);

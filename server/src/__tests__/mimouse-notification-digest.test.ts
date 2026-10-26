@@ -3,7 +3,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { evaluateNotificationPolicy, updateNotificationPolicy } from "../services/mimouse-notifications/policy.js";
 import { notificationDigestKey, notificationDigestEnabled, notificationDigestWindow, buildNotificationDigest, freezeNotificationDigest, notificationDispatchContent } from "../services/mimouse-notifications/digest.js";
 
-const snapshot = { kind: "wecom_webhook", secretRef: "secret", secretVersion: 1, configVersion: 2, targetKey: "target", target: "recipient", locale: "en", renderVersion: 2, digestVersion: 1,
+const snapshot = { kind: "wecom_webhook", secretRef: "secret", secretVersion: 1, configVersion: 2, verificationEpoch: 1, targetKey: "target", target: "recipient", locale: "en", renderVersion: 2, digestVersion: 1,
   policyEvent: "coding.artifact_ready", policyResourceId: "resource-1", title: "Artifact manifest ready", text: "Original body", detailUrl: "https://paperclip.example/CO/coding",
   policy: { minimumSeverity: "info", mergeWindowSeconds: 30, mergeMode: "digest" }, policyVersion: 1, severity: "info" };
 const key = (patch = {}) => notificationDigestKey("company", "subscription", { ...snapshot, ...patch });
@@ -21,8 +21,15 @@ describe("bounded notification digests (no provider/network)", () => {
   });
   it("shares resource IDs but freezes every routing/render/policy boundary", () => {
     expect(key({ policyResourceId: "other-resource", text: "other generated text" })).toBe(key());
-    for (const change of [{ kind: "feishu_webhook" }, { secretRef: "different" }, { secretVersion: 2 }, { configVersion: 3 }, { target: "different" }, { targetKey: "different" }, { locale: "ja" }, { renderVersion: 3 }, { title: "Other" }, { severity: "warning" }, { policyEvent: "coding.ci_failed" }, { policyVersion: 2 }, { detailUrl: "https://other.example" }, { templateData: {} }]) expect(key(change)).not.toBe(key());
+    for (const change of [{ kind: "feishu_webhook" }, { secretRef: "different" }, { secretVersion: 2 }, { configVersion: 3 }, { verificationEpoch: 2 }, { target: "different" }, { targetKey: "different" }, { locale: "ja" }, { renderVersion: 3 }, { title: "Other" }, { severity: "warning" }, { policyEvent: "coding.ci_failed" }, { policyVersion: 2 }, { detailUrl: "https://other.example" }, { templateData: {} }]) expect(key(change)).not.toBe(key());
     expect(notificationDigestKey("other", "subscription", snapshot)).not.toBe(key()); expect(notificationDigestKey("company", "other", snapshot)).not.toBe(key());
+  });
+  it("keeps the admitted key stable after JSON persistence when the security epoch is frozen up front", () => {
+    const admitted = row(); const persisted = JSON.parse(JSON.stringify(admitted.snapshot));
+    expect(notificationDigestKey(admitted.company_id, admitted.subscription_id, persisted)).toBe(admitted.merge_key);
+    expect(buildNotificationDigest({ ...admitted, snapshot: persisted }, [child()]).members).toHaveLength(2);
+    // A newer epoch is a different security boundary, never ignored to hide a persistence mismatch.
+    expect(() => buildNotificationDigest({ ...admitted, snapshot: { ...persisted, verificationEpoch: 2 } }, [])).toThrow("invalid_digest_boundary");
   });
   it("locks admission against claim, caps children and never extends the cutoff", async () => {
     const until = new Date("2026-10-26T00:01:00Z"); const execute = vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: "leader", merge_until: until }]);
