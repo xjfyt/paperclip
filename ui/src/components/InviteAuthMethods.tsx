@@ -6,7 +6,6 @@ import { navigateTopLevel } from "@/lib/browserNavigation";
 import { safeOidcReturnPath } from "@/lib/oidc-navigation";
 import { useTranslation } from "@/i18n";
 import { CloudSignIn } from "./CloudSignIn";
-import { LanguageSelector } from "./LanguageSelector";
 import { Button } from "./ui/button";
 
 /** Only reveal password fields after the instance has explicitly advertised them. */
@@ -31,7 +30,6 @@ export function InviteAuthMethods({ token, cloud, children }: {
   const casdoor = capabilities.data.providers.some(provider => provider.id === "casdoor");
   const password = capabilities.data.password === true;
   return <div className="space-y-5" data-testid="invite-auth-methods">
-    <LanguageSelector />
     {casdoor && <div className="space-y-3">
       <h2 className="text-lg font-semibold">{t("inviteAuth.title")}</h2>
       <p className="text-sm text-zinc-400">{t("inviteAuth.help")}</p>

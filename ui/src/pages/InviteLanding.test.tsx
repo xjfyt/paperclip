@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
+import { i18n } from "@/i18n";
 
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { InviteLandingPage } from "./InviteLanding";
 import { queryKeys } from "../lib/queryKeys";
@@ -1258,6 +1259,74 @@ describe("InviteLandingPage", () => {
     expect(container.querySelector('[role="alert"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="invite-inline-auth"]')).toBeNull(); expect(acceptInviteMock).not.toHaveBeenCalled();
     await act(async () => root.unmount()); queryClient.clear();
+  });
+
+  it("ignores an old invite acceptance response after navigating to a different invite", async () => {
+    getSessionMock.mockResolvedValue({ session: { id: "session", userId: "user" }, user: { id: "user", name: "Fixture", email: "fixture@example.invalid" } });
+    getInviteMock.mockImplementation(async (token: string) => ({ id: token, companyId: token === "pcp_invite_old" ? "company-old" : "company-new", companyName: token === "pcp_invite_old" ? "Old organization" : "New organization", inviteType: "company_join", allowedJoinTypes: token === "pcp_invite_old" ? "human" : "agent", expiresAt: "2027-03-07T00:10:00.000Z" }));
+    let resolveOld!: (value: unknown) => void;
+    acceptInviteMock.mockImplementationOnce(() => new Promise(resolve => { resolveOld = resolve; }));
+    function SwitchInvite() { const navigate = useNavigate(); return <button data-testid="switch-invite" onClick={() => navigate("/invite/pcp_invite_new")}>Switch invitation</button>; }
+    const root = createRoot(container), client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    try {
+      await act(async () => root.render(<MemoryRouter initialEntries={["/invite/pcp_invite_old"]}><QueryClientProvider client={client}><SwitchInvite /><Routes><Route path="/invite/:token" element={<InviteLandingPage />} /><Route path="/" element={<p data-testid="wrong-destination">Old invitation redirected this page</p>} /></Routes></QueryClientProvider></MemoryRouter>));
+      for (let i=0;i<6;i++) await flushReact(); expect(acceptInviteMock).toHaveBeenCalledExactlyOnceWith("pcp_invite_old", { requestType: "human" });
+      await act(async () => container.querySelector<HTMLButtonElement>('[data-testid="switch-invite"]')!.click());
+      for (let i=0;i<4;i++) await flushReact(); expect(container.textContent).toContain("New organization");
+      await act(async () => resolveOld({ id: "join-old", companyId: "company-old", requestType: "human", status: "approved" }));
+      for (let i=0;i<6;i++) await flushReact();
+      expect(container.querySelector('[data-testid="wrong-destination"]')).toBeNull(); expect(container.textContent).toContain("New organization"); expect(container.textContent).toContain("Submit agent details");
+      expect(localStorage.getItem("paperclip:pending-invite-token")).toBe("pcp_invite_new"); expect(acceptInviteMock).toHaveBeenCalledTimes(1);
+    } finally { await act(async () => root.unmount()); client.clear(); }
+  });
+
+  it.each(["en", "zh-CN", "es", "ja"])("localizes invite details without rewriting names, messages or typed fields in %s", async locale => {
+    await i18n.changeLanguage(locale);
+    const root = createRoot(container), client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    try {
+      await act(async () => root.render(<MemoryRouter initialEntries={["/invite/pcp_invite_test"]}><QueryClientProvider client={client}><Routes><Route path="/invite/:token" element={<InviteLandingPage />} /></Routes></QueryClientProvider></MemoryRouter>));
+      for(let i=0;i<4;i++)await flushReact();
+      expect(container.textContent).toContain(i18n.t("inviteUi.join", { company: "Acme Robotics" }));
+      expect(container.textContent).toContain(i18n.t("inviteUi.operator")); expect(container.textContent).toContain("Welcome aboard.");
+      expect(container.querySelectorAll('select[aria-label]')).toHaveLength(1);
+      const name = container.querySelector<HTMLInputElement>('input[name="name"]')!;
+      await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(name, "客户 Custom"); name.dispatchEvent(new Event("input", { bubbles: true })); });
+      await act(async () => { await i18n.changeLanguage(locale === "ja" ? "zh-CN" : "ja"); });
+      expect(container.querySelector<HTMLInputElement>('input[name="name"]')!.value).toBe("客户 Custom");
+      expect(container.textContent).toContain(i18n.t("inviteUi.createAndContinue")); expect(acceptInviteMock).not.toHaveBeenCalled();
+    } finally { await act(async () => root.unmount()); client.clear(); await i18n.changeLanguage("en"); }
+  });
+  it.each(["en", "zh-CN", "es", "ja"])("localizes awaiting approval while preserving organization and inviter names in %s", async locale => {
+    await i18n.changeLanguage(locale);
+    getSessionMock.mockResolvedValue({ session: { id: "session", userId: "user" }, user: { id: "user", name: "Fixture", email: "fixture@example.invalid" } });
+    getInviteMock.mockResolvedValue({ id: "invite", companyId: "company-1", companyName: "自定义 Custom", invitedByUserName: "审批人 Reviewer", inviteType: "company_join", allowedJoinTypes: "human", expiresAt: "2027-03-07T00:10:00.000Z" });
+    acceptInviteMock.mockResolvedValue({ id: "join", companyId: "company-1", requestType: "human", status: "pending_approval" });
+    const root = createRoot(container), client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    try {
+      await act(async () => root.render(<MemoryRouter initialEntries={["/invite/pcp_invite_test"]}><QueryClientProvider client={client}><Routes><Route path="/invite/:token" element={<InviteLandingPage />} /></Routes></QueryClientProvider></MemoryRouter>));
+      for(let i=0;i<7;i++)await flushReact();
+      expect(container.textContent).toContain(i18n.t("inviteUi.requestJoin", { company: "自定义 Custom" }));
+      expect(container.textContent).toContain(i18n.t("inviteUi.awaitingApproval", { approver: "审批人 Reviewer" }));
+      expect(container.querySelector('[data-testid="invite-pending-approval"]')).not.toBeNull();
+    } finally { await act(async () => root.unmount()); client.clear(); await i18n.changeLanguage("en"); }
+  });
+  it("retranslates known authentication feedback when language changes without resubmitting", async () => {
+    signUpEmailMock.mockRejectedValue(Object.assign(new Error("already exists"), { code: "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL" }));
+    const root = createRoot(container), client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    try {
+      await act(async () => root.render(<MemoryRouter initialEntries={["/invite/pcp_invite_test"]}><QueryClientProvider client={client}><Routes><Route path="/invite/:token" element={<InviteLandingPage />} /></Routes></QueryClientProvider></MemoryRouter>));
+      for(let i=0;i<4;i++)await flushReact();
+      for(const [key,value] of Object.entries({ name: "Custom name", email: "fixture@example.invalid", password: "fixture-only-password" })) {
+        const input = container.querySelector<HTMLInputElement>(`input[name="${key}"]`)!;
+        await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value")!.set!.call(input,value); input.dispatchEvent(new Event("input",{bubbles:true})); });
+      }
+      await act(async () => { container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
+      for(let i=0;i<4;i++)await flushReact();
+      expect(container.textContent).toContain(i18n.t("inviteUi.accountExists", { email: "fixture@example.invalid" }));
+      await act(async () => { await i18n.changeLanguage("zh-CN"); });
+      expect(container.textContent).toContain(i18n.t("inviteUi.accountExists", { email: "fixture@example.invalid" })); expect(signUpEmailMock).toHaveBeenCalledTimes(1);
+      expect(container.querySelector<HTMLInputElement>('input[name="email"]')!.value).toBe("fixture@example.invalid");
+    } finally { await act(async () => root.unmount()); client.clear(); await i18n.changeLanguage("en"); }
   });
 
 });

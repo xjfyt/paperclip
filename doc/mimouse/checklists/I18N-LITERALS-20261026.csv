@@ -345,76 +345,7 @@ ui/src/pages/Costs.tsx,697,jsx-text,", included in the inference ledger.",needs_
 ui/src/pages/Costs.tsx,781,jsx-text,cached) · out,needs_review
 ui/src/pages/Costs.tsx,818,jsx-text,tok,needs_review
 ui/src/pages/Costs.tsx,854,jsx-expression,Unattributed,needs_review
-ui/src/pages/InviteLanding.tsx,177,jsx-text,Request to join,needs_review
-ui/src/pages/InviteLanding.tsx,180,jsx-text,Your request is still awaiting approval.,needs_review
-ui/src/pages/InviteLanding.tsx,181,jsx-text,must approve your request to join.,needs_review
-ui/src/pages/InviteLanding.tsx,184,jsx-text,Approval page,needs_review
-ui/src/pages/InviteLanding.tsx,185,jsx-text,Settings → Members,needs_review
-ui/src/pages/InviteLanding.tsx,187,jsx-text,Ask them to visit,needs_review
-ui/src/pages/InviteLanding.tsx,188,jsx-text,Settings → Members,needs_review
-ui/src/pages/InviteLanding.tsx,188,jsx-text,to approve your request.,needs_review
-ui/src/pages/InviteLanding.tsx,190,jsx-text,Refresh this page after you've been approved — you'll be redirected automatically.,needs_review
-ui/src/pages/InviteLanding.tsx,196,jsx-text,Claim secret,needs_review
-ui/src/pages/InviteLanding.tsx,198,jsx-text,POST,needs_review
-ui/src/pages/InviteLanding.tsx,202,jsx-text,Onboarding:,needs_review
-ui/src/pages/InviteLanding.tsx,445,jsx-text,Invalid invite token.,needs_review
-ui/src/pages/InviteLanding.tsx,449,jsx-text,Loading invite...,needs_review
-ui/src/pages/InviteLanding.tsx,457,jsx-text,Checking your access...,needs_review
-ui/src/pages/InviteLanding.tsx,464,jsx-text,Invite not available,needs_review
-ui/src/pages/InviteLanding.tsx,465,jsx-text,"This invite may be expired, revoked, or already used.",needs_review
-ui/src/pages/InviteLanding.tsx,478,jsx-text,Opening organization...,needs_review
-ui/src/pages/InviteLanding.tsx,495,jsx-text,Invite not available,needs_review
-ui/src/pages/InviteLanding.tsx,498,jsx-expression,This join request was not approved.,needs_review
-ui/src/pages/InviteLanding.tsx,499,jsx-expression,This invite has already been used.,needs_review
-ui/src/pages/InviteLanding.tsx,510,jsx-text,Bootstrap complete,needs_review
-ui/src/pages/InviteLanding.tsx,513,jsx-text,Open board,needs_review
-ui/src/pages/InviteLanding.tsx,542,jsx-text,You joined the organization,needs_review
-ui/src/pages/InviteLanding.tsx,546,jsx-text,Open board,needs_review
-ui/src/pages/InviteLanding.tsx,576,jsx-text,You've been invited to join Paperclip,needs_review
-ui/src/pages/InviteLanding.tsx,580,jsx-expression,Set up Paperclip,needs_review
-ui/src/pages/InviteLanding.tsx,580,jsx-template,Join,needs_review
-ui/src/pages/InviteLanding.tsx,584,jsx-expression,"Review the invite details, then submit the agent information below to start the join request.",needs_review
-ui/src/pages/InviteLanding.tsx,587,jsx-expression,"Your account is ready. Review the invite details, then accept it to continue.",needs_review
-ui/src/pages/InviteLanding.tsx,594,jsx-text,Organization,needs_review
-ui/src/pages/InviteLanding.tsx,598,jsx-text,Invited by,needs_review
-ui/src/pages/InviteLanding.tsx,599,jsx-expression,Paperclip board,needs_review
-ui/src/pages/InviteLanding.tsx,602,jsx-text,Requested access,needs_review
-ui/src/pages/InviteLanding.tsx,604,jsx-expression,Agent join request,needs_review
-ui/src/pages/InviteLanding.tsx,604,jsx-expression,Organization access,needs_review
-ui/src/pages/InviteLanding.tsx,608,jsx-text,Invite expires,needs_review
-ui/src/pages/InviteLanding.tsx,615,jsx-text,Message from inviter,needs_review
-ui/src/pages/InviteLanding.tsx,621,jsx-text,Signed in as,needs_review
-ui/src/pages/InviteLanding.tsx,631,jsx-text,Submit agent details,needs_review
-ui/src/pages/InviteLanding.tsx,632,jsx-text,This invite will create an approval request for a new agent in,needs_review
-ui/src/pages/InviteLanding.tsx,637,jsx-text,Agent name,needs_review
-ui/src/pages/InviteLanding.tsx,645,jsx-text,Adapter type,needs_review
-ui/src/pages/InviteLanding.tsx,653,jsx-expression,(Coming soon),needs_review
-ui/src/pages/InviteLanding.tsx,659,jsx-text,Capabilities,needs_review
-ui/src/pages/InviteLanding.tsx,673,jsx-expression,Working...,needs_review
-ui/src/pages/InviteLanding.tsx,681,jsx-expression,Create your account,needs_review
-ui/src/pages/InviteLanding.tsx,681,jsx-expression,Sign in to continue,needs_review
-ui/src/pages/InviteLanding.tsx,685,jsx-template,"Start with a Paperclip account. After that, you'll come right back here to accept the invite for",needs_review
-ui/src/pages/InviteLanding.tsx,686,jsx-expression,"Use the Paperclip account that already matches this invite. If you do not have one yet, switch back to create account.",needs_review
-ui/src/pages/InviteLanding.tsx,702,jsx-text,Create account,needs_review
-ui/src/pages/InviteLanding.tsx,716,jsx-text,I already have an account,needs_review
-ui/src/pages/InviteLanding.tsx,738,jsx-text,Name,needs_review
-ui/src/pages/InviteLanding.tsx,758,jsx-text,Email,needs_review
-ui/src/pages/InviteLanding.tsx,778,jsx-text,Password,needs_review
-ui/src/pages/InviteLanding.tsx,814,jsx-expression,Working...,needs_review
-ui/src/pages/InviteLanding.tsx,816,jsx-expression,Sign in and continue,needs_review
-ui/src/pages/InviteLanding.tsx,817,jsx-expression,Create account and continue,needs_review
-ui/src/pages/InviteLanding.tsx,823,jsx-expression,Already signed up before? Use the existing-account option instead so the invite lands on the right Paperclip user.,needs_review
-ui/src/pages/InviteLanding.tsx,824,jsx-expression,No account yet? Switch back to create account so you can accept the invite with a new login.,needs_review
-ui/src/pages/InviteLanding.tsx,833,jsx-expression,Already in this organization,needs_review
-ui/src/pages/InviteLanding.tsx,835,jsx-expression,Completing organization access,needs_review
-ui/src/pages/InviteLanding.tsx,837,jsx-expression,Accept bootstrap invite,needs_review
-ui/src/pages/InviteLanding.tsx,838,jsx-expression,Accept organization invite,needs_review
-ui/src/pages/InviteLanding.tsx,842,jsx-template,Granting your access to,needs_review
-ui/src/pages/InviteLanding.tsx,844,jsx-template,This account already belongs to,needs_review
-ui/src/pages/InviteLanding.tsx,845,jsx-template,This will,needs_review
-ui/src/pages/InviteLanding.tsx,853,jsx-expression,Submitting request...,needs_review
-ui/src/pages/InviteLanding.tsx,853,jsx-expression,Finishing sign-in...,needs_review
-ui/src/pages/InviteLanding.tsx,869,jsx-expression,Working...,needs_review
+ui/src/pages/InviteLanding.tsx,167,jsx-text,POST,keep_protocol
 ui/src/pages/IssueDetail.tsx,843,jsx-attribute,Assignee,needs_review
 ui/src/pages/IssueDetail.tsx,847,jsx-attribute,Originating,needs_review
 ui/src/pages/IssueDetail.tsx,1016,jsx-template,Routine execution from routine,needs_review
