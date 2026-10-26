@@ -203,7 +203,13 @@ test("real HTTP routes enforce role/session actor scope and keep declarations se
       for (const actor of [{ ...owner, memberships: [{ companyId: f.company.id, membershipRole: "member", status: "active" }] }, { ...owner, companyIds: [f.other.id], memberships: [] }, { type: "agent", source: "agent_key", companyId: f.company.id, agentId: randomUUID() }] as Express.Request["actor"][]) {
         expect((await app(actor).get(path)).status).toBe(403); expect((await app(actor).get(`${path}/evidence`)).status).toBe(403); expect((await app(actor).post(`${path}/evidence`).send(f.input(1))).status).toBe(403);
       }
-      expect((await app({ type: "none", source: "none" } as Express.Request["actor"]).get(path)).status).toBe(401);
+      // This fixture mounts the router directly, without the application login
+      // middleware. Its established assertBoard boundary rejects non-board with 403.
+      const anonymous = app({ type: "none", source: "none" } as Express.Request["actor"]);
+      expect((await anonymous.get(path)).status).toBe(403);
+      expect((await anonymous.get(`${path}/evidence`)).status).toBe(403);
+      expect((await anonymous.post(`${path}/evidence`).send(f.input(1))).status).toBe(403);
+      expect(await f.rows()).toHaveLength(1);
       expect(await f.db.select().from(deliveries).where(eq(deliveries.companyId, f.company.id))).toHaveLength(1);
     });
   } finally { await f.cleanup(); }
