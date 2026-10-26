@@ -9,7 +9,7 @@ const keys: Record<string, string> = {
 };
 export function usePropertyLabels() {
   const { t } = useTranslation();
-  return (label: string) => Object.hasOwn(keys, label) ? t(`propertyLabels.${keys[label]}`) : label;
+  return (label: string) => label === "Model" ? t("issueModelUi.model") : Object.hasOwn(keys, label) ? t(`propertyLabels.${keys[label]}`) : label;
 }
 
 const builtinPanelLabels: Record<string, string> = { properties: "Properties", plans: "Plan", artifacts: "Artifacts", subtasks: "Subtasks", references: "References" };

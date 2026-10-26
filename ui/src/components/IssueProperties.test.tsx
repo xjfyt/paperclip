@@ -2,6 +2,7 @@
 
 import { i18n, coreTaskMessages } from "../i18n/core-task-test-resources";
 import { issuePropertyControlsMessages } from "../i18n/issue-property-controls-test-resources";
+import { issueModelMessages } from "../i18n/issue-model-test-resources";
 import { issueWatchdogMessages } from "../i18n/issue-watchdog-test-resources";
 
 import type { ComponentProps, ReactNode } from "react";
@@ -2481,6 +2482,85 @@ describe("IssueProperties", () => {
     act(() => root.unmount());
   });
 
+  it.each(Object.entries(issueModelMessages).flatMap(([locale, messages]) =>
+    (["codex_local", "claude_local", "opencode_local"] as const).map((adapterType) => ({ locale, messages, adapterType })),
+  ))("localizes task model options without changing $adapterType values in $locale", async ({ locale, messages, adapterType }) => {
+    await i18n.changeLanguage(locale);
+    const effortKey = adapterType === "codex_local" ? "modelReasoningEffort" : adapterType === "opencode_local" ? "variant" : "effort";
+    mockAgentsApi.list.mockResolvedValue([{
+      id: "agent-1", name: "Default model", role: "engineer", status: "active", adapterType, icon: null,
+    }]);
+    mockAgentsApi.adapterModels.mockResolvedValue([{ id: "model-raw-2", label: "Default model" }]);
+    const onUpdate = vi.fn();
+    const config = { model: "原模型/custom", [effortKey]: "high", customOption: "keep 原值" };
+    const root = renderProperties(container, {
+      issue: createIssue({ assigneeAgentId: "agent-1", assigneeAdapterOverrides: { adapterConfig: config } }),
+      childIssues: [], onUpdate, inline: true,
+    });
+    try {
+      await waitForAssertion(() => expect(findRowTrigger(container, "Assignee")?.textContent).toContain("Default model"));
+      await waitForAssertion(() => expect(findRowTrigger(container, "Model")?.textContent).toContain(messages.effortHigh));
+      expect(findRowTrigger(container, "Model")?.textContent).toContain("原模型/custom");
+      expect(container.querySelector('[data-property-label="Model"]')?.textContent).toBe(messages.model);
+      await act(() => findRowTrigger(container, "Model")!.click());
+      expect(container.querySelector(`[role="radiogroup"][aria-label="${messages.modelLane}"]`)).not.toBeNull();
+      expect(container.textContent).toContain(messages.overrideDescription);
+      expect(container.textContent).toContain(messages.thinkingEffort);
+      const search = container.querySelector<HTMLInputElement>(`input[aria-label="${messages.searchModels}"]`)!;
+      const searchFor = async (value: string) => act(() => {
+        Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")!.set!.call(search, value);
+        search.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      await searchFor(messages.defaultModel);
+      expect(container.textContent).toContain(messages.defaultModel);
+      await searchFor("Default model");
+      expect(container.textContent).toContain(messages.defaultModel);
+      await searchFor("no matching model 731");
+      expect(container.textContent).toContain(messages.noModels);
+      await searchFor("");
+      // Distinguish the real model from the system default even when English labels coincide.
+      const modelOptions = Array.from(container.querySelectorAll<HTMLButtonElement>("[data-mobile-entity-picker-list] button"))
+        .filter((button) => button.textContent === "Default model");
+      expect(modelOptions.length).toBeGreaterThan(0);
+      await act(() => modelOptions.at(-1)!.click());
+      expect(onUpdate).toHaveBeenLastCalledWith({ assigneeAdapterOverrides: { adapterConfig: { ...config, model: "model-raw-2" } } });
+      await act(() => Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent === messages.effortLow)!.click());
+      expect(onUpdate).toHaveBeenLastCalledWith({ assigneeAdapterOverrides: { adapterConfig: { ...config, [effortKey]: "low" } } });
+      if (adapterType === "claude_local") {
+        await act(() => container.querySelector<HTMLButtonElement>(`[role="switch"][aria-label="${messages.enableChrome}"]`)!.click());
+        expect(onUpdate).toHaveBeenLastCalledWith({ assigneeAdapterOverrides: { adapterConfig: { ...config, chrome: true } } });
+      }
+      await act(() => Array.from(container.querySelectorAll<HTMLButtonElement>('[role="radio"]')).find((button) => button.textContent === messages.primary)!.click());
+      expect(onUpdate).toHaveBeenLastCalledWith({ assigneeAdapterOverrides: null });
+    } finally {
+      await act(() => root.unmount());
+    }
+  });
+
+  it.each(Object.entries(issueModelMessages))("localizes incompatible model options without replacing unknown effort in %s", async (locale, messages) => {
+    await i18n.changeLanguage(locale);
+    mockAgentsApi.list.mockResolvedValue([{ id: "agent-1", name: "Real Agent", status: "active", adapterType: "http", icon: null }]);
+    const onUpdate = vi.fn();
+    const root = renderProperties(container, {
+      issue: createIssue({ assigneeAgentId: "agent-1", assigneeAdapterOverrides: { adapterConfig: { effort: "future-effort" } } }),
+      childIssues: [], onUpdate, inline: true,
+    });
+    try {
+      await waitForAssertion(() => expect(findRowTrigger(container, "Assignee")?.textContent).toContain("Real Agent"));
+      await waitForAssertion(() => expect(findRowTrigger(container, "Model")?.textContent).toContain("future-effort"));
+      await act(() => findRowTrigger(container, "Model")!.click());
+      expect(container.textContent).toContain(messages.adapterUnsupported);
+      await act(async () => { await i18n.changeLanguage(locale === "en" ? "ja" : "en"); });
+      expect(findRowTrigger(container, "Model")?.textContent).toContain("future-effort");
+      expect(onUpdate).not.toHaveBeenCalled();
+      await act(async () => { await i18n.changeLanguage(locale); });
+      await act(() => Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent === messages.clearAdapterOptions)!.click());
+      expect(onUpdate).toHaveBeenCalledWith({ assigneeAdapterOverrides: null });
+    } finally {
+      await act(() => root.unmount());
+    }
+  });
+
   it("hides model options when the issue uses the responsible default", async () => {
     mockAgentsApi.list.mockResolvedValue([
       {
@@ -2544,7 +2624,7 @@ describe("IssueProperties", () => {
     await flush();
     await flush();
 
-    expect(container.textContent).toContain("Override · gpt-5.4 · high");
+    expect(container.textContent).toContain("Override · gpt-5.4 · High");
     expect(container.textContent).toContain("Model lane");
 
     // Wait for the adapter-models query to resolve so the model options render.

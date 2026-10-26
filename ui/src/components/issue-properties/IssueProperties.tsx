@@ -836,30 +836,36 @@ export function IssueProperties({
     }
     updateAssigneeAdapterOverrides(buildAssigneeOverrideWithConfig(assigneeOverrideAdapterConfig) ?? { adapterConfig: {} });
   };
+  const effortLabels: Record<string, string> = {
+    "": "effortDefault", minimal: "effortMinimal", low: "effortLow", medium: "effortMedium",
+    high: "effortHigh", xhigh: "effortXhigh", max: "effortMax", ultra: "effortUltra",
+  };
+  const effortLabel = (value: string, fallback = value) => Object.hasOwn(effortLabels, value)
+    ? t(`issueModelUi.${effortLabels[value]}`) : fallback;
   const assigneeOptionsTrigger = (() => {
     if (assigneeOverrideLane === "custom") {
       const details = [
         assigneeOverrideModel,
-        assigneeOverrideThinkingEffort,
+        assigneeOverrideThinkingEffort ? effortLabel(assigneeOverrideThinkingEffort) : "",
         assigneeOverrideChrome ? "Chrome" : "",
       ].filter(Boolean);
-      const summary = details.length > 0 ? `Override · ${details.join(" · ")}` : "Override · adapter options";
+      const summary = details.length > 0 ? t("issueModelUi.overrideSummary", { details: details.join(" · ") }) : t("issueModelUi.overrideFallback");
       return (
         <span
           className="min-w-0 truncate text-sm"
-          title={`Task-level model override — replaces the agent's primary model for this issue.${details.length > 0 ? ` (${details.join(" · ")})` : ""}`}
+          title={details.length > 0 ? t("issueModelUi.overrideDescriptionWithDetails", { details: details.join(" · ") }) : t("issueModelUi.overrideDescription")}
         >
           {summary}
         </span>
       );
     }
-    return <span className="text-sm text-muted-foreground">Primary model</span>;
+    return <span className="text-sm text-muted-foreground">{t("issueModelUi.primaryModel")}</span>;
   })();
   const assigneeOptionsContent = supportsAssigneeOverrides ? (
     <div className="w-full space-y-3 p-2">
       <div className="space-y-1.5">
-        <div className="text-xs text-muted-foreground">Model lane</div>
-        <div className="flex w-full overflow-hidden rounded-md border border-border" role="radiogroup" aria-label="Model lane">
+        <div className="text-xs text-muted-foreground">{t("issueModelUi.modelLane")}</div>
+        <div className="flex w-full overflow-hidden rounded-md border border-border" role="radiogroup" aria-label={t("issueModelUi.modelLane")}>
           {(["primary", "custom"] as const).map((lane) => (
             <button
               key={lane}
@@ -872,33 +878,35 @@ export function IssueProperties({
               )}
               onClick={() => setAssigneeOverrideLane(lane)}
             >
-              {lane === "primary" ? "Primary" : "Override"}
+              {lane === "primary" ? t("issueModelUi.primary") : t("issueModelUi.override")}
             </button>
           ))}
         </div>
         {assigneeOverrideLane === "custom" ? (
           <p className="text-xs text-muted-foreground">
-            Task-level model override — replaces the agent&apos;s primary model for this issue.
+            {t("issueModelUi.overrideDescription")}
           </p>
         ) : null}
       </div>
       {assigneeOverrideLane === "custom" ? (
         <>
           <div className="space-y-1.5">
-            <div className="text-xs text-muted-foreground">Model</div>
+            <div className="text-xs text-muted-foreground">{t("issueModelUi.model")}</div>
             <InlineEntitySelector
               value={assigneeOverrideModel}
               options={modelOverrideOptions}
-              placeholder="Default model"
+              placeholder={t("issueModelUi.defaultModel")}
               disablePortal
-              noneLabel="Default model"
-              searchPlaceholder="Search models..."
-              emptyMessage="No models found."
+              noneLabel={t("issueModelUi.defaultModel")}
+              noneSearchText={`Default model ${t("issueModelUi.defaultModel")}`}
+              searchPlaceholder={t("issueModelUi.searchModels")}
+              emptyMessage={t("issueModelUi.noModels")}
+              closeLabel={t("issueModelUi.closeSelector")}
               onChange={updateAssigneeOverrideModel}
             />
           </div>
           <div className="space-y-1.5">
-            <div className="text-xs text-muted-foreground">Thinking effort</div>
+            <div className="text-xs text-muted-foreground">{t("issueModelUi.thinkingEffort")}</div>
             <div className="flex items-center gap-1.5 flex-wrap">
               {thinkingEffortOptionsFor(assigneeAdapterType, effectiveAssigneeModel).map((option) => (
                 <button
@@ -909,15 +917,16 @@ export function IssueProperties({
                   )}
                   onClick={() => updateAssigneeOverrideThinkingEffort(option.value)}
                 >
-                  {option.label}
+                  {effortLabel(option.value, option.label)}
                 </button>
               ))}
             </div>
           </div>
           {assigneeAdapterType === "claude_local" ? (
             <div className="flex items-center justify-between rounded-md border border-border px-2 py-1.5">
-              <div className="text-xs text-muted-foreground">Enable Chrome (--chrome)</div>
+              <div className="text-xs text-muted-foreground">{t("issueModelUi.enableChrome")}</div>
               <ToggleSwitch
+                aria-label={t("issueModelUi.enableChrome")}
                 checked={assigneeOverrideChrome}
                 onCheckedChange={(next) => updateAssigneeOverrideConfig({ chrome: next ? true : undefined })}
               />
@@ -930,15 +939,15 @@ export function IssueProperties({
     <div className="w-full space-y-2 p-2">
       <p className="text-xs text-muted-foreground">
         {assignee
-          ? "This assignee's adapter does not expose editable task overrides."
-          : "Select a compatible assignee agent to edit these overrides."}
+          ? t("issueModelUi.adapterUnsupported")
+          : t("issueModelUi.selectCompatibleAgent")}
       </p>
       <button
         type="button"
         className="inline-flex items-center rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
         onClick={() => updateAssigneeAdapterOverrides(null)}
       >
-        Clear adapter options
+        {t("issueModelUi.clearAdapterOptions")}
       </button>
     </div>
   );
