@@ -1,5 +1,12 @@
 # Agent 创建界面四语补漏与待手测清单（2026-10-26）
 
+## 中央集成状态补记（2026-10-26 19:30 UTC）
+
+文中后续连接/OAuth/remote MCP/断开管理四片已合入3186阶段，四语合成、中央UI类型/构建及794文件9222项分批聚合通过。原分支未跑完整检查的陈述是提交时记录，不是当前中央状态。真实供应商登录、实际remote MCP连接/注销、真实CLI及各部署环境仍待人工验收，不能用mock或全UI单测替代。
+
+统一证据及版本边界见 [VERIFICATION](../mimouse/VERIFICATION.md)。下文早期“未运行/待集成”如无后续限定，指原切片提交时，不覆盖本补记；未提到的实测不作通过推断。
+
+
 ## 范围和结论
 
 对应原计划 §4.2–4.4。入口是 `App.tsx` 的 `agents/new` → `pages/NewAgent.tsx` → `components/new-agent/NewAgentSetup.tsx`，不是 Storybook 原型或 legacy 创建窗口。本片覆盖 `NewAgent` 页面和 `NewAgentSetup`、`AgentBasicsDialog`、`AgentProviderConnection` 三个组件（共四个文件）：面包屑、名称/适配器两步、连接/配置/确认界面、自有表单标签与 aria-label、占位符、提示、空状态、校验及错误兜底。

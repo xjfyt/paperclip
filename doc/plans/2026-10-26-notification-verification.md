@@ -1,5 +1,12 @@
 # 通知 endpoint/version 验证切片
 
+## 中央集成状态补记（2026-10-26 19:30 UTC）
+
+0356正式迁移已生成并应用；本文10项真实数据库/HTTP fixture 已包含在3186阶段 source API145项及编译server入口同套145项通过记录中，非仍未运行。真实云端Chrome完成四语预览、取消零写入和手动blocked协议证据保存/刷新；没有发送真实通知，也没有把人工声明当作C3/C4机器验证。见 [浏览器记录](../mimouse/checklists/NOTIFICATION-LINEAGE-BROWSER-20261026.md)。
+
+统一证据及版本边界见 [VERIFICATION](../mimouse/VERIFICATION.md)。下文早期“未运行/待集成”如无后续限定，指原切片提交时，不覆盖本补记；未提到的实测不作通过推断。
+
+
 基线：`45a234e289b14fd5a8177a61bc69f2be6368bcc3`。原 §7.4/§9.4；不新增供应商独立认证要求。
 
 ## 合同与失效

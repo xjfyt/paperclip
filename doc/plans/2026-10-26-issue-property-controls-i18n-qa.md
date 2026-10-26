@@ -1,5 +1,12 @@
 # 任务属性选择器四语补齐与待验收记录
 
+## 中央集成状态补记（2026-10-26 19:30 UTC）
+
+已合入3186阶段并合成资源，中央完成UI类型/构建、794文件9222项分批聚合；实际云端Chrome验证MIM-1四语属性与空项目搜索，未分配Agent/执行。3193阶段另补输入栏可见“无负责人”，6文件347项、UI类型/构建通过，中文Chrome可见与搜索验证；未重跑3193全UI。详见 [浏览器记录](../mimouse/checklists/ISSUE-PROPERTIES-BROWSER-20261026.md)。
+
+统一证据及版本边界见 [VERIFICATION](../mimouse/VERIFICATION.md)。下文早期“未运行/待集成”如无后续限定，指原切片提交时，不覆盖本补记；未提到的实测不作通过推断。
+
+
 ## 范围与实现证据
 
 - 实际入口：`TaskSidePanel` → `components/IssueProperties.tsx` re-export → `issue-properties/IssueProperties.tsx`。兼顾桌面弹层、inline 折叠选择器；不是另造未使用页面。
