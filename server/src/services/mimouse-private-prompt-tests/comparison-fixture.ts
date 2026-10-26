@@ -1,6 +1,6 @@
 import type { PrivateComparisonEvidence } from "./compare.js";
 import { privateConfigDigest, privatePromptHash, privatePromptFixedContext, assertPrivatePromptTextInventory, PRIVATE_PROMPT_IMPLEMENTATION } from "./profile.js";
-export const comparisonId = (n: number) => `${String(n).padStart(8, "0")}-1111-4111-8111-111111111111`;
+export const comparisonId = (n: number) => `${String(n).padStart(8, "a")}-1111-4111-8111-111111111111`;
 /** Inert, synthetic historical rows. No CLI, network, secret or live result. */
 export function comparisonFixture(): PrivateComparisonEvidence {
   const id = comparisonId, companyId = id(1), promptId = id(2), actorUserId = "private-comparison-owner";

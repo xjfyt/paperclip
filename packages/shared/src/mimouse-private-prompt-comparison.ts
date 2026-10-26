@@ -1,5 +1,5 @@
 import { z } from "zod";
-const uuid = z.string().uuid(), hash = z.string().regex(/^[a-f0-9]{64}$/);
+const uuid = z.string().uuid().transform(value => value.toLowerCase()), hash = z.string().regex(/^[a-f0-9]{64}$/);
 /** Explicit historical IDs only: no execution, inferred latest run or supplied scores. */
 export const comparePrivatePromptTestsSchema = z.object({
   datasetId: uuid, baselineRevisionId: uuid, candidateRevisionId: uuid,

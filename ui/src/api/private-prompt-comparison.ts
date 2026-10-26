@@ -3,10 +3,13 @@ import { requestResponse } from "./client";
 import { readApiJson } from "./response";
 
 /** Validate the complete private identity before exposing any comparison in UI. */
-export function verifyPrivatePromptComparison(raw: unknown, companyId: string, userId: string, promptId: string, input: ComparePrivatePromptTests): PrivatePromptComparison {
+export function verifyPrivatePromptComparison(raw: unknown, companyId: string, userId: string, promptId: string, rawInput: ComparePrivatePromptTests): PrivatePromptComparison {
+  const input = comparePrivatePromptTestsSchema.parse(rawInput);
   const report = privatePromptComparisonSchema.parse(raw);
+  const exceedsLimit = input.maxCandidateCostCents !== null && report.candidate.totalCostCents !== null && report.candidate.totalCostCents > input.maxCandidateCostCents;
+  if (report.blockers.includes("candidate_cost_exceeds_limit") !== exceedsLimit) throw Error("private_comparison_cost_limit_invalid");
   const rows = report.results, ids = rows.flatMap(row => row.testId === null ? [] : [row.testId]);
-  if (report.companyId !== companyId || report.actorUserId !== userId || report.promptId !== promptId || report.datasetId !== input.datasetId ||
+  if (report.companyId !== companyId.toLowerCase() || report.actorUserId !== userId || report.promptId !== promptId.toLowerCase() || report.datasetId !== input.datasetId ||
       report.baseline.revisionId !== input.baselineRevisionId || report.candidate.revisionId !== input.candidateRevisionId ||
       ids.length !== input.testIds.length || new Set(ids).size !== ids.length || ids.some(id => !input.testIds.includes(id)) ||
       rows.some(row => ![input.baselineRevisionId, input.candidateRevisionId].includes(row.revisionId)) ||

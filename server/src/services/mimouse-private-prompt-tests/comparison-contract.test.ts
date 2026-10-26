@@ -11,3 +11,11 @@ describe("private historical comparison request", () => {
     }
   });
 });
+
+it("normalizes only UUIDs before rejecting semantic duplicates and same revisions", () => {
+  const letterId = "abcdef12-abcd-4abc-8abc-abcdef123456";
+  const parsed = comparePrivatePromptTestsSchema.parse({ ...input, datasetId: letterId.toUpperCase(), testIds: [letterId.toUpperCase()] });
+  expect(parsed.datasetId).toBe(letterId); expect(parsed.testIds).toEqual([letterId]);
+  expect(comparePrivatePromptTestsSchema.safeParse({ ...input, testIds: [letterId, letterId.toUpperCase()] }).success).toBe(false);
+  expect(comparePrivatePromptTestsSchema.safeParse({ ...input, baselineRevisionId: letterId, candidateRevisionId: letterId.toUpperCase() }).success).toBe(false);
+});

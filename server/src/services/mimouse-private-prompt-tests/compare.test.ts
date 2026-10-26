@@ -97,3 +97,10 @@ it("the shared response contract rejects inconsistent matrices, costs and false 
   ];
   for (const change of changes) { const report = structuredClone(good); change(report); expect(privatePromptComparisonSchema.safeParse(report).success).toBe(false); }
 });
+
+it("accepts uppercase explicit UUIDs against canonical historical evidence", async () => {
+  const e = comparisonFixture(), original = await comparePrivatePromptEvidence(e);
+  e.input = { ...e.input, datasetId: e.input.datasetId.toUpperCase(), baselineRevisionId: e.input.baselineRevisionId.toUpperCase(),
+    candidateRevisionId: e.input.candidateRevisionId.toUpperCase(), testIds: e.input.testIds.map(id => id.toUpperCase()) };
+  expect((await comparePrivatePromptEvidence(e)).reportHash).toBe(original.reportHash);
+});

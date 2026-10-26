@@ -39,3 +39,37 @@ it("preserves unknown cost without treating it as zero", () => {
   const value = report(); const parsed = verify({ ...value, candidate: { ...value.candidate, totalCostCents: null, unknownCostCases: 1, knownCostCents: 0 }, eligibleForHumanReview: false, blockers: ["candidate_cost_unknown"] });
   expect(parsed.candidate.totalCostCents).toBeNull(); expect(parsed.candidate.passed).toBe(1);
 });
+
+it("binds the budget blocker bidirectionally for absent, higher, equal and exceeded limits", () => {
+  const blocked = report({ eligibleForHumanReview: false, blockers: ["candidate_cost_exceeds_limit"] });
+  for (const cap of [null, 2, 1]) {
+    expect(() => verify(blocked, { ...input, maxCandidateCostCents: cap })).toThrow();
+    expect(() => verify(report(), { ...input, maxCandidateCostCents: cap })).not.toThrow();
+  }
+  expect(() => verify(blocked, { ...input, maxCandidateCostCents: 0 })).not.toThrow();
+  const other = report(); other.baseline.totalCostCents = null; other.baseline.unknownCostCases = 1; other.baseline.knownCostCents = 0;
+  other.eligibleForHumanReview = false; other.blockers = ["baseline_cost_unknown"];
+  expect(() => verify(other, { ...input, maxCandidateCostCents: 0 })).toThrow();
+  other.blockers.push("candidate_cost_exceeds_limit");
+  expect(() => verify(other, { ...input, maxCandidateCostCents: 0 })).not.toThrow();
+  const unknown = report(); unknown.candidate.totalCostCents = null; unknown.candidate.unknownCostCases = 1; unknown.candidate.knownCostCents = 0;
+  unknown.eligibleForHumanReview = false; unknown.blockers = ["candidate_cost_unknown"];
+  expect(() => verify(unknown, { ...input, maxCandidateCostCents: 0 })).not.toThrow();
+  unknown.blockers.push("candidate_cost_exceeds_limit");
+  expect(() => verify(unknown, { ...input, maxCandidateCostCents: 0 })).toThrow();
+});
+it("canonicalizes legal UUID case in request and response bindings without changing opaque actors", async () => {
+  const letter = (n: number) => `abcdef1${n}-abcd-4abc-8abc-abcdef123456`;
+  const lower = { datasetId: letter(1), baselineRevisionId: letter(2), candidateRevisionId: letter(3), testIds: [letter(4), letter(5)], maxCandidateCostCents: null };
+  const upper = { ...lower, datasetId: lower.datasetId.toUpperCase(), baselineRevisionId: lower.baselineRevisionId.toUpperCase(), candidateRevisionId: lower.candidateRevisionId.toUpperCase(), testIds: lower.testIds.map(value => value.toUpperCase()) };
+  const value = report({ companyId: letter(6), actorUserId: "OpaqueUser", promptId: letter(7), datasetId: lower.datasetId });
+  value.baseline.revisionId = lower.baselineRevisionId; value.candidate.revisionId = lower.candidateRevisionId;
+  value.results = value.results.map((row, i) => ({ ...row, revisionId: i ? lower.candidateRevisionId : lower.baselineRevisionId, testId: lower.testIds[i] }));
+  expect(verifyPrivatePromptComparison(value, letter(6).toUpperCase(), "OpaqueUser", letter(7).toUpperCase(), upper).datasetId).toBe(lower.datasetId);
+  expect(() => verifyPrivatePromptComparison(value, letter(6), "opaqueuser", letter(7), upper)).toThrow();
+  const fetcher = vi.fn(async () => new Response(JSON.stringify(value))); vi.stubGlobal("fetch", fetcher);
+  await privatePromptComparisonApi(letter(6), "OpaqueUser", new AbortController().signal).compare(letter(7), upper);
+  expect(JSON.parse(String((fetcher.mock.calls as unknown as Array<[string, RequestInit]>)[0][1].body))).toEqual(lower);
+  await expect(privatePromptComparisonApi(letter(6), "OpaqueUser", new AbortController().signal).compare(letter(7), { ...upper, testIds: [lower.testIds[0], upper.testIds[0]] })).rejects.toThrow();
+  expect(fetcher).toHaveBeenCalledTimes(1);
+});

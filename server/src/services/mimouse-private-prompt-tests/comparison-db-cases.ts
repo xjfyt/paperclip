@@ -45,6 +45,9 @@ export async function verifyPrivateHistoricalComparison(db: Db) {
   const before = await state();
   const good = await compare(); expect(good.eligibleForHumanReview).toBe(true);
   expect(good.candidate.totalCostCents).toBe(0.125); expect(await state()).toEqual(before);
+  const upper = { ...e.input, datasetId: e.input.datasetId.toUpperCase(), baselineRevisionId: e.input.baselineRevisionId.toUpperCase(),
+    candidateRevisionId: e.input.candidateRevisionId.toUpperCase(), testIds: e.input.testIds.map(id => id.toUpperCase()) };
+  expect((await service.compare(actor, e.promptId, upper)).reportHash).toBe(good.reportHash);
   expect(JSON.stringify(good)).not.toMatch(/SENTINEL|WRONG_TRIMMED|fixed-fixture/);
   const fractional = [0.1, 0.2, 0.3].map((costCents, index) => ({ id: `0000000${index + 1}-aaaa-4aaa-8aaa-aaaaaaaaaaaa`,
     companyId: actor.companyId, agentId: e.tests[1].agentId, issueId: e.tests[1].issueId, heartbeatRunId: e.tests[1].heartbeatRunId,

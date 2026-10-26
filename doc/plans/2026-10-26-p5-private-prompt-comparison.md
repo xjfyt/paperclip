@@ -9,6 +9,7 @@
 - 同 company、当前有效 session、active owner/admin、active company；私有 test 另按 actorUserId + promptId 限定。其他管理员不能读取你的结果。
 - 比较领域服务在 PostgreSQL `READ ONLY / repeatable read` 事务读取一致快照，不 reconcile、不写运行/报告/审批状态、不 wake、不通知。评分后再用 fresh 只读事务检查授权；这不是锁住并发撤权直到网络送达的保证。既有 HTTP 认证栈可能刷新 session/lastSeen，不能宣称整个请求栈绝无写入。
 - 不调用会更新状态的私有 tests list/detail；不写普通 company evaluation comparison 表。继承 `prompt-registry` 私有 HTTP 日志分类，返回 `Cache-Control: no-store`，错误不返回 SQL、原文或底层 cause。
+- 此独立只读合同比较合法 UUID 时先规范小写，再拒绝语义重复/相同 revision；不改 opaque actor/hash，也不改付费执行票据或持久请求摘要。预算阻断与本次请求双向绑定：仅已知 total 超过非空上限时出现 `candidate_cost_exceeds_limit`，unknown 不按已知小计假定最终成本。
 - 固定完整数据集，每 case 每侧必须有一个明确 test；缺失仍保留分母并阻断，重复或额外 evidence 拒绝，不自动选最新成功运行。
 - 重算 dataset、skill inventory、revision 完整性；严格校验批准 snapshot 和 prepared witness 的 test/attempt/run/agent/revision/prompt hash/bytes。仅已封存 completed、持久 spawn、succeeded 且绑定一致的 run 可以评分。
 - 两侧必须有相同历史 agent、skill version/hash、dataset/hash、execution profile、批准 snapshot/configDigest、secretValueHash、implementation 和 runtimeConfigHash。**不拿当前 Agent 配置代替历史配置**。
@@ -26,10 +27,11 @@
 
 ## 已验证与待验
 
-- 纯评分/合同专项：35/35（包括原文空白、structured-only、缺 case、重复/跨域、历史配置与 witness、unknown cost、矩阵矛盾回执）。
-- UI/API 相邻六文件：106/106；四语 en/zh-CN/es/ja，token gates、locale compose 和 diff 检查。
+- 纯评分/合同专项：37/37（包括原文空白、structured-only、缺 case、重复/跨域、历史配置与 witness、unknown cost、矩阵矛盾回执）。
+- UI/API 相邻六文件：108/108；四语 en/zh-CN/es/ja，token gates、locale compose 和 diff 检查。
 - 单 owned PostgreSQL fixture 目标用例：当前 session、角色/撤权/跨 actor/公司、真实 readonly/isolation、评分后 fresh 撤权拒绝、hash/缺 case/未知成本、单项及累计正文超限拒绝、多行小数账本不同物理插入顺序同 hash、领域表无写与无额外 provider-boundary 调用；loopback HTTP actor 注入验证，不等于真实 cookie/OIDC。
 - DB fixture 直接构造合成已封存历史，不证明真实 CLI 或模型成功。正常迁移和 owned DB 清理沿既有夹具；immutable revision 触发器拒绝篡改，未禁用触发器。
+- 大小写修补新增的实际 DB 大写 UUID 输入断言留中央全 private suite 重验；本工作区未与其并发启动 DB。
 - 全量 typecheck/build、全量 API/UI 集成由中央执行，本工作区没有运行。真实 CLI、账户、费用产生均未验收。
 
 人工验收：
