@@ -14,7 +14,7 @@ C1=实现/本地检查，C2=受控协议及故障夹具，C3=真实租户/版本
 
 本轮已确认 2354 键快照完整 UI 回归：770 文件、8665 项通过，sourceUnchanged=true，源码集合 SHA-256 `979d17c84647f5bd050bc5f8695334623d0e09d96c10b0aeff93214026530db5`。这是冻结 UI 的 C2 证据，不是后续翻译/IME 修复或浏览器验收证明。`6bee5bc` 完整server类型、标准构建及编译入口132项已通过（44.1秒），退出限制独立保留。审计时已核实远端为 `0d43ebb`；本文不把本地提交自动称作已推送。历史结果保留在 [VERIFICATION](VERIFICATION.md)，不要迁移到新 SHA。
 
-12:50 UTC：核心任务、Agent设置四文件首片及MarkdownEditor/InlineEntitySelector IME保护已合入，2504键生成、完整UI类型/构建及235/113/69项定向回归通过；更多共享子组件/管理路径仍在修复，真实IME与全路径布局未验，因此宽范围条目继续标部分。13:33 UTC后续2875键批次已补退出提示、产物清单UI、管理与共享登录显示；中央类型/构建及32文件717项通过，真实账号和新全UI另验。
+12:50 UTC：核心任务、Agent设置四文件首片及MarkdownEditor/InlineEntitySelector IME保护已合入，2504键生成、完整UI类型/构建及235/113/69项定向回归通过；更多共享子组件/管理路径仍在修复，真实IME与全路径布局未验，因此宽范围条目继续标部分。13:33 UTC后续2875键批次已补退出提示、产物清单UI、管理与共享登录显示；中央类型/构建及32文件717项通过，真实账号和新全UI另验。15:22 UTC已到2924键，补高级连接身份/权限摘要；完整UI首轮一项旧夹具失败已修正，最终重跑中，见VERIFICATION。
 
 ## 原始条目矩阵
 
@@ -28,9 +28,9 @@ C1=实现/本地检查，C2=受控协议及故障夹具，C3=真实租户/版本
 | V2-I18N-02 | §4.1 Intl/业务内容不改写 | 实现完成 | ui/src/i18n 格式化入口；货币/账期与语言独立；具体调用点随覆盖审计 | T01 / 固定 USD、时区和用户正文 |
 | V2-I18N-03 | §4.3 领域合成与校验 | 实现完成 | scripts/compose-mimouse-locales.mjs；四语贡献及 CI 确定性检查 | T00 / — |
 | V2-I18N-04 | §4.2 高频实际路由 | 部分 | 实际 IssueProperties、AgentDetail、Costs、ApprovalDetail、NewIssueDialog、两套 SidebarAgents 有漏译；修复中，不以未路由 production 页面代替 | T01 / 两套实际 UI 模式 |
-| V2-I18N-05 | §4.2 新模块与术语 | 部分 | 新增 MiMouse 页面已有四语；App app.cloudCreateUnavailable 缺键及 onboarding Agent 术语待收口 | T01 / 管理员与无公司状态 |
+| V2-I18N-05 | §4.2 新模块与术语 | 部分 | 新增 MiMouse 页面已有四语；App app.cloudCreateUnavailable 缺键及 onboarding Agent 术语已修正；新增深层入口仍随切片复查 | T01 / 管理员与无公司状态 |
 | V2-I18N-06 | §4.4 IME/布局/aria | 部分 | MarkdownEditor/InlineEntitySelector及两种登录码输入已补composing/229保护；真实中日输入法与西语长文本待测 | T01 / 实际输入法 |
-| V2-I18N-07 | §4.4 明确分母/剩余项 | 部分 | i18n_remaining.md 与候选扫描可复查；50 文件585候选不是渲染覆盖，缺调用图人工逐条结论 | T01 / 人工路径记录 |
+| V2-I18N-07 | §4.4 明确分母/剩余项 | 部分 | i18n_remaining.md 与候选扫描可复查；15:22固定50文件520候选不是渲染覆盖，缺调用图人工逐条结论 | T01 / 人工路径记录 |
 | V2-AUTH-01 | §5.1–5.3 OIDC/邀请边界 | 实现完成 | server/src/auth、Casdoor 协议；未邀请用户无公司数据，不以 email 自动合并 | T02 / 本地 fixture；C3 需租户 |
 | V2-AUTH-02 | §5.2 配置/签名/回跳 | 实现完成 | issuer、client、回跳及令牌校验；敏感配置与日志边界 | T02 / 注册应用/允许回跳 |
 | V2-AUTH-03 | §5.3 旧账号显式绑定 | 实现完成 | 已登录身份显式绑定/解绑；冲突不合并 | T02 / 两个身份 |
@@ -38,7 +38,7 @@ C1=实现/本地检查，C2=受控协议及故障夹具，C3=真实租户/版本
 | V2-AUTH-05 | §5.4 成员停用/session与token | 实现完成 | server/src/services/mimouse-auth-revocations.ts；撤销 session/个人 Board key，不声称取消所有连接器或在途任务 | T02 / 管理员/普通成员 |
 | V2-AUTH-06 | §5.4 全局退出未确认提示 | 实现完成，实测待做 | 本地明确成功后显示未确认状态，fresh-session隔离旧缓存；保留可信IdP跳转。浏览器的IdP错误页不能显示本站文案，返回本站后可见；不宣称全局成功 | T02 / CASDOOR-LOGOUT清单 |
 | V2-AUTH-07 | §5.1 管理员恢复/双入口 | 实现完成 | doc/mimouse/casdoor.md 恢复路径及受控入口；不能默认留公开密码注册 | T02 / 隔离恢复环境 |
-| V2-AUTH-08 | §5.5 真实租户三项退出停用 | 仅待实测 | 本地 C2 已有；登录、前台退出、管理员撤销、IdP 停用分别验收；AUTH-06 另为代码缺口 | T02 / 实际 Casdoor 版本/应用/两账号 |
+| V2-AUTH-08 | §5.5 真实租户三项退出停用 | 仅待实测 | 本地 C2 已有；登录、前台退出、管理员撤销、IdP 停用分别验收；AUTH-06提示已补，真实IdP失败/回跳需复验 | T02 / 实际 Casdoor 版本/应用/两账号 |
 | V2-AUTH-09 | §5.4 back-channel/身份同步 | 不适用 | 原文明确后续增加，不把首版自动停用传播当已实现 | 需另定同步合同 |
 | V2-ADAPT-01 | §6.1 上游外部适配器合同 | 实现完成 | external-adapters 与 server/src/adapters/mimouse-packages.test.ts；真实 loader 合同 | T03 / 安装权限 |
 | V2-QODER-01 | §6.2 诊断/流式/错误 | 实现完成 | external-adapters/qoder-cn；argv、允许工作区、结构化输出及错误 | T03 / fixture |
