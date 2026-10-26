@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
-import { i18n } from "@/i18n";
+import { i18n } from "../i18n/management-test-resources";
+import { formatCents } from "../lib/utils";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -118,6 +119,27 @@ describe("Shared Costs surfaces", () => {
       "Other billing usage: 150 tokens · $6.00 in recorded charges, included in the inference ledger.",
     )));
     expect(container.textContent).not.toContain("tokens have an unknown billing type");
+  });
+
+  it.each(["en", "zh-CN", "es", "ja"])("localizes recorded charges without changing their values in %s", async (locale) => {
+    await i18n.changeLanguage(locale);
+    for (const mock of Object.values(costsApiMocks)) mock.mockResolvedValue([]);
+    costsApiMocks.byUser.mockResolvedValue({ activeUserCount: 1, rows: [] });
+    costsApiMocks.summary.mockResolvedValue({ spendCents: 600, budgetCents: 0, pricingComplete: true });
+    costsApiMocks.financeSummary.mockResolvedValue({ netCents: 500, debitCents: 600, creditCents: 100, estimatedDebitCents: 0, eventCount: 2 });
+    const report = await subscriptionsMocks.report();
+    subscriptionsMocks.report.mockResolvedValue({ ...report,
+      subscription: { ...report.subscription, costCents: "300" },
+      unknown: { ...report.unknown, inputTokens: 100, cachedInputTokens: 40, outputTokens: 10, costCents: "600", eventCount: 3 },
+    });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    root = createRoot(container);
+    await act(async () => { root.render(<MemoryRouter><QueryClientProvider client={queryClient}><Costs /></QueryClientProvider></MemoryRouter>); });
+    await act(async () => { await vi.waitFor(() => expect(container.textContent).toContain(i18n.t("managementUi.otherBillingCharges", { tokens: "150", amount: formatCents(600) }))); });
+    expect(container.textContent).toContain(i18n.t("managementUi.subscriptionCharges", { amount: formatCents(300) }));
+    expect(container.textContent).toContain(i18n.t("managementUi.debits", { amount: formatCents(600) }));
+    expect(container.textContent).toContain(i18n.t("managementUi.credits", { amount: formatCents(100) }));
+    queryClient.clear();
   });
 
   it("renders a focused Budgets section without duplicate Costs chrome or spend queries", async () => {

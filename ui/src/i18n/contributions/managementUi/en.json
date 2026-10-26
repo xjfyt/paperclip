@@ -1,0 +1,22 @@
+{
+  "selectOrganization": "Select an organization first.",
+  "starFailed": "Couldn't star {{name}}.",
+  "unstarFailed": "Couldn't unstar {{name}}.",
+  "leaveFailed": "Couldn't leave {{name}}.",
+  "joinFailed": "Couldn't join {{name}}.",
+  "tryAgain": "Try again.",
+  "approveFailed": "Approve failed",
+  "rejectFailed": "Reject failed",
+  "revisionFailed": "Revision request failed",
+  "resubmitFailed": "Resubmit failed",
+  "commentFailed": "Comment failed",
+  "deleteFailed": "Delete failed",
+  "budgetStop": "Resolve this budget stop from the budget controls on <0>/costs</0>.",
+  "debits": "{{amount}} debits",
+  "credits": "{{amount}} credits",
+  "subscriptionCharges": "Subscription accounts also have {{amount}} in recorded usage charges for this period, separate from monthly fees.",
+  "otherBillingTokens": "Other billing usage: {{tokens}} tokens, included in the inference ledger.",
+  "otherBillingCharges": "Other billing usage: {{tokens}} tokens · {{amount}} in recorded charges, included in the inference ledger.",
+  "tokenBreakdown": "in {{input}} ({{cached}} cached) · out {{output}}",
+  "unattributed": "Unattributed"
+}

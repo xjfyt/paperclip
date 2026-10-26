@@ -1,3 +1,5 @@
+import { Trans } from "react-i18next";
+import { describeManagementError, renderManagementError, type ManagementErrorDescriptor } from "@/i18n/management-errors";
 import { systemLabel } from "@/i18n/system-labels";
 import { t as mimouseT, useTranslation as useMimouseTranslation, i18n as mimouseI18n } from "@/i18n";
 import { AgentIdentity } from "@/components/AgentIdentity";
@@ -28,7 +30,7 @@ export function ApprovalDetail() {
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const [commentBody, setCommentBody] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ManagementErrorDescriptor | null>(null);
   const [showRawPayload, setShowRawPayload] = useState(false);
 
   const { data: approval, isLoading } = useQuery({
@@ -95,7 +97,7 @@ export function ApprovalDetail() {
       refresh();
       navigate(`/approvals/${approvalId}?resolved=approved`, { replace: true });
     },
-    onError: (err) => setError(err instanceof Error ? err.message : "Approve failed"),
+    onError: (err) => setError(describeManagementError(err, "managementUi.approveFailed")),
   });
 
   const rejectMutation = useMutation({
@@ -104,7 +106,7 @@ export function ApprovalDetail() {
       setError(null);
       refresh();
     },
-    onError: (err) => setError(err instanceof Error ? err.message : "Reject failed"),
+    onError: (err) => setError(describeManagementError(err, "managementUi.rejectFailed")),
   });
 
   const revisionMutation = useMutation({
@@ -113,7 +115,7 @@ export function ApprovalDetail() {
       setError(null);
       refresh();
     },
-    onError: (err) => setError(err instanceof Error ? err.message : "Revision request failed"),
+    onError: (err) => setError(describeManagementError(err, "managementUi.revisionFailed")),
   });
 
   const resubmitMutation = useMutation({
@@ -122,7 +124,7 @@ export function ApprovalDetail() {
       setError(null);
       refresh();
     },
-    onError: (err) => setError(err instanceof Error ? err.message : "Resubmit failed"),
+    onError: (err) => setError(describeManagementError(err, "managementUi.resubmitFailed")),
   });
 
   const addCommentMutation = useMutation({
@@ -132,7 +134,7 @@ export function ApprovalDetail() {
       setError(null);
       refresh();
     },
-    onError: (err) => setError(err instanceof Error ? err.message : "Comment failed"),
+    onError: (err) => setError(describeManagementError(err, "managementUi.commentFailed")),
   });
 
   const deleteAgentMutation = useMutation({
@@ -142,7 +144,7 @@ export function ApprovalDetail() {
       refresh();
       navigate("/approvals");
     },
-    onError: (err) => setError(err instanceof Error ? err.message : "Delete failed"),
+    onError: (err) => setError(describeManagementError(err, "managementUi.deleteFailed")),
   });
 
   if (isLoading) return <PageSkeleton variant="detail" />;
@@ -237,7 +239,7 @@ export function ApprovalDetail() {
             <p className="text-xs text-muted-foreground">{mimouseT("workflowHelp.decisionNote")} {approval.decisionNote}</p>
           )}
         </div>
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {error && <p className="text-sm text-destructive">{renderManagementError(error)}</p>}
         {linkedIssues && linkedIssues.length > 0 && (
           <div className="pt-2 border-t border-border/60">
             <p className="text-xs text-muted-foreground mb-1.5">{mimouseT("workflow.linkedTasks")}</p>
@@ -277,7 +279,7 @@ export function ApprovalDetail() {
           )}
           {isBudgetApproval && approval.status === "pending" && (
             <p className="text-sm text-muted-foreground">
-              Resolve this budget stop from the budget controls on <Link to="/costs" className="underline underline-offset-2">/costs</Link>.
+              <Trans i18nKey="managementUi.budgetStop" components={[<Link to="/costs" className="underline underline-offset-2" />]} />
             </p>
           )}
           {approval.status === "pending" && (

@@ -1,0 +1,22 @@
+{
+  "selectOrganization": "先に組織を選択してください。",
+  "starFailed": "{{name}} をお気に入りに追加できませんでした。",
+  "unstarFailed": "{{name}} をお気に入りから削除できませんでした。",
+  "leaveFailed": "{{name}} から退出できませんでした。",
+  "joinFailed": "{{name}} に参加できませんでした。",
+  "tryAgain": "もう一度お試しください。",
+  "approveFailed": "承認できませんでした",
+  "rejectFailed": "却下できませんでした",
+  "revisionFailed": "修正を依頼できませんでした",
+  "resubmitFailed": "再送信できませんでした",
+  "commentFailed": "コメントを投稿できませんでした",
+  "deleteFailed": "削除できませんでした",
+  "budgetStop": "<0>/costs</0> の予算管理から、この予算による停止を解除してください。",
+  "debits": "借方 {{amount}}",
+  "credits": "貸方 {{amount}}",
+  "subscriptionCharges": "サブスクリプションアカウントには、この期間の利用料金として {{amount}} が記録されています。月額料金とは別です。",
+  "otherBillingTokens": "その他の課金方式の使用量：{{tokens}} トークン（推論台帳に含まれます）。",
+  "otherBillingCharges": "その他の課金方式の使用量：{{tokens}} トークン・記録済み料金 {{amount}}（推論台帳に含まれます）。",
+  "tokenBreakdown": "入力 {{input}}（キャッシュ {{cached}}）・出力 {{output}}",
+  "unattributed": "帰属先不明"
+}

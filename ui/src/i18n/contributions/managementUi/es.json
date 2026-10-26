@@ -1,0 +1,22 @@
+{
+  "selectOrganization": "Seleccione primero una organización.",
+  "starFailed": "No se pudo añadir {{name}} a favoritos.",
+  "unstarFailed": "No se pudo quitar {{name}} de favoritos.",
+  "leaveFailed": "No se pudo salir de {{name}}.",
+  "joinFailed": "No se pudo unirse a {{name}}.",
+  "tryAgain": "Vuelva a intentarlo.",
+  "approveFailed": "No se pudo aprobar",
+  "rejectFailed": "No se pudo rechazar",
+  "revisionFailed": "No se pudo solicitar la revisión",
+  "resubmitFailed": "No se pudo volver a enviar",
+  "commentFailed": "No se pudo publicar el comentario",
+  "deleteFailed": "No se pudo eliminar",
+  "budgetStop": "Resuelva esta detención por presupuesto desde los controles de presupuesto en <0>/costs</0>.",
+  "debits": "Débitos: {{amount}}",
+  "credits": "Créditos: {{amount}}",
+  "subscriptionCharges": "Las cuentas de suscripción también tienen {{amount}} en cargos de uso registrados para este período, aparte de las cuotas mensuales.",
+  "otherBillingTokens": "Uso de otras modalidades de facturación: {{tokens}} tokens, incluido en el registro de inferencia.",
+  "otherBillingCharges": "Uso de otras modalidades de facturación: {{tokens}} tokens · {{amount}} en cargos registrados, incluido en el registro de inferencia.",
+  "tokenBreakdown": "entrada {{input}} ({{cached}} en caché) · salida {{output}}",
+  "unattributed": "Sin atribuir"
+}

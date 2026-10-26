@@ -1,0 +1,22 @@
+{
+  "selectOrganization": "请先选择组织。",
+  "starFailed": "无法收藏 {{name}}。",
+  "unstarFailed": "无法取消收藏 {{name}}。",
+  "leaveFailed": "无法退出 {{name}}。",
+  "joinFailed": "无法加入 {{name}}。",
+  "tryAgain": "请重试。",
+  "approveFailed": "审批失败",
+  "rejectFailed": "拒绝失败",
+  "revisionFailed": "要求修订失败",
+  "resubmitFailed": "重新提交失败",
+  "commentFailed": "评论失败",
+  "deleteFailed": "删除失败",
+  "budgetStop": "请在 <0>/costs</0> 页面的预算控制中解除此次预算暂停。",
+  "debits": "借方 {{amount}}",
+  "credits": "贷方 {{amount}}",
+  "subscriptionCharges": "订阅账户在此期间另有 {{amount}} 已入账用量费用，与月费分开计算。",
+  "otherBillingTokens": "其他计费方式的用量：{{tokens}} token，已计入推理账本。",
+  "otherBillingCharges": "其他计费方式的用量：{{tokens}} token · 已入账费用 {{amount}}，已计入推理账本。",
+  "tokenBreakdown": "输入 {{input}}（缓存 {{cached}}）· 输出 {{output}}",
+  "unattributed": "未归属"
+}

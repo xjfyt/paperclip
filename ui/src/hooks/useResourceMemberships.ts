@@ -1,3 +1,5 @@
+import { t } from "@/i18n";
+import { ManagementUiError, managementErrorText } from "@/i18n/management-errors";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   ResourceMembershipResourceType,
@@ -151,7 +153,7 @@ export function useResourceMembershipMutation(companyId: string | null | undefin
 
   return useMutation({
     mutationFn: (variables: MutationVariables) => {
-      if (!companyId) throw new Error("Select an organization first.");
+      if (!companyId) throw new ManagementUiError("managementUi.selectOrganization");
       const body = { state: variables.state, starred: variables.starred };
       return variables.resourceType === "project"
         ? resourceMembershipsApi.updateProject(companyId, variables.resourceId, body)
@@ -173,12 +175,12 @@ export function useResourceMembershipMutation(companyId: string | null | undefin
       if (context?.previous) {
         queryClient.setQueryData(queryKey, context.previous);
       }
-      const verb = variables.starred !== undefined
-        ? variables.starred ? "star" : "unstar"
-        : variables.state === "left" ? "leave" : "join";
+      const errorKey = variables.starred !== undefined
+        ? variables.starred ? "managementUi.starFailed" : "managementUi.unstarFailed"
+        : variables.state === "left" ? "managementUi.leaveFailed" : "managementUi.joinFailed";
       pushToast({
-        title: `Couldn't ${verb} ${variables.resourceName}.`,
-        body: error instanceof Error ? error.message : "Try again.",
+        title: t(errorKey, { name: variables.resourceName }),
+        body: managementErrorText(error, "managementUi.tryAgain"),
         tone: "error",
       });
     },

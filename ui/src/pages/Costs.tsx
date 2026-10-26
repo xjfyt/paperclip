@@ -680,8 +680,8 @@ export function Costs({
               value={financeData ? formatCents(financeData.summary.netCents) : "—"}
               subtitle={financeData ? (
                 <>
-                  <span className="block whitespace-nowrap">{formatCents(financeData.summary.debitCents)} debits</span>
-                  <span className="block whitespace-nowrap">{formatCents(financeData.summary.creditCents)} credits</span>
+                  <span className="block whitespace-nowrap">{mimouseT("managementUi.debits", { amount: formatCents(financeData.summary.debitCents) })}</span>
+                  <span className="block whitespace-nowrap">{mimouseT("managementUi.credits", { amount: formatCents(financeData.summary.creditCents) })}</span>
                 </>
               ) : mimouseT("costOps.financeUnavailable")}
               icon={ReceiptText}
@@ -693,8 +693,8 @@ export function Costs({
               icon={ArrowUpRight}
             />
           </div>
-          {subscriptions && Number(subscriptions.subscription.costCents) > 0 && <p className="text-sm text-muted-foreground">Subscription accounts also have {formatCents(Number(subscriptions.subscription.costCents))} in recorded usage charges for this period, separate from monthly fees.</p>}
-          {subscriptions && subscriptions.unknown.eventCount > 0 && <p className="text-sm text-muted-foreground">Other billing usage: {formatTokens(subscriptions.unknown.inputTokens + subscriptions.unknown.cachedInputTokens + subscriptions.unknown.outputTokens)} tokens{Number(subscriptions.unknown.costCents) > 0 ? ` · ${formatCents(Number(subscriptions.unknown.costCents))} in recorded charges` : ""}, included in the inference ledger.</p>}
+          {subscriptions && Number(subscriptions.subscription.costCents) > 0 && <p className="text-sm text-muted-foreground">{mimouseT("managementUi.subscriptionCharges", { amount: formatCents(Number(subscriptions.subscription.costCents)) })}</p>}
+          {subscriptions && subscriptions.unknown.eventCount > 0 && <p className="text-sm text-muted-foreground">{mimouseT(Number(subscriptions.unknown.costCents) > 0 ? "managementUi.otherBillingCharges" : "managementUi.otherBillingTokens", { tokens: formatTokens(subscriptions.unknown.inputTokens + subscriptions.unknown.cachedInputTokens + subscriptions.unknown.outputTokens), amount: formatCents(Number(subscriptions.unknown.costCents)) })}</p>}
           {subscriptionError && subscriptions && <p role="status" className="text-sm text-muted-foreground">{mimouseT("workflowHelp.usageStale")}</p>}
           {discoverSubscriptions.error && <div role="status" className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
             <p>{mimouseT("workflowHelp.accountsCheckFailed")}</p>
@@ -778,7 +778,7 @@ export function Costs({
                                 <div className="text-right text-sm tabular-nums">
                                   <CostAmount costCents={row.costCents} eventCount={row.eventCount} estimatedEventCount={row.estimatedEventCount} />
                                   <div className="text-xs text-muted-foreground">
-                                    in {formatTokens(row.inputTokens + row.cachedInputTokens)} ({formatTokens(row.cachedInputTokens)} cached) · out {formatTokens(row.outputTokens)}
+                                    {mimouseT("managementUi.tokenBreakdown", { input: formatTokens(row.inputTokens + row.cachedInputTokens), cached: formatTokens(row.cachedInputTokens), output: formatTokens(row.outputTokens) })}
                                   </div>
                                   {(row.apiRunCount > 0 || row.subscriptionRunCount > 0) ? (
                                     <div className="text-xs text-muted-foreground">
@@ -851,7 +851,7 @@ export function Costs({
                             key={row.projectId ?? `unattributed-${index}`}
                             className="flex items-center justify-between gap-3 border border-border px-3 py-2 text-sm"
                           >
-                            <span className="truncate">{row.projectName ?? row.projectId ?? "Unattributed"}</span>
+                            <span className="truncate">{row.projectName ?? row.projectId ?? mimouseT("managementUi.unattributed")}</span>
                             <CostAmount costCents={row.costCents} eventCount={row.eventCount} estimatedEventCount={row.estimatedEventCount} />
                           </div>
                         ))
