@@ -1,4 +1,4 @@
-import { createPrivatePromptTestSchema } from "@paperclipai/shared/mimouse-private-prompt-tests";
+import { preparePrivatePromptTestSchema, executePrivatePromptTestSchema, cancelPrivatePromptTestSchema } from "@paperclipai/shared/mimouse-private-prompt-tests";
 import { privatePromptTestService } from "../services/mimouse-private-prompt-tests/service.js";
 import { privatePromptTestsEnabled } from "../services/mimouse-private-prompt-tests/profile.js";
 import { heartbeatService } from "../services/heartbeat.js";
@@ -41,10 +41,18 @@ export function mimousePromptRegistryRoutes(db: Db) {
     res.json({ enabled: privatePromptTestsEnabled(), profile: "claude_cli_bare_api_key_v1",
       privateResults: true, toolsEnabled: false, completeContextCaptured: false });
   });
-  router.post(`${root}/:promptId/tests`, validate(createPrivatePromptTestSchema), async (req, res) => {
+  router.post(`${root}/:promptId/tests`, validate(preparePrivatePromptTestSchema), async (req, res) => {
     const actor = privateHuman(req), promptId = uuid.parse(req.params.promptId);
-    const result = await safe(() => privateTests.create(actor, promptId, req.body));
+    const result = await safe(() => privateTests.prepare(actor, promptId, req.body));
     res.status(result.duplicate ? 200 : 201).json(result);
+  });
+  router.post(`${root}/:promptId/tests/:testId/execute`, validate(executePrivatePromptTestSchema), async (req, res) => {
+    const actor = privateHuman(req), promptId = uuid.parse(req.params.promptId), testId = uuid.parse(req.params.testId);
+    res.json(await safe(() => privateTests.execute(actor, promptId, testId, req.body)));
+  });
+  router.post(`${root}/:promptId/tests/:testId/cancel`, validate(cancelPrivatePromptTestSchema), async (req, res) => {
+    const actor = privateHuman(req), promptId = uuid.parse(req.params.promptId), testId = uuid.parse(req.params.testId);
+    res.json(await safe(() => privateTests.cancel(actor, promptId, testId, req.body)));
   });
   router.get(`${root}/:promptId/tests`, async (req, res) => {
     const actor = privateHuman(req), promptId = uuid.parse(req.params.promptId);

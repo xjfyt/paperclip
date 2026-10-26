@@ -33,13 +33,24 @@ vi.mock("@paperclipai/adapter-utils/execution-target", async original => {
 import { getServerAdapter, privatePromptTestImplementation, registerServerAdapter } from "../../adapters/registry.js";
 import { snapshotFile } from "../skill-snapshot.js";
 import * as issueModule from "../issues.js";
-import { assertPrivatePromptEarlyBinding, privatePromptTestService } from "./service.js";
+import { assertPrivatePromptEarlyBinding, privatePromptTestService as rawPrivatePromptTestService } from "./service.js";
 import { privateConfigDigest, privatePromptHash } from "./profile.js";
 import { promptRegistryService } from "../mimouse-prompt-registry/service.js";
 import { secretService } from "../secrets.js";
 import { heartbeatService } from "../heartbeat.js";
 import { drainHeartbeatRunsToQuiescence } from "../../__tests__/helpers/drain-heartbeat-runs.js";
 
+// Legacy scenario helper now explicitly performs the two separate authorized steps.
+// Production exposes no one-step dispatch API.
+function privatePromptTestService(...args: Parameters<typeof rawPrivatePromptTestService>) {
+  const service = rawPrivatePromptTestService(...args);
+  return { ...service, create: async (identity: Parameters<typeof service.prepare>[0], prompt: string, raw: any) => {
+    const { confirmRestrictedProfile, confirmExecution, confirmPossibleCharges, ...preparation } = raw;
+    const ticket = await service.prepare(identity, prompt, preparation);
+    return service.execute(identity, prompt, ticket.item.id, { approvalDigest: ticket.item.approvalDigest,
+      executionProfile: raw.executionProfile, confirmRestrictedProfile, confirmExecution, confirmPossibleCharges });
+  } };
+}
 let pgLog: string;
 function recordPg(message: unknown) { appendFileSync(pgLog, `${String(message)}\n`); }
 let db: Db, pg: { initialise(): Promise<void>; start(): Promise<void>; stop(): Promise<void> }, home: string, dataDir: string, pid: number;
@@ -393,6 +404,67 @@ it("protects private bindings when disabled while leaving an ordinary migrated i
     await expect(heartbeat.wakeup(input.agentId, { contextSnapshot: { issueId: privateRun.issueId } })).rejects.toThrow("private_prompt_generic_wake_denied");
     expect((await privatePromptTestService(db).detail(actor, promptId, privateRun.id)).item.id).toBe(privateRun.id);
   } finally { vi.stubEnv("PAPERCLIP_PRIVATE_PROMPT_TESTS_ENABLED", "true"); }
+});
+function preparationInput(requestId = randomUUID()) {
+  const { confirmRestrictedProfile, confirmExecution, confirmPossibleCharges, ...preparation } = input;
+  return { ...preparation, requestId };
+}
+function confirmation(approvalDigest: string) {
+  return { approvalDigest, executionProfile: "claude_cli_bare_api_key_v1" as const,
+    confirmRestrictedProfile: true as const, confirmExecution: true as const, confirmPossibleCharges: true as const };
+}
+it("prepares metadata only and never resumes an existing ticket even after admission", async () => {
+  const before = processBoundary.calls, wake = vi.fn(async () => null), service = rawPrivatePromptTestService(db, wake);
+  const preparation = preparationInput();
+  const [first, repeated] = await Promise.all([service.prepare(actor, promptId, preparation), service.prepare(actor, promptId, preparation)]);
+  expect(first.item.id).toBe(repeated.item.id); expect(first.item.status).toBe("awaiting_confirmation");
+  expect(first.item.requestId).toBe(preparation.requestId); expect(first.item.companyId).toBe(actor.companyId);
+  expect(first.item.actorUserId).toBe(actor.userId); expect(first.item.headReceiptId).toBe(preparation.expectedHeadReceiptId);
+  expect(first.item.issueId).toBeNull(); expect(wake).not.toHaveBeenCalled(); expect(processBoundary.calls).toBe(before);
+  await expect(service.prepare(actor, promptId, input)).rejects.toThrow(); // Old combined body cannot dispatch.
+  const admitted = await service.execute(actor, promptId, first.item.id, confirmation(first.item.approvalDigest));
+  expect(admitted.item.status).toBe("pending_wake"); expect(wake).toHaveBeenCalledTimes(1);
+  const after = await service.prepare(actor, promptId, preparation);
+  expect(after.item.status).toBe("pending_wake"); expect(after.item.approvalDigest).toBe(first.item.approvalDigest);
+  expect(wake).toHaveBeenCalledTimes(1); expect(processBoundary.calls).toBe(before);
+});
+it("rejects configuration drift and revoked authorization between prepare and execute", async () => {
+  const service = rawPrivatePromptTestService(db, heartbeat.wakeup), before = processBoundary.calls;
+  const ticket = await service.prepare(actor, promptId, preparationInput());
+  const [agent] = await db.select().from(agents).where(eq(agents.id, input.agentId));
+  try {
+    await db.update(agents).set({ adapterConfig: { ...agent.adapterConfig, model: "claude-changed" } }).where(eq(agents.id, agent.id));
+    await expect(service.execute(actor, promptId, ticket.item.id, confirmation(ticket.item.approvalDigest))).rejects.toThrow("private_prompt_approval_snapshot_changed");
+    expect((await service.detail(actor, promptId, ticket.item.id)).item.approvalDigest).toBe(ticket.item.approvalDigest);
+    await db.update(agents).set({ adapterConfig: agent.adapterConfig }).where(eq(agents.id, agent.id));
+    await db.update(companyMemberships).set({ status: "suspended" }).where(and(eq(companyMemberships.companyId, actor.companyId), eq(companyMemberships.principalId, actor.userId)));
+    await expect(service.execute(actor, promptId, ticket.item.id, confirmation(ticket.item.approvalDigest))).rejects.toThrow("private_prompt_active_session_administrator_required");
+  } finally {
+    await db.update(agents).set({ adapterConfig: agent.adapterConfig }).where(eq(agents.id, agent.id));
+    await db.update(companyMemberships).set({ status: "active" }).where(and(eq(companyMemberships.companyId, actor.companyId), eq(companyMemberships.principalId, actor.userId)));
+  }
+  const cancelled = await service.cancel(actor, promptId, ticket.item.id, { approvalDigest: ticket.item.approvalDigest });
+  expect(cancelled.item.status).toBe("cancelled");
+  expect((await service.execute(actor, promptId, ticket.item.id, confirmation(ticket.item.approvalDigest))).item.status).toBe("cancelled");
+  expect(processBoundary.calls).toBe(before);
+});
+it("serializes execute/cancel and keeps late execute and terminal replay on the same ticket", async () => {
+  const service = rawPrivatePromptTestService(db, heartbeat.wakeup), before = processBoundary.calls;
+  const ticket = await service.prepare(actor, promptId, preparationInput());
+  await expect(service.execute(actor, promptId, ticket.item.id, confirmation("0".repeat(64)))).rejects.toThrow("private_prompt_approval_changed");
+  const [execution, cancellation] = await Promise.all([
+    service.execute(actor, promptId, ticket.item.id, confirmation(ticket.item.approvalDigest)),
+    service.cancel(actor, promptId, ticket.item.id, { approvalDigest: ticket.item.approvalDigest }),
+  ]);
+  await drainHeartbeatRunsToQuiescence(db, heartbeat);
+  const resolved = await service.detail(actor, promptId, ticket.item.id);
+  expect(["completed", "cancelled"]).toContain(resolved.item.status);
+  expect(resolved.item.approvalDigest).toBe(ticket.item.approvalDigest);
+  if (cancellation.item.status === "cancelled") expect(execution.item.status).toBe("cancelled");
+  expect(processBoundary.calls - before).toBe(resolved.item.status === "completed" ? 1 : 0);
+  const count = processBoundary.calls;
+  expect((await service.execute(actor, promptId, ticket.item.id, confirmation(ticket.item.approvalDigest))).item.status).toBe(resolved.item.status);
+  expect(processBoundary.calls).toBe(count);
 });
 it("denies another active administrator and a revoked original administrator", async () => {
   const before = processBoundary.calls;

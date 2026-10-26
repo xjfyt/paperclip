@@ -3,7 +3,7 @@ import { and, desc, eq, gt, inArray, isNull, lt, sql } from "drizzle-orm";
 import { activityLog, agents, authSessions, authUsers, companies, companyMemberships, companySecrets, companySecretVersions,
   companySkills, companySkillVersions, heartbeatRuns, agentWakeupRequests, environments, instanceSettings, projects, issues, mimouseEvaluationDatasets, mimousePromptRevisions, mimousePrompts, type Db } from "@paperclipai/db";
 import { mimousePrivatePromptTests as tests } from "@paperclipai/db/schema/mimouse_private_prompt_tests";
-import { createPrivatePromptTestSchema, type CreatePrivatePromptTest, type PrivatePromptTestRecord } from "@paperclipai/shared/mimouse-private-prompt-tests";
+import { preparePrivatePromptTestSchema, executePrivatePromptTestSchema, cancelPrivatePromptTestSchema, type PreparePrivatePromptTest, type ExecutePrivatePromptTest, type CancelPrivatePromptTest, type CreatePrivatePromptTest, type PrivatePromptTestRecord } from "@paperclipai/shared/mimouse-private-prompt-tests";
 import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
 import { issueService } from "../issues.js";
 import { accessService } from "../access.js";
@@ -27,7 +27,7 @@ export async function authorizePrivatePrompt(tx: PrivatePromptTx, actor: Private
   return { type: "board" as const, source: "session" as const, userId: actor.userId, sessionId: actor.sessionId,
     companyIds: [actor.companyId], memberships: [{ companyId: actor.companyId, status: "active" as const, membershipRole: member.membershipRole }] };
 }
-export async function validatePrivatePromptResources(tx: PrivatePromptTx, actor: PrivatePromptIdentity, input: CreatePrivatePromptTest, promptId: string, replay = false, allowRunning = false) {
+export async function validatePrivatePromptResources(tx: PrivatePromptTx, actor: PrivatePromptIdentity, input: PreparePrivatePromptTest, promptId: string, replay = false, allowRunning = false) {
   const principal = await authorizePrivatePrompt(tx, actor);
   if (!privatePromptTestsEnabled()) throw unprocessable("private_prompt_execution_disabled");
   const [agent] = await tx.select().from(agents).where(and(eq(agents.id, input.agentId), eq(agents.companyId, actor.companyId))).for("share");
@@ -107,8 +107,16 @@ export async function assertPrivatePromptEarlyBinding(db: Db, run: typeof heartb
     return { ...row, effectiveEnvironmentId: bound.profile.effectiveEnvironment.id };
   });
 }
+export function privatePromptApprovalDigest(row: PrivatePromptRow): string {
+  return privateConfigDigest({ schemaVersion: 1, testId: row.id, companyId: row.companyId, actorUserId: row.actorUserId,
+    promptId: row.promptId, revisionId: row.revisionId, headReceiptId: row.headReceiptId, agentId: row.agentId,
+    datasetId: row.datasetId, caseId: row.caseId, skillVersionId: row.skillVersionId, executionProfile: "claude_cli_bare_api_key_v1",
+    requestId: row.requestId, requestDigest: row.requestDigest, revisionHash: row.revisionHash, datasetHash: row.datasetHash,
+    skillVersionHash: row.skillVersionHash, secretValueHash: row.secretValueHash, configDigest: row.configDigest });
+}
 export function privatePromptRecord(row: PrivatePromptRow): PrivatePromptTestRecord {
-  return { id: row.id, promptId: row.promptId, revisionId: row.revisionId, agentId: row.agentId, datasetId: row.datasetId,
+  return { id: row.id, companyId: row.companyId, actorUserId: row.actorUserId, requestId: row.requestId, headReceiptId: row.headReceiptId, approvalDigest: privatePromptApprovalDigest(row),
+    executionProfile: "claude_cli_bare_api_key_v1", promptId: row.promptId, revisionId: row.revisionId, agentId: row.agentId, datasetId: row.datasetId,
     caseId: row.caseId, skillVersionId: row.skillVersionId, status: row.status, issueId: row.issueId,
     heartbeatRunId: row.heartbeatRunId, prepared: row.prepared, spawnedAt: row.spawnedAt?.toISOString() ?? null,
     errorCode: row.errorCode, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), runtimeApplied: false };
@@ -163,8 +171,8 @@ export function privatePromptTestService(db: Db, wake?: (agentId: string, opts: 
       const row = await get(actor, promptId, id);
       return { item: privatePromptRecord(row), privateResult: row.privateResult, contentDisposition: "untrusted_inert_text" as const };
     },
-    async create(actor: PrivatePromptIdentity, promptId: string, raw: CreatePrivatePromptTest) {
-      const input = createPrivatePromptTestSchema.parse(raw);
+    async prepare(actor: PrivatePromptIdentity, promptId: string, raw: PreparePrivatePromptTest) {
+      const input = preparePrivatePromptTestSchema.parse(raw);
       const digest = privateConfigDigest({ ...input, promptId });
       const created = await db.transaction(async tx => {
         await authorizePrivatePrompt(tx, actor);
@@ -172,20 +180,55 @@ export function privatePromptTestService(db: Db, wake?: (agentId: string, opts: 
         const [prior] = await tx.select().from(tests).where(and(eq(tests.companyId, actor.companyId), eq(tests.requestId, input.requestId)));
         if (prior) {
           if (prior.actorUserId !== actor.userId || prior.requestDigest !== digest) throw conflict("private_prompt_request_conflict");
-          // A fresh valid session may recover the same user intent; execution
-          // still revalidates the original approval session before dispatch.
+          // Metadata retry cannot admit execution, even after confirmation.
           return { row: prior, duplicate: true };
         }
         const bound = await validatePrivatePromptResources(tx, actor, input, promptId);
-        const [row] = await tx.insert(tests).values({ companyId: actor.companyId, promptId, revisionId: input.revisionId,
+        const [row] = await tx.insert(tests).values({ status: "awaiting_confirmation", companyId: actor.companyId, promptId, revisionId: input.revisionId,
           headReceiptId: input.expectedHeadReceiptId, revisionHash: bound.revision.contentHash, requestId: input.requestId,
           requestDigest: digest, actorUserId: actor.userId, actorSessionId: actor.sessionId, agentId: input.agentId,
           datasetId: input.datasetId, datasetHash: bound.dataset.datasetHash, caseId: input.caseId,
           skillVersionId: input.skillVersionId, skillVersionHash: privateConfigDigest(bound.version.fileInventory), secretValueHash: bound.secret.valueHash, configDigest: bound.profile.configDigest }).returning();
         await tx.insert(activityLog).values({ companyId: actor.companyId, actorType: "user", actorId: actor.userId,
-          action: "prompt_registry.private_test_authorized", entityType: "private_prompt_test", entityId: row!.id,
+          action: "prompt_registry.private_test_snapshot_prepared", entityType: "private_prompt_test", entityId: row!.id,
           details: { executionProfile: input.executionProfile, runtimeApplied: false } });
         return { row: row!, duplicate: false };
+      });
+      return { item: privatePromptRecord(await get(actor, promptId, created.row.id)), duplicate: created.duplicate };
+    },
+    async cancel(actor: PrivatePromptIdentity, promptId: string, id: string, raw: CancelPrivatePromptTest) {
+      const input = cancelPrivatePromptTestSchema.parse(raw);
+      return db.transaction(async tx => {
+        await authorizePrivatePrompt(tx, actor);
+        const [row] = await tx.select().from(tests).where(and(eq(tests.companyId, actor.companyId), eq(tests.promptId, promptId),
+          eq(tests.id, id), eq(tests.actorUserId, actor.userId))).for("update");
+        if (!row) throw notFound("private_prompt_test_not_found");
+        if (input.approvalDigest !== privatePromptApprovalDigest(row)) throw conflict("private_prompt_approval_changed");
+        if (row.status !== "awaiting_confirmation") return { item: privatePromptRecord(await reconcilePrivatePromptState(tx, row)), duplicate: true };
+        const [cancelled] = await tx.update(tests).set({ status: "cancelled", errorCode: "private_prompt_confirmation_cancelled", updatedAt: new Date() })
+          .where(and(eq(tests.id, row.id), eq(tests.status, "awaiting_confirmation"))).returning();
+        return { item: privatePromptRecord(cancelled!), duplicate: false };
+      });
+    },
+    async execute(actor: PrivatePromptIdentity, promptId: string, id: string, raw: ExecutePrivatePromptTest) {
+      const input = executePrivatePromptTestSchema.parse(raw);
+      const created = await db.transaction(async tx => {
+        await authorizePrivatePrompt(tx, actor);
+        const [row] = await tx.select().from(tests).where(and(eq(tests.companyId, actor.companyId), eq(tests.promptId, promptId),
+          eq(tests.id, id), eq(tests.actorUserId, actor.userId))).for("update");
+        if (!row) throw notFound("private_prompt_test_not_found");
+        if (input.approvalDigest !== privatePromptApprovalDigest(row)) throw conflict("private_prompt_approval_changed");
+        if (row.status !== "awaiting_confirmation") return { row, duplicate: true };
+        const bound = await validatePrivatePromptResources(tx, actor, privatePromptInput(row), promptId, true);
+        if (bound.profile.configDigest !== row.configDigest || bound.dataset.datasetHash !== row.datasetHash ||
+            bound.revision.contentHash !== row.revisionHash || privateConfigDigest(bound.version.fileInventory) !== row.skillVersionHash ||
+            bound.secret.valueHash !== row.secretValueHash) throw conflict("private_prompt_approval_snapshot_changed");
+        const [admitted] = await tx.update(tests).set({ status: "pending_harness", actorSessionId: actor.sessionId, updatedAt: new Date() })
+          .where(and(eq(tests.id, row.id), eq(tests.status, "awaiting_confirmation"))).returning();
+        await tx.insert(activityLog).values({ companyId: row.companyId, actorType: "user", actorId: actor.userId,
+          action: "prompt_registry.private_test_authorized", entityType: "private_prompt_test", entityId: row.id,
+          details: { executionProfile: input.executionProfile, runtimeApplied: false } });
+        return { row: admitted!, duplicate: false };
       });
       if (["pending_harness", "pending_wake"].includes(created.row.status)) {
         await db.transaction(async tx => {

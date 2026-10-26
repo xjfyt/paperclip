@@ -9,7 +9,7 @@ CREATE TABLE mimouse_private_prompt_tests (
   dataset_id uuid NOT NULL, dataset_hash text NOT NULL, case_id uuid NOT NULL,
   skill_version_id uuid NOT NULL REFERENCES company_skill_versions(id) ON DELETE RESTRICT,
   config_digest text NOT NULL, skill_version_hash text NOT NULL, secret_value_hash text NOT NULL,
-  status text NOT NULL DEFAULT 'pending_harness',
+  status text NOT NULL DEFAULT 'awaiting_confirmation',
   issue_id uuid REFERENCES issues(id) ON DELETE RESTRICT,
   wakeup_request_id uuid REFERENCES agent_wakeup_requests(id) ON DELETE RESTRICT,
   heartbeat_run_id uuid REFERENCES heartbeat_runs(id) ON DELETE RESTRICT,
@@ -21,7 +21,8 @@ CREATE TABLE mimouse_private_prompt_tests (
     REFERENCES mimouse_prompt_receipts(company_id,prompt_id,id) ON DELETE RESTRICT,
   CONSTRAINT mimouse_private_prompt_test_dataset FOREIGN KEY(company_id,dataset_id)
     REFERENCES mimouse_evaluation_datasets(company_id,id) ON DELETE RESTRICT,
-  CONSTRAINT mimouse_private_prompt_test_state CHECK(status IN ('pending_harness','pending_wake','queued','prepared','spawned','completed','failed','unknown','cancelled')),
+  CONSTRAINT mimouse_private_prompt_test_confirmation CHECK(status <> 'awaiting_confirmation' OR (issue_id IS NULL AND wakeup_request_id IS NULL AND heartbeat_run_id IS NULL AND attempt_id IS NULL AND prepared IS NULL AND private_result IS NULL)),
+  CONSTRAINT mimouse_private_prompt_test_state CHECK(status IN ('awaiting_confirmation','pending_harness','pending_wake','queued','prepared','spawned','completed','failed','unknown','cancelled')),
   CONSTRAINT mimouse_private_prompt_test_witness CHECK(status NOT IN ('prepared','spawned','completed') OR (prepared IS NOT NULL AND attempt_id IS NOT NULL AND heartbeat_run_id IS NOT NULL)),
   CONSTRAINT mimouse_private_prompt_test_spawned CHECK(status NOT IN ('spawned','completed') OR spawned_at IS NOT NULL),
   CONSTRAINT mimouse_private_prompt_test_result CHECK(status <> 'completed' OR private_result IS NOT NULL)

@@ -20,20 +20,25 @@ ACP/native/remote、resume/warm/recovery 或配置漂移均 unsupported，不回
 
 - `POST /api/companies/:companyId/prompt-registry/:promptId/tests`：requestId、
   revisionId、expectedHeadReceiptId、agentId、datasetId、caseId、skillVersionId，
-  独立明确执行和可能收费确认。不能接收 raw body、context、heartbeat ID 或 witness。
+  以及固定executionProfile；只准备元数据ticket，绝不创建harness/wake或执行。
+- `POST .../:promptId/tests/:testId/execute`：已知ticket的approvalDigest + profile +
+  三项独立执行/受限配置/API收费确认。锁内重验prepare时配置；只能首次awaiting→pending，
+  终态重放只返回旧回执。不能接收 raw body、context、heartbeat ID 或 witness。
+- `POST .../:promptId/tests/:testId/cancel`：approvalDigest；锁内仅awaiting→cancelled。
+  与execute竞争只能一方赢，返回pending/queued等不等于取消成功。
 - `GET .../:promptId/tests/:testId`：当前有效真人 session + active 公司 owner/admin
   且测试所属发起者/既定私有 ACL；no-store，错误仅固定 code。
 - 专用 intent 表绑定公司、actor/session、精确批准 payload digest、revision/content hash、
   dataset/hash/case、skillVersion、无 secret 原文的配置摘要、issue/wake/run/attempt。
-- 状态：pending_harness → pending_wake → queued → prepared → spawned → completed；
+- 状态：awaiting_confirmation → pending_harness → pending_wake → queued → prepared → spawned → completed；
   failed/unknown 不自动重跑。唯一 request、issue、wake、attempt fence 必须由 DB 强制。
 - prepared witness：实际最终 prompt 的 SHA-256、UTF-8 byte length、implementation
   identity/version、所有绑定 ID。它不是 spawn、stdin_written 或 provider consumed。
 
 ## 核心接缝
 
-1. 创建事务重查 session、user、active owner/admin、company/agent/resource，保留
-   skills.test 和 tasks:assign。使用 issues.create 的 private personal project 与 ACL。
+1. prepare与execute确认事务分别重查session、user、active owner/admin、company/agent/resource，
+   保留skills.test和tasks:assign；只有execute后使用issues.create的private personal project与ACL。
 2. 核心 heartbeat queue 用 reserved key 的 DB 唯一 fence 和队列事务关联；普通
    wake 不得伪造标记。未知响应同 request 恢复，不另建 intent。
 3. 最终 adapter.execute 前重查实际选择的同一 builtin 对象与全部执行合同，server
@@ -167,3 +172,24 @@ suite18：3 files / 35 tests passed，其中17项DB窄集成。额外验证了�
 已queued（显式maxConcurrentRuns=1），释放child后后继succeeded、Agent自然idle。另两项真实
 用户取消/转派竞争验证不覆盖用户决定。成功/后继用例没有手动重置Agent状态；故障注入用例的
 idle恢复仅用于隔离刻意制造的失败。普通后继同样仅固定无网络Node脚本，不调用真实CLI账户。
+
+
+### 两阶段收费身份不变量
+
+prepare重复遇到任何既有状态都只读固定ticket，不恢复harness/wake。它返回稳定testId与
+approvalDigest、company/actor/requestId、head/profile和固定资源引用。digest绑定不可变
+快照，不随生命周期或确认session更新变化；prepare不是最终实际prompt的prepared witness。
+execute仅awaiting首次准入，pending_harness/pending_wake只能恢复同唯一意图，
+queued/prepared/spawned/completed/failed/unknown/cancelled均不能新attempt或新收费派发。
+failed不可重试、取消不可被迟到execute撤销；新测试必须另一次独立显式批准。
+
+客户端执行前必须把非秘密ticket/UUID/digest身份写入同标签页pending journal并读回确认。
+HTTP状态码（包括4xx）、畸形200、当前GET仍awaiting均不能证明未知execute未生效；只能
+严格核对同owner/company/operation完整回执，显式同ID恢复或原子cancel。后台auth重新验证、
+head/revision变化及组件卸载不能清除未知收费身份；storage不可用禁止execute。journal不含
+prompt正文、凭据或结果，不自动POST。跨用户/公司/session的旧响应不得清新操作标记；
+同标签页存储不冒充跨关闭标签页的保证，历史ticket仍可通过受私有ACL保护的列表发现。
+
+两阶段后端初验twophase20：3files/38项通过，额外覆盖prepare零wake、旧合并body拒绝、
+重复prepare不恢复pending、prepare后配置漂移/撤权、execute/cancel竞态及迟到execute不重派。
+该轮尚未证明最终UI真实浏览器行为，须独立UI审查与中央联调。
