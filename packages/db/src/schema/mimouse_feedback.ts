@@ -33,6 +33,7 @@ export const mimouseFeedbackPromotions = pgTable("mimouse_feedback_promotions", 
 }, t => ({
   feedback: foreignKey({ columns: [t.companyId, t.feedbackId], foreignColumns: [mimouseFeedbackInbox.companyId, mimouseFeedbackInbox.id], name: "mimouse_feedback_promotion_source_fk" }),
   issue: foreignKey({ columns: [t.companyId, t.issueId], foreignColumns: [issues.companyId, issues.id], name: "mimouse_feedback_promotion_issue_fk" }),
+  verificationIdentity: uniqueIndex("mimouse_feedback_promotion_verification_identity").on(t.companyId, t.feedbackId, t.issueId),
   oneIssue: uniqueIndex("mimouse_feedback_promotion_once").on(t.companyId, t.feedbackId),
   request: uniqueIndex("mimouse_feedback_promotion_request").on(t.companyId, t.requestId),
 }));

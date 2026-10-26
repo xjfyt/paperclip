@@ -743,3 +743,13 @@ Use the same root client for in-process writers. New queue insertion paths must
 register before writing, or they can remain unseen until the next startup or
 another notification. Tests should verify both the producer and its outer
 transaction boundary.
+
+## Feedback verification attestations
+
+`mimouse_feedback_verifications` appends immutable human-reviewed links between
+feedback promotion and failed/passed coding checks. Composite foreign keys keep
+source promotion and both deliveries on one company/task; a company/request
+unique index provides replay identity, not one-receipt-per-feedback exclusivity.
+Snapshot JSON stores only bounded references/digests and explicitly distinguishes
+human evidence from machine reference validation. No existing feedback is
+backfilled as reproduced or fixed. See [verification receipts](features/feedback-verification-receipts.md).

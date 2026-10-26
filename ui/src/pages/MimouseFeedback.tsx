@@ -1,3 +1,4 @@
+import { MimouseFeedbackVerification } from "@/components/MimouseFeedbackVerification";
 import { MimouseFeedbackEvidence } from "@/components/MimouseFeedbackEvidence";
 import { MimouseWecomPanel } from "@/components/MimouseWecomPanel";
 import { MimouseLangfusePanel } from "@/components/MimouseLangfusePanel";
@@ -96,8 +97,8 @@ function FeedbackReview({ companyId, userId, sessionId, item }: { companyId: str
   if (status.isError) return <p role="alert">{t("feedbackUi.readError")}</p>;
   if (status.isPending || status.isFetching) return <p>{t("common.loading")}</p>;
   const recorded = receipt ?? status.data?.receipt;
-  if (recorded) return <div className="space-y-2"><p role="status">{t("feedbackUi.confirmed")}</p><Link className="text-sm underline" to={`/issues/${recorded.issueId}`}>{t("feedbackUi.openTask")}</Link><p className="break-all font-mono text-xs">{recorded.requestId}</p></div>;
-  if (status.data.recorded) return <p>{t("feedbackUi.alreadyConfirmed")}</p>;
+  if (recorded) return <div className="space-y-2"><p role="status">{t("feedbackUi.confirmed")}</p><Link className="text-sm underline" to={`/issues/${recorded.issueId}`}>{t("feedbackUi.openTask")}</Link><p className="break-all font-mono text-xs">{recorded.requestId}</p><MimouseFeedbackVerification companyId={companyId} userId={userId} sessionId={sessionId} id={item.id} /></div>;
+  if (status.data.recorded) return <div className="space-y-2"><p>{t("feedbackUi.alreadyConfirmed")}</p><MimouseFeedbackVerification companyId={companyId} userId={userId} sessionId={sessionId} id={item.id} /></div>;
   return <form className="space-y-3 border-t border-border pt-4" onSubmit={event => {
     event.preventDefault(); if (mutation.isPending) return;
     if (attempt) { mutation.mutate(attempt); return; }

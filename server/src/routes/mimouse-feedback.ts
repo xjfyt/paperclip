@@ -1,3 +1,5 @@
+import { feedbackVerificationService } from "../services/mimouse-feedback-verification.js";
+import { feedbackVerificationPreviewSchema, feedbackVerificationConfirmSchema } from "@paperclipai/shared/mimouse-feedback-verification";
 import { feedbackPromotionService } from "../services/mimouse-feedback-promotion.js";
 import { Router, type Request } from "express";
 import { z } from "zod";
@@ -23,6 +25,27 @@ export function mimouseFeedbackRoutes(db: Db) {
   router.post(path, validate(feedbackImportSchema), async (req, res) => {
     const companyId = admin(req), result = await service.import(companyId, feedbackImportSchema.parse(req.body), getActorInfo(req).actorId);
     res.status(result.duplicate ? 200 : 201).json(result);
+  });
+  function reviewer(req: Request) {
+    if (req.actor.type !== "board" || req.actor.source !== "session" || !req.actor.userId) throw forbidden("A signed-in human must review feedback verification");
+    return req.actor.userId;
+  }
+  const verification = feedbackVerificationService(db);
+  router.get(`${path}/:id/verification-options`, async (req, res) => {
+    const companyId = admin(req), actor = reviewer(req); res.setHeader("Cache-Control", "no-store");
+    res.json(await verification.options(companyId, id(req), actor));
+  });
+  router.get(`${path}/:id/verifications`, async (req, res) => {
+    const companyId = admin(req), actor = reviewer(req); res.setHeader("Cache-Control", "no-store");
+    res.json(await verification.history(companyId, id(req), actor));
+  });
+  router.post(`${path}/:id/verification-preview`, validate(feedbackVerificationPreviewSchema), async (req, res) => {
+    const companyId = admin(req), actor = reviewer(req); res.setHeader("Cache-Control", "no-store");
+    res.json(await verification.preview(companyId, id(req), actor, feedbackVerificationPreviewSchema.parse(req.body)));
+  });
+  router.post(`${path}/:id/verifications`, validate(feedbackVerificationConfirmSchema), async (req, res) => {
+    const companyId = admin(req), actor = reviewer(req); res.setHeader("Cache-Control", "no-store");
+    res.json(await verification.confirm(companyId, id(req), actor, feedbackVerificationConfirmSchema.parse(req.body)));
   });
   router.get(`${path}/:id/promotion`, async (req, res) => {
     const companyId = admin(req);

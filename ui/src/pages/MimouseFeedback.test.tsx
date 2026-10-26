@@ -7,6 +7,7 @@ import { i18n } from "@/i18n";
 import { queryKeys } from "@/lib/queryKeys";
 import { MimouseFeedback } from "./MimouseFeedback";
 const calls = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), session: vi.fn(), breadcrumbs: vi.fn(), companyId: "company-a" as string | null }));
+vi.mock("@/components/MimouseFeedbackVerification", () => ({ MimouseFeedbackVerification: () => <section data-testid="verification-panel" /> }));
 vi.mock("@/components/MimouseWecomPanel", () => ({ MimouseWecomPanel: ({ companyId, userId, sessionId }: { companyId: string; userId: string; sessionId: string }) => <section data-testid="wecom-panel" data-company={companyId} data-user={userId} data-session={sessionId} /> }));
 vi.mock("@/components/MimouseLangfusePanel", () => ({ MimouseLangfusePanel: ({ companyId }: { companyId: string }) => <section data-testid="langfuse-panel">{companyId}</section> }));
 vi.mock("@/api/client", () => ({ api: { get: calls.get, post: calls.post } }));

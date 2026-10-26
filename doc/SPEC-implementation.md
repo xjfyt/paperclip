@@ -2142,3 +2142,13 @@ The internal service provides local-only availability and bounded, reauthorized 
 ## Company fast-response service
 
 Companies may configure an optional shared API connection and model for short acknowledgements of accepted human turns. Fast responses use direct SDK inference alongside normal agent work, with a three-second admission deadline, bounded prompts/output, current authorization and independent `fast_response` accounting. They are server-marked platform receipts attributed to the agent, never completion, interaction or recovery evidence. Company-sponsored unlinked external senders are explicit; linked-user permission denials are never bypassed. See [fast-responses.md](fast-responses.md) for provider, delivery, history and endpoint contracts.
+
+### Human-attested feedback verification
+
+Company administrators may explicitly record immutable, private-task-scoped
+feedback reproduction/regression attestations against existing fixed-commit
+coding receipts. Reference validation is not machine test execution; original
+checks remain operator-supplied. Preview and confirmation must bind exact server
+snapshots, current human authority and task access. Historical attestations never
+change task status, dispatch work, or grant release authority. See
+[feedback verification receipts](features/feedback-verification-receipts.md).
