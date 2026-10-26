@@ -61,3 +61,5 @@
 ## 设置引导权限
 
 GET `/companies/:companyId/setup-capabilities`：当前登录board的只读能力提示，现返回canCreateAgents。经现有公司边界和实际authorization service判定，响应private/no-store；不通过role名称猜测，不能作为后续修改请求的授权凭证。Dashboard在未知、刷新中、错误或明确拒绝时不自动打开Agent创建引导。
+
+- `GET/POST /api/admin/users/:userId/auth-revocations`：实例管理员浏览器session专用，尊重instance.access托管限制。POST要求requestId、confirmUserId、reason，原子失效目标既有会话并撤销个人Board keys；同requestId只返回原回执，输入变化409。返回截止时间及数量，不返回秘密。此接口不是账号封禁，不修改成员关系、IdP、MCP/连接器凭据或运行任务；详见casdoor.md停用顺序。

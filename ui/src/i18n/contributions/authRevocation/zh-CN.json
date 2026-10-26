@@ -1,0 +1,23 @@
+{
+  "title": "撤销本地登录访问",
+  "scope": "使该用户在此实例中现有的 Paperclip 会话失效，并撤销其个人 Board API 密钥。不会显示凭据。",
+  "warning": "这不会禁止之后重新登录、改变组织成员关系、撤销 IdP 或连接器令牌，也不会取消运行中的任务。离职处理应先禁止 IdP 登录并暂停成员授权。",
+  "target": "目标用户 ID",
+  "reason": "原因",
+  "offboarding": "离职或停用",
+  "compromised": "疑似凭据泄露",
+  "administrative": "管理员操作",
+  "request": "请求 ID",
+  "success": "已失效会话：{{sessions}}；已撤销 Board 密钥：{{keys}}。",
+  "cutoff": "撤销截止时间",
+  "newRequest": "开始新的撤销请求",
+  "confirm": "输入完整目标用户 ID 以确认",
+  "working": "正在撤销…",
+  "retry": "重试同一请求",
+  "submit": "撤销会话和 Board 密钥",
+  "uncertain": "结果尚未确认。请使用同一请求 ID 重试以获取回执，不要假定操作未执行。",
+  "storageFailed": "此浏览器无法保存请求 ID。离开前请复制，避免误建新请求。",
+  "history": "最近回执（最多 50 条）",
+  "loading": "正在加载回执…",
+  "historyFailed": "无法加载回执，请刷新后再判断结果。"
+}

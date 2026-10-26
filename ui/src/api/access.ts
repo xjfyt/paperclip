@@ -1,4 +1,4 @@
-import type { CompanySetupCapabilities } from "@paperclipai/shared";
+import type { AuthRevocationDto, RevokeLocalAuthInput, CompanySetupCapabilities } from "@paperclipai/shared";
 import type { AgentAdapterType, JoinRequest, PermissionKey } from "@paperclipai/shared";
 import { api } from "./client";
 
@@ -401,6 +401,9 @@ export const accessApi = {
 
   searchAdminUsers: (query: string) =>
     api.get<AdminUserDirectoryEntry[]>(`/admin/users?query=${encodeURIComponent(query)}`),
+
+  listAuthRevocations: (userId: string) => api.get<AuthRevocationDto[]>(`/admin/users/${encodeURIComponent(userId)}/auth-revocations`),
+  revokeLocalAuth: (userId: string, input: RevokeLocalAuthInput) => api.post<AuthRevocationDto>(`/admin/users/${encodeURIComponent(userId)}/auth-revocations`, input),
 
   promoteInstanceAdmin: (userId: string) =>
     api.post(`/admin/users/${userId}/promote-instance-admin`, {}),

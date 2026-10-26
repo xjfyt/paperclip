@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AuthRevocationPanel } from "@/components/AuthRevocationPanel";
 import { Shield, ShieldCheck } from "lucide-react";
 import { accessApi } from "@/api/access";
 import { ApiError } from "@/api/client";
@@ -236,6 +237,8 @@ export function InstanceAccess() {
                   </Button>
                 </div>
               </div>
+
+              <AuthRevocationPanel key={`${accountUserId}:${selectedUserId}`} actorUserId={accountUserId ?? ""} targetUserId={selectedUserId} />
 
               <div className="space-y-2">
                 <h2 className="text-sm font-semibold">Current memberships</h2>

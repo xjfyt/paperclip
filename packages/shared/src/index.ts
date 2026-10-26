@@ -2878,3 +2878,4 @@ export * from "./fast-response.js";
 export type { NotificationEndpointDto, NotificationRevisionDto, NotificationRevisionInput, NotificationReviewInput, NotificationReviewDto } from "./mimouse-notifications.js";
 
 export type { CompanySetupCapabilities } from "./mimouse-access.js";
+export { revokeLocalAuthSchema, type RevokeLocalAuthInput, type AuthRevocationDto } from "./mimouse-auth-revocations.js";

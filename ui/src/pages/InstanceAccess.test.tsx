@@ -13,6 +13,8 @@ const mocks = vi.hoisted(() => ({
   getSession: vi.fn(), searchAdminUsers: vi.fn(), getUserCompanyAccess: vi.fn(),
   setUserCompanyAccess: vi.fn(), setBreadcrumbs: vi.fn(), pushToast: vi.fn(),
 }));
+vi.mock("@/components/AuthRevocationPanel", () => ({ AuthRevocationPanel: () => null }));
+
 vi.mock("@/api/companies", () => ({ companiesApi: mocks }));
 vi.mock("@/api/auth", () => ({ authApi: mocks }));
 vi.mock("@/api/access", () => ({ accessApi: mocks }));
