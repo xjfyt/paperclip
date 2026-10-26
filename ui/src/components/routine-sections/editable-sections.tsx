@@ -44,58 +44,58 @@ const routineRunStatusKeys: Record<string, string> = {
 const concurrencyPolicyOptions = [
   {
     value: "coalesce_if_active",
-    title: "Coalesce if active",
-    description: "Keep one follow-up run queued while an active run is still working.",
+    title: "managementUi.routineCoalesceTitle",
+    description: "managementUi.routineCoalesceHelp",
   },
   {
     value: "always_enqueue",
-    title: "Always enqueue",
-    description: "Queue every trigger occurrence, even if several runs stack up.",
+    title: "managementUi.routineEnqueueTitle",
+    description: "managementUi.routineEnqueueHelp",
   },
   {
     value: "skip_if_active",
-    title: "Skip if active",
-    description: "Drop overlapping trigger occurrences while the routine is already active.",
+    title: "managementUi.routineSkipTitle",
+    description: "managementUi.routineSkipHelp",
   },
 ];
 
 const catchUpPolicyOptions = [
   {
     value: "skip_missed",
-    title: "Skip missed",
-    description: "Ignore schedule windows that were missed while paused.",
+    title: "managementUi.routineMissedTitle",
+    description: "managementUi.routineMissedHelp",
   },
   {
     value: "enqueue_missed_with_cap",
-    title: "Enqueue missed with cap",
-    description: "Catch up missed schedule windows after recovery; sub-hourly schedules are combined into one catch-up run, slower schedules replay each missed window up to a cap.",
+    title: "managementUi.routineCatchUpTitle",
+    description: "routineOps.catchUp",
   },
 ];
 
 const activityGatePolicyOptions = [
   {
     value: "always",
-    title: "Run on every scheduled tick",
-    description: "Fire on the schedule no matter what — the default behavior.",
+    title: "managementUi.routineEveryTickTitle",
+    description: "managementUi.routineEveryTickHelp",
   },
   {
     value: "require_external_activity",
-    title: "Skip when there's been no activity since the last run",
+    title: "managementUi.routineActivityTitle",
     description:
-      "On a scheduled tick, only run if something happened since the last run that finished. Lets a watcher-style routine stay asleep while the system is settled instead of burning tokens.",
+      "managementUi.routineActivityHelp",
   },
 ];
 
 const activityGateScopeOptions = [
   {
     value: "company",
-    title: "Organization-wide",
-    description: "Any activity across the organization counts as a reason to run.",
+    title: "managementUi.routineCompanyScope",
+    description: "managementUi.routineCompanyScopeHelp",
   },
   {
     value: "project",
-    title: "This project",
-    description: "Only activity in the routine's project counts as a reason to run.",
+    title: "managementUi.routineProjectScope",
+    description: "managementUi.routineProjectScopeHelp",
   },
 ];
 
@@ -480,6 +480,7 @@ export function SecretsSection() {
 }
 
 export function DeliverySection() {
+  const { t } = useTranslation();
   const ctx = useRoutineDetail();
   const { editDraft, setEditDraft, routine } = ctx;
 
@@ -494,58 +495,57 @@ export function DeliverySection() {
     <div className="space-y-6">
       <div className="space-y-3">
         <p className="text-xs font-medium uppercase tracking-(--tracking-caps) text-muted-foreground">
-          Concurrency
+          {t("commonUi.concurrency")}
         </p>
         <RadioCardGroup
-          ariaLabel="Concurrency policy"
+          ariaLabel={t("managementUi.routineConcurrencyPolicy")}
           value={editDraft.concurrencyPolicy}
           onValueChange={(concurrencyPolicy) =>
             setEditDraft((current) => ({ ...current, concurrencyPolicy }))
           }
-          options={concurrencyPolicyOptions}
+          options={concurrencyPolicyOptions.map(option => ({ ...option, title: t(option.title), description: t(option.description) }))}
         />
       </div>
       <div className="space-y-3">
         <p className="text-xs font-medium uppercase tracking-(--tracking-caps) text-muted-foreground">
-          Catch-up
+          {t("routineHistoryUi.catchUp")}
         </p>
         <RadioCardGroup
-          ariaLabel="Catch-up policy"
+          ariaLabel={t("managementUi.routineCatchUpPolicy")}
           value={editDraft.catchUpPolicy}
           onValueChange={(catchUpPolicy) =>
             setEditDraft((current) => ({ ...current, catchUpPolicy }))
           }
-          options={catchUpPolicyOptions}
+          options={catchUpPolicyOptions.map(option => ({ ...option, title: t(option.title), description: t(option.description) }))}
         />
       </div>
       <div className="space-y-3">
         <p className="text-xs font-medium uppercase tracking-(--tracking-caps) text-muted-foreground">
-          Advanced run policy
+          {t("managementUi.routineAdvancedPolicy")}
         </p>
         <RadioCardGroup
-          ariaLabel="Advanced run policy"
+          ariaLabel={t("managementUi.routineAdvancedPolicy")}
           value={editDraft.activityGatePolicy}
           onValueChange={(activityGatePolicy) =>
             setEditDraft((current) => ({ ...current, activityGatePolicy }))
           }
-          options={activityGatePolicyOptions}
+          options={activityGatePolicyOptions.map(option => ({ ...option, title: t(option.title), description: t(option.description) }))}
           disabled={!hasScheduleTrigger}
         />
         {!hasScheduleTrigger ? (
           <p className="text-xs text-muted-foreground">
-            Add a schedule trigger to gate runs on activity. Webhook, manual, and API fires always
-            run.
+            {t("managementUi.routineGateHelp")}
           </p>
         ) : gateEnabled ? (
           <div className="space-y-2 rounded-lg border border-border p-3">
-            <Label className="text-xs font-medium">Activity scope</Label>
+            <Label className="text-xs font-medium">{t("managementUi.routineActivityScope")}</Label>
             <RadioCardGroup
-              ariaLabel="Activity gate scope"
+              ariaLabel={t("managementUi.routineGateScope")}
               value={editDraft.activityGateScope}
               onValueChange={(activityGateScope) =>
                 setEditDraft((current) => ({ ...current, activityGateScope }))
               }
-              options={activityGateScopeOptions}
+              options={activityGateScopeOptions.map(option => ({ ...option, title: t(option.title), description: t(option.description) }))}
             />
           </div>
         ) : null}
@@ -557,6 +557,16 @@ export function DeliverySection() {
     </div>
   );
 }
+
+const dispositionLabelKeys: Record<string, string> = {
+  queued: "managementUi.routineQueued",
+  coalesced: "managementUi.routineCoalesced",
+  skipped: "managementUi.routineSkipped",
+};
+const dispositionNoteKeys: Record<string, string> = {
+  "runs immediately": "managementUi.routineImmediately",
+  "if the previous run is still active": "managementUi.routinePreviousActive",
+};
 
 const dispositionToneClass: Record<string, string> = {
   queued: "text-emerald-600 dark:text-emerald-400",
@@ -577,6 +587,7 @@ function NextFiresPreview({
   triggers: RoutineDetailType["triggers"];
   concurrencyPolicy: string;
 }) {
+  const { t } = useTranslation();
   const preview = useMemo(() => {
     const schedule = triggers
       .filter((trigger) => trigger.kind === "schedule" && trigger.enabled && trigger.cronExpression)
@@ -598,7 +609,7 @@ function NextFiresPreview({
   return (
     <div className="space-y-3">
       <p className="text-xs font-medium uppercase tracking-(--tracking-caps) text-muted-foreground">
-        Next 5 fires
+        {t("managementUi.routineNextFive")}
       </p>
       {preview ? (
         <>
@@ -609,23 +620,21 @@ function NextFiresPreview({
                 <span className="tabular-nums">{formatFireTime(entry.at, preview.timeZone)}</span>
                 <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground/50" />
                 <span className={cn("font-medium", dispositionToneClass[entry.disposition])}>
-                  {entry.label}
+                  {dispositionLabelKeys[entry.disposition] ? t(dispositionLabelKeys[entry.disposition]) : entry.label}
                 </span>
                 {entry.note ? (
-                  <span className="truncate text-muted-foreground/60">({entry.note})</span>
+                  <span className="truncate text-muted-foreground/60">({dispositionNoteKeys[entry.note] ? t(dispositionNoteKeys[entry.note]) : entry.note})</span>
                 ) : null}
               </div>
             ))}
           </div>
           <p className="text-(length:--text-micro) text-muted-foreground/60">
-            Preview assumes the previous run is still in flight when the next fires. Times shown in{" "}
-            {preview.timeZone}.
+            {t("managementUi.routinePreviewHelp", { zone: preview.timeZone })}
           </p>
         </>
       ) : (
         <p className="rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">
-          No enabled schedule trigger to preview. Add a schedule in Triggers to see how this policy
-          treats upcoming fires.
+          {t("managementUi.routineNoPreview")}
         </p>
       )}
     </div>
@@ -634,7 +643,7 @@ function NextFiresPreview({
 
 function formatFireTime(date: Date, timeZone: string): string {
   try {
-    return new Intl.DateTimeFormat(undefined, {
+    return new Intl.DateTimeFormat(i18n.language, {
       timeZone,
       year: "numeric",
       month: "2-digit",

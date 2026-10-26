@@ -50,3 +50,98 @@ it.each(Object.entries(managementMessages).flatMap(([locale, messages]) => [fals
     } finally { await act(async () => { root.unmount(); }); }
   },
 );
+
+const localeVariants = Object.entries(managementMessages).flatMap(([locale, messages]) =>
+  [false, true].map(legacy => ({ locale, messages, legacy })),
+);
+const policyCases = localeVariants.flatMap(variant =>
+  ["coalesce_if_active", "always_enqueue", "skip_if_active"].map(policy => ({ ...variant, policy })),
+);
+it.each(policyCases)("localizes policy preview in $locale (production: $legacy, policy: $policy)", async ({ locale, messages, legacy, policy }) => {
+  await i18n.changeLanguage(locale);
+  const draft = { concurrencyPolicy: policy, catchUpPolicy: "skip_missed", activityGatePolicy: "require_external_activity", activityGateScope: "project" };
+  const setDraft = vi.fn();
+  fixture.value = { ...fixture.value, editDraft: draft, setEditDraft: setDraft,
+    routine: { triggers: [{ id: "schedule-a", kind: "schedule", enabled: true, cronExpression: "0 * * * *", timezone: "UTC" }] } };
+  const Section = legacy ? production.DeliverySection : current.DeliverySection;
+  const host = document.createElement("div"), root = createRoot(host);
+  try {
+    await act(async () => { root.render(<Section />); });
+    expect(host.querySelector(`[role="radiogroup"][aria-label="${messages.routineConcurrencyPolicy}"]`)).not.toBeNull();
+    expect(host.querySelector(`[role="radiogroup"][aria-label="${messages.routineGateScope}"]`)).not.toBeNull();
+    expect(host.textContent).toContain(messages.routineActivityHelp);
+    expect(host.textContent).toContain(legacy ? messages.routineLegacyCompanyScopeHelp : messages.routineCompanyScopeHelp);
+    expect(host.textContent).toContain(i18n.t("managementUi.routinePreviewHelp", { zone: "UTC" }));
+    expect(host.textContent).toContain(messages.routineImmediately);
+    expect(host.textContent).toContain(policy === "coalesce_if_active" ? messages.routineCoalesced : policy === "skip_if_active" ? messages.routineSkipped : messages.routineQueued);
+    expect(host.querySelectorAll("span.tabular-nums")).toHaveLength(5);
+    const enqueue = [...host.querySelectorAll<HTMLButtonElement>('[role="radio"]')].find(button => button.textContent?.includes(messages.routineEnqueueTitle));
+    await act(async () => { enqueue!.click(); });
+    expect(setDraft).toHaveBeenCalledTimes(1);
+    expect(setDraft.mock.calls[0][0](draft)).toEqual({ ...draft, concurrencyPolicy: "always_enqueue" });
+    await act(async () => { await i18n.changeLanguage(locale === "ja" ? "es" : "ja"); });
+    expect(host.textContent).toContain(i18n.t("managementUi.routineNextFive"));
+    expect(setDraft).toHaveBeenCalledTimes(1);
+  } finally { await act(async () => { root.unmount(); }); }
+});
+it.each(localeVariants)("localizes unavailable scheduling in $locale (production: $legacy)", async ({ locale, messages, legacy }) => {
+  await i18n.changeLanguage(locale);
+  const Section = legacy ? production.DeliverySection : current.DeliverySection;
+  const host = document.createElement("div"), root = createRoot(host);
+  try {
+    await act(async () => { root.render(<Section />); });
+    expect(host.textContent).toContain(messages.routineGateHelp);
+    expect(host.textContent).toContain(messages.routineNoPreview);
+    const gate = host.querySelector(`[aria-label="${messages.routineAdvancedPolicy}"]`)!;
+    expect([...gate.querySelectorAll<HTMLButtonElement>("button")].every(button => button.disabled)).toBe(true);
+    expect(fixture.value.setEditDraft).not.toHaveBeenCalled();
+  } finally { await act(async () => { root.unmount(); }); }
+});
+const signingCases = Object.entries(managementMessages).flatMap(([locale, messages]) =>
+  ["bearer", "hmac_sha256", "github_hmac", "app_webhook", "fireflies_hmac", "none"].map(signingMode => ({ locale, messages, signingMode })),
+);
+it.each(signingCases)("localizes legacy trigger controls in $locale ($signingMode)", async ({ locale, messages, signingMode }) => {
+  await i18n.changeLanguage(locale);
+  const create = vi.fn(), setTrigger = vi.fn(), copy = vi.fn();
+  const url = "https://example.invalid/webhook/test-only", secret = "test-only-secret";
+  fixture.value = { ...fixture.value, routine: { triggers: [] },
+    newTrigger: { kind: "webhook", signingMode, replayWindowSec: "300" }, setNewTrigger: setTrigger,
+    createTrigger: { isPending: false, mutate: create }, updateTrigger: { mutate: vi.fn() }, deleteTrigger: { mutate: vi.fn() }, rotateTrigger: { mutate: vi.fn() },
+    secretMessage: { title: "Original message", entries: [{ webhookUrl: url, webhookSecret: secret }] }, copySecretValue: copy, setSecretMessage: vi.fn() };
+  const host = document.createElement("div"), root = createRoot(host);
+  try {
+    await act(async () => { root.render(<production.TriggersSection />); });
+    expect(host.textContent).toContain(messages.routineNoTriggers);
+    expect(host.textContent).toContain(messages.routineSecretOnce);
+    expect(host.querySelector<HTMLInputElement>(`[aria-label="${messages.routineNewWebhookUrl}"]`)?.value).toBe(url);
+    expect(host.querySelector<HTMLInputElement>(`[aria-label="${messages.routineNewWebhookSecret}"]`)?.value).toBe(secret);
+    await act(async () => { host.querySelector<HTMLButtonElement>("button[aria-expanded]")!.click(); });
+    const descriptionKeys: Record<string, string> = { bearer: "routineSigningBearer", hmac_sha256: "routineSigningHmac", github_hmac: "routineSigningGithub", app_webhook: "routineSigningApp", fireflies_hmac: "routineSigningLegacy", none: "routineSigningNone" };
+    const values = signingMode === "bearer" ? { header: "Authorization: Bearer <secret>" }
+      : signingMode === "hmac_sha256" ? { timestamp: "X-Paperclip-Timestamp", signature: "X-Paperclip-Signature: sha256=<hex>" }
+      : signingMode === "github_hmac" ? { header: "X-Hub-Signature-256" }
+      : { header: "X-Hub-Signature", header256: "X-Hub-Signature-256" };
+    expect(host.textContent).toContain(i18n.t(`managementUi.${descriptionKeys[signingMode]}`, values));
+    const secretCopy = [...host.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === messages.routineSecret)!;
+    await act(async () => { secretCopy.click(); });
+    expect(copy).toHaveBeenCalledWith(messages.routineWebhookSecret, secret);
+    await act(async () => { await i18n.changeLanguage(locale === "ja" ? "es" : "ja"); });
+    expect(host.textContent).toContain(i18n.t(`managementUi.${descriptionKeys[signingMode]}`, values));
+    expect(host.textContent).toContain("Original message");
+    expect(setTrigger).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+  } finally { await act(async () => { root.unmount(); }); }
+});
+it.each(Object.entries(managementMessages).flatMap(([locale]) => [1, 2].map(count => ({ locale, count }))))(
+  "localizes legacy trigger counts in $locale ($count)", async ({ locale, count }) => {
+    await i18n.changeLanguage(locale);
+    fixture.value = { ...fixture.value, routine: { triggers: Array.from({ length: count }, (_, index) => ({ id: `trigger-${index}`, kind: "webhook" })) },
+      newTrigger: { kind: "webhook", signingMode: "none" }, createTrigger: { isPending: false } };
+    const host = document.createElement("div"), root = createRoot(host);
+    try {
+      await act(async () => { root.render(<production.TriggersSection />); });
+      expect(host.textContent).toContain(i18n.t("managementUi.routineTriggerCount", { count }));
+      expect(host.textContent).not.toContain("managementUi.");
+    } finally { await act(async () => { root.unmount(); }); }
+  },
+);

@@ -48,71 +48,63 @@ const routineRunStatusKeys: Record<string, string> = {
 const concurrencyPolicyOptions = [
   {
     value: "coalesce_if_active",
-    title: "Coalesce if active",
-    description: "Keep one follow-up run queued while an active run is still working.",
+    title: "managementUi.routineCoalesceTitle",
+    description: "managementUi.routineCoalesceHelp",
   },
   {
     value: "always_enqueue",
-    title: "Always enqueue",
-    description: "Queue every trigger occurrence, even if several runs stack up.",
+    title: "managementUi.routineEnqueueTitle",
+    description: "managementUi.routineEnqueueHelp",
   },
   {
     value: "skip_if_active",
-    title: "Skip if active",
-    description: "Drop overlapping trigger occurrences while the routine is already active.",
+    title: "managementUi.routineSkipTitle",
+    description: "managementUi.routineSkipHelp",
   },
 ];
 
 const catchUpPolicyOptions = [
   {
     value: "skip_missed",
-    title: "Skip missed",
-    description: "Ignore schedule windows that were missed while paused.",
+    title: "managementUi.routineMissedTitle",
+    description: "managementUi.routineMissedHelp",
   },
   {
     value: "enqueue_missed_with_cap",
-    title: "Enqueue missed with cap",
-    description: "Catch up missed schedule windows after recovery; sub-hourly schedules are combined into one catch-up run, slower schedules replay each missed window up to a cap.",
+    title: "managementUi.routineCatchUpTitle",
+    description: "routineOps.catchUp",
   },
 ];
 
 const activityGatePolicyOptions = [
   {
     value: "always",
-    title: "Run on every scheduled tick",
-    description: "Fire on the schedule no matter what — the default behavior.",
+    title: "managementUi.routineEveryTickTitle",
+    description: "managementUi.routineEveryTickHelp",
   },
   {
     value: "require_external_activity",
-    title: "Skip when there's been no activity since the last run",
+    title: "managementUi.routineActivityTitle",
     description:
-      "On a scheduled tick, only run if something happened since the last run that finished. Lets a watcher-style routine stay asleep while the system is settled instead of burning tokens.",
+      "managementUi.routineActivityHelp",
   },
 ];
 
 const activityGateScopeOptions = [
   {
     value: "company",
-    title: "Company-wide",
-    description: "Any activity across the company counts as a reason to run.",
+    title: "managementUi.routineLegacyCompanyScope",
+    description: "managementUi.routineLegacyCompanyScopeHelp",
   },
   {
     value: "project",
-    title: "This project",
-    description: "Only activity in the routine's project counts as a reason to run.",
+    title: "managementUi.routineProjectScope",
+    description: "managementUi.routineProjectScopeHelp",
   },
 ];
 
 const triggerKinds = ["schedule", "webhook"];
 const signingModes = ["app_webhook", "bearer", "hmac_sha256", "github_hmac", "none"];
-const signingModeDescriptions: Record<string, string> = {
-  bearer: "Send Authorization: Bearer <secret> with each request.",
-  hmac_sha256: "Send X-Paperclip-Timestamp and X-Paperclip-Signature: sha256=<hex>, signing timestamp + a dot + the exact JSON body.",
-  github_hmac: "Accept GitHub-style X-Hub-Signature-256 header (HMAC over raw body, no timestamp).",
-  app_webhook: "Accept a bearer token or an HMAC-SHA256 signature over the exact request body in X-Hub-Signature or X-Hub-Signature-256.",
-  fireflies_hmac: "Signed webhook (legacy).",
-  none: "No authentication — the webhook URL itself acts as a shared secret.",
-};
 const SIGNING_MODES_WITHOUT_REPLAY_WINDOW = new Set(["app_webhook", "bearer", "github_hmac", "fireflies_hmac", "none"]);
 
 export function OverviewSection({
@@ -428,6 +420,15 @@ function SummaryCard({
 }
 
 export function TriggersSection() {
+  const { t } = useTranslation();
+  const signingDescriptions: Record<string, string> = {
+    bearer: t("managementUi.routineSigningBearer", { header: "Authorization: Bearer <secret>" }),
+    hmac_sha256: t("managementUi.routineSigningHmac", { timestamp: "X-Paperclip-Timestamp", signature: "X-Paperclip-Signature: sha256=<hex>" }),
+    github_hmac: t("managementUi.routineSigningGithub", { header: "X-Hub-Signature-256" }),
+    app_webhook: t("managementUi.routineSigningApp", { header: "X-Hub-Signature", header256: "X-Hub-Signature-256" }),
+    fireflies_hmac: t("managementUi.routineSigningLegacy"),
+    none: t("managementUi.routineSigningNone"),
+  };
   const ctx = useRoutineDetail();
   const { routine, newTrigger, setNewTrigger, createTrigger, updateTrigger, deleteTrigger, rotateTrigger, secretMessage, copySecretValue, setSecretMessage } = ctx;
   const [addOpen, setAddOpen] = useState(false);
@@ -450,8 +451,8 @@ export function TriggersSection() {
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium text-muted-foreground">
           {routine.triggers.length === 0
-            ? "No triggers yet"
-            : `${routine.triggers.length} trigger${routine.triggers.length === 1 ? "" : "s"}`}
+            ? t("managementUi.routineNoTriggers")
+            : t("managementUi.routineTriggerCount", { count: routine.triggers.length })}
         </p>
         <Button
           size="sm"
@@ -462,12 +463,12 @@ export function TriggersSection() {
           {addOpen ? (
             <>
               <X className="mr-1.5 h-3.5 w-3.5" />
-              Cancel
+              {t("commonUi.cancel")}
             </>
           ) : (
             <>
               <Plus className="mr-1.5 h-3.5 w-3.5" />
-              New trigger
+              {t("managementUi.routineNewTrigger")}
             </>
           )}
         </Button>
@@ -476,10 +477,10 @@ export function TriggersSection() {
       {/* Add trigger form — expand-on-click drawer */}
       {addOpen ? (
       <div className="space-y-3 rounded-lg border border-border p-4">
-        <p className="text-sm font-medium">Add trigger</p>
+        <p className="text-sm font-medium">{t("managementUi.routineAddTrigger")}</p>
         <div className="grid gap-3 md:grid-cols-2">
           <div className="space-y-1.5">
-            <Label className="text-xs">Kind</Label>
+            <Label className="text-xs">{t("managementUi.routineKind")}</Label>
             <Select
               value={newTrigger.kind}
               onValueChange={(kind) => setNewTrigger((current) => ({ ...current, kind }))}
@@ -490,7 +491,7 @@ export function TriggersSection() {
               <SelectContent>
                 {triggerKinds.map((kind) => (
                   <SelectItem key={kind} value={kind}>
-                    {kind}
+                    {t(`routineScheduleUi.kind_${kind}`, { defaultValue: kind })}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -498,7 +499,7 @@ export function TriggersSection() {
           </div>
           {newTrigger.kind === "schedule" && (
             <div className="space-y-1.5 md:col-span-2">
-              <Label className="text-xs">Schedule</Label>
+              <Label className="text-xs">{t("routineScheduleUi.schedule")}</Label>
               <ScheduleEditor
                 value={newTrigger.cronExpression}
                 onChange={(cronExpression) =>
@@ -511,7 +512,7 @@ export function TriggersSection() {
           {newTrigger.kind === "webhook" && (
             <>
               <div className="space-y-1.5">
-                <Label className="text-xs">Signing mode</Label>
+                <Label className="text-xs">{t("routineScheduleUi.signing")}</Label>
                 <Select
                   value={newTrigger.signingMode}
                   onValueChange={(signingMode) =>
@@ -524,18 +525,18 @@ export function TriggersSection() {
                   <SelectContent>
                     {signingModes.map((mode) => (
                       <SelectItem key={mode} value={mode}>
-                        {mode}
+                        {t(`routineScheduleUi.signing_${mode}`, { defaultValue: mode })}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  {signingModeDescriptions[newTrigger.signingMode]}
+                  {signingDescriptions[newTrigger.signingMode]}
                 </p>
               </div>
               {!SIGNING_MODES_WITHOUT_REPLAY_WINDOW.has(newTrigger.signingMode) && (
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Replay window (seconds)</Label>
+                  <Label className="text-xs">{t("routineScheduleUi.replay")}</Label>
                   <Input
                     value={newTrigger.replayWindowSec}
                     onChange={(event) =>
@@ -549,7 +550,7 @@ export function TriggersSection() {
         </div>
         <div className="flex items-center justify-end gap-2">
           <Button size="sm" variant="ghost" onClick={() => setAddOpen(false)}>
-            Cancel
+            {t("commonUi.cancel")}
           </Button>
           <Button
             size="sm"
@@ -563,7 +564,7 @@ export function TriggersSection() {
             }
             disabled={addDisabled}
           >
-            {createTrigger.isPending ? "Adding..." : "Add trigger"}
+            {createTrigger.isPending ? t("managementUi.routineAdding") : t("managementUi.routineAddTrigger")}
           </Button>
         </div>
       </div>
@@ -574,28 +575,28 @@ export function TriggersSection() {
           <div>
             <p className="font-medium">{secretMessage.title}</p>
             <p className="text-xs text-muted-foreground">
-              Save this now. Paperclip will not show the secret value again.
+              {t("managementUi.routineSecretOnce")}
             </p>
           </div>
           <div className="space-y-3">
             {secretMessage.entries.map((entry, index) => (
               <div key={`${entry.webhookUrl}-${index}`} className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <Input aria-label="New webhook URL" value={entry.webhookUrl} readOnly className="flex-1" />
-                  <Button variant="outline" size="sm" onClick={() => copySecretValue("Webhook URL", entry.webhookUrl)}>
+                  <Input aria-label={t("managementUi.routineNewWebhookUrl")} value={entry.webhookUrl} readOnly className="flex-1" />
+                  <Button variant="outline" size="sm" onClick={() => copySecretValue(t("routineScheduleUi.webhookUrl"), entry.webhookUrl)}>
                     URL
                   </Button>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Input aria-label="New webhook secret" value={entry.webhookSecret} readOnly className="flex-1" />
-                  <Button variant="outline" size="sm" onClick={() => copySecretValue("Webhook secret", entry.webhookSecret)}>
-                    Secret
+                  <Input aria-label={t("managementUi.routineNewWebhookSecret")} value={entry.webhookSecret} readOnly className="flex-1" />
+                  <Button variant="outline" size="sm" onClick={() => copySecretValue(t("managementUi.routineWebhookSecret"), entry.webhookSecret)}>
+                    {t("managementUi.routineSecret")}
                   </Button>
                 </div>
               </div>
             ))}
           </div>
-          <Button variant="outline" size="sm" onClick={() => setSecretMessage(null)}>Done</Button>
+          <Button variant="outline" size="sm" onClick={() => setSecretMessage(null)}>{t("shell.done")}</Button>
         </div>
       ) : null}
 
@@ -603,8 +604,8 @@ export function TriggersSection() {
       {routine.triggers.length === 0 ? (
         <EmptyState
           icon={Clock3}
-          message="No triggers yet."
-          action="Add a trigger"
+          message={t("managementUi.routineNoTriggers")}
+          action={t("managementUi.routineAddATrigger")}
           onAction={() => setAddOpen(true)}
         />
       ) : (
@@ -700,6 +701,7 @@ export function SecretsSection() {
 }
 
 export function DeliverySection() {
+  const { t } = useTranslation();
   const ctx = useRoutineDetail();
   const { editDraft, setEditDraft, routine } = ctx;
 
@@ -714,58 +716,57 @@ export function DeliverySection() {
     <div className="space-y-6">
       <div className="space-y-3">
         <p className="text-xs font-medium uppercase tracking-(--tracking-caps) text-muted-foreground">
-          Concurrency
+          {t("commonUi.concurrency")}
         </p>
         <RadioCardGroup
-          ariaLabel="Concurrency policy"
+          ariaLabel={t("managementUi.routineConcurrencyPolicy")}
           value={editDraft.concurrencyPolicy}
           onValueChange={(concurrencyPolicy) =>
             setEditDraft((current) => ({ ...current, concurrencyPolicy }))
           }
-          options={concurrencyPolicyOptions}
+          options={concurrencyPolicyOptions.map(option => ({ ...option, title: t(option.title), description: t(option.description) }))}
         />
       </div>
       <div className="space-y-3">
         <p className="text-xs font-medium uppercase tracking-(--tracking-caps) text-muted-foreground">
-          Catch-up
+          {t("routineHistoryUi.catchUp")}
         </p>
         <RadioCardGroup
-          ariaLabel="Catch-up policy"
+          ariaLabel={t("managementUi.routineCatchUpPolicy")}
           value={editDraft.catchUpPolicy}
           onValueChange={(catchUpPolicy) =>
             setEditDraft((current) => ({ ...current, catchUpPolicy }))
           }
-          options={catchUpPolicyOptions}
+          options={catchUpPolicyOptions.map(option => ({ ...option, title: t(option.title), description: t(option.description) }))}
         />
       </div>
       <div className="space-y-3">
         <p className="text-xs font-medium uppercase tracking-(--tracking-caps) text-muted-foreground">
-          Advanced run policy
+          {t("managementUi.routineAdvancedPolicy")}
         </p>
         <RadioCardGroup
-          ariaLabel="Advanced run policy"
+          ariaLabel={t("managementUi.routineAdvancedPolicy")}
           value={editDraft.activityGatePolicy}
           onValueChange={(activityGatePolicy) =>
             setEditDraft((current) => ({ ...current, activityGatePolicy }))
           }
-          options={activityGatePolicyOptions}
+          options={activityGatePolicyOptions.map(option => ({ ...option, title: t(option.title), description: t(option.description) }))}
           disabled={!hasScheduleTrigger}
         />
         {!hasScheduleTrigger ? (
           <p className="text-xs text-muted-foreground">
-            Add a schedule trigger to gate runs on activity. Webhook, manual, and API fires always
-            run.
+            {t("managementUi.routineGateHelp")}
           </p>
         ) : gateEnabled ? (
           <div className="space-y-2 rounded-lg border border-border p-3">
-            <Label className="text-xs font-medium">Activity scope</Label>
+            <Label className="text-xs font-medium">{t("managementUi.routineActivityScope")}</Label>
             <RadioCardGroup
-              ariaLabel="Activity gate scope"
+              ariaLabel={t("managementUi.routineGateScope")}
               value={editDraft.activityGateScope}
               onValueChange={(activityGateScope) =>
                 setEditDraft((current) => ({ ...current, activityGateScope }))
               }
-              options={activityGateScopeOptions}
+              options={activityGateScopeOptions.map(option => ({ ...option, title: t(option.title), description: t(option.description) }))}
             />
           </div>
         ) : null}
@@ -777,6 +778,16 @@ export function DeliverySection() {
     </div>
   );
 }
+
+const dispositionLabelKeys: Record<string, string> = {
+  queued: "managementUi.routineQueued",
+  coalesced: "managementUi.routineCoalesced",
+  skipped: "managementUi.routineSkipped",
+};
+const dispositionNoteKeys: Record<string, string> = {
+  "runs immediately": "managementUi.routineImmediately",
+  "if the previous run is still active": "managementUi.routinePreviousActive",
+};
 
 const dispositionToneClass: Record<string, string> = {
   queued: "text-emerald-600 dark:text-emerald-400",
@@ -797,6 +808,7 @@ function NextFiresPreview({
   triggers: RoutineDetailType["triggers"];
   concurrencyPolicy: string;
 }) {
+  const { t } = useTranslation();
   const preview = useMemo(() => {
     const schedule = triggers
       .filter((trigger) => trigger.kind === "schedule" && trigger.enabled && trigger.cronExpression)
@@ -818,7 +830,7 @@ function NextFiresPreview({
   return (
     <div className="space-y-3">
       <p className="text-xs font-medium uppercase tracking-(--tracking-caps) text-muted-foreground">
-        Next 5 fires
+        {t("managementUi.routineNextFive")}
       </p>
       {preview ? (
         <>
@@ -829,23 +841,21 @@ function NextFiresPreview({
                 <span className="tabular-nums">{formatFireTime(entry.at, preview.timeZone)}</span>
                 <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground/50" />
                 <span className={cn("font-medium", dispositionToneClass[entry.disposition])}>
-                  {entry.label}
+                  {dispositionLabelKeys[entry.disposition] ? t(dispositionLabelKeys[entry.disposition]) : entry.label}
                 </span>
                 {entry.note ? (
-                  <span className="truncate text-muted-foreground/60">({entry.note})</span>
+                  <span className="truncate text-muted-foreground/60">({dispositionNoteKeys[entry.note] ? t(dispositionNoteKeys[entry.note]) : entry.note})</span>
                 ) : null}
               </div>
             ))}
           </div>
           <p className="text-(length:--text-micro) text-muted-foreground/60">
-            Preview assumes the previous run is still in flight when the next fires. Times shown in{" "}
-            {preview.timeZone}.
+            {t("managementUi.routinePreviewHelp", { zone: preview.timeZone })}
           </p>
         </>
       ) : (
         <p className="rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">
-          No enabled schedule trigger to preview. Add a schedule in Triggers to see how this policy
-          treats upcoming fires.
+          {t("managementUi.routineNoPreview")}
         </p>
       )}
     </div>
@@ -854,7 +864,7 @@ function NextFiresPreview({
 
 function formatFireTime(date: Date, timeZone: string): string {
   try {
-    return new Intl.DateTimeFormat(undefined, {
+    return new Intl.DateTimeFormat(i18n.language, {
       timeZone,
       year: "numeric",
       month: "2-digit",
