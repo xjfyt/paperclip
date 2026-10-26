@@ -14,7 +14,7 @@ export function ResearchRoutinePanel({ companyId, userId }: { companyId: string;
   const client = useQueryClient(), key = ["research-routines", companyId, userId], root = `/companies/${companyId}/research-routines`;
   const [routineId, setRoutineId] = useState(""), [product, setProduct] = useState(""), [enabled, setEnabled] = useState(false);
   const bindings = useQuery({ queryKey: key, queryFn: () => api.get<Binding[]>(root), retry: false });
-  const routines = useQuery({ queryKey: [...key, "available"], queryFn: () => routinesApi.list(companyId), retry: false });
+  const routines = useQuery({ queryKey: [...key, "available"], queryFn: () => api.get<Array<{ id: string; title: string; status: string }>>(root + "/available"), retry: false });
   const save = useMutation({ mutationFn: () => api.put(root + "/" + encodeURIComponent(routineId), { product, enabled }),
     onSuccess: () => { void client.invalidateQueries({ queryKey: key }); } });
   const create = useMutation({ mutationFn: async () => {

@@ -30,3 +30,13 @@ heartbeat UUID 用作服务端 requestId，一个执行只产生一个报告候�
 ## 验证边界
 
 纯函数测试覆盖跨公司、伪造 run header、错误 task/origin/assignee、终止 run、缺失来源字段、来源脱敏、哈希和手动导入不可伪造 provenance。`tests/mimouse/research-routines.spec.ts` 是待集成环境执行的数据库 fixture，不会运行调度器、适配器或模型。它直接插入 inert execution 行以验证事务、幂等与权限，不应宣称为真实外网研究成功。浏览器、数据库迁移与完整构建由集成验证统一执行。
+
+## 公司公开来源限制（安全复核）
+
+Agent 能读写私有任务，不等于它能把任务派生内容发布给所有公司管理员。本通道仅允许公司公开来源，**不支持私有调研报告向管理员收件箱自动降密**：报告与绑定均检查当前 Routine 的项目/父任务；报告再检查实际执行任务、结构祖先、privacy-parent 祖先和各节点项目。任何 private、非空 privacy-root、未知/缺失/跨公司节点、循环或过深祖先均拒绝；不因报告 Agent、绑定管理员是原所有者而放宽。
+
+上述分类与真实 actor 的既有 privacy helper / access decision 同时成立才允许，并在事务中锁定读取行。没有虚构用户或匿名身份作为公开性证明，未调用 break-glass。绑定/可选 Routine 列表过滤不公开/不可读的关联边界，不借旧的公司 Routine 全量列表展示私有元数据。
+
+新建仍保持 paused、无触发器、绑定 disabled；只有在原 Routine 页面配置明确公司公开的项目或父任务后才可启用报告。系统不会自动把任何私有任务或项目改为公开。收到的报告是接收当时的公开来源快照；操作者仍不得在公开任务报告中粘贴其他私有来源内容。
+
+代码检查确认原 Routine 调度调用 issueService.create，未显式 visibility 时起始 open，随后继承私有 parent/project。新增 DB fixture 使用这个真实 issueService 路径验证上述默认/继承（backlog、无分配、无 wakeup），但不假装调用了真实调度/模型。

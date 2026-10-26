@@ -46,3 +46,11 @@ CREATE TABLE mimouse_research_routine_bindings (
 - 未执行：UI 单测/token-gates、完整类型/构建、DB fixture/迁移、浏览器；按父任务串行内存窗口安排，不标为通过。
 - 复核修正：拒绝任何冲突的 checkoutRunId/executionRunId（不能只用 OR 接受旧 owner）；严格核对 issue.originRunId；普通 agent-key 即使伪造 run header 也不读取报告数据库；报告重放摘要不包含可变的绑定更新时间，相同产品绑定重存不会改写旧报告。
 - 待集成重点：原人工页面新增面板的错误/请求缓存不应污染旧表单；新建与绑定为两次现有 API 调用，部分失败必须保留“可能已创建暂停任务”提示；现有任务描述不会被绑定动作自动改写。
+
+## 安全复核补丁
+
+- 仅公司公开来源：新增 public-boundary 遍历所有结构/privacy-parent祖先及项目；拒绝 private、非空 privacy-root、未知节点、循环/超深图。真实 actor 的现有隐私和 ACL helper 同时验证，不使用 dummy/anonymous用户。
+- 新增 `GET /research-routines/available` 安全列表；界面不再读取可能包含私有元数据的全量 routines list。绑定列表也重新过滤。
+- 启用报告必须先配置公开项目或父任务；新建保持 disabled，不改变任何已有隐私设置。
+- DB fixture 扩展了同公司其他所有者的私有父任务、私有项目、继承边界和真实 issueService 创建默认值；仍待父任务执行，未启动 DB。
+- 安全补丁实际验证：4 个纯测试文件 / 58 项通过（含原 44 项和 14 项公开边界测试），512MB、单 worker，5.51 秒。日志 `/workspace/scratch/f6c354020279/research-routines-privacy-pure.log`。UI/DB/全量检查仍未执行。

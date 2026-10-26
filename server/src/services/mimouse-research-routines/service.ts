@@ -1,14 +1,29 @@
 import { and, eq } from "drizzle-orm";
-import { activityLog, companies, companyMemberships, heartbeatRuns, issues, routines, routineRuns, mimouseResearchCandidates as candidates, type Db } from "@paperclipai/db";
+import { activityLog, companies, companyMemberships, heartbeatRuns, issues, projects, routines, routineRuns, mimouseResearchCandidates as candidates, type Db } from "@paperclipai/db";
 import { mimouseResearchRoutineBindings as bindings } from "@paperclipai/db/schema/mimouse_research_routines";
 import { researchRoutineBindingSchema, researchRoutineReportSchema, researchRoutineReportContract, type ResearchRoutineBindingInput, type ResearchRoutineReportInput } from "@paperclipai/shared/mimouse-research-routines";
 import { conflict, forbidden, notFound } from "../../errors.js";
+import { canActorReadIssuePrivacy, canActorReadProjectPrivacy } from "../authorization.js";
+import { isCompanyOpenResearchBoundary } from "./public-boundary.js";
 import { accessService } from "../access.js";
 import { prepareResearchReport } from "./evidence.js";
 import { researchDigest } from "../mimouse-research/evidence.js";
 import { assertResearchReportIdentity } from "./policy.js";
 type Actor = Express.Request["actor"];
 export function researchRoutineService(db: Db) {
+  async function publicBoundary(tx: Db, companyId: string, actor: Actor, source: { projectId?: string | null; issueId?: string | null; parentIssueId?: string | null }) {
+    return isCompanyOpenResearchBoundary({ companyId, ...source }, {
+      issue: async id => (await tx.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, id))).for("share"))[0] ?? null,
+      project: async id => (await tx.select().from(projects).where(and(eq(projects.companyId, companyId), eq(projects.id, id))).for("share"))[0] ?? null,
+      canReadIssue: async issue => await canActorReadIssuePrivacy(tx, actor, issue) && (await accessService(tx).decide({
+        actor, action: "issue:read", resource: { type: "issue", companyId, issueId: issue.id, projectId: issue.projectId,
+          parentIssueId: issue.parentId, assigneeAgentId: issue.assigneeAgentId, assigneeUserId: issue.assigneeUserId, status: issue.status },
+      })).allowed,
+      canReadProject: async project => await canActorReadProjectPrivacy(tx, actor, project) && (await accessService(tx).decide({
+        actor, action: "project:read", resource: { type: "project", companyId, projectId: project.id },
+      })).allowed,
+    });
+  }
   async function assertAdmin(tx: Db, companyId: string, actor: Actor) {
     if (actor.type !== "board" || actor.source !== "session" || !actor.userId) throw forbidden("Signed-in company administrator required");
     const [member] = await tx.select().from(companyMemberships).where(and(eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, actor.userId))).for("share");
@@ -17,12 +32,29 @@ export function researchRoutineService(db: Db) {
     return actor.userId;
   }
   return {
+    async available(companyId: string, actor: Actor) {
+      return db.transaction(async tx => {
+        await assertAdmin(tx as unknown as Db, companyId, actor);
+        const rows = await tx.select().from(routines).where(eq(routines.companyId, companyId)).for("share");
+        const visible = [];
+        for (const row of rows) {
+          if (!await publicBoundary(tx as unknown as Db, companyId, actor, { projectId: row.projectId, parentIssueId: row.parentIssueId })) continue;
+          visible.push({ id: row.id, title: row.title, status: row.status });
+        }
+        return visible;
+      });
+    },
     async list(companyId: string, actor: Actor) {
       return db.transaction(async tx => {
         await assertAdmin(tx as unknown as Db, companyId, actor);
-        const rows = await tx.select({ binding: bindings, routine: { id: routines.id, title: routines.title, status: routines.status } }).from(bindings)
-          .innerJoin(routines, and(eq(routines.id, bindings.routineId), eq(routines.companyId, bindings.companyId))).where(eq(bindings.companyId, companyId));
-        return rows.map(row => ({ ...row.binding, routine: row.routine, contract: researchRoutineReportContract(companyId, row.routine.id, row.binding.product) }));
+        const rows = await tx.select({ binding: bindings, routine: routines }).from(bindings)
+          .innerJoin(routines, and(eq(routines.id, bindings.routineId), eq(routines.companyId, bindings.companyId))).where(eq(bindings.companyId, companyId)).for("share");
+        const visible = [];
+        for (const row of rows) {
+          if (!await publicBoundary(tx as unknown as Db, companyId, actor, { projectId: row.routine.projectId, parentIssueId: row.routine.parentIssueId })) continue;
+          visible.push({ ...row.binding, routine: { id: row.routine.id, title: row.routine.title, status: row.routine.status }, contract: researchRoutineReportContract(companyId, row.routine.id, row.binding.product) });
+        }
+        return visible;
       });
     },
     async bind(companyId: string, routineId: string, actor: Actor, raw: ResearchRoutineBindingInput) {
@@ -32,6 +64,8 @@ export function researchRoutineService(db: Db) {
         if (!await accessService(tx as unknown as Db).canUser(companyId, userId, "tasks:assign")) throw forbidden("Missing permission: tasks:assign");
         const [routine] = await tx.select().from(routines).where(and(eq(routines.companyId, companyId), eq(routines.id, routineId))).for("share");
         if (!routine) throw notFound("Routine unavailable");
+        if (input.enabled && !routine.projectId && !routine.parentIssueId) throw forbidden("Configure a company-open project or parent before accepting reports");
+        if (!await publicBoundary(tx as unknown as Db, companyId, actor, { projectId: routine.projectId, parentIssueId: routine.parentIssueId })) throw forbidden("Research binding requires a company-open source boundary");
         const [binding] = await tx.insert(bindings).values({ ...input, companyId, routineId, configuredByUserId: userId }).onConflictDoUpdate({
           target: [bindings.companyId, bindings.routineId], set: { ...input, configuredByUserId: userId, updatedAt: new Date() },
         }).returning();
@@ -53,6 +87,10 @@ export function researchRoutineService(db: Db) {
         const [issue] = await tx.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, input.issueId))).for("share");
         const [run] = await tx.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, actor.runId!))).for("share");
         if (!routine || !routineRun || !issue || !run) throw notFound("Research execution unavailable");
+        if (!routine.projectId && !routine.parentIssueId) throw forbidden("Company-open routine project or parent required");
+        // A task's write permission never grants permission to copy its private
+        // contents into the company-administrator candidate inbox.
+        if (!await publicBoundary(tx as unknown as Db, companyId, actor, { projectId: routine.projectId, parentIssueId: routine.parentIssueId, issueId: issue.id })) throw forbidden("Research reports require a company-open source boundary");
         assertResearchReportIdentity({ companyId, routineId, routineRunId: input.routineRunId, issueId: input.issueId, actor, routine, routineRun, issue, run });
         const decision = await accessService(tx as unknown as Db).decide({ actor, action: "issue:mutate", resource: {
           type: "issue", companyId, issueId: issue.id, projectId: issue.projectId, parentIssueId: issue.parentId,

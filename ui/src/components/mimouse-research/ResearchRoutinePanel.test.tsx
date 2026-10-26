@@ -17,7 +17,7 @@ async function setProduct(value: string) { const input = host.querySelector('inp
 async function click(text: string) { const button = [...host.querySelectorAll("button")].find(node => node.textContent === text)!;
   await act(async () => button.dispatchEvent(new MouseEvent("click", { bubbles: true }))); await flush(); }
 beforeEach(async () => {
-  vi.clearAllMocks(); await i18n.changeLanguage("en"); calls.get.mockResolvedValue([]); calls.list.mockResolvedValue([{ id: "routine", title: "Existing", status: "paused" }]);
+  vi.clearAllMocks(); await i18n.changeLanguage("en"); calls.get.mockImplementation(async (path: string) => path.endsWith("/available") ? [{ id: "routine", title: "Existing", status: "paused" }] : []);
   calls.create.mockResolvedValue({ id: "new-routine", status: "paused" }); calls.put.mockResolvedValue({ routineStarted: false });
   host = document.createElement("div"); document.body.append(host); root = createRoot(host); client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } } });
 });
@@ -43,4 +43,8 @@ it("denied binding read hides the mutation controls", async () => {
 });
 it.each(["zh-CN", "es", "ja"])("renders localized scheduled-research controls in %s", async language => {
   await i18n.changeLanguage(language); await mount(); expect(host.textContent).not.toContain("Create paused research routine"); expect(host.querySelectorAll("button")).toHaveLength(2);
+});
+it("uses only the privacy-filtered research routine selector", async () => {
+  await mount(); expect(calls.get).toHaveBeenCalledWith("/companies/company/research-routines/available");
+  expect(calls.list).not.toHaveBeenCalled(); expect(host.textContent).toContain("configure an open project or parent");
 });
