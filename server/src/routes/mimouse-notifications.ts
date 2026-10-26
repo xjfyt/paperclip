@@ -1,6 +1,7 @@
 import { notificationPolicyUpdateSchema, updateNotificationPolicy } from "../services/mimouse-notifications/policy.js";
 import { notificationReconciliation } from "../services/mimouse-notifications/reconciliation.js";
 import { notificationConfiguration } from "../services/mimouse-notifications/configuration.js";
+import { notificationVerification } from "../services/mimouse-notifications/verification.js";
 import { renderTemplateData } from "../services/mimouse-notifications/render.js";
 import { Router, type Request } from "express";
 import { and, desc, eq } from "drizzle-orm";
@@ -27,6 +28,7 @@ export function mimouseNotificationRoutes(db: Db) {
   const router = Router();
   const configuration = notificationConfiguration(db);
   const reconciliation = notificationReconciliation(db);
+  const verification = notificationVerification(db);
   const path = "/companies/:companyId/notifications";
   const loadEndpoint = async (companyId: string, id: string) => {
     const [endpoint] = await db.select().from(endpoints).where(and(eq(endpoints.id, id), eq(endpoints.companyId, companyId)));
@@ -41,6 +43,11 @@ export function mimouseNotificationRoutes(db: Db) {
       unconnectedEvents: [],
       verification: { implemented: true, contractTested: false, liveVerified: false, scenarioVerified: false },
       endpoints: channelRows.map(({ targetKey: _targetKey, ...row }) => row), subscriptions: subscriptionRows, deliveries: deliveryRows });
+  });
+  router.get(`${path}/endpoints/:id/verification`, async (req, res) => {
+    const companyId = String(req.params.companyId); companyAdmin(req, companyId);
+    res.setHeader("Cache-Control", "no-store");
+    res.json(await verification.read(companyId, String(req.params.id)));
   });
   router.post(`${path}/endpoints`, validate(endpointSchema), async (req, res) => {
     const companyId = String(req.params.companyId); companyAdmin(req, companyId); const input = endpointSchema.parse(req.body);

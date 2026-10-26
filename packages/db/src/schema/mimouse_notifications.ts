@@ -14,8 +14,9 @@ export const mimouseNotificationEndpoints = pgTable("mimouse_notification_endpoi
   targetKey: text("target_key").notNull(),
   enabled: boolean("enabled").notNull().default(false),
   configVersion: integer("config_version").notNull().default(1),
+  verificationEpoch: integer("verification_epoch").notNull().default(1),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, t => ({ companyIdentity: uniqueIndex("mimouse_notification_endpoint_company_identity").on(t.companyId, t.id), versionCheck: check("mimouse_notification_secret_version_positive", sql`${t.secretVersion} > 0`) }));
+}, t => ({ companyIdentity: uniqueIndex("mimouse_notification_endpoint_company_identity").on(t.companyId, t.id), versionCheck: check("mimouse_notification_secret_version_positive", sql`${t.secretVersion} > 0`), verificationEpochPositive: check("mimouse_notification_verification_epoch_positive", sql`${t.verificationEpoch} > 0`) }));
 
 export const mimouseNotificationSubscriptions = pgTable("mimouse_notification_subscriptions", {
   id: uuid("id").primaryKey().defaultRandom(),
