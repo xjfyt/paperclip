@@ -6,6 +6,8 @@ ALTER TABLE mimouse_notification_endpoints ADD CONSTRAINT mimouse_notification_v
 -- Security mutations take their own source row first, then endpoint rows.
 -- Evidence append must lock provider config -> secret -> version -> endpoint,
 -- NEVER endpoint -> secret. Its company-ledger lock precedes all these locks.
+-- All explicit evidence locks are FOR NO KEY UPDATE: serialize metadata
+-- mutations while allowing existing revision/rotation FK KEY SHARE checks.
 CREATE FUNCTION mimouse_notification_secret_epoch() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF ROW(OLD.status, OLD.scope, OLD.owner_user_id, OLD.provider, OLD.managed_mode, OLD.external_ref, OLD.provider_config_id, OLD.deleted_at)

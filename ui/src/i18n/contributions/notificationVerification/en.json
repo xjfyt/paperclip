@@ -54,5 +54,6 @@
   "invalid": "Check required aliases, full commit, UTC dates, current reviewed delivery and category confirmations.",
   "rejected": "Request rejected. Reload current permissions and evidence before preparing a new declaration.",
   "refreshError": "Declaration recorded, but the read refresh failed. Do not submit a replacement.",
-  "savedDeclaration": "Declaration recorded. This is an administrator statement, not a provider certificate."
+  "savedDeclaration": "Declaration recorded. This is an administrator statement, not a provider certificate.",
+  "sourceReferences": "Source IDs: delivery / human review / approval"
 }

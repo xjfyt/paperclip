@@ -12,7 +12,7 @@ const input = () => ({ expectedRevision: 0, idempotencyKey: id(5), expectedConfi
 function dbFixture() {
   const db = { select: (_projection?: any) => {
     let table = "", predicate = (_row: any) => true, order: any, limit = Infinity;
-    const chain: any = { from: (value: any) => { table = value.name; return chain; }, where: (value: any) => { predicate = value; return chain; }, orderBy: (value: any) => { order = value; return chain; }, limit: (value: number) => { limit = value; return chain; }, for: () => { state.locks.push(table); return chain; },
+    const chain: any = { from: (value: any) => { table = value.name; return chain; }, where: (value: any) => { predicate = value; return chain; }, orderBy: (value: any) => { order = value; return chain; }, limit: (value: number) => { limit = value; return chain; }, for: (strength: string) => { state.locks.push(`${table}:${strength}`); return chain; },
       then: (resolve: any, reject: any) => Promise.resolve(state.rows[table].filter(predicate).sort((a, b) => order?.desc ? b[order.key] - a[order.key] : a.revision - b.revision).slice(0, limit)).then(resolve, reject) }; return chain;
   }, insert: (table: any) => ({ values: (value: any) => {
     if (table.name === "audit" && state.failAudit) throw Error("audit unavailable");
@@ -39,7 +39,7 @@ describe("notification declaration transaction fixture (not real SQL locking)", 
   });
   it("keeps credential lock order and leaves no record when audit fails", async () => {
     state.failAudit = true; await expect(append()).rejects.toThrow("audit unavailable");
-    expect(state.locks).toEqual(["companies", "secrets", "versions", "endpoints"]);
+    expect(state.locks).toEqual(["companies:no key update", "secrets:no key update", "versions:no key update", "endpoints:no key update"]);
     expect(state.rows.events).toHaveLength(0);
   });
   it.each(["company", "epoch", "version", "credential", "delivery", "review", "attempt", "old_time", "human_unknown"])("rejects stale or foreign %s", async change => {

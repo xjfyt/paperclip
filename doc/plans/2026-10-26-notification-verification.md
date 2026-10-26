@@ -11,7 +11,7 @@
 - endpoint verificationEpoch仅被凭据安全变更递增；名称、resolve更新的updatedAt、普通token缓存刷新不递增。暂停endpoint/worker也不递增。
 - 新delivery由DB触发器固定epoch，涵盖既有SQL run.failed生产者。旧行不回填；manual-retry不补上缺失epoch，不将旧观察变成当前证据。
 - `doc/plans/sql/2026-10-26-notification-verification.sql` 是A0待分配迁移号的提案，不是已应用迁移；journal/snapshot集中维护。schema依赖其应用后才能部署。
-- 凭据变更持有来源行然后更新endpoint；声明事务必须按company台账锁→providerConfig→secret→pinnedVersion→endpoint锁序，禁止endpoint→secret倒序。公司台账与既有adapter记录共用revision和幂等边界。
+- 凭据变更持有来源行然后更新endpoint；声明事务必须按company台账锁→providerConfig→secret→pinnedVersion→endpoint锁序，禁止endpoint→secret倒序。公司台账与既有adapter记录共用revision和幂等边界。全部声明显式行锁使用`FOR NO KEY UPDATE`：仍串行化同台账CAS及元数据写入，但兼容既有revision→company及secret rotation→provider外键的`KEY SHARE`，不能改回`FOR UPDATE`。
 
 ## 本地检查（不是供应商验收）
 
@@ -30,7 +30,7 @@ NODE_OPTIONS=--max-old-space-size=512 node ../../node_modules/vitest/vitest.mjs 
 
 ## 人工凭据切片
 
-- 独立`appendNotificationEvidenceSchema`，现有adapter输入schema及其canonical hash原样保留。新增通知receipt的持久JSON类型并复用capability_evidence台账；旧adapter列表过滤通知receipt，返回全台账headRevision保持CAS正确。adapter写入口拒绝撤销通知receipt。
+- 独立`appendNotificationEvidenceSchema`，现有adapter输入schema及其canonical hash原样保留。新增通知receipt的持久JSON类型并复用capability_evidence台账；旧adapter列表过滤通知receipt及其撤销事件（按同公司target域判断），返回全台账headRevision保持CAS正确。adapter写入口拒绝撤销通知receipt。
 - 四类声明：protocol_report（人工录入协议报告，不带真实投递字段）、live_connection、recipient_observation、approval_scenario。所有类别固定manual=true/machineVerified=false，不从fixture或accepted自动生成。
 - 非协议类必须明确confirmRealTarget且引用当前配置/epoch最新投递及最新人工核对，精确比较state/attempt。C4仅原始approval事件，拒绝manual.test或manual-retry冒充原始业务通知，并查询实际同公司approval资源。
 - 保存/撤销/替代使用company级CAS、actor+endpoint+规范化body幂等摘要；相同key重放先返回原回执，即使此后配置变更，原回执也只能以旧scope历史展示。不同actor/body/endpoint复用key冲突。审计与台账同事务。
@@ -51,16 +51,20 @@ UI纯fixture：新面板与原通知页2文件50项通过（512MB/单worker）�
 
 ## 中央DB/API待执行清单
 
-`tests/mimouse/notification-verification.spec.ts`为8项独立fixture，使用既有createFixtureDb数据目录身份防护，先由A0应用正式迁移；本分支**未运行**。通过才可在报告填写passed：
+`tests/mimouse/notification-verification.spec.ts`为10项独立fixture，使用既有createFixtureDb数据目录身份防护，先由A0应用正式迁移；本分支**未运行**。通过才可在报告填写passed：
 
 1. 当前endpoint/version真实SQL查询不被120条较新其他版本记录截断，最新失败保留；accepted和旧人工受理不生成声明。
-2. 双连接CAS一胜一409；相同规范化请求幂等；不同actor拒绝；adapter列表不泄漏通知receipt且headRevision正确。
+2. 双连接CAS一胜一409；相同规范化请求幂等；不同actor拒绝；adapter列表不泄漏通知receipt或其撤销事件且headRevision正确。
 3. resolve/name/普通字段/暂停/current→previous不增epoch；凭据disable→active、revokedAt往返都不可复活旧证据。
 4. provider安全配置/停用影响实际绑定；显示名/health/显式绑定的default标记不增epoch；纯验证不访问AWS。
 5. 凭据撤销持锁与声明并发，不倒序死锁、不认可旧epoch。
 6. 跨公司、同公司不同endpoint、错误review、改变账号秘密引用及config版本拒绝；C4必须对应实际同公司approval。
 7. 审计失败整体回滚；凭据安全更新事务失败也回滚epoch。
 8. 真实HTTP路由owner可读写，member/其他公司/Agent拒绝、匿名401；登记不产生新delivery或任何fetch。
+9. 与既有配置修改同序：连接A先UPDATE endpoint，连接B拿company台账锁并阻塞于endpoint，然后A INSERT revision触发company FK；不能死锁，旧配置声明409且无回执。
+10. 与既有rotate同序：连接A先锁secret，连接B拿默认provider锁并阻塞于secret，然后A把null providerConfigId改为该显式provider触发FK；不能死锁，旧绑定声明409且无回执。
+
+并发项5/9/10不用sleep推断时序：独立只读observer连接通过`pg_blocking_pids`确认两事务已经相遇，再释放来源事务。observer独立于两个竞争连接池，即使maxConnections=1也不会阻塞自身；声明设置8秒statement_timeout使死锁/悬挂明确失败。第2项仍以真实双连接验证同级NO KEY UPDATE锁互斥且CAS一胜一409。以上SQL/API均未在本分支运行，不能以单元mock锁断言代替。
 
 额外静态检查：fixture通过`node --check`语法检查，不代表执行。纯server/shared最终6文件84项通过。观察createdAt并列时保守优先非accepted状态/非accepted人工核对，避免随机UUID排序让成功隐藏同一时间的失败或未知。
 
@@ -83,4 +87,12 @@ UI纯fixture：新面板与原通知页2文件50项通过（512MB/单worker）�
 
 测试账号/环境/报告仅使用非敏感别名，勿粘贴Webhook、token、原始客户内容。记录结果时分别注明fixture、管理员申报、真实传输观察及真实收件端/业务验收，不把本文件的待测项填成已通过。配置保存的既有secret-provider读取未被禁止或扩展；新verification路径没有resolveSecretValue、fetch、token交换或发送。
 
-第四片最终纯UI回归4文件61项通过（含原通知页和原adapter台账/API）；新增同身份marker被替换后迟到成功不得清除、company/endpoint切换及损坏持久scope阻止重放。验证GET结束前再次比较endpoint绑定，若读期间发生配置/安全代次变化则409关闭混合快照。读取仍是时点观察，不是对未来远端可用性的保证。SQL、DB/API八项、真实浏览器与用户NV清单均仍未执行。
+第四片最终纯UI回归4文件61项通过（含原通知页和原adapter台账/API）；新增同身份marker被替换后迟到成功不得清除、company/endpoint切换及损坏持久scope阻止重放。验证GET结束前再次比较endpoint绑定，若读期间发生配置/安全代次变化则409关闭混合快照。读取仍是时点观察，不是对未来远端可用性的保证。SQL、DB/API十项、真实浏览器与用户NV清单均仍未执行。
+
+## 独立审计补正
+
+审计发现原FOR UPDATE会与既有配置修订的company FK及秘密rotate的provider FK形成倒序等待。统一改用兼容KEY SHARE、仍排斥元数据UPDATE和其他声明的NO KEY UPDATE，并补上述真实双事务回归，待中央执行。另修adapter列表按target过滤通知撤销事件；界面显式展示来源delivery/review/approval标识，便于人工核查。未改变原adapter schema、摘要或幂等身份，也未新增网络调用。
+
+审计补正后重新执行：server/shared六文件84项、UI四文件61项全部通过（512MB/单worker）；token三项静态检查、fixture语法及git diff检查通过。双连接/触发器/HTTP真实fixture仍待中央执行。
+
+独立只读复核确认：两条已报告FK锁环在当前NO KEY UPDATE合同下关闭；检查既有rotate的secret→version、version独立更新→endpoint及provider默认切换后，未发现新增正常可达倒序环。该结论只是源码复核，绝不替代上述10项真实DB/API与迁移执行结果。

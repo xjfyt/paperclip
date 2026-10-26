@@ -29,12 +29,14 @@ export function notificationEvidence(db: Db) {
       const hash = createHash("sha256").update(JSON.stringify({ endpointId, reviewerId, input })).digest("hex");
       return db.transaction(async tx => {
         const database = tx as unknown as Db;
-        const company = await tx.select({ id: companies.id }).from(companies).where(eq(companies.id, companyId)).for("update");
+        const company = await tx.select({ id: companies.id }).from(companies).where(eq(companies.id, companyId)).for("no key update");
         if (!company.length) throw notFound("Company not found");
         const [retry] = await tx.select().from(capabilityEvidence).where(and(eq(capabilityEvidence.companyId, companyId), eq(capabilityEvidence.idempotencyKey, input.idempotencyKey)));
         if (retry) { if (retry.requestHash !== hash) throw conflict("Idempotency key already used for a different request"); return present(retry); }
         const [head] = await tx.select({ revision: capabilityEvidence.revision }).from(capabilityEvidence).where(eq(capabilityEvidence.companyId, companyId)).orderBy(desc(capabilityEvidence.revision)).limit(1);
         if ((head?.revision ?? 0) !== input.expectedRevision) throw conflict("Evidence ledger changed; reload before recording");
+        // NO KEY UPDATE serializes metadata changes but permits existing FK KEY SHARE
+        // paths (endpoint revision -> company; secret rotation -> provider).
         // First read locates the credential. Do not lock endpoint before its credential:
         // security-change triggers hold secret/provider/version then update endpoint.
         const [initial] = await tx.select().from(endpoints).where(and(eq(endpoints.companyId, companyId), eq(endpoints.id, endpointId)));
@@ -44,12 +46,12 @@ export function notificationEvidence(db: Db) {
         if (secretLocation?.provider !== "local_encrypted") await tx.select({ id: companySecretProviderConfigs.id }).from(companySecretProviderConfigs).where(and(
           eq(companySecretProviderConfigs.companyId, companyId), eq(companySecretProviderConfigs.provider, secretLocation?.provider ?? ""),
           secretLocation?.providerConfigId ? eq(companySecretProviderConfigs.id, secretLocation.providerConfigId) : eq(companySecretProviderConfigs.isDefault, true),
-        )).for("update");
+        )).for("no key update");
         const [secret] = await tx.select({ provider: companySecrets.provider, providerConfigId: companySecrets.providerConfigId }).from(companySecrets)
-          .where(and(eq(companySecrets.companyId, companyId), eq(companySecrets.id, initial.secretRef))).for("update");
+          .where(and(eq(companySecrets.companyId, companyId), eq(companySecrets.id, initial.secretRef))).for("no key update");
         if (secret?.provider !== secretLocation?.provider || secret?.providerConfigId !== secretLocation?.providerConfigId) throw conflict("Credential binding changed; reload");
-        await tx.select({ id: companySecretVersions.id }).from(companySecretVersions).where(and(eq(companySecretVersions.secretId, initial.secretRef), eq(companySecretVersions.version, initial.secretVersion))).for("update");
-        const [endpoint] = await tx.select().from(endpoints).where(and(eq(endpoints.companyId, companyId), eq(endpoints.id, endpointId))).for("update");
+        await tx.select({ id: companySecretVersions.id }).from(companySecretVersions).where(and(eq(companySecretVersions.secretId, initial.secretRef), eq(companySecretVersions.version, initial.secretVersion))).for("no key update");
+        const [endpoint] = await tx.select().from(endpoints).where(and(eq(endpoints.companyId, companyId), eq(endpoints.id, endpointId))).for("no key update");
         if (!endpoint || !sameNotificationScope(notificationScope(initial), notificationScope(endpoint)) || endpoint.configVersion !== input.expectedConfigVersion || endpoint.verificationEpoch !== input.expectedEpoch)
           throw conflict("Notification configuration or credential changed; reload");
         let target: typeof capabilityEvidence.$inferSelect | undefined;

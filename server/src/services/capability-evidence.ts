@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, desc, eq, gt } from "drizzle-orm";
+import { and, desc, eq, gt, inArray } from "drizzle-orm";
 import { activityLog, companies, capabilityEvidence, type Db } from "@paperclipai/db";
 import { appendCapabilityEvidenceSchema, capabilityBaseline, sameEvidenceContext, type CapabilityEvidenceEvent } from "@paperclipai/shared/capability-evidence";
 import { conflict, notFound, unprocessable } from "../errors.js";
@@ -16,7 +16,12 @@ export function capabilityEvidenceService(db: Db) {
       )).orderBy(capabilityEvidence.revision).limit(101);
       const [head] = await db.select({ revision: capabilityEvidence.revision }).from(capabilityEvidence)
         .where(eq(capabilityEvidence.companyId, companyId)).orderBy(desc(capabilityEvidence.revision)).limit(1);
-      return { events: rows.slice(0, 100).filter(row => !row.receipt || "adapterType" in row.receipt).map(present),
+      const page = rows.slice(0, 100);
+      const targetIds = page.flatMap(row => !row.receipt && row.targetId ? [row.targetId] : []);
+      const targets = targetIds.length ? await db.select({ id: capabilityEvidence.id, receipt: capabilityEvidence.receipt }).from(capabilityEvidence)
+        .where(and(eq(capabilityEvidence.companyId, companyId), inArray(capabilityEvidence.id, targetIds))) : [];
+      const adapterTargets = new Set(targets.filter(row => row.receipt && "adapterType" in row.receipt).map(row => row.id));
+      return { events: page.filter(row => row.receipt ? "adapterType" in row.receipt : Boolean(row.targetId && adapterTargets.has(row.targetId))).map(present),
         nextRevision: rows.length > 100 ? rows[99].revision : null, headRevision: head?.revision ?? 0 };
     },
     async append(companyId: string, reviewerId: string, raw: unknown) {
@@ -25,7 +30,7 @@ export function capabilityEvidenceService(db: Db) {
       const hash = createHash("sha256").update(JSON.stringify({ reviewerId, input })).digest("hex");
       return db.transaction(async tx => {
         const company = await tx.select({ id: companies.id }).from(companies)
-          .where(eq(companies.id, companyId)).for("update");
+          .where(eq(companies.id, companyId)).for("no key update");
         if (!company.length) throw notFound("Company not found");
         const [retry] = await tx.select().from(capabilityEvidence).where(and(
           eq(capabilityEvidence.companyId, companyId), eq(capabilityEvidence.idempotencyKey, input.idempotencyKey),

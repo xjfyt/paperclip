@@ -54,5 +54,6 @@
   "invalid": "请检查必填别名、完整提交、UTC 时间、当前投递核对及类别确认。",
   "rejected": "请求被拒绝，请重新读取权限和依据后再准备新声明。",
   "refreshError": "声明已记录，但读取刷新失败；请勿重复创建。",
-  "savedDeclaration": "声明已记录。这是管理员陈述，不是供应商认证。"
+  "savedDeclaration": "声明已记录。这是管理员陈述，不是供应商认证。",
+  "sourceReferences": "来源 ID：投递 / 人工核对 / 审批资源"
 }

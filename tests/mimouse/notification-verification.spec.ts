@@ -2,8 +2,8 @@ import { expect, test } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import type { NextFunction, Request, Response } from "express";
-import { activityLog, companies, companySecrets, companySecretVersions, companySecretProviderConfigs, approvals, capabilityEvidence,
-  mimouseNotificationEndpoints as endpoints, mimouseNotificationSubscriptions as subscriptions, mimouseNotificationDeliveries as deliveries } from "../../packages/db/src/index.js";
+import { activityLog, companies, companySecrets, companySecretVersions, companySecretProviderConfigs, approvals, capabilityEvidence, type Db,
+  mimouseNotificationRevisions as revisions, mimouseNotificationEndpoints as endpoints, mimouseNotificationSubscriptions as subscriptions, mimouseNotificationDeliveries as deliveries } from "../../packages/db/src/index.js";
 import { secretService } from "../../server/src/services/secrets.js";
 import { notificationConfiguration } from "../../server/src/services/mimouse-notifications/configuration.js";
 import { notificationReconciliation } from "../../server/src/services/mimouse-notifications/reconciliation.js";
@@ -15,7 +15,7 @@ import { HttpError } from "../../server/src/errors.js";
 import { evaluateNotificationEvidence, type AppendNotificationEvidence } from "../../packages/shared/src/notification-evidence.js";
 import { createFixtureDb } from "./fixture-db.js";
 const require = createRequire(new URL("../../server/package.json", import.meta.url));
-const { and, eq } = await import(require.resolve("drizzle-orm"));
+const { and, eq, sql } = await import(require.resolve("drizzle-orm"));
 const express = require("express"), supertest = require("supertest");
 // Central runner only. Real guarded disposable PostgreSQL and HTTP router,
 // no real provider/account/send. Seeded accepted and declarations remain C2 fixtures.
@@ -44,6 +44,32 @@ async function noExternal<T>(body: () => Promise<T>) {
   const previous = globalThis.fetch; let calls = 0;
   globalThis.fetch = (async () => { calls++; throw Error("No external calls permitted by verification fixture"); }) as typeof fetch;
   try { const result = await body(); expect(calls).toBe(0); return result; } finally { globalThis.fetch = previous; }
+}
+
+function declarationWithPid(db: Db, companyId: string, endpointId: string, input: AppendNotificationEvidence) {
+  let identify!: (pid: number) => void, unidentified!: (error: unknown) => void;
+  const pid = new Promise<number>((resolve, reject) => { identify = resolve; unidentified = reject; });
+  const result = db.transaction(async tx => {
+    await tx.execute(sql`SET LOCAL statement_timeout = '8s'`);
+    const rows = await tx.execute(sql`SELECT pg_backend_pid() AS pid`) as unknown as Array<{ pid: number }>;
+    identify(rows[0].pid);
+    return notificationEvidence(tx as unknown as Db).append(companyId, endpointId, "admin", input);
+  });
+  void result.catch(unidentified);
+  return { pid, result };
+}
+async function waitBlockedBy(waiter: number, blocker: number) {
+  // Do not infer ordering from a sleep: prove the two live PostgreSQL backends
+  // reached the intended blocking edge before allowing the FK operation.
+  // A separate guarded observer avoids borrowing either held transaction's
+  // pool when the central runner deliberately uses maxConnections=1.
+  const observer = await createFixtureDb();
+  try {
+    await expect.poll(async () => {
+      const rows = await observer.$client.unsafe("SELECT $1::int = ANY(pg_blocking_pids($2::int)) AS blocked", [blocker, waiter]);
+      return rows[0]?.blocked;
+    }, { timeout: 5000, intervals: [20, 50, 100] }).toBe(true);
+  } finally { await observer.$client.end({ timeout: 1 }); }
 }
 
 test("latest endpoint/version query survives 120 newer rows; accepted and old reviews do not generate evidence", async () => {
@@ -75,6 +101,8 @@ test("two connections serialize CAS and exact canonical retries; adapter list ne
     const history = await f.service.list(f.company.id, f.endpoint.id); expect(history.events).toHaveLength(1); expect(history.events[0].receipt?.machineVerified).toBe(false);
     const view = await f.verification.read(f.company.id, f.endpoint.id);
     expect(evaluateNotificationEvidence(f.company.id, view, history.events).find(row => row.category === "live_connection")?.status).toBe("manual_passed");
+    await f.service.append(f.company.id, f.endpoint.id, "admin", f.input(1, { action: "revoke", targetId: winner.id, receipt: undefined }));
+    expect(await capabilityEvidenceService(f.db).list(f.company.id)).toMatchObject({ events: [], headRevision: 2 });
   }); } finally { await otherDb.$client.end({ timeout: 1 }); await f.cleanup(); }
 });
 
@@ -119,13 +147,13 @@ test("provider security updates affect exact bindings, not display/health or unr
 test("credential revocation racing an evidence write waits in one lock order and never validates the old epoch", async () => {
   const f = await fixture(), otherDb = await createFixtureDb(); let release!: () => void; let entered!: () => void;
   const ready = new Promise<void>(resolve => { entered = resolve; }), held = new Promise<void>(resolve => { release = resolve; });
-  let mutation: Promise<unknown> | undefined;
+  let mutation: Promise<unknown> | undefined; let blockerPid = 0;
   try {
-    mutation = otherDb.transaction(async tx => { await tx.update(companySecrets).set({ status: "disabled" }).where(eq(companySecrets.id, f.secret.id)); entered(); await held; });
+    mutation = otherDb.transaction(async tx => { blockerPid = (await tx.execute(sql`SELECT pg_backend_pid() AS pid`) as unknown as Array<{ pid: number }>)[0].pid; await tx.update(companySecrets).set({ status: "disabled" }).where(eq(companySecrets.id, f.secret.id)); entered(); await held; });
     await Promise.race([ready, mutation]);
-    let settled = false; const declaration = f.service.append(f.company.id, f.endpoint.id, "admin", f.input()).finally(() => { settled = true; });
-    const rejection = expect(declaration).rejects.toMatchObject({ status: 409 });
-    await new Promise(resolve => setTimeout(resolve, 100)); expect(settled).toBe(false);
+    const declaration = declarationWithPid(f.db, f.company.id, f.endpoint.id, f.input());
+    const rejection = expect(declaration.result).rejects.toMatchObject({ status: 409 });
+    await waitBlockedBy(await declaration.pid, blockerPid);
     release(); await mutation; await rejection; expect(await f.rows()).toHaveLength(0);
   } finally { release?.(); await mutation?.catch(() => {}); await otherDb.$client.end({ timeout: 1 }); await f.cleanup(); }
 });
@@ -179,4 +207,50 @@ test("real HTTP routes enforce role/session actor scope and keep declarations se
       expect(await f.db.select().from(deliveries).where(eq(deliveries.companyId, f.company.id))).toHaveLength(1);
     });
   } finally { await f.cleanup(); }
+});
+
+
+test("endpoint revision FK insertion does not deadlock with the company-ledger lock", async () => {
+  const f = await fixture(), otherDb = await createFixtureDb(); let release!: () => void, entered!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; }), ready = new Promise<void>(resolve => { entered = resolve; });
+  let revision: Promise<unknown> | undefined; let blockerPid = 0;
+  try {
+    // Reproduce the existing configuration.revise transaction's exact order:
+    // UPDATE endpoint, then INSERT revisions with company/endpoint foreign keys.
+    revision = otherDb.transaction(async tx => {
+      blockerPid = (await tx.execute(sql`SELECT pg_backend_pid() AS pid`) as unknown as Array<{ pid: number }>)[0].pid;
+      await tx.update(endpoints).set({ configVersion: 2, enabled: false }).where(eq(endpoints.id, f.endpoint.id)); entered(); await held;
+      await tx.insert(revisions).values({ companyId: f.company.id, endpointId: f.endpoint.id, configVersion: 2, snapshot: { ...f.config, configVersion: 2 }, actorId: "fixture-editor" });
+    });
+    await Promise.race([ready, revision]);
+    const declaration = declarationWithPid(f.db, f.company.id, f.endpoint.id, f.input());
+    const rejected = expect(declaration.result).rejects.toMatchObject({ status: 409 });
+    await waitBlockedBy(await declaration.pid, blockerPid); release(); await revision; await rejected;
+    expect(await f.rows()).toHaveLength(0);
+    expect(await f.db.select().from(revisions).where(and(eq(revisions.endpointId, f.endpoint.id), eq(revisions.configVersion, 2)))).toHaveLength(1);
+  } finally { release?.(); await revision?.catch(() => {}); await otherDb.$client.end({ timeout: 1 }); await f.cleanup(); }
+});
+
+test("default-to-explicit provider FK binding does not deadlock with a verification reader", async () => {
+  const f = await fixture(), otherDb = await createFixtureDb(); let release!: () => void, entered!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; }), ready = new Promise<void>(resolve => { entered = resolve; });
+  let rotation: Promise<unknown> | undefined; let blockerPid = 0;
+  try {
+    const [provider] = await f.db.insert(companySecretProviderConfigs).values({ companyId: f.company.id, provider: "aws_secrets_manager", displayName: "Offline provider FK fixture", status: "ready", isDefault: true, config: {} }).returning();
+    await f.db.update(companySecrets).set({ provider: "aws_secrets_manager", providerConfigId: null }).where(eq(companySecrets.id, f.secret.id));
+    await f.db.update(companySecretVersions).set({ providerVersionRef: "fixture-version" }).where(eq(companySecretVersions.secretId, f.secret.id));
+    const request = f.input(0, { expectedEpoch: await f.epoch() });
+    // Existing rotate holds the secret row before its providerConfig FK check.
+    // No real AWS create/rotate/resolve is invoked by this SQL lock fixture.
+    rotation = otherDb.transaction(async tx => {
+      blockerPid = (await tx.execute(sql`SELECT pg_backend_pid() AS pid`) as unknown as Array<{ pid: number }>)[0].pid;
+      await tx.select().from(companySecrets).where(eq(companySecrets.id, f.secret.id)).for("no key update"); entered(); await held;
+      await tx.update(companySecrets).set({ providerConfigId: provider.id }).where(eq(companySecrets.id, f.secret.id));
+    });
+    await Promise.race([ready, rotation]);
+    const declaration = declarationWithPid(f.db, f.company.id, f.endpoint.id, request);
+    const rejected = expect(declaration.result).rejects.toMatchObject({ status: 409 });
+    await waitBlockedBy(await declaration.pid, blockerPid); release(); await rotation; await rejected;
+    expect(await f.rows()).toHaveLength(0);
+  } finally { release?.(); await rotation?.catch(() => {}); await otherDb.$client.end({ timeout: 1 }); await f.cleanup(); }
 });

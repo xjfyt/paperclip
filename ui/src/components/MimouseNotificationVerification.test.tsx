@@ -66,6 +66,7 @@ it("keeps four-language keys/placeholders aligned and renders real safety copy",
 });
 it("accepted plus an old human accepted review never grants C3/C4", async () => {
   await mount(); expect(host.textContent).not.toContain(text("manual_passed")); expect(host.textContent).toContain(text("not_recorded"));
+  expect(host.textContent).toContain(`${text("sourceReferences")}: ${id(3)} / ${id(4)} / ${id(7)}`);
   expect(state.fetch.mock.calls.every(([, init]) => init.method === "GET" && init.cache === "no-store" && init.signal instanceof AbortSignal)).toBe(true);
 });
 it.each(["protocol_report", "live_connection", "recipient_observation", "approval_scenario"])("saves only explicitly confirmed %s, with no test/probe call", async category => {

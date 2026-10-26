@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 vi.mock("drizzle-orm", () => ({
   eq: (key: string, value: unknown) => (row: Record<string, unknown>) => row[key] === value,
+  inArray: (key: string, values: unknown[]) => (row: Record<string, unknown>) => values.includes(row[key]),
   gt: (key: string, value: number) => (row: Record<string, number>) => row[key] > value,
   and: (...checks: Array<(row: unknown) => boolean>) => (row: unknown) => checks.every(check => check(row)),
   desc: (key: string) => ({ key, desc: true }),
@@ -98,8 +99,9 @@ describe("capability ledger transaction contract", () => {
   it("hides notification receipts but exposes the shared revision for adapter CAS", async () => {
     const { service, state } = fixture(); await service.append("company-a", "admin", request);
     state.events.push({ id: "notification", companyId: "company-a", revision: 2, receipt: { domain: "notification", reportRef: "private-notification-report" }, createdAt: new Date() });
+    state.events.push({ id: "notification-revoke", companyId: "company-a", revision: 3, receipt: null, targetId: "notification", createdAt: new Date() });
     const page = await service.list("company-a");
-    expect(page.events).toHaveLength(1); expect(page.headRevision).toBe(2);
+    expect(page.events).toHaveLength(1); expect(page.headRevision).toBe(3);
     expect(JSON.stringify(page)).not.toContain("private-notification-report");
   });
   it("cannot revoke a notification receipt through the adapter entrypoint", async () => {

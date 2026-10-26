@@ -54,5 +54,6 @@
   "invalid": "Revise los alias, el commit completo, las fechas UTC, la entrega revisada y las confirmaciones.",
   "rejected": "Solicitud rechazada. Recargue permisos y evidencia antes de preparar otra.",
   "refreshError": "Declaración registrada, pero falló la actualización de lectura. No cree una sustituta.",
-  "savedDeclaration": "Declaración registrada. Es una afirmación del administrador, no un certificado del proveedor."
+  "savedDeclaration": "Declaración registrada. Es una afirmación del administrador, no un certificado del proveedor.",
+  "sourceReferences": "IDs de origen: entrega / revisión humana / aprobación"
 }

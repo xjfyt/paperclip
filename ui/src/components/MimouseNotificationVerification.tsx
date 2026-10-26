@@ -60,6 +60,7 @@ function Verification({ companyId, endpointId, identity, authEpoch, onClose }: {
       <h3>{t(`notificationVerification.${name}`)}</h3>
       {row ? <><p className="font-mono text-sm break-all">{row.id} · {t(`notifications.state_${row.state}`, { defaultValue: row.state })} · {row.lastCode ?? "—"}</p>
         <p>{row.scopeMatches ? t("notificationVerification.currentScope") : t("notificationVerification.oldScope")}</p>
+        <p className="font-mono text-xs break-all">{t("notificationVerification.sourceReferences")}: {row.id} / {row.review?.id ?? "—"} / {row.resourceId ?? "—"}</p>
         {row.review && <p>{t("notificationVerification.oldReview")}: {t(`notifications.observed_${row.review.outcome}`)} · {row.review.actorId} · {row.review.createdAt}</p>}</> : <p>{t("notificationVerification.not_recorded")}</p>}
     </div>; })}
     {statuses.map(status => <p key={status.category}>{t(`notificationVerification.${status.category}`)}: {t(`notificationVerification.${status.status}`)}</p>)}
@@ -69,6 +70,7 @@ function Verification({ companyId, endpointId, identity, authEpoch, onClose }: {
       <p className="font-mono text-xs break-all">{event.id} · {event.reviewerId} · {event.createdAt}</p>
       {event.receipt ? <><p>{t(`notificationVerification.${event.receipt.category}`)} · {t(`capabilityEvidence.${event.receipt.result}`)} · {t("notificationVerification.manual")}</p>
         <p>{t("notificationVerification.scope", { version: event.receipt.scope.configVersion, epoch: event.receipt.scope.verificationEpoch })}</p>
+        <p className="font-mono text-xs break-all">{t("notificationVerification.sourceReferences")}: {event.receipt.deliveryId ?? "—"} / {event.receipt.reviewId ?? "—"} / {event.receipt.resourceId ?? "—"}</p>
         <p className="text-xs break-all">{event.receipt.runtimeVersion} / {event.receipt.environmentAlias} / {event.receipt.accountAlias} / {event.receipt.reportRef}</p>
         <p className="font-mono text-xs break-all">{event.receipt.testedCommit} · {event.receipt.testedAt} → {event.receipt.expiresAt}</p></> : <p>{t("notificationVerification.revoked")}</p>}
     </div>)}</details>
