@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 
+import { issueRecoveryMessages } from "../i18n/issue-recovery-test-resources";
+import { i18n } from "../i18n";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import type { AnchorHTMLAttributes, ReactElement } from "react";
@@ -1160,4 +1162,63 @@ it("requires export retry for ordinary restoration while keeping explicit board 
   expect(document.body.textContent).not.toContain("Mark task done");
   expect(document.body.textContent).not.toContain("Send for review");
   expect(document.body.textContent).toContain("False positive, done");
+});
+
+
+describe("recovery card localized controls", () => {
+  afterEach(() => { act(() => { void i18n.changeLanguage("en"); }); });
+
+  it.each(Object.entries(issueRecoveryMessages))("renders %s without changing names, diagnostics or resolve payload", (locale, messages) => {
+    act(() => { void i18n.changeLanguage(locale); });
+    const onResolve = vi.fn();
+    const namedBoard = { ...ownerAgent, name: "Board" };
+    const node = render(<IssueRecoveryActionCard action={buildAction({
+      evidence: { summary: "untranslated diagnostic X_UNKNOWN_17" },
+      nextAction: "User-authored next step",
+    })} agentMap={new Map([[ownerAgent.id, namedBoard]])} onResolve={onResolve} />);
+    expect(node.textContent).toContain("Board");
+    expect(node.textContent).toContain("untranslated diagnostic X_UNKNOWN_17");
+    expect(node.textContent).toContain("User-authored next step");
+    const trigger = node.querySelector("[data-testid='recovery-action-resolve-trigger']");
+    expect(trigger?.getAttribute("aria-label")).toBe(messages.resolveAria);
+    click(trigger);
+    expect(document.body.textContent).toContain(messages.tryAgainDescription);
+    expect(document.body.textContent).not.toContain(messages.falseDone);
+    click([...document.body.querySelectorAll("button")].find(button => button.textContent?.includes(messages.tryAgain)) ?? null);
+    expect(onResolve.mock.calls).toEqual([["todo"]]);
+  });
+
+  it.each(Object.entries(issueRecoveryMessages))("preserves %s break-glass validation, reason and pending repeated-click gate", (locale, messages) => {
+    act(() => { void i18n.changeLanguage(locale); });
+    const onConfirm = vi.fn();
+    const action = buildWorkspaceValidationAction();
+    const node = render(<IssueRecoveryActionCard action={action} onBreakGlassOverride={onConfirm} canBreakGlass />);
+    click(node.querySelector("[data-testid='recovery-action-breakglass-trigger']"));
+    expect(document.body.textContent).toContain(messages.breakGlassTitle);
+    const textarea = document.body.querySelector<HTMLTextAreaElement>("[data-testid='recovery-breakglass-reason']");
+    expect(textarea?.placeholder).toBe(messages.reasonPlaceholder);
+    const confirm = () => document.body.querySelector<HTMLButtonElement>("[data-testid='recovery-action-breakglass-confirm']");
+    expect(confirm()?.disabled).toBe(true);
+    setTextareaValue(textarea, "   ");
+    click(confirm());
+    expect(onConfirm).not.toHaveBeenCalled();
+    setTextareaValue(textarea, "  Operator reason — 原文  ");
+    click(confirm());
+    expect(onConfirm.mock.calls).toEqual([["Operator reason — 原文"]]);
+    act(() => root?.render(<IssueRecoveryActionCard action={action} onBreakGlassOverride={onConfirm} canBreakGlass reconcilePending />));
+    click(confirm());
+    click(confirm());
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+  });
+
+  it("updates an open confirmation on locale switch and Escape dismisses without a mutation", () => {
+    const onConfirm = vi.fn();
+    const node = render(<IssueRecoveryActionCard action={buildWorkspaceValidationAction()} onBreakGlassOverride={onConfirm} canBreakGlass />);
+    click(node.querySelector("[data-testid='recovery-action-breakglass-trigger']"));
+    act(() => { void i18n.changeLanguage("ja"); });
+    expect(document.body.textContent).toContain(issueRecoveryMessages.ja.breakGlassTitle);
+    act(() => { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+    expect(document.body.querySelector("[data-testid='recovery-action-breakglass-confirm']")).toBeNull();
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
 });
