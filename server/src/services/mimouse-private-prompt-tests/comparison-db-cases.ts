@@ -146,7 +146,7 @@ export async function verifyPrivateHistoricalComparison(db: Db) {
   await db.update(companyMemberships).set({ status: "active" }).where(eq(companyMemberships.id, member.id));
   const board = { type: "board" as const, source: "session" as const, userId: actor.userId, sessionId: actor.sessionId,
     companyIds: [actor.companyId], memberships: [{ companyId: actor.companyId, status: "active" as const, membershipRole: "admin" }] };
-  const http = await privatePromptHttpFixture(db, { owner: board, other: { ...board, userId, sessionId }, agent: { type: "agent", source: "api_key", agentId: original.agentId, companyId: actor.companyId } });
+  const http = await privatePromptHttpFixture(db, { owner: board, other: { ...board, userId, sessionId }, agent: { type: "agent", source: "agent_key", agentId: original.agentId, companyId: actor.companyId } });
   try {
     const path = `/api/companies/${actor.companyId}/prompt-registry/${e.promptId}/comparison`, prior = await state();
     const result = await http.call("POST", path, e.input);
