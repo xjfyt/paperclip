@@ -96,3 +96,21 @@ UI纯fixture：新面板与原通知页2文件50项通过（512MB/单worker）�
 审计补正后重新执行：server/shared六文件84项、UI四文件61项全部通过（512MB/单worker）；token三项静态检查、fixture语法及git diff检查通过。双连接/触发器/HTTP真实fixture仍待中央执行。
 
 独立只读复核确认：两条已报告FK锁环在当前NO KEY UPDATE合同下关闭；检查既有rotate的secret→version、version独立更新→endpoint及provider默认切换后，未发现新增正常可达倒序环。该结论只是源码复核，绝不替代上述10项真实DB/API与迁移执行结果。
+
+## 中央迁移组装与常规API入口
+
+`package.json`的`test:mimouse:api`已显式纳入`notification-verification.spec.ts`，避免新fixture只在专项命令执行。这里只静态确认脚本和文件，不启动Playwright配置中的webServer/DB；中央仍需执行实际10项。
+
+SQL提案是**完整参考**，不能把整个文件追加到Drizzle生成结果后。相对固定基线，数据库schema只有下列DDL变化：
+
+| 对象 | 来源与中央处理 |
+| --- | --- |
+| endpoint列`verification_epoch integer NOT NULL DEFAULT 1` | 已在`mimouse_notifications.ts`声明，Drizzle生成；不得重复`ADD COLUMN` |
+| check `mimouse_notification_verification_epoch_positive` | 已在schema声明，Drizzle生成；保留生成的`verification_epoch > 0`约束一次，不再追加提案同名check |
+| index `mimouse_notification_verification_latest` | 已在schema声明，Drizzle生成；核对顺序为company_id、endpoint_id、snapshot的configVersion文本表达式、created_at DESC、id DESC；不得重复创建 |
+| 四组function+trigger：`mimouse_notification_secret_epoch`、`mimouse_notification_version_epoch`、`mimouse_notification_provider_epoch`、`mimouse_notification_freeze_epoch` | schema未表达，中央从提案`CUSTOM SUPPLEMENT BEGIN/END`之间追加，共4个function和4个trigger |
+| capability_evidence.receipt的TypeScript联合类型 | 仍是原jsonb，不产生ALTER TABLE，不新增表或约束 |
+
+`packages/db/drizzle.config.ts`读取`dist/schema/*.js`，中央生成前必须让dist来自集成后的schema，不能用旧dist得出“无变更”。以中央实际生成SQL与最新snapshot为准核对上述3项；若缺失，先查生成输入/基线，不盲目重复追加。自定义部分置于新增列之后，每个完整function或trigger之间按既有迁移格式添加`--> statement-breakpoint`，不能把分隔符插到`$$`函数体内部。该片没有额外自定义constraint/index：均已归Drizzle管理。
+
+中央分配迁移号并更新journal/snapshot后，检查每个列/check/index/function/trigger恰好一次，再执行迁移安全检查和隔离DB/API十项。提案不回填旧delivery epoch、不发送消息、不resolve secret。本分支没有生成或修改journal/snapshot，也没有执行迁移。

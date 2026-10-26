@@ -1,8 +1,14 @@
 -- A0 migration proposal: assign the real migration number/journal centrally.
 -- Additive only. No provider/secret resolution and no dispatch side effects.
+-- FULL REFERENCE, not an append-only supplement to Drizzle output.
+-- DRIZZLE-OWNED: the column and check below, and the final index, are already
+-- declared in mimouse_notifications.ts. Keep each generated DDL exactly once.
 ALTER TABLE mimouse_notification_endpoints ADD COLUMN verification_epoch integer NOT NULL DEFAULT 1;
 ALTER TABLE mimouse_notification_endpoints ADD CONSTRAINT mimouse_notification_verification_epoch_positive CHECK (verification_epoch > 0);
 
+-- CUSTOM SUPPLEMENT BEGIN: Drizzle does not generate these four functions
+-- and four triggers. Append this section after the generated column/check;
+-- separate complete top-level statements with migration statement-breakpoints.
 -- Security mutations take their own source row first, then endpoint rows.
 -- Evidence append must lock provider config -> secret -> version -> endpoint,
 -- NEVER endpoint -> secret. Its company-ledger lock precedes all these locks.
@@ -74,5 +80,7 @@ BEGIN
 END $$;
 CREATE TRIGGER mimouse_notification_freeze_epoch BEFORE INSERT ON mimouse_notification_deliveries
   FOR EACH ROW EXECUTE FUNCTION mimouse_notification_freeze_epoch();
+-- CUSTOM SUPPLEMENT END
+-- DRIZZLE-OWNED: do not append a duplicate if the generated migration has it.
 CREATE INDEX mimouse_notification_verification_latest ON mimouse_notification_deliveries
   (company_id, endpoint_id, (snapshot->>'configVersion'), created_at DESC, id DESC);
