@@ -90,6 +90,25 @@ describe("source-pinned coding review", () => {
     await expect(f.diff()).rejects.toThrow("submodule_workspace_requires_external_review");
     await expect(verifyLocalCodingHead(f.workspace, f.row.baseSha, f.row.headSha)).rejects.toThrow("submodule_workspace_requires_external_review");
   });
+  it("missing promisor blob fails locally without invoking a secondary remote helper", async () => {
+    const f = await fixture();
+    const oldBlob = await f.git("rev-parse", `${f.row.baseSha}:source.txt`);
+    await rm(path.join(f.cwd, ".git", "objects", oldBlob.slice(0, 2), oldBlob.slice(2)));
+    const marker = path.join(f.cwd, ".git", "lazy-fetch-ran"); const hook = path.join(f.cwd, ".git", "fixture-ssh");
+    // This executable never connects: it only proves whether Git tried transport.
+    await writeFile(hook, `#!/bin/sh\nprintf attempted > '${marker}'\nexit 1\n`); await chmod(hook, 0o755);
+    await f.git("config", "core.repositoryFormatVersion", "1");
+    await f.git("config", "extensions.partialClone", "secondary");
+    await f.git("config", "remote.secondary.url", "ssh://fixture.invalid/repo.git");
+    await f.git("config", "remote.secondary.promisor", "true");
+    await f.git("config", "remote.secondary.partialCloneFilter", "blob:none");
+    await f.git("config", "core.sshCommand", hook);
+    const args = ["diff", "--no-ext-diff", "--no-textconv", f.row.baseSha, f.row.headSha, "--"];
+    await expect(exec("git", args, { cwd: f.cwd, timeout: 5000, env: { ...process.env, GIT_NO_LAZY_FETCH: "0", GIT_ALLOW_PROTOCOL: "ssh", GIT_TERMINAL_PROMPT: "0" } })).rejects.toThrow();
+    await access(marker); await rm(marker); // Control proves lazy fetch was attempted.
+    await expect(f.diff()).rejects.toThrow(); await expect(access(marker)).rejects.toThrow();
+    await expect(access(path.join(f.cwd, ".git", "objects", oldBlob.slice(0, 2), oldBlob.slice(2)))).rejects.toThrow();
+  });
   it("does not execute configured external diff commands", async () => {
     const f = await fixture(); await f.git("config", "diff.external", "command-that-must-not-exist"); expect((await f.diff()).complete).toBe(true);
   });

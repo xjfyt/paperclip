@@ -122,7 +122,8 @@ export function mimouseCodingRoutes(db: Db, deps: { service?: ReturnType<typeof 
       const [current] = await tx.select().from(deliveries).where(and(eq(deliveries.companyId, row.companyId), eq(deliveries.id, row.id))).for("update");
       if (!current || reviewBinding(current) !== diff.binding) throw unprocessable("Review changed while confirming");
       await tx.update(deliveries).set({ reviewReceipt: receipt, reviewedSha: input.headSha, reviewerUserId, updatedAt: new Date() }).where(and(eq(deliveries.companyId, row.companyId), eq(deliveries.id, row.id)));
-      await logActivity(tx, { companyId: row.companyId, actorType: actor.actorType, actorId: actor.actorId, action: "coding.head.reviewed", entityType: "coding_delivery", entityId: row.id, details: {} }, publications);
+      // logActivity uses select/insert on this path, not the root Db.$client.
+      await logActivity(tx as unknown as Db, { companyId: row.companyId, actorType: actor.actorType, actorId: actor.actorId, action: "coding.head.reviewed", entityType: "coding_delivery", entityId: row.id, details: {} }, publications);
     });
     publications.forEach(publishActivity); res.json({ reviewedSha: input.headSha, productionReleaseAuthorized: false });
   });

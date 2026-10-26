@@ -94,7 +94,12 @@ GET `/api/companies/:companyId/coding/:id/build-matrix` 和交付列表的 `buil
 回执绑定的是已记录的产物 SHA-256 清单，不是持续监控磁盘文件；后续上传/发布必须重新核验实际字节，当前没有授权上传或发布。
 MR/CI 同步不会把旧式 SHA 勾选升级为新回执，任何候选状态仍不代表六平台 Runner、签名或生产发布已验收。
 
-定向验证：实际临时 Git 仓库 26 项单测、差异交互 8 项 jsdom 测试通过；涵盖跨项目、旧摘要/旧 SHA、脏目录、非祖先、二进制、体积/文件数限制、取消/重开及身份切换。
+定向验证：实际临时 Git 仓库 27 项单测、差异交互 8 项 jsdom 测试通过；涵盖跨项目、旧摘要/旧 SHA、脏目录、非祖先、二进制、体积/文件数限制、取消/重开及身份切换。
 `tests/mimouse/coding-diff.spec.ts` 提供真实隔离数据库与 HTTP 路由测试，GitLab project 读取是注入夹具；须在集成迁移后运行，不代表真实 GitLab 联调。
 
 审阅回执与 activity 审计同事务写入，事务成功后才发布 activity 事件；审计失败不会留下已确认审阅。注册/产物/修复使用的 `verifyLocalCodingHead` 与差异检查复用只读 Git 防护，不改变显式授权 push 的凭据环境或 hooks。
+
+只读检查必须设置 `GIT_NO_LAZY_FETCH=1`、`GIT_ALLOW_PROTOCOL=`（空协议白名单）和 `GIT_OPTIONAL_LOCKS=0`。
+仅不显式调用 fetch 不足以保证本地读取：partial clone 的缺失对象会触发 promisor remote 下载，且 promisor 可以不是 origin。
+本地 Git 2.52.0 夹具删除 base blob，配置第二 promisor remote 与仅写标记后退出的 SSH helper；对照检查确实触发 helper，受防护差异检查失败且不触发 helper、不补回对象、不访问网络。
+此限制仅用于检查，不更改显式授权 push 的环境。实现依据：[Git 2.52.0 --no-lazy-fetch / GIT_NO_LAZY_FETCH](https://git-scm.com/docs/git/2.52.0#Documentation/git.txt---no-lazy-fetch)、[Git 2.52.0 GIT_ALLOW_PROTOCOL 与 GIT_OPTIONAL_LOCKS](https://git-scm.com/docs/git/2.52.0)、[Partial clone 缺失对象与多个 promisor remote](https://git-scm.com/docs/partial-clone)。
