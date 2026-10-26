@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 
+import { i18n, coreTaskMessages } from "../i18n/core-task-test-resources";
+
 import type { ComponentProps, ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -582,7 +584,8 @@ describe("IssueProperties", () => {
     act(() => root.unmount());
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await i18n.changeLanguage("en");
     mockSidebarState.isMobile = false;
     container = document.createElement("div");
     document.body.appendChild(container);
@@ -1182,6 +1185,38 @@ describe("IssueProperties", () => {
     expect(onUpdate).toHaveBeenCalledWith({ assigneeAgentId: "agent-2", assigneeUserId: null });
 
     act(() => root.unmount());
+  });
+
+  it.each(Object.entries(coreTaskMessages))("localizes assignment pickers and searches translated labels in %s", async (locale, messages) => {
+    await i18n.changeLanguage(locale);
+    const { root, queryClient } = renderPropertiesWithQueryClient(container, {
+      issue: createIssue(), childIssues: [], onUpdate: vi.fn(),
+    });
+    try {
+      await act(async () => queryClient.setQueryData(queryKeys.auth.session, { user: { id: "user-1" } }));
+      await flush();
+      const search = container.querySelector<HTMLInputElement>(`input[aria-label="${messages.searchAssignees}"]`)!;
+      expect(search?.placeholder).toBe(messages.searchAssignees);
+      await waitForAssertion(() => expect(container.textContent).toContain(messages.assignToMe));
+      expect(container.textContent).toContain(messages.boardUsers);
+      for (const key of ["searchReviewers", "searchApprovers"] as const) {
+        expect(container.querySelector(`input[aria-label="${messages[key]}"]`)).not.toBeNull();
+      }
+      expect(container.textContent).toContain(messages.noReviewers);
+      expect(container.textContent).toContain(messages.noApprovers);
+      const setSearch = async (value: string) => {
+        await act(async () => {
+          Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(search, value);
+          search.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+        await flush();
+      };
+      await setSearch(messages.noAssignee);
+      expect(search.nextElementSibling?.textContent).toContain(messages.noAssignee);
+      await setSearch("zzzz-nonexistent");
+      expect(search.nextElementSibling?.textContent).not.toContain(messages.noAssignee);
+      expect(search.nextElementSibling?.textContent).toContain(i18n.t("agentSelect.noMatches"));
+    } finally { act(() => root.unmount()); queryClient.clear(); }
   });
 
   it("filters the no-assignee option with assignee search", async () => {

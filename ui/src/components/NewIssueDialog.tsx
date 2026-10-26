@@ -1,3 +1,4 @@
+import { Trans } from "react-i18next";
 import { t as mimouseT, useTranslation as useMimouseTranslation } from "@/i18n";
 import { usePrimaryAgentPresentation } from "./primary-agent/PrimaryAgentPresentation";
 import { useWorkspaceIsolationControls } from "@/hooks/useWorkspaceIsolationControls";
@@ -405,8 +406,8 @@ export function NewIssueDialog() {
   const privateParentProject = privacyParent?.project?.visibility === "private" ? privacyParent.project : null;
   const inheritedPrivateProject = privateParentProject ?? (!isPrivate && currentProject?.visibility === "private" ? currentProject : null);
   const inheritedPrivacyReason = privacyParent?.visibility === "private"
-    ? `Subtask of private task ${privacyParent.title || newIssueDefaults.parentTitle || parentIssueLabel}`
-    : inheritedPrivateProject ? `In private project ${inheritedPrivateProject.name}` : undefined;
+    ? mimouseT("coreTaskUi.privateSubtask", { title: privacyParent.title || newIssueDefaults.parentTitle || parentIssueLabel })
+    : inheritedPrivateProject ? mimouseT("coreTaskUi.privateProject", { name: inheritedPrivateProject.name }) : undefined;
   const effectivePrivate = isPrivate || inheritsPrivateAccess
     || orderedProjects.some(project => project.id === projectId && project.visibility === "private");
 
@@ -1156,7 +1157,7 @@ export function NewIssueDialog() {
               mobile={isMobile}
               mentions={mentionOptions}
               onImageUpload={async (file) => {
-                if (!effectiveCompanyId) throw new Error("No organization selected");
+                if (!effectiveCompanyId) throw new Error(mimouseT("coreTaskUi.noOrganization"));
                 const asset = await assetsApi.uploadImage(effectiveCompanyId, file, "issues/drafts");
                 return asset.contentPath;
               }}
@@ -1197,7 +1198,7 @@ export function NewIssueDialog() {
                     }
                   },
                 },
-                submitLabel: isSubIssueMode ? "Create sub-task" : mimouseT("commonUi.createTask"),
+                submitLabel: isSubIssueMode ? mimouseT("coreTaskUi.createSubtask") : mimouseT("commonUi.createTask"),
                 canSubmitWithoutBody: Boolean(title.trim()),
                 onSelectFiles: stageFiles,
                 runSettings: composerSettings,
@@ -1223,7 +1224,7 @@ export function NewIssueDialog() {
                           <div className="max-w-full rounded-md border border-border bg-muted/30 px-2.5 py-1.5 text-xs text-muted-foreground">
                             <div className="flex items-center gap-1.5">
                               <ListTree className="h-3.5 w-3.5 shrink-0" />
-                              <span className="shrink-0">Sub-task of</span>
+                              <span className="shrink-0">{mimouseT("coreTaskUi.subtaskOf")}</span>
                               <span className="font-medium text-foreground">{parentIssueLabel}</span>
                             </div>
                             {newIssueDefaults.parentTitle ? (
@@ -1238,14 +1239,14 @@ export function NewIssueDialog() {
                   <>
                     {parentPrivacyUnresolved ? (
                       <div role={parentPrivacyError ? "alert" : "status"} className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
-                        <span>{parentPrivacyError ? "Couldn't check parent access." : "Checking parent access…"}</span>
+                        <span>{parentPrivacyError ? mimouseT("coreTaskUi.parentAccessError") : mimouseT("coreTaskUi.parentAccessLoading")}</span>
                         {parentPrivacyError ? <Button variant="ghost" size="sm" onClick={() => void refetchParentPrivacy()}>{mimouseT("workflow.retry")}</Button> : null}
                       </div>
                     ) : null}
                     {worktreeSelectionIncomplete && !worktreesLoading ? (
                       <p role="alert" className="mb-2 text-xs text-destructive">
-                        {worktreesError ? "Couldn't check the selected worktree. Retry in Worktrees or choose New worktree."
-                          : "The selected worktree is no longer available. Choose another worktree or start a new one."}
+                        {worktreesError ? mimouseT("coreTaskUi.worktreeCheckFailed")
+                          : mimouseT("coreTaskUi.worktreeUnavailable")}
                       </p>
                     ) : null}
                     {stagedFiles.length > 0 ? (
@@ -1334,10 +1335,11 @@ export function NewIssueDialog() {
                       >
                         <Flag className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-300" />
                         <span className="leading-snug">
-                          Assigning implies executable intent - leave status as{" "}
-                          <span className="font-medium">Backlog</span> only to deliberately park this. The assignee will
-                          not be woken until status moves to <span className="font-medium">Todo</span> or{" "}
-                          <span className="font-medium">In Progress</span>.
+                          <Trans i18nKey="coreTaskUi.assignedBacklog" components={[
+                            <span className="font-medium" />,
+                            <span className="font-medium" />,
+                            <span className="font-medium" />,
+                          ]} />
                         </span>
                       </div>
                     ) : null}
@@ -1345,12 +1347,12 @@ export function NewIssueDialog() {
                     {selectedAssigneeAgent?.status === "paused" ? (
                       <div data-testid="new-issue-paused-assignee-note" className="mx-4 mb-2">
                         <InlineBanner tone="warning" icon={PauseCircle} compact>
-                          <span className="font-medium">{selectedAssigneeAgent.name}</span> is paused and will not start
-                          work on this task until it is resumed
-                          {selectedAssigneeAgent.pauseReason === "import"
-                            ? " — it arrived paused from an organization import"
-                            : ""}
-                          . You can resume it from the task page after creating the task.
+                          <Trans
+                            i18nKey={selectedAssigneeAgent.pauseReason === "import"
+                              ? "coreTaskUi.pausedImportedAssignee" : "coreTaskUi.pausedAssignee"}
+                            values={{ name: selectedAssigneeAgent.name }}
+                            components={[<span className="font-medium" />]}
+                          />
                         </InlineBanner>
                       </div>
                     ) : null}
@@ -1384,15 +1386,15 @@ export function NewIssueDialog() {
                       options={projectOptions}
                       recentOptionIds={recentProjectIds}
                       placeholder={mimouseT("commonUi.project")}
-                      mobileTitle="Select project"
+                      mobileTitle={mimouseT("coreTaskUi.selectProject")}
                       modal
                       className="h-8 min-w-0 flex-1 gap-1.5 border-0 bg-transparent px-2 text-xs shadow-none hover:bg-accent focus-visible:bg-accent focus-visible:ring-0 sm:max-w-64 sm:flex-none"
                       disabled={createIssue.isPending}
                       triggerDataSlot="new-issue-compact-control"
                       contentStyle={entityPickerViewportStyle}
-                      noneLabel="No project"
+                      noneLabel={mimouseT("commonUi.noProject")}
                       noneAtTop
-                      searchPlaceholder="Search projects..."
+                      searchPlaceholder={mimouseT("filterUi.searchProjects")}
                       emptyMessage={mimouseT("workflow.noProjects")}
                       onChange={handleProjectChange}
                       renderTriggerValue={(option) =>

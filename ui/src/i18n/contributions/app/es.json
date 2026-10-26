@@ -3,5 +3,6 @@
     "title": "Crea tu primera empresa",
     "description": "Comienza creando una empresa.",
     "newCompany": "Nueva empresa"
-  }
+  },
+  "cloudCreateUnavailable": "Las organizaciones se crean en Paperclip Cloud. Esta instancia no puede acceder ahora; inténtelo de nuevo desde su panel de Cloud."
 }

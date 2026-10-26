@@ -1,11 +1,14 @@
 // @vitest-environment jsdom
 
+import { i18n, coreTaskMessages } from "../i18n/core-task-test-resources";
+
 import { act, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Agent, ResourceMemberships } from "@paperclipai/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SidebarAgents } from "./SidebarAgents";
+import { SidebarAgents as ProductionSidebarAgents } from "./SidebarAgents.production";
 import { queryKeys } from "../lib/queryKeys";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
@@ -217,7 +220,8 @@ describe("SidebarAgents", () => {
   let queryClient: QueryClient;
   let memberships: ResourceMemberships;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await i18n.changeLanguage("en");
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
     mockSidebarState.collapsed = false;
     mockSidebarState.peeking = false;
@@ -302,14 +306,14 @@ describe("SidebarAgents", () => {
     }
   });
 
-  async function renderSidebarAgents(streamlined = true) {
+  async function renderSidebarAgents(streamlined = true, Sidebar = SidebarAgents) {
     const currentRoot = createRoot(container);
     root = currentRoot;
 
     await act(async () => {
       currentRoot.render(
         <QueryClientProvider client={queryClient}>
-          <SidebarAgents streamlined={streamlined} />
+          <Sidebar streamlined={streamlined} />
         </QueryClientProvider>,
       );
     });
@@ -346,6 +350,45 @@ describe("SidebarAgents", () => {
     });
     await flushReact();
   }
+
+  it.each(Object.entries(coreTaskMessages).flatMap(([locale, messages]) =>
+    [false, true].map(production => ({ locale, messages, production })),
+  ))("localizes row actions in $locale (production: $production)", async ({ locale, messages, production }) => {
+    await i18n.changeLanguage(locale);
+    await renderSidebarAgents(true, production ? ProductionSidebarAgents : SidebarAgents);
+    await openAgentMenu(i18n.t("browserQa.openActions", { name: "Alpha" }));
+    for (const text of [messages.starAgent, messages.editAgent, messages.pauseAgent, messages.leaveAgent]) {
+      expect(document.body.textContent).toContain(text);
+    }
+    expect(container.querySelector('a[href="/agents/alpha"]')?.textContent).toContain("Alpha");
+    await act(async () => { await i18n.changeLanguage(locale === "en" ? "ja" : "en"); });
+    expect(document.body.textContent).toContain(i18n.t("coreTaskUi.pauseAgent"));
+  });
+
+  it.each(Object.entries(coreTaskMessages))("localizes budget accessibility and its disabled action in %s", async (locale, messages) => {
+    await i18n.changeLanguage(locale);
+    mockAgentsApi.list.mockResolvedValue([makeAgent({ status: "paused", pauseReason: "budget" })]);
+    mockInstanceSettingsApi.getExperimental.mockResolvedValue({ enableBuiltInAgents: true });
+    mockBuiltInAgentsApi.list.mockResolvedValue([{ agentId: "agent-1", status: "needs_setup" }]);
+    await renderSidebarAgents();
+    await flushReact();
+    expect(container.innerHTML).toContain(messages.agentPausedBudget);
+    await openAgentMenu(i18n.t("browserQa.openActions", { name: "Alpha" }));
+    expect(document.body.textContent).toContain(messages.budgetPaused);
+    expect(document.body.querySelector('[title="' + messages.pauseBudgetLimits + '"]')?.getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it.each(Object.entries(coreTaskMessages))("localizes built-in lifecycle labels in the collapsed rail in %s", async (locale, messages) => {
+    await i18n.changeLanguage(locale);
+    const settings = { enableBuiltInAgents: true };
+    const builtInAgents = [{ agentId: "agent-1", status: "needs_setup" }];
+    mockInstanceSettingsApi.getExperimental.mockResolvedValue(settings);
+    mockBuiltInAgentsApi.list.mockResolvedValue(builtInAgents);
+    queryClient.setQueryData(queryKeys.instance.experimentalSettings, settings);
+    queryClient.setQueryData(queryKeys.builtInAgents.list("company-1"), builtInAgents);
+    await renderRailSidebarAgents();
+    expect(container.querySelector('a[href="/agents/alpha"]')?.getAttribute("aria-label")).toContain(messages.builtInNeedsSetup);
+  });
 
   it.each(["agent", "section"])("finishes deferred %s menu focus cleanup before DOM teardown", async (menu) => {
     await renderSidebarAgents();

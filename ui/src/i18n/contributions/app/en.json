@@ -3,5 +3,6 @@
     "title": "Create your first organization",
     "description": "Get started by creating an organization.",
     "newCompany": "New Organization"
-  }
+  },
+  "cloudCreateUnavailable": "Organizations are created in Paperclip Cloud. This instance can't reach it right now — try again from your Cloud portfolio."
 }

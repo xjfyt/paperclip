@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 
+import { i18n, coreTaskMessages } from "../i18n/core-task-test-resources";
+
 import type { ComponentProps, ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -353,7 +355,8 @@ describe("NewIssueDialog", () => {
   let originalVisualViewportDescriptor: PropertyDescriptor | undefined;
   let originalInnerHeightDescriptor: PropertyDescriptor | undefined;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await i18n.changeLanguage("en");
     primaryState.primaryAgentId = null;
     primaryState.loading = false;
     vi.useRealTimers();
@@ -924,6 +927,46 @@ describe("NewIssueDialog", () => {
     expect(container.textContent).not.toContain("Codex options");
 
     act(() => root.unmount());
+  });
+
+  it.each(Object.entries(coreTaskMessages))("localizes parent-access states and preserves the creation gate in %s", async (locale, messages) => {
+    await i18n.changeLanguage(locale);
+    let rejectParent!: (error: Error) => void;
+    mockIssuesApi.get.mockReturnValue(new Promise((_resolve, reject) => { rejectParent = reject; }));
+    dialogState.newIssueDefaults = { parentId: "issue-1", title: "Private child" };
+    const { root, queryClient } = renderDialog(container);
+    try {
+      await flush();
+      expect(container.textContent).toContain(messages.parentAccessLoading);
+      const submit = container.querySelector<HTMLButtonElement>(`button[aria-label="${messages.createSubtask}"]`);
+      expect(submit?.disabled).toBe(true);
+      await act(async () => rejectParent(new Error("Unavailable")));
+      await waitForAssertion(() => expect(container.querySelector('[role="alert"]')?.textContent).toContain(messages.parentAccessError));
+      expect(submit?.disabled).toBe(true);
+      expect(mockIssuesApi.create).not.toHaveBeenCalled();
+    } finally { act(() => root.unmount()); queryClient.clear(); }
+  });
+
+  it.each(Object.entries(coreTaskMessages))("localizes paused-import and backlog notices without changing names in %s", async (locale, messages) => {
+    await i18n.changeLanguage(locale);
+    const name = "Agent <b>Original</b>";
+    dialogState.newIssueDefaults = { title: "Draft", assigneeAgentId: "agent-1", status: "backlog" };
+    mockAgentsApi.list.mockResolvedValue([{
+      id: "agent-1", name, status: "paused", pauseReason: "import", adapterType: "process",
+      adapterConfig: {}, runtimeConfig: {}, permissions: {},
+    }]);
+    const { root, queryClient } = renderDialog(container);
+    try {
+      await waitForAssertion(() => expect(container.querySelector('[data-testid="new-issue-paused-assignee-note"]')).not.toBeNull());
+      const paused = container.querySelector('[data-testid="new-issue-paused-assignee-note"]')!;
+      expect(paused.textContent).toBe(messages.pausedImportedAssignee.replace(/<\/?0>/g, "").replace("{{name}}", name));
+      expect(paused.querySelector("b")).toBeNull();
+      expect(paused.querySelector(".font-medium")?.textContent).toBe(name);
+      const backlog = container.querySelector('[data-testid="new-issue-assigned-backlog-note"]')!;
+      expect(backlog.textContent).toBe(messages.assignedBacklog.replace(/<\/?[012]>/g, ""));
+      expect(backlog.querySelectorAll(".font-medium")).toHaveLength(3);
+      expect(mockIssuesApi.create).not.toHaveBeenCalled();
+    } finally { act(() => root.unmount()); queryClient.clear(); }
   });
 
   it("warns when the selected assignee is a paused imported agent", async () => {

@@ -3,5 +3,6 @@
     "title": "创建您的第一家公司",
     "description": "通过创建公司开始。",
     "newCompany": "新公司"
-  }
+  },
+  "cloudCreateUnavailable": "组织需在 Paperclip Cloud 中创建。此实例目前无法访问 Cloud，请从你的 Cloud 项目列表重试。"
 }

@@ -3,5 +3,6 @@
     "title": "最初の会社を作成",
     "description": "会社を作成して始めましょう。",
     "newCompany": "新しい会社"
-  }
+  },
+  "cloudCreateUnavailable": "組織は Paperclip Cloud で作成します。このインスタンスからは現在アクセスできません。Cloud のポートフォリオから再試行してください。"
 }
