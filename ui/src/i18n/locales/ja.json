@@ -1776,6 +1776,26 @@
     "resolutionFailedBody": "復旧アクションを解決できませんでした",
     "createdRunBody": "{{identifier}} は新しい隔離ワークスペースで実行されます。"
   },
+  "issueWatchdogUi": {
+    "disabled": "（無効）",
+    "agent": "監視エージェント",
+    "selectAgent": "エージェントを選択",
+    "noAgent": "監視エージェントなし",
+    "searchAgents": "エージェントを検索…",
+    "noAgents": "エージェントが見つかりません。",
+    "closeSelector": "選択画面を閉じる",
+    "instructions": "指示",
+    "optional": "（任意）",
+    "instructionsPlaceholder": "監視エージェントは何に注意し、どのように作業の進行を促すべきですか？",
+    "task": "監視タスク：",
+    "viewTask": "タスクを表示",
+    "openTask": "監視タスクを開く",
+    "removing": "削除中…",
+    "remove": "削除",
+    "saving": "保存中…",
+    "update": "更新",
+    "set": "監視を設定"
+  },
   "langfuseUi": {
     "title": "Langfuse 読み取り専用取得",
     "boundary": "観測名・状態・Trace 参照のみ取得します。入出力や完全なログは取得しません。データは隔離され、顧客返信・モデル呼び出し・Agent 実行はありません。Cloud / セルフホスト v4 の observations v2 のみ対応。",

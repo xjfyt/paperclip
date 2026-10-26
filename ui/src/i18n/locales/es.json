@@ -1776,6 +1776,26 @@
     "resolutionFailedBody": "No se pudo resolver la acción de recuperación",
     "createdRunBody": "{{identifier}} se ejecutará en un nuevo espacio de trabajo aislado."
   },
+  "issueWatchdogUi": {
+    "disabled": "(desactivado)",
+    "agent": "Agente de supervisión",
+    "selectAgent": "Seleccionar agente",
+    "noAgent": "Sin agente de supervisión",
+    "searchAgents": "Buscar agentes...",
+    "noAgents": "No se encontraron agentes.",
+    "closeSelector": "Cerrar selector",
+    "instructions": "Instrucciones",
+    "optional": "(opcional)",
+    "instructionsPlaceholder": "¿Qué debe vigilar el agente de supervisión y cómo debe mantener el trabajo en marcha?",
+    "task": "Tarea de supervisión:",
+    "viewTask": "Ver tarea",
+    "openTask": "Abrir tarea de supervisión",
+    "removing": "Eliminando…",
+    "remove": "Eliminar",
+    "saving": "Guardando…",
+    "update": "Actualizar",
+    "set": "Configurar supervisión"
+  },
   "langfuseUi": {
     "title": "Lectura de Langfuse",
     "boundary": "Solo nombres, estados y referencias de trazas; sin entradas, salidas ni registros completos. Datos en cuarentena, sin respuestas a clientes, modelos ni agentes. Solo Cloud / v4 observations v2.",

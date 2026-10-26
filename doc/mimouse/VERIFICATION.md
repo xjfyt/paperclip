@@ -341,3 +341,10 @@ server编译除tsc --singleThreaded之外仍执行package.json中的所有资源
 75个应用提交的补丁已在独立临时验证克隆重放，tree=ae812dfc2319034d430a848756359595115ebf67与原分支一致，bundle保留精确SHA，全部作者/联合署名校验通过。随后的文档提交不改变受测应用代码。该验证克隆只用于本地重放，没有创建独立Codex任务。
 
 真实供应商、Runner、上传及P4/P5等剩余范围仍按REMAINING列出，不称原计划完成。实现代码尚未推送GitHub，提交身份授权待选择；MiWork剩余恢复文件未获永久删除确认，未删除。
+
+## 2026-10-26 23:28 UTC：3506键与调研合同
+
+- watchdog 18键四语中央合成与--check通过；3文件142项、完整UI类型/生产构建通过（/tmp/paperclip-3506-{focused,ui-types,ui-build}.log）。本片没有新增全UI/浏览器验收。
+- 收益/验收/依赖合同：9项单测与新隔离库4项API通过。首次--project server无匹配，改server/vitest.config.ts后通过，未掩盖启动失败。
+- 新research-scheduled-loop独立集成在新隔离库1项通过：真实routine调度、来源关系、JWT/HTTP报告与人审私有待办和真实依赖边；仅heartbeat执行替换为惰性回执，不是实际模型、联网检索或真实业务收益。日志/tmp/paperclip-scheduled-research-api.log。
+- API启动为源码入口，工作区依赖亦为源码；尚未运行本片编译入口完整API。测试目录保留且postmaster.pid存在，不删除锁、不宣称整个PG优雅退出。

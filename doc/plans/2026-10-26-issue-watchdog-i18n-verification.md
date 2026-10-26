@@ -54,3 +54,7 @@ NODE_OPTIONS=--max-old-space-size=512 /opt/codex/runtimes/codex-primary-runtime/
 - [ ] 打开编辑器切语言不丢指令/选择；关闭再开恢复原值；无 Agent、无匹配 Agent、active/disabled 和带/不带子任务链接状态。
 - [ ] 仅在授权测试环境做实际新增/更新/删除和 API 拒绝/超时，核验 pending 不重复请求、错误原文可见、跨语言 payload 一致。不要为语言验收自动唤醒/执行 Agent。
 - [ ] 中央类型检查、生产构建、相关宿主回归及推送后 CI；本片未运行，不沿用之前全量数字。
+
+## 中央集成补充（2026-10-26 23:28 UTC）
+
+本片已合入mimouse并合成3506键四语资源；compose --check、3文件142项定向回归、完整UI类型与生产构建通过。没有本片新全UI/真实浏览器验收，不外推旧3312全量结果。
