@@ -67,3 +67,38 @@ checkout, not the partial staging tree. It reads that checkout's root
 `package.json`, `packages/paperclip-runner/acpx-profiles.json`, and configured
 patch files; only package payload and install/patch outputs go to the fixture.
 These inputs need not be copied or guessed in staging.
+
+## Explicit online cache preparation
+
+If the offline consumer reports `ENOTCACHED`, separately authorize downloading
+public dependencies, then run:
+
+```sh
+node scripts/prepare-dist-smoke-cache.mjs \
+  --source /absolute/path/to/current-checkout \
+  --scratch /absolute/path/to/disposable-scratch-parent \
+  --cache /absolute/path/to/existing/npm-cache
+```
+
+This metadata-only fixture enumerates the canonical server release closure,
+resolves each declared external edge separately with strict
+`npm install --package-lock-only --ignore-scripts`, and
+serially caches official npm-registry tarballs compatible with this host. It does
+not install node_modules, run package lifecycle scripts, build code, start the
+server/database, or invoke agent/provider executables. Direct-version
+variants get separate metadata fixtures, never a merged dependency union or
+synthetic dev-only dependency names. The canonical producer's qualified
+bridge/runtime override is retained for its exact pinned edge. Peer-resolution
+conflicts are recorded as incomplete branches, without force or legacy-peer
+resolution. `CACHE-COVERAGE.json` reports successes and unresolved branches. This is
+cache warming, not proof that the offline install/start smoke will pass.
+
+The helper preserves **existing** proxy routing and CA environment variables
+unchanged. It does not print their values, obtain credentials, create alternative
+proxies/certificates, or disable TLS checks. Empty separate user/global npmrcs and
+an allowlisted environment keep authentication and unrelated runtime settings out.
+Dropping an existing proxy or `NODE_EXTRA_CA_CERTS` during sanitization can produce
+misleading DNS/certificate failures. Restore only already-provisioned configuration;
+never bypass a policy denial or security warning. Downloads stop at the first
+failure, without alternate registries or rerouting. The offline smoke's strict
+runtime environment remains unchanged.
