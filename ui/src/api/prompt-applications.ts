@@ -42,6 +42,16 @@ function dispatch(raw: unknown): PromptApplicationDispatchReceipt {
   if (row.state === "dispatched" && (!row.dispatchedAt || !row.promptHash)) fail();
   return row;
 }
+export type PromptApplicationRecoveryTarget = { action: "approve" | "rollback"; applicationId: string; agentId: string; expectedGeneration: number };
+export type PromptApplicationClosure = PromptApplicationRecoveryTarget & { outcome: "not_applied_closed"; requestId: string; currentGeneration: number; reason: "generation_advanced" | "approval_expired" };
+/** Only the locked server outcome may close an uncertain mutation, never an HTTP error. */
+export function verifyApplicationClosure(raw: unknown, expected: PromptApplicationRecoveryTarget & { requestId: string }): PromptApplicationClosure {
+  const r = applicationKeys(raw, ["outcome", "requestId", "action", "applicationId", "agentId", "expectedGeneration", "currentGeneration", "reason"]);
+  const value: PromptApplicationClosure = { outcome: literal(r.outcome, "not_applied_closed"), requestId: uuid(r.requestId), action: literal(r.action, expected.action), applicationId: uuid(r.applicationId), agentId: uuid(r.agentId), expectedGeneration: integer(r.expectedGeneration), currentGeneration: integer(r.currentGeneration), reason: r.reason === "generation_advanced" || r.reason === "approval_expired" ? r.reason : fail() };
+  if (value.requestId !== uuid(expected.requestId) || value.applicationId !== uuid(expected.applicationId) || value.agentId !== uuid(expected.agentId) || value.expectedGeneration !== expected.expectedGeneration ||
+    (value.reason === "generation_advanced" ? value.currentGeneration <= value.expectedGeneration : value.action !== "approve")) fail();
+  return value;
+}
 /** No shared GET cache, execution, retries or storage. All responses are identity-bound. */
 export function promptApplicationsApi(companyId: string, userId: string, signal: AbortSignal) {
   const root = `/companies/${encodeURIComponent(companyId)}`;
@@ -90,11 +100,15 @@ export function promptApplicationsApi(companyId: string, userId: string, signal:
     },
     approve: (promptId: string, applicationId: string, body: ApprovePromptApplication) => mutation(promptId, applicationId, "approve", body),
     rollback: (promptId: string, applicationId: string, body: RollbackPromptApplication) => mutation(promptId, applicationId, "rollback", body),
-    async request(promptId: string, requestId: string) {
-      const r = applicationKeys(await send(`${path(promptId)}/requests/${uuid(requestId)}`), ["application", "receipt", "enabled"]);
+    async request(promptId: string, requestId: string, expected?: PromptApplicationRecoveryTarget) {
+      if (expected && !["approve", "rollback"].includes(expected.action)) fail();
+      const query = expected ? `?applicationId=${uuid(expected.applicationId)}&action=${expected.action}&expectedGeneration=${integer(expected.expectedGeneration)}` : "";
+      const r = applicationKeys(await send(`${path(promptId)}/requests/${uuid(requestId)}${query}`), ["application", "receipt", "enabled", "closure"]);
       const application = nullable(r.application, value => record(value, promptId)), receipt = nullable(r.receipt, parseApplicationReceipt);
       if ((application && application.requestId !== uuid(requestId)) || (receipt && receipt.requestId !== uuid(requestId))) fail();
-      return { application, receipt, enabled: bool(r.enabled) };
+      const closure = r.closure === null ? null : expected ? verifyApplicationClosure(r.closure, { ...expected, requestId }) : fail();
+      if (closure && (application || receipt)) fail();
+      return { application, receipt, enabled: bool(r.enabled), closure };
     },
     async dispatches(promptId: string, applicationId: string, beforeId?: string | null) {
       const r = applicationKeys(await send(`${path(promptId)}/${uuid(applicationId)}/dispatches${beforeId ? `?beforeId=${uuid(beforeId)}` : ""}`), ["items", "nextBeforeId"]), items = array(r.items, dispatch);

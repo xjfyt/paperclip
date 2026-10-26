@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { PromptApplicationRecord, PromptApplicationReceipt, PromptApplicationDispatchReceipt } from "@paperclipai/shared/mimouse-prompt-applications";
 import { ApiError } from "@/api/client";
-import { promptApplicationsApi, type PromptApplicationEvidence, type PromptApplicationHead } from "@/api/prompt-applications";
+import { promptApplicationsApi, verifyApplicationClosure, type PromptApplicationEvidence, type PromptApplicationHead } from "@/api/prompt-applications";
 import { verifyPrivatePromptComparison } from "@/api/private-prompt-comparison";
 import { readApplicationJournal, startApplicationJournal, clearApplicationJournal, abandonApplicationPreparation, type PromptApplicationJournal } from "@/lib/prompt-application-journal";
 import { Button } from "@/components/ui/button";
@@ -100,8 +100,14 @@ function ApplicationSession(props: Props) {
     const value = pending.current; if (!value || writeLock.current || denied || storageFailed) return;
     const { current, api } = begin(); clearView();
     try {
-      const result = await api.request(value.promptId, value.requestId); if (!current()) return;
+      const expected = value.action === "prepare" ? null : { action: value.action, applicationId: value.applicationId!, agentId: value.agentId, expectedGeneration: value.expectedGeneration };
+      const result = expected ? await api.request(value.promptId, value.requestId, expected) : await api.request(value.promptId, value.requestId); if (!current()) return;
       setEnabled(result.enabled);
+      if (result.closure) {
+        if (!expected || result.application || result.receipt) throw Error("application_closure_binding_invalid");
+        verifyApplicationClosure(result.closure, { ...expected, requestId: value.requestId });
+        clearApplicationJournal(value); adopt(null); clearView(); setNotice("notAppliedClosed"); return;
+      }
       if (!result.application && !result.receipt) { setNotice("unresolved"); return; }
       resolve(value, result.application, result.receipt);
     } catch (error) { if (current()) { if (error instanceof ApiError && [401, 403].includes(error.status)) reject(error); else setNotice("unknown"); } }
@@ -197,7 +203,8 @@ function ApplicationSession(props: Props) {
       {nextPage && <Button variant="outline" disabled={locked} onClick={() => void refresh(true)}>{label("more")}</Button>}
       {row && <div className="space-y-2">
         <h3 className="font-medium">{label("review")}</h3>
-        <dl className="font-mono break-all">{[["applicationId", row.id], ["agentId", row.agentId], ["revisionId", row.revisionId], ["revisionHash", row.revisionHash], ["reportHash", row.reportHash], ["approvalDigest", row.approvalDigest], ["targetDigest", row.snapshot.targetDigest], ["implementationDigest", row.snapshot.implementationDigest], ["environmentId", row.snapshot.environmentId], ["slot", row.snapshot.slot], ["model", row.snapshot.model], ["approvalExpiresAt", row.approvalExpiresAt], ["generation", formatNumber(row.expectedGeneration)]].map(([key, value]) => <div key={key}><dt>{label(key!)}</dt><dd>{value}</dd></div>)}</dl>
+        <dl className="font-mono break-all">{[["applicationId", row.id], ["agentId", row.agentId], ["revisionId", row.revisionId], ["revisionHash", row.revisionHash], ["reportHash", row.reportHash], ["retryDataset", row.comparison.datasetId], ["baselineRevisionId", row.comparison.baselineRevisionId], ["testCount", formatNumber(row.comparison.testIds.length)], ["approvalDigest", row.approvalDigest], ["targetDigest", row.snapshot.targetDigest], ["implementationDigest", row.snapshot.implementationDigest], ["environmentId", row.snapshot.environmentId], ["slot", row.snapshot.slot], ["model", row.snapshot.model], ["approvalExpiresAt", row.approvalExpiresAt], ["generation", formatNumber(row.expectedGeneration)]].map(([key, value]) => <div key={key}><dt>{label(key!)}</dt><dd>{value}</dd></div>)}</dl>
+        <dl className="font-mono break-all"><dt>{label("credentialVersions")}</dt>{row.snapshot.credentials.map(credential => <dd key={`${credential.secretId}:${credential.version}`}>{credential.secretId} / {formatNumber(credential.version)}</dd>)}</dl>
         <p>{label("expiryBoundary")}</p><p>{label("contextBoundary")}</p>
         {!head && <Button variant="outline" disabled={locked} onClick={() => void inspectTarget(row.agentId, row)}>{label("inspectTarget")}</Button>}
         <fieldset disabled={journal?.action === "approve" ? busy || storageFailed || !retryReviewed : locked || !canApprove} className="space-y-2">{checksKeys.map((key, index) => <label key={key} className="flex items-start gap-2"><input aria-label={label(key)} type="checkbox" checked={checks[index]} onChange={event => setChecks(old => old.map((value, position) => position === index ? event.target.checked : value))} /><span>{label(key)}</span></label>)}{!journal && <Button disabled={!checks.every(Boolean)} onClick={() => void mutate("approve")}>{label("approve")}</Button>}</fieldset>

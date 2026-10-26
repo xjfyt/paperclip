@@ -43,9 +43,9 @@ it.each([{ requestId: id(99) }, { applicationId: id(99) }, { action: "rollback" 
   await expect(make().approve(id(7), id(20), { requestId: id(25), expectedGeneration: 0, approvalDigest: "f".repeat(64), confirmOrdinaryVisibility: true, confirmBareComparisonNotToolQuality: true, confirmNewTasksOnly: true, confirmNoAutomaticRun: true })).rejects.toThrow();
 });
 it("recovers only the same request by GET; empty result is not a mutation", async () => {
-  const fetcher = reply({ enabled: true, application: null, receipt: null }); expect(await make().request(id(7), id(25))).toEqual({ enabled: true, application: null, receipt: null });
+  const fetcher = reply({ enabled: true, application: null, receipt: null, closure: null }); expect(await make().request(id(7), id(25))).toEqual({ enabled: true, application: null, receipt: null, closure: null });
   expect((fetcher.mock.calls as unknown as Array<[string, RequestInit]>)[0]).toMatchObject([`/api/companies/${id(1)}/prompt-registry/${id(7)}/applications/requests/${id(25)}`, { method: "GET" }]);
-  reply({ enabled: true, application: null, receipt: receipt({ requestId: id(99) }) }); await expect(make().request(id(7), id(25))).rejects.toThrow();
+  reply({ enabled: true, application: null, receipt: receipt({ requestId: id(99) }), closure: null }); await expect(make().request(id(7), id(25))).rejects.toThrow();
 });
 it("retains distinct configuration and actual dispatch evidence with pagination", async () => {
   reply({ items: [dispatch()], nextBeforeId: id(26) }); expect((await make().dispatches(id(7), id(20), id(29))).items[0].providerConsumed).toBe(false);
@@ -60,5 +60,16 @@ it("keeps configured bindings valid after the approval deadline", () => {
 it("allows company metadata inspection for rollback, but binds prepare/recovery to the current actor", async () => {
   reply({ enabled: true, items: [record({ actorUserId: "other-admin" })], nextBeforeId: null }); expect((await make().list(id(7))).items[0].actorUserId).toBe("other-admin");
   reply({ enabled: true, item: record({ actorUserId: "other-admin" }) }); expect((await make().detail(id(7), id(20))).item.id).toBe(id(20));
-  reply({ enabled: true, application: record({ actorUserId: "other-admin" }), receipt: null }); await expect(make().request(id(7), id(21))).rejects.toThrow();
+  reply({ enabled: true, application: record({ actorUserId: "other-admin" }), receipt: null, closure: null }); await expect(make().request(id(7), id(21))).rejects.toThrow();
+});
+it("queries an uncertain mutation with the frozen target and only accepts a matching locked closure", async () => {
+  const expected = { applicationId: id(20), agentId: id(9), action: "approve" as const, expectedGeneration: 0 };
+  const closure = { ...expected, outcome: "not_applied_closed", requestId: id(25), currentGeneration: 1, reason: "generation_advanced" };
+  const fetcher = reply({ enabled: true, application: null, receipt: null, closure }); expect((await make().request(id(7), id(25), expected)).closure).toEqual(closure);
+  expect((fetcher.mock.calls as unknown as Array<[string, RequestInit]>)[0][0]).toContain(`applicationId=${id(20)}&action=approve&expectedGeneration=0`);
+  for (const patch of [{ requestId: id(99) }, { agentId: id(99) }, { applicationId: id(99) }, { expectedGeneration: 1 }, { currentGeneration: 0 }, { action: "rollback" }, { outcome: "pending" }]) {
+    reply({ enabled: true, application: null, receipt: null, closure: { ...closure, ...patch } }); await expect(make().request(id(7), id(25), expected)).rejects.toThrow();
+  }
+  reply({ enabled: true, application: null, receipt: receipt(), closure }); await expect(make().request(id(7), id(25), expected)).rejects.toThrow();
+  reply({ enabled: true, application: null, receipt: null, closure: { ...closure, currentGeneration: 0, reason: "approval_expired" } }); expect((await make().request(id(7), id(25), expected)).closure?.reason).toBe("approval_expired");
 });

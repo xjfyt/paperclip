@@ -51,7 +51,7 @@ it("disabled-by-default and absent evidence cannot prepare a proposal", async ()
 });
 it("prepares one explicitly selected agent and gates approval on four fresh checks", async () => {
   await prepared(); expect(calls.prepare).toHaveBeenCalledTimes(1); expect(calls.prepare.mock.calls[0][1]).toMatchObject({ agentId: id(9), expectedGeneration: 0, comparison: evidence.comparison, approvalValidForMinutes: 60 });
-  for (const key of ["revisionHash", "reportHash", "targetDigest", "implementationDigest", "expiryBoundary", "contextBoundary"]) expect(host.textContent).toContain(label(key));
+  for (const key of ["revisionHash", "reportHash", "targetDigest", "implementationDigest", "expiryBoundary", "contextBoundary", "credentialVersions", "baselineRevisionId", "testCount"]) expect(host.textContent).toContain(label(key));
   expect(button("approve").matches(":disabled")).toBe(true); expect(host.querySelectorAll('input[type="checkbox"]')).toHaveLength(4);
   await checkAll(); await click("approve"); expect(calls.approve).toHaveBeenCalledExactlyOnceWith(id(7), id(20), expect.objectContaining({ expectedGeneration: 0, approvalDigest: "f".repeat(64), confirmOrdinaryVisibility: true, confirmBareComparisonNotToolQuality: true, confirmNewTasksOnly: true, confirmNoAutomaticRun: true }));
   expect(host.textContent).toContain(label("configuredReceipt")); expect(calls.dispatches).not.toHaveBeenCalled(); expect(readApplicationJournal(id(1), "user")).toBeNull();
@@ -73,7 +73,7 @@ it("unknown writes persist only metadata and recover by same-ID GET without repl
 it("after remount, an uncertain approval can only be queried and never inherits checked confirmation", async () => {
   calls.approve.mockRejectedValueOnce(Error("lost")); await prepared(); await checkAll(); await click("approve"); const saved = readApplicationJournal(id(1), "user")!;
   await mount({ sessionId: "next-session" }); expect(host.querySelectorAll('input[type="checkbox"]:checked')).toHaveLength(0);
-  calls.request.mockResolvedValueOnce({ enabled: true, application: null, receipt: receipt({ requestId: saved.requestId }) }); await click("recover"); expect(calls.request).toHaveBeenCalledWith(id(7), saved.requestId);
+  calls.request.mockResolvedValueOnce({ enabled: true, application: null, receipt: receipt({ requestId: saved.requestId }) }); await click("recover"); expect(calls.request).toHaveBeenCalledWith(id(7), saved.requestId, { action: "approve", applicationId: id(20), agentId: id(9), expectedGeneration: 0 });
   expect(calls.approve).toHaveBeenCalledTimes(1); expect(host.textContent).toContain(label("configuredReceipt")); expect(readApplicationJournal(id(1), "user")).toBeNull();
 });
 it.each(["companyId", "userId", "sessionId", "promptId"])("%s transition clears private state and discards a late write response", async key => {
@@ -137,4 +137,11 @@ it("only metadata-only preparation can be abandoned locally, without cancelling 
   calls.prepare.mockRejectedValueOnce(Error("lost")); await mount(); await ready(); await click("prepare");
   expect(host.textContent).toContain(label("abandonPrepareBoundary")); await click("abandonPrepare"); expect(readApplicationJournal(id(1), "user")).toBeNull();
   expect(host.textContent).toContain(label("abandonedPrepare")); expect(calls.approve).not.toHaveBeenCalled(); expect(calls.rollback).not.toHaveBeenCalled(); expect(calls.prepare).toHaveBeenCalledTimes(1);
+});
+it("only a matching server closure releases an uncertain approval; an ordinary retry conflict never does", async () => {
+  calls.approve.mockRejectedValueOnce(Error("lost")).mockRejectedValueOnce(new ApiError("expired", 409, null)); await prepared(); await checkAll(); await click("approve");
+  const saved = readApplicationJournal(id(1), "user")!; await click("reviewRetry"); await checkAll(); await click("retrySameRequest"); expect(readApplicationJournal(id(1), "user")).not.toBeNull();
+  const closure = { outcome: "not_applied_closed", requestId: saved.requestId, action: "approve", applicationId: id(20), agentId: id(9), expectedGeneration: 0, currentGeneration: 0, reason: "approval_expired" };
+  calls.request.mockResolvedValueOnce({ enabled: true, application: null, receipt: null, closure: { ...closure, agentId: id(99) } }); await click("recover"); expect(readApplicationJournal(id(1), "user")).not.toBeNull();
+  calls.request.mockResolvedValueOnce({ enabled: true, application: null, receipt: null, closure }); await click("recover"); expect(readApplicationJournal(id(1), "user")).toBeNull(); expect(host.textContent).toContain(label("notAppliedClosed")); expect(calls.approve).toHaveBeenCalledTimes(2);
 });
