@@ -1,0 +1,21 @@
+{
+  "invalidHandoff": "Paperclip Cloud devolvió una transferencia de inicio de sesión no válida.",
+  "expired": "Este inicio de sesión caducó. Inicia la conexión de nuevo.",
+  "forbidden": "Paperclip Cloud no pudo autorizar esta conexión para tu cuenta.",
+  "unavailable": "Paperclip Cloud no pudo preparar el inicio de sesión seguro. Vuelve a intentarlo.",
+  "invalidProviderAddress": "Paperclip Cloud devolvió una dirección de inicio de sesión del proveedor no válida.",
+  "urlMissing": "Este servidor no proporcionó una dirección de inicio de sesión.",
+  "urlMalformed": "La dirección de inicio de sesión de este servidor no es una URL válida, por lo que Paperclip se detuvo.",
+  "urlScheme": "La dirección de inicio de sesión de este servidor no usa https, por lo que Paperclip se detuvo.",
+  "urlInsecure": "La dirección de inicio de sesión de este servidor no es segura (https), por lo que Paperclip se detuvo.",
+  "urlCredentials": "La dirección de inicio de sesión de este servidor oculta otro sitio detrás de un nombre de usuario, por lo que Paperclip se detuvo.",
+  "urlFragment": "La dirección de inicio de sesión de este servidor tiene un formato incorrecto, por lo que Paperclip se detuvo.",
+  "cannotContinue": "No se pudo continuar el inicio de sesión",
+  "prepareFailed": "Paperclip no pudo preparar el inicio de sesión del proveedor. Vuelve a intentarlo.",
+  "refreshing": "Se está actualizando tu inicio de sesión en Paperclip.",
+  "opening": "Paperclip está abriendo el proveedor de forma segura.",
+  "returnToPaperclip": "Volver a Paperclip",
+  "returnExpired": "Este inicio de sesión caducó. Vuelve a Paperclip e inicia la conexión de nuevo.",
+  "refreshFailed": "Paperclip no pudo actualizar este inicio de sesión. Vuelve a intentarlo para continuar.",
+  "securePrepareFailed": "Paperclip no pudo preparar el inicio de sesión seguro."
+}

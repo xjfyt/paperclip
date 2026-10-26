@@ -1,0 +1,21 @@
+{
+  "invalidHandoff": "Paperclip Cloud 返回了无效的登录交接信息。",
+  "expired": "此次登录已过期。请重新开始连接。",
+  "forbidden": "Paperclip Cloud 无法为你的账户授权此连接。",
+  "unavailable": "Paperclip Cloud 无法准备安全登录。请重试。",
+  "invalidProviderAddress": "Paperclip Cloud 返回了无效的供应商登录地址。",
+  "urlMissing": "此服务器未提供登录地址。",
+  "urlMalformed": "此服务器的登录地址不是有效 URL，Paperclip 已停止操作。",
+  "urlScheme": "此服务器的登录地址未使用 https，Paperclip 已停止操作。",
+  "urlInsecure": "此服务器的登录地址不安全（未使用 https），Paperclip 已停止操作。",
+  "urlCredentials": "此服务器的登录地址在用户名后隐藏了其他网站，Paperclip 已停止操作。",
+  "urlFragment": "此服务器的登录地址格式不适用于登录，Paperclip 已停止操作。",
+  "cannotContinue": "无法继续登录",
+  "prepareFailed": "Paperclip 无法准备供应商登录。请重试。",
+  "refreshing": "正在刷新你的 Paperclip 登录。",
+  "opening": "Paperclip 正在安全地打开供应商页面。",
+  "returnToPaperclip": "返回 Paperclip",
+  "returnExpired": "此次登录已过期。请返回 Paperclip 并重新开始连接。",
+  "refreshFailed": "Paperclip 无法刷新此次登录。请重试以继续。",
+  "securePrepareFailed": "Paperclip 无法准备安全登录。"
+}

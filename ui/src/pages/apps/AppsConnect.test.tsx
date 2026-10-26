@@ -2424,6 +2424,25 @@ describe("AppsConnect — Connect with a link (M4 frame)", () => {
     expect(finishAppMock).not.toHaveBeenCalled();
   });
 
+  it("retranslates a standard OAuth URL refusal without restarting or leaking the refused URL", async () => {
+    mockSearch.value = "source=notion";
+    listGalleryMock.mockResolvedValue({ apps: [NOTION] });
+    connectAppMock.mockResolvedValue({ connectionId: "conn-notion", application: { id: "app-notion", name: "Notion" }, connection: { id: "conn-notion", credentialPolicy: "per_user" }, actions: { readOnly: [], canMakeChanges: [] }, catalog: [], suggestedDefaults: {}, auth: { kind: "oauth", startUrl: "javascript:private_payload" } });
+    await render(); await passAccessStep(); await flushReact();
+    const calls = () => JSON.stringify([connectAppMock.mock.calls, startOAuthMock.mock.calls, finishAppMock.mock.calls, putConnectionInstallsMock.mock.calls]);
+    const before = calls();
+    for (const locale of ["ja", "zh-CN", "es", "en"]) {
+      await act(async () => { await i18n.changeLanguage(locale); });
+      expect(container.textContent).toContain(i18n.t("connectionHandoffUi.urlScheme"));
+      expect(container.textContent).not.toContain("private_payload");
+      expect(calls()).toBe(before);
+      expect(navigateTopLevelMock).not.toHaveBeenCalled();
+    }
+    expect(connectAppMock).toHaveBeenCalledOnce();
+    expect(startOAuthMock).not.toHaveBeenCalled();
+    expect(finishAppMock).not.toHaveBeenCalled();
+  });
+
   it("keeps the same OAuth polling registration across language changes and completes only after saved-state verification", async () => {
     listGalleryMock.mockResolvedValue({ apps: [NOTION] });
     connectAppMock.mockResolvedValue({ connectionId: "conn-notion", application: { id: "app-notion", name: "Notion" }, connection: { id: "conn-notion", credentialPolicy: "per_user" }, actions: { readOnly: [], canMakeChanges: [] }, catalog: [], suggestedDefaults: {}, auth: { kind: "oauth" } });

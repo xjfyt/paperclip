@@ -178,11 +178,32 @@ NODE_OPTIONS=--max-old-space-size=512 node ../node_modules/vitest/vitest.mjs run
 
 - 手测追加：使用测试账户分别从页面、任务弹窗及独立弹窗打开标准 OAuth 连接；在等待、弹窗被阻止/关闭、取消/失败回调、恢复已保存 draft 时切四语。核对正在授权的 host 和 URL 不变、未经验证警告可读、草稿身份/范围保留、不重复打开窗口或启动授权/完成。显式点击重试或新标签页后应仍沿用原连接；真正成功必须以已保存连接验证为准。再测试窄屏、长名称、键盘取消/返回及屏幕阅读器；真实供应商授权、跨窗口消息和计时仍待用户验收。
 
+## 第九片：OAuth handoff 工具描述符与最小真实宿主（2026-10-26）
+
+- `authorizationUrl.ts` 仅给共享 validator 的六类本地拒绝附加显示 key，原有英文 `message` 保留；没有改动 HTTPS、loopback、同源、用户名/密码、fragment 或协议判断，也不回显拒绝的 URL。
+- `OAuthHandoffError` 保留名称、错误码和 `Error.message`，只有明确本地构造点附加可选翻译 key。`invalid_handoff` 与 `unavailable` 均非唯一文案来源，禁止按错误码/英文文本猜测翻译；真实网络 `lastError.message`、存储异常和 AbortError 原样，现有同 session 重试/清理规则不变。
+- 独立 `connectionHandoffUi` 四语贡献；接线仅标准 OAuth catch 与真实 `/oauth-handoff` 页面。页面错误保存描述符、render 翻译，`resume`/effect 依赖未新增翻译函数。未知外部诊断保持文本，不重新请求来“更新语言”。没有扩展 `ToastContext`；其它 handoff 宿主仍可使用兼容英文 message，不能声称所有宿主已消费描述符。
+- 回归覆盖六类 URL 拒绝及不泄露输入、401/403/404/500 分支、同 opaque session 的既有请求次数、原始网络诊断/Abort；实际 handoff 页面在已显示错误后切四语，sessionStorage 和请求记录不变、不导航。实际 AppsConnect 遇到无效协议授权地址后切语言，也不重新 connect/startOAuth/finish、不泄露拒绝 URL。
+- 最终专注回归 **7 文件 / 276 用例通过**；独立审阅、资源/合成器安全规则、token gates、调色板/角色同步与 diff 检查通过。真实授权、浏览器导航/存储策略及网络故障仍待手测。本片未执行完整类型检查/构建、数据库或真实网络。
+- 复现命令（`ui/`，512 MB、单 worker，纯测试/mock）：
+
+```sh
+NODE_OPTIONS=--max-old-space-size=512 node ../node_modules/vitest/vitest.mjs run \
+  src/i18n/connection-handoff-surfaces.test.tsx \
+  src/lib/oauthHandoff.test.ts src/lib/authorizationUrl.test.ts \
+  src/pages/apps/PaperclipCloudOAuthHandoff.test.tsx \
+  src/pages/apps/AppsConnect.test.tsx \
+  src/i18n/connection-oauth-surfaces.test.tsx \
+  src/features/connections/ConnectionSetupFlow.architecture.test.ts --maxWorkers=1
+```
+
+- 手测追加：在测试环境触发 handoff 过期、无权限、暂时不可用、无效供应商地址与重复近期登录恢复，切四语检查语义和返回/重试按钮；切语言不应重新交换 session、清草稿或导航。主动重试沿用既有流程。原始网络诊断不承诺翻译；拒绝 URL 的提示不得泄露 URL 内凭据。
+
 ## 已知剩余范围（不是本片已完成项）
 
 - 真实登录、剪贴板权限及浏览器布局尚未四语验收。系统提示已抽取不代表外部交互已通过。
 - `AdapterLoginPanel` 与 `useLocalAiLogin` 本片指定显示层已补；`environmentDisplayLabel` 仅拼用户环境名和原始 driver 标识，保留为用户内容/技术值。此前确认的三个共享权限摘要/选择组件已由第六片补齐，三行摘要和完成页由第七片补齐；`ConnectionSetupFlow` 标准 OAuth 状态屏和自身本地错误缓存由第八片补齐，但其它分支（如校验/错误缓存、密钥表单）以及远程 MCP 独立 controller 的其它认证/管理/错误文案仍未包含，不能据此声称整个连接流程四语完成。所有切片均未更改权限判定或真实授权语义。
-- `oauthHandoff.ts` / `authorizationUrl.ts` 工具的本地异常尚未增加明确翻译描述符；它们部分路径混合外部网络原始诊断，本片不按 Error.message 或宽泛错误码猜测翻译。工具既有安全测试通过不等于其本地提示已四语覆盖。
+- 第九片已给 `oauthHandoff.ts` / `authorizationUrl.ts` 明确本地异常增加描述符并接通最小宿主；`ConnectionSetupFlow.openConnectorEnrollment` 仍使用 `target.message`，`RemoteMcpProductionSetup` 仍以 `new Error(target.message)` 包装；PasteConfigTab、AppDetail/AdvancedPanel toast 等其它宿主也未消费全部描述符。现有 toast 只保存字符串，不能承诺已显示 toast 随语言更新；本片不扩展共享 toast。真实网络原始诊断不按错误码猜测翻译。
 - 第四片审计发现的 `OnboardingWizard` 本机 connect 错误宿主已由第五片接通；向导的其他硬编码校验/错误及尚未审计的系统文案，不在本次 Agent 创建切片完成结论内。
 - 服务端/适配器 `Error.message`、运行检查结果以及用户/组织/环境名称保持原始内容，不能以纯英文扫描结果判定它们都应翻译。
 - 基线 `6bee5bc` 的 `optionalOnboarding.configureAgent` 三语使用“智能体/agente/エージェント”；本片创建按钮使用独立 Agent 术语键，不覆盖其他域片段。并行 core 切片已修中文 Agent 术语，其他语种与最终集成状态以合并后的资源为准。

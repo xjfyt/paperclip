@@ -56,6 +56,7 @@ describe("resolveAuthorizationTarget", () => {
     expect(resolveAuthorizationTarget("http://127.0.0.1:8930/authorize")).toEqual({
       ok: false,
       message: expect.stringContaining("secure"),
+      translationKey: "connectionHandoffUi.urlInsecure",
     });
     expect(resolveAuthorizationTarget("https://auth.example.test/authorize").ok).toBe(true);
   });

@@ -1,0 +1,21 @@
+{
+  "invalidHandoff": "Paperclip Cloud が無効なサインイン引き継ぎ情報を返しました。",
+  "expired": "このサインインは期限切れです。接続を最初からやり直してください。",
+  "forbidden": "Paperclip Cloud はあなたのアカウントでこの接続を承認できませんでした。",
+  "unavailable": "Paperclip Cloud は安全なサインインを準備できませんでした。もう一度お試しください。",
+  "invalidProviderAddress": "Paperclip Cloud が無効なプロバイダーのサインインアドレスを返しました。",
+  "urlMissing": "このサーバーはサインインアドレスを提供しませんでした。",
+  "urlMalformed": "このサーバーのサインインアドレスは有効な URL ではないため、Paperclip は処理を停止しました。",
+  "urlScheme": "このサーバーのサインインアドレスは https を使用していないため、Paperclip は処理を停止しました。",
+  "urlInsecure": "このサーバーのサインインアドレスは安全ではない（https ではない）ため、Paperclip は処理を停止しました。",
+  "urlCredentials": "このサーバーのサインインアドレスはユーザー名の後ろに別のサイトを隠しているため、Paperclip は処理を停止しました。",
+  "urlFragment": "このサーバーのサインインアドレスはサインインに適さない形式のため、Paperclip は処理を停止しました。",
+  "cannotContinue": "サインインを続行できませんでした",
+  "prepareFailed": "Paperclip はプロバイダーへのサインインを準備できませんでした。もう一度お試しください。",
+  "refreshing": "Paperclip のサインインを更新しています。",
+  "opening": "Paperclip がプロバイダーを安全に開いています。",
+  "returnToPaperclip": "Paperclip に戻る",
+  "returnExpired": "このサインインは期限切れです。Paperclip に戻り、接続を最初からやり直してください。",
+  "refreshFailed": "Paperclip はこのサインインを更新できませんでした。もう一度試して続けてください。",
+  "securePrepareFailed": "Paperclip は安全なサインインを準備できませんでした。"
+}

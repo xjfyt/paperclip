@@ -1,3 +1,4 @@
+import "./connection-handoff-test-resources";
 import "./connection-oauth-test-resources";
 import "./connection-completion-test-resources";
 import "./connection-access-test-resources";

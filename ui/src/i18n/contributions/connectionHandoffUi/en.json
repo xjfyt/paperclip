@@ -1,0 +1,21 @@
+{
+  "invalidHandoff": "Paperclip Cloud returned an invalid sign-in handoff.",
+  "expired": "This sign-in expired. Start the connection again.",
+  "forbidden": "Paperclip Cloud could not authorize this connection for your account.",
+  "unavailable": "Paperclip Cloud couldn’t prepare secure sign-in. Try again.",
+  "invalidProviderAddress": "Paperclip Cloud returned an invalid provider sign-in address.",
+  "urlMissing": "This server did not provide a sign-in address.",
+  "urlMalformed": "This server's sign-in address is not a valid URL, so Paperclip stopped.",
+  "urlScheme": "This server's sign-in address does not use https, so Paperclip stopped.",
+  "urlInsecure": "This server's sign-in address is not secure (https), so Paperclip stopped.",
+  "urlCredentials": "This server's sign-in address hides a different site behind a username, so Paperclip stopped.",
+  "urlFragment": "This server's sign-in address is malformed for sign-in, so Paperclip stopped.",
+  "cannotContinue": "Sign-in couldn’t continue",
+  "prepareFailed": "Paperclip couldn’t prepare the provider sign-in. Try again.",
+  "refreshing": "Your Paperclip sign-in is being refreshed.",
+  "opening": "Paperclip is opening the provider securely.",
+  "returnToPaperclip": "Return to Paperclip",
+  "returnExpired": "This sign-in expired. Return to Paperclip and start the connection again.",
+  "refreshFailed": "Paperclip couldn’t refresh this sign-in. Try again to continue.",
+  "securePrepareFailed": "Paperclip couldn’t prepare secure sign-in."
+}
