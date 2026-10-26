@@ -20,6 +20,9 @@ async function fixture(request: APIRequestContext) {
 test("human confirmation creates one private quarantined backlog task atomically without dispatch", async ({ request }) => {
   const f = await fixture(request); try {
     const [a, b] = await Promise.all([f.service.promote(f.companyId, f.source.id, f.actor, f.input), f.service.promote(f.companyId, f.source.id, f.actor, f.input)]);
+    expect(await f.service.status(f.companyId, f.source.id, f.actor)).toEqual({ recorded: true, receipt: a });
+    expect(await f.service.status(f.companyId, f.source.id, "different-reviewer")).toEqual({ recorded: true, receipt: null });
+    await expect(f.service.status(randomUUID(), f.source.id, f.actor)).rejects.toThrow("not found");
     expect(a).toEqual(b); expect(a).toMatchObject({ feedbackId: f.source.id, actorUserId: f.actor, initialStatus: "backlog", initialVisibility: "private", agentDispatched: false });
     const [issue] = await f.db.select().from(issues).where(eq(issues.id, a.issueId));
     expect(issue).toMatchObject({ companyId: f.companyId, status: "backlog", visibility: "private", responsibleUserId: f.actor, assigneeAgentId: null, assigneeUserId: null,

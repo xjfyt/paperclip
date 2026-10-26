@@ -24,6 +24,11 @@ export function mimouseFeedbackRoutes(db: Db) {
     const companyId = admin(req), result = await service.import(companyId, feedbackImportSchema.parse(req.body), getActorInfo(req).actorId);
     res.status(result.duplicate ? 200 : 201).json(result);
   });
+  router.get(`${path}/:id/promotion`, async (req, res) => {
+    const companyId = admin(req);
+    if (req.actor.type !== "board" || req.actor.source !== "session" || !req.actor.userId) throw forbidden("A signed-in human must inspect confirmation state");
+    res.json(await feedbackPromotionService(db).status(companyId, id(req), req.actor.userId));
+  });
   router.post(`${path}/:id/promote`, validate(feedbackPromotionSchema), async (req, res) => {
     const companyId = admin(req);
     if (req.actor.type !== "board" || req.actor.source !== "session" || !req.actor.userId) throw forbidden("A signed-in human must confirm task creation");

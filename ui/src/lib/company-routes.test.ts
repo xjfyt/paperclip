@@ -154,3 +154,10 @@ describe("company routes", () => {
     expect(applyCompanyPrefix("/PAP/artifacts", "PAP")).toBe("/PAP/artifacts");
   });
 });
+
+it("keeps the feedback inbox in the selected company shell and preserves deep-link suffixes", () => {
+  expect(isBoardPathWithoutPrefix("/feedback-inbox")).toBe(true);
+  expect(extractCompanyPrefixFromPath("/feedback-inbox")).toBeNull();
+  expect(applyCompanyPrefix("/feedback-inbox?view=recent#review", "OID")).toBe("/OID/feedback-inbox?view=recent#review");
+  expect(toCompanyRelativePath("/OID/feedback-inbox")).toBe("/feedback-inbox");
+});

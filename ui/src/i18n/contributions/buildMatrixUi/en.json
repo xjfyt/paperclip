@@ -1,0 +1,17 @@
+{
+  "title": "Build evidence matrix",
+  "boundary": "Six targets are tracked separately. Local hashes and declared job names do not prove a Runner build, test, signature or upload.",
+  "blocked": "Blocked: evidence missing",
+  "unavailable": "No matching matrix snapshot is available. Refresh the delivery.",
+  "none": "No local artifact recorded",
+  "hashed": "Local bytes hashed; target is only declared",
+  "declaredJob": "Declared job: {{job}}",
+  "size": "{{amount}} bytes",
+  "upload": "Upload blocked: internal upload contract is not configured.",
+  "codeGate": "Code-review and CI snapshot only; build/upload readiness is separate.",
+  "manifest_missing": "Artifact manifest missing",
+  "manifest_invalid": "Artifact manifest is invalid or unsupported",
+  "manifest_identity_mismatch": "Manifest project or commit does not match",
+  "artifact_missing": "No artifact for this target",
+  "runner_evidence_missing": "Verified Runner receipt missing"
+}

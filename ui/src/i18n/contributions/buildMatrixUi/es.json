@@ -1,0 +1,17 @@
+{
+  "title": "Matriz de evidencias de compilación",
+  "boundary": "Los seis destinos se registran por separado. Los hashes locales y nombres de trabajos declarados no prueban compilación, pruebas, firma ni carga mediante Runner.",
+  "blocked": "Bloqueado: faltan evidencias",
+  "unavailable": "No hay una instantánea coincidente. Actualiza la entrega.",
+  "none": "Sin artefacto local registrado",
+  "hashed": "Bytes locales verificados por hash; destino solo declarado",
+  "declaredJob": "Trabajo declarado: {{job}}",
+  "size": "{{amount}} bytes",
+  "upload": "Carga bloqueada: falta el contrato del servicio interno de carga.",
+  "codeGate": "Solo instantánea de revisión de código y CI; compilación y carga se verifican aparte.",
+  "manifest_missing": "Falta el manifiesto de artefactos",
+  "manifest_invalid": "Manifiesto no válido o no compatible",
+  "manifest_identity_mismatch": "No coincide el proyecto o commit del manifiesto",
+  "artifact_missing": "Sin artefacto para este destino",
+  "runner_evidence_missing": "Falta el comprobante verificado del Runner"
+}

@@ -1,0 +1,17 @@
+{
+  "title": "构建证据矩阵",
+  "boundary": "六个目标分别跟踪。本地哈希和声明的任务名称不证明 Runner 构建、测试、签名或上传已完成。",
+  "blocked": "受阻：缺少证据",
+  "unavailable": "暂无匹配的矩阵快照，请刷新交付记录。",
+  "none": "未记录本地产物",
+  "hashed": "本地字节已计算哈希；目标平台仅为声明",
+  "declaredJob": "声明的构建任务：{{job}}",
+  "size": "{{amount}} 字节",
+  "upload": "上传受阻：尚未配置内部上传服务合同。",
+  "codeGate": "此处仅表示代码审阅与 CI 快照；构建及上传就绪情况另行核验。",
+  "manifest_missing": "缺少产物清单",
+  "manifest_invalid": "产物清单无效或版本不受支持",
+  "manifest_identity_mismatch": "清单项目或提交不匹配",
+  "artifact_missing": "该目标没有产物",
+  "runner_evidence_missing": "缺少已验证的 Runner 回执"
+}

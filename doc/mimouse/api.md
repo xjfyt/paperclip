@@ -82,3 +82,5 @@ POST `/api/companies/:companyId/feedback-inbox/:id/promote` 使用feedbackPromot
 同一requestId相同确认返回原始回执；修改确认内容、改反馈/操作者或换requestId重复转同一反馈均409。数据库复合外键保持反馈/任务公司一致，任务创建和确认记录同事务。固定生成确认者负责的private/backlog任务，无Agent/用户指派；sourceTrust保持low_trust_review/quarantined，不因为人审建待办就授予执行权限。复现、预期、建议和验收标准再次脱敏；原导入内容放在不会被其反引号打断的文本围栏内。
 
 回执记录initialStatus/initialVisibility及agentDispatched:false，是创建时的历史事实，不代替当前任务状态。当前不自动回复客户、派发Agent或直接修改代码。确认记录不可覆盖，引用任务的永久删除按上游引用冲突逻辑拒绝，可按现有任务流程归档；公司级永久清理需后续明确的保留/删除策略，不能删除确认记录后自动重建任务。
+
+GET `/:id/promotion`：真实浏览器管理员读取确认状态，返回recorded及自己的receipt；已由其他人确认只返回recorded:true/receipt:null，不泄露他人的私有任务回执。界面刷新只GET，不重放POST；未知提交沿用冻结的requestId及原始确认内容重试。切换组织/用户/反馈后旧请求回执不会覆盖新页面。

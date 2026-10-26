@@ -180,6 +180,7 @@ export function Sidebar({ children }: { children?: ReactNode }) {
           <SidebarNavItem to="/integrations/workbuddy" label="WorkBuddy" icon={Unplug} />
           <SidebarNavItem to="/coding" label={t("coding.title")} icon={GitBranch} />
           <SidebarNavItem to="/notifications" label={t("notifications.title")} icon={Inbox} />
+          <SidebarNavItem to="/feedback-inbox" label={t("feedbackUi.pageTitle")} icon={Inbox} />
           <SidebarNavItem to="/search" label={t("navigation.search")} icon={Search} />
           <SidebarNavItem to="/dashboard" label={t("navigation.dashboard")} icon={LayoutDashboard} liveCount={liveRunCount} />
           {!combinedInboxTasks ? (

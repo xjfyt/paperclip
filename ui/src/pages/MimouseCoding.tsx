@@ -1,3 +1,5 @@
+import type { MimouseBuildMatrix as BuildMatrix } from "@paperclipai/shared";
+import { MimouseBuildMatrix } from "@/components/MimouseBuildMatrix";
 import { useEffect as usePageEffect } from "react";
 import { useBreadcrumbs } from "@/context/BreadcrumbContext";
 import { authApi } from "@/api/auth";
@@ -11,7 +13,7 @@ import { useTranslation } from "@/i18n";
 import { api } from "@/api/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-interface Delivery { id: string; issueId: string; headSha: string; operationState: string; mrIid: number | null; pipelineId: number | null; gate: { readyForReleaseCandidate: boolean; blockers: string[] } }
+interface Delivery { buildMatrix?: BuildMatrix; id: string; issueId: string; headSha: string; operationState: string; mrIid: number | null; pipelineId: number | null; gate: { readyForReleaseCandidate: boolean; blockers: string[] } }
 export function MimouseCoding() {
   const { t: pageT, i18n: pageI18n } = useTranslation();
   const { setBreadcrumbs } = useBreadcrumbs();
@@ -43,6 +45,8 @@ function CodingCompany({ companyId, userId }: { companyId: string; userId: strin
     {query.data?.deliveries.filter(row => !form.issueId || row.issueId === form.issueId).map(row => <section key={row.id} className="rounded-lg border border-border p-4 space-y-3">
       <p className="font-mono text-sm break-all">{row.headSha}</p><p>{t("coding.operationState")}: {row.operationState}</p>
       <MimouseCodingRepair key={`${row.id}:${row.headSha}`} companyId={companyId} userId={userId} issueId={row.issueId} deliveryId={row.id} headSha={row.headSha} />
+      <MimouseBuildMatrix matrix={row.buildMatrix} companyId={companyId} deliveryId={row.id} commitSha={row.headSha} />
+      <p className="text-xs text-muted-foreground">{t("buildMatrixUi.codeGate")}</p>
       <p>{row.gate.readyForReleaseCandidate ? t("coding.candidate") : t("coding.notReady")}</p>
       {row.gate.blockers.map(blocker => <p key={blocker} className="text-sm">{t(`coding.${blocker}`, { defaultValue: blocker })}</p>)}
       <div className="flex flex-wrap gap-2">

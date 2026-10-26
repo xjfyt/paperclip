@@ -75,3 +75,9 @@ it.each(["local_implicit", "board_key"] as const)("does not let %s promote feedb
   const response = await request(server).post(`/companies/${companyId}/feedback-inbox/33333333-3333-4333-8333-333333333333/promote`).send({ requestId: "44444444-4444-4444-8444-444444444444", confirm: true, title: "Reviewed feedback", reproduction: "Reproduce locally", expectedBehavior: "No crash", acceptanceCriteria: ["Regression passes"] });
   expect(response.status).toBe(403); expect(select).not.toHaveBeenCalled();
 });
+
+it("does not reveal a private confirmation receipt through a personal Board key", async () => {
+  const { server, select } = app({ type: "board", source: "board_key", userId: "owner", companyIds: [companyId], isInstanceAdmin: true });
+  expect((await request(server).get(`/companies/${companyId}/feedback-inbox/33333333-3333-4333-8333-333333333333/promotion`)).status).toBe(403);
+  expect(select).not.toHaveBeenCalled();
+});

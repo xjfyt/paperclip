@@ -18,6 +18,12 @@ export function feedbackEvidenceBlock(text: string) {
 export function feedbackPromotionService(db: Db) {
   const tasks = issueService(db);
   return {
+    async status(companyId: string, feedbackId: string, actorUserId: string) {
+      const [source] = await db.select({ id: inbox.id }).from(inbox).where(and(eq(inbox.companyId, companyId), eq(inbox.id, feedbackId)));
+      if (!source) throw notFound("Feedback candidate not found");
+      const [row] = await db.select().from(promotions).where(and(eq(promotions.companyId, companyId), eq(promotions.feedbackId, feedbackId)));
+      return { recorded: Boolean(row), receipt: row?.actorUserId === actorUserId ? receipt(row) : null };
+    },
     async promote(companyId: string, feedbackId: string, actorUserId: string, raw: FeedbackPromotionInput) {
       const input = feedbackPromotionSchema.parse(raw), requestDigest = createHash("sha256").update(JSON.stringify(input)).digest("hex");
       return db.transaction(async tx => {
