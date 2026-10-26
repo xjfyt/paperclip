@@ -27,3 +27,14 @@ NODE_OPTIONS=--max-old-space-size=512 node ../../node_modules/vitest/vitest.mjs 
 ```
 
 第一次命令误在server目录创建相对路径，已移回计划目录；未找到测试退出。下一次标准config因复用node_modules指向主树而找不到新shared文件，改用显式当前工作树shared alias的纯fixture config后通过。无安装、无服务/DB/网络。类型/构建、迁移、真实DB并发与浏览器留中央验证。
+
+## 人工凭据切片
+
+- 独立`appendNotificationEvidenceSchema`，现有adapter输入schema及其canonical hash原样保留。新增通知receipt的持久JSON类型并复用capability_evidence台账；旧adapter列表过滤通知receipt，返回全台账headRevision保持CAS正确。adapter写入口拒绝撤销通知receipt。
+- 四类声明：protocol_report（人工录入协议报告，不带真实投递字段）、live_connection、recipient_observation、approval_scenario。所有类别固定manual=true/machineVerified=false，不从fixture或accepted自动生成。
+- 非协议类必须明确confirmRealTarget且引用当前配置/epoch最新投递及最新人工核对，精确比较state/attempt。C4仅原始approval事件，拒绝manual.test或manual-retry冒充原始业务通知，并查询实际同公司approval资源。
+- 保存/撤销/替代使用company级CAS、actor+endpoint+规范化body幂等摘要；相同key重放先返回原回执，即使此后配置变更，原回执也只能以旧scope历史展示。不同actor/body/endpoint复用key冲突。审计与台账同事务。
+- supersede要求相同scope/category/runtimeVersion/environmentAlias/accountAlias/testedCommit；跨上下文应新建记录，不能移用旧证据。有效期沿现有能力台账，最多30天。暂停不撤销证据；最新失败/新投递/新核对会使旧声明不再显示为当前通过。
+- 协议报告的testedCommit/runtime是人工记录，不是从源码文件存在推断测试通过；UI必须明确它是人工报告，非CI自动认证。凭据真实远端过期若未反映到本地元数据，不能由零probe路径发现；metadata_active绝不宣称远端仍可用。
+
+检查：server/shared六文件83项（含旧adapter schema/服务）通过，旧adapter UI/API两文件7项通过；均512MB/单worker。shared原标准config因工作树复用依赖找不到zod曾失败，纯fixture config追加既有server zod别名后通过；未安装依赖。尚未执行真实SQL锁/触发器、API/浏览器、类型或构建。

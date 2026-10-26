@@ -5,7 +5,7 @@ export const capabilityEvidenceApi = {
   // Authentication can change while another observer retains the old GET.
   // Bypass path-only coalescing, not standard credentials/error handling.
   list: async (companyId: string, afterRevision = 0, signal?: AbortSignal) => readApiJson<{
-    events: CapabilityEvidenceEvent[]; nextRevision: number | null;
+    events: CapabilityEvidenceEvent[]; nextRevision: number | null; headRevision?: number;
   }>(await requestResponse(
     `/companies/${encodeURIComponent(companyId)}/capability-evidence?afterRevision=${afterRevision}`,
     { method: "GET", signal, cache: "no-store" },

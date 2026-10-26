@@ -1,6 +1,8 @@
 import { notificationPolicyUpdateSchema, updateNotificationPolicy } from "../services/mimouse-notifications/policy.js";
 import { notificationReconciliation } from "../services/mimouse-notifications/reconciliation.js";
 import { notificationConfiguration } from "../services/mimouse-notifications/configuration.js";
+import { notificationEvidence } from "../services/mimouse-notifications/evidence.js";
+import { appendNotificationEvidenceSchema } from "@paperclipai/shared/notification-evidence";
 import { notificationVerification } from "../services/mimouse-notifications/verification.js";
 import { renderTemplateData } from "../services/mimouse-notifications/render.js";
 import { Router, type Request } from "express";
@@ -29,6 +31,7 @@ export function mimouseNotificationRoutes(db: Db) {
   const configuration = notificationConfiguration(db);
   const reconciliation = notificationReconciliation(db);
   const verification = notificationVerification(db);
+  const evidence = notificationEvidence(db);
   const path = "/companies/:companyId/notifications";
   const loadEndpoint = async (companyId: string, id: string) => {
     const [endpoint] = await db.select().from(endpoints).where(and(eq(endpoints.id, id), eq(endpoints.companyId, companyId)));
@@ -41,13 +44,23 @@ export function mimouseNotificationRoutes(db: Db) {
     const deliveryRows = await db.select({ id: deliveries.id, eventId: deliveries.eventId, endpointId: deliveries.endpointId, state: deliveries.state, attempt: deliveries.attempt, lastCode: deliveries.lastCode, mergedInto: deliveries.mergedInto, mergeUntil: deliveries.mergeUntil, createdAt: deliveries.createdAt }).from(deliveries).where(eq(deliveries.companyId, companyId)).orderBy(desc(deliveries.createdAt)).limit(100);
     res.json({ enabled: process.env.PAPERCLIP_NOTIFICATIONS_ENABLED === "true", dispatchEnabled: process.env.PAPERCLIP_NOTIFICATIONS_ENABLED === "true" && process.env.PAPERCLIP_NOTIFICATIONS_WORKER_ENABLED !== "false", connectedEvents: CONNECTED_NOTIFICATION_EVENTS,
       unconnectedEvents: [],
-      verification: { implemented: true, contractTested: false, liveVerified: false, scenarioVerified: false },
+      verification: { implemented: true, scope: "endpoint_config_version", machineVerified: false },
       endpoints: channelRows.map(({ targetKey: _targetKey, ...row }) => row), subscriptions: subscriptionRows, deliveries: deliveryRows });
   });
   router.get(`${path}/endpoints/:id/verification`, async (req, res) => {
     const companyId = String(req.params.companyId); companyAdmin(req, companyId);
     res.setHeader("Cache-Control", "no-store");
     res.json(await verification.read(companyId, String(req.params.id)));
+  });
+  router.get(`${path}/endpoints/:id/verification/evidence`, async (req, res) => {
+    const companyId = String(req.params.companyId); companyAdmin(req, companyId);
+    const after = z.coerce.number().int().min(0).max(2147483646).parse(req.query.afterRevision ?? 0);
+    res.setHeader("Cache-Control", "no-store");
+    res.json(await evidence.list(companyId, String(req.params.id), after));
+  });
+  router.post(`${path}/endpoints/:id/verification/evidence`, validate(appendNotificationEvidenceSchema), async (req, res) => {
+    const companyId = String(req.params.companyId); companyAdmin(req, companyId);
+    res.json(await evidence.append(companyId, String(req.params.id), getActorInfo(req).actorId, req.body));
   });
   router.post(`${path}/endpoints`, validate(endpointSchema), async (req, res) => {
     const companyId = String(req.params.companyId); companyAdmin(req, companyId); const input = endpointSchema.parse(req.body);

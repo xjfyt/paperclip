@@ -95,4 +95,17 @@ describe("capability ledger transaction contract", () => {
       await expect(service.append("company-a", "admin", { ...request, receipt: { ...receipt, ...patch } })).rejects.toMatchObject({ status: 422 });
     }
   });
+  it("hides notification receipts but exposes the shared revision for adapter CAS", async () => {
+    const { service, state } = fixture(); await service.append("company-a", "admin", request);
+    state.events.push({ id: "notification", companyId: "company-a", revision: 2, receipt: { domain: "notification", reportRef: "private-notification-report" }, createdAt: new Date() });
+    const page = await service.list("company-a");
+    expect(page.events).toHaveLength(1); expect(page.headRevision).toBe(2);
+    expect(JSON.stringify(page)).not.toContain("private-notification-report");
+  });
+  it("cannot revoke a notification receipt through the adapter entrypoint", async () => {
+    const { service, state } = fixture();
+    state.events.push({ id: "00000000-0000-4000-8000-000000000003", companyId: "company-a", revision: 1, receipt: { domain: "notification" }, createdAt: new Date() });
+    await expect(service.append("company-a", "admin", { ...request, expectedRevision: 1, action: "revoke", targetId: state.events[0].id, receipt: undefined })).rejects.toMatchObject({ status: 404 });
+  });
+
 });

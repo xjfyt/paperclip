@@ -73,7 +73,7 @@ function Ledger({ companyId, adapterType, identity }: { companyId: string; adapt
           <dt>{t("capabilityEvidence.receipt")}</dt><dd>{event.id} · {event.revision}</dd>
         </dl>
         <Button variant="outline" disabled={!complete || retired || mutation.isPending || Boolean(confirmation)} onClick={() => {
-          setConfirmation({ action: "revoke", targetId: event.id, expectedRevision: Math.max(0, ...events.map(item => item.revision)), idempotencyKey: crypto.randomUUID(), reason: "incorrect" });
+          setConfirmation({ action: "revoke", targetId: event.id, expectedRevision: Math.max(0, ...query.data!.pages.map(page => page.headRevision ?? 0), ...events.map(item => item.revision)), idempotencyKey: crypto.randomUUID(), reason: "incorrect" });
         }}>{t("capabilityEvidence.revoke")}</Button>
       </li>;
     })}</ul>

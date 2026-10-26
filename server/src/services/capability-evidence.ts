@@ -6,7 +6,7 @@ import { conflict, notFound, unprocessable } from "../errors.js";
 
 function present(row: typeof capabilityEvidence.$inferSelect): CapabilityEvidenceEvent {
   const { idempotencyKey: _key, requestHash: _hash, ...event } = row;
-  return { ...event, createdAt: row.createdAt.toISOString() };
+  return { ...event, receipt: event.receipt && "adapterType" in event.receipt ? event.receipt : null, createdAt: row.createdAt.toISOString() };
 }
 export function capabilityEvidenceService(db: Db) {
   return {
@@ -14,7 +14,10 @@ export function capabilityEvidenceService(db: Db) {
       const rows = await db.select().from(capabilityEvidence).where(and(
         eq(capabilityEvidence.companyId, companyId), gt(capabilityEvidence.revision, afterRevision),
       )).orderBy(capabilityEvidence.revision).limit(101);
-      return { events: rows.slice(0, 100).map(present), nextRevision: rows.length > 100 ? rows[99].revision : null };
+      const [head] = await db.select({ revision: capabilityEvidence.revision }).from(capabilityEvidence)
+        .where(eq(capabilityEvidence.companyId, companyId)).orderBy(desc(capabilityEvidence.revision)).limit(1);
+      return { events: rows.slice(0, 100).filter(row => !row.receipt || "adapterType" in row.receipt).map(present),
+        nextRevision: rows.length > 100 ? rows[99].revision : null, headRevision: head?.revision ?? 0 };
     },
     async append(companyId: string, reviewerId: string, raw: unknown) {
       const input = appendCapabilityEvidenceSchema.parse(raw);
@@ -47,7 +50,7 @@ export function capabilityEvidenceService(db: Db) {
           const [target] = await tx.select().from(capabilityEvidence).where(and(
             eq(capabilityEvidence.companyId, companyId), eq(capabilityEvidence.id, input.targetId),
           ));
-          if (!target?.receipt) throw notFound("Receipt not found in this company");
+          if (!target?.receipt || !("adapterType" in target.receipt)) throw notFound("Adapter receipt not found in this company");
           const [retired] = await tx.select({ id: capabilityEvidence.id }).from(capabilityEvidence).where(and(
             eq(capabilityEvidence.companyId, companyId), eq(capabilityEvidence.targetId, input.targetId),
           )).limit(1);

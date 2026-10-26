@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { type AnyPgColumn, check, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { companies } from "./companies.js";
+import type { NotificationEvidenceReceipt } from "@paperclipai/shared/notification-evidence";
 import type { CapabilityReceipt, AppendCapabilityEvidence } from "@paperclipai/shared/capability-evidence";
 
 export const capabilityEvidence = pgTable("capability_evidence", {
@@ -11,7 +12,7 @@ export const capabilityEvidence = pgTable("capability_evidence", {
   requestHash: text("request_hash").notNull(),
   action: text("action").$type<AppendCapabilityEvidence["action"]>().notNull(),
   targetId: uuid("target_id").references((): AnyPgColumn => capabilityEvidence.id),
-  receipt: jsonb("receipt").$type<CapabilityReceipt>(),
+  receipt: jsonb("receipt").$type<CapabilityReceipt | NotificationEvidenceReceipt>(),
   reason: text("reason").$type<AppendCapabilityEvidence["reason"]>().notNull(),
   reviewerId: text("reviewer_id").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
