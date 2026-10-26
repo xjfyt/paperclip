@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import "@/i18n/agent-setup-test-resources";
+import "@/i18n/connection-enrollment-test-resources";
 import { i18n } from "@/i18n";
 
 import { act, type ReactNode } from "react";
@@ -36,6 +37,7 @@ const getCloudConnectorEnrollmentMock = vi.hoisted(() => vi.fn());
 const startCloudConnectorEnrollmentMock = vi.hoisted(() => vi.fn());
 const listAgentsMock = vi.hoisted(() => vi.fn());
 const mockNavigate = vi.hoisted(() => vi.fn());
+const setBreadcrumbsMock = vi.hoisted(() => vi.fn());
 const openAggregatorTaskMock = vi.hoisted(() => vi.fn());
 vi.mock("@/context/DialogContext", () => ({ useDialogActions: () => ({ openNewIssue: openAggregatorTaskMock }) }));
 const navigateTopLevelMock = vi.hoisted(() => vi.fn());
@@ -115,7 +117,7 @@ vi.mock("@/context/CompanyContext", () => ({
 }));
 
 vi.mock("@/context/BreadcrumbContext", () => ({
-  useBreadcrumbs: () => ({ setBreadcrumbs: vi.fn() }),
+  useBreadcrumbs: () => ({ setBreadcrumbs: setBreadcrumbsMock }),
 }));
 
 vi.mock("@/context/ToastContext", () => ({
@@ -1509,6 +1511,168 @@ describe("AppsConnect — Connect with a link (M4 frame)", () => {
     expect(document.body.textContent).toContain("Which humans can use this credential?");
     expect(document.body.textContent).toContain("Just me");
     expect(mockNavigate).not.toHaveBeenCalledWith("/apps/connect", { replace: true });
+  });
+
+  function enrollmentFixture(status = "not_configured", providerName = GMAIL.name) {
+    mockSearch.value = "source=gmail&stage=setup&intent=intent-1";
+    listGalleryMock.mockResolvedValue({ apps: [{
+      ...GMAIL, name: providerName, methods: GMAIL.methods.filter(method => !method.oauthStrategy),
+      ownershipAvailability: { platform_shared: false, customer: true, dcr: true },
+    }] });
+    getCloudConnectorEnrollmentMock.mockResolvedValue({ configured: status === "active", status });
+  }
+
+  it.each(["en", "zh-CN", "es", "ja"])("localizes actual page enrollment and preserves its deferred request in %s", async locale => {
+    const providerName = "Customer <strong>私の Gmail</strong>";
+    enrollmentFixture("not_configured", providerName);
+    let finish!: (value: unknown) => void;
+    startCloudConnectorEnrollmentMock.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    await i18n.changeLanguage(locale);
+    await render();
+    expect(container.textContent).toContain(i18n.t("connectionEnrollmentUi.explanation", { providerName }));
+    expect(container.textContent).toContain(i18n.t("connectionEnrollmentUi.customOAuth", { providerName }));
+    expect(container.querySelector("h1")?.textContent).toBe(i18n.t("connectionOAuthUi.headerConnect", { serverName: providerName }));
+    expect(container.querySelector("strong")).toBeNull();
+    expect(setBreadcrumbsMock).toHaveBeenLastCalledWith([{ label: i18n.t("navigation.connectors"), href: "/apps" }, { label: i18n.t("connectionEnrollmentUi.connectBreadcrumb") }]);
+    expect(startCloudConnectorEnrollmentMock).not.toHaveBeenCalled();
+    await act(async () => buttonByText(i18n.t("connectionEnrollmentUi.connect"))!.click());
+    const savedAccess = window.sessionStorage.getItem("paperclip.connector-enrollment-access:gmail");
+    expect(savedAccess).not.toBeNull();
+    const reads = [listGalleryMock.mock.calls.length, getCloudConnectorEnrollmentMock.mock.calls.length];
+    await act(async () => { await i18n.changeLanguage(locale === "ja" ? "zh-CN" : "ja"); });
+    expect(buttonByText(i18n.t("connectionEnrollmentUi.connect"))?.disabled).toBe(true);
+    expect(setBreadcrumbsMock).toHaveBeenLastCalledWith([{ label: i18n.t("navigation.connectors"), href: "/apps" }, { label: i18n.t("connectionEnrollmentUi.connectBreadcrumb") }]);
+    expect(window.sessionStorage.getItem("paperclip.connector-enrollment-access:gmail")).toBe(savedAccess);
+    expect([listGalleryMock.mock.calls.length, getCloudConnectorEnrollmentMock.mock.calls.length]).toEqual(reads);
+    expect(startCloudConnectorEnrollmentMock).toHaveBeenCalledExactlyOnceWith("company-1", "Paperclip", "/apps/connect?source=gmail&stage=setup&intent=intent-1");
+    expect(navigateTopLevelMock).not.toHaveBeenCalled();
+    const verificationUrl = "https://auth.example.test/enroll?state=opaque%2Bvalue&token=fixture-only";
+    await act(async () => finish({ status: "pending", verificationUrl }));
+    await flushReact();
+    expect(navigateTopLevelMock).toHaveBeenCalledExactlyOnceWith(verificationUrl);
+    expect(connectAppMock).not.toHaveBeenCalled();
+    expect(startOAuthMock).not.toHaveBeenCalled();
+    expect(putConnectionInstallsMock).not.toHaveBeenCalled();
+  });
+
+  it.each(["en", "zh-CN", "es", "ja"].flatMap(locale =>
+    ["blocked", "missing", "unsafe", "fallback", "raw"].map(failure => ({ locale, failure })),
+  ))("retranslates actual dialog enrollment $failure feedback in $locale without replay", async ({ locale, failure }) => {
+    enrollmentFixture();
+    const popup = { closed: false, location: { assign: vi.fn() }, focus: vi.fn(), close: vi.fn() };
+    vi.spyOn(window, "open").mockReturnValue(failure === "blocked" ? null : popup as unknown as Window);
+    const verificationUrl = "https://auth.example.test/enroll?state=opaque%2Bvalue";
+    if (failure === "fallback") startCloudConnectorEnrollmentMock.mockRejectedValue(null);
+    else if (failure === "raw") startCloudConnectorEnrollmentMock.mockRejectedValue(new Error("Provider diagnostic <raw> STATE_42"));
+    else startCloudConnectorEnrollmentMock.mockResolvedValue({ status: "pending", verificationUrl:
+      failure === "missing" ? undefined : failure === "unsafe" ? "javascript:private-data" : verificationUrl });
+    await i18n.changeLanguage(locale);
+    await render(undefined, false, <ConnectionSetupFlow host="dialog" serviceSlug="gmail" interactionId="intent-1" requestedAgentId="agent-1" />);
+    await act(async () => buttonByText(i18n.t("connectionEnrollmentUi.connect"))!.click());
+    await flushReact();
+    const error = () => failure === "raw" ? "Provider diagnostic <raw> STATE_42" : i18n.t(failure === "unsafe" ? "connectionHandoffUi.urlScheme" : `connectionEnrollmentUi.${failure === "blocked" ? "popupBlocked" : failure === "missing" ? "linkMissing" : "cloudUnreachable"}`);
+    expect(container.textContent).toContain(error());
+    const savedAccess = window.sessionStorage.getItem("paperclip.connector-enrollment-access:gmail");
+    const requests = [listGalleryMock.mock.calls.length, getCloudConnectorEnrollmentMock.mock.calls.length];
+    await act(async () => { await i18n.changeLanguage(locale === "ja" ? "zh-CN" : "ja"); });
+    expect(container.textContent).toContain(error());
+    expect(window.sessionStorage.getItem("paperclip.connector-enrollment-access:gmail")).toBe(savedAccess);
+    expect([listGalleryMock.mock.calls.length, getCloudConnectorEnrollmentMock.mock.calls.length]).toEqual(requests);
+    expect(startCloudConnectorEnrollmentMock).toHaveBeenCalledExactlyOnceWith("company-1", "Paperclip", "/apps/connect?source=gmail&stage=setup&intent=intent-1&enrollment_host=dialog");
+    expect(navigateTopLevelMock).not.toHaveBeenCalled();
+    expect(popup.location.assign).not.toHaveBeenCalled();
+    expect(connectAppMock).not.toHaveBeenCalled();
+    expect(startOAuthMock).not.toHaveBeenCalled();
+    expect(container.textContent).not.toContain("javascript:private-data");
+    if (failure === "blocked") {
+      const fallback = container.querySelector<HTMLAnchorElement>('a[target="_blank"]');
+      expect(fallback?.textContent).toBe(i18n.t("connectionEnrollmentUi.openNewTab"));
+      expect(fallback?.getAttribute("href")).toBe(verificationUrl);
+      expect(fallback?.rel).toBe("noopener noreferrer");
+      expect(container.textContent).toContain(i18n.t("connectionEnrollmentUi.finishInWindow"));
+    } else expect(popup.close).toHaveBeenCalledOnce();
+  });
+
+  it.each(["en", "zh-CN", "es", "ja"])("renders pending, failed lookup and unavailable enrollment in %s without downgrading", async locale => {
+    enrollmentFixture("pending");
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    await i18n.changeLanguage(locale);
+    await render(client);
+    expect(buttonByText(i18n.t("connectionEnrollmentUi.continue"))).toBeDefined();
+    getCloudConnectorEnrollmentMock.mockRejectedValueOnce(new Error("RAW_CLOUD_LOOKUP"));
+    await act(async () => { await client.invalidateQueries({ queryKey: ["cloud-connector", "enrollment"] }); });
+    await flushReact();
+    expect(container.textContent).toContain(i18n.t("connectionEnrollmentUi.registrationCheckFailed"));
+    getCloudConnectorEnrollmentMock.mockResolvedValue({ configured: true, status: "active" });
+    await act(async () => { await client.invalidateQueries({ queryKey: ["cloud-connector", "enrollment"] }); });
+    await flushReact();
+    expect(container.textContent).toContain(i18n.t("connectionEnrollmentUi.unavailableTitle", { providerName: GMAIL.name }));
+    expect(container.textContent).toContain(i18n.t("connectionEnrollmentUi.unavailableBody", { providerName: GMAIL.name }));
+    expect(container.querySelector('input[type="password"]')).toBeNull();
+    expect(buttonByText(i18n.t("connectionEnrollmentUi.tryAgain"))?.disabled).toBe(false);
+    await act(async () => buttonByText(i18n.t("connectionEnrollmentUi.back"))!.click());
+    expect(mockNavigate).toHaveBeenCalledWith("/apps?intent=intent-1");
+    expect(startCloudConnectorEnrollmentMock).not.toHaveBeenCalled();
+    expect(connectAppMock).not.toHaveBeenCalled();
+  });
+
+  it.each(["en", "zh-CN", "es", "ja"])("localizes the mounted Composio entry status and alert in %s", async locale => {
+    mockSearch.value = "source=composio&targetToolkit=circleback_mcp";
+    let fail!: (reason: unknown) => void;
+    listConnectionsMock.mockImplementation(() => new Promise((_resolve, reject) => { fail = reject; }));
+    await i18n.changeLanguage(locale);
+    await render();
+    expect(container.querySelector('[role="status"]')?.textContent).toBe(i18n.t("connectionEnrollmentUi.checkingComposio"));
+    await act(async () => fail(new Error("RAW_LOOKUP")));
+    await flushReact();
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe(i18n.t("connectionEnrollmentUi.composioLoadFailed"));
+    await act(async () => { await i18n.changeLanguage(locale === "ja" ? "zh-CN" : "ja"); });
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe(i18n.t("connectionEnrollmentUi.composioLoadFailed"));
+    expect(listConnectionsMock).toHaveBeenCalledOnce();
+    expect(buttonByText(i18n.t("connectionEnrollmentUi.tryAgain"))).toBeDefined();
+    await act(async () => buttonByText(i18n.t("common.cancel"))!.click());
+    expect(mockNavigate).toHaveBeenCalledWith("/apps");
+    expect(connectAppMock).not.toHaveBeenCalled();
+  });
+
+  it.each(["en", "zh-CN", "es", "ja"].flatMap(locale =>
+    ["ai-loading", "ai-error", "ai-missing", "pool-loading", "pool-missing", "pool-raw", "saved-error", "saved-loading", "memory-loading", "memory-disabled"].map(state => ({ locale, state })),
+  ))("localizes actual entry $state in $locale without changing lookup or raw diagnostics", async ({ locale, state }) => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const stalled = new Promise<never>(() => {});
+    let key: string;
+    if (state.startsWith("ai-")) {
+      mockSearch.value = "source=openai&reconnect=fixture-account";
+      const list = vi.spyOn(aiConnectionsApi, "list");
+      if (state === "ai-loading") { list.mockReturnValue(stalled); key = "loadingConnection"; }
+      else if (state === "ai-error") { list.mockRejectedValue(new Error("RAW_AI")); key = "connectionLoadFailed"; }
+      else { list.mockResolvedValue({ currentUserId: "board-user", canManageConnections: true, connections: [] }); key = "connectionUnavailable"; }
+    } else if (state.startsWith("pool-")) {
+      mockSearch.value = "source=ai-router-fixture";
+      if (state === "pool-loading") { listGalleryMock.mockReturnValue(stalled); key = "loadingConnector"; }
+      else if (state === "pool-raw") { listGalleryMock.mockRejectedValue(new Error("Provider pool <raw>")); key = "raw"; }
+      else { listGalleryMock.mockResolvedValue({ apps: [] }); key = "poolUnavailable"; }
+    } else if (state.startsWith("saved-")) {
+      mockSearch.value = "source=mem0&resume=fixture-draft";
+      if (state === "saved-loading") { getConnectionMock.mockReturnValue(stalled); key = "loadingConnection"; }
+      else { getConnectionMock.mockRejectedValue(new Error("RAW_SAVED")); key = "savedConnectionLoadFailed"; }
+    } else {
+      mockSearch.value = "source=mem0";
+      if (state === "memory-loading") { experimentalMock.mockReturnValue(stalled); key = "loadingSettings"; }
+      else { experimentalMock.mockResolvedValue({ enableMemoryConnectors: false }); key = "memoryDisabled"; }
+    }
+    await i18n.changeLanguage(locale);
+    await render(client);
+    const text = () => key === "raw" ? "Provider pool <raw>" : i18n.t(`connectionEnrollmentUi.${key}`);
+    expect(container.textContent).toContain(text());
+    const reads = [getConnectionMock.mock.calls.length, listGalleryMock.mock.calls.length, experimentalMock.mock.calls.length];
+    await act(async () => { await i18n.changeLanguage(locale === "ja" ? "zh-CN" : "ja"); });
+    expect(container.textContent).toContain(text());
+    expect([getConnectionMock.mock.calls.length, listGalleryMock.mock.calls.length, experimentalMock.mock.calls.length]).toEqual(reads);
+    expect(connectAppMock).not.toHaveBeenCalled();
+    expect(startOAuthMock).not.toHaveBeenCalled();
+    expect(startCloudConnectorEnrollmentMock).not.toHaveBeenCalled();
+    expect(navigateTopLevelMock).not.toHaveBeenCalled();
   });
 
   it("prompts for one-time Cloud registration inside Gmail when managed methods are not yet advertised", async () => {

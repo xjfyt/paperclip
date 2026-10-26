@@ -570,6 +570,7 @@ export interface ConnectionSetupFlowProps {
  * here so a provider can never drift between entry points.
  */
 export function ConnectionSetupFlow(props: ConnectionSetupFlowProps = {}) {
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const params = useParams<{ appKey?: string }>();
   const { selectedCompanyId } = useCompany();
@@ -587,11 +588,11 @@ export function ConnectionSetupFlow(props: ConnectionSetupFlowProps = {}) {
   const existing = useQuery({ queryKey: ["tools", "connection", existingId], queryFn: () => toolsApi.getConnection(existingId!), enabled: lookup });
   const provider = source || existing.data?.config?.sourceTemplateKey;
   const method = searchParams.get("method") || existing.data?.config?.connectionMethodKey;
-  if (lookup && existing.isPending) return <p className="p-6 text-sm text-muted-foreground">Loading connection…</p>;
-  if (lookup && existing.isError) return <div role="alert" className="space-y-3 p-6"><p>Could not load this connection. Your saved access and credentials have not changed.</p><Button variant="outline" onClick={() => void existing.refetch()}>Try again</Button></div>;
+  if (lookup && existing.isPending) return <p className="p-6 text-sm text-muted-foreground">{t("connectionEnrollmentUi.loadingConnection")}</p>;
+  if (lookup && existing.isError) return <div role="alert" className="space-y-3 p-6"><p>{t("connectionEnrollmentUi.savedConnectionLoadFailed")}</p><Button variant="outline" onClick={() => void existing.refetch()}>{t("connectionEnrollmentUi.tryAgain")}</Button></div>;
   if (isMemoryConnectorId(provider) && !(existing.data && existing.data.status !== "draft" && existing.data.config?.sourceTemplateKey === provider)) {
-    if (!memory.loaded) return <p className="p-6 text-sm text-muted-foreground">Loading connection settings…</p>;
-    if (!memory.enabled) return <p role="status" className="p-6 text-sm text-muted-foreground">Enable memory connectors in Settings → Experimental to set up this connection.</p>;
+    if (!memory.loaded) return <p className="p-6 text-sm text-muted-foreground">{t("connectionEnrollmentUi.loadingSettings")}</p>;
+    if (!memory.enabled) return <p role="status" className="p-6 text-sm text-muted-foreground">{t("connectionEnrollmentUi.memoryDisabled")}</p>;
   }
   if (!props.byoOnly && (props.credentialSource ?? "paperclip_vault") === "paperclip_vault"
     && isRemoteMcpConnectorId(provider) && (!method || isRemoteMcpConnectorMethod(provider, method))) {
@@ -1003,11 +1004,11 @@ function StandardConnectionSetupFlow({
   useEffect(() => {
     if (host !== "page") return;
     setBreadcrumbs([
-      { label: "Connectors", href: "/apps" },
-      { label: vercelConnectMode ? "Vercel Connect" : byoOnly ? "Connect your own tool" : "Connect an app" },
+      { label: t("navigation.connectors"), href: "/apps" },
+      { label: vercelConnectMode ? "Vercel Connect" : byoOnly ? t("connectionEnrollmentUi.customToolBreadcrumb") : t("connectionEnrollmentUi.connectBreadcrumb") },
     ]);
     return () => setBreadcrumbs([]);
-  }, [byoOnly, host, setBreadcrumbs, vercelConnectMode]);
+  }, [byoOnly, host, setBreadcrumbs, t, vercelConnectMode]);
 
   const galleryQuery = useQuery({
     queryKey: queryKeys.apps.gallery(selectedCompanyId ?? "__none__"),
@@ -1073,7 +1074,7 @@ function StandardConnectionSetupFlow({
       && !entryAdvertisesManagedConnector
     ),
   });
-  const [connectorEnrollmentError, setConnectorEnrollmentError] = useState<string | null>(null);
+  const [connectorEnrollmentError, setConnectorEnrollmentError] = useState<LocalizedUiMessage | null>(null);
   const closeEnrollmentPopup = useCallback(() => {
     oauthPopupRef.current?.close();
     oauthPopupRef.current = null;
@@ -1091,7 +1092,7 @@ function StandardConnectionSetupFlow({
     const target = resolveAuthorizationTarget(verificationUrl);
     if (!target.ok) {
       closeEnrollmentPopup();
-      setConnectorEnrollmentError(target.message);
+      setConnectorEnrollmentError({ key: target.translationKey });
       return;
     }
     if (host === "dialog") {
@@ -1101,7 +1102,7 @@ function StandardConnectionSetupFlow({
         popup.location.assign(target.url);
         popup.focus();
       } else {
-        setConnectorEnrollmentError("Open authorization in a new tab to continue.");
+        setConnectorEnrollmentError({ key: "connectionEnrollmentUi.popupBlocked" });
       }
       return;
     }
@@ -1130,7 +1131,7 @@ function StandardConnectionSetupFlow({
     onSuccess: (status) => {
       if (!status.verificationUrl) {
         closeEnrollmentPopup();
-        setConnectorEnrollmentError("Paperclip Cloud did not return an enrollment link. Try again.");
+        setConnectorEnrollmentError({ key: "connectionEnrollmentUi.linkMissing" });
         return;
       }
       openConnectorEnrollment(status.verificationUrl);
@@ -1138,7 +1139,7 @@ function StandardConnectionSetupFlow({
     onError: (error) => {
       closeEnrollmentPopup();
       setConnectorEnrollmentError(
-        error instanceof Error ? error.message : "Paperclip couldn’t reach Paperclip Cloud. Try again.",
+        localizedUiErrorMessage(error, "connectionEnrollmentUi.cloudUnreachable"),
       );
     },
   });
@@ -2438,20 +2439,20 @@ function StandardConnectionSetupFlow({
 
       {managedConnectorUnavailable && entry ? (
         <div className="mx-auto max-w-xl rounded-xl border border-border bg-card p-6">
-          <h2 className="text-lg font-semibold text-foreground">{entry.name} sign-in is unavailable</h2>
+          <h2 className="text-lg font-semibold text-foreground">{t("connectionEnrollmentUi.unavailableTitle", { providerName: entry.name })}</h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            This instance is connected to Paperclip, but {entry.name} sign-in is not currently available. Try again shortly or contact your instance administrator.
+            {t("connectionEnrollmentUi.unavailableBody", { providerName: entry.name })}
           </p>
           {customOAuthMethod ? (
             <Button type="button" variant="link" className="mt-4 h-auto p-0 text-xs" onClick={() => setConnectionMethodKey(customOAuthMethod.key)}>
-              Use your own {entry.name} OAuth app
+              {t("connectionEnrollmentUi.customOAuth", { providerName: entry.name })}
             </Button>
           ) : null}
           <div className="mt-6 flex items-center justify-between gap-3">
-            <Button type="button" variant="ghost" onClick={backToGallery}>Back</Button>
+            <Button type="button" variant="ghost" onClick={backToGallery}>{t("connectionEnrollmentUi.back")}</Button>
             <Button type="button" disabled={galleryQuery.isFetching} onClick={() => void galleryQuery.refetch()}>
               {galleryQuery.isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              Try again
+              {t("connectionEnrollmentUi.tryAgain")}
             </Button>
           </div>
         </div>
@@ -2464,38 +2465,40 @@ function StandardConnectionSetupFlow({
               </div>
               <div className="min-w-0">
                 <h2 className="text-lg font-semibold text-foreground">
-                  Connect with Paperclip
+                  {t("connectionEnrollmentUi.connect")}
                 </h2>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  You must connect this instance to Paperclip to connect to {entry.name} (you only need to do this once).
+                  {t("connectionEnrollmentUi.explanation", { providerName: entry.name })}
                 </p>
               </div>
             </div>
 
             {customOAuthMethod ? (
               <Button type="button" variant="link" className="mt-4 h-auto p-0 text-xs" onClick={() => setConnectionMethodKey(customOAuthMethod.key)}>
-                Use your own {entry.name} OAuth app
+                {t("connectionEnrollmentUi.customOAuth", { providerName: entry.name })}
               </Button>
             ) : null}
 
             {connectorEnrollmentQuery.isError || connectorEnrollmentError ? (
               <InlineBanner tone="danger" className="mt-4">
-                {connectorEnrollmentError ?? "Paperclip couldn’t check Cloud registration. Try again."}
+                {connectorEnrollmentError
+                  ? typeof connectorEnrollmentError === "string" ? connectorEnrollmentError : t(connectorEnrollmentError.key)
+                  : t("connectionEnrollmentUi.registrationCheckFailed")}
               </InlineBanner>
             ) : null}
 
             {enrollmentAuthorizationUrl ? (
               <p className="mt-4 text-sm text-muted-foreground">
-                Finish authorization in the opened window.{' '}
+                {t("connectionEnrollmentUi.finishInWindow")}{" "}
                 <a className="underline" href={enrollmentAuthorizationUrl} target="_blank" rel="noopener noreferrer">
-                  Open authorization in a new tab
+                  {t("connectionEnrollmentUi.openNewTab")}
                 </a>
               </p>
             ) : null}
             {connectionDefaults}
             <div className="mt-6 flex items-center justify-between gap-3">
               <Button type="button" variant="ghost" onClick={backToGallery}>
-                Back
+                {t("connectionEnrollmentUi.back")}
               </Button>
               <Button
                 type="button"
@@ -2511,8 +2514,8 @@ function StandardConnectionSetupFlow({
               >
                 {startConnectorEnrollment.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 {connectorEnrollmentQuery.data?.status === "pending"
-                  ? "Continue"
-                  : "Connect with Paperclip"}
+                  ? t("connectionEnrollmentUi.continue")
+                  : t("connectionEnrollmentUi.connect")}
               </Button>
             </div>
           </div>
