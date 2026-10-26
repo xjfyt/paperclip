@@ -17,7 +17,7 @@ export type WecomStopReason = "cancelled" | "displaced" | "authentication" | "re
 export class WecomReceiveError extends Error {
   constructor(readonly code: WecomStopReason) { super(`WeCom receive stopped: ${code}`); }
 }
-const record = z.record(z.unknown());
+const record = z.record(z.string(), z.unknown());
 export const wecomFrameSchema = z.object({
   cmd: z.string().max(64).optional(), headers: z.object({ req_id: z.string().max(200) }).optional(),
   errcode: z.number().optional(), body: record.optional(),

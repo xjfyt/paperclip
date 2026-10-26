@@ -49,6 +49,13 @@ describe("WeCom receive boundary", () => {
     expect(a.externalId).toBe(b.externalId); expect(a.sourceInstance).toBe(b.sourceInstance);
     expect(a.externalId).not.toContain(message.msgid); expect(a.sourceInstance).not.toContain(config.botId);
   });
+  it("parses object payloads with explicit string keys and rejects non-record bodies", () => {
+    const frame = { cmd: "aibot_msg_callback", body: message };
+    expect(parseWecomFrame(Buffer.from(JSON.stringify(frame)))).toEqual(frame);
+    for (const body of [null, [], "not-an-object", 7]) {
+      expect(() => parseWecomFrame(Buffer.from(JSON.stringify({ ...frame, body })))).toThrow("protocol");
+    }
+  });
   it("rejects malformed, binary and oversized frames", () => {
     for (const raw of [Buffer.from("{"), Buffer.alloc(WECOM_MAX_FRAME_BYTES + 1)]) expect(() => parseWecomFrame(raw)).toThrow("protocol");
     expect(() => parseWecomFrame(Buffer.from("{}"), true)).toThrow("protocol");
