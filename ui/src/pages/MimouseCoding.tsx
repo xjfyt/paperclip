@@ -13,6 +13,7 @@ import { useSearchParams } from "@/lib/router";
 import { useCompany } from "@/context/CompanyContext";
 import { useTranslation } from "@/i18n";
 import { api } from "@/api/client";
+import { readCodingEvidence } from "@/api/coding-read";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 interface Delivery { buildMatrix?: BuildMatrix; id: string; issueId: string; projectId: number; headSha: string; operationState: string; mrIid: number | null; pipelineId: number | null; gate: { readyForReleaseCandidate: boolean; blockers: string[] } }
@@ -23,19 +24,21 @@ export function MimouseCoding() {
   const { selectedCompanyId } = useCompany(); const { t } = useTranslation();
   const session = useQuery({ queryKey: queryKeys.auth.session, queryFn: () => authApi.getSession(), retry: false });
   if (!selectedCompanyId) return null;
-  if (session.isPending) return <p>{t("common.loading")}</p>;
+  if (session.isPending || session.isFetching) return <p>{t("common.loading")}</p>;
   if (session.isError) return <p role="alert">{t("coding.error")}</p>;
   const userId = session.data?.user?.id ?? session.data?.session?.userId ?? "local-board";
   const sessionId = session.data?.session?.id ?? "local-board";
-  return <CodingCompany companyId={selectedCompanyId} userId={userId} sessionId={sessionId} key={`${selectedCompanyId}:${userId}:${sessionId}`} />;
+  const authEpoch = session.dataUpdatedAt;
+  return <CodingCompany companyId={selectedCompanyId} userId={userId} sessionId={sessionId} authEpoch={authEpoch} key={`${selectedCompanyId}:${userId}:${sessionId}:${authEpoch}`} />;
 }
-function CodingCompany({ companyId, userId, sessionId }: { companyId: string; userId: string; sessionId: string }) {
-  const { t } = useTranslation(); const [search] = useSearchParams(); const client = useQueryClient(); const root = `/companies/${companyId}/coding`; const key = ["mimouse-coding", companyId, userId, sessionId];
-  const query = useQuery({ queryKey: key, queryFn: () => api.get<{ deliveries: Delivery[]; publishEnabled: boolean }>(root, { cache: "no-store" }) });
+function CodingCompany({ companyId, userId, sessionId, authEpoch }: { companyId: string; userId: string; sessionId: string; authEpoch: number }) {
+  const { t } = useTranslation(); const [search] = useSearchParams(); const client = useQueryClient(); const root = `/companies/${companyId}/coding`; const key = ["mimouse-coding", companyId, userId, sessionId, authEpoch];
+  const query = useQuery({ queryKey: key, queryFn: ({ signal }) => readCodingEvidence<{ deliveries: Delivery[]; publishEnabled: boolean }>(root, signal), retry: false, gcTime: 0 });
   const [form, setForm] = useState({ issueId: search.get("issueId") ?? "", workspaceId: search.get("workspaceId") ?? "", gitlabOrigin: "", projectId: "", secretRef: "", baseSha: "", headSha: "", targetBranch: "main" });
   const [confirmation, setConfirmation] = useState<{ id: string; headSha: string; action: string } | null>(null);
   const [evidence, setEvidence] = useState("[]");
   const mutation = useMutation({ mutationFn: (action: () => Promise<unknown>) => action(), onSuccess: async () => { await client.invalidateQueries({ queryKey: key }); setConfirmation(null); } });
+  if (query.isPending || !query.isFetchedAfterMount) return <p>{t("common.loading")}</p>;
   if (query.isError) return <p role="alert">{t("coding.error")}</p>;
   return <div className="max-w-4xl space-y-5">
     <h1 className="text-xl font-semibold">{t("coding.title")}</h1><p>{t("coding.boundary")}</p>
@@ -47,12 +50,12 @@ function CodingCompany({ companyId, userId, sessionId }: { companyId: string; us
     </form>
     {query.data?.deliveries.filter(row => !form.issueId || row.issueId === form.issueId).map(row => <section key={row.id} className="rounded-lg border border-border p-4 space-y-3">
       <p className="font-mono text-sm break-all">{row.headSha}</p><p>{t("coding.operationState")}: {row.operationState}</p>
-      <MimouseCodingDiffReview companyId={companyId} userId={userId} deliveryId={row.id} headSha={row.headSha} onReviewed={() => client.invalidateQueries({ queryKey: key })} />
+      <MimouseCodingDiffReview companyId={companyId} userId={userId} sessionId={sessionId} authEpoch={authEpoch} deliveryId={row.id} headSha={row.headSha} onReviewed={() => client.invalidateQueries({ queryKey: key })} />
       <MimouseCodingRepair key={`${row.id}:${row.headSha}`} companyId={companyId} userId={userId} issueId={row.issueId} deliveryId={row.id} headSha={row.headSha} />
       <MimouseCodingArtifacts companyId={companyId} userId={userId} sessionId={sessionId} deliveryId={row.id} projectId={row.projectId} headSha={row.headSha} onRefresh={async () => {
         const result = await query.refetch();
         if (result.error) throw result.error;
-        await client.invalidateQueries({ queryKey: ["coding-diff", companyId, userId, row.id, row.headSha] });
+        await client.invalidateQueries({ queryKey: ["coding-diff", companyId, userId, sessionId, authEpoch, row.id, row.headSha] });
       }} />
       <MimouseBuildMatrix matrix={row.buildMatrix} companyId={companyId} deliveryId={row.id} commitSha={row.headSha} />
       <p className="text-xs text-muted-foreground">{t("buildMatrixUi.codeGate")}</p>

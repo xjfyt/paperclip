@@ -125,3 +125,29 @@ it("a failed refresh after a confirmed write is not mislabeled as a failed POST"
   base.onRefresh.mockRejectedValue(Error("refresh lost")); await mount(); await edit(); await confirm(); await click(button("save"));
   expect(host.textContent).toContain(text("saved")); expect(host.textContent).toContain(text("refreshFailed")); expect(sessionStorage.length).toBe(0); expect(calls.post).toHaveBeenCalledOnce();
 });
+
+it.each(["success", "rejected"])("late operation A %s cannot clear replacement B's uncertainty token", async outcome => {
+  const pending: Array<{ resolve: (value: unknown) => void; reject: (error: unknown) => void }> = [];
+  calls.post.mockImplementation(() => new Promise((resolve, reject) => pending.push({ resolve, reject })));
+  await mount(); await edit(); await confirm(); await click(button("save"));
+  const key = sessionStorage.key(0)!, first = sessionStorage.getItem(key);
+  expect(first).toMatch(/^[a-f0-9-]{36}$/);
+  await act(async () => root.render(null)); await mount(); await click(button("title"));
+  await click(button("refresh")); await click(host.querySelector<HTMLInputElement>('input[type="checkbox"]')!); await click(button("newOperation"));
+  await fill("version", payload.version); await fill("path", payload.artifacts[0].path); await fill("buildJob", "declared-job");
+  await confirm(); await click(button("save")); const second = sessionStorage.getItem(key);
+  expect(second).not.toBe(first); expect(pending).toHaveLength(2);
+  await act(async () => { if (outcome === "success") pending[0].resolve(receipt); else pending[0].reject(new ApiError("late rejected", 422, null)); });
+  expect(sessionStorage.getItem(key)).toBe(second);
+  await act(async () => root.render(null)); await mount(); await click(button("title"));
+  expect(host.textContent).toContain(text("unknown")); expect(calls.post).toHaveBeenCalledTimes(2);
+  await act(async () => pending[1].reject(Error("lost B"))); expect(sessionStorage.getItem(key)).toBe(second);
+});
+
+it("manual reconciliation cannot clear a token replaced after its read", async () => {
+  calls.post.mockRejectedValue(Error("lost")); await mount(); await edit(); await confirm(); await click(button("save"));
+  await click(button("refresh")); await click(host.querySelector<HTMLInputElement>('input[type="checkbox"]')!);
+  const key = sessionStorage.key(0)!, replacement = crypto.randomUUID(); sessionStorage.setItem(key, replacement);
+  await click(button("newOperation")); expect(sessionStorage.getItem(key)).toBe(replacement);
+  expect(host.textContent).toContain(text("unknown")); expect(button("newOperation").disabled).toBe(true); expect(calls.post).toHaveBeenCalledOnce();
+});

@@ -41,9 +41,11 @@ function ArtifactForm({ companyId, deliveryId, projectId, headSha, onRefresh, id
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Draft>({ headSha, version: "", artifacts: [freshArtifact()] });
   const [review, setReview] = useState(false), [confirmed, setConfirmed] = useState(false);
-  const [state, setState] = useState<"idle" | "pending" | "saved" | "unknown" | "rejected" | "denied" | "storage">(() => {
-    try { return sessionStorage.getItem(storageKey) ? "unknown" : "idle"; } catch { return "storage"; }
+  const [initialMarker] = useState(() => {
+    try { return { token: sessionStorage.getItem(storageKey), failed: false }; } catch { return { token: null, failed: true }; }
   });
+  const marker = useRef(initialMarker.token);
+  const [state, setState] = useState<"idle" | "pending" | "saved" | "unknown" | "rejected" | "denied" | "storage">(initialMarker.failed ? "storage" : initialMarker.token ? "unknown" : "idle");
   const [refreshing, setRefreshing] = useState(false), [refreshFailed, setRefreshFailed] = useState(false);
   const [inspected, setInspected] = useState(false), [reconciled, setReconciled] = useState(false);
   const active = useRef(true), inFlight = useRef(false);
@@ -52,26 +54,43 @@ function ArtifactForm({ companyId, deliveryId, projectId, headSha, onRefresh, id
   const blocked = pending || state === "unknown" || state === "denied" || state === "storage";
   const editable = !blocked && !review;
   const update = (next: Draft) => { setDraft(next); setConfirmed(false); setState("idle"); };
+  function removeOwnedMarker(token: string | null) {
+    if (!token || sessionStorage.getItem(storageKey) !== token) return false;
+    sessionStorage.removeItem(storageKey);
+    return true;
+  }
   async function refresh() {
     if (refreshing) return;
     setRefreshing(true); setRefreshFailed(false); setInspected(false); setReconciled(false);
-    try { await onRefresh(); if (active.current) setInspected(true); }
+    try {
+      const token = state === "unknown" ? sessionStorage.getItem(storageKey) : null;
+      await onRefresh();
+      if (active.current && (state !== "unknown" || (token !== null && sessionStorage.getItem(storageKey) === token))) {
+        marker.current = token; setInspected(true);
+      }
+    }
     catch { if (active.current) setRefreshFailed(true); }
     finally { if (active.current) setRefreshing(false); }
   }
   async function save() {
     if (!review || !confirmed || blocked || inFlight.current || !validDraft(draft) || !Number.isSafeInteger(projectId)) return;
-    // The API has no idempotency key. Persist only an uncertainty marker, never
+    // The API has no idempotency key. Persist only a random operation token, never
     // paths/content. A reload cannot silently turn a lost response into a retry.
-    try { sessionStorage.setItem(storageKey, "unconfirmed"); }
+    const token = crypto.randomUUID();
+    try {
+      const existing = sessionStorage.getItem(storageKey);
+      if (existing) { marker.current = existing; setState("unknown"); setConfirmed(false); return; }
+      sessionStorage.setItem(storageKey, token); marker.current = token;
+    }
     catch { setState("storage"); setConfirmed(false); return; }
     inFlight.current = true; setState("pending"); setConfirmed(false);
     let recorded = false;
     try {
       const result = await api.post<unknown>(`/companies/${companyId}/coding/${deliveryId}/artifacts`, draft);
       if (!matchesReceipt(result, draft, projectId)) throw Error("unconfirmed_manifest_response");
-      sessionStorage.removeItem(storageKey); recorded = true;
       if (!active.current) return;
+      if (!removeOwnedMarker(token)) { setState("unknown"); setInspected(false); setReconciled(false); return; }
+      recorded = true;
       setState("saved"); setReview(false);
       setDraft({ headSha, version: "", artifacts: [freshArtifact()] });
       await refresh();
@@ -79,7 +98,7 @@ function ArtifactForm({ companyId, deliveryId, projectId, headSha, onRefresh, id
       if (recorded || !active.current) return;
       const rejected = error instanceof ApiError && [400, 401, 403, 404, 409, 422].includes(error.status);
       if (rejected) {
-        try { sessionStorage.removeItem(storageKey); }
+        try { if (!removeOwnedMarker(token)) { setState("unknown"); setInspected(false); setReconciled(false); return; } }
         catch { setState("storage"); return; }
         setState([401, 403, 404].includes(error.status) ? "denied" : "rejected");
         setReview(false);
@@ -89,7 +108,7 @@ function ArtifactForm({ companyId, deliveryId, projectId, headSha, onRefresh, id
   }
   function newAfterReconciliation() {
     if (state !== "unknown" || !inspected || !reconciled || refreshing) return;
-    try { sessionStorage.removeItem(storageKey); }
+    try { if (!removeOwnedMarker(marker.current)) { setInspected(false); setReconciled(false); return; } }
     catch { setState("storage"); return; }
     setState("idle"); setReview(false); setConfirmed(false); setInspected(false); setReconciled(false);
     setDraft({ headSha, version: "", artifacts: [freshArtifact()] });

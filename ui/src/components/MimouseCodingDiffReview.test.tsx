@@ -5,10 +5,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { MimouseCodingDiffReview } from "./MimouseCodingDiffReview";
 const api = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }));
-vi.mock("@/api/client", () => ({ api }));
+vi.mock("@/api/client", async original => ({ ...await original<typeof import("@/api/client")>(), api }));
+vi.mock("@/api/coding-read", () => ({ readCodingEvidence: (path: string) => api.get(path) }));
 vi.mock("@/i18n", () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 let root: Root, host: HTMLDivElement, client: QueryClient;
-const props = { companyId: "company", userId: "owner", deliveryId: "delivery", headSha: "a".repeat(40), onReviewed: vi.fn(async () => {}) };
+const props = { companyId: "company", userId: "owner", sessionId: "session", authEpoch: 1, deliveryId: "delivery", headSha: "a".repeat(40), onReviewed: vi.fn(async () => {}) };
 const diff = { baseSha: "b".repeat(40), headSha: props.headSha, digest: "d".repeat(64), projectId: 3, repository: "https://git.example/group/repo.git", complete: true, blockers: [], fileCount: 1, patch: "-old\n+new", evidence: [], artifactManifest: null };
 const flush = async () => { await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); }); };
 const click = async (item: Element) => { await act(async () => { item.dispatchEvent(new MouseEvent("click", { bubbles: true })); }); await flush(); };
@@ -27,7 +28,7 @@ it("shows real patch and confirms exactly the displayed base/head/digest", async
 });
 it("new digest invalidates checked consent", async () => {
   await mount(); await open(); await click(host.querySelector("input")!);
-  await act(async () => client.setQueryData(["coding-diff", "company", "owner", "delivery", props.headSha], { ...diff, digest: "e".repeat(64) })); await flush();
+  await act(async () => client.setQueryData(["coding-diff", "company", "owner", "session", 1, "delivery", props.headSha], { ...diff, digest: "e".repeat(64) })); await flush();
   expect(button("codingDiff.save").disabled).toBe(true); expect((host.querySelector("input") as HTMLInputElement).checked).toBe(false);
 });
 it.each([{ ...diff, complete: false, blockers: ["diff_byte_limit"] }, { ...diff, headSha: "c".repeat(40) }])("blocks incomplete or stale snapshots", async value => {

@@ -23,8 +23,10 @@ unknown；现有六目标矩阵仍展示未核验，不升级发布资格。
 
 此 POST **没有幂等键或 compare-and-swap 版本合同**。界面没有自动重试；双击
 只发一次，发送期间不可重复确认。网络错误、5xx、非匹配回执都显示未知。
-发送前在 sessionStorage 写入公司/用户/session/交付/SHA限定的标记，仅保存
-“unconfirmed”，不保存文件路径、正文或凭据。刷新、关闭重开和当前标签页导航
+发送前在 sessionStorage 写入公司/用户/session/交付/SHA限定的随机操作token，
+不保存文件路径、正文或凭据。成功、明确拒绝和人工核对后的清理都先比较token归属；
+卸载后的迟到响应不清理存储，不会抹掉后来操作的未知保护。
+刷新、关闭重开和当前标签页导航
 不能直接清除此标记。存储不可用则阻断新的发送。
 
 未知后仅提供只读刷新，不能凭“有清单”或“清单一样”证明本次 POST 成功。
@@ -37,6 +39,12 @@ unknown；现有六目标矩阵仍展示未核验，不升级发布资格。
 迟到响应不会填入新身份或触发新身份刷新。成功后的读取失败独立提示，不将已确认
 写入误标为失败而鼓励重复提交。当前接口没有防止两位管理员并发覆盖的CAS，
 本切片不声称解决；多人操作应先协调。
+
+私有交付列表和代码差异不使用全局URL-only GET合并池，改为独立
+`requestResponse/readApiJson`、AbortSignal和no-store。查询身份同时绑定session与
+认证复核时点；认证正在复核时隐藏旧私有操作，复核后必须有新的列表读取。差异
+读取亦独立取消/隔离，旧session审阅POST的迟到回调不能关闭新界面或刷新新身份。
+这不取消已被服务端接受的写入，也不改变后端允许的local_trusted Board权限。
 
 ## 用户手测（全部默认未执行）
 
@@ -55,6 +63,8 @@ unknown；现有六目标矩阵仍展示未核验，不升级发布资格。
 | AM8 | 普通成员/Agent/其他公司/不可读私有任务，或发送前撤权 | 后端拒绝；无越权文件哈希；失权时草稿与写控件清除 |
 | AM9 | 关闭sessionStorage权限，或清空后重新进入未知操作 | 存储不可用时不发送；人工清空存储不能当作操作未发生，须核对活动记录 |
 | AM10 | 两位管理员同时记录不同清单 | 记录接口无CAS的现有限制；以最后服务器结果对账，不宣称前端可防并发覆盖 |
+| AM11 | A请求未回→离开→返回核对未知→明确新建B→A迟到→刷新 | A不能删除B操作token，B仍显示未知；B没有自动重试 |
+| AM12 | 保留旧会话的慢列表/差异读取，然后切换或复核会话 | 旧操作隐藏，旧读取取消；新会话独立请求，不接受旧响应或沿用确认；local_trusted合法读取仍可用 |
 
 ## 本切片自动检查
 
@@ -63,7 +73,7 @@ unknown；现有六目标矩阵仍展示未核验，不升级发布资格。
 不读取真实工作区文件，不运行数据库、服务器、模型、外部API或构建。
 类型检查、生成locales、最终集成构建由主工作树统一运行；不得将定向检查记作全量通过。
 
-2026-10-26 本切片定向结果：4文件48项通过（新增32项，既有差异/矩阵16项），
+2026-10-26 首次切片定向结果：4文件48项通过（新增32项，既有差异/矩阵16项），
 512MB单worker；三项设计token检查与 `git diff --check` 通过。命令从 `ui` 执行：
 
 ```sh
@@ -71,8 +81,16 @@ NODE_OPTIONS=--max-old-space-size=512 node ../node_modules/vitest/vitest.mjs run
   src/components/MimouseCodingArtifacts.test.tsx \
   src/pages/MimouseCoding.artifacts.test.tsx \
   src/components/MimouseCodingDiffReview.test.tsx \
+  src/components/MimouseCodingDiffReview.transport.test.tsx \
   src/components/MimouseBuildMatrix.test.tsx --maxWorkers=1 --pool=forks
 ```
+
+独立审计指出首次实现的旧A迟到清理可能抹掉新B未知标记，以及no-store仍会
+加入全局URL-only合并池；这两项是代码缺陷，不是外部验收条件。修复后以上5文件
+58项通过，含10项新增操作交错/会话真实传输层回归。传输测试使用真实客户端与
+fetch响应夹具，特意保留旧 `api.get` 观察者；没有发送外部请求。类型/构建与浏览器
+仍由主树统一验证，不能据此宣称整个模块或真实文件路径已验收。
+独立只读复审确认上述两项阻塞均已关闭；复审者未重复运行测试。
 
 最初的 `pnpm exec` 因当前pnpm自动尝试依赖状态安装、无法创建
 `/home/agent/.local/share/pnpm` 而立即失败；未安装依赖，未改锁文件，改用已安装
