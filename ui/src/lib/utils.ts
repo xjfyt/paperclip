@@ -248,11 +248,11 @@ export function financeEventKindDisplayName(eventKind: FinanceEventKind): string
     custom_model_storage_charge: "Custom model storage",
     manual_adjustment: "Manual adjustment",
   };
-  return map[eventKind];
+  return i18n.t(`financeOps.kind_${eventKind}`, { defaultValue: Object.hasOwn(map, eventKind) ? map[eventKind] : eventKind });
 }
 
 export function financeDirectionDisplayName(direction: FinanceDirection): string {
-  return direction === "credit" ? "Credit" : "Debit";
+  return i18n.t(direction === "credit" ? "financeOps.direction_credit" : "financeOps.direction_debit");
 }
 
 /** Build an issue URL using the human-readable identifier when available. */
