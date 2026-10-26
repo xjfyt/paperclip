@@ -41,7 +41,7 @@ export interface PrivatePromptPreparedWitness {
   stdinWritten: false;
 }
 export interface PrivatePromptTestRecord {
-  id: string; promptId: string; revisionId: string; agentId: string;
+  id: string; companyId: string; actorUserId: string; promptId: string; revisionId: string; agentId: string;
   requestId: string; headReceiptId: string | null; approvalDigest: string;
   executionProfile: "claude_cli_bare_api_key_v1";
   datasetId: string; caseId: string; skillVersionId: string;
@@ -51,6 +51,9 @@ export interface PrivatePromptTestRecord {
   runtimeApplied: false;
 }
 
+/** execute never restarts queued/prepared/spawned/completed/failed/unknown/cancelled.
+ * Only awaiting_confirmation can be admitted; pending_harness/pending_wake may
+ * recover the same uniquely fenced intent. A late execute cannot undo cancel. */
 export interface PrivatePromptTestResponse {
   item: PrivatePromptTestRecord;
   duplicate: boolean;
