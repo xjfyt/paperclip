@@ -1,3 +1,4 @@
+import "./agent-setup-shared-test-resources";
 // Test only: the integration owner composes these contributions into runtime locales.
 import { i18n } from "./index";
 import en from "./contributions/agentSetupUi/en.json";
