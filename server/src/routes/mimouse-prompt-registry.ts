@@ -1,3 +1,5 @@
+import { comparePrivatePromptTestsSchema } from "@paperclipai/shared/mimouse-private-prompt-comparison";
+import { privatePromptComparisonService } from "../services/mimouse-private-prompt-tests/comparison-service.js";
 import { preparePrivatePromptTestSchema, executePrivatePromptTestSchema, cancelPrivatePromptTestSchema } from "@paperclipai/shared/mimouse-private-prompt-tests";
 import { privatePromptTestService } from "../services/mimouse-private-prompt-tests/service.js";
 import { privatePromptTestsEnabled } from "../services/mimouse-private-prompt-tests/profile.js";
@@ -40,6 +42,11 @@ export function mimousePromptRegistryRoutes(db: Db) {
     await safe(() => privateTests.list(actor, "00000000-0000-4000-8000-000000000000"));
     res.json({ enabled: privatePromptTestsEnabled(), profile: "claude_cli_bare_api_key_v1",
       privateResults: true, toolsEnabled: false, completeContextCaptured: false });
+  });
+  // POST carries explicit IDs; the service enforces READ ONLY transactions.
+  router.post(`${root}/:promptId/comparison`, validate(comparePrivatePromptTestsSchema), async (req, res) => {
+    const actor = privateHuman(req), promptId = uuid.parse(req.params.promptId);
+    res.json(await safe(() => privatePromptComparisonService(db).compare(actor, promptId, req.body)));
   });
   router.post(`${root}/:promptId/tests`, validate(preparePrivatePromptTestSchema), async (req, res) => {
     const actor = privateHuman(req), promptId = uuid.parse(req.params.promptId);

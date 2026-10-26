@@ -630,6 +630,12 @@ it("enforces the actual loopback HTTP router and error middleware without a prod
     expect(processBoundary.calls).toBe(before + 1);
   } finally { await http.close(); }
 });
+it("private historical comparison is scoped, sealed and read only", async () => {
+  const before = processBoundary.calls;
+  const { verifyPrivateHistoricalComparison } = await import("./comparison-db-cases.js");
+  await verifyPrivateHistoricalComparison(db);
+  expect(processBoundary.calls).toBe(before);
+});
 it("denies another active administrator and a revoked original administrator", async () => {
   const before = processBoundary.calls;
   const userId = randomUUID(), sessionId = randomUUID(), now = new Date();

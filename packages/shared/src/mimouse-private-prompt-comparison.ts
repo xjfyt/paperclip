@@ -24,5 +24,31 @@ export const privatePromptComparisonSchema = z.object({
   eligibleForHumanReview: z.boolean(), reportHash: hash,
   readOnly: z.literal(true), executionStarted: z.literal(false), promoted: z.literal(false), runtimeApplied: z.literal(false),
   completeContextCaptured: z.literal(false), costBasis: z.literal("recorded_issue_ledger_snapshot"),
-}).strict();
+}).strict().superRefine((report, ctx) => {
+  const fail = () => ctx.addIssue({ code: "custom", message: "private_comparison_inconsistent_report" });
+  if (report.baseline.revisionId === report.candidate.revisionId || report.baseline.cases < 1 ||
+      report.baseline.cases !== report.candidate.cases || report.results.length !== report.baseline.cases * 2 ||
+      new Set(report.blockers).size !== report.blockers.length) fail();
+  const testIds = report.results.flatMap(r => r.testId ? [r.testId] : []);
+  if (new Set(testIds).size !== testIds.length) fail();
+  const caseSets: Set<string>[] = [];
+  for (const side of [report.baseline, report.candidate]) {
+    const rows = report.results.filter(r => r.revisionId === side.revisionId), cases = new Set(rows.map(r => r.caseId));
+    caseSets.push(cases);
+    if (rows.length !== side.cases || cases.size !== side.cases || rows.filter(r => r.passed).length !== side.passed ||
+        rows.filter(r => r.blocked !== null).length !== side.blocked || side.unknownCostCases > side.cases ||
+        (side.unknownCostCases > 0 ? side.totalCostCents !== null : side.totalCostCents !== side.knownCostCents)) fail();
+  }
+  if ([...caseSets[0]].some(id => !caseSets[1].has(id)) || report.results.some(r =>
+    ![report.baseline.revisionId, report.candidate.revisionId].includes(r.revisionId) ||
+    (r.passed && (r.blocked !== null || r.testId === null || r.outputHash === null)) ||
+    ((r.testId === null) !== (r.blocked === "missing_run")) || (r.testId === null && r.outputHash !== null))) fail();
+  const incomplete = report.baseline.blocked > 0 || report.candidate.blocked > 0;
+  if (incomplete !== report.blockers.includes("incomplete_or_mismatched_evidence") ||
+      (report.baseline.totalCostCents === null) !== report.blockers.includes("baseline_cost_unknown") ||
+      (report.candidate.totalCostCents === null) !== report.blockers.includes("candidate_cost_unknown") ||
+      (report.candidate.passed !== report.candidate.cases) !== report.blockers.includes("candidate_not_all_passed") ||
+      (report.candidate.passed < report.baseline.passed) !== report.blockers.includes("quality_regressed") ||
+      report.eligibleForHumanReview !== (report.blockers.length === 0)) fail();
+});
 export type PrivatePromptComparison = z.infer<typeof privatePromptComparisonSchema>;
