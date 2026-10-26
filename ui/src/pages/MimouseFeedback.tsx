@@ -1,4 +1,5 @@
 import { MimouseFeedbackEvidence } from "@/components/MimouseFeedbackEvidence";
+import { MimouseWecomPanel } from "@/components/MimouseWecomPanel";
 import { MimouseLangfusePanel } from "@/components/MimouseLangfusePanel";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -24,9 +25,10 @@ export function MimouseFeedback() {
   if (session.isPending) return <p>{t("common.loading")}</p>;
   if (session.isError) return <p role="alert">{t("feedbackUi.readError")}</p>;
   const userId = session.data?.user?.id ?? session.data?.session?.userId ?? "local-board";
-  return <FeedbackCompany key={`${selectedCompanyId}:${userId}`} companyId={selectedCompanyId} userId={userId} />;
+  const sessionId = session.data?.session?.id ?? "";
+  return <FeedbackCompany key={JSON.stringify([selectedCompanyId, userId, sessionId])} companyId={selectedCompanyId} userId={userId} sessionId={sessionId} privateSessionReady={!session.isFetching} />;
 }
-function FeedbackCompany({ companyId, userId }: { companyId: string; userId: string }) {
+function FeedbackCompany({ companyId, userId, sessionId, privateSessionReady }: { companyId: string; userId: string; sessionId: string; privateSessionReady: boolean }) {
   const { t } = useTranslation(), client = useQueryClient(), active = useActive();
   const [beforeId, setBeforeId] = useState<string>(), [selectedId, setSelectedId] = useState<string | null>(null), [form, setForm] = useState(blankImport), [notice, setNotice] = useState("");
   const root = `/companies/${companyId}/feedback-inbox`, key = ["mimouse-feedback", companyId, userId];
@@ -40,6 +42,7 @@ function FeedbackCompany({ companyId, userId }: { companyId: string; userId: str
   return <div className="space-y-6">
     <p className="text-sm text-muted-foreground">{t("feedbackUi.boundary")}</p>
     <details className="rounded-lg border border-border p-4"><summary className="cursor-pointer font-medium">{t("langfuseUi.title")}</summary><div className="pt-4"><MimouseLangfusePanel companyId={companyId} onImported={() => { void client.invalidateQueries({ queryKey: key }); }} /></div></details>
+    <details className="rounded-lg border border-border p-4"><summary className="cursor-pointer font-medium">{t("wecomUi.title")}</summary><div className="pt-4"><MimouseWecomPanel companyId={companyId} userId={userId} sessionId={privateSessionReady ? sessionId : ""} /></div></details>
     <form className="space-y-3 rounded-lg border border-border p-4" onSubmit={event => { event.preventDefault(); setNotice(""); mutation.mutate({ ...form, commitSha: form.commitSha || null, traceId: form.traceId || null }); }}>
       <h2 className="font-medium">{t("feedbackUi.importTitle")}</h2>
       <fieldset disabled={mutation.isPending} className="space-y-3">

@@ -4,8 +4,10 @@ import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { i18n } from "@/i18n";
+import { queryKeys } from "@/lib/queryKeys";
 import { MimouseFeedback } from "./MimouseFeedback";
 const calls = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), session: vi.fn(), breadcrumbs: vi.fn(), companyId: "company-a" as string | null }));
+vi.mock("@/components/MimouseWecomPanel", () => ({ MimouseWecomPanel: ({ companyId, userId, sessionId }: { companyId: string; userId: string; sessionId: string }) => <section data-testid="wecom-panel" data-company={companyId} data-user={userId} data-session={sessionId} /> }));
 vi.mock("@/components/MimouseLangfusePanel", () => ({ MimouseLangfusePanel: ({ companyId }: { companyId: string }) => <section data-testid="langfuse-panel">{companyId}</section> }));
 vi.mock("@/api/client", () => ({ api: { get: calls.get, post: calls.post } }));
 vi.mock("@/api/auth", () => ({ authApi: { getSession: calls.session } }));
@@ -113,4 +115,20 @@ it("shows local evidence as inert text and never claims reproduction or creates 
   expect(host.querySelector("img")).toBeNull();
   expect(host.textContent).toContain(i18n.t("feedbackEvidence.notReproduced"));
   expect(calls.post).not.toHaveBeenCalled();
+});
+
+it("mounts WeCom alongside Langfuse with company, user and actual session identity", async () => {
+  calls.session.mockResolvedValue({ user: { id: "owner-a" }, session: { id: "session-a", userId: "owner-a" } }); await mount();
+  const panel = host.querySelector('[data-testid="wecom-panel"]')!;
+  expect(panel.getAttribute("data-company")).toBe("company-a"); expect(panel.getAttribute("data-user")).toBe("owner-a"); expect(panel.getAttribute("data-session")).toBe("session-a");
+  expect(host.querySelector('[data-testid="langfuse-panel"]')).not.toBeNull();
+});
+
+it("removes private WeCom session identity during authentication refetch without replaying writes", async () => {
+  calls.session.mockResolvedValue({ user: { id: "owner-a" }, session: { id: "session-a", userId: "owner-a" } }); await mount();
+  let finish!: (value: unknown) => void; calls.session.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  let refreshing!: Promise<void>; await act(async () => { refreshing = client.refetchQueries({ queryKey: queryKeys.auth.session }); }); await flush();
+  expect(host.querySelector('[data-testid="wecom-panel"]')!.getAttribute("data-session")).toBe("");
+  await act(async () => { finish({ user: { id: "owner-a" }, session: { id: "session-new", userId: "owner-a" } }); await refreshing; }); await flush();
+  expect(host.querySelector('[data-testid="wecom-panel"]')!.getAttribute("data-session")).toBe("session-new"); expect(calls.post).not.toHaveBeenCalled();
 });
