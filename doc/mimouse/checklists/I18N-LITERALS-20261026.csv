@@ -1,0 +1,555 @@
+file,line,syntax,literal_candidate,review_status
+ui/src/components/ClaudeSubscriptionPanel.tsx,66,jsx-text,Anthropic subscription,needs_review
+ui/src/components/ClaudeSubscriptionPanel.tsx,69,jsx-text,Quota from the Claude subscription connected to this server.,needs_review
+ui/src/components/ClaudeSubscriptionPanel.tsx,124,jsx-text,% used,needs_review
+ui/src/components/CloudAccessGate.tsx,220,jsx-text,Connection interrupted. Reconnecting automatically…,needs_review
+ui/src/components/CodexSubscriptionPanel.tsx,69,jsx-text,Codex subscription,needs_review
+ui/src/components/CodexSubscriptionPanel.tsx,72,jsx-text,Quota from the Codex subscription connected to this server.,needs_review
+ui/src/components/CodexSubscriptionPanel.tsx,91,jsx-text,Account windows,needs_review
+ui/src/components/CodexSubscriptionPanel.tsx,103,jsx-text,Model windows,needs_review
+ui/src/components/CodexSubscriptionPanel.tsx,146,jsx-text,% used,needs_review
+ui/src/components/CommentThread.tsx,273,jsx-attribute,Copy comment as markdown,needs_review
+ui/src/components/CommentThread.tsx,358,jsx-text,Queued,needs_review
+ui/src/components/CommentThread.tsx,363,jsx-text,Follow-up,needs_review
+ui/src/components/CommentThread.tsx,384,jsx-expression,Queueing...,needs_review
+ui/src/components/CommentThread.tsx,384,jsx-expression,Sending...,needs_review
+ui/src/components/CommentThread.tsx,397,jsx-text,Comment deleted,needs_review
+ui/src/components/CommentThread.tsx,431,jsx-text,run,needs_review
+ui/src/components/CommentThread.tsx,435,jsx-text,run,needs_review
+ui/src/components/CommentThread.tsx,448,jsx-text,run,needs_review
+ui/src/components/CommentThread.tsx,452,jsx-text,run,needs_review
+ui/src/components/CommentThread.tsx,500,jsx-text,Status,needs_review
+ui/src/components/CommentThread.tsx,515,jsx-text,Assignee,needs_review
+ui/src/components/CommentThread.tsx,530,jsx-text,Workspace,needs_review
+ui/src/components/CommentThread.tsx,588,jsx-text,No timeline entries yet.,needs_review
+ui/src/components/CommentThread.tsx,635,jsx-text,run,needs_review
+ui/src/components/CommentThread.tsx,656,jsx-text,Environment,needs_review
+ui/src/components/CommentThread.tsx,667,jsx-text,Provider,needs_review
+ui/src/components/CommentThread.tsx,672,jsx-text,Lease,needs_review
+ui/src/components/CommentThread.tsx,686,jsx-text,Failure:,needs_review
+ui/src/components/CommentThread.tsx,952,jsx-text,Timeline (,needs_review
+ui/src/components/CommentThread.tsx,977,jsx-text,Queued Comments (,needs_review
+ui/src/components/CommentThread.tsx,988,jsx-expression,Interrupting...,needs_review
+ui/src/components/CommentThread.tsx,988,jsx-expression,Interrupt,needs_review
+ui/src/components/CommentThread.tsx,1019,jsx-attribute,Leave a comment...,needs_review
+ui/src/components/CommentThread.tsx,1040,jsx-attribute,Attach image,needs_review
+ui/src/components/CommentThread.tsx,1050,jsx-attribute,Responsible,needs_review
+ui/src/components/CommentThread.tsx,1057,jsx-text,Responsible,needs_review
+ui/src/components/CommentThread.tsx,1085,jsx-expression,Posting...,needs_review
+ui/src/components/CommentThread.tsx,1085,jsx-expression,Comment,needs_review
+ui/src/components/CompanySettingsSidebar.tsx,90,jsx-attribute,Settings,needs_review
+ui/src/components/CompanySettingsSidebar.tsx,99,jsx-attribute,Back to app,needs_review
+ui/src/components/CompanySettingsSidebar.tsx,103,jsx-attribute,Settings,needs_review
+ui/src/components/CompanySettingsSidebar.tsx,108,jsx-attribute,General,needs_review
+ui/src/components/CompanySettingsSidebar.tsx,112,jsx-attribute,Profile,needs_review
+ui/src/components/CompanySettingsSidebar.tsx,120,jsx-attribute,Members,needs_review
+ui/src/components/CompanySettingsSidebar.tsx,138,jsx-attribute,Secrets,needs_review
+ui/src/components/CompanySettingsSidebar.tsx,143,jsx-attribute,Environments,needs_review
+ui/src/components/CompanySettingsSidebar.tsx,149,jsx-attribute,Connections,needs_review
+ui/src/components/CompanySettingsSidebar.tsx,154,jsx-attribute,Access,needs_review
+ui/src/components/CompanySettingsSidebar.tsx,160,jsx-attribute,Export,needs_review
+ui/src/components/CompanySettingsSidebar.tsx,163,jsx-attribute,Import,needs_review
+ui/src/components/CompanySettingsSidebar.tsx,168,jsx-attribute,Experimental,needs_review
+ui/src/components/CompanySettingsSidebar.tsx,175,jsx-attribute,Plugins,needs_review
+ui/src/components/CompanySettingsSidebar.tsx,203,jsx-attribute,Adapters,needs_review
+ui/src/components/IssueFiltersPopover.tsx,95,jsx-template,Search,needs_review
+ui/src/components/IssueFiltersPopover.tsx,96,jsx-template,Search,needs_review
+ui/src/components/IssueFiltersPopover.tsx,213,jsx-text,Filters,needs_review
+ui/src/components/IssueFiltersPopover.tsx,219,jsx-text,Clear,needs_review
+ui/src/components/IssueFiltersPopover.tsx,229,jsx-text,Category,needs_review
+ui/src/components/IssueFiltersPopover.tsx,256,jsx-text,Approval status,needs_review
+ui/src/components/IssueFiltersPopover.tsx,288,jsx-text,Quick filters,needs_review
+ui/src/components/IssueFiltersPopover.tsx,315,jsx-text,Status,needs_review
+ui/src/components/IssueFiltersPopover.tsx,333,jsx-text,Priority,needs_review
+ui/src/components/IssueFiltersPopover.tsx,352,jsx-text,Responsible,needs_review
+ui/src/components/IssueFiltersPopover.tsx,354,jsx-attribute,Responsible,needs_review
+ui/src/components/IssueFiltersPopover.tsx,362,jsx-text,No responsible,needs_review
+ui/src/components/IssueFiltersPopover.tsx,388,jsx-text,Creator,needs_review
+ui/src/components/IssueFiltersPopover.tsx,399,jsx-template,Remove creator,needs_review
+ui/src/components/IssueFiltersPopover.tsx,412,jsx-attribute,Search creators...,needs_review
+ui/src/components/IssueFiltersPopover.tsx,434,jsx-text,No creators match.,needs_review
+ui/src/components/IssueFiltersPopover.tsx,442,jsx-text,Project,needs_review
+ui/src/components/IssueFiltersPopover.tsx,444,jsx-attribute,Projects,needs_review
+ui/src/components/IssueFiltersPopover.tsx,464,jsx-text,Labels,needs_review
+ui/src/components/IssueFiltersPopover.tsx,466,jsx-attribute,Labels,needs_review
+ui/src/components/IssueFiltersPopover.tsx,485,jsx-text,External object status,needs_review
+ui/src/components/IssueFiltersPopover.tsx,517,jsx-text,Visibility,needs_review
+ui/src/components/IssueFiltersPopover.tsx,523,jsx-text,Live runs only,needs_review
+ui/src/components/IssueFiltersPopover.tsx,531,jsx-text,Hide routine runs,needs_review
+ui/src/components/NewIssueDialog.tsx,1226,jsx-text,Sub-task of,needs_review
+ui/src/components/NewIssueDialog.tsx,1241,jsx-expression,Couldn't check parent access.,needs_review
+ui/src/components/NewIssueDialog.tsx,1241,jsx-expression,Checking parent access…,needs_review
+ui/src/components/NewIssueDialog.tsx,1247,jsx-expression,Couldn't check the selected worktree. Retry in Worktrees or choose New worktree.,needs_review
+ui/src/components/NewIssueDialog.tsx,1248,jsx-expression,The selected worktree is no longer available. Choose another worktree or start a new one.,needs_review
+ui/src/components/NewIssueDialog.tsx,1310,jsx-expression,application/octet-stream,needs_review
+ui/src/components/NewIssueDialog.tsx,1336,jsx-text,Assigning implies executable intent - leave status as,needs_review
+ui/src/components/NewIssueDialog.tsx,1338,jsx-text,Backlog,needs_review
+ui/src/components/NewIssueDialog.tsx,1338,jsx-text,only to deliberately park this. The assignee will not be woken until status moves to,needs_review
+ui/src/components/NewIssueDialog.tsx,1339,jsx-text,Todo,needs_review
+ui/src/components/NewIssueDialog.tsx,1340,jsx-text,In Progress,needs_review
+ui/src/components/NewIssueDialog.tsx,1348,jsx-text,is paused and will not start work on this task until it is resumed,needs_review
+ui/src/components/NewIssueDialog.tsx,1351,jsx-expression,— it arrived paused from an organization import,needs_review
+ui/src/components/NewIssueDialog.tsx,1352,jsx-text,. You can resume it from the task page after creating the task.,needs_review
+ui/src/components/Sidebar.tsx,180,jsx-attribute,WorkBuddy,needs_review
+ui/src/components/SidebarAccountMenu.tsx,204,jsx-attribute,View profile,needs_review
+ui/src/components/SidebarAccountMenu.tsx,225,jsx-template,View commit,needs_review
+ui/src/components/SidebarAccountMenu.tsx,225,jsx-template,on GitHub,needs_review
+ui/src/components/SidebarAccountMenu.tsx,227,jsx-text,SHA,needs_review
+ui/src/components/SidebarAccountMenu.tsx,236,jsx-attribute,Settings,needs_review
+ui/src/components/SidebarAccountMenu.tsx,243,jsx-attribute,Invite,needs_review
+ui/src/components/SidebarAccountMenu.tsx,251,jsx-attribute,Documentation,needs_review
+ui/src/components/SidebarAccountMenu.tsx,272,jsx-expression,Signing out...,needs_review
+ui/src/components/SidebarAccountMenu.tsx,272,jsx-expression,Sign out,needs_review
+ui/src/components/SidebarAgents.tsx,188,jsx-attribute,Invalid reporting chain,needs_review
+ui/src/components/SidebarAgents.tsx,195,jsx-attribute,Agent paused by budget,needs_review
+ui/src/components/SidebarAgents.tsx,255,jsx-expression,Remove from starred,needs_review
+ui/src/components/SidebarAgents.tsx,255,jsx-expression,Star agent,needs_review
+ui/src/components/SidebarAgents.tsx,268,jsx-text,Edit agent,needs_review
+ui/src/components/SidebarAgents.tsx,278,jsx-expression,Agent was paused by budget limits,needs_review
+ui/src/components/SidebarAgents.tsx,292,jsx-expression,Leaving...,needs_review
+ui/src/components/SidebarAgents.tsx,292,jsx-expression,Leave agent,needs_review
+ui/src/components/SidebarProjects.tsx,149,jsx-attribute,Private project,needs_review
+ui/src/components/SidebarProjects.tsx,151,jsx-attribute,Project paused by budget,needs_review
+ui/src/components/SidebarProjects.tsx,186,jsx-template,Open actions for,needs_review
+ui/src/components/SidebarProjects.tsx,200,jsx-expression,Leaving...,needs_review
+ui/src/components/SidebarProjects.tsx,200,jsx-expression,Leave project,needs_review
+ui/src/components/SidebarProjects.tsx,413,jsx-attribute,Projects,needs_review
+ui/src/components/SubscriptionCostCard.tsx,112,jsx-expression,unavailable,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,172,jsx-template,Copy,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,172,jsx-template,to clipboard,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,185,jsx-text,Copied,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,849,jsx-template,Task-level model override — replaces the agent's primary model for this issue.,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,855,jsx-text,Primary model,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,860,jsx-text,Model lane,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,861,jsx-attribute,Model lane,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,874,jsx-expression,Primary,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,874,jsx-expression,Override,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,879,jsx-text,Task-level model override — replaces the agent's primary model for this issue.,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,887,jsx-text,Model,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,891,jsx-attribute,Default model,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,900,jsx-text,Thinking effort,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,918,jsx-text,Enable Chrome (--chrome),needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,932,jsx-expression,This assignee's adapter does not expose editable task overrides.,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,933,jsx-expression,Select a compatible assignee agent to edit these overrides.,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,939,jsx-text,Clear adapter options,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1064,jsx-expression,Run review now,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1064,jsx-expression,Run approval now,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1168,jsx-text,(disabled),needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1179,jsx-attribute,Add label,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1180,jsx-attribute,Add label,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1182,jsx-text,Add label,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1189,jsx-text,Watchdog agent,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1193,jsx-attribute,Select agent,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1199,jsx-text,Select agent,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1220,jsx-text,Instructions,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1221,jsx-text,(optional),needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1226,jsx-attribute,What should the watchdog watch for and how should it keep work moving?,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1232,jsx-text,Watchdog task:,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1235,jsx-expression,View task,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1251,jsx-expression,Removing…,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1251,jsx-expression,Remove,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1260,jsx-expression,Saving…,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1260,jsx-expression,Update,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1260,jsx-expression,Set watchdog,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1363,jsx-text,Monitor,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1364,jsx-text,Attempt,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1368,jsx-text,Next check,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1373,jsx-text,Watching,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1377,jsx-text,Notes,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1381,jsx-text,Last triggered,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1382,jsx-expression,— not yet triggered,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1388,jsx-expression,Checking…,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1388,jsx-expression,Check now,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1391,jsx-text,Edit,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1392,jsx-text,Clear,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1433,jsx-text,Attempt,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1455,jsx-expression,Scheduled continuation,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1455,jsx-expression,Scheduled retry,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1458,jsx-text,Attempt,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1466,jsx-text,Reason,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1472,jsx-text,Next attempt,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1483,jsx-text,Replaces run,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1496,jsx-text,Agent,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1509,jsx-text,Last error,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1533,jsx-text,Retrying…,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1539,jsx-expression,Already promoted,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1539,jsx-expression,Promoted,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1543,jsx-text,Retry now,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1550,jsx-expression,Promoting scheduled retry,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1553,jsx-expression,Already promoted — run starting,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1554,jsx-expression,Promoted — run starting,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1558,jsx-expression,Pulls continuation forward immediately,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1559,jsx-expression,Pulls retry forward immediately,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1576,jsx-attribute,What should the agent re-check?,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1585,jsx-attribute,External service,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1595,jsx-text,Schedule,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1603,jsx-text,Clear,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1641,jsx-text,more,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1652,jsx-attribute,Search labels...,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1691,jsx-attribute,New label,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1707,jsx-expression,Creating…,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1707,jsx-expression,Create label,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1721,jsx-text,Unassigned,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1842,jsx-attribute,Search assignees...,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1864,jsx-text,No matches.,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1880,jsx-template,Search,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1893,jsx-expression,reviewers,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1893,jsx-expression,approvers,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1903,jsx-text,Assign to me,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1916,jsx-expression,Requester,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,1993,jsx-attribute,Search projects...,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2076,jsx-text,more,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2090,jsx-text,more,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2162,jsx-attribute,Search tasks...,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2177,jsx-text,No parent,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2200,jsx-text,Searching tasks...,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2202,jsx-text,No matching tasks.,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2248,jsx-attribute,Search tasks...,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2252,jsx-attribute,Search tasks to add as blockers,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2265,jsx-text,No blockers,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2289,jsx-text,Searching tasks...,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2291,jsx-text,No matching tasks.,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2302,jsx-text,Add blocker,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2324,jsx-text,No subtasks yet.,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2337,jsx-text,Add subtask,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2348,jsx-expression,Work,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2348,jsx-expression,Triage,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2352,jsx-attribute,Status,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2365,jsx-attribute,Priority,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2376,jsx-attribute,Assignee,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2397,jsx-attribute,Model,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2410,jsx-attribute,Project,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2431,jsx-attribute,Labels,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2444,jsx-attribute,Relationships,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2447,jsx-attribute,Parent,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2464,jsx-attribute,Blocked by,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2480,jsx-attribute,Blocked by,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2503,jsx-attribute,Blocked by,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2532,jsx-attribute,Blocking,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2552,jsx-attribute,Subtasks,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2564,jsx-attribute,Sub-tasks,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2580,jsx-text,Add sub-task,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2589,jsx-expression,Referenced,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2589,jsx-expression,Related tasks,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2604,jsx-attribute,Pull requests,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2608,jsx-text,Couldn’t load pull requests.,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2609,jsx-text,Retry,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2623,jsx-attribute,Execution,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2626,jsx-attribute,Approvals,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2635,jsx-attribute,Execution policy,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2636,jsx-text,Execution policy unavailable. Refresh to try again.,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2641,jsx-attribute,Reviewers,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2660,jsx-attribute,Approvers,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2679,jsx-attribute,Execution,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2685,jsx-attribute,Workspace,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2686,jsx-text,Waiting for workspace,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2691,jsx-attribute,Scheduled retry,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2706,jsx-attribute,Monitor,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2719,jsx-attribute,Watchdog,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2730,jsx-attribute,Open watchdog task,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2731,jsx-attribute,Open watchdog task,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2744,jsx-attribute,Workspace,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2748,jsx-attribute,Execution,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2774,jsx-text,Default,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2775,jsx-text,Use the project workspace policy,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2785,jsx-text,New isolated workspace,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2786,jsx-text,Create a fresh workspace on the next run,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2796,jsx-text,Reuse existing workspace…,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2797,jsx-text,Pick a workspace to reuse,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2803,jsx-expression,Current workspace stays active. Applies on the next run.,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2803,jsx-expression,Applies on the next run.,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2813,jsx-attribute,Back to workspace options,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2815,jsx-text,Workspace mode,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2820,jsx-attribute,Search workspaces...,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2824,jsx-attribute,Search reusable workspaces,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2829,jsx-text,Loading workspaces...,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2831,jsx-text,Failed to load workspaces.,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2833,jsx-text,No matching workspaces.,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2855,jsx-expression,Current workspace stays active. Applies on the next run.,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2855,jsx-expression,Applies on the next run.,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2862,jsx-attribute,Workspace,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2867,jsx-text,View workspace,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2874,jsx-attribute,Service,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2895,jsx-attribute,Branch,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2903,jsx-attribute,Folder,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2913,jsx-attribute,About,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2915,jsx-attribute,Originating,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2931,jsx-text,via,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2940,jsx-attribute,Started,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2948,jsx-attribute,Completed,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2955,jsx-attribute,Created,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2961,jsx-attribute,Updated,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2972,jsx-attribute,Archived,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,2982,jsx-template,Archived by,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,3000,jsx-expression,Unarchiving…,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,3000,jsx-expression,Unarchive,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,3014,jsx-attribute,Depth,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,3061,jsx-attribute,Properties panel sections,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,3070,jsx-text,Properties,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,3075,jsx-text,Properties,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,3190,jsx-template,Close,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,3190,jsx-template,tab,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,3219,jsx-attribute,Open closed sidebar tab,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,3220,jsx-expression,All sidebar tabs are open,needs_review
+ui/src/components/issue-properties/IssueProperties.tsx,3220,jsx-expression,Open closed sidebar tab,needs_review
+ui/src/pages/AgentDetail.tsx,469,jsx-expression,string,needs_review
+ui/src/pages/AgentDetail.tsx,472,jsx-expression,string,needs_review
+ui/src/pages/AgentDetail.tsx,633,jsx-expression,Failed to load workspace operation log,needs_review
+ui/src/pages/AgentDetail.tsx,732,jsx-expression,boolean,needs_review
+ui/src/pages/AgentDetail.tsx,734,jsx-expression,Created by this run,needs_review
+ui/src/pages/AgentDetail.tsx,734,jsx-expression,Reused existing workspace,needs_review
+ui/src/pages/AgentDetail.tsx,739,jsx-text,stderr excerpt,needs_review
+ui/src/pages/AgentDetail.tsx,747,jsx-text,stdout excerpt,needs_review
+ui/src/pages/AgentDetail.tsx,1240,jsx-text,cannot accept tasks or start runs until its reporting chain is repaired.,needs_review
+ui/src/pages/AgentDetail.tsx,1256,jsx-template,avatar,needs_review
+ui/src/pages/AgentDetail.tsx,1305,jsx-text,"depends on this agent. While paused,",needs_review
+ui/src/pages/AgentDetail.tsx,1306,jsx-text,generation is skipped and the,needs_review
+ui/src/pages/AgentDetail.tsx,1307,jsx-text,page shows a warning.,needs_review
+ui/src/pages/AgentDetail.tsx,1341,jsx-expression,Resetting…,needs_review
+ui/src/pages/AgentDetail.tsx,1341,jsx-expression,Reset to defaults,needs_review
+ui/src/pages/AgentDetail.tsx,1344,jsx-text,Ships with Paperclip and powers,needs_review
+ui/src/pages/AgentDetail.tsx,1345,jsx-text,". Configure it like any agent — model, instructions, budget. It can be paused but not deleted; pausing it pauses",needs_review
+ui/src/pages/AgentDetail.tsx,1395,jsx-expression,run-detail,needs_review
+ui/src/pages/AgentDetail.tsx,1395,jsx-expression,channels,needs_review
+ui/src/pages/AgentDetail.tsx,1398,jsx-expression,overview,needs_review
+ui/src/pages/AgentDetail.tsx,1411,jsx-expression,instructions,needs_review
+ui/src/pages/AgentDetail.tsx,1425,jsx-expression,runtime,needs_review
+ui/src/pages/AgentDetail.tsx,1443,jsx-expression,secrets,needs_review
+ui/src/pages/AgentDetail.tsx,1458,jsx-expression,skills,needs_review
+ui/src/pages/AgentDetail.tsx,1465,jsx-expression,tools,needs_review
+ui/src/pages/AgentDetail.tsx,1469,jsx-expression,channels,needs_review
+ui/src/pages/AgentDetail.tsx,1473,jsx-expression,permissions,needs_review
+ui/src/pages/AgentDetail.tsx,1488,jsx-expression,api-keys,needs_review
+ui/src/pages/AgentDetail.tsx,1494,jsx-expression,revisions,needs_review
+ui/src/pages/AgentDetail.tsx,1498,jsx-expression,run-detail,needs_review
+ui/src/pages/AgentDetail.tsx,1511,jsx-expression,Saving changes…,needs_review
+ui/src/pages/AgentDetail.tsx,1511,jsx-expression,You have unsaved changes.,needs_review
+ui/src/pages/AgentDetail.tsx,1514,jsx-expression,Saving…,needs_review
+ui/src/pages/AgentDetail.tsx,1514,jsx-expression,Save changes,needs_review
+ui/src/pages/AgentDetail.tsx,1760,jsx-expression,Not set,needs_review
+ui/src/pages/AgentDetail.tsx,1820,jsx-text,more,needs_review
+ui/src/pages/AgentDetail.tsx,1851,jsx-text,more tasks,needs_review
+ui/src/pages/AgentDetail.tsx,1932,jsx-text,total,needs_review
+ui/src/pages/AgentDetail.tsx,1955,jsx-expression,no tracked changes,needs_review
+ui/src/pages/AgentDetail.tsx,2746,jsx-expression,(managed),needs_review
+ui/src/pages/AgentDetail.tsx,2771,jsx-attribute,/absolute/path/to/agent/prompts,needs_review
+ui/src/pages/AgentDetail.tsx,2865,jsx-attribute,TOOLS.md,needs_review
+ui/src/pages/AgentDetail.tsx,2940,jsx-expression,entry,needs_review
+ui/src/pages/AgentDetail.tsx,2974,jsx-expression,Deprecated virtual file,needs_review
+ui/src/pages/AgentDetail.tsx,2975,jsx-template,file,needs_review
+ui/src/pages/AgentDetail.tsx,2976,jsx-expression,New file in this bundle,needs_review
+ui/src/pages/AgentDetail.tsx,3028,jsx-expression,managed,needs_review
+ui/src/pages/AgentDetail.tsx,3049,jsx-template,Preserved edits for,needs_review
+ui/src/pages/AgentDetail.tsx,3050,jsx-text,. To keep any of these edits in,needs_review
+ui/src/pages/AgentDetail.tsx,3050,jsx-text,", copy them and edit the current entry explicitly.",needs_review
+ui/src/pages/AgentDetail.tsx,3071,jsx-expression,pending,needs_review
+ui/src/pages/AgentDetail.tsx,3072,jsx-expression,managed,needs_review
+ui/src/pages/AgentDetail.tsx,3072,jsx-expression,agent_files,needs_review
+ui/src/pages/AgentDetail.tsx,3129,jsx-attribute,# Agent instructions,needs_review
+ui/src/pages/AgentDetail.tsx,3258,jsx-text,tok,needs_review
+ui/src/pages/AgentDetail.tsx,3589,jsx-expression,running,needs_review
+ui/src/pages/AgentDetail.tsx,3589,jsx-expression,queued,needs_review
+ui/src/pages/AgentDetail.tsx,3597,jsx-expression,Cancelling…,needs_review
+ui/src/pages/AgentDetail.tsx,3609,jsx-expression,Resuming…,needs_review
+ui/src/pages/AgentDetail.tsx,3621,jsx-expression,Retrying…,needs_review
+ui/src/pages/AgentDetail.tsx,3621,jsx-expression,Retry,needs_review
+ui/src/pages/AgentDetail.tsx,3687,jsx-expression,No responsible person,needs_review
+ui/src/pages/AgentDetail.tsx,3704,jsx-expression,Failed to resume run,needs_review
+ui/src/pages/AgentDetail.tsx,3709,jsx-expression,Failed to retry run,needs_review
+ui/src/pages/AgentDetail.tsx,3736,jsx-expression,claude_auth_required,needs_review
+ui/src/pages/AgentDetail.tsx,3736,jsx-expression,claude_local,needs_review
+ui/src/pages/AgentDetail.tsx,3745,jsx-expression,Running claude login...,needs_review
+ui/src/pages/AgentDetail.tsx,3745,jsx-expression,Login to Claude Code,needs_review
+ui/src/pages/AgentDetail.tsx,3751,jsx-expression,Failed to run Claude login,needs_review
+ui/src/pages/AgentDetail.tsx,3789,jsx-text,(signal:,needs_review
+ui/src/pages/AgentDetail.tsx,3825,jsx-text,(changed),needs_review
+ui/src/pages/AgentDetail.tsx,3831,jsx-expression,Before,needs_review
+ui/src/pages/AgentDetail.tsx,3837,jsx-text,After,needs_review
+ui/src/pages/AgentDetail.tsx,3857,jsx-expression,clearing session...,needs_review
+ui/src/pages/AgentDetail.tsx,3858,jsx-expression,clear session for these tasks,needs_review
+ui/src/pages/AgentDetail.tsx,3864,jsx-expression,Failed to clear sessions,needs_review
+ui/src/pages/AgentDetail.tsx,3900,jsx-text,stderr,needs_review
+ui/src/pages/AgentDetail.tsx,3908,jsx-text,stdout,needs_review
+ui/src/pages/AgentDetail.tsx,4499,jsx-expression,Loading...,needs_review
+ui/src/pages/AgentDetail.tsx,4499,jsx-expression,Load more log,needs_review
+ui/src/pages/AgentDetail.tsx,4501,jsx-text,Showing the first,needs_review
+ui/src/pages/AgentDetail.tsx,4517,jsx-expression,failed,needs_review
+ui/src/pages/AgentDetail.tsx,4517,jsx-expression,timed_out,needs_review
+ui/src/pages/AgentDetail.tsx,4528,jsx-text,stderr excerpt,needs_review
+ui/src/pages/AgentDetail.tsx,4536,jsx-text,adapter result JSON,needs_review
+ui/src/pages/AgentDetail.tsx,4544,jsx-text,stdout excerpt,needs_review
+ui/src/pages/AgentDetail.tsx,4650,jsx-expression,Hide,needs_review
+ui/src/pages/AgentDetail.tsx,4650,jsx-expression,Show,needs_review
+ui/src/pages/Agents.tsx,360,jsx-expression,needs_setup,needs_review
+ui/src/pages/Agents.tsx,482,jsx-text,New Agent,needs_review
+ui/src/pages/Agents.tsx,489,jsx-text,agent,needs_review
+ui/src/pages/Agents.tsx,504,jsx-expression,list,needs_review
+ui/src/pages/Agents.tsx,510,jsx-expression,list,needs_review
+ui/src/pages/Agents.tsx,515,jsx-expression,org,needs_review
+ui/src/pages/Agents.tsx,519,jsx-expression,org,needs_review
+ui/src/pages/Agents.tsx,523,jsx-expression,org,needs_review
+ui/src/pages/Agents.tsx,603,jsx-expression,needs_setup,needs_review
+ui/src/pages/ApprovalDetail.tsx,278,jsx-expression,pending,needs_review
+ui/src/pages/ApprovalDetail.tsx,279,jsx-text,Resolve this budget stop from the budget controls on,needs_review
+ui/src/pages/ApprovalDetail.tsx,280,jsx-text,/costs,needs_review
+ui/src/pages/ApprovalDetail.tsx,283,jsx-expression,pending,needs_review
+ui/src/pages/ApprovalDetail.tsx,291,jsx-expression,revision_requested,needs_review
+ui/src/pages/ApprovalDetail.tsx,299,jsx-expression,rejected,needs_review
+ui/src/pages/ApprovalDetail.tsx,299,jsx-expression,hire_agent,needs_review
+ui/src/pages/Auth.tsx,156,jsx-expression,sign_up,needs_review
+ui/src/pages/Costs.tsx,683,jsx-text,debits,needs_review
+ui/src/pages/Costs.tsx,684,jsx-text,credits,needs_review
+ui/src/pages/Costs.tsx,696,jsx-text,Subscription accounts also have,needs_review
+ui/src/pages/Costs.tsx,696,jsx-text,"in recorded usage charges for this period, separate from monthly fees.",needs_review
+ui/src/pages/Costs.tsx,697,jsx-text,Other billing usage:,needs_review
+ui/src/pages/Costs.tsx,697,jsx-text,tokens,needs_review
+ui/src/pages/Costs.tsx,697,jsx-template,in recorded charges,needs_review
+ui/src/pages/Costs.tsx,697,jsx-text,", included in the inference ledger.",needs_review
+ui/src/pages/Costs.tsx,704,jsx-expression,overview,needs_review
+ui/src/pages/Costs.tsx,781,jsx-text,cached) · out,needs_review
+ui/src/pages/Costs.tsx,818,jsx-text,tok,needs_review
+ui/src/pages/Costs.tsx,854,jsx-expression,Unattributed,needs_review
+ui/src/pages/InstanceAccess.tsx,97,jsx-text,Loading instance access…,needs_review
+ui/src/pages/InstanceAccess.tsx,113,jsx-text,Failed to load organizations. Try again before changing access.,needs_review
+ui/src/pages/InstanceAccess.tsx,114,jsx-text,Try again,needs_review
+ui/src/pages/InstanceAccess.tsx,124,jsx-text,Instance Access,needs_review
+ui/src/pages/InstanceAccess.tsx,126,jsx-text,"Search users, manage instance-admin status, and control which organizations they can access.",needs_review
+ui/src/pages/InstanceAccess.tsx,134,jsx-text,Search users,needs_review
+ui/src/pages/InstanceAccess.tsx,139,jsx-attribute,Search by name or email,needs_review
+ui/src/pages/InstanceAccess.tsx,164,jsx-text,active organization memberships,needs_review
+ui/src/pages/InstanceAccess.tsx,173,jsx-text,Select a user to inspect instance access.,needs_review
+ui/src/pages/InstanceAccess.tsx,175,jsx-text,Loading user access…,needs_review
+ui/src/pages/InstanceAccess.tsx,178,jsx-expression,Failed to load user access.,needs_review
+ui/src/pages/InstanceAccess.tsx,196,jsx-expression,Remove instance admin,needs_review
+ui/src/pages/InstanceAccess.tsx,196,jsx-expression,Promote to instance admin,needs_review
+ui/src/pages/InstanceAccess.tsx,202,jsx-text,Organization access,needs_review
+ui/src/pages/InstanceAccess.tsx,203,jsx-text,Toggle organization membership for this user. New access defaults to an active operator membership.,needs_review
+ui/src/pages/InstanceAccess.tsx,236,jsx-expression,Saving…,needs_review
+ui/src/pages/InstanceAccess.tsx,236,jsx-expression,Save organization access,needs_review
+ui/src/pages/InstanceAccess.tsx,244,jsx-text,Current memberships,needs_review
+ui/src/pages/InstanceAccess.tsx,254,jsx-expression,unset,needs_review
+ui/src/pages/InviteLanding.tsx,177,jsx-text,Request to join,needs_review
+ui/src/pages/InviteLanding.tsx,180,jsx-text,Your request is still awaiting approval.,needs_review
+ui/src/pages/InviteLanding.tsx,181,jsx-text,must approve your request to join.,needs_review
+ui/src/pages/InviteLanding.tsx,184,jsx-text,Approval page,needs_review
+ui/src/pages/InviteLanding.tsx,185,jsx-text,Settings → Members,needs_review
+ui/src/pages/InviteLanding.tsx,187,jsx-text,Ask them to visit,needs_review
+ui/src/pages/InviteLanding.tsx,188,jsx-text,Settings → Members,needs_review
+ui/src/pages/InviteLanding.tsx,188,jsx-text,to approve your request.,needs_review
+ui/src/pages/InviteLanding.tsx,190,jsx-text,Refresh this page after you've been approved — you'll be redirected automatically.,needs_review
+ui/src/pages/InviteLanding.tsx,196,jsx-text,Claim secret,needs_review
+ui/src/pages/InviteLanding.tsx,198,jsx-text,POST,needs_review
+ui/src/pages/InviteLanding.tsx,202,jsx-text,Onboarding:,needs_review
+ui/src/pages/InviteLanding.tsx,445,jsx-text,Invalid invite token.,needs_review
+ui/src/pages/InviteLanding.tsx,449,jsx-text,Loading invite...,needs_review
+ui/src/pages/InviteLanding.tsx,457,jsx-text,Checking your access...,needs_review
+ui/src/pages/InviteLanding.tsx,464,jsx-text,Invite not available,needs_review
+ui/src/pages/InviteLanding.tsx,465,jsx-text,"This invite may be expired, revoked, or already used.",needs_review
+ui/src/pages/InviteLanding.tsx,478,jsx-text,Opening organization...,needs_review
+ui/src/pages/InviteLanding.tsx,495,jsx-text,Invite not available,needs_review
+ui/src/pages/InviteLanding.tsx,498,jsx-expression,This join request was not approved.,needs_review
+ui/src/pages/InviteLanding.tsx,499,jsx-expression,This invite has already been used.,needs_review
+ui/src/pages/InviteLanding.tsx,510,jsx-text,Bootstrap complete,needs_review
+ui/src/pages/InviteLanding.tsx,513,jsx-text,Open board,needs_review
+ui/src/pages/InviteLanding.tsx,542,jsx-text,You joined the organization,needs_review
+ui/src/pages/InviteLanding.tsx,546,jsx-text,Open board,needs_review
+ui/src/pages/InviteLanding.tsx,576,jsx-text,You've been invited to join Paperclip,needs_review
+ui/src/pages/InviteLanding.tsx,580,jsx-expression,Set up Paperclip,needs_review
+ui/src/pages/InviteLanding.tsx,580,jsx-template,Join,needs_review
+ui/src/pages/InviteLanding.tsx,584,jsx-expression,"Review the invite details, then submit the agent information below to start the join request.",needs_review
+ui/src/pages/InviteLanding.tsx,587,jsx-expression,"Your account is ready. Review the invite details, then accept it to continue.",needs_review
+ui/src/pages/InviteLanding.tsx,594,jsx-text,Organization,needs_review
+ui/src/pages/InviteLanding.tsx,598,jsx-text,Invited by,needs_review
+ui/src/pages/InviteLanding.tsx,599,jsx-expression,Paperclip board,needs_review
+ui/src/pages/InviteLanding.tsx,602,jsx-text,Requested access,needs_review
+ui/src/pages/InviteLanding.tsx,604,jsx-expression,Agent join request,needs_review
+ui/src/pages/InviteLanding.tsx,604,jsx-expression,Organization access,needs_review
+ui/src/pages/InviteLanding.tsx,608,jsx-text,Invite expires,needs_review
+ui/src/pages/InviteLanding.tsx,615,jsx-text,Message from inviter,needs_review
+ui/src/pages/InviteLanding.tsx,621,jsx-text,Signed in as,needs_review
+ui/src/pages/InviteLanding.tsx,631,jsx-text,Submit agent details,needs_review
+ui/src/pages/InviteLanding.tsx,632,jsx-text,This invite will create an approval request for a new agent in,needs_review
+ui/src/pages/InviteLanding.tsx,637,jsx-text,Agent name,needs_review
+ui/src/pages/InviteLanding.tsx,645,jsx-text,Adapter type,needs_review
+ui/src/pages/InviteLanding.tsx,653,jsx-expression,(Coming soon),needs_review
+ui/src/pages/InviteLanding.tsx,659,jsx-text,Capabilities,needs_review
+ui/src/pages/InviteLanding.tsx,673,jsx-expression,Working...,needs_review
+ui/src/pages/InviteLanding.tsx,681,jsx-expression,Create your account,needs_review
+ui/src/pages/InviteLanding.tsx,681,jsx-expression,Sign in to continue,needs_review
+ui/src/pages/InviteLanding.tsx,685,jsx-template,"Start with a Paperclip account. After that, you'll come right back here to accept the invite for",needs_review
+ui/src/pages/InviteLanding.tsx,686,jsx-expression,"Use the Paperclip account that already matches this invite. If you do not have one yet, switch back to create account.",needs_review
+ui/src/pages/InviteLanding.tsx,702,jsx-text,Create account,needs_review
+ui/src/pages/InviteLanding.tsx,716,jsx-text,I already have an account,needs_review
+ui/src/pages/InviteLanding.tsx,738,jsx-text,Name,needs_review
+ui/src/pages/InviteLanding.tsx,758,jsx-text,Email,needs_review
+ui/src/pages/InviteLanding.tsx,778,jsx-text,Password,needs_review
+ui/src/pages/InviteLanding.tsx,814,jsx-expression,Working...,needs_review
+ui/src/pages/InviteLanding.tsx,816,jsx-expression,Sign in and continue,needs_review
+ui/src/pages/InviteLanding.tsx,817,jsx-expression,Create account and continue,needs_review
+ui/src/pages/InviteLanding.tsx,823,jsx-expression,Already signed up before? Use the existing-account option instead so the invite lands on the right Paperclip user.,needs_review
+ui/src/pages/InviteLanding.tsx,824,jsx-expression,No account yet? Switch back to create account so you can accept the invite with a new login.,needs_review
+ui/src/pages/InviteLanding.tsx,833,jsx-expression,Already in this organization,needs_review
+ui/src/pages/InviteLanding.tsx,835,jsx-expression,Completing organization access,needs_review
+ui/src/pages/InviteLanding.tsx,837,jsx-expression,Accept bootstrap invite,needs_review
+ui/src/pages/InviteLanding.tsx,838,jsx-expression,Accept organization invite,needs_review
+ui/src/pages/InviteLanding.tsx,842,jsx-template,Granting your access to,needs_review
+ui/src/pages/InviteLanding.tsx,844,jsx-template,This account already belongs to,needs_review
+ui/src/pages/InviteLanding.tsx,845,jsx-template,This will,needs_review
+ui/src/pages/InviteLanding.tsx,853,jsx-expression,Submitting request...,needs_review
+ui/src/pages/InviteLanding.tsx,853,jsx-expression,Finishing sign-in...,needs_review
+ui/src/pages/InviteLanding.tsx,869,jsx-expression,Working...,needs_review
+ui/src/pages/IssueDetail.tsx,843,jsx-attribute,Assignee,needs_review
+ui/src/pages/IssueDetail.tsx,847,jsx-attribute,Originating,needs_review
+ui/src/pages/IssueDetail.tsx,1016,jsx-template,Routine execution from routine,needs_review
+ui/src/pages/IssueDetail.tsx,2397,jsx-expression,Loading earlier comments...,needs_review
+ui/src/pages/IssueDetail.tsx,2398,jsx-expression,Load earlier comments,needs_review
+ui/src/pages/IssueDetail.tsx,2796,jsx-template,", out",needs_review
+ui/src/pages/IssueDetail.tsx,2796,jsx-template,", cached",needs_review
+ui/src/pages/IssueDetail.tsx,2797,jsx-template,", out",needs_review
+ui/src/pages/IssueDetail.tsx,2802,jsx-template,run,needs_review
+ui/src/pages/IssueDetail.tsx,2826,jsx-template,", out",needs_review
+ui/src/pages/IssueDetail.tsx,2826,jsx-template,", cached",needs_review
+ui/src/pages/IssueDetail.tsx,2827,jsx-template,", out",needs_review
+ui/src/pages/IssueDetail.tsx,2831,jsx-template,run,needs_review
+ui/src/pages/IssueDetail.tsx,2835,jsx-text,task,needs_review
+ui/src/pages/IssueDetail.tsx,5562,jsx-template,Configure,needs_review
+ui/src/pages/IssueDetail.tsx,7024,jsx-expression,Uploading...,needs_review
+ui/src/pages/IssueDetail.tsx,7163,jsx-expression,routine_execution,needs_review
+ui/src/pages/IssueDetail.tsx,7167,jsx-template,Routine execution from routine,needs_review
+ui/src/pages/IssueDetail.tsx,7197,jsx-template,This task is in,needs_review
+ui/src/pages/IssueDetail.tsx,7626,jsx-expression,chat,needs_review
+ui/src/pages/IssueDetail.tsx,7631,jsx-expression,chat,needs_review
+ui/src/pages/IssueDetail.tsx,7635,jsx-expression,in_review,needs_review
+ui/src/pages/IssueDetail.tsx,7635,jsx-expression,waiting,needs_review
+ui/src/pages/IssueDetail.tsx,7659,jsx-expression,composer,needs_review
+ui/src/pages/IssueDetail.tsx,8409,jsx-expression,Plan,needs_review
+ui/src/pages/IssueDetail.tsx,8410,jsx-expression,Properties,needs_review
+ui/src/pages/MimouseCoding.tsx,55,jsx-expression,evidence,needs_review
+ui/src/pages/MimouseCodingRepair.tsx,36,jsx-expression,local-board,needs_review
+ui/src/pages/MimouseNotifications.tsx,71,jsx-expression,feishu_webhook,needs_review
+ui/src/pages/MimouseNotifications.tsx,71,jsx-text,Feishu,needs_review
+ui/src/pages/MimouseNotifications.tsx,71,jsx-text,Lark,needs_review
+ui/src/pages/MimouseNotifications.tsx,74,jsx-expression,dingtalk_app,needs_review
+ui/src/pages/MimouseNotifications.tsx,74,jsx-expression,wechat_official_account,needs_review
+ui/src/pages/MimouseNotifications.tsx,75,jsx-expression,dingtalk_app,needs_review
+ui/src/pages/MimouseNotifications.tsx,76,jsx-expression,wechat_official_account,needs_review
+ui/src/pages/MimouseWorkbuddy.tsx,37,jsx-text,WorkBuddy,needs_review
+ui/src/pages/ProfileSettings.tsx,130,jsx-text,Loading profile...,needs_review
+ui/src/pages/ProfileSettings.tsx,136,jsx-expression,Failed to load profile.,needs_review
+ui/src/pages/ProfileSettings.tsx,154,jsx-text,Profile,needs_review
+ui/src/pages/ProfileSettings.tsx,156,jsx-text,Control how your account appears in the sidebar and other board surfaces.,needs_review
+ui/src/pages/ProfileSettings.tsx,216,jsx-expression,Change photo,needs_review
+ui/src/pages/ProfileSettings.tsx,216,jsx-expression,Upload photo,needs_review
+ui/src/pages/ProfileSettings.tsx,225,jsx-text,Remove,needs_review
+ui/src/pages/ProfileSettings.tsx,235,jsx-expression,No email,needs_review
+ui/src/pages/ProfileSettings.tsx,237,jsx-text,Click the avatar to upload a new image.,needs_review
+ui/src/pages/ProfileSettings.tsx,253,jsx-text,Display name,needs_review
+ui/src/pages/ProfileSettings.tsx,259,jsx-attribute,Board,needs_review
+ui/src/pages/ProfileSettings.tsx,261,jsx-text,Shown in the sidebar account footer and comment author surfaces.,needs_review
+ui/src/pages/ProfileSettings.tsx,267,jsx-text,Email,needs_review
+ui/src/pages/ProfileSettings.tsx,274,jsx-text,Email is managed by your auth session and is read-only here.,needs_review
+ui/src/pages/ProfileSettings.tsx,282,jsx-expression,Saving...,needs_review
+ui/src/pages/ProfileSettings.tsx,282,jsx-expression,Save profile,needs_review
+ui/src/pages/Routines.tsx,1129,jsx-text,filed in,needs_review
+ui/src/pages/Routines.tsx,1277,jsx-text,routine,needs_review
+ui/src/pages/Routines.tsx,1463,jsx-text,routine,needs_review
