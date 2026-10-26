@@ -48,5 +48,6 @@
   "passed": "Aprobado",
   "failed": "Fallido",
   "execution_context_unknown": "Falta contexto de ejecución",
-  "execution_context_mismatch": "Los contextos de ejecución difieren"
+  "execution_context_mismatch": "Los contextos de ejecución difieren",
+  "historicalRun": "Ejecución histórica sustituida"
 }

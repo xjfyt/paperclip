@@ -5,7 +5,7 @@
 - 公司管理员专属 `skill-evaluations` API 与四语界面；不是对上游普通技能权限的重新定义。
 - 从同公司、同技能、未删除的 `companySkillTestInputs` 加载正文，和人工提交的精确预期输出一起冻结。每集最多100条；无修改、删除 API。
 - 比较两个**已有且不同**的 `companySkillVersions`。请求只携带版本、数据集与测试运行 ID，不能携带输入正文、运行输出、评分或成本。
-- 服务加载同公司同技能、未删除/未替代的 `companySkillTestRuns`，复用 `paperclip-eval-kernel` 做纯记录矩阵评分。缺失、失败、输入不匹配、同用例重复运行都不能变成通过。重复运行不自动挑选“最好”结果，而是要求明确选择。
+- 服务加载同公司同技能、未删除的 `companySkillTestRuns`（包含已被后续运行替代的历史记录），复用 `paperclip-eval-kernel` 做纯记录矩阵评分。缺失、失败、输入不匹配、同用例重复运行都不能变成通过。重复运行不自动挑选“最好”结果，而是要求明确选择。
 - 比较相同代理配置快照与模板正文的哈希；缺失或不同执行上下文不形成可复核的孤立技能改善结论。不同模型/配置可展示结果，但不能通过此门槛。
 - 评分只有 `exact_text_v1`，不声称语义质量、开放式任务评分、模型评审或自动提示词优化。
 - 公司内 `requestId` + 请求哈希 + 事务级 advisory lock 提供持久幂等；同 ID 不同输入409。成功请求重试返回原记录，不受后来输入/账本变化影响。新报告引用冻结数据集，保存运行与成本证据快照、版本文件清单哈希，审计日志与记录同事务落库。
@@ -53,3 +53,13 @@
 - 新增 `tests/mimouse/evaluation.spec.ts` 六项真实可丢弃数据库/API fixture（父工作树运行）：并发幂等、输入冻结、JSONB报告哈希、跨公司/技能/版本边界、复合FK、缺失/失败/上下文不一致证据、成本未知/小数/晚到记录，以及实际表上的显式session actor路由合同。此文件尚未执行；local_trusted fixture 中注入actor不代表真实登录/SSO验收。
 
 - 发布兼容补充：vendoring helper 的三项 Vitest 测试通过，验证私有依赖不存在时的相对运行入口、类型声明/许可证/来源哈希，以及未知运行时 import/缺失构建产物的失败关闭。生产完整打包安装验收仍由父工作树统一执行。
+
+## 上游连续运行与历史证据
+
+上游 `createTestRun` 对同技能/同输入的所有旧运行设置 `supersededAt`，与版本无关；未完成旧运行同时被取消。因此评测必须允许选择已完成的历史 superseded 运行，否则正常的基线→候选流程无法比较。证据列表保留 `supersededAt`、`harnessIssueDeletedAt`；报告固定历史标记，界面明确显示历史身份。仍排除 deleted 记录，仍校验公司/技能/版本与冻结输入；queued/running/cancelled/failed 仅形成阻塞结果，不计通过。
+
+新增第七项数据库夹具使用真实 `companySkillService.createTestRun` 连续创建两个已有版本的运行，显式注入数据库 `createHarnessIssue` 与 NO-OP `wakeHarnessIssue`，再明确填写fixture完成快照。覆盖上游真实superseding副作用、历史成功证据比较、未完成旧运行自动取消及报告不变；没有执行Agent或模型。由父工作树运行，未在本工作树启动数据库。
+
+冻结输入与上游运行保持同一边界：对源测试输入执行 JavaScript `String.trim()`，仅去除首尾空白，保留内部换行/缩进；纯空白输入拒绝。数据集用例 `id` 仍是原输入ID，另存 `sourceInputSnapshot` 原始正文，并把原文与规范化正文都绑定进数据集哈希。预期输出和运行输出不做trim，继续严格逐字符比较。原有已冻结数据集不会被迁移改写；新建数据集采用此规范化。
+
+本次历史运行/trim修复复验：12项纯函数/合同测试、5项UI测试与token gates通过；新增真实createTestRun数据库夹具未在本工作树执行，等待父工作树统一验证。

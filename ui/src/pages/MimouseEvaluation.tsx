@@ -10,7 +10,7 @@ import { formatNumber, useTranslation } from "@/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 type Page<T> = { items: T[]; nextBeforeId: string | null };
-type Evidence = { versions: Array<{ id: string; revision: number; label: string | null }>; inputs: Array<{ id: string; name: string }>; runs: Array<{ id: string; inputId: string | null; versionId: string; status: string }> };
+type Evidence = { versions: Array<{ id: string; revision: number; label: string | null }>; inputs: Array<{ id: string; name: string }>; runs: Array<{ id: string; inputId: string | null; versionId: string; status: string; supersededAt: string | null; harnessIssueDeletedAt: string | null }> };
 const area = "min-h-32 w-full rounded-md border border-border bg-background p-3 font-mono text-xs";
 export function MimouseEvaluation() {
   const { t } = useTranslation(), { selectedCompanyId } = useCompany(), { setBreadcrumbs } = useBreadcrumbs();
@@ -85,7 +85,7 @@ function EvaluationCompany({ companyId, userId }: { companyId: string; userId: s
       <p>{t("evaluationUi.qualityDelta")}: {formatNumber(selected.report.passCountDelta)}</p>
       <p>{t(selected.report.eligibleForHumanReview ? "evaluationUi.reviewable" : "evaluationUi.blocked")}</p>
       <ul>{selected.report.blockers.map(blocker => <li key={blocker}>{t(`evaluationUi.${blocker}`)}</li>)}</ul>
-      <details><summary>{t("evaluationUi.results")}</summary><ul>{selected.report.results.map(result => <li key={`${result.versionId}:${result.caseId}`} className="break-all text-xs">{result.caseId} · {result.versionId} · {result.runId ?? "—"} · {t(`evaluationUi.${result.blocked ?? (result.passed ? "passed" : "failed")}`)}</li>)}</ul></details>
+      <details><summary>{t("evaluationUi.results")}</summary><ul>{selected.report.results.map(result => <li key={`${result.versionId}:${result.caseId}`} className="break-all text-xs">{result.caseId} · {result.versionId} · {result.runId ?? "—"} · {result.supersededAt && `${t("evaluationUi.historicalRun")} · `}{t(`evaluationUi.${result.blocked ?? (result.passed ? "passed" : "failed")}`)}</li>)}</ul></details>
       <p>{t("evaluationUi.restoreBlocked")}</p>
     </section>}
   </div>;

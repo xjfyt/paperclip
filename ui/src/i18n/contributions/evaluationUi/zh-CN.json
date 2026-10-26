@@ -48,5 +48,6 @@
   "passed": "通过",
   "failed": "失败",
   "execution_context_unknown": "执行上下文缺失",
-  "execution_context_mismatch": "执行上下文不一致"
+  "execution_context_mismatch": "执行上下文不一致",
+  "historicalRun": "已被后续运行替代的历史记录"
 }

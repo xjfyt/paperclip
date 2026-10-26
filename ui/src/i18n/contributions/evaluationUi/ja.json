@@ -48,5 +48,6 @@
   "passed": "合格",
   "failed": "不合格",
   "execution_context_unknown": "実行コンテキストなし",
-  "execution_context_mismatch": "実行コンテキストが不一致"
+  "execution_context_mismatch": "実行コンテキストが不一致",
+  "historicalRun": "後続実行に置き換えられた履歴"
 }

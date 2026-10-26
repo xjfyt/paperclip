@@ -37,7 +37,7 @@ export function evaluationService(db: Db) {
       if (!skill) throw notFound("Skill not found");
       const versions = await db.select({ id: companySkillVersions.id, revision: companySkillVersions.revisionNumber, label: companySkillVersions.label }).from(companySkillVersions).where(and(eq(companySkillVersions.companyId, companyId), eq(companySkillVersions.companySkillId, skillId))).orderBy(desc(companySkillVersions.revisionNumber)).limit(100);
       const inputs = await db.select({ id: companySkillTestInputs.id, name: companySkillTestInputs.name }).from(companySkillTestInputs).where(and(eq(companySkillTestInputs.companyId, companyId), eq(companySkillTestInputs.skillId, skillId), isNull(companySkillTestInputs.deletedAt))).orderBy(desc(companySkillTestInputs.id)).limit(100);
-      const runs = await db.select({ id: companySkillTestRuns.id, inputId: companySkillTestRuns.inputId, versionId: companySkillTestRuns.skillVersionId, status: companySkillTestRuns.status }).from(companySkillTestRuns).where(and(eq(companySkillTestRuns.companyId, companyId), eq(companySkillTestRuns.skillId, skillId), isNull(companySkillTestRuns.deletedAt), isNull(companySkillTestRuns.supersededAt))).orderBy(desc(companySkillTestRuns.createdAt)).limit(200);
+      const runs = await db.select({ id: companySkillTestRuns.id, inputId: companySkillTestRuns.inputId, versionId: companySkillTestRuns.skillVersionId, status: companySkillTestRuns.status, supersededAt: companySkillTestRuns.supersededAt, harnessIssueDeletedAt: companySkillTestRuns.harnessIssueDeletedAt }).from(companySkillTestRuns).where(and(eq(companySkillTestRuns.companyId, companyId), eq(companySkillTestRuns.skillId, skillId), isNull(companySkillTestRuns.deletedAt))).orderBy(desc(companySkillTestRuns.createdAt)).limit(200);
       return { skill, versions, inputs, runs, limits: { versions: 100, inputs: 100, runs: 200 } };
     },
     async createDataset(companyId: string, raw: CreateEvaluationDataset, actorId: string) {
@@ -49,7 +49,10 @@ export function evaluationService(db: Db) {
         await activeCompany(tx, companyId);
         const rows = await tx.select().from(companySkillTestInputs).where(and(eq(companySkillTestInputs.companyId, companyId), eq(companySkillTestInputs.skillId, input.skillId), isNull(companySkillTestInputs.deletedAt), inArray(companySkillTestInputs.id, input.cases.map(item => item.inputId))));
         if (rows.length !== input.cases.length) throw notFound("Skill test input not found");
-        const cases = input.cases.map(item => ({ id: item.inputId, input: rows.find(row => row.id === item.inputId)!.content, expected: item.expected }));
+        // Match createTestRun's exact input boundary: trim only the outside,
+        // retain interior whitespace and the original source snapshot for audit.
+        const cases = input.cases.map(item => { const sourceInputSnapshot = rows.find(row => row.id === item.inputId)!.content;
+          return { id: item.inputId, input: sourceInputSnapshot.trim(), sourceInputSnapshot, expected: item.expected }; });
         if (cases.some(item => !item.input || item.input.length > 32000) || Buffer.byteLength(JSON.stringify(cases)) > 1_000_000) throw unprocessable("Dataset input exceeds snapshot limits");
         const datasetHash = hash(cases);
         const [row] = await tx.insert(datasets).values({ companyId, skillId: input.skillId, requestId: input.requestId, requestDigest, name: input.name, cases, datasetHash, actorId }).returning();
@@ -67,14 +70,14 @@ export function evaluationService(db: Db) {
         if (!dataset) throw notFound("Evaluation dataset not found");
         const versions = await tx.select().from(companySkillVersions).where(and(eq(companySkillVersions.companyId, companyId), eq(companySkillVersions.companySkillId, dataset.skillId), inArray(companySkillVersions.id, [input.baselineVersionId, input.candidateVersionId])));
         if (versions.length !== 2) throw notFound("Two existing skill versions are required");
-        const rows = input.runIds.length ? await tx.select().from(companySkillTestRuns).where(and(eq(companySkillTestRuns.companyId, companyId), eq(companySkillTestRuns.skillId, dataset.skillId), isNull(companySkillTestRuns.deletedAt), isNull(companySkillTestRuns.supersededAt), inArray(companySkillTestRuns.id, input.runIds))) : [];
+        const rows = input.runIds.length ? await tx.select().from(companySkillTestRuns).where(and(eq(companySkillTestRuns.companyId, companyId), eq(companySkillTestRuns.skillId, dataset.skillId), isNull(companySkillTestRuns.deletedAt), inArray(companySkillTestRuns.id, input.runIds))) : [];
         if (rows.length !== input.runIds.length) throw notFound("Recorded skill run not found");
         if (rows.some(row => row.outputSnapshot.length > 128000) || Buffer.byteLength(JSON.stringify(rows.map(row => [row.inputSnapshot, row.outputSnapshot]))) > 2_000_000) throw unprocessable("Recorded evidence exceeds snapshot limits");
         const ledger = rows.length ? await tx.select({ id: costEvents.id, issueId: costEvents.issueId, costCents: costEvents.costCents, costStatus: costEvents.costStatus, billingType: costEvents.billingType }).from(costEvents).where(and(eq(costEvents.companyId, companyId), inArray(costEvents.issueId, rows.map(row => row.issueId)))).limit(10001) : [];
         if (ledger.length > 10000) throw unprocessable("Cost evidence exceeds snapshot limits");
         const runs: RecordedSkillRun[] = rows.map(row => {
           const costs = ledger.filter(cost => cost.issueId === row.issueId);
-          return { id: row.id, companyId: row.companyId, skillId: row.skillId, versionId: row.skillVersionId, caseId: row.inputId ?? "missing_input", inputSnapshot: row.inputSnapshot, outputSnapshot: row.outputSnapshot, status: row.status as RecordedSkillRun["status"], costCents: recordedEvaluationCost(costs), executionContextHash: typeof row.agentConfigSnapshot.adapterType === "string" ? hash({ agent: row.agentConfigSnapshot, template: row.templateBody }) : null };
+          return { id: row.id, companyId: row.companyId, skillId: row.skillId, versionId: row.skillVersionId, caseId: row.inputId ?? "missing_input", inputSnapshot: row.inputSnapshot, outputSnapshot: row.outputSnapshot, status: row.status as RecordedSkillRun["status"], supersededAt: row.supersededAt?.toISOString() ?? null, costCents: recordedEvaluationCost(costs), executionContextHash: typeof row.agentConfigSnapshot.adapterType === "string" ? hash({ agent: row.agentConfigSnapshot, template: row.templateBody }) : null };
         });
         let report;
         try { report = await compareRecordedSkillRuns({ companyId, skillId: dataset.skillId, datasetId: dataset.id, baselineVersionId: input.baselineVersionId, candidateVersionId: input.candidateVersionId, cases: dataset.cases, runs, maxCandidateCostCents: input.maxCandidateCostCents }); }

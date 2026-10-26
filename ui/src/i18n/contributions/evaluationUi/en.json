@@ -48,5 +48,6 @@
   "passed": "Passed",
   "failed": "Failed",
   "execution_context_unknown": "Execution context missing",
-  "execution_context_mismatch": "Execution contexts differ"
+  "execution_context_mismatch": "Execution contexts differ",
+  "historicalRun": "Historical superseded run"
 }

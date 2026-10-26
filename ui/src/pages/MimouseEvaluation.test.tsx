@@ -52,3 +52,9 @@ it("does not round a nonzero fractional-cent ledger record down to a displayed z
   await mount(); await act(async () => [...host.querySelectorAll("button")].find(item => item.textContent === "report-a")!.click());
   expect(host.textContent).toContain("0.0000001");
 });
+it("labels completed superseded evidence as historical rather than hiding the comparison", async () => {
+  const historical = { ...report, report: { ...report.report, results: [{ caseId: "case-a", versionId: "base", runId: "old-run", supersededAt: "2026-10-26T00:00:00.000Z", passed: true, blocked: null }] } };
+  calls.get.mockImplementation(async (url: string) => ({ items: url.endsWith("comparisons") ? [historical] : [], nextBeforeId: null }));
+  await mount(); await act(async () => [...host.querySelectorAll("button")].find(item => item.textContent === "report-a")!.click());
+  expect(host.textContent).toContain(i18n.t("evaluationUi.historicalRun")); expect(host.textContent).toContain("old-run");
+});

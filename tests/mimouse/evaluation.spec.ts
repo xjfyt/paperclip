@@ -2,8 +2,9 @@ import { test, expect, type APIRequestContext } from "@playwright/test";
 import { createHash, randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import { createFixtureDb } from "./fixture-db.js";
-import { activityLog, agents, issues, companySkills, companySkillVersions, companySkillTestInputs, companySkillTestRuns, costEvents,
+import { activityLog, agents, heartbeatRuns, issues, companySkills, companySkillVersions, companySkillTestInputs, companySkillTestRuns, costEvents,
   mimouseEvaluationDatasets as datasets, mimouseEvaluationComparisons as comparisons } from "../../packages/db/src/index.js";
+import { companySkillService } from "../../server/src/services/company-skills.js";
 import { evaluationService } from "../../server/src/services/mimouse-evaluation/service.js";
 import { mimouseEvaluationRoutes } from "../../server/src/routes/mimouse-evaluation.js";
 import { canonical } from "../../server/src/services/mimouse-operations/preview.js";
@@ -13,19 +14,19 @@ const { eq } = await import(require.resolve("drizzle-orm"));
 const express = require("express") as typeof import("express");
 const supertest = require("supertest") as typeof import("supertest");
 const digest = (value: unknown) => createHash("sha256").update(canonical(value)).digest("hex");
-async function fixture(request: APIRequestContext) {
+async function fixture(request: APIRequestContext, seedRecordedRuns = true) {
   const response = await request.post("/api/companies", { data: { name: "Recorded evaluation fixture — no model execution" } });
   expect(response.ok(), await response.text()).toBe(true); const companyId = (await response.json()).id as string;
   const db = await createFixtureDb();
-  const [agent] = await db.insert(agents).values({ companyId, name: "Paused fixture agent", status: "paused", adapterType: "process", adapterConfig: {} }).returning();
+  const [agent] = await db.insert(agents).values({ companyId, name: "Paused fixture agent", status: "paused", adapterType: "process", adapterConfig: {}, runtimeConfig: { heartbeat: { enabled: false, wakeOnDemand: false } } }).returning();
   const [skill] = await db.insert(companySkills).values({ companyId, key: `fixture-${randomUUID()}`, slug: `fixture-${randomUUID()}`, name: "Recorded skill fixture", markdown: "# Fixture only", sourceType: "local_path" }).returning();
   const versions = await db.insert(companySkillVersions).values([1, 2].map(revisionNumber => ({ companyId, companySkillId: skill.id, revisionNumber,
     fileInventory: [{ path: "SKILL.md", kind: "skill" as const, content: `# Version ${revisionNumber}`, encoding: "utf8" as const }] }))).returning();
-  const [input] = await db.insert(companySkillTestInputs).values({ companyId, skillId: skill.id, name: "Frozen case", content: "original input: α\nsecond line" }).returning();
-  const harnesses = await db.insert(issues).values(versions.map(version => ({ companyId, title: `Recorded fixture ${version.id}`, status: "done", harnessKind: "skill_test" }))).returning();
-  const runs = await db.insert(companySkillTestRuns).values(versions.map((version, index) => ({ companyId, skillId: skill.id, inputId: input.id, inputSnapshot: input.content,
+  const [input] = await db.insert(companySkillTestInputs).values({ companyId, skillId: skill.id, name: "Frozen case", content: " \noriginal input: α\n  second line\n\t" }).returning();
+  const harnesses = seedRecordedRuns ? await db.insert(issues).values(versions.map(version => ({ companyId, title: `Recorded fixture ${version.id}`, status: "done", harnessKind: "skill_test" }))).returning() : [];
+  const runs = seedRecordedRuns ? await db.insert(companySkillTestRuns).values(versions.map((version, index) => ({ companyId, skillId: skill.id, inputId: input.id, inputSnapshot: input.content.trim(),
     skillVersionId: version.id, agentId: agent.id, agentConfigSnapshot: { agentId: agent.id, adapterType: "process", model: "fixture-only", adapterConfig: {} },
-    issueId: harnesses[index]!.id, status: "succeeded", outputSnapshot: index ? "correct\noutput" : "wrong\noutput", templateBody: "Recorded fixture template" }))).returning();
+    issueId: harnesses[index]!.id, status: "succeeded", outputSnapshot: index ? "correct\noutput" : "wrong\noutput", templateBody: "Recorded fixture template" }))).returning() : [];
   const root = `/api/companies/${companyId}/skill-evaluations`;
   const datasetInput = { requestId: randomUUID(), skillId: skill.id, name: "Fixed regression v1", cases: [{ inputId: input.id, expected: "correct\noutput" }] };
   return { db, companyId, agent, skill, versions, input, runs, root, datasetInput, service: evaluationService(db) };
@@ -44,7 +45,7 @@ test("dataset freezes server-loaded inputs, retries exactly once and rejects rep
     const responses = await Promise.all([request.post(`${f.root}/datasets`, { data: f.datasetInput }), request.post(`${f.root}/datasets`, { data: f.datasetInput })]);
     expect(responses.map(response => response.status()).sort()).toEqual([200, 201]);
     const [a, b] = await Promise.all(responses.map(response => response.json())); expect(a.item.id).toBe(b.item.id);
-    expect(a.item.cases).toEqual([{ id: f.input.id, input: f.input.content, expected: "correct\noutput" }]);
+    expect(a.item.cases).toEqual([{ id: f.input.id, input: f.input.content.trim(), sourceInputSnapshot: f.input.content, expected: "correct\noutput" }]);
     expect(a.item.datasetHash).toBe(digest(a.item.cases));
     await f.db.update(companySkillTestInputs).set({ content: "later edit must not change frozen input" }).where(eq(companySkillTestInputs.id, f.input.id));
     const retry = await request.post(`${f.root}/datasets`, { data: f.datasetInput }); expect(retry.status()).toBe(200); expect((await retry.json()).item).toEqual(a.item);
@@ -53,6 +54,8 @@ test("dataset freezes server-loaded inputs, retries exactly once and rejects rep
     const stored = await f.db.select().from(datasets).where(eq(datasets.companyId, f.companyId)); expect(stored).toHaveLength(1); expect(stored[0]!.cases).toEqual(a.item.cases);
     const audit = await f.db.select().from(activityLog).where(eq(activityLog.entityId, a.item.id)); expect(audit).toHaveLength(1); expect(JSON.stringify(audit[0]!.details)).not.toContain(f.input.content);
     expect((await request.patch(`${f.root}/datasets/${a.item.id}`, { data: { name: "mutate" } })).status()).toBe(404);
+    await f.db.update(companySkillTestInputs).set({ content: " \n\t " }).where(eq(companySkillTestInputs.id, f.input.id));
+    expect((await request.post(`${f.root}/datasets`, { data: { ...f.datasetInput, requestId: randomUUID() } })).status()).toBe(422);
   } finally { await f.db.$client.end({ timeout: 1 }); }
 });
 
@@ -102,9 +105,9 @@ test("missing, failed and edited-input runs keep the full denominator and block 
     const failed = await compare(request, f, { ...body, requestId: randomUUID() }); expect(failed.report.results[1].blocked).toBe("run_not_succeeded");
     await f.db.update(companySkillTestRuns).set({ status: "succeeded", inputSnapshot: "not the frozen input" }).where(eq(companySkillTestRuns.id, f.runs[1]!.id));
     const mismatch = await compare(request, f, { ...body, requestId: randomUUID() }); expect(mismatch.report.results[1].blocked).toBe("input_snapshot_mismatch"); expect(mismatch.report.eligibleForHumanReview).toBe(false);
-    await f.db.update(companySkillTestRuns).set({ inputSnapshot: f.input.content, agentConfigSnapshot: { adapterType: "process", model: "different-fixture-model" } }).where(eq(companySkillTestRuns.id, f.runs[1]!.id));
+    await f.db.update(companySkillTestRuns).set({ inputSnapshot: f.input.content.trim(), agentConfigSnapshot: { adapterType: "process", model: "different-fixture-model" } }).where(eq(companySkillTestRuns.id, f.runs[1]!.id));
     const context = await compare(request, f, { ...body, requestId: randomUUID() }); expect(context.report.results[1].blocked).toBe("execution_context_mismatch");
-    await f.db.update(companySkillTestRuns).set({ inputSnapshot: f.input.content, supersededAt: new Date() }).where(eq(companySkillTestRuns.id, f.runs[1]!.id));
+    await f.db.update(companySkillTestRuns).set({ inputSnapshot: f.input.content.trim(), deletedAt: new Date() }).where(eq(companySkillTestRuns.id, f.runs[1]!.id));
     expect((await request.post(`${f.root}/comparisons`, { data: { ...body, requestId: randomUUID() } })).status()).toBe(404);
   } finally { await f.db.$client.end({ timeout: 1 }); }
 });
@@ -145,5 +148,51 @@ test("real DB route contract accepts administrator session actors and denies mem
       expect((await supertest(app(actor)).post(`${base}/datasets`).send({ ...f.datasetInput, requestId: randomUUID() })).status).toBe(403);
     }
     expect((await f.db.select().from(datasets).where(eq(datasets.companyId, f.companyId))).length).toBe(1);
+  } finally { await f.db.$client.end({ timeout: 1 }); }
+});
+
+
+test("normal sequential upstream test runs retain completed superseded evidence without waking an agent", async ({ request }) => {
+  const f = await fixture(request, false); try {
+    const dataset = await freeze(request, f), skills = companySkillService(f.db);
+    // The real upstream API disallows paused agents. Direct DB fixtures keep all
+    // lifecycle scheduling inactive; the only wake dependency below is a NO-OP.
+    await f.db.update(agents).set({ status: "idle" }).where(eq(agents.id, f.agent.id));
+    let wakeInvocations = 0;
+    const deps: Parameters<typeof skills.createTestRun>[4] = {
+      createHarnessIssue: async input => {
+        const [row] = await f.db.insert(issues).values({ ...input, companyId: f.companyId }).returning({ id: issues.id });
+        return row!;
+      },
+      wakeHarnessIssue: async () => { wakeInvocations += 1; return { fixtureNoOp: true }; },
+    };
+    const create = (versionId: string) => skills.createTestRun(f.companyId, f.skill.id, { inputId: f.input.id, agentId: f.agent.id, skillVersionId: versionId, templateId: null }, { type: "system" }, deps);
+    const completeFixture = async (run: Awaited<ReturnType<typeof create>>, outputSnapshot: string) => {
+      // Explicit recorded fixtures only: no provider, runner, heartbeat or model.
+      await f.db.update(companySkillTestRuns).set({ outputSnapshot }).where(eq(companySkillTestRuns.id, run.id));
+      await skills.completeTestRunForIssue({ companyId: f.companyId, issueId: run.issueId, outcome: "succeeded" });
+    };
+    const baseline = await create(f.versions[0]!.id); await completeFixture(baseline, "wrong\noutput");
+    const candidate = await create(f.versions[1]!.id); await completeFixture(candidate, "correct\noutput");
+    const [historical] = await f.db.select().from(companySkillTestRuns).where(eq(companySkillTestRuns.id, baseline.id));
+    expect(historical!.supersededAt).not.toBeNull(); expect(historical!.status).toBe("succeeded"); expect(historical!.inputSnapshot).toBe(f.input.content.trim());
+    expect(dataset.cases[0]).toMatchObject({ id: f.input.id, input: f.input.content.trim(), sourceInputSnapshot: f.input.content });
+    const evidenceResponse = await request.get(`${f.root}/skills/${f.skill.id}/evidence`); expect(evidenceResponse.status()).toBe(200);
+    const evidence = await evidenceResponse.json(); expect(evidence.runs.find((run: { id: string }) => run.id === baseline.id)).toMatchObject({ status: "succeeded", supersededAt: historical!.supersededAt!.toISOString() });
+    const body = { ...comparison(f, dataset.id), runIds: [baseline.id, candidate.id] };
+    const report = await compare(request, f, body);
+    expect(report.report).toMatchObject({ eligibleForHumanReview: true, passCountDelta: 1, baseline: { passed: 0, blocked: 0 }, candidate: { passed: 1, blocked: 0 } });
+    expect(report.report.results[0].supersededAt).toBe(historical!.supersededAt!.toISOString());
+    // Superseding an unfinished run really cancels it upstream; preserving it
+    // as history must not turn that cancelled snapshot into successful evidence.
+    const unfinished = await create(f.versions[0]!.id), newest = await create(f.versions[1]!.id); await completeFixture(newest, "correct\noutput");
+    const [cancelled] = await f.db.select().from(companySkillTestRuns).where(eq(companySkillTestRuns.id, unfinished.id));
+    expect(cancelled!.supersededAt).not.toBeNull(); expect(cancelled!.status).toBe("cancelled");
+    const blocked = await compare(request, f, { ...body, requestId: randomUUID(), runIds: [unfinished.id, newest.id] });
+    expect(blocked.report.results[0].blocked).toBe("run_not_succeeded"); expect(blocked.report.eligibleForHumanReview).toBe(false);
+    expect(wakeInvocations).toBe(4);
+    expect(await f.db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.companyId))).toHaveLength(0);
+    // Previously persisted comparison remains pinned despite later superseding.
+    expect((await (await request.get(`${f.root}/comparisons/${report.id}`)).json()).report).toEqual(report.report);
   } finally { await f.db.$client.end({ timeout: 1 }); }
 });

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { runPaperclipEvalMatrix } from "../../vendor/paperclip-eval-kernel/index.js";
 import { canonical } from "../mimouse-operations/preview.js";
 export interface FixedCase { id: string; input: string; expected: string }
-export interface RecordedSkillRun { id: string; companyId: string; skillId: string; versionId: string; caseId: string; inputSnapshot: string; outputSnapshot: string; status: "queued" | "running" | "succeeded" | "failed" | "cancelled"; costCents: number | null; executionContextHash: string | null }
+export interface RecordedSkillRun { id: string; companyId: string; skillId: string; versionId: string; caseId: string; inputSnapshot: string; outputSnapshot: string; status: "queued" | "running" | "succeeded" | "failed" | "cancelled"; costCents: number | null; executionContextHash: string | null; supersededAt?: string | null }
 interface Input { companyId: string; skillId: string; datasetId: string; baselineVersionId: string; candidateVersionId: string; cases: FixedCase[]; runs: RecordedSkillRun[]; maxCandidateCostCents: number | null }
 const hash = (value: unknown) => createHash("sha256").update(canonical(value)).digest("hex");
 const pair = (versionId: string, caseId: string) => JSON.stringify([versionId, caseId]);
@@ -53,7 +53,7 @@ export async function compareRecordedSkillRuns(input: Input) {
   if (input.maxCandidateCostCents !== null && (candidate.totalCostCents === null || candidate.totalCostCents > input.maxCandidateCostCents)) blockers.push(candidate.totalCostCents === null ? "candidate_cost_unknown" : "candidate_cost_exceeds_limit");
   const report = { schemaVersion: 1 as const, companyId: input.companyId, skillId: input.skillId, datasetId: input.datasetId, datasetHash: hash(cases), scorer: "exact_text_v1" as const, costBasis: "recorded_issue_ledger_snapshot" as const,
     baseline, candidate, passCountDelta: candidate.passed - baseline.passed, blockers, eligibleForHumanReview: blockers.length === 0,
-    results: matrix.map(row => ({ caseId: row.scenarioId, versionId: row.candidateId, runId: row.output?.id ?? null, outputHash: row.output ? hash(row.output.outputSnapshot) : null, ...row.score })),
+    results: matrix.map(row => ({ caseId: row.scenarioId, versionId: row.candidateId, runId: row.output?.id ?? null, supersededAt: row.output?.supersededAt ?? null, outputHash: row.output ? hash(row.output.outputSnapshot) : null, ...row.score })),
     executionStarted: false as const, promoted: false as const };
   return { ...report, reportHash: hash(report) };
 }

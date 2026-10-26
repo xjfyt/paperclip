@@ -57,3 +57,13 @@ test("different or absent execution context cannot claim an isolated skill impro
     assert.ok(report.results.some(row => row.blocked?.startsWith("execution_context_")));
   }
 });
+
+test("completed superseded snapshots remain comparable and cancelled history remains blocked", async () => {
+  const supersededAt = "2026-10-26T00:00:00.000Z";
+  const report = await compareRecordedSkillRuns({ ...input, runs: [run("base", { supersededAt }), run("next")] });
+  assert.equal(report.eligibleForHumanReview, true); assert.equal(report.results[0].supersededAt, supersededAt);
+  for (const status of ["queued", "running", "cancelled", "failed"]) {
+    const blocked = await compareRecordedSkillRuns({ ...input, runs: [run("base", { supersededAt, status }), run("next")] });
+    assert.equal(blocked.eligibleForHumanReview, false); assert.equal(blocked.results[0].blocked, "run_not_succeeded");
+  }
+});
