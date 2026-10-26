@@ -159,6 +159,7 @@ NODE_OPTIONS=--max-old-space-size=512 node ../node_modules/vitest/vitest.mjs run
 - 新增屏幕四语渲染覆盖 entry/resume/starting/redirecting/error、按钮、进度 aria、安全警告、原始 URL/host/供应商诊断和 HTML 字面名称；实际 `AppsConnect` mock 流程先触发 connect/start 的本地 fallback、已知授权过期或原始外部错误，以及已保存 draft 的三种回调失败，再切四语，核对 connect/startOAuth/finish/install/查询记录不增加。保留 draft ID 与 `asCurrentUser` 语义，只有主动重试才重新启动。
 - 弹窗阻止后的四语切换不重复打开窗口/启动请求；独立 dialog 测试拦截 interval 并主动执行原注册回调，证明切语言不重新注册/清理 1 秒轮询、不调用 finish/onComplete；只有原回调读取 mock 已保存 active 状态后才完成。该测试不是实时浏览器计时、真实弹窗或外部 OAuth 验收。
 - 最终专注回归 **11 文件 / 332 用例通过**；资源/实际合成器安全规则、独立审阅、token gates、调色板/角色同步与 diff 检查通过。未执行完整类型检查/构建、真实授权、数据库或网络。
+- 中央整合类型检查曾发现新增 interval 测试的全局 `window` 重载被推断为 Node `Timeout`；测试 spy 已明确使用浏览器 `Window` 接口，保留数字句柄/回调/断言，不改生产类型。修后重跑 `AppsConnect.test.tsx` 与 `connection-oauth-surfaces.test.tsx`，**2 文件 / 227 用例通过**；完整 UI 类型结果由中央复检记录。
 - 复现命令（`ui/`，512 MB、单 worker，均为纯测试或 mock/jsdom）：
 
 ```sh

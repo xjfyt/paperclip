@@ -2431,7 +2431,8 @@ describe("AppsConnect — Connect with a link (M4 frame)", () => {
     const open = vi.spyOn(window, "open").mockReturnValue(popup as unknown as Window);
     // Drive the registered callbacks explicitly: no real popup, network, or clock delay.
     const polls: Array<() => unknown> = [];
-    const intervals = vi.spyOn(window, "setInterval").mockImplementation(handler => { polls.push(handler as () => unknown); return polls.length; });
+    // This jsdom/browser stub uses numeric handles, not Node global Timeout objects.
+    const intervals = vi.spyOn(window as Window, "setInterval").mockImplementation(handler => { polls.push(handler as () => unknown); return polls.length; });
     const clears = vi.spyOn(window, "clearInterval").mockImplementation(() => {});
     const onComplete = vi.fn(), onPhaseChange = vi.fn();
     await render(undefined, false, <ConnectionSetupFlow host="dialog" serviceSlug="notion" onComplete={onComplete} onPhaseChange={onPhaseChange} />);
