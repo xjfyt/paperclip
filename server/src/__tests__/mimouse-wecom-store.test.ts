@@ -4,7 +4,7 @@ import { wecomFeedbackService, type WecomLease } from "../services/mimouse-wecom
 import type { WecomStopReason } from "../services/mimouse-wecom/protocol.js";
 
 const lease: WecomLease = { companyId: "22222222-2222-4222-8222-222222222222", id: "33333333-3333-4333-8333-333333333333",
-  token: "44444444-4444-4444-8444-444444444444", config: { transport: "long_connection", botId: "test-bot", product: "test",
+  token: "44444444-4444-4444-8444-444444444444", activationToken: "66666666-6666-4666-8666-666666666666", config: { transport: "long_connection", botId: "test-bot", product: "test",
     allowedGroupIds: ["test-group"], allowedDirectSenderIds: [], secret: { secretId: "55555555-5555-4555-8555-555555555555", version: 1 } } };
 function mockDb() {
   const forLock = vi.fn().mockResolvedValue([]);
@@ -38,7 +38,7 @@ describe("WeCom durable store fail-closed seams (no database or sockets)", () =>
   });
   it("commits a disabled gap status when the pinned credential was revoked before acquire", async () => {
     const mock = mockDb();
-    mock.forLock.mockResolvedValueOnce([{ config: lease.config }]).mockResolvedValue([]);
+    mock.forLock.mockResolvedValueOnce([{ config: lease.config, activationToken: lease.activationToken, leaseToken: null }]).mockResolvedValue([]);
     const values = vi.fn().mockResolvedValue(undefined);
     mock.insert.mockReturnValue({ values });
     expect(await wecomFeedbackService(mock.db).acquire(lease.companyId, lease.id)).toBeNull();
@@ -129,4 +129,24 @@ it("ordinary company admin cannot reserve a global bot with any dummy secret ref
 it("sets transaction-local statement and lock budgets even on a denied lease", async () => {
   const mock = mockDb(); await wecomFeedbackService(mock.db).renew(lease);
   expect(mock.execute).toHaveBeenCalledTimes(1);
+});
+
+it("an expired retained lease never creates a fresh run budget", async () => {
+  const mock = mockDb(); mock.forLock.mockResolvedValue([{ config: lease.config, activationToken: lease.activationToken, leaseToken: lease.token }]);
+  expect(await wecomFeedbackService(mock.db).acquire(lease.companyId, lease.id)).toBeNull();
+  expect(mock.set).toHaveBeenCalledWith(expect.objectContaining({ enabled: false, state: "interrupted", gapDetected: true, leaseToken: null }));
+});
+it.each([false, true])("enabled=%s preserves explicit activation idempotency", async alreadyEnabled => {
+  const mock = mockDb(), now = new Date();
+  const row = { ...lease, enabled: alreadyEnabled, activationToken: lease.activationToken, createdAt: now, updatedAt: now };
+  mock.forLock.mockResolvedValueOnce([row])
+    .mockResolvedValueOnce([{ scope: "company", status: "active" }])
+    .mockResolvedValueOnce([{ status: "current", revokedAt: null }]);
+  mock.returning.mockResolvedValue([{ ...row, enabled: true }]);
+  await wecomFeedbackService(mock.db).setEnabled(lease.companyId, lease.id, true, { actorType: "user", actorId: "operator" });
+  if (alreadyEnabled) expect(mock.update).not.toHaveBeenCalled();
+  else {
+    expect(mock.set).toHaveBeenCalledWith(expect.objectContaining({ enabled: true, activationToken: expect.stringMatching(/^[a-f0-9-]{36}$/) }));
+    expect(mock.set).not.toHaveBeenCalledWith(expect.objectContaining({ activationToken: lease.activationToken }));
+  }
 });

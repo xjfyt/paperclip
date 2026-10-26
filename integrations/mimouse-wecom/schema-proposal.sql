@@ -7,6 +7,7 @@ CREATE TABLE mimouse_wecom_connections (
   bot_hash text NOT NULL,
   config jsonb NOT NULL,
   enabled boolean NOT NULL DEFAULT false,
+  activation_token uuid,
   state text NOT NULL DEFAULT 'disabled',
   lease_token uuid,
   lease_expires_at timestamptz,

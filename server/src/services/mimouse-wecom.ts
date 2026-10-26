@@ -9,12 +9,12 @@ import { wecomConfigSchema, type WecomConfig, type WecomStopReason } from "./mim
 
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 type Actor = { actorType: "agent" | "user" | "system" | "plugin"; actorId: string };
-export type WecomLease = { companyId: string; id: string; token: string; config: WecomConfig };
+export type WecomLease = { companyId: string; id: string; token: string; activationToken: string; config: WecomConfig };
 const systemActor: Actor = { actorType: "system", actorId: "wecom-inbound" };
 const scope = (companyId: string, id: string) => and(eq(connections.companyId, companyId), eq(connections.id, id));
 const botHash = (id: string) => createHash("sha256").update(id).digest("hex");
 const activeLease = (lease: WecomLease) => and(scope(lease.companyId, lease.id), eq(connections.enabled, true),
-  eq(connections.leaseToken, lease.token), gt(connections.leaseExpiresAt, sql`clock_timestamp()`));
+  eq(connections.leaseToken, lease.token), eq(connections.activationToken, lease.activationToken), gt(connections.leaseExpiresAt, sql`clock_timestamp()`));
 function publicConnection(row: typeof connections.$inferSelect) {
   // No bot IDs, sender/group IDs, aliases, references, credentials or lease tokens in status.
   return { id: row.id, companyId: row.companyId, product: row.config.product, transport: row.config.transport,
@@ -103,7 +103,7 @@ export function wecomFeedbackService(db: Db) {
         if (enabled) await assertCredential(tx, companyId, row.config);
         // Idempotent enable cannot steal a live lease or reset a displacement stop.
         if (row.enabled === enabled) return publicConnection(row);
-        const [updated] = await tx.update(connections).set({ enabled, state: enabled ? "pending" : "disabled",
+        const [updated] = await tx.update(connections).set({ enabled, ...(enabled ? { activationToken: randomUUID() } : {}), state: enabled ? "pending" : "disabled",
           leaseToken: null, leaseExpiresAt: null, gapDetected: row.gapDetected || !enabled, updatedAt: new Date() }).where(scope(companyId, id)).returning();
         await audit(tx, companyId, id, actor, enabled ? "feedback.wecom.enabled" : "feedback.wecom.disabled");
         return publicConnection(updated);
@@ -116,6 +116,14 @@ export function wecomFeedbackService(db: Db) {
           or(isNull(connections.leaseToken), lte(connections.leaseExpiresAt, sql`clock_timestamp()`)))).for("update", { skipLocked: true });
         if (!row) return null;
         if (!active) { await stopInactiveCompany(tx, companyId, id); return null; }
+        if (!row.activationToken || row.leaseToken) {
+          // A crashed/abandoned run has an unknown delivery gap and spent retry budget.
+          // Never treat lease expiry or process restart as a fresh operator activation.
+          await tx.update(connections).set({ enabled: false, state: "interrupted", gapDetected: true,
+            leaseToken: null, leaseExpiresAt: null, updatedAt: new Date() }).where(scope(companyId, id));
+          await audit(tx, companyId, id, systemActor, "feedback.wecom.stopped");
+          return null;
+        }
         try { await assertCredential(tx, companyId, row.config); }
         catch (error) {
           if (!(error instanceof HttpError) || error.status !== 422) throw error;
@@ -128,7 +136,7 @@ export function wecomFeedbackService(db: Db) {
         const config = wecomConfigSchema.parse(row.config), token = randomUUID();
         await tx.update(connections).set({ leaseToken: token, leaseExpiresAt: sql`clock_timestamp() + interval '30 seconds'`,
           state: "connecting", gapDetected: row.gapDetected || row.leaseToken !== null, updatedAt: new Date() }).where(scope(companyId, id));
-        return { companyId, id, token, config };
+        return { companyId, id, token, activationToken: row.activationToken, config };
       });
     },
     async renew(lease: WecomLease) {
@@ -188,7 +196,7 @@ export function wecomFeedbackService(db: Db) {
       return boundedTransaction(db, async tx => {
         const [row] = await tx.update(connections).set({ leaseToken: null, leaseExpiresAt: null, state: reason,
           enabled: false, gapDetected: true, updatedAt: new Date() })
-          .where(and(scope(lease.companyId, lease.id), eq(connections.leaseToken, lease.token))).returning();
+          .where(and(scope(lease.companyId, lease.id), eq(connections.leaseToken, lease.token), eq(connections.activationToken, lease.activationToken))).returning();
         if (row) await audit(tx, lease.companyId, lease.id, systemActor, "feedback.wecom.stopped");
       });
     },

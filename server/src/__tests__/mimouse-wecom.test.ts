@@ -61,7 +61,7 @@ class FakeSocket extends EventEmitter {
   frame(frame: unknown) { this.emit("message", Buffer.from(JSON.stringify(frame)), false); }
 }
 function fixture() {
-  const socket = new FakeSocket(), lease = { companyId: "company-a", id: "connection-a", token: "fence", config };
+  const socket = new FakeSocket(), lease = { companyId: "company-a", id: "connection-a", token: "fence", activationToken: "activation", config };
   const store = { acquire: vi.fn(async () => lease), renew: vi.fn(async () => true), release: vi.fn(async () => {}),
     resolveCredential: vi.fn(async () => "test-secret"), markGap: vi.fn(async () => true), markAuthenticated: vi.fn(async () => true), persist: vi.fn(async (_lease: unknown, _item: unknown, _signal?: AbortSignal, _credential?: string) => true) };
   const connect = vi.fn(() => socket as unknown as WebSocket);

@@ -11,6 +11,7 @@ export const mimouseWecomConnections = pgTable("mimouse_wecom_connections", {
     secret: { secretId: string; version: number };
   }>().notNull(),
   enabled: boolean("enabled").notNull().default(false),
+  activationToken: uuid("activation_token"),
   state: text("state").notNull().default("disabled"),
   leaseToken: uuid("lease_token"), leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
   gapDetected: boolean("gap_detected").notNull().default(false),
