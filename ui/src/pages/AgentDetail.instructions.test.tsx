@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import "../i18n/management-test-resources";
 
 import type { ComponentProps } from "react";
 import { flushSync } from "react-dom";

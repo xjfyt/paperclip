@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act } from "react";
+import { i18n, managementMessages } from "../i18n/management-test-resources";
 import { createRoot } from "react-dom/client";
 import type { HeartbeatRun } from "@paperclipai/shared";
 import { afterEach, expect, it, vi } from "vitest";
@@ -21,7 +22,7 @@ vi.mock("../components/transcript/RunTranscriptView", () => ({
   RunTranscriptView: ({ entries }: { entries: Array<{ chunk: string }> }) => <div>{entries.map(line => line.chunk).join(" ")}</div>,
 }));
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); log.mockReset(); events.mockClear(); });
+afterEach(async () => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); log.mockReset(); events.mockClear(); await i18n.changeLanguage("en"); });
 
 it.each([LogViewer, ProductionLogViewer])("retains legacy history and reads only the next offset on visibility recovery (%#)", async (Viewer) => {
   const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
@@ -91,4 +92,31 @@ it.each([LogViewer, ProductionLogViewer])("polls logs when WebSocket constructio
     await act(async () => root.unmount());
   }
   expect(sockets[0].close).toHaveBeenCalled();
+});
+
+it.each(Object.entries(managementMessages))("retranslates the local run-log failure without a second fetch in %s", async (locale, messages) => {
+  await i18n.changeLanguage(locale);
+  log.mockRejectedValue("unknown failure");
+  const run = { id: "run-1", companyId: "company-1", agentId: "agent-1", status: "failed", logRef: "log" } as HeartbeatRun;
+  const container = document.createElement("div"), root = createRoot(container);
+  document.body.append(container);
+  try {
+    await act(async () => { root.render(<LogViewer run={run} adapterType="codex_local" />); });
+    expect(container.textContent).toContain(messages.runLogFailed);
+    expect(log).toHaveBeenCalledTimes(1);
+    await act(async () => { await i18n.changeLanguage(locale === "ja" ? "es" : "ja"); });
+    expect(container.textContent).toContain(i18n.t("managementUi.runLogFailed"));
+    expect(log).toHaveBeenCalledTimes(1);
+  } finally { await act(async () => { root.unmount(); }); container.remove(); }
+});
+it("keeps server log errors verbatim across locale changes", async () => {
+  log.mockRejectedValue(new Error("Remote original <run-a>"));
+  const run = { id: "run-1", status: "failed", logRef: "log" } as HeartbeatRun;
+  const container = document.createElement("div"), root = createRoot(container);
+  try {
+    await act(async () => { root.render(<LogViewer run={run} adapterType="codex_local" />); });
+    await act(async () => { await i18n.changeLanguage("zh-CN"); });
+    expect(container.textContent).toContain("Remote original <run-a>");
+    expect(log).toHaveBeenCalledTimes(1);
+  } finally { await act(async () => { root.unmount(); }); }
 });

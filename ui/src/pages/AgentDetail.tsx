@@ -1,3 +1,4 @@
+import { describeManagementError, managementErrorText, ManagementUiError, renderManagementError, type ManagementErrorDescriptor } from "@/i18n/management-errors";
 import { CapabilityEvidenceLedger } from "@/components/CapabilityEvidenceLedger";
 import { MimouseAdapterCapabilities } from "@/components/MimouseAdapterCapabilities";
 import { systemLabel } from "@/i18n/system-labels";
@@ -631,7 +632,7 @@ function WorkspaceOperationLogViewer({
           {isLoading && <div className="text-xs text-muted-foreground">{mimouseT("workflow.loadingLog")}</div>}
           {error && (
             <div className="text-xs text-destructive">
-              {error instanceof Error ? error.message : "Failed to load workspace operation log"}
+              {managementErrorText(error, "managementUi.workspaceLogFailed")}
             </div>
           )}
           {!isLoading && !error && chunks.length === 0 && (
@@ -778,7 +779,7 @@ export function AgentDetail() {
   const { setBreadcrumbs } = useBreadcrumbs();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<ManagementErrorDescriptor | null>(null);
   const [dismissedLeftAgentIds, setDismissedLeftAgentIds] = useState<Set<string>>(() => new Set());
   const activeView: AgentDetailView = urlRunId ? "run-detail"
     : parseAgentDetailView(urlTab ?? null);
@@ -883,7 +884,7 @@ export function AgentDetail() {
       builtInAgentsApi.reset(resolvedCompanyId!, builtInState!.definition.key, [kind]),
     onSuccess: invalidateBuiltIn,
     onError: (error) => {
-      setActionError(error instanceof Error ? error.message : "Failed to update bundle resource");
+      setActionError(describeManagementError(error, "managementUi.bundleResourceFailed"));
     },
   });
   const runBuiltInRoutine = useMutation({
@@ -891,7 +892,7 @@ export function AgentDetail() {
       builtInAgentsApi.runRoutine(resolvedCompanyId!, builtInState!.definition.key, routineKey),
     onSuccess: invalidateBuiltIn,
     onError: (error) => {
-      setActionError(error instanceof Error ? error.message : "Failed to run built-in routine");
+      setActionError(describeManagementError(error, "managementUi.builtInRoutineFailed"));
     },
   });
   const enableBuiltInSchedule = useMutation({
@@ -899,7 +900,7 @@ export function AgentDetail() {
       builtInAgentsApi.enableRoutineSchedule(resolvedCompanyId!, builtInState!.definition.key, routineKey),
     onSuccess: invalidateBuiltIn,
     onError: (error) => {
-      setActionError(error instanceof Error ? error.message : "Failed to enable routine schedule");
+      setActionError(describeManagementError(error, "managementUi.enableScheduleFailed"));
     },
   });
   const disableBuiltInSchedule = useMutation({
@@ -907,7 +908,7 @@ export function AgentDetail() {
       builtInAgentsApi.disableRoutineSchedule(resolvedCompanyId!, builtInState!.definition.key, routineKey),
     onSuccess: invalidateBuiltIn,
     onError: (error) => {
-      setActionError(error instanceof Error ? error.message : "Failed to disable routine schedule");
+      setActionError(describeManagementError(error, "managementUi.disableScheduleFailed"));
     },
   });
   const builtInRoutineActionPending =
@@ -995,7 +996,7 @@ export function AgentDetail() {
   // AgentActionButtons component. Approval and lifecycle retry stay in the detail header.
   const agentAction = useMutation({
     mutationFn: async (action: "approve" | "retryLifecycle") => {
-      if (!agentLookupRef) return Promise.reject(new Error("No agent reference"));
+      if (!agentLookupRef) return Promise.reject(new ManagementUiError("managementUi.noAgentReference"));
       if (action === "approve") {
         return agentsApi.approve(agentLookupRef, resolvedCompanyId ?? undefined);
       }
@@ -1019,7 +1020,7 @@ export function AgentDetail() {
       }
     },
     onError: (err) => {
-      setActionError(err instanceof Error ? err.message : "Action failed");
+      setActionError(describeManagementError(err, "managementUi.actionFailed"));
     },
   });
 
@@ -1046,7 +1047,7 @@ export function AgentDetail() {
       }
     },
     onError: (err) => {
-      setActionError(err instanceof Error ? err.message : "Failed to update permissions");
+      setActionError(describeManagementError(err, "managementUi.permissionsFailed"));
     },
   });
 
@@ -1339,7 +1340,7 @@ export function AgentDetail() {
               onClick={() => resetBuiltIn.mutate()}
               disabled={resetBuiltIn.isPending}
             >
-              {resetBuiltIn.isPending ? "Resetting…" : "Reset to defaults"}
+              {resetBuiltIn.isPending ? mimouseT("managementUi.resetting") : mimouseT("managementUi.resetDefaults")}
             </Button>
           }
         >
@@ -1377,7 +1378,7 @@ export function AgentDetail() {
       )}
 
 
-      {actionError && <p className="text-sm text-destructive">{actionError}</p>}
+      {actionError && <p className="text-sm text-destructive">{renderManagementError(actionError)}</p>}
       {isPendingApproval && (
         <div className="flex flex-wrap items-center gap-3 rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-400/40 dark:bg-amber-950/30 dark:text-amber-200">
           <span>{mimouseT("workflow.pendingApproval")}</span>
@@ -1509,10 +1510,10 @@ export function AgentDetail() {
       )}
 
       {showConfigActionBar && <footer className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 border-t border-border bg-background py-4">
-        <p role="status" className="text-xs text-muted-foreground">{configSaving ? "Saving changes…" : configDirty ? "You have unsaved changes." : ""}</p>
+        <p role="status" className="text-xs text-muted-foreground">{configSaving ? mimouseT("managementUi.savingChanges") : configDirty ? mimouseT("managementUi.unsavedChanges") : ""}</p>
         <div className="flex gap-2">
           <Button variant="ghost" disabled={!configDirty || configSaving} onClick={() => cancelConfigActionRef.current?.()}>{mimouseT("workflow.discard")}</Button>
-          <Button disabled={!configDirty || configSaving} onClick={() => {Promise.resolve(saveConfigActionRef.current?.()).catch(() => {});}}>{configSaving ? "Saving…" : "Save changes"}</Button>
+          <Button disabled={!configDirty || configSaving} onClick={() => {Promise.resolve(saveConfigActionRef.current?.()).catch(() => {});}}>{configSaving ? mimouseT("managementUi.saving") : mimouseT("managementUi.saveChanges")}</Button>
         </div>
       </footer>}
 
@@ -2037,7 +2038,7 @@ export function ConfigurationTab({
       if (!syncAgentRouteAfterRename(queryClient, navigate, agent, updated, urlTab ?? content)) {
         queryClient.invalidateQueries({ queryKey: queryKeys.agents.detail(agent.urlKey) });
       }
-      pushToast({ title: "Agent saved", tone: "success" });
+      pushToast({ title: mimouseT("managementUi.agentSaved"), tone: "success" });
     },
     onError: (err) => {
       setAwaitingRefreshAfterSave(false);
@@ -2046,8 +2047,8 @@ export function ConfigurationTab({
           ? err.message
           : err instanceof Error
             ? err.message
-            : "Could not save agent";
-      pushToast({ title: "Save failed", body: message, tone: "error" });
+            : mimouseT("managementUi.agentSaveFailed");
+      pushToast({ title: mimouseT("managementUi.saveFailed"), body: message, tone: "error" });
     },
   });
 
@@ -3454,7 +3455,7 @@ function RunDetail({ run: initialRun, agentRouteId, adapterType, adapterConfig }
         payload: resumePayload,
       }, run.companyId);
       if (!("id" in result)) {
-        throw new Error(result.message ?? "Resume request was skipped.");
+        throw result.message != null ? new Error(result.message) : new ManagementUiError("managementUi.resumeSkipped");
       }
       return result;
     },
@@ -3596,7 +3597,7 @@ function RunDetail({ run: initialRun, agentRouteId, adapterType, adapterConfig }
                   onClick={() => cancelRun.mutate()}
                   disabled={cancelRun.isPending}
                 >
-                  {cancelRun.isPending ? "Cancelling…" : mimouseT("commonUi.cancel")}
+                  {cancelRun.isPending ? mimouseT("managementUi.cancelling") : mimouseT("commonUi.cancel")}
                 </Button>
               )}
               {canResumeLostRun && (
@@ -3608,7 +3609,7 @@ function RunDetail({ run: initialRun, agentRouteId, adapterType, adapterConfig }
                   disabled={resumeRun.isPending}
                 >
                   <RotateCcw className="h-3.5 w-3.5 mr-1" />
-                  {resumeRun.isPending ? "Resuming…" : mimouseT("commonUi.resume")}
+                  {resumeRun.isPending ? mimouseT("liveUi.resuming") : mimouseT("commonUi.resume")}
                 </Button>
               )}
               {canRetryRun && !canResumeLostRun && (
@@ -3620,7 +3621,7 @@ function RunDetail({ run: initialRun, agentRouteId, adapterType, adapterConfig }
                   disabled={retryRun.isPending}
                 >
                   <RotateCcw className="h-3.5 w-3.5 mr-1" />
-                  {retryRun.isPending ? "Retrying…" : "Retry"}
+                  {retryRun.isPending ? mimouseT("managementUi.retrying") : mimouseT("workflow.retry")}
                 </Button>
               )}
               <Button
@@ -3703,12 +3704,12 @@ function RunDetail({ run: initialRun, agentRouteId, adapterType, adapterConfig }
             )}
             {resumeRun.isError && (
               <div className="text-xs text-destructive">
-                {resumeRun.error instanceof Error ? resumeRun.error.message : "Failed to resume run"}
+                {managementErrorText(resumeRun.error, "managementUi.resumeRunFailed")}
               </div>
             )}
             {retryRun.isError && (
               <div className="text-xs text-destructive">
-                {retryRun.error instanceof Error ? retryRun.error.message : "Failed to retry run"}
+                {managementErrorText(retryRun.error, "managementUi.retryRunFailed")}
               </div>
             )}
             {startTime && (
@@ -3946,7 +3947,7 @@ export function LogViewer({ run, adapterType }: { run: HeartbeatRun; adapterType
   const [logLines, setLogLines] = useState<RunLogChunk[]>([]);
   const [loading, setLoading] = useState(true);
   const [logLoading, setLogLoading] = useState(!!run.logRef);
-  const [logError, setLogError] = useState<string | null>(null);
+  const [logError, setLogError] = useState<ManagementErrorDescriptor | null>(null);
   const [logOffset, setLogOffsetState] = useState(0);
   const logOffsetRef = useRef(0);
   const setLogOffset = useCallback((next: number | ((previous: number) => number)) => {
@@ -4015,7 +4016,7 @@ export function LogViewer({ run, adapterType }: { run: HeartbeatRun; adapterType
 
     if (parsed.length > 0) {
       // Live runs stream forever, so cap the retained tail. Terminated runs are
-      // paginated by the user via "Load more log" and keep their full history.
+      // paginated by the user via the load-more-log action and keep their full history.
       appendLogLines(parsed);
     }
   }
@@ -4153,7 +4154,7 @@ export function LogViewer({ run, adapterType }: { run: HeartbeatRun; adapterType
             setLogLoading(false);
             return;
           }
-          setLogError(err instanceof Error ? err.message : "Failed to load run log");
+          setLogError(describeManagementError(err, "managementUi.runLogFailed"));
         }
       } finally {
         if (!cancelled) setLogLoading(false);
@@ -4177,7 +4178,7 @@ export function LogViewer({ run, adapterType }: { run: HeartbeatRun; adapterType
       setLogOffset(next);
       setHasMoreLog(result.nextOffset !== undefined);
     } catch (err) {
-      setLogError(err instanceof Error ? err.message : "Failed to load more run log");
+      setLogError(describeManagementError(err, "managementUi.moreRunLogFailed"));
     } finally {
       setLoadingMoreLog(false);
     }
@@ -4498,19 +4499,19 @@ export function LogViewer({ run, adapterType }: { run: HeartbeatRun; adapterType
               onClick={loadMorePersistedLog}
               disabled={loadingMoreLog}
             >
-              {loadingMoreLog ? "Loading..." : "Load more log"}
+              {loadingMoreLog ? mimouseT("managementUi.loading") : mimouseT("managementUi.loadMoreLog")}
             </Button>
             <span className="text-xs text-muted-foreground">
-              Showing the first {Math.round(logOffset / 1024).toLocaleString("en-US")} KB
-              {typeof run.logBytes === "number" && run.logBytes > 0
-                ? ` of ${Math.round(run.logBytes / 1024).toLocaleString("en-US")} KB`
-                : ""}
+              {mimouseT(typeof run.logBytes === "number" && run.logBytes > 0 ? "managementUi.logFirstTotal" : "managementUi.logFirst", {
+                loaded: Math.round(logOffset / 1024).toLocaleString(mimouseI18n.language),
+                total: Math.round((run.logBytes ?? 0) / 1024).toLocaleString(mimouseI18n.language),
+              })}
             </span>
           </div>
         )}
         {logError && (
           <div className="mt-3 rounded-xl border border-red-500/20 bg-red-500/[0.06] px-3 py-2 text-xs text-red-700 dark:text-red-300">
-            {logError}
+            {renderManagementError(logError)}
           </div>
         )}
         <div ref={logEndRef} />
@@ -4628,7 +4629,7 @@ export function KeysTab({ agentId, companyId }: { agentId: string; companyId?: s
         setTimeout(() => setCopied(false), 2000);
       })
       .catch(() => {
-        pushToast({ title: "Copy failed", body: "Clipboard access is unavailable.", tone: "error" });
+        pushToast({ title: mimouseT("managementUi.copyFailed"), body: mimouseT("managementUi.clipboardUnavailable"), tone: "error" });
       });
   }
 

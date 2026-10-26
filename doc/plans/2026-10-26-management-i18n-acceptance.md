@@ -28,3 +28,16 @@ NODE_OPTIONS=--max-old-space-size=512 ../node_modules/.bin/vitest run --maxWorke
 - [ ] 窄屏长文案不遮挡按钮，不出现原始翻译 key 或富文本槽位。
 
 完整类型/构建、浏览器 E2E、真实权限/失败请求和账务对账未执行；静态候选不是完整覆盖率。技术路径、原始服务器错误、用户资源名及 token 数值不是待翻译的业务正文。
+
+## 第二片：活跃 Agent 保存、重试与日志
+
+仅处理 `AgentDetail.tsx` 的保存条/保存结果、内置资源及权限操作本地失败、恢复/重试按钮及兜底、运行日志加载/分页、复制失败提示。未挂载的 `AgentDetail.production.tsx` 不扩大修改；指令文件正文、命令、stdout/stderr、API 原始错误保留。
+
+本地 `actionError`/`logError` 使用延迟描述符，切换语言仅更新显示；不再次调用保存、运行或日志 API。toast 沿用触发时语言。日志大小的数值格式按所选语言显示，不改变读取偏移。
+
+自动检查：`AgentDetail.instructions.test.tsx` 12、`AgentDetail.log-visibility.test.tsx` 9、`AgentDetail.liveRun.test.ts` 12、`AgentDetail.progress.test.ts` 12、`management-errors.test.ts` 4，共 49 项通过；三项 token 门禁、差异检查通过。仍为 512 MB/单 worker，不包含完整类型/构建或浏览器。
+
+- [ ] 在测试 Agent 编辑设置：未保存、保存中、成功/失败提示四语正确；保存/取消后再次进入无重复请求，原有敏感信息/权限边界不变。
+- [ ] 对失败或失联测试运行检查重试/恢复/取消等待态、兜底错误；切换语言不再次重试，服务器错误正文保持原样。
+- [ ] 模拟运行日志首次及追加读取失败：在错误仍可见时切换四语，无额外日志读取；分页大小/总量格式、已有日志与读取偏移保持正确。
+- [ ] 禁止剪贴板权限后复制测试数据：本地失败提示本地化；不使用真实 API key 做人工截图。
