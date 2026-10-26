@@ -8,7 +8,7 @@ import { privatePromptTestImplementation } from "../../adapters/registry.js";
 import { secretService } from "../secrets.js";
 import { conflict } from "../../errors.js";
 import { privatePromptInput, validatePrivatePromptResources, type PrivatePromptRow, type PrivatePromptTx } from "./service.js";
-import { privateConfigDigest, privatePromptHash, PRIVATE_PROMPT_IMPLEMENTATION } from "./profile.js";
+import { privatePromptFixedContext, privateConfigDigest, privatePromptHash, PRIVATE_PROMPT_IMPLEMENTATION } from "./profile.js";
 import { sealPrivatePromptResult } from "./result.js";
 
 export async function findPrivatePromptExecution(db: Db, companyId: string, issueId: string | null) {
@@ -22,6 +22,11 @@ async function validate(tx: PrivatePromptTx, row: PrivatePromptRow, input: Heart
   if (!current || current.status !== "running" || current.agentId !== row.agentId || current.wakeupRequestId !== row.wakeupRequestId ||
       row.heartbeatRunId !== run.id || agent.id !== row.agentId || agent.companyId !== row.companyId ||
       !issue || issue.assigneeAgentId !== row.agentId || issue.visibility !== "private" || issue.responsibleUserId !== row.actorUserId ||
+      (issue.assigneeAdapterOverrides && Object.keys(issue.assigneeAdapterOverrides).length > 0) ||
+      input.config.managedAiRuntime || input.task.context.aiRouterSelection || input.task.context.aiConnection ||
+      Object.keys(input.config.resolvedConfig).some(key => !["engine", "model", "cwd", "env"].includes(key)) ||
+      Object.keys(input.config.configuredTaskEnvironment).some(key => key !== "ANTHROPIC_API_KEY") ||
+      input.config.resolvedConfig.engine !== "cli" || input.config.runtimeConfig.engine !== "cli" ||
       issue.originKind !== "private_prompt_test" || issue.originId !== row.id || ["done", "cancelled"].includes(issue.status) ||
       input.runtime.nativeRuntimeResolution.kind !== "legacy" || run.runtimeMode !== "legacy" ||
       input.workspace.executionTarget?.kind === "remote" || input.workspace.remoteExecution ||
@@ -29,9 +34,12 @@ async function validate(tx: PrivatePromptTx, row: PrivatePromptRow, input: Heart
       !privatePromptTestImplementation(input.runtime.adapter)) throw conflict("private_prompt_execution_binding_denied");
   const bound = await validatePrivatePromptResources(tx,
     { companyId: row.companyId, userId: row.actorUserId, sessionId: row.actorSessionId }, privatePromptInput(row), row.promptId, true, true);
-  if (bound.profile.configDigest !== row.configDigest || bound.dataset.datasetHash !== row.datasetHash ||
+  if (input.workspace.executionTarget?.kind !== "local" || input.workspace.executionTarget.environmentId !== bound.profile.effectiveEnvironment.id ||
+      bound.profile.configDigest !== row.configDigest || bound.dataset.datasetHash !== row.datasetHash ||
       bound.revision.contentHash !== row.revisionHash || privateConfigDigest(bound.version.fileInventory) !== row.skillVersionHash ||
-      bound.secret.valueHash !== row.secretValueHash) throw conflict("private_prompt_execution_snapshot_changed");
+      bound.secret.valueHash !== row.secretValueHash || input.config.resolvedConfig.model !== bound.profile.model ||
+      input.config.runtimeConfig.model !== bound.profile.model ||
+      privatePromptHash(input.config.configuredTaskEnvironment.ANTHROPIC_API_KEY ?? "") !== row.secretValueHash) throw conflict("private_prompt_execution_snapshot_changed");
   return bound;
 }
 export async function executePrivatePromptHeartbeat(db: Db, input: HeartbeatRuntimeExecutionInput, binding: PrivatePromptRow): Promise<AdapterExecutionResult> {
@@ -52,10 +60,7 @@ export async function executePrivatePromptHeartbeat(db: Db, input: HeartbeatRunt
     });
     if (privatePromptHash(apiKey) !== binding.secretValueHash) throw conflict("private_prompt_secret_changed");
     const restrictedConfig = { engine: "cli", model: bound.profile.model, cwd: input.workspace.executionWorkspace.cwd };
-    const fixedContext = ["Private prompt test. Return the answer as text. No tools are available.",
-      `Fixed test case:\n${bound.testCase.input}`,
-      `Pinned skill version ${bound.version.id}:\n${JSON.stringify(bound.version.fileInventory)}`].join("\n\n");
-    if (Buffer.byteLength(fixedContext, "utf8") > 256000) throw conflict("private_prompt_fixed_context_too_large");
+    const fixedContext = privatePromptFixedContext(bound.testCase.input, bound.version.id, bound.textInventory, bound.revision.content);
     const guarded = await input.control.dispatchResolvedInteractionContinuationWithAtomicGate(markDispatchStarted => {
       input.effects.onLegacyAdapterEntered();
       return input.runtime.adapter.execute({

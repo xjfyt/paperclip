@@ -251,10 +251,14 @@ const grokLoginCapability: AdapterLoginCapability = {
   },
 };
 
+const stampedClaudeExecute = stampClaudeAgentIdHeader(claudeExecute);
+const builtinClaudeExecute: ServerAdapterModule["execute"] = (ctx) =>
+  ctx.privatePromptTest ? claudeExecute(ctx) : stampedClaudeExecute(ctx);
+
 const claudeLocalAdapter: ServerAdapterModule = {
   type: "claude_local",
   runtimeToolDelivery: "native_mcp",
-  execute: stampClaudeAgentIdHeader(claudeExecute),
+  execute: builtinClaudeExecute,
   testEnvironment: claudeTestEnvironment,
   acp: {
     agentId: "claude",
@@ -1034,7 +1038,7 @@ export function requireServerAdapter(type: string): ServerAdapterModule {
 
 /** Object identity is server-owned. An external adapter cannot self-attest this lane. */
 export function privatePromptTestImplementation(adapter: ServerAdapterModule): string | null {
-  return adapter === claudeLocalAdapter && adapter.execute === claudeExecute &&
+  return adapter === claudeLocalAdapter && adapter.execute === builtinClaudeExecute &&
     findActiveServerAdapter("claude_local") === adapter
     ? "paperclip.builtin.claude-local.cli.literal.v1" : null;
 }

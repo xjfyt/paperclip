@@ -25,6 +25,7 @@ export async function executePrivatePromptTest(ctx: AdapterExecutionContext): Pr
   try {
     // Literal is concatenated, never template-rendered, trimmed, or serialized.
     const prompt = `${test.fixedContext}\n\n<private-prompt-revision>\n${test.literalRevision}\n</private-prompt-revision>`;
+    if (Buffer.byteLength(prompt, "utf8") > 256000) throw new Error("private_prompt_text_context_too_large");
     await ctx.onCancellationReady?.();
     if (ctx.signal?.aborted) throw new Error("private_prompt_test_cancelled");
     await test.prepare(prompt);
@@ -32,7 +33,7 @@ export async function executePrivatePromptTest(ctx: AdapterExecutionContext): Pr
     let spawnUnconfirmed = false;
     const proc = await runAdapterExecutionTargetProcess(ctx.runId, null, "claude", [
       "--bare", "--print", "--output-format", "stream-json", "--verbose",
-      "--tools", "", "--disallowedTools", "*", "--disable-slash-commands",
+      "--tools", "", "--disallowedTools", "*", "mcp__*", "--disable-slash-commands",
       "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}',
       "--no-chrome", "--no-session-persistence", "--max-turns", "1",
       "--model", ctx.config.model,

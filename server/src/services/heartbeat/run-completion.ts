@@ -12,7 +12,7 @@ import { isConversation, settleConversationTurn } from "../agent-conversations.j
 import { legacyExecutionNeedsReconciliationWithEvidence } from "../legacy-execution-recovery.js";
 import { isWorkspaceGitScanError } from "../workspace-git-operation-scheduler.js";
 import { and, eq, sql } from "drizzle-orm";
-import { heartbeatRuns, issues, nativeRunFinalizations } from "@paperclipai/db";
+import { mimousePrivatePromptTests, heartbeatRuns, issues, nativeRunFinalizations } from "@paperclipai/db";
 import { HttpError } from "../../errors.js";
 import { logger } from "../../middleware/logger.js";
 import { normalizeResponsibleUserDenialCode } from "../responsible-user-denial-run-outcomes.js";
@@ -317,6 +317,8 @@ function readNonEmptyString(value: unknown): string | null {
 }
 
 export function createHeartbeatRunCompletion(db: Db, dependencies: HeartbeatRunCompletionDependencies) {
+  const isPrivatePromptRun = async (runId: string) => (await db.select({ id: mimousePrivatePromptTests.id }).from(mimousePrivatePromptTests)
+    .where(eq(mimousePrivatePromptTests.heartbeatRunId, runId)).limit(1)).length > 0;
   const {
     getRun,
     getAgent,
@@ -688,6 +690,7 @@ export function createHeartbeatRunCompletion(db: Db, dependencies: HeartbeatRunC
         );
       }
       const livenessRun = finalizedRun;
+      const privatePromptAttempt = await isPrivatePromptRun(livenessRun.id);
       await refreshContinuationSummaryForRun(livenessRun, agent);
       const skipRunIssueComment =
         parseObject(livenessRun.contextSnapshot).skipIssueComment === true;
@@ -830,7 +833,7 @@ export function createHeartbeatRunCompletion(db: Db, dependencies: HeartbeatRunC
           `[paperclip] Failed to resolve run presentation: ${err instanceof Error ? err.message : String(err)}\n`,
         );
       }
-      if (outcome === "failed" && isMaxTurnExhaustionRun(livenessRun)) {
+      if (!privatePromptAttempt && outcome === "failed" && isMaxTurnExhaustionRun(livenessRun)) {
         const policy = parseMaxTurnContinuationPolicy(agent);
         if (policy.enabled && policy.maxAttempts > 0) {
           await scheduleBoundedRetryForRun(livenessRun, agent, {
@@ -853,12 +856,12 @@ export function createHeartbeatRunCompletion(db: Db, dependencies: HeartbeatRunC
           });
         }
       } else if (
-        outcome === "failed" &&
+        !privatePromptAttempt && outcome === "failed" &&
         readTransientRecoveryContractFromRun(livenessRun)
       ) {
         await scheduleBoundedRetryForRun(livenessRun, agent);
       } else if (
-        outcome === "failed" &&
+        !privatePromptAttempt && outcome === "failed" &&
         !(await legacyExecutionNeedsReconciliationWithEvidence(db, livenessRun))
       ) {
         await scheduleInteractionContinuationInfrastructureRetryIfEligible(
@@ -873,15 +876,15 @@ export function createHeartbeatRunCompletion(db: Db, dependencies: HeartbeatRunC
       );
       const conversationSettled = await settleConversationTurn(db, livenessRun);
       await releaseIssueExecutionAndPromote(livenessRun, {
-        suppressImmediateRecovery: conversationSettled ||
+        suppressImmediateRecovery: privatePromptAttempt || conversationSettled ||
           readNonEmptyString(
             parseObject(livenessRun.contextSnapshot).goalControlRequestId,
           ) !== null ||
           parseObject(livenessRun.contextSnapshot)
             .resumeSessionGoalHeartbeat === true,
       });
-      if (!conversationSettled) {
-        await handleIssueReviewPathDisposition(livenessRun);
+      if (!privatePromptAttempt && !conversationSettled) {
+        if (!privatePromptAttempt) await handleIssueReviewPathDisposition(livenessRun);
         if (livenessRun.runtimeMode !== "native") {
           await recovery.reconcileLegacyContinuation(livenessRun.id);
         } else {
@@ -1151,6 +1154,7 @@ export function createHeartbeatRunCompletion(db: Db, dependencies: HeartbeatRunC
       });
       const livenessRun =
         (await classifyAndPersistRunLiveness(failedRun)) ?? failedRun;
+      const privatePromptAttempt = await isPrivatePromptRun(livenessRun.id);
       try {
         await completeSkillTestRunForHeartbeatOutcome({
           run: livenessRun,
@@ -1172,7 +1176,7 @@ export function createHeartbeatRunCompletion(db: Db, dependencies: HeartbeatRunC
       ) {
         await finalizeIssueCommentPolicy(livenessRun, agent);
       }
-      await scheduleInteractionContinuationInfrastructureRetryIfEligible(
+      if (!privatePromptAttempt) await scheduleInteractionContinuationInfrastructureRetryIfEligible(
         livenessRun,
         agent,
       );
@@ -1181,9 +1185,9 @@ export function createHeartbeatRunCompletion(db: Db, dependencies: HeartbeatRunC
         // exhaustion. Once its durable coordinator has classified a
         // terminal failure, generic issue recovery must not create a
         // replacement retryOfRunId chain for the same provider work.
-        suppressImmediateRecovery: nativeTerminalFailureCode !== null,
+        suppressImmediateRecovery: privatePromptAttempt || nativeTerminalFailureCode !== null,
       });
-      await handleIssueReviewPathDisposition(livenessRun);
+      if (!privatePromptAttempt) await handleIssueReviewPathDisposition(livenessRun);
 
       await updateRuntimeState(
         agent,
@@ -1389,6 +1393,7 @@ export function createHeartbeatRunCompletion(db: Db, dependencies: HeartbeatRunC
           );
         });
       }
+      const privatePromptAttempt = await isPrivatePromptRun(livenessRun.id);
       const failedAgent =
         setupFailureAgent ??
         (await getAgent(run.agentId).catch(() => null));
@@ -1408,7 +1413,7 @@ export function createHeartbeatRunCompletion(db: Db, dependencies: HeartbeatRunC
         // No provider work began. Retry temporary host scan failures with
         // the existing durable failure budget, before releasing execution.
         // Generic recovery must not grant a second budget on exhaustion.
-        await (isTransientWorkspaceGitScanCode(livenessRun.errorCode)
+        if (!privatePromptAttempt) await (isTransientWorkspaceGitScanCode(livenessRun.errorCode)
           ? scheduleBoundedRetryForRun(livenessRun, failedAgent)
           : scheduleInteractionContinuationInfrastructureRetryIfEligible(livenessRun, failedAgent)
         ).catch((retryError) => {
@@ -1419,7 +1424,7 @@ export function createHeartbeatRunCompletion(db: Db, dependencies: HeartbeatRunC
         });
       }
       await releaseIssueExecutionAndPromote(livenessRun, {
-        suppressImmediateRecovery:
+        suppressImmediateRecovery: privatePromptAttempt ||
           readNonEmptyString(
             parseObject(livenessRun.contextSnapshot).goalControlRequestId,
           ) !== null ||
@@ -1431,7 +1436,7 @@ export function createHeartbeatRunCompletion(db: Db, dependencies: HeartbeatRunC
           "failed to release issue execution after heartbeat setup failure",
         );
       });
-      await handleIssueReviewPathDisposition(livenessRun).catch(
+      if (!privatePromptAttempt) await handleIssueReviewPathDisposition(livenessRun).catch(
         (reviewPathError) => {
           logger.error(
             { err: reviewPathError, runId },

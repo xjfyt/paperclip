@@ -1,3 +1,4 @@
+import { assertPrivatePromptEarlyBinding } from "./mimouse-private-prompt-tests/service.js";
 import { selectHeartbeatEnvironment } from "./heartbeat/environment-selection.js";
 import { prepareHeartbeatWorkspace } from "./heartbeat/workspace-preparation.js";
 import { executeHeartbeatRuntime, NativeSessionResumeScheduledError, NativeWorkspaceFinalizeScheduledError } from "./heartbeat/runtime-execution.js";
@@ -2142,6 +2143,7 @@ export function heartbeatService(
       }
 
       const dispatchIssueId = readNonEmptyString(parseObject(run.contextSnapshot).issueId);
+      const privatePromptEarlyBinding = await assertPrivatePromptEarlyBinding(db, run, dispatchIssueId);
       const resumingAdmittedConversationTurn = !!runOptions.nativeLeaseOwner
         && typeof run.contextSnapshot?.conversationSessionGeneration === "number";
       if (dispatchIssueId && isConversation(await getIssueExecutionContext(run.companyId, dispatchIssueId))
@@ -3050,6 +3052,13 @@ export function heartbeatService(
         config: { config, issueAssigneeOverrides },
         services: { executionWorkspacesSvc, environmentsSvc, instanceSettings, findSharedWorkspaceHolder },
       });
+      if (privatePromptEarlyBinding && (selectedEnvironmentId !== privatePromptEarlyBinding.effectiveEnvironmentId ||
+          selectedEnvironmentForConfig?.driver !== "local" ||
+          Object.keys(selectedEnvironmentForConfig.config ?? {}).length > 0 ||
+          Object.keys(selectedEnvironmentForConfig?.envVars ?? {}).length > 0 || aiBinding ||
+          issueAssigneeOverrides && Object.keys(issueAssigneeOverrides).length > 0)) {
+        throw new Error("private_prompt_preparation_overlay_unsupported");
+      }
       const workspaceManagedConfig = buildExecutionWorkspaceAdapterConfig({
         agentConfig: config,
         projectPolicy: projectExecutionWorkspacePolicy,

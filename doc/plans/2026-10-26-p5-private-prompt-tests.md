@@ -91,7 +91,62 @@ process helper 的 `inheritEnv:false` 禁止继承服务端/Paperclip/Git 凭据
 未识别固定flags的CLI必须失败，不回退普通订阅模式；实际安装版本/受管策略需要用户
 在独立测试机器核验后再启用。真实CLI/计费/进程树验证尚未做。
 
-当前原型验证：适配器边界 mock 8项、私有结果边界7项、配置/authority3项、真实本地
-无网络 Node 子进程 stdin/env 隔离1项通过。不是端到端创建/queue/DB验收证明。
+### 执行边界与本机环境
+
+这是文本提示词试验：固定 skill version 的非执行文本快照、case.input 与 literal revision
+组成真实 stdin；不发送 case.expected/评分答案，不执行技能脚本、工具或二进制资产。
+需完整非空 SKILL.md，inventory 仅 skill/markdown/reference，UTF-8、非 executable；现有snapshotFile省略encoding按其既定UTF-8语义正规化，
+显式base64/未知encoding或错误历史shape受控拒绝。实际prompt与字节计算使用同一正规化文本。
+总实际 prompt（含固定文字和分隔符）上限 256000 UTF-8 bytes，超限拒绝而不截断。
 结果上限128000 UTF-8 bytes、深度16、节点4096；超限标记失败，不截断伪装完整。
 completed仅表示有可用CLI success result且受控执行结束，不代表正确/消费/发布通过。
+
+支持正常初始化的 Default Local：必须 active、driver=local、config/envVars严格空对象。
+有效选择来源（agent/instance/implicit）及目标ID纳入配置digest；implicit解析core同一唯一
+local行，不用null作为通配符，缺失即unsupported。create/queue/early/prepare复核，最终
+execution target ID必须相同。默认/agent来源变化、禁用、额外env/config均拒绝。执行策略
+（含bootstrap mode）禁止forced Kubernetes或managedSandboxOnly，不能绕过普通环境授权。
+不要求清空全实例默认环境，不把metadata自报当能力证明。
+
+核心在provider/runtime/MCP准备前识别持久私有绑定并重验。仍复用正常调度、预算、workspace、
+凭据与固定技能准备生命周期；原文只在最终受限builtin分支加载，不进入普通上下文。
+三条完成/失败路径按持久run绑定抑制自动retry/continuation；未知结果不获得新attempt。
+终态在私有list/detail/create读取对账；pending_wake的未admitted wake明确failed，
+终止run的既有attempt明确unknown，未dispatch的取消为cancelled、其它失败为failed，不伪造completed。
+
+### 可复现的窄集成验证
+
+```sh
+NODE_OPTIONS=--max-old-space-size=512 node node_modules/vitest/vitest.mjs run \
+  --config tests/mimouse/private-prompt-vitest.config.ts
+```
+
+独立新marker目录中初始化owned EmbeddedPostgres，仅该目录conf禁Unix socket，保持loopback
+TCP和原账号鉴权；不复用旧PG目录/不删PID/不提权。测试运行后先关pool再stop owned PG，
+核对PID文件不存在和进程退出。启动/停止日志保留在`/tmp/paperclip-private-prompt-home-*-postgres.log`。
+正式迁移由中央生成；fixture先应用已有正式迁移再应用本片SQL proposal。
+
+仅provider进程边界替换为受控无网络Node fixture，实际走真实创建服务→唯一wake→heartbeat→
+builtin literal分支→真实子进程 stdin→专用私有结果读取。禁止真实Claude CLI/账户/外部provider；
+禁dotenv/外部adapter插件，fetch直接拒绝。子进程主动回显stdin到stdout/stderr以验证平台隔离，
+并用无转义唯一marker检查普通issue/run/event/activity，而非易产生假阴性的多行原文字符串比较。
+
+已执行：正常初始化Local端到端服务链， concurrent同key、配置overlay、harness去重碰撞、
+skipped wake收敛、私有ACL/撤权、目标来源漂移/禁用/env/config、prepared持久失败零dispatch、
+同名override/fallback、expected答案不进stdin、默认关闭仍保护私有harness/普通issue识别。
+2026-10-26 suite14：3 files / 30 tests passed（其中13项真实DB窄集成）。
+另覆盖spawn receipt持久失败时真实子进程只执行一次、真实fixture子进程取消后unknown不重派、
+持久spawned/终止run的模拟重启窗口经fresh service读取收敛（并非完整服务进程重启）。
+之前Unix socket受限尝试0executed/2skipped，以及修复前失败日志保留；不把它们说成通过。
+适配器边界mock8项、真实本地Node stdin/env1项另行验证过，不与完整HTTP/browser E2E混称。
+
+尚需中央完整类型/回归/正式迁移验证、真实session HTTP路由与浏览器联调，以及用户独立机器
+真实CLI版本/账号API计费/权限/进程树检查。当前fixture不是完整HTTP/UI端到端验收，也未证明
+OS沙箱、provider消费或完整隐藏上下文。真实CLI进程树取消/完整服务重启仍需专项手测，不以mock替代。
+
+### 部署前置（中央集成）
+
+必须先应用正式迁移再启动新版服务。queue、早期私有绑定保护、最终执行都会查询新表，
+即使执行开关关闭也必须识别历史 private harness，不能退回普通执行。默认关闭不代表
+可以省略 schema 迁移。SQL proposal 不是已注册迁移；编号/journal/snapshot由中央处理。
+迁移后需验证普通历史 issue/skill test 的 API 与执行行为保持，不以开关绕过私有识别。
