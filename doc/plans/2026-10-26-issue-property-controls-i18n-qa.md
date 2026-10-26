@@ -32,3 +32,13 @@
 ## 明确后续边界
 
 模型覆盖、watchdog、monitor/计划重试、工作区控制与未知错误尚未在本片全部翻译；不能以 AST 候选数下降宣称整个高频路径或原计划完成。本次已完成的第二片仅处理属性侧栏 tab 与复制路径的固定文案，未扩展到其他控制流程。
+
+## 第四片：实际 composer 负责人空项（浏览器发现后修正）
+
+- 集成 Chrome 人工检查发现负责人 aria 已本地化，但底部可见文本仍显示 `No assignee`。本片不以 aria 通过代替可见文本验收。
+- 实际 `TaskChatComposer` 分支：存在 `companyId` + `modelAgents` 时使用 `ComposerRunSettingsPicker`；否则使用 `InlineEntitySelector`。两支系统空项、搜索提示、无匹配提示均补齐四语，运行设置 picker 的负责人标题/列表 aria 一并补齐。
+- 新贡献域 `composerAssigneeUi`（7 keys）；未编辑正式 locale、main、模型设置语义或发送键事件。
+- `InlineEntitySelector.noneSearchText` 是可选属性，默认完全保持旧行为；仅 composer 传入 `No assignee` 别名。系统空项匹配当前显示译文和原英文；运行设置 picker 还保留 `Unassigned` 旧别名。用户 Agent 名称、角色、模型标签、id 和配置不翻译、不改写。
+- 定向测试覆盖两个实际组件的可见 `textContent`、译文/英文搜索、动态语言、无匹配状态、用户名称保持、空字符串负责人回调及原 `null` 设置清空；选中 Agent 时语言变化不重拉模型、不修改设置，fallback 不发送消息。
+- 使用本 worktree 的 `ui/vitest.config.ts`（`@` 指向本树），共享依赖只读复用；单 worker、512 MB。最终 4 文件 155/155 通过（两 composer 分支、InlineEntitySelector 回归及四语贡献契约），token gates 与 diff 检查通过；未跑重型 types/build。
+- 待实际浏览器复验：四语分别进入已有负责人/无负责人的任务；检查底部可见文字和展开列表；译文与英文搜索；切语言不发送或保存；西语 320/375px、日语换行、真实中日 IME 输入/组合取消、Escape/反复开关。模型选择/effort 内其余固定英文不属于本片，仍留后续。

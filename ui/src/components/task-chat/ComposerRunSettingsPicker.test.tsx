@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { i18n, composerAssigneeMessages } from "../../i18n/composer-assignee-test-resources";
 import { act, useState, type ComponentProps } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -49,7 +50,7 @@ function render(onAssigneeChange: (value: string) => void, onSettingsChange: () 
   flushSync(() => root!.render(insideDialog ? <Dialog defaultOpen><DialogContent aria-describedby={undefined}><DialogTitle>New task</DialogTitle>{picker}</DialogContent></Dialog> : picker));
 }
 
-beforeEach(() => localStorage.clear());
+beforeEach(async () => { localStorage.clear(); await i18n.changeLanguage("en"); });
 afterEach(() => {
   vi.restoreAllMocks();
   flushSync(() => root?.unmount());
@@ -59,6 +60,61 @@ afterEach(() => {
 });
 
 describe("composer assignee picker", () => {
+  it.each(Object.entries(composerAssigneeMessages))("renders and searches the translated empty assignee without changing settings in %s", async (locale, messages) => {
+    await i18n.changeLanguage(locale);
+    const onAssigneeChange = vi.fn(), onSettingsChange = vi.fn();
+    const loadModels = vi.spyOn(agentsApi, "adapterModels").mockResolvedValue([]);
+    render(onAssigneeChange, onSettingsChange, true, { assigneeValue: "", currentAssigneeValue: "" });
+    expect(container!.querySelector('[data-testid="task-chat-composer-assignee-label"]')?.textContent).toBe(messages.noAssignee);
+    await click(i18n.t("liveUi.selectAssignee"));
+    expect(document.body.textContent).toContain(messages.chooseAssignee);
+    const search = document.querySelector<HTMLInputElement>(`input[aria-label="${messages.searchAssignees}"]`)!;
+    const setSearch = (value: string) => flushSync(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(search, value);
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    for (const query of [messages.noAssignee, "No assignee", "Unassigned"]) {
+      setSearch(query);
+      expect(document.querySelector('[role="option"]')?.textContent).toBe(messages.noAssignee);
+    }
+    setSearch("Clippy");
+    expect(document.querySelector('[role="option"]')?.textContent).toContain("Clippy");
+    setSearch("zz-no-match");
+    expect(document.body.textContent).toContain(messages.noMatches);
+    setSearch("");
+    await act(async () => { await i18n.changeLanguage(locale === "ja" ? "es" : "ja"); });
+    const next = locale === "ja" ? composerAssigneeMessages.es : composerAssigneeMessages.ja;
+    expect(container!.querySelector('[data-testid="task-chat-composer-assignee-label"]')?.textContent).toBe(next.noAssignee);
+    expect(document.body.textContent).toContain(next.chooseAssignee);
+    expect(loadModels).not.toHaveBeenCalled();
+    expect(onAssigneeChange).not.toHaveBeenCalled();
+    expect(onSettingsChange).not.toHaveBeenCalled();
+    await click("Clippy");
+    expect(onAssigneeChange).toHaveBeenCalledExactlyOnceWith("agent:a1");
+    expect(onSettingsChange).toHaveBeenCalledExactlyOnceWith(null);
+  });
+
+  it.each(Object.entries(composerAssigneeMessages))("clears the selected agent using the translated visible option in %s", async (locale, messages) => {
+    await i18n.changeLanguage(locale);
+    const onAssigneeChange = vi.fn(), onSettingsChange = vi.fn();
+    const loadModels = vi.spyOn(agentsApi, "adapterModels").mockResolvedValue([{ id: "gpt-6-sol", label: "Private 用户model" }]);
+    render(onAssigneeChange, onSettingsChange, true);
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+    expect(container!.querySelector('[data-testid="task-chat-composer-assignee-label"]')?.textContent).toBe("Clippy");
+    expect(container!.querySelector('[data-testid="task-chat-composer-model-label"]')?.textContent).toBe("Private 用户model");
+    const requests = loadModels.mock.calls.length;
+    await act(async () => { await i18n.changeLanguage(locale === "ja" ? "es" : "ja"); });
+    expect(loadModels).toHaveBeenCalledTimes(requests);
+    expect(onAssigneeChange).not.toHaveBeenCalled();
+    expect(onSettingsChange).not.toHaveBeenCalled();
+    expect(container!.querySelector('[data-testid="task-chat-composer-model-label"]')?.textContent).toBe("Private 用户model");
+    await act(async () => { await i18n.changeLanguage(locale); });
+    await click(i18n.t("liveUi.selectAssignee"));
+    await click(messages.noAssignee);
+    expect(onAssigneeChange).toHaveBeenCalledExactlyOnceWith("");
+    expect(onSettingsChange).toHaveBeenCalledExactlyOnceWith(null);
+  });
+
   it.each([false, true])("keeps the trigger stable until the picker closes (mobile: %s)", async (mobile) => {
     function ControlledPicker() {
       const [settings, setSettings] = useState({ model: "gpt-6-sol", effort: "high", fast: false });

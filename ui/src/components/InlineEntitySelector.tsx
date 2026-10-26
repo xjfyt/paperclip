@@ -16,6 +16,8 @@ interface InlineEntitySelectorProps {
   options: InlineEntityOption[];
   placeholder: string;
   noneLabel: string;
+  /** Optional search aliases for the system no-selection option only. */
+  noneSearchText?: string;
   /** Keep the no-selection action before the selected and recent choices. */
   noneAtTop?: boolean;
   /** Keep the no-selection action after the project choices. */
@@ -74,6 +76,7 @@ export const InlineEntitySelector = forwardRef<HTMLButtonElement, InlineEntitySe
       options,
       placeholder,
       noneLabel,
+      noneSearchText,
       noneAtTop = false,
       noneAtEnd = false,
       searchPlaceholder,
@@ -107,11 +110,11 @@ export const InlineEntitySelector = forwardRef<HTMLButtonElement, InlineEntitySe
     const isPointerDownRef = useRef(false);
 
     const allOptions = useMemo<InlineEntityOption[]>(() => {
-      const baseOptions = [{ id: "", label: noneLabel, searchText: noneLabel }, ...options];
+      const baseOptions = [{ id: "", label: noneLabel, searchText: noneSearchText ?? noneLabel }, ...options];
       const ordered = orderItemsBySelectedAndRecent(baseOptions, value, recentOptionIds);
       if (noneAtTop) return [baseOptions[0]!, ...ordered.filter((option) => option.id)];
       return noneAtEnd ? [...ordered.filter((option) => option.id), baseOptions[0]!] : ordered;
-    }, [noneAtEnd, noneAtTop, noneLabel, options, recentOptionIds, value]);
+    }, [noneAtEnd, noneAtTop, noneLabel, noneSearchText, options, recentOptionIds, value]);
 
     const filteredOptions = useMemo(() => {
       const term = query.trim().toLowerCase();

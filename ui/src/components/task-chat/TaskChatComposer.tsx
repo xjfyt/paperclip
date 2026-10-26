@@ -1507,11 +1507,12 @@ export function TaskChatComposer({
               <InlineEntitySelector
                 value={assigneeValue}
                 options={reassignOptions ?? []}
-                placeholder="Assignee"
+                placeholder={mimouseUiT("composerAssigneeUi.assignee")}
                 mobileTitle={mimouseUiT("liveUi.selectAssignee")}
-                noneLabel="No assignee"
-                searchPlaceholder="Search assignees…"
-                emptyMessage="No matches."
+                noneLabel={mimouseUiT("composerAssigneeUi.noAssignee")}
+                noneSearchText="No assignee"
+                searchPlaceholder={mimouseUiT("composerAssigneeUi.searchPlaceholder")}
+                emptyMessage={mimouseUiT("composerAssigneeUi.noMatches")}
                 onChange={updatePendingAssignee}
                 disabled={disabled}
                 triggerTestId="task-chat-composer-assignee"

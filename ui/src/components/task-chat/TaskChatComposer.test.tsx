@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { i18n, composerAssigneeMessages } from "../../i18n/composer-assignee-test-resources";
 import { act, StrictMode, useState, type ReactElement } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
@@ -175,7 +176,8 @@ let container: HTMLDivElement;
 let root: Root | null = null;
 let originalRangeRect: typeof Range.prototype.getBoundingClientRect;
 
-beforeEach(() => {
+beforeEach(async () => {
+  await i18n.changeLanguage("en");
   localStorage.clear();
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -1630,6 +1632,40 @@ describe("TaskChatComposer", () => {
         "Unsupported by OpenCode",
       );
     });
+  });
+
+  it.each(Object.entries(composerAssigneeMessages))("localizes the fallback assignee list visibly without sending in %s", async (locale, messages) => {
+    await i18n.changeLanguage(locale);
+    const onAdd = vi.fn(), onPendingAssigneeChange = vi.fn();
+    render(<TaskChatComposer onAdd={onAdd} workMode="standard" enableReassign
+      reassignOptions={[{ id: "agent:a1", label: "用户 Clippy" }]} currentAssigneeValue="agent:a1"
+      onPendingAssigneeChange={onPendingAssigneeChange} />);
+    const trigger = container.querySelector<HTMLButtonElement>('[data-testid="task-chat-composer-assignee"]')!;
+    expect(trigger.textContent).toContain("用户 Clippy");
+    flushSync(() => trigger.click()); await flushAsync();
+    const search = document.querySelector<HTMLInputElement>(`input[placeholder="${messages.searchPlaceholder}"]`)!;
+    const setSearch = (value: string) => flushSync(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(search, value);
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    for (const query of [messages.noAssignee, "No assignee"]) {
+      setSearch(query);
+      expect([...document.querySelectorAll("button")].some(button => button.textContent?.trim() === messages.noAssignee)).toBe(true);
+    }
+    setSearch("zz-no-match");
+    expect(document.body.textContent).toContain(messages.noMatches);
+    setSearch("");
+    await act(async () => { await i18n.changeLanguage(locale === "ja" ? "es" : "ja"); });
+    const next = locale === "ja" ? composerAssigneeMessages.es : composerAssigneeMessages.ja;
+    const empty = [...document.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent?.trim() === next.noAssignee)!;
+    expect(empty).toBeDefined();
+    expect(trigger.textContent).toContain("用户 Clippy");
+    expect(onAdd).not.toHaveBeenCalled();
+    expect(onPendingAssigneeChange).not.toHaveBeenCalled();
+    flushSync(() => empty.click()); await flushAsync();
+    expect(onPendingAssigneeChange).toHaveBeenCalledExactlyOnceWith("");
+    expect(onAdd).not.toHaveBeenCalled();
+    expect(trigger.textContent).toContain(i18n.t("liveUi.unassigned"));
   });
 
   it("shows the assignee combobox only when reassign is enabled, with the current label", () => {
