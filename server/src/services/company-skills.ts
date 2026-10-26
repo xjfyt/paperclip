@@ -2280,6 +2280,7 @@ async function resolveRequestedSkillEntriesOrThrow(
         missing.add(selection.key);
         continue;
       }
+      if (skill.metadata?.mimouseRestorePending) throw conflict("restore_pending_skill_assignment");
       const selectedVersionId = selection.versionId ?? null;
       await assertVersionMatchesSkill(db, companyId, skill.id, selectedVersionId);
       if (!resolved.has(skill.key)) {
@@ -2945,7 +2946,7 @@ async function listLastEditorsBySkillId(
   return editors;
 }
 
-export function companySkillService(db: Db) {
+export function companySkillService(db: Db, testHooks: { beforeAuditPersist?: () => Promise<void>; beforeVersionPersist?: () => Promise<void>; beforeReconcilePersist?: (skillId: string) => Promise<void> } = {}) {
   const folderSvc = folderService(db);
   const agents = agentService(db);
   const projects = projectService(db);
@@ -3132,6 +3133,8 @@ export function companySkillService(db: Db) {
     const rows = await db
       .select({
         id: companySkills.id,
+        updatedAt: companySkills.updatedAt,
+        currentVersionId: companySkills.currentVersionId,
         key: companySkills.key,
         slug: companySkills.slug,
         sourceType: companySkills.sourceType,
@@ -3156,6 +3159,9 @@ export function companySkillService(db: Db) {
       if (skill.sourceType !== "local_path") continue;
       if (isPaperclipBundledSkillKey(skill.key) || asString(skill.metadata?.sourceKind) === "paperclip_bundled") continue;
 
+      const unchanged = and(eq(companySkills.id, skill.id), eq(companySkills.updatedAt, skill.updatedAt),
+        sql`${companySkills.currentVersionId} is not distinct from ${skill.currentVersionId}`,
+        sql`${companySkills.metadata}->>'mimouseRestorePending' is null`);
       if (!missingIds.has(skill.id)) {
         const metadata = getMissingSourceMarker(skill.metadata)
           ? withoutMissingSourceMarker(skill.metadata)
@@ -3168,6 +3174,7 @@ export function companySkillService(db: Db) {
         const inventoryChanged = nextInventory ? !inventoryEntriesEqual(skill.fileInventory, nextInventory) : false;
         const metadataChanged = !stableJsonEqual(metadata ?? {}, skill.metadata ?? {});
         if (inventoryChanged || metadataChanged || nextTrustLevel !== skill.trustLevel) {
+          await testHooks.beforeReconcilePersist?.(skill.id);
           await db
             .update(companySkills)
             .set({
@@ -3176,7 +3183,7 @@ export function companySkillService(db: Db) {
               metadata,
               updatedAt: new Date(),
             })
-            .where(and(eq(companySkills.id, skill.id), sql`${companySkills.metadata}->>'mimouseRestorePending' is null`));
+            .where(unchanged);
         }
         continue;
       }
@@ -3188,20 +3195,23 @@ export function companySkillService(db: Db) {
           buildMissingLocalSourceMarker(skill),
         );
         if (!stableJsonEqual(metadata, skill.metadata ?? {})) {
+          await testHooks.beforeReconcilePersist?.(skill.id);
           await db
             .update(companySkills)
             .set({ metadata, updatedAt: new Date() })
-            .where(and(eq(companySkills.id, skill.id), sql`${companySkills.metadata}->>'mimouseRestorePending' is null`));
+            .where(unchanged);
         }
         continue;
       }
 
-      await removeRuntimeSkillCache(resolveManagedSkillsRoot(companyId), skill.id, async () => {
-        const [latest] = await db.select({ metadata: companySkills.metadata }).from(companySkills).where(eq(companySkills.id, skill.id));
-        if (latest?.metadata?.mimouseRestorePending) return;
+      await removeRuntimeSkillCache(resolveManagedSkillsRoot(companyId), skill.id, () => db.transaction(async tx => {
+        await tx.execute(sql`select ${companies.id} from ${companies} where ${companies.id}=${companyId} for no key update`);
+        await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${companyId}:${skill.slug}`}, 0))`);
+        const [latest] = await tx.select({ id: companySkills.id }).from(companySkills).where(unchanged).for("update");
+        if (!latest) return;
         await fs.rm(resolveRuntimeSkillMaterializedPath(companyId, skill), { recursive: true, force: true });
-        await db.delete(companySkills).where(and(eq(companySkills.id, skill.id), sql`${companySkills.metadata}->>'mimouseRestorePending' is null`));
-      });
+        await tx.delete(companySkills).where(unchanged);
+      }));
     }
   }
 
@@ -3459,17 +3469,19 @@ export function companySkillService(db: Db) {
     skill: CompanySkill,
     metadataPatch: Record<string, unknown>,
   ): Promise<CompanySkill> {
-    const metadata = {
-      ...(isPlainRecord(skill.metadata) ? skill.metadata : {}),
-      ...metadataPatch,
-    };
+    // Merge into the locked current JSON, never a pre-audit metadata copy.
+    // The UPDATE predicate is rechecked after any row-lock wait, so an audit
+    // that started before restore preparation cannot erase its recovery gate.
     const row = await db
       .update(companySkills)
-      .set({ metadata, updatedAt: new Date() })
-      .where(eq(companySkills.id, skill.id))
+      .set({ metadata: sql`coalesce(${companySkills.metadata}, '{}'::jsonb) || ${JSON.stringify(metadataPatch)}::jsonb`, updatedAt: new Date() })
+      .where(and(eq(companySkills.id, skill.id), eq(companySkills.companyId, skill.companyId),
+        eq(companySkills.updatedAt, skill.updatedAt), sql`${companySkills.metadata}->>'mimouseRestorePending' is null`,
+        sql`${companySkills.currentVersionId} is not distinct from ${skill.currentVersionId}`,
+        sql`${companySkills.sourceLocator} is not distinct from ${skill.sourceLocator}`))
       .returning()
       .then((rows) => rows[0] ?? null);
-    if (!row) throw notFound("Skill not found");
+    if (!row) throw conflict("Skill changed during audit; retry after any pending restoration is recovered.");
     return toCompanySkill(row);
   }
 
@@ -3500,6 +3512,7 @@ export function companySkillService(db: Db) {
       if (!version) throw unprocessable("Installed skill version is unavailable.");
       const sourceLocator = await materializeVersionSnapshot(companyId, skill, version);
       const audit = await auditInstalledSkillBytes({ ...skill, sourceType: "local_path", sourceLocator });
+      await testHooks.beforeAuditPersist?.();
       await persistAuditMetadata(skill, audit);
       return audit;
     }
@@ -3507,7 +3520,8 @@ export function companySkillService(db: Db) {
       throw unprocessable("Only local-path and catalog-managed company skills support audit.");
     }
     const audit = await auditInstalledSkillBytes(skill);
-    await persistAuditMetadata(skill, audit);
+    await testHooks.beforeAuditPersist?.();
+      await persistAuditMetadata(skill, audit);
     return audit;
   }
 
@@ -3643,6 +3657,10 @@ export function companySkillService(db: Db) {
           and ${companySkills.companyId} = ${companyId}
         for update
       `);
+      // Snapshot collection can predate this lock. Re-read the recovery gate
+      // and identity before inserting a version or advancing the live pointer.
+      const current = await getById(companyId, skillId, tx);
+      if (!current || current.currentVersionId !== skill.currentVersionId || current.slug !== skill.slug || current.sourceLocator !== skill.sourceLocator) throw conflict("Skill changed while preparing a version; retry from the current snapshot.");
       const [{ nextRevision }] = await tx
         .select({
           nextRevision: sql<number>`coalesce(max(${companySkillVersions.revisionNumber}), 0) + 1`,
@@ -3674,6 +3692,7 @@ export function companySkillService(db: Db) {
       }
       return row;
     };
+    await testHooks.beforeVersionPersist?.();
     const versionRow = options.database ? await persist(options.database) : await db.transaction(persist);
     if (!versionRow) throw notFound("Failed to persist skill version");
     return toCompanySkillVersion(versionRow);
@@ -3905,6 +3924,7 @@ export function companySkillService(db: Db) {
     if (planned.length === 0) return [];
     const skills = await listReferenceTargets(companyId);
     await db.transaction(async (tx) => {
+      await tx.execute(sql`select ${companies.id} from ${companies} where ${companies.id}=${companyId} for no key update`);
       for (const item of planned) {
         const row = await tx
           .select({
@@ -4635,6 +4655,7 @@ export function companySkillService(db: Db) {
     const initial = await getById(companyId, skillId);
     if (!initial) throw notFound("Skill not found");
     return db.transaction(async (tx) => {
+      await tx.execute(sql`select ${companies.id} from ${companies} where ${companies.id}=${companyId} for no key update`);
       // Share the creation/deletion name lock. The identity must be checked
       // again after waiting: a new skill can now own the same source folder.
       for (const slug of [...new Set([initial.slug, ...additionalSlugs])].filter(Boolean).sort()) {
@@ -4671,6 +4692,8 @@ export function companySkillService(db: Db) {
     const initial = await getById(companyId, skillId, db, true);
     if (!initial) throw notFound("Skill not found");
     return db.transaction(async tx => {
+      // Serialize against lifecycle attachment commits before checking usage.
+      await tx.execute(sql`select ${companies.id} from ${companies} where ${companies.id}=${companyId} for no key update`);
       await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${companyId}:${initial.slug}`}, 0))`);
       await tx.execute(sql`select ${companySkills.id} from ${companySkills} where ${companySkills.id}=${skillId} and ${companySkills.companyId}=${companyId} for update`);
       const skill = await getById(companyId, skillId, tx, true);

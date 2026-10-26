@@ -1,3 +1,4 @@
+import { assertNoPendingRestoreAssignments } from "./mimouse-evaluation/restore-assignment-guard.js";
 import { and, eq } from "drizzle-orm";
 import { assets, agentConfigRevisions, agentTaskSessions, agentRuntimeState, type Db } from "@paperclipai/db";
 import { normalizeAgentUrlKey } from "@paperclipai/shared";
@@ -79,6 +80,9 @@ export async function prepareAgentConfiguration(db: Db, existing: AgentConfigura
       normalizedPatch.adapterType as string,
       existing.adapterConfig,
     );
+  }
+  if (Object.prototype.hasOwnProperty.call(normalizedPatch, "adapterConfig")) {
+    await assertNoPendingRestoreAssignments(db, existing.companyId, normalizedPatch.adapterConfig);
   }
   return normalizedPatch;
 }

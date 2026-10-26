@@ -39,4 +39,14 @@
 
 ## 当前验证
 
-9项纯FS测试通过，单worker、512MB heap，日志 `/tmp/mimouse-evaluation-restore-fs.log`：二进制/可执行位/删除、两个rename中断点、幂等继续与补偿、补偿中断、链接/模式/文件变化拒绝、路径冲突。未运行本切片数据库、route/UI、全量类型/构建，遵循父工作树共享内存冻结；这些仍是集成前条件。
+10项纯FS测试通过，单worker、512MB heap，日志 `/tmp/mimouse-evaluation-restore-fs.log`：二进制/可执行位/删除、两个rename中断点、幂等继续与补偿、补偿中断、链接/模式/文件变化拒绝、路径冲突。未运行本切片数据库、route/UI、全量类型/构建，遵循父工作树共享内存冻结；这些仍是集成前条件。
+
+## 并发边界补强
+
+恢复、技能文件变更及清理采用 **company accounting row → slug advisory → skill row** 顺序；先拿公司锁，再查实际代理引用。恢复每次 apply/compensate 都重复此检查。代理生命周期的普通配置、直接 adapterConfig、revision rollback、hire/approval 在事务内拒绝任何 proposed pending 技能引用；解除引用不受阻。运行时读取的 missing 状态不是持久配置权限，提交检查不能省略。
+
+少数内部配置事务可能先持有 agent row；提交 guard 对 company 使用 NOWAIT，遇到相反锁顺序立即409并回滚，而非等待形成死锁；上游标准生命周期已先持有公司 accounting lock，不受此快速失败影响。
+
+长时间 audit/inventory 不能拿旧 metadata 全量替换新状态：audit 使用当前 JSON 原子 merge，并以 updatedAt/currentVersion/source CAS 拒绝过期结果；inventory 使用 revision CAS，包括 missing-source 删除路径。createVersion 在 row-lock 后重读 pending 和原 currentVersion/source/slug，旧快照不能覆盖刚恢复的版本。target 全嵌套目录和原 live 树均在 prepared 提交前自底向上 fsync；原树即后续补偿备份。
+
+新增 `tests/mimouse/evaluation-restore.spec.ts` 是隔离真实文件/DB fixture：先确认服务器 DB data_directory 和实例根属于 PAPERCLIP_MIMOUSE_TEST_HOME，再创建公司/文件。覆盖真实整树激活/回滚、rename/数据库提交中断、audit/version/inventory 跨 pending 与 completed 竞态、attachment 公司锁交错、direct/revision pending attach 拒绝和 detach/recover，以及 paused-company 路由/当前成员资格。路由认证使用明确注入测试 session actor，不声称测试真实 SSO 登录；不执行任何模型/Agent。夹具未在本工作树运行，交父工作树统一执行。

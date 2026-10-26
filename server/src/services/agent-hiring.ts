@@ -1,3 +1,4 @@
+import { assertNoPendingRestoreAssignments } from "./mimouse-evaluation/restore-assignment-guard.js";
 import { agentAppearanceSchema, randomAgentAppearance } from "@paperclipai/shared";
 import { normalizePaperclipRunnerAdapterConfig } from "@paperclipai/adapter-utils/server-utils";
 import { agents, toolConnectionInstalls, principalPermissionGrants, type Db } from "@paperclipai/db";
@@ -35,6 +36,7 @@ export async function prepareAgentHire(db: Db, companyId: string, data: CreateAg
     ? await secretService(db).normalizeAdapterConfigForPersistence(companyId, data.adapterConfig, { adapterType })
     : {};
   const adapterConfig = normalizePaperclipRunnerAdapterConfig(adapterType, rawAdapterConfig);
+  await assertNoPendingRestoreAssignments(db, companyId, adapterConfig);
   await agentCredentialService(db).enforceClaudeOAuthBindingClaim(db, {
     companyId, consume: true, environmentId: data.defaultEnvironmentId ?? null,
     childAdapterConfig: adapterConfig, claudeLogin: options?.claudeLogin,
@@ -115,6 +117,7 @@ export async function prepareAgentHireApproval(txDb: Db, existing: AgentHireReco
         nextConfig: patch.adapterConfig, priorConfig: existing.adapterConfig }),
     });
   }
+  await assertNoPendingRestoreAssignments(txDb, existing.companyId, patch.adapterConfig ?? existing.adapterConfig);
   return patch;
 }
 

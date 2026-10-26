@@ -82,14 +82,33 @@ export async function readRestoreTree(root: string, directory: string): Promise<
   }
   await walk(directory, ""); return out;
 }
-export async function stageRestoreTree(plan: RestoreTreePlan, files: File[]) {
+export async function stageRestoreTree(plan: RestoreTreePlan, files: File[], onDirectorySynced?: (directory: string) => void) {
   if (validateRestoreSnapshot(files) !== plan.targetHash) throw Error("restore_target_hash_mismatch");
   const loc = locations(plan); await assertRestoreDirectory(loc.root, loc.live);
   const before = await readRestoreTree(loc.root, loc.live);
   if (!before || skillSnapshotHash(before) !== plan.beforeHash) throw Error("restore_live_snapshot_changed");
   await mkdir(loc.root, loc.operation);
+  async function durableStage() {
+    // Persist every directory entry, including parents of multi-level children.
+    // Reused complete stages are also re-synced before a new journal commit.
+    async function syncTree(directory: string) {
+      await assertRestoreDirectory(loc.root, directory);
+      for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
+        const child = path.join(directory, entry.name);
+        if (entry.isDirectory()) await syncTree(child);
+        else if (entry.isFile()) { const handle = await fs.open(child, constants.O_RDONLY | constants.O_NOFOLLOW); try { await handle.sync(); } finally { await handle.close(); } }
+        else throw Error("restore_symbolic_or_special_file");
+      }
+      await syncDirectory(directory); onDirectorySynced?.(directory);
+    }
+    // The original tree is the future compensation backup. Flush its bytes
+    // too: a durable rename alone does not make pre-existing file data durable.
+    await syncTree(loc.live);
+    await syncTree(loc.stage);
+    for (const directory of [loc.operation, path.dirname(loc.operation), loc.root]) { await syncDirectory(directory); onDirectorySynced?.(directory); }
+  }
   const existing = await readRestoreTree(loc.root, loc.stage);
-  if (existing) { if (skillSnapshotHash(existing) === plan.targetHash && !await readRestoreTree(loc.root, loc.backup)) return; throw Error("restore_orphan_stage_requires_review"); }
+  if (existing) { if (skillSnapshotHash(existing) === plan.targetHash && !await readRestoreTree(loc.root, loc.backup)) { await durableStage(); return; } throw Error("restore_orphan_stage_requires_review"); }
   await fs.mkdir(loc.stage, { mode: 0o755 });
   for (const file of files) {
     const target = path.join(loc.stage, file.path); await mkdir(loc.root, path.dirname(target));
@@ -97,7 +116,7 @@ export async function stageRestoreTree(plan: RestoreTreePlan, files: File[]) {
     try { await handle.writeFile(skillFileBytes(file)); await handle.chmod(file.executable ? 0o755 : 0o644); await handle.sync(); } finally { await handle.close(); }
     await syncDirectory(path.dirname(target));
   }
-  await syncDirectory(loc.stage); await syncDirectory(loc.operation); await syncDirectory(path.dirname(loc.operation)); await syncDirectory(loc.root);
+  await durableStage();
   const staged = await readRestoreTree(loc.root, loc.stage);
   if (!staged || skillSnapshotHash(staged) !== plan.targetHash) throw Error("restore_staged_snapshot_mismatch");
 }

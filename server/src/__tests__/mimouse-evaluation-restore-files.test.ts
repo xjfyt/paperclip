@@ -58,3 +58,15 @@ it("refuses to guess after external edits during interrupted restoration", async
 it("validates traversal, duplicate paths, file-directory collisions and canonical binary payloads", () => {
   for (const files of [[...target, target[0]!], [...target, { path: "../escape", kind: "other", content: "x" }], [...target, { path: "bin", kind: "other", content: "x" }], [{ ...target[0]!, encoding: "base64", content: "bad!!!" }]]) expect(() => validateRestoreSnapshot(files as File[])).toThrow();
 });
+
+it("fsyncs every nested directory bottom-up, including a reused complete stage", async () => {
+  const plan = await fixture(), deep = [...target, { path: "a/b/c/file.txt", kind: "other" as const, content: "nested" }];
+  plan.targetHash = skillSnapshotHash(deep);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const synced: string[] = []; await stageRestoreTree(plan, deep, directory => synced.push(directory));
+    const stage = path.join(plan.root, "__mimouse_restores__", plan.operationId, "target");
+    const paths = [path.join(stage, "a/b/c"), path.join(stage, "a/b"), path.join(stage, "a"), stage, path.dirname(stage), path.dirname(path.dirname(stage)), plan.root];
+    for (const directory of paths) expect(synced).toContain(directory);
+    for (let index = 1; index < paths.length; index++) expect(synced.indexOf(paths[index - 1]!)).toBeLessThan(synced.indexOf(paths[index]!));
+  }
+});
