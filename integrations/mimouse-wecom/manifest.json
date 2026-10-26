@@ -17,14 +17,8 @@
   "historyBackfill": false,
   "modelOrAgentExecution": false,
   "integrationPending": [
-    "Review and allocate migration identity for schema-proposal.sql; do not append it blindly to an existing journal",
-    "Export mimouse_wecom schema through the database schema index and rebuild the database package",
-    "Mount mimouseWecomRoutes in the API after company authentication middleware",
-    "Verify existing private integration log policy remains installed before the mounted routes",
-    "Regenerate the four compiled locale files from feedbackUi contributions for providerPushed provenance copy",
-    "Wire bounded worker lifecycle and shutdown cancellation only after explicit operator activation",
-    "Run offline automated checks and the documented local database/race test matrix",
-    "Perform separately authorized real-tenant qualification before claiming delivery support"
+    "Final full server/UI build and aggregate regression for this integrated revision",
+    "Separately authorized real-tenant qualification; no delivery or history-completeness claim"
   ],
   "manualGuide": "doc/connections/MIMOUSE-WECOM.md",
   "receiverEntry": "server/src/services/mimouse-wecom/receiver.ts#runWecomReceiver",
@@ -32,5 +26,13 @@
   "candidateBatch": 8,
   "shutdownDrainMs": 5000,
   "activationBudgetPerProcess": 1024,
-  "databaseFixture": "tests/mimouse/wecom-inbound.spec.ts"
+  "databaseFixture": "tests/mimouse/wecom-inbound.spec.ts",
+  "integrationCompleted": [
+    "0355 incremental migration and schema export",
+    "Routes mounted after company authentication",
+    "Private request URL/body/error logging policy",
+    "Four generated locales include provider_push provenance",
+    "Bounded worker wired to shutdown, standby and task admission lifecycle",
+    "Seven isolated database/API cases passed without provider connection"
+  ]
 }

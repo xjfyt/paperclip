@@ -1,3 +1,4 @@
+import { mimouseWecomRoutes } from "./routes/mimouse-wecom.js";
 import { costRoutingPreviewRoutes } from "./routes/cost-routing-preview.js";
 import { mimousePromptRegistryRoutes } from "./routes/mimouse-prompt-registry.js";
 import { capabilityEvidenceRoutes } from "./routes/capability-evidence.js";
@@ -917,6 +918,7 @@ export async function createApp(
   api.use(capabilityEvidenceRoutes(db));
   api.use(mimousePromptRegistryRoutes(db));
   api.use(costRoutingPreviewRoutes(db));
+  api.use(mimouseWecomRoutes(db));
   api.use(mimouseResearchRoutineRoutes(db));
   api.use(instanceSettingsRoutes(db, workerManager, opts.prepareIdleDatabaseBackup));
   if (opts.databaseBackupService) {

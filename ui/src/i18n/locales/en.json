@@ -790,7 +790,8 @@
     "alreadyConfirmed": "A task was already confirmed for this feedback. Its private receipt is not available to this account.",
     "sessionRequired": "Sign in as a company owner or administrator to confirm task creation.",
     "providerFetched": "Read from the configured provider; evidence remains quarantined and requires human review. This is not proof of full trace or log coverage.",
-    "sourceUrl": "Trace source"
+    "sourceUrl": "Trace source",
+    "providerPushed": "Received through the provider connection; untrusted evidence, not a history fetch or verified claim."
   },
   "filterUi": {
     "filters": "Filters",
@@ -1353,6 +1354,37 @@
     "reviewError": "Review request failed or is unconfirmed. Refresh or retry the same preview; it will not create a second approval.",
     "readError": "Cannot read the preview or review state. Check administrator access and retry.",
     "retryRead": "Retry reading"
+  },
+  "promptRegistryUi": {
+    "title": "Prompt registry",
+    "boundary": "Registry selection only. This never applies agent files, model configuration or runtime changes. Do not store credentials.",
+    "denied": "An active company administrator session is required. Data is hidden after any read failure.",
+    "order": "Pages use UUID order, not chronology. Only selected revision and head receipt are authoritative.",
+    "key": "Prompt key",
+    "content": "Exact prompt text",
+    "create": "Save new immutable revision",
+    "selected": "Selected revision",
+    "head": "Head receipt",
+    "viewSelected": "View selected revision",
+    "revisions": "Revisions",
+    "action": "Action",
+    "promote": "Select revision",
+    "rollback": "Undo current receipt",
+    "target": "Target revision",
+    "loadReceipt": "Load receipt pages until the current head receipt is available before rollback.",
+    "confirm": "I confirm this changes only the registry selection, not any running agent or model.",
+    "select": "Confirm registry selection",
+    "receipts": "Selection receipts",
+    "previous": "Previous receipt",
+    "moreHeads": "More registries",
+    "moreRevisions": "More revisions",
+    "moreReceipts": "More receipts",
+    "refresh": "Refresh current state",
+    "saved": "Saved receipt/revision:",
+    "conflict": "Head changed or request identity conflicts. Reloaded state; inspect and confirm a new intent.",
+    "rejected": "Request rejected. Inspect current state before creating a new intent.",
+    "unknown": "Response uncertain. The frozen request must be retried with the same ID to recover its durable result. No new intent is allowed yet.",
+    "recover": "Recover same request"
   },
   "propertyLabels": {
     "work": "Work",

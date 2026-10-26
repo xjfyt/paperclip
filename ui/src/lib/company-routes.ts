@@ -3,6 +3,7 @@ const BOARD_ROUTE_ROOTS = new Set([
   "research-candidates",
   "skill-evaluations",
   "cost-routing-preview",
+  "prompt-registry",
   "feedback-inbox",
   "notifications",
   "integrations",

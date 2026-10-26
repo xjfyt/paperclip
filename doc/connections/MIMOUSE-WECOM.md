@@ -42,7 +42,7 @@
 
 ## 管理接口与配置
 
-接口需由集成方显式挂载，默认未自动接入主应用：
+以下接口已挂载到主应用公司鉴权之后；接收 worker 仍默认关闭：
 
 - `GET /api/companies/:companyId/feedback-wecom/connections`：脱敏状态列表。
 - `POST /api/companies/:companyId/feedback-wecom/connections`：保存禁用配置。
@@ -66,7 +66,7 @@ Secret 必须已在该公司 vault 中保存为可用的公司级凭据，固定
 明文 Secret、别名、用户级凭据、其他公司的 ID 或随时变化的 `latest`。
 供应商刷新 Secret 后，需要运营人员更新 pin 并再次显式启用，旧 pin 不应静默跟随。
 
-**保存绝不连接；设置 enabled 也不直接建立连接。** Worker 只有在全局
+**保存绝不连接。启用接口虽不直接拨号，但允许后台 worker 随后连接供应商，必须按真实连接授权操作。** Worker 只有在全局
 `MIMOUSE_WECOM_WORKER_ENABLED=true` 且该连接 enabled 时才可工作。
 关闭全局开关必须配合停止已运行 worker（通过生命周期 AbortSignal）；不应把运行中
 进程的环境变量变更当成跨进程关闭广播。状态不输出 bot ID、群/发送人 ID、Secret 引用
@@ -94,11 +94,10 @@ Secret 必须已在该公司 vault 中保存为可用的公司级凭据，固定
 - 无已证实的供应商 replay/backfill 保证。重连只恢复未来推送；重复过滤不是送达保证。
   不自动重置缺口标记、不声明 exactly-once、不自动读取历史补偿。
 
-## 集成交接（保留给整合分支）
+## 集成交接（历史步骤，中央接线已完成）
 
 见 `integrations/mimouse-wecom/manifest.json` 与 `schema-proposal.sql`。
-本分支不修改主应用/root index、数据库 schema index、生成语言文件、migration journal
-或 package.json，不占用迁移编号，也不启动服务器、数据库、worker 或供应商连接。
+最初模块切片未修改中央文件。后续已接入 root 生命周期、鉴权后的 routes、schema 导出、0355 增量迁移、四语生成和 API 测试入口；下列步骤保留为集成检查点。没有启动真实供应商连接。
 
 集成顺序：
 
@@ -118,7 +117,7 @@ Secret 必须已在该公司 vault 中保存为可用的公司级凭据，固定
 
 ### 配置与授权
 
-- [ ] owner/admin 与正确公司可以保存，响应 disabled；保存及启用接口均不调用 socket。
+- [ ] 已登录实例管理员可为有访问权公司注册，响应 disabled；普通公司 owner/admin 不能注册新 Bot，但可管理已有绑定。保存不拨号；启用后仅在全局和生命周期门控允许时接收器可连接。
 - [ ] 普通成员、Agent、停用成员、其他公司 owner 对全部路径均为 403，不触发服务。
 - [ ] 缺少 `confirm: true`、未知字段、自定义 URL、空允许范围、超长列表/文本被拒绝。
 - [ ] 用户级/跨公司/已删除/已撤销/不存在版本凭据不能保存或启用；明文 Secret 被拒绝。
@@ -180,7 +179,7 @@ Mock 通过不证明真实 PostgreSQL 锁/回滚、TLS/供应商权限或消息�
 
 ## 有界后台生命周期接线
 
-主入口保持未改动。整合方在已有数据库与 leader/standby/drain 判定建立后导入：
+主入口已接入现有调度关闭、warm-standby 和 idle-task-drain 状态；task admission 变化同步触发 reconcile，shutdown 在首个 await 前关闭入口。以下是同类部署接线示例，不能把示例 isLeader 当成当前存在的全局选主：
 
 ```ts
 import { startWecomWorker } from "./services/mimouse-wecom/worker.js";
@@ -215,6 +214,6 @@ shutdown 立即终止 socket，最多等五秒数据库 drain；超时只记录�
 不记录错误对象、公司、Bot、token、Secret 或文本。晚回数据库结果仍受 AbortSignal 与提交前
 双 token fencing 限制；超时返回并不是数据库事务已经取消的证明。
 
-`tests/mimouse/wecom-inbound.spec.ts` 新增真实隔离数据库夹具，当前未运行：全局注册权限、
+`tests/mimouse/wecom-inbound.spec.ts` 的7项真实隔离数据库夹具已在中央迁移后通过（连同既有反馈3项共10项）：全局注册权限、
 跨公司冲突、公司暂停/归档、凭据撤销、双 token/过期中断、第一次快照及审计失败回滚。
 仅由中央一次性测试实例应用迁移后执行；不启动 receiver，不使用真实网络/客户凭据。

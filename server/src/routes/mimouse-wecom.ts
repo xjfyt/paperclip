@@ -6,7 +6,7 @@ import { forbidden } from "../errors.js";
 import { wecomFeedbackService } from "../services/mimouse-wecom.js";
 import { wecomConfigSchema } from "../services/mimouse-wecom/protocol.js";
 
-/** Administration only: neither saving nor enabling creates a network connection. */
+/** Saving stays disabled. Explicit enabling permits the separately gated worker to connect. */
 export function mimouseWecomRoutes(db: Db) {
   const router = Router(), service = wecomFeedbackService(db);
   const path = "/companies/:companyId/feedback-wecom/connections";

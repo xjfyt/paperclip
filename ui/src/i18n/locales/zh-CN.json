@@ -790,7 +790,8 @@
     "alreadyConfirmed": "此反馈已确认转为任务，当前账号无法查看其私有回执。",
     "sessionRequired": "请以公司负责人或管理员身份登录后确认创建任务。",
     "providerFetched": "由已配置供应商读取，证据仍处于隔离状态并需人工审核，不代表已覆盖完整trace或日志。",
-    "sourceUrl": "Trace来源"
+    "sourceUrl": "Trace来源",
+    "providerPushed": "通过提供方连接接收；内容仍是不可信证据，不代表历史拉取或已核实事实。"
   },
   "filterUi": {
     "filters": "筛选",
@@ -1353,6 +1354,37 @@
     "reviewError": "审核申请失败或结果未知。请刷新或重试同一预览，不会创建第二条审批。",
     "readError": "无法读取预览或审核状态，请检查管理员权限后重试。",
     "retryRead": "重新读取"
+  },
+  "promptRegistryUi": {
+    "title": "提示词注册表",
+    "boundary": "仅选择注册表版本，不应用 Agent 文件、模型配置或运行态变更。请勿保存凭据。",
+    "denied": "需要有效的公司管理员登录会话。任何读取失败后均隐藏数据。",
+    "order": "分页按 UUID 排序，不代表时间顺序；仅已选版本与当前回执为准。",
+    "key": "提示词标识",
+    "content": "提示词原文",
+    "create": "保存新的不可变版本",
+    "selected": "已选版本",
+    "head": "当前回执",
+    "viewSelected": "查看已选版本",
+    "revisions": "版本历史",
+    "action": "操作",
+    "promote": "选择版本",
+    "rollback": "撤销当前回执",
+    "target": "目标版本",
+    "loadReceipt": "请继续加载回执，找到当前回执后才能回滚。",
+    "confirm": "我确认仅更改注册表选择，不更改运行中的 Agent 或模型。",
+    "select": "确认注册表选择",
+    "receipts": "选择回执",
+    "previous": "前一回执",
+    "moreHeads": "更多注册表",
+    "moreRevisions": "更多版本",
+    "moreReceipts": "更多回执",
+    "refresh": "刷新当前状态",
+    "saved": "已保存回执/版本：",
+    "conflict": "当前回执已变更或请求身份冲突。已刷新，请检查后重新确认新操作。",
+    "rejected": "请求被拒绝，请检查当前状态后再发起新操作。",
+    "unknown": "响应不确定。必须使用相同 ID 重试冻结请求，恢复持久化结果；暂不能发起新操作。",
+    "recover": "恢复同一请求"
   },
   "propertyLabels": {
     "work": "工作",

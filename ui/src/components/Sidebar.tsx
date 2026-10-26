@@ -185,6 +185,7 @@ export function Sidebar({ children }: { children?: ReactNode }) {
           <SidebarNavItem to="/research-candidates" label={t("researchUi.pageTitle")} icon={ListChecks} />
           <SidebarNavItem to="/skill-evaluations" label={t("evaluationUi.pageTitle")} icon={ListChecks} />
           <SidebarNavItem to="/cost-routing-preview" label={t("costRoutingPreview.title")} icon={ListChecks} />
+          <SidebarNavItem to="/prompt-registry" label={t("promptRegistryUi.title")} icon={ListChecks} />
           <SidebarNavItem to="/search" label={t("navigation.search")} icon={Search} />
           <SidebarNavItem to="/dashboard" label={t("navigation.dashboard")} icon={LayoutDashboard} liveCount={liveRunCount} />
           {!combinedInboxTasks ? (

@@ -2472,6 +2472,13 @@
       "when": 1793005511713,
       "tag": "0354_faithful_scarlet_spider",
       "breakpoints": true
+    },
+    {
+      "idx": 355,
+      "version": "7",
+      "when": 1793008893090,
+      "tag": "0355_acoustic_scarecrow",
+      "breakpoints": true
     }
   ]
 }

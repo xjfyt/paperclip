@@ -269,3 +269,5 @@ export * from "./capability_evidence.js";
 export * from "./mimouse_prompt_registry.js";
 
 export * from "./cost_routing_preview.js";
+
+export * from "./mimouse_wecom.js";

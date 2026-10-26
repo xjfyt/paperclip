@@ -1,3 +1,4 @@
+import { MimousePromptRegistryPage } from "./pages/MimousePromptRegistryPage";
 import { CostRoutingPreview } from "./pages/CostRoutingPreview";
 import { MimouseEvaluation } from "./pages/MimouseEvaluation";
 import { MimouseResearch } from "./pages/MimouseResearch";
@@ -167,6 +168,7 @@ function boardRoutes(streamlinedUiEnabled: boolean, combinedInboxTasksEnabled: b
       <Route path="research-candidates" element={<MimouseResearch />} />
       <Route path="skill-evaluations" element={<MimouseEvaluation />} />
       <Route path="cost-routing-preview" element={<CostRoutingPreview />} />
+      <Route path="prompt-registry" element={<MimousePromptRegistryPage />} />
       <Route path="feedback-inbox" element={<MimouseFeedback />} />
       <Route path="coding" element={<MimouseCoding />} />
       <Route path="notifications" element={<MimouseNotifications />} />
@@ -850,6 +852,7 @@ export function App() {
           <Route path="research-candidates" element={<UnprefixedBoardRedirect />} />
           <Route path="skill-evaluations" element={<UnprefixedBoardRedirect />} />
           <Route path="cost-routing-preview" element={<UnprefixedBoardRedirect />} />
+          <Route path="prompt-registry" element={<UnprefixedBoardRedirect />} />
           <Route path="feedback-inbox" element={<UnprefixedBoardRedirect />} />
           <Route path="coding" element={<UnprefixedBoardRedirect />} />
           <Route path="notifications" element={<UnprefixedBoardRedirect />} />
