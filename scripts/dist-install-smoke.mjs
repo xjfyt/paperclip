@@ -117,7 +117,7 @@ function main() {
   const consumer = resolve(fixture, 'consumer'); mkdirSync(consumer);
   writeFileSync(resolve(consumer, 'package.json'), JSON.stringify({ private: true, type: 'module', dependencies: tarballs }, null, 2));
   run('npm', ['install', '--offline', '--ignore-scripts', '--omit=dev', '--no-audit', '--no-fund'], consumer);
-  for (const name of ['dist-install-runtime.mjs', 'dist-install-guard.mjs']) cpSync(new URL(name, import.meta.url), resolve(consumer, name));
+  for (const name of ['dist-install-runtime.mjs', 'dist-install-guard.mjs', 'dist-install-shutdown.mjs']) cpSync(new URL(name, import.meta.url), resolve(consumer, name));
   writeFileSync(resolve(consumer, 'smoke-plan.json'), JSON.stringify({ marker: MARKER, fixture, packages: packages.map(p => p.name), apiPath }));
   run(process.execPath, ['--import', './dist-install-guard.mjs', './dist-install-runtime.mjs'], consumer, { timeout: 240_000, detached: true,
     env: { ...env, PAPERCLIP_TELEMETRY_DISABLED: '1' } });

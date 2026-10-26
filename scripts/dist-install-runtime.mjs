@@ -1,4 +1,5 @@
-import { readFileSync, realpathSync, existsSync, statSync, readdirSync, writeFileSync, appendFileSync } from 'node:fs';
+import { finishOwnedSmoke } from "./dist-install-shutdown.mjs";
+import { readFileSync, realpathSync, existsSync, statSync, readdirSync, writeFileSync, appendFileSync, writeSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
@@ -75,6 +76,7 @@ if (realpathSync(dataDir) !== dataDir || realpathSync(postgresConfig) !== postgr
 appendFileSync(postgresConfig, "\n# Isolated smoke: loopback TCP only; no shared Unix socket.\nunix_socket_directories = ''\n");
 const { startServer } = await import('@paperclipai/server');
 const app = await startServer();
+let shutdownResolved = false;
 try {
   // Prove the actual database, not only intended config, belongs to this fixture.
   const postgres = (await import('postgres')).default;
@@ -99,5 +101,14 @@ try {
     if (!response.ok) throw new Error(`API smoke ${plan.apiPath}: ${response.status}`);
     await response.json();
   }
-} finally { await app.shutdown(); }
-writeFileSync(resolve(fixture, 'PASS.json'), JSON.stringify({ installedPackages: plan.packages, dataDirectory: dataDir, health: true, ui: true, apiPath: plan.apiPath ?? null }, null, 2));
+} finally { await app.shutdown(); shutdownResolved = true; }
+finishOwnedSmoke({ shutdownResolved, httpListening: app.server.listening,
+  databasePidPresent: existsSync(resolve(dataDir, 'postmaster.pid')),
+  resources: process.getActiveResourcesInfo(),
+  diagnose: teardown => writeSync(2, `Installed smoke teardown: ${JSON.stringify(teardown)}\n`),
+  writeReceipt: teardown => writeFileSync(resolve(fixture, 'PASS.json'), JSON.stringify({
+    installedPackages: plan.packages, dataDirectory: dataDir, health: true, ui: true, apiPath: plan.apiPath ?? null,
+    build: JSON.parse(readFileSync(resolve(serverRoot, 'dist/build-info.json'), 'utf8')), teardown,
+  }, null, 2)),
+  exit: code => process.exit(code),
+});

@@ -54,8 +54,13 @@ installed DB package's bundled PostgreSQL and native-runtime helper. Its
 TCP; existing cluster state, pid files and symlinked config paths are refused.
 No agent/provider executable is invoked by the harness. Before success it queries `SHOW data_directory` and checks the canonical
 path against the fixture, waits for `/api/health` status `ok`, fetches packaged UI,
-and optionally GETs the requested API path. It shuts down the server and database;
-the parent also terminates the isolated process group on timeout/failure. Never
+and optionally GETs the requested API path. It awaits the exported server shutdown, verifies the HTTP listener is closed and
+the database pid file absent, records only public `process.getActiveResourcesInfo()`
+resource types, then explicitly exits its owned process. The exported shutdown
+API intentionally does not exit its caller; the CLI signal path does. The receipt
+labels natural process exit **not verified**, and remaining resource types must
+not be presented as full natural quiescence or used to dismiss a product leak.
+The parent also terminates the isolated process group on timeout/failure. Never
 point it at an existing database. Nothing is deleted automatically: retain the
 printed fixture path, resolution trace and `PASS.json` for review.
 
