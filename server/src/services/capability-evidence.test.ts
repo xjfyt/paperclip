@@ -9,7 +9,7 @@ vi.mock("@paperclipai/db", () => ({
   companies: { name: "companies", id: "id" }, activityLog: { name: "audit" },
   capabilityEvidence: { name: "events", id: "id", companyId: "companyId", revision: "revision", idempotencyKey: "idempotencyKey", targetId: "targetId" },
 }));
-import { capabilityEvidenceService } from "./capability-evidence";
+import { capabilityEvidenceService } from "./capability-evidence.js";
 import type { Db } from "@paperclipai/db";
 
 // Pure transactional double: no database process, SQL or external calls.

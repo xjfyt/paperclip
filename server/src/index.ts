@@ -451,7 +451,14 @@ async function startServerWithDatabaseTeardown(
       const mod = await loadWithoutCoordinatedShutdownSignalHooks(
         loadEmbeddedPostgres,
       );
-      EmbeddedPostgres = mod.default as EmbeddedPostgresCtor;
+      if (typeof mod.default !== "function" || typeof mod.default.prototype.initialise !== "function"
+        || typeof mod.default.prototype.start !== "function" || typeof mod.default.prototype.stop !== "function") {
+        throw new Error("Unsupported embedded PostgreSQL constructor");
+      }
+      // The qualified wrapper declares its optional process field private in
+      // TypeScript, but exposes it at runtime for the existing exit supervisor.
+      // Adapt that library boundary explicitly; do not erase the loader types.
+      EmbeddedPostgres = mod.default as unknown as EmbeddedPostgresCtor;
     } catch {
       throw new Error(
         "Embedded PostgreSQL mode requires dependency `embedded-postgres`. Reinstall dependencies (without omitting required packages), or set DATABASE_URL for external Postgres.",
