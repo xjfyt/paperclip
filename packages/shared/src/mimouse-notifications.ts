@@ -25,4 +25,6 @@ export interface NotificationReviewDto {
 export interface NotificationPolicyDto {
   minimumSeverity: "info" | "warning" | "critical";
   mergeWindowSeconds: number;
+  /** Omitted means legacy exact duplicates; digest is opt-in for coding text channels. */
+  mergeMode?: "exact" | "digest";
 }

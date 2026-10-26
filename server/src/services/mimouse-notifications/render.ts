@@ -39,3 +39,10 @@ export function renderTemplateData(raw: unknown, content: { title: string; text:
     return [key, { value }];
   }));
 }
+
+/** Only event titles and validated opaque IDs; never task bodies, logs or approval actions. */
+export function renderNotificationDigest(title: string, resources: string[], locale: string) {
+  if (resources.length < 1 || resources.length > 10 || resources.some(id => !/^[a-zA-Z0-9_-]{1,100}$/.test(id))) throw Error("invalid_digest_members");
+  const heading = `${title} × ${resources.length}`;
+  return { title: heading, text: `${heading}\n${resources.join("\n")}\n${notices[locale] ?? notices.en}` };
+}

@@ -25,7 +25,7 @@ export const mimouseNotificationSubscriptions = pgTable("mimouse_notification_su
   eventType: text("event_type").notNull(),
   locale: text("locale").notNull().default("en"),
   policyVersion: integer("policy_version").notNull().default(1),
-  policy: jsonb("policy").$type<{ minimumSeverity: "info" | "warning" | "critical"; mergeWindowSeconds: number }>().notNull().default({ minimumSeverity: "info", mergeWindowSeconds: 0 }),
+  policy: jsonb("policy").$type<{ minimumSeverity: "info" | "warning" | "critical"; mergeWindowSeconds: number; mergeMode?: "exact" | "digest" }>().notNull().default({ minimumSeverity: "info", mergeWindowSeconds: 0 }),
   enabled: boolean("enabled").notNull().default(true),
 }, t => ({ policyVersionPositive: check("mimouse_notification_policy_version_positive", sql`${t.policyVersion}>0`), endpoint: foreignKey({ columns: [t.companyId, t.endpointId], foreignColumns: [mimouseNotificationEndpoints.companyId, mimouseNotificationEndpoints.id] }).onDelete("cascade"), identity: uniqueIndex("mimouse_notification_subscription_company_identity").on(t.companyId, t.id), unique: uniqueIndex("mimouse_notification_subscription_unique").on(t.companyId, t.endpointId, t.eventType) }));
 

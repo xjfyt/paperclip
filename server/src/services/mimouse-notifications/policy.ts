@@ -1,4 +1,4 @@
-import { conflict, notFound } from "../../errors.js";
+import { conflict, notFound, unprocessable } from "../../errors.js";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
@@ -7,6 +7,7 @@ import type { Db } from "@paperclipai/db";
 export const notificationPolicySchema = z.object({
   minimumSeverity: z.enum(["info", "warning", "critical"]),
   mergeWindowSeconds: z.number().int().min(0).max(300),
+  mergeMode: z.enum(["exact", "digest"]).optional(),
 }).strict();
 export type NotificationPolicy = z.infer<typeof notificationPolicySchema>;
 export const DEFAULT_NOTIFICATION_POLICY: NotificationPolicy = { minimumSeverity: "info", mergeWindowSeconds: 0 };
@@ -56,8 +57,18 @@ export const notificationPolicyUpdateSchema = notificationPolicySchema.extend({ 
 export async function updateNotificationPolicy(db: Pick<Db, "transaction">, companyId: string, id: string,
   input: z.infer<typeof notificationPolicyUpdateSchema>,
   audit: (tx: Parameters<Parameters<Db["transaction"]>[0]>[0], version: number) => Promise<unknown>) {
-  const { expectedVersion, ...policy } = notificationPolicyUpdateSchema.parse(input);
+  const { expectedVersion, mergeMode, ...legacyPolicy } = notificationPolicyUpdateSchema.parse(input);
+  // Keep the legacy two-field shape for the strict failed-run database trigger.
+  const policy = { ...legacyPolicy, ...(mergeMode === "digest" ? { mergeMode } : {}) };
   return db.transaction(async tx => {
+    if (mergeMode === "digest") {
+      const scope = await tx.execute(sql`SELECT s.event_type, e.kind FROM mimouse_notification_subscriptions s
+        JOIN mimouse_notification_endpoints e ON e.company_id=s.company_id AND e.id=s.endpoint_id
+        WHERE s.company_id=${companyId} AND s.id=${id} FOR UPDATE OF s, e`);
+      if (!scope.length) throw notFound("Notification subscription not found");
+      const target = scope[0] as unknown as { event_type: string; kind: string };
+      if (!supportsNotificationDigest(target.event_type, target.kind)) throw unprocessable("Digest is supported only for coding events on text channels");
+    }
     const rows = await tx.execute(sql`UPDATE mimouse_notification_subscriptions
       SET policy=${JSON.stringify(policy)}::jsonb, policy_version=policy_version+1
       WHERE company_id=${companyId} AND id=${id} AND policy_version=${expectedVersion}
@@ -71,4 +82,10 @@ export async function updateNotificationPolicy(db: Pick<Db, "transaction">, comp
     await audit(tx, row.policyVersion);
     return row;
   });
+}
+
+/** Critical approvals/budgets, failed-run trigger rows and official templates stay individual. */
+export function supportsNotificationDigest(event: string, kind: string): boolean {
+  return ["coding.mr_ready", "coding.ci_failed", "coding.artifact_ready"].includes(event)
+    && ["wecom_webhook", "feishu_webhook", "dingtalk_webhook_legacy", "dingtalk_app"].includes(kind);
 }

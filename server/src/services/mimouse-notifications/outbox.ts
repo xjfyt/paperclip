@@ -1,3 +1,4 @@
+import { notificationDigestKey, notificationDigestEnabled, notificationDigestWindow, freezeNotificationDigest, notificationDispatchContent } from "./digest.js";
 import { evaluateNotificationPolicy, notificationMergeKey, notificationMergeWindow } from "./policy.js";
 import { appCredential, NotificationTokenError } from "./app-credentials.js";
 import { notificationTokenCache } from "./token-cache.js";
@@ -15,8 +16,8 @@ export const CONNECTED_NOTIFICATION_EVENTS = ["approval.requested", "run.failed"
 // the shared query surface, not an unsafe cast to Drizzle transaction internals.
 type Transaction = Pick<Parameters<Parameters<Db["transaction"]>[0]>[0], "select" | "insert" | "execute">;
 interface EventInput { companyId: string; eventId: string; type: string; resourceId: string; title?: string; text?: string }
-interface Snapshot extends NotificationSnapshot { policy?: unknown; policyVersion?: number; severity?: string; policyEvent?: string; policyResourceId?: string; configVersion?: number; secretRef: string; secretVersion: number; targetKey: string; locale: string; renderVersion: number; renderEvent?: string; renderResourceId?: string; renderCompanyPrefix?: string; rendered?: boolean }
-interface DeliveryRow { id: string; company_id: string; endpoint_id: string; subscription_id: string; snapshot: Snapshot; lease: string; attempt: number; created_at: Date }
+interface Snapshot extends NotificationSnapshot { digestVersion?: number; digestEnvelope?: unknown; policy?: unknown; policyVersion?: number; severity?: string; policyEvent?: string; policyResourceId?: string; configVersion?: number; secretRef: string; secretVersion: number; targetKey: string; locale: string; renderVersion: number; renderEvent?: string; renderResourceId?: string; renderCompanyPrefix?: string; rendered?: boolean }
+interface DeliveryRow { id: string; company_id: string; endpoint_id: string; subscription_id: string; snapshot: Snapshot; lease: string; merge_key?: string | null; attempt: number; created_at: Date }
 
 /** Called inside the exact business transaction. Never run a provider request here. */
 export async function enqueueNotification(tx: Transaction, event: EventInput): Promise<void> {
@@ -41,8 +42,10 @@ export async function enqueueNotification(tx: Transaction, event: EventInput): P
       // Keep a visible rejected delivery, not a successful or silently lost send.
       renderFailed = true; rendered = { title: "Notification rendering failed", text: event.resourceId };
     }
+    const digest = !renderFailed && notificationDigestEnabled(event.type, endpoint.kind, decision);
     const snapshot: Snapshot = {
       ...endpoint.config,
+      ...(digest ? { digestVersion: 1 } : {}),
       policy: decision.policy, policyVersion: subscription.policyVersion, severity: decision.severity, policyEvent: event.type, policyResourceId: event.resourceId,
       kind: endpoint.kind as NotificationSnapshot["kind"], ...rendered,
       ...(templateData ? { templateData } : {}),
@@ -50,7 +53,8 @@ export async function enqueueNotification(tx: Transaction, event: EventInput): P
       targetKey: endpoint.targetKey, locale: subscription.locale, renderVersion: 2,
     };
     const merge = !renderFailed && !decision.filtered && decision.mergeWindowSeconds > 0
-      ? await notificationMergeWindow(tx, event.companyId, notificationMergeKey(event.companyId, subscription.id, event.type, event.resourceId, snapshot as unknown as Record<string, unknown>), decision.mergeWindowSeconds)
+      ? digest ? await notificationDigestWindow(tx, event.companyId, notificationDigestKey(event.companyId, subscription.id, snapshot as unknown as Record<string, unknown>), decision.mergeWindowSeconds)
+        : await notificationMergeWindow(tx, event.companyId, notificationMergeKey(event.companyId, subscription.id, event.type, event.resourceId, snapshot as unknown as Record<string, unknown>), decision.mergeWindowSeconds)
       : {};
     await tx.insert(deliveries).values({ ...merge, ...(decision.filtered ? { state: "filtered", lastCode: "severity_filtered" } : {}), companyId: event.companyId, eventId: event.eventId, subscriptionId: subscription.id, endpointId: endpoint.id, snapshot: snapshot as unknown as Record<string, unknown>, ...(renderFailed ? { state: "rejected", lastCode: "snapshot_render_failed" } : {}) }).onConflictDoNothing();
   }
@@ -137,6 +141,16 @@ export function notificationOutbox(db: Db, deps: {
         return true;
       }
     }
+    if (row.snapshot.digestVersion === 1) {
+      try {
+        const frozen = await freezeNotificationDigest(db, row as unknown as Parameters<typeof freezeNotificationDigest>[1]);
+        if (!frozen) return true;
+        row.snapshot = frozen as unknown as Snapshot;
+      } catch {
+        await db.execute(sql`UPDATE mimouse_notification_deliveries SET state='rejected',last_code='snapshot_render_failed',lease=NULL,lease_expires_at=NULL,updated_at=now() WHERE id=${row.id} AND lease=${row.lease} AND state='claimed'`);
+        return true;
+      }
+    }
     let secret: ChannelSecret;
     try { secret = JSON.parse(await resolveSecret(row.company_id, row.snapshot.secretRef, row.snapshot.secretVersion)); }
     catch {
@@ -164,7 +178,7 @@ export function notificationOutbox(db: Db, deps: {
     }
     if (!await enterSending(row)) return true;
     let result: DeliveryResult;
-    try { result = await send(row.snapshot, secret); } catch { result = { state: "indeterminate", code: "worker_transport_exception" }; }
+    try { result = await send({ ...row.snapshot, ...notificationDispatchContent(row.snapshot as unknown as Record<string, unknown>) }, secret); } catch { result = { state: "indeterminate", code: "worker_transport_exception" }; }
     await settle(row, result);
     return true;
   }

@@ -1,3 +1,4 @@
+import { notificationDispatchContent } from "../services/mimouse-notifications/digest.js";
 import { notificationPolicyUpdateSchema, updateNotificationPolicy } from "../services/mimouse-notifications/policy.js";
 import { notificationReconciliation } from "../services/mimouse-notifications/reconciliation.js";
 import { notificationConfiguration } from "../services/mimouse-notifications/configuration.js";
@@ -6,7 +7,7 @@ import { appendNotificationEvidenceSchema } from "@paperclipai/shared/notificati
 import { notificationVerification } from "../services/mimouse-notifications/verification.js";
 import { renderTemplateData } from "../services/mimouse-notifications/render.js";
 import { Router, type Request } from "express";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { mimouseNotificationDeliveries as deliveries, mimouseNotificationEndpoints as endpoints, mimouseNotificationSubscriptions as subscriptions, signalDatabaseWork, type Db } from "@paperclipai/db";
 import { assertBoard, assertCompanyAccess, getActorInfo } from "./authz.js";
@@ -41,7 +42,7 @@ export function mimouseNotificationRoutes(db: Db) {
     const companyId = String(req.params.companyId); companyAdmin(req, companyId);
     const channelRows = await db.select().from(endpoints).where(eq(endpoints.companyId, companyId));
     const subscriptionRows = await db.select().from(subscriptions).where(eq(subscriptions.companyId, companyId));
-    const deliveryRows = await db.select({ id: deliveries.id, eventId: deliveries.eventId, endpointId: deliveries.endpointId, state: deliveries.state, attempt: deliveries.attempt, lastCode: deliveries.lastCode, mergedInto: deliveries.mergedInto, mergeUntil: deliveries.mergeUntil, createdAt: deliveries.createdAt }).from(deliveries).where(eq(deliveries.companyId, companyId)).orderBy(desc(deliveries.createdAt)).limit(100);
+    const deliveryRows = await db.select({ id: deliveries.id, eventId: deliveries.eventId, endpointId: deliveries.endpointId, state: deliveries.state, attempt: deliveries.attempt, lastCode: deliveries.lastCode, mergedInto: deliveries.mergedInto, mergeUntil: deliveries.mergeUntil, mergeMode: sql<string>`CASE WHEN ${deliveries.snapshot}->>'digestVersion'='1' THEN 'digest' ELSE 'exact' END`, createdAt: deliveries.createdAt }).from(deliveries).where(eq(deliveries.companyId, companyId)).orderBy(desc(deliveries.createdAt)).limit(100);
     res.json({ enabled: process.env.PAPERCLIP_NOTIFICATIONS_ENABLED === "true", dispatchEnabled: process.env.PAPERCLIP_NOTIFICATIONS_ENABLED === "true" && process.env.PAPERCLIP_NOTIFICATIONS_WORKER_ENABLED !== "false", connectedEvents: CONNECTED_NOTIFICATION_EVENTS,
       unconnectedEvents: [],
       verification: { implemented: true, scope: "endpoint_config_version", machineVerified: false },
@@ -108,7 +109,7 @@ export function mimouseNotificationRoutes(db: Db) {
     const input = notificationPolicyUpdateSchema.parse(req.body); const actor = getActorInfo(req);
     const publications: ActivityPublication[] = [];
     const row = await updateNotificationPolicy(db, companyId, String(req.params.id), input, async (tx, policyVersion) => {
-      await logActivity(tx as unknown as Db, { companyId, actorType: actor.actorType, actorId: actor.actorId, action: "notification.subscription.policy_updated", entityType: "notification_subscription", entityId: String(req.params.id), details: { policy: { minimumSeverity: input.minimumSeverity, mergeWindowSeconds: input.mergeWindowSeconds }, previousVersion: input.expectedVersion, policyVersion, appliesToNewEventsOnly: true } }, publications);
+      await logActivity(tx as unknown as Db, { companyId, actorType: actor.actorType, actorId: actor.actorId, action: "notification.subscription.policy_updated", entityType: "notification_subscription", entityId: String(req.params.id), details: { policy: { minimumSeverity: input.minimumSeverity, mergeWindowSeconds: input.mergeWindowSeconds, ...(input.mergeMode === "digest" ? { mergeMode: input.mergeMode } : {}) }, previousVersion: input.expectedVersion, policyVersion, appliesToNewEventsOnly: true } }, publications);
     });
     publications.forEach(publishActivity);
     res.json(row);
@@ -129,8 +130,10 @@ export function mimouseNotificationRoutes(db: Db) {
     const [row] = await db.select().from(deliveries).where(and(eq(deliveries.companyId, companyId), eq(deliveries.id, String(req.params.id))));
     if (!row) throw notFound("Delivery not found"); const endpoint = await loadEndpoint(companyId, row.endpointId);
     const snapshot = row.snapshot;
-    res.json({ id: row.id, state: row.state, endpointName: endpoint.name, kind: endpoint.kind,
-      title: typeof snapshot.title === "string" ? snapshot.title.slice(0, 1000) : "", text: typeof snapshot.text === "string" ? snapshot.text.slice(0, 5000) : "",
+    let content = { title: String(snapshot.title ?? ""), text: String(snapshot.text ?? "") };
+    if (snapshot.digestEnvelope !== undefined) content = notificationDispatchContent(snapshot);
+    res.json({ id: row.id, state: row.state, endpointName: endpoint.name, kind: snapshot.kind,
+      title: content.title.slice(0, 1000), text: content.text.slice(0, 5000),
       templateData: snapshot.kind === "wechat_official_account" ? snapshot.templateData ?? null : null,
       configVersion: snapshot.configVersion ?? null, target: typeof snapshot.target === "string" ? snapshot.target : null, secretVersion: snapshot.secretVersion, locale: snapshot.locale });
   });
