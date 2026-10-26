@@ -1,3 +1,4 @@
+import "./agent-setup-login-test-resources";
 import "./agent-setup-connection-test-resources";
 import "./agent-setup-shared-test-resources";
 // Test only: the integration owner composes these contributions into runtime locales.
