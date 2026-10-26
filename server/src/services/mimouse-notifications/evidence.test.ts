@@ -55,6 +55,11 @@ describe("notification declaration transaction fixture (not real SQL locking)", 
     if (change === "human_unknown") state.view.latestTest.review.outcome = "unknown";
     await expect(append(request)).rejects.toBeDefined(); expect(state.rows.events).toHaveLength(0);
   });
+  it("rejects a missing human review with a domain error and no evidence write", async () => {
+    state.view.latestTest.review = null;
+    await expect(append()).rejects.toMatchObject({ status: 422 });
+    expect(state.rows.events).toHaveLength(0);
+  });
   it("requires an actual company approval resource, not a test or replay", async () => {
     const request = input(); Object.assign(request.receipt, { category: "approval_scenario", approvalChecks: { received: true, detailLink: true, permissionChecked: true, noGetAction: true } });
     state.view.latestApproval = { ...state.view.latestTest, resourceId: id(7), eventId: "manual-test:wrong" };

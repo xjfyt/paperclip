@@ -70,7 +70,7 @@ export function notificationEvidence(db: Db) {
           let resourceId: string | null = null;
           if (claim.category !== "protocol_report") {
             const observation = claim.category === "approval_scenario" ? view.latestApproval : view.latestTest;
-            if (!observation || !observation.scopeMatches || observation.id !== claim.deliveryId || observation.review?.id !== claim.reviewId)
+            if (!observation || !observation.scopeMatches || !observation.review || observation.id !== claim.deliveryId || observation.review.id !== claim.reviewId)
               throw unprocessable("Evidence must reference the latest matching delivery and human review");
             if (observation.state !== claim.expectedState || observation.attempt !== claim.expectedAttempt
               || observation.review.observedState !== observation.state || observation.review.observedAttempt !== observation.attempt) throw conflict("Delivery or human review changed; reload");
