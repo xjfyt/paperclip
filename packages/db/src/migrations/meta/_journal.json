@@ -2409,6 +2409,13 @@
       "when": 1792984171016,
       "tag": "0345_mimouse_feedback_inbox",
       "breakpoints": true
+    },
+    {
+      "idx": 346,
+      "version": "7",
+      "when": 1792984598087,
+      "tag": "0346_mimouse_feedback_promotions",
+      "breakpoints": true
     }
   ]
 }

@@ -74,3 +74,11 @@ GET `/companies/:companyId/setup-capabilities`：当前登录board的只读能�
 幂等身份为company/sourceKind/sourceInstance/externalId；原始导入的内容摘要仅内部保存，重试相同内容返回原记录，改变内容409。并发由唯一索引仲裁，不能覆盖先前证据。只保存经过确定性脱敏的文本；已知凭据/邮箱/电话和URL用户信息、query/fragment被去除。规则不能保证检测任意形式秘密；导入方仍须预先审核，不在sourceInstance/externalId/traceId等标识字段放凭据或客户隐私。导入API及错误日志整段隐去请求体。
 
 当前没有外部URL抓取、附件下载、客户回复、Langfuse/企微授权、自动建任务或Agent派发。外部文本是数据，绝不形成平台权限。该接口与上游Paperclip产品反馈导出无调用关系，不向其反馈站发送公司客户内容。后续人审转任务与UI、可信连接器另行接入。
+
+### 人工确认反馈转任务
+
+POST `/api/companies/:companyId/feedback-inbox/:id/promote` 使用feedbackPromotionSchema：requestId、confirm:true、title、reproduction、expectedBehavior、fixProposal、acceptanceCriteria。只允许真实浏览器登录会话；实例管理员身份不能代替有效公司owner/admin成员资格，Agent、Board key、local_implicit不允许。服务在事务内再次核对公司和成员状态。
+
+同一requestId相同确认返回原始回执；修改确认内容、改反馈/操作者或换requestId重复转同一反馈均409。数据库复合外键保持反馈/任务公司一致，任务创建和确认记录同事务。固定生成确认者负责的private/backlog任务，无Agent/用户指派；sourceTrust保持low_trust_review/quarantined，不因为人审建待办就授予执行权限。复现、预期、建议和验收标准再次脱敏；原导入内容放在不会被其反引号打断的文本围栏内。
+
+回执记录initialStatus/initialVisibility及agentDispatched:false，是创建时的历史事实，不代替当前任务状态。当前不自动回复客户、派发Agent或直接修改代码。确认记录不可覆盖，引用任务的永久删除按上游引用冲突逻辑拒绝，可按现有任务流程归档；公司级永久清理需后续明确的保留/删除策略，不能删除确认记录后自动重建任务。

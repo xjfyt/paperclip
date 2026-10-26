@@ -253,4 +253,4 @@ export { mimouseWorkbuddyConnections, mimouseWorkbuddyJobs, mimouseWorkbuddyTurn
 
 export { mimouseCodingDeliveries, mimouseCodingRepairAttempts } from "./mimouse_coding.js";
 export { mimouseAuthRevocations } from "./mimouse_auth_revocations.js";
-export { mimouseFeedbackInbox } from "./mimouse_feedback.js";
+export { mimouseFeedbackInbox, mimouseFeedbackPromotions } from "./mimouse_feedback.js";

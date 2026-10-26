@@ -1,7 +1,8 @@
+import { feedbackPromotionService } from "../services/mimouse-feedback-promotion.js";
 import { Router, type Request } from "express";
 import { z } from "zod";
 import type { Db } from "@paperclipai/db";
-import { feedbackImportSchema } from "@paperclipai/shared";
+import { feedbackImportSchema, feedbackPromotionSchema } from "@paperclipai/shared";
 import { assertBoard, assertCompanyAccess, getActorInfo } from "./authz.js";
 import { forbidden, notFound } from "../errors.js";
 import { validate } from "../middleware/validate.js";
@@ -22,6 +23,11 @@ export function mimouseFeedbackRoutes(db: Db) {
   router.post(path, validate(feedbackImportSchema), async (req, res) => {
     const companyId = admin(req), result = await service.import(companyId, feedbackImportSchema.parse(req.body), getActorInfo(req).actorId);
     res.status(result.duplicate ? 200 : 201).json(result);
+  });
+  router.post(`${path}/:id/promote`, validate(feedbackPromotionSchema), async (req, res) => {
+    const companyId = admin(req);
+    if (req.actor.type !== "board" || req.actor.source !== "session" || !req.actor.userId) throw forbidden("A signed-in human must confirm task creation");
+    res.json(await feedbackPromotionService(db).promote(companyId, id(req), req.actor.userId, feedbackPromotionSchema.parse(req.body)));
   });
   router.get(`${path}/:id`, async (req, res) => { const companyId = admin(req); res.json(await service.get(companyId, id(req))); });
   router.get(`${path}/:id/candidates`, async (req, res) => { const companyId = admin(req); res.json(await service.candidates(companyId, id(req))); });

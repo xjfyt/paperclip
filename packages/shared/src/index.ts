@@ -2881,3 +2881,4 @@ export type { CompanySetupCapabilities } from "./mimouse-access.js";
 export { revokeLocalAuthSchema, type RevokeLocalAuthInput, type AuthRevocationDto } from "./mimouse-auth-revocations.js";
 export { MIMOUSE_BUILD_TARGETS, type MimouseBuildTarget, type MimouseMatrixBlocker, type MimouseBuildMatrix } from "./mimouse-build-matrix.js";
 export { feedbackImportSchema, type FeedbackImportInput, type FeedbackInboxItem, type FeedbackInboxPage } from "./mimouse-feedback.js";
+export { feedbackPromotionSchema, type FeedbackPromotionInput, type FeedbackPromotionReceipt } from "./mimouse-feedback.js";

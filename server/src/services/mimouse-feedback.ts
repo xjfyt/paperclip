@@ -5,18 +5,20 @@ import { feedbackImportSchema, type FeedbackImportInput, type FeedbackInboxItem 
 import { conflict, notFound } from "../errors.js";
 import { createFeedbackRedactionState, sanitizeFeedbackText } from "./feedback-redaction.js";
 const digest = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
-/** No URL retrieval, model call, command execution, customer reply or export. */
-export function prepareFeedbackImport(raw: FeedbackImportInput) {
-  const input = feedbackImportSchema.parse(raw), redaction = createFeedbackRedactionState();
-  // Remove URL credentials and query/fragment values before generic redaction.
-  const sanitize = (text: string, field: string, max: number) => {
+// Remove URL credentials and query/fragment values before generic redaction.
+export function sanitizeImportedFeedbackText(text: string, redaction: ReturnType<typeof createFeedbackRedactionState>, field: string, max: number) {
     const withoutUrlSecrets = text.replace(/https?:\/\/[^\s<>"']+/gi, value => {
       try { const url = new URL(value); url.username = ""; url.password = ""; url.search = ""; url.hash = ""; return url.href; }
       catch { return "[REDACTED_URL]"; }
     });
     if (withoutUrlSecrets !== text) redaction.redactedFields.add(field);
     return sanitizeFeedbackText(withoutUrlSecrets, redaction, field, max).slice(0, max);
-  };
+}
+
+/** No URL retrieval, model call, command execution, customer reply or export. */
+export function prepareFeedbackImport(raw: FeedbackImportInput) {
+  const input = feedbackImportSchema.parse(raw), redaction = createFeedbackRedactionState();
+  const sanitize = (text: string, field: string, max: number) => sanitizeImportedFeedbackText(text, redaction, field, max);
   const title = sanitize(input.title, "title", 240), body = sanitize(input.text, "text", 32000);
   const product = sanitize(input.product, "product", 120), softwareVersion = sanitize(input.softwareVersion, "softwareVersion", 120);
   const normalized = (value: string) => value.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();

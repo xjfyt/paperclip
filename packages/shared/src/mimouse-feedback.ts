@@ -17,3 +17,15 @@ export interface FeedbackInboxItem {
   status: "candidate";
 }
 export interface FeedbackInboxPage { items: FeedbackInboxItem[]; nextBeforeId: string | null }
+
+export const feedbackPromotionSchema = z.object({
+  requestId: z.string().uuid(), confirm: z.literal(true),
+  title: z.string().trim().min(1).max(240), reproduction: z.string().trim().min(1).max(8000),
+  expectedBehavior: z.string().trim().min(1).max(4000), fixProposal: z.string().trim().max(8000).default(""),
+  acceptanceCriteria: z.array(z.string().trim().min(1).max(1000)).min(1).max(10),
+}).strict();
+export type FeedbackPromotionInput = z.infer<typeof feedbackPromotionSchema>;
+export interface FeedbackPromotionReceipt {
+  requestId: string; feedbackId: string; issueId: string; actorUserId: string; createdAt: string;
+  initialStatus: "backlog"; initialVisibility: "private"; agentDispatched: false;
+}
