@@ -1,0 +1,15 @@
+{
+  "identityLabel": "身份",
+  "availableToLabel": "可用范围",
+  "actionsLabel": "操作",
+  "yourIdentity": "你的身份",
+  "dedicatedIdentity": "Agent 专用身份",
+  "organizationIdentity": "组织身份",
+  "selectedAgents_one": "{{count}} 个所选 Agent",
+  "selectedAgents_other": "{{count}} 个所选 Agent",
+  "actionsOn_one": "已启用 {{count}} 项操作",
+  "actionsOn_other": "已启用 {{count}} 项操作",
+  "actionsUnknown": "已启用操作尚未确认",
+  "appReady": "{{appName}} 已就绪。",
+  "viewConnection": "查看连接"
+}

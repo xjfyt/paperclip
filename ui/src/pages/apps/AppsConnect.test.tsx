@@ -2785,6 +2785,22 @@ describe("AppsConnect — Connect with a link (M4 frame)", () => {
     expect(connectAppMock).toHaveBeenCalledWith("company-1", expect.objectContaining({ resumeConnectionId: connectionId }));
     expect(finishAppMock).toHaveBeenCalledWith("company-1", connectionId, expect.any(Object));
     expect(startOAuthMock).not.toHaveBeenCalled();
+    const completedCalls = [connectAppMock.mock.calls, finishAppMock.mock.calls, putConnectionInstallsMock.mock.calls];
+    const snapshot = JSON.stringify(completedCalls);
+    try {
+      for (const locale of ["zh-CN", "es", "ja", "en"]) {
+        await act(async () => { await i18n.changeLanguage(locale); });
+        expect(container.textContent).toContain(i18n.t("connectionCompletionUi.appReady", { appName: "Context7" }));
+        expect(Array.from(container.querySelectorAll('dt'), node => node.textContent)).toEqual([
+          i18n.t("connectionCompletionUi.identityLabel"), i18n.t("connectionCompletionUi.availableToLabel"), i18n.t("connectionCompletionUi.actionsLabel"),
+        ]);
+        expect(container.textContent).toContain(i18n.t("connectionAccessUi.noIdentity"));
+        expect(container.textContent).toContain(i18n.t("connectionCompletionUi.actionsOn", { count: 1 }));
+        expect(buttonByText(i18n.t("connectionCompletionUi.viewConnection"))).toBeTruthy();
+        expect(JSON.stringify([connectAppMock.mock.calls, finishAppMock.mock.calls, putConnectionInstallsMock.mock.calls])).toBe(snapshot);
+        expect(startOAuthMock).not.toHaveBeenCalled();
+      }
+    } finally { await act(async () => { await i18n.changeLanguage("en"); }); }
     await act(async () => {
       buttonByText("View connection")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });

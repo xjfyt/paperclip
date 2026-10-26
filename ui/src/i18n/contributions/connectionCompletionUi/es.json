@@ -1,0 +1,15 @@
+{
+  "identityLabel": "Identidad",
+  "availableToLabel": "Disponible para",
+  "actionsLabel": "Acciones",
+  "yourIdentity": "Tu identidad",
+  "dedicatedIdentity": "Identidad dedicada de Agent",
+  "organizationIdentity": "Identidad de la organización",
+  "selectedAgents_one": "{{count}} Agent seleccionado",
+  "selectedAgents_other": "{{count}} Agent seleccionados",
+  "actionsOn_one": "{{count}} acción activada",
+  "actionsOn_other": "{{count}} acciones activadas",
+  "actionsUnknown": "Las acciones activadas no están confirmadas",
+  "appReady": "{{appName}} está listo.",
+  "viewConnection": "Ver conexión"
+}

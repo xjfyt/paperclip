@@ -2694,7 +2694,7 @@ function StandardConnectionSetupFlow({
             installChoice,
             installCount: installAgentIds.size,
             enabledCount: Object.values(enabled).filter(Boolean).length,
-          })}
+          }, t)}
           statedDefault={connectionDefaultSummarySentence({
             grantKind: effectiveGrantKind,
             authKind: accessStepAuthKind,
@@ -4576,23 +4576,32 @@ export function accessSummaryLines(input: {
   installChoice: "specific" | "all";
   installCount: number;
   enabledCount: number;
-}): Array<{ label: string; value: string }> {
+}, t: TFunction = i18n.t): Array<{ label: string; value: string }> {
+  // Unknown display inputs must not claim organization-wide or read-only access.
   const identity = input.authKind === "none"
-    ? "No identity required"
-    : input.grantKind === "user"
-      ? "Your identity"
-      : input.grantKind === "agent"
-        ? "Dedicated agent identity"
-      : "Organization identity";
+    ? t("connectionAccessUi.noIdentity")
+    : input.authKind !== "oauth" && input.authKind !== "api_key"
+      ? t("connectionAccessUi.summaryIdentityUnknown")
+      : input.grantKind === "user"
+        ? t("connectionCompletionUi.yourIdentity")
+        : input.grantKind === "agent"
+          ? t("connectionCompletionUi.dedicatedIdentity")
+          : input.grantKind === "organization"
+            ? t("connectionCompletionUi.organizationIdentity")
+            : t("connectionAccessUi.summaryIdentityUnknown");
   const availableTo = input.installChoice === "all"
-    ? "Any agent"
-    : `${input.installCount} selected ${input.installCount === 1 ? "agent" : "agents"}`;
+    ? t("connectionAccessUi.anyAgent")
+    : input.installChoice === "specific" && Number.isInteger(input.installCount) && input.installCount >= 0
+      ? t("connectionCompletionUi.selectedAgents", { count: input.installCount })
+      : t("connectionAccessUi.summaryReachUnknown");
   return [
-    { label: "Identity", value: identity },
-    { label: "Available to", value: availableTo },
+    { label: t("connectionCompletionUi.identityLabel"), value: identity },
+    { label: t("connectionCompletionUi.availableToLabel"), value: availableTo },
     {
-      label: "Actions",
-      value: `${input.enabledCount} ${input.enabledCount === 1 ? "action" : "actions"} on`,
+      label: t("connectionCompletionUi.actionsLabel"),
+      value: Number.isInteger(input.enabledCount) && input.enabledCount >= 0
+        ? t("connectionCompletionUi.actionsOn", { count: input.enabledCount })
+        : t("connectionCompletionUi.actionsUnknown"),
     },
   ];
 }
@@ -4630,6 +4639,7 @@ export function ConnectionSetupCompletionScreen({
   statedDefault?: string;
   onDone: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="mx-auto max-w-md py-10 text-center">
       <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border-2 border-emerald-500 bg-emerald-500/10">
@@ -4637,7 +4647,7 @@ export function ConnectionSetupCompletionScreen({
       </div>
       <div className="mt-6 flex items-center justify-center gap-2">
         <AppLogo name={appName} logoUrl={logoUrl} darkLogoUrl={darkLogoUrl} size={28} />
-        <h2 className="text-2xl font-bold tracking-tight">{appName} is ready.</h2>
+        <h2 className="text-2xl font-bold tracking-tight">{t("connectionCompletionUi.appReady", { appName })}</h2>
       </div>
       {statedDefault ? <p className="mt-3 text-sm text-muted-foreground">{statedDefault}</p> : null}
       <dl className="mx-auto mt-6 max-w-xs space-y-1 text-left">
@@ -4650,7 +4660,7 @@ export function ConnectionSetupCompletionScreen({
       </dl>
       <div className="mt-8">
         <Button size="lg" className="px-10" onClick={onDone}>
-          View connection
+          {t("connectionCompletionUi.viewConnection")}
         </Button>
       </div>
     </div>

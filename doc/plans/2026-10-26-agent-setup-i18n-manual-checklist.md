@@ -128,10 +128,33 @@ NODE_OPTIONS=--max-old-space-size=512 node ../node_modules/vitest/vitest.mjs run
 
 - 手测追加：四语进入高级连接并展开“更改”，切换个人/组织/专用身份和全部/指定 Agent；检查 0 选择不能误读成全部，受限用户不可选择组织级/全部范围且原因可读。任务宿主仅授予请求 Agent，重连仍保留原范围；验证四语长文/键盘/屏幕阅读器。使用测试账户核对真实保存后的授权范围与服务端拒绝越权，不能只依据 UI disabled 判定授权安全。
 
+## 第七片：连接完成页与三行摘要（2026-10-26）
+
+- 仅补 `accessSummaryLines` 的身份/可用范围/已启用操作数量，以及 `ConnectionSetupCompletionScreen` 的完成标题和查看连接按钮；新增独立 `connectionCompletionUi` 领域，复用第六片身份/范围通用键。实际标准连接宿主传当前翻译函数，三行摘要不会固定为进入完成页时的语言。
+- 保持个人/组织/Agent 专用身份、全部/指定范围、0/1/多项动作的区别；未知身份或非法计数只显示未确认，不推断组织级授权、只读或全部动作。没有修改权限判断、读写分类、业务 ID、请求 payload 或查看连接后的导航路径。
+- 完成页本身没有本地错误状态；本片不会顺带改写 OAuth controller 的错误缓存。调用方传入的自定义 summary/原始诊断和应用名称仍是原始文本；名称含字面 HTML 也不解析为标记。
+- 四语渲染与切换回归覆盖实际完成标题、三行摘要、单复数、未知值和调用方原文。真实 `AppsConnect` mock 流程先完成，再轮流切换四语，核对 connect/finish/install 调用记录完全不变；点击已翻译按钮仍导航至同一 connection ID 的 permissions 页面，不因切换语言再次完成或自动导航。
+- 最终专注回归 **8 文件 / 292 用例通过**；独立审阅、四语键/占位符及实际合成器安全规则、token gates、调色板/角色同步和 diff 检查通过。未执行完整类型检查/构建、真实授权、数据库或网络。
+- 复现命令（`ui/`，纯 mock/jsdom、512 MB、单 worker）：
+
+```sh
+NODE_OPTIONS=--max-old-space-size=512 node ../node_modules/vitest/vitest.mjs run \
+  src/i18n/connection-completion-surfaces.test.tsx \
+  src/i18n/connection-access-surfaces.test.tsx \
+  src/i18n/connection-access-remote.test.tsx \
+  src/components/ai-connections/AiProviderSetup.test.tsx \
+  src/pages/apps/AppsConnect.test.tsx \
+  src/features/connections/ConnectionSetupFlow.architecture.test.ts \
+  src/features/connections/ConnectionSetupFlow.oauth.test.ts \
+  src/features/connections/connection-defaults.test.ts --maxWorkers=1
+```
+
+- 手测追加：使用测试连接完成配置后，在四语间切换，检查标题、身份/范围/动作计数及按钮；确认权限页的连接 ID 与实际授权范围没有改变，没有再次发起授权/保存。使用长应用名称和窄屏核对摘要对齐、换行及键盘焦点；真实供应商授权和浏览器布局仍须用户验收。
+
 ## 已知剩余范围（不是本片已完成项）
 
 - 真实登录、剪贴板权限及浏览器布局尚未四语验收。系统提示已抽取不代表外部交互已通过。
-- `AdapterLoginPanel` 与 `useLocalAiLogin` 本片指定显示层已补；`environmentDisplayLabel` 仅拼用户环境名和原始 driver 标识，保留为用户内容/技术值。此前确认的三个共享权限摘要/选择组件已由第六片补齐，但 `ConnectionSetupFlow` 其它分支（例如 `accessSummaryLines`、完成页）以及远程 MCP 的其它认证/管理/错误文案仍未包含，不能据此声称整个连接流程四语完成。所有切片均未更改权限判定或真实授权语义。
+- `AdapterLoginPanel` 与 `useLocalAiLogin` 本片指定显示层已补；`environmentDisplayLabel` 仅拼用户环境名和原始 driver 标识，保留为用户内容/技术值。此前确认的三个共享权限摘要/选择组件已由第六片补齐，三行摘要和完成页由第七片补齐；`ConnectionSetupFlow` 其它分支（如 OAuth 登录状态、校验/错误缓存、密钥表单）以及远程 MCP 的其它认证/管理/错误文案仍未包含，不能据此声称整个连接流程四语完成。所有切片均未更改权限判定或真实授权语义。
 - 第四片审计发现的 `OnboardingWizard` 本机 connect 错误宿主已由第五片接通；向导的其他硬编码校验/错误及尚未审计的系统文案，不在本次 Agent 创建切片完成结论内。
 - 服务端/适配器 `Error.message`、运行检查结果以及用户/组织/环境名称保持原始内容，不能以纯英文扫描结果判定它们都应翻译。
 - 基线 `6bee5bc` 的 `optionalOnboarding.configureAgent` 三语使用“智能体/agente/エージェント”；本片创建按钮使用独立 Agent 术语键，不覆盖其他域片段。并行 core 切片已修中文 Agent 术语，其他语种与最终集成状态以合并后的资源为准。

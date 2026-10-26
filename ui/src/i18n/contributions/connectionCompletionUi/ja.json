@@ -1,0 +1,15 @@
+{
+  "identityLabel": "アカウント",
+  "availableToLabel": "利用可能な対象",
+  "actionsLabel": "アクション",
+  "yourIdentity": "あなたのアカウント",
+  "dedicatedIdentity": "Agent 専用のアカウント",
+  "organizationIdentity": "組織のアカウント",
+  "selectedAgents_one": "選択した {{count}} 個の Agent",
+  "selectedAgents_other": "選択した {{count}} 個の Agent",
+  "actionsOn_one": "{{count}} 件のアクションが有効",
+  "actionsOn_other": "{{count}} 件のアクションが有効",
+  "actionsUnknown": "有効なアクションは未確認です",
+  "appReady": "{{appName}} の準備ができました。",
+  "viewConnection": "接続を表示"
+}

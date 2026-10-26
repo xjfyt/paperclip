@@ -1,3 +1,4 @@
+import "./connection-completion-test-resources";
 import "./connection-access-test-resources";
 import "./agent-setup-login-test-resources";
 import "./agent-setup-connection-test-resources";
