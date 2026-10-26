@@ -56,3 +56,14 @@ it.each(["en", "zh-CN", "es", "ja"] as const)("renders complete %s controls", as
   expect(host.textContent).toContain(i18n.t("langfuseUi.boundary")); expect(host.textContent).not.toContain("langfuseUi.");
   expect(Object.keys({ en, "zh-CN": zh, es, ja }[lang])).toEqual(Object.keys(en));
 });
+
+it("reuses creation request ID after unknown outcome and changes it only for edited intent", async () => {
+  await mount(); calls.post.mockRejectedValue(new Error("unknown outcome"));
+  const submit = async () => { await act(async () => { host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); }); await flush(); };
+  await submit(); await submit();
+  expect(calls.post.mock.calls[0][1].requestId).toBe(calls.post.mock.calls[1][1].requestId);
+  expect(calls.post.mock.calls[0][1]).toHaveProperty("config.api", "observations_v2");
+  const input = host.querySelector('input[name="product"]')!;
+  await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "Changed product"); input.dispatchEvent(new Event("input", { bubbles: true })); });
+  await submit(); expect(calls.post.mock.calls[2][1].requestId).not.toBe(calls.post.mock.calls[1][1].requestId);
+});

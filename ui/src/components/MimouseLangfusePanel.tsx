@@ -13,6 +13,7 @@ function Panel({ companyId, onImported }: { companyId: string; onImported?: () =
   const { t } = useTranslation(), root = `/companies/${companyId}/feedback-langfuse/pulls`;
   const [rows, setRows] = useState<Pull[]>([]), [form, setForm] = useState(blank), [busy, setBusy] = useState(false);
   const [error, setError] = useState(""), [notice, setNotice] = useState(""), [restart, setRestart] = useState<string | null>(null);
+  const requestId = useRef(crypto.randomUUID());
   const controller = useRef<AbortController | null>(null), generation = useRef(0), mounted = useRef(true);
   async function run(path?: string, body?: unknown) {
     if (controller.current) return;
@@ -43,16 +44,16 @@ function Panel({ companyId, onImported }: { companyId: string; onImported?: () =
     <h2 className="font-medium">{t("langfuseUi.title")}</h2>
     <p className="text-sm text-muted-foreground">{t("langfuseUi.boundary")}</p>
     <form className="space-y-3" onSubmit={event => {
-      event.preventDefault(); void run(root, { origin: form.origin, projectId: form.projectId, product: form.product, from: form.from, to: form.to, api: "observations_v2",
-        publicKey: { secretId: form.publicSecretId, version: Number(form.publicVersion) }, secretKey: { secretId: form.secretSecretId, version: Number(form.secretVersion) } });
+      event.preventDefault(); void run(root, { requestId: requestId.current, config: { origin: form.origin, projectId: form.projectId, product: form.product, from: form.from, to: form.to, api: "observations_v2",
+        publicKey: { secretId: form.publicSecretId, version: Number(form.publicVersion) }, secretKey: { secretId: form.secretSecretId, version: Number(form.secretVersion) } } });
     }}>
       <fieldset disabled={busy} className="grid gap-3 sm:grid-cols-2">
         {(Object.keys(blank) as (keyof typeof blank)[]).map(field => <label key={field} className="block space-y-1"><span>{t(`langfuseUi.${field}`)}</span>
-          <Input name={field} required value={form[field]} maxLength={300} type={field.endsWith("Version") ? "number" : "text"} min={field.endsWith("Version") ? 1 : undefined} onChange={event => setForm({ ...form, [field]: event.target.value })} />
+          <Input name={field} required value={form[field]} maxLength={300} type={field.endsWith("Version") ? "number" : "text"} min={field.endsWith("Version") ? 1 : undefined} onChange={event => { requestId.current = crypto.randomUUID(); setForm({ ...form, [field]: event.target.value }); }} />
         </label>)}
       </fieldset>
       <p className="text-xs text-muted-foreground">{t("langfuseUi.credentials")}</p>
-      <div className="flex items-center justify-between gap-2"><Button type="button" variant="outline" onClick={busy ? cancel : () => { setForm(blank); setRestart(null); }} >{t(busy ? "langfuseUi.cancel" : "langfuseUi.clear")}</Button><Button type="submit" disabled={busy}>{t("langfuseUi.create")}</Button></div>
+      <div className="flex items-center justify-between gap-2"><Button type="button" variant="outline" onClick={busy ? cancel : () => { requestId.current = crypto.randomUUID(); setForm(blank); setRestart(null); }} >{t(busy ? "langfuseUi.cancel" : "langfuseUi.clear")}</Button><Button type="submit" disabled={busy}>{t("langfuseUi.create")}</Button></div>
     </form>
     {error && <p role="alert">{t(`langfuseUi.${error}`)}</p>}{notice && <p role="status">{t(`langfuseUi.${notice}`)}</p>}
     <Button variant="outline" disabled={busy} onClick={() => void run()}>{t("langfuseUi.refresh")}</Button>

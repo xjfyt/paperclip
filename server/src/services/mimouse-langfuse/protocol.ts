@@ -17,6 +17,7 @@ export const langfuseConfigSchema = z.object({
   const width = Date.parse(value.to) - Date.parse(value.from);
   return width > 0 && width <= 24 * 60 * 60 * 1000;
 }, "Choose a fixed window of at most 24 hours");
+export const langfuseCreateSchema = z.object({ requestId: z.string().uuid(), config: langfuseConfigSchema }).strict();
 export type LangfuseConfig = z.infer<typeof langfuseConfigSchema>;
 export class LangfuseReadError extends Error {
   constructor(readonly code: "unsupported" | "authentication" | "rate_limited" | "provider_unavailable" | "invalid_response" | "cancelled" | "transport", readonly retryAfterSeconds?: number) {

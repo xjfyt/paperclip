@@ -4,8 +4,7 @@ import type { Db } from "@paperclipai/db";
 import { assertBoard, assertCompanyAccess, getActorInfo } from "./authz.js";
 import { forbidden } from "../errors.js";
 import { langfuseFeedbackService } from "../services/mimouse-langfuse.js";
-import { langfuseConfigSchema, LangfuseReadError } from "../services/mimouse-langfuse/protocol.js";
-import { logActivity } from "../services/activity-log.js";
+import { langfuseCreateSchema, LangfuseReadError } from "../services/mimouse-langfuse/protocol.js";
 
 /** Board-admin pull only. No background polling, customer messages or agent execution. */
 export function mimouseLangfuseRoutes(db: Db) {
@@ -19,21 +18,16 @@ export function mimouseLangfuseRoutes(db: Db) {
     }
     return companyId;
   }
-  async function audit(req: Request, companyId: string, id: string, action: string) {
-    const actor = getActorInfo(req);
-    await logActivity(db, { companyId, actorType: actor.actorType, actorId: actor.actorId, action,
-      entityType: "langfuse_pull", entityId: id, details: { provider: "langfuse", readOnly: true } });
-  }
   router.get(path, async (req, res) => { res.json(await service.list(admin(req))); });
   router.post(path, async (req, res) => {
-    const companyId = admin(req), row = await service.create(companyId, langfuseConfigSchema.parse(req.body));
-    await audit(req, companyId, row.id, "feedback.langfuse.created"); res.status(201).json(row);
+    const companyId = admin(req), row = await service.create(companyId, langfuseCreateSchema.parse(req.body), getActorInfo(req));
+    res.status(201).json(row);
   });
   router.post(`${path}/:id/restart`, async (req, res) => {
     const companyId = admin(req), id = z.string().uuid().parse(req.params.id);
     z.object({ confirm: z.literal(true) }).strict().parse(req.body);
-    const row = await service.restart(companyId, id);
-    await audit(req, companyId, id, "feedback.langfuse.restarted"); res.json(row);
+    const row = await service.restart(companyId, id, getActorInfo(req));
+    res.json(row);
   });
   router.post(`${path}/:id/pull`, async (req, res) => {
     const companyId = admin(req), id = z.string().uuid().parse(req.params.id), controller = new AbortController();
@@ -41,8 +35,8 @@ export function mimouseLangfuseRoutes(db: Db) {
     const disconnect = () => { if (!res.writableEnded) controller.abort(); };
     res.on("close", disconnect);
     try {
-      const row = await service.pull(companyId, id, getActorInfo(req).actorId, controller.signal);
-      await audit(req, companyId, id, "feedback.langfuse.page_read"); res.json(row);
+      const row = await service.pull(companyId, id, getActorInfo(req), controller.signal);
+      res.json(row);
     } catch (error) {
       if (!(error instanceof LangfuseReadError)) throw error;
       if (error.retryAfterSeconds) res.setHeader("Retry-After", error.retryAfterSeconds);

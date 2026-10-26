@@ -57,8 +57,11 @@ Provider response/error bodies and credential values are not logged.
    status/redaction/source-kind/title/body clauses and the manual default.
 3. Mount `mimouseLangfuseRoutes(db)` behind normal auth. Admin API prefix:
    `/api/companies/:companyId/feedback-langfuse/pulls`: GET list (latest 50), POST
-   create config, POST `/:id/pull` `{}` one page, POST `/:id/restart` `{confirm:true}`.
-   Responses omit cursor and secret references. Audit records contain no payload.
+   create `{requestId, config}`, POST `/:id/pull` `{}` one page, POST `/:id/restart` `{confirm:true}`.
+   Responses omit cursor and secret references. Create uses a company-scoped unique
+   requestId; retrying the same actor/config returns the existing job, changed
+   intent conflicts. The UI retains the requestId until edit/clear. Create, restart
+   and page changes persist their fixed-metadata audit within the same transaction.
 4. Mount `<MimouseLangfusePanel companyId={companyId} onImported={...}/>` in
    FeedbackCompany; key parent by company + user. Invalidate existing inbox query
    on imported callback. Reconcile four `langfuseUi` contribution files through
@@ -74,6 +77,11 @@ pagination, project/time boundaries, cancellation, malformed/oversized payloads,
 cycles, unsupported routes and rate limits, with no real network requests.
 UI tests cover explicit page/replay controls, cancellation and company isolation.
 No real-provider/customer-data tests or database execution were authorized here.
+`tests/mimouse/langfuse.spec.ts` supplies seven real disposable DB/API scenarios
+for parent execution: atomic page/audit rollback, restart dedup, idempotent create,
+active pinned credential scope/revocation, NOWAIT concurrency, cancellation,
+project/cursor rejection and cross-company boundaries. Only explicit service test
+dependencies supply in-memory responses; production routes cannot select them.
 Parent runs integrated migration/type/build/browser checks; focused units are not
 full acceptance. C3/C4 still need authorized origin/version, project, company-vault
 read credentials, approved sanitized samples with product/version/commit mapping,
@@ -81,7 +89,7 @@ and permission/environment for live evidence. These inputs are missing, not
 simulated. WeCom inbound and semantic clustering are separate work.
 
 Local checks passed: 20 protocol + 12 legacy feedback tests; 3 direct-router
-company/role denial tests (no listening server); 8 UI tests; token gates and
+company/role denial tests (no listening server); 9 UI tests; token gates and
 `git diff --check`. Database atomicity/dedup/migration behavior is implemented but
 not DB-executed in this constrained branch. Parent integration verification remains
 required, including typecheck/build and real mounted-browser flow.
