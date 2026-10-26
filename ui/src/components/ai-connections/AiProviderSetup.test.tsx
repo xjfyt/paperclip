@@ -1,13 +1,17 @@
 // @vitest-environment jsdom
+import "@/i18n/agent-setup-test-resources";
+import { i18n } from "@/i18n";
 import { act, type ComponentProps } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { AiProviderSetup } from "./AiProviderSetup";
 import { aiConnectionsApi } from "@/api/ai-connections";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { aiProviderSetupPreset } from "@paperclipai/shared";
 import type { AiConnectionCredentialStep } from "./AiConnectionCredentialStep";
+
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 let credentialProps: ComponentProps<typeof AiConnectionCredentialStep> | undefined;
 vi.mock("@/api/ai-connections", () => ({ aiConnectionsApi: { create: vi.fn(async () => ({ connectionId: "connection", grantId: "grant" })), list: vi.fn(async () => ({ currentUserId: "owner", connections: [], canManageConnections: true })) } }));
@@ -136,5 +140,51 @@ it.each(["google", "openai", "anthropic", "xai"] as const)("allows an ordinary m
     expect(credentialProps).toMatchObject({ provider, ownership: "personal", allAgents: false, agentIds: [], disabled: false });
   } finally {
     await act(async () => root.unmount()); client.clear();
+  }
+});
+
+afterEach(async () => { await i18n.changeLanguage("en"); });
+
+
+it.each(["en", "zh-CN", "es", "ja"])("keeps provider-step state and saved identifiers independent of %s", async locale => {
+  await i18n.changeLanguage(locale);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+  client.setQueryData(["ai-connections", "company", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"], { canManageConnections: true, connections: [] });
+  client.setQueryData(["agents", "company", "provider-access"], [{ id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", name: "Customer Agent" }]);
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  vi.mocked(aiConnectionsApi.create).mockClear();
+  try {
+    await act(async () => root.render(<QueryClientProvider client={client}><TooltipProvider><AiProviderSetup companyId="company" agentId="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" advancedOnly onCancel={() => {}} onComplete={() => {}} /></TooltipProvider></QueryClientProvider>));
+    expect(container.querySelector("h2")?.textContent).toBe(i18n.t("agentSetupConnectionUi.connectProvider"));
+    await act(async () => { await i18n.changeLanguage(locale === "ja" ? "zh-CN" : "ja"); });
+    // Display-language changes must not change the stable provider step.
+    expect(container.querySelector("h2")?.textContent).toBe(i18n.t("agentSetupConnectionUi.connectProvider"));
+    const chooseLocal = container.querySelector<HTMLButtonElement>(`[aria-label="${i18n.t("agentSetupConnectionUi.localName")}"]`)!;
+    await act(async () => chooseLocal.click());
+    expect(container.querySelector("h2")?.textContent).toBe(i18n.t("agentSetupConnectionUi.connectProviderName", { provider: i18n.t("agentSetupConnectionUi.localName") }));
+    const change = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Change")!;
+    await act(async () => change.click());
+    const fill = async (label: string, value: string) => {
+      const input = container.querySelector<HTMLInputElement>(`[aria-label="${label}"]`)!;
+      expect(input).not.toBeNull();
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    };
+    await fill(i18n.t("agentSetupConnectionUi.providerUrl"), "http://localhost:11434/v1");
+    await fill(i18n.t("agentSetupConnectionUi.modelIds"), "customer/model-id");
+    await fill(i18n.t("agentSetupUi.apiKey"), "fixture-key");
+    await act(async () => container.querySelector<HTMLFormElement>("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect(aiConnectionsApi.create).toHaveBeenCalledExactlyOnceWith("company", expect.objectContaining({
+      name: "My Local endpoint", provider: "openai", method: "api_key", ownership: "personal", agentIds: ["aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"],
+      routing: expect.objectContaining({ kind: "local", protocol: "responses", baseUrl: "http://localhost:11434/v1", models: [{ id: "customer/model-id" }] }),
+    }));
+  } finally {
+    await act(async () => root.unmount());
+    client.clear();
+    container.remove();
   }
 });

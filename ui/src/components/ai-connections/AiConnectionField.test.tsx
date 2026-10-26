@@ -155,7 +155,7 @@ it.each(["en", "zh-CN", "es", "ja"])("localizes the live account dialog in %s wi
   await i18n.changeLanguage(locale);
   await mount([account({ name: "Customer subscription" })]);
   // The account chooser itself is a separate component; exercise this field's modal.
-  await click("Reconnect account");
+  await click(i18n.t("agentSetupSharedUi.reconnectAccount"));
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain(i18n.t("agentSetupSharedUi.reconnectAccount"));
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain(i18n.t("agentSetupSharedUi.repairAccountHelp"));
   expect(credentialProps?.name).toBe("Customer subscription");

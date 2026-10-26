@@ -40,6 +40,7 @@ describe("saved provider keys", () => {
       {
         id: "user:d1",
         label: "My Claude (Your key)",
+        labelMessage: { key: "yourKey", name: "My Claude" },
         binding: {
           type: "user_secret_ref",
           key: "ANTHROPIC_API_KEY.setup.abc",
@@ -49,6 +50,7 @@ describe("saved provider keys", () => {
       {
         id: "company:s1",
         label: "Claude (Organization key)",
+        labelMessage: { key: "organizationKey", name: "Claude" },
         binding: { type: "secret_ref", secretId: "s1", version: "latest" },
       },
     ]);
@@ -89,6 +91,7 @@ it("lists only active company Codex account connections", () => {
     {
       id: "company:s1",
       label: "ChatGPT account · team",
+      labelMessage: { key: "chatgptAccount", name: "team" },
       binding: { type: "secret_ref", secretId: "s1", version: "latest" },
     },
   ]);

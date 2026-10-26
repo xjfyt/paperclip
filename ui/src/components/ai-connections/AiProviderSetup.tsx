@@ -1,3 +1,4 @@
+import { useTranslation } from "@/i18n";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Network, Monitor } from "lucide-react";
@@ -90,6 +91,7 @@ export function AiProviderSetup({
     binding: Exclude<AiConnectionBinding, { mode: "responsible_user" }>,
   ) => void;
 }) {
+  const { t } = useTranslation();
   const [provider, setProvider] = useState<ProviderChoice | undefined>(
     reconnect
       ? reconnect.routing?.kind === "gateway" ||
@@ -132,6 +134,8 @@ export function AiProviderSetup({
     queryFn: () => agentsApi.list(companyId),
   });
   const label = providerLabel ?? providers.find((p) => p.id === provider)?.name ?? "provider";
+  const displayProviderName = (id: string, name: string) => id === "gateway" ? t("agentSetupConnectionUi.gatewayName") : id === "local" ? t("agentSetupConnectionUi.localName") : name;
+  const displayLabel = providerLabel ?? (provider ? displayProviderName(provider, label) : t("agentSetupConnectionUi.provider"));
   const advanced = reconnect ? Boolean(reconnect.routing) : ["openrouter", "bedrock", "gateway", "local"].includes(provider ?? "");
   const nativeProvider: AiProvider =
     provider === "bedrock"
@@ -213,6 +217,8 @@ export function AiProviderSetup({
         .filter((p) => Boolean("advanced" in p && p.advanced) === advancedOnly)
         .map((p) => ({
           ...p,
+          name: displayProviderName(p.id, p.name),
+          description: t(`agentSetupConnectionUi.${p.id}Description`),
           icon:
             p.id === "gateway" || p.id === "local" ? (
               <span className="flex size-9 items-center justify-center rounded-lg bg-muted">
@@ -237,16 +243,15 @@ export function AiProviderSetup({
   );
   const modelSettings = (
     <label className="block space-y-2 text-xs text-muted-foreground">
-      Model IDs (comma separated)
+      {t("agentSetupConnectionUi.modelIdsLabel")}
       <Input
-        aria-label="Model IDs"
+        aria-label={t("agentSetupConnectionUi.modelIds")}
         value={models}
         onChange={(e) => setModels(e.target.value)}
         disabled={Boolean(reconnect)}
       />
       <span className="block">
-        Use the provider’s model ID or your gateway’s alias. You can
-        also enter one on the agent.
+        {t("agentSetupConnectionUi.modelIdsHelp")}
       </span>
     </label>
   );
@@ -266,35 +271,35 @@ export function AiProviderSetup({
       installAgentIds={agentIds}
       setInstallAgentIds={setAgentIds}
       disabled={save.isPending}
-      notice={!canManageConnections ? ["Only a connection manager can share this credential with everyone or give every agent access."] : undefined}
+      notice={!canManageConnections ? [t("agentSetupConnectionUi.managerRequired")] : undefined}
     />
   ) : undefined;
   const cancel = () => reconnect || initialProvider ? onCancel() : setStep("provider");
-  if (!reconnect && accounts.isPending) return <p role="status">Loading connection permissions…</p>;
-  if (!reconnect && accounts.isError) return <p role="alert">Could not load connection permissions. <Button type="button" variant="ghost" onClick={() => void accounts.refetch()}>Retry</Button></p>;
+  if (!reconnect && accounts.isPending) return <p role="status">{t("agentSetupConnectionUi.loadingPermissions")}</p>;
+  if (!reconnect && accounts.isError) return <p role="alert">{t("agentSetupConnectionUi.permissionsLoadFailed")} <Button type="button" variant="ghost" onClick={() => void accounts.refetch()}>{t("common.retry")}</Button></p>;
   return (
     <div className="mx-auto w-full max-w-2xl space-y-6" onSubmit={(event) => event.stopPropagation()}>
       <div className="space-y-2">
         <h2 className="text-xl font-semibold">
           {step === "provider"
-            ? "Connect a model provider"
-            : `${reconnect ? "Reconnect" : "Connect"} ${label}`}
+            ? t("agentSetupConnectionUi.connectProvider")
+            : t(reconnect ? "agentSetupConnectionUi.reconnectProviderName" : "agentSetupConnectionUi.connectProviderName", { provider: displayLabel })}
         </h2>
       </div>
-      {agents.isError && <p role="alert" className="text-sm text-destructive">Could not load agents. <Button type="button" variant="ghost" onClick={() => void agents.refetch()}>Retry</Button></p>}
+      {agents.isError && <p role="alert" className="text-sm text-destructive">{t("agentSetupConnectionUi.agentsLoadFailed")} <Button type="button" variant="ghost" onClick={() => void agents.refetch()}>{t("common.retry")}</Button></p>}
       {step === "provider" ? (
         <>
           {advancedOnly ? choices(true) : <>
           {choices(false)}
           <details>
             <summary className="cursor-pointer text-sm text-muted-foreground">
-              Advanced providers
+              {t("agentSetupSharedUi.advancedProviders")}
             </summary>
             <div className="pt-4">{choices(true)}</div>
           </details>
           </>}
           <Button type="button" variant="ghost" onClick={onCancel}>
-            Cancel
+            {t("common.cancel")}
           </Button>
         </>
       ) : !advanced ? (
@@ -326,9 +331,9 @@ export function AiProviderSetup({
           {(provider === "gateway" || provider === "local") && (
             <>
               <label className="block space-y-2 text-xs text-muted-foreground">
-                Provider URL
+                {t("agentSetupConnectionUi.providerUrl")}
                 <Input
-                  aria-label="Provider URL"
+                  aria-label={t("agentSetupConnectionUi.providerUrl")}
                   placeholder={
                     provider === "local"
                       ? "http://localhost:11434/v1"
@@ -340,7 +345,7 @@ export function AiProviderSetup({
                 />
               </label>
               <label className="block space-y-2 text-xs text-muted-foreground">
-                API format
+                {t("agentSetupConnectionUi.apiFormat")}
                 <Select
                   value={protocol}
                   onValueChange={(v) => {
@@ -350,7 +355,7 @@ export function AiProviderSetup({
                   }}
                   disabled={Boolean(reconnect) || Boolean(initialProtocol)}
                 >
-                  <SelectTrigger aria-label="API format" className="w-full">
+                  <SelectTrigger aria-label={t("agentSetupConnectionUi.apiFormat")} className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -370,9 +375,9 @@ export function AiProviderSetup({
           )}
           {provider === "bedrock" && (
             <label className="block space-y-2 text-xs text-muted-foreground">
-              AWS region
+              {t("agentSetupConnectionUi.awsRegion")}
               <Input
-                aria-label="AWS region"
+                aria-label={t("agentSetupConnectionUi.awsRegion")}
                 value={region}
                 onChange={(e) => setRegion(e.target.value)}
                 disabled={Boolean(reconnect)}
@@ -381,29 +386,29 @@ export function AiProviderSetup({
           )}
           {provider !== "openrouter" && (
             <label className="block space-y-2 text-xs text-muted-foreground">
-              Authentication
+              {t("agentSetupConnectionUi.authentication")}
               <Select
                 value={auth}
                 onValueChange={(v) => setAuth(v as typeof auth)}
                 disabled={Boolean(reconnect)}
               >
-                <SelectTrigger aria-label="Authentication" className="w-full">
+                <SelectTrigger aria-label={t("agentSetupConnectionUi.authentication")} className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="bearer">
                     {provider === "bedrock"
-                      ? "Bedrock API key"
-                      : "Bearer token"}
+                      ? t("agentSetupConnectionUi.bedrockApiKey")
+                      : t("agentSetupConnectionUi.bearerToken")}
                   </SelectItem>
                   {provider !== "bedrock" && (
                     <>
                       {protocol === "messages" && (
                         <SelectItem value="api_key">
-                          API key · x-api-key
+                          {t("agentSetupConnectionUi.headerApiKey")}
                         </SelectItem>
                       )}
-                      <SelectItem value="none">No authentication</SelectItem>
+                      <SelectItem value="none">{t("agentSetupConnectionUi.noAuthentication")}</SelectItem>
                     </>
                   )}
                 </SelectContent>
@@ -413,9 +418,9 @@ export function AiProviderSetup({
           {
             auth !== "none" && (
               <label className="block space-y-2 text-xs text-muted-foreground">
-                API key
+                {t("agentSetupUi.apiKey")}
                 <Input
-                  aria-label="API key"
+                  aria-label={t("agentSetupUi.apiKey")}
                   type="password"
                   autoComplete="new-password"
                   value={apiKey}
@@ -424,15 +429,14 @@ export function AiProviderSetup({
               </label>
             )
           }
-          {reconnect && <details><summary className="cursor-pointer text-sm text-muted-foreground">Model settings</summary>{modelSettings}</details>}
+          {reconnect && <details><summary className="cursor-pointer text-sm text-muted-foreground">{t("agentSetupConnectionUi.modelSettings")}</summary>{modelSettings}</details>}
           <p className="text-xs text-muted-foreground">
-            Test the connection with your chosen model in the agent’s execution
-            environment after connecting.
+            {t("agentSetupConnectionUi.testAfterConnecting")}
           </p>
           {save.error && (
             <p role="alert" className="text-sm text-destructive">
               {save.error instanceof Error && save.error.name === "ZodError"
-                ? "Check the URL, API format, and authentication fields."
+                ? t("agentSetupConnectionUi.checkConnectionFields")
                 : save.error.message}
             </p>
           )}
@@ -444,7 +448,7 @@ export function AiProviderSetup({
               onClick={cancel}
               disabled={save.isPending}
             >
-              Back
+              {t("onboarding.back")}
             </Button>
             <Button
               type="submit"
@@ -455,10 +459,10 @@ export function AiProviderSetup({
               }
             >
               {save.isPending
-                ? "Connecting…"
+                ? t("agentSetupConnectionUi.connecting")
                 : reconnect
-                  ? "Reconnect"
-                  : "Connect"}
+                  ? t("agentSetupConnectionUi.reconnect")
+                  : t("onboarding.connect")}
             </Button>
           </div>
         </form>

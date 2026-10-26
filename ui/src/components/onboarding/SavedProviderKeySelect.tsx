@@ -103,7 +103,7 @@ export function SavedProviderKeySelect({
           >
             {options.map((option) => (
               <option key={option.id} value={option.id}>
-                {option.label}
+                {option.labelMessage ? t(`agentSetupConnectionUi.${option.labelMessage.key}`, { name: option.labelMessage.name }) : option.label}
               </option>
             ))}
             <option value="">

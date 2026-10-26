@@ -56,10 +56,19 @@ NODE_OPTIONS=--max-old-space-size=512 node ../node_modules/vitest/vitest.mjs run
 - 原计划 §4.4 单独安全补齐：`OnboardingCardField` 在组合输入或 keyCode 229 时不提交、不 preventDefault；未屏蔽普通输入，普通 Enter 保持提交语义。新增非掩码授权码与掩码 API key 两种回归。真实 IME 仍待上表手测。
 - token gates、调色板/角色同步、diff 检查通过。测试命令在上一命令基础上增加 `src/components/AdapterLoginChrome.test.tsx`、`src/components/ModelDropdown.test.tsx`、`src/components/ai-connections/AiConnectionField.test.tsx`、`src/i18n/agent-setup-shared-surfaces.test.tsx`。
 
+## 第三片：嵌套连接选择与凭据步骤（2026-10-26）
+
+- 已补 `AiConnectionSelect` 的默认账户、加载、失败、不可用/不兼容与状态提示；未知服务端不可用原因保留原文。
+- 已补 `AiProviderSetup` 的提供商选择、URL/API 格式/认证字段、权限加载兜底、模型帮助与重连；`AiConnectionCredentialStep` 自有连接名称、环境选择、输入与动作同时覆盖。权限摘要来自独立的 `ConnectionSetupFlow`，仍未计为本片完成。
+- `SavedProviderKeySelect` 的系统后缀通过 `saved-provider-credentials` 显式标签元数据翻译，原始名称、旧 label 与绑定保持原值；不对用户名称做子串替换。
+- 专注回归 **6 文件 / 150 用例通过**（512 MB、单 worker），包括四语实际高级提供商选择、在 provider 步切换语言、保存 `provider` / model ID / URL / `My Local endpoint` 默认名称不变、用户名称包含 `Your default` 时不被误译；四语键与占位符一致。静态资源的键数不构成整条路径覆盖率。
+- 复现：在 `ui/` 使用前述命令运行 `AiProviderSetup.test.tsx`、`AiConnectionField.test.tsx`、`NewAgent.test.tsx`、`AgentProviderConnection.test.tsx`、`agent-setup-connection-surfaces.test.tsx`、`saved-provider-credentials.test.ts`（使用各文件的 `src/` 完整路径）。token gates、调色板/角色同步、diff 检查通过。
+- 手测追加：四语创建高级网关/本地模型连接，编辑中切语言，检查标题/placeholder 与账号状态更新而权限、模型和 URL 不变；已有账户名称恰含英文系统词时仍保留名称。使用受控账户验证 API 成功/失败与重连，不能仅以 mock 请求通过代替外部连接验收。
+
 ## 已知剩余范围（不是本片已完成项）
 
 - 真实登录、剪贴板权限及浏览器布局尚未四语验收。系统提示已抽取不代表外部交互已通过。
-- 下一片继续审计 `AgentConfigForm` 的 `AdapterLoginPanel`、`AiConnectionSelect`、`AiProviderSetup`、`AiConnectionCredentialStep`、已保存凭据标签来源及环境显示辅助函数。`AiConnectionField` 的子组件被调用不等于其文案已覆盖；高级连接中的访问默认值共享组件也须单独核对。
+- 下一片继续审计 `AgentConfigForm` 的 `AdapterLoginPanel`、`useLocalAiLogin` 及环境显示辅助函数。高级连接的 `ConnectionSetupFlow` 中 `connectionDefaultSummarySentence`、`ConnectionAccessDefaults`、`AccessStepContent` 仍有权限摘要与 Change 等英文，需独立切片；本片没有更改权限语义。
 - 服务端/适配器 `Error.message`、运行检查结果以及用户/组织/环境名称保持原始内容，不能以纯英文扫描结果判定它们都应翻译。
 - 基线 `6bee5bc` 的 `optionalOnboarding.configureAgent` 三语使用“智能体/agente/エージェント”；本片创建按钮使用独立 Agent 术语键，不覆盖其他域片段。并行 core 切片已修中文 Agent 术语，其他语种与最终集成状态以合并后的资源为准。
 
