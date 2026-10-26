@@ -1,3 +1,4 @@
+import { preparePromptApplicationExecution, type PromptApplicationCandidate } from "../mimouse-prompt-applications/execution.js";
 import { findPrivatePromptExecution, executePrivatePromptHeartbeat } from "../mimouse-private-prompt-tests/execution.js";
 import { parseNativeSessionGoalControl } from "./scheduling.js";
 import { isHeartbeatRunTerminalStatus } from "./run-lifecycle.js";
@@ -160,9 +161,10 @@ export interface HeartbeatRuntimeExecutionInput {
     environmentRealizeEndedAtMs: number;
   };
   control: {
+    promptApplicationCandidate?: PromptApplicationCandidate | null;
     executionControl: ReturnType<typeof createAdapterExecutionControl>;
     executionPhaseContext: Parameters<typeof withAdapterExecutionPhase>[0];
-    dispatchResolvedInteractionContinuationWithAtomicGate: <T>(dispatch: (markDispatchStarted: () => void) => Promise<T>) => Promise<
+    dispatchResolvedInteractionContinuationWithAtomicGate: <T>(dispatch: (markDispatchStarted: () => void) => Promise<T>, preflight?: () => Promise<void>) => Promise<
       { dispatched: true; resultPromise: Promise<T> } | { dispatched: false }
     >;
   };
@@ -791,12 +793,14 @@ export async function executeHeartbeatRuntime(db: Db, input: HeartbeatRuntimeExe
       if (managedMcpConfig) {
         adapterContext.paperclipManagedMcp = managedMcpConfig;
       }
+      let controlledPromptApplication: AdapterExecutionContext["controlledPromptApplication"];
       const guardedDispatch =
         await dispatchResolvedInteractionContinuationWithAtomicGate(
           (markDispatchStarted) => {
             input.effects.onLegacyAdapterEntered();
             return withAdapterExecutionPhase(executionPhaseContext, "adapter_execution", () => adapter.execute({
               getFreshSessionHandoff,
+              controlledPromptApplication,
               agentIdentity,
               runId: run.id,
               agent,
@@ -830,7 +834,10 @@ export async function executeHeartbeatRuntime(db: Db, input: HeartbeatRuntimeExe
                   issueId,
                 );
               },
-              onProviderStopped: collectStoppedInstructions,
+              onProviderStopped: async () => {
+                await controlledPromptApplication?.stopped();
+                await collectStoppedInstructions?.();
+              },
               onDispatch: markDispatchStarted,
               signal: executionControl.controller.signal,
               ...(executionTarget?.kind === "remote" && executionTarget.transport === "sandbox" ? {
@@ -875,6 +882,7 @@ export async function executeHeartbeatRuntime(db: Db, input: HeartbeatRuntimeExe
               authToken: authToken ?? undefined,
             }));
           },
+          async () => { controlledPromptApplication = await preparePromptApplicationExecution(db, input); },
         );
       if (!guardedDispatch.dispatched) return { dispatched: false };
       adapterResult = await guardedDispatch.resultPromise;

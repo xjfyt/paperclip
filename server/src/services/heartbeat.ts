@@ -1,4 +1,5 @@
 import { codingRepairRunDeadlineElapsed } from "./mimouse-coding/repair-deadline.js";
+import { findPromptApplicationCandidate } from "./mimouse-prompt-applications/execution.js";
 import { assertPrivatePromptEarlyBinding } from "./mimouse-private-prompt-tests/service.js";
 import { selectHeartbeatEnvironment } from "./heartbeat/environment-selection.js";
 import { prepareHeartbeatWorkspace } from "./heartbeat/workspace-preparation.js";
@@ -2149,6 +2150,7 @@ export function heartbeatService(
 
       const dispatchIssueId = readNonEmptyString(parseObject(run.contextSnapshot).issueId);
       const privatePromptEarlyBinding = await assertPrivatePromptEarlyBinding(db, run, dispatchIssueId);
+      const promptApplicationCandidate = privatePromptEarlyBinding ? null : await findPromptApplicationCandidate(db, run, dispatchIssueId);
       const resumingAdmittedConversationTurn = !!runOptions.nativeLeaseOwner
         && typeof run.contextSnapshot?.conversationSessionGeneration === "number";
       if (dispatchIssueId && isConversation(await getIssueExecutionContext(run.companyId, dispatchIssueId))
@@ -2175,6 +2177,7 @@ export function heartbeatService(
       }
       const runtime = await ensureRuntimeState(agent);
       const context = parseObject(run.contextSnapshot);
+      if (promptApplicationCandidate) context.forceFreshSession = true;
       const authorizeFailedChatRetryExecution = () =>
         db.transaction((tx) =>
           authorizeFailedChatRunRetryWake(db, tx as unknown as Db, {
@@ -3557,7 +3560,7 @@ export function heartbeatService(
         }
         if (
           !issueId ||
-          (!isResolvedInteractionContinuationWakeContext(context) &&
+          (!promptApplicationCandidate && !isResolvedInteractionContinuationWakeContext(context) &&
             !["native_safe_replacement", "native_provider_overloaded"].includes(run.scheduledRetryReason ?? ""))
         ) {
           return { dispatched: true, resultPromise: dispatch(() => {}) };
@@ -3590,6 +3593,7 @@ export function heartbeatService(
       };
       const dispatchResolvedInteractionContinuationWithAtomicGate = async <T>(
         dispatch: (markDispatchStarted: () => void) => Promise<T>,
+        preflight?: () => Promise<void>,
       ) => {
         // Admission can wait for accounting locks. Finish that wait before the
         // final ownership gate, whose callback must enter the adapter directly.
@@ -3603,6 +3607,7 @@ export function heartbeatService(
             await cancelRunInternal(run.id, "Coding repair deadline elapsed", { errorCode: "coding_repair_deadline_elapsed", suppressImmediateRecovery: true });
             return { dispatched: false as const };
           }
+          await preflight?.();
           return await dispatchResolvedInteractionContinuationAfterAdmission((markDispatchStarted) => {
             entered = true;
             return dispatch(markDispatchStarted);
@@ -4571,6 +4576,7 @@ export function heartbeatService(
             environmentRealizeEndedAtMs,
           },
           control: {
+            promptApplicationCandidate,
             executionControl,
             executionPhaseContext,
             dispatchResolvedInteractionContinuationWithAtomicGate,

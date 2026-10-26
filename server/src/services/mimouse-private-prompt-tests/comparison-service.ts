@@ -21,11 +21,13 @@ async function authorize(tx: PrivatePromptTx, actor: PrivatePromptIdentity) {
 const readOnly = { isolationLevel: "repeatable read", accessMode: "read only" } as const;
 /** A bounded historical snapshot, not a complete execution-context reproduction.
  * This service has no write, reconciliation, wake, logging or report-store dependency. */
-export function privatePromptComparisonService(db: Db) {
+/** Optional server-owned reauthorization is used for an already approved binding;
+ * routes always use the session-bound default. It never accepts client policy. */
+export function privatePromptComparisonService(db: Db, reauthorize: typeof authorize = authorize) {
   return { async compare(actor: PrivatePromptIdentity, promptId: string, raw: ComparePrivatePromptTests) {
     const input = comparePrivatePromptTestsSchema.parse(raw);
     const report = await db.transaction(async tx => {
-      await authorize(tx, actor);
+      await reauthorize(tx, actor);
       const sizes = await tx.select({ skillVersionId: tests.skillVersionId, bytes: sql<number>`octet_length(coalesce(${tests.privateResult}::text, ''))`, allBytes: sql<number>`octet_length(to_jsonb(${tests})::text)` }).from(tests).where(and(
         eq(tests.companyId, actor.companyId), eq(tests.actorUserId, actor.userId), eq(tests.promptId, promptId), inArray(tests.id, input.testIds)));
       if (sizes.length !== input.testIds.length) throw notFound("private_comparison_evidence_not_found");
@@ -70,7 +72,7 @@ export function privatePromptComparisonService(db: Db) {
     }, readOnly);
     // Fresh snapshot catches revocation committed while scoring. This is not a
     // claim that authorization can be locked through network delivery.
-    await db.transaction(tx => authorize(tx, actor), readOnly);
+    await db.transaction(tx => reauthorize(tx, actor), readOnly);
     return report;
   } };
 }

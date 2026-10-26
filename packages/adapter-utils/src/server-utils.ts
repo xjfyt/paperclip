@@ -4690,6 +4690,11 @@ export async function ensureCommandResolvable(
   throw new Error(`Command not found in PATH: "${command}"`);
 }
 
+export class RequiredSpawnReceiptError extends Error {
+  readonly processStopped = true;
+  constructor() { super("required_spawn_receipt_failed"); this.name = "RequiredSpawnReceiptError"; }
+}
+
 export async function runChildProcess(
   runId: string,
   command: string,
@@ -4708,12 +4713,16 @@ export async function runChildProcess(
       processGroupId: number | null;
       startedAt: string;
     }) => Promise<void>;
+    /** Opt-in local fail-closed receipt: no stdin on absent/failed spawn persistence. */
+    requireSpawnReceipt?: boolean;
+    spawnReceiptTimeoutMs?: number;
     terminalResultCleanup?: TerminalResultCleanupOptions;
     stdin?: string;
     remoteExecution?: RemoteExecutionSpec | null;
     localProcessSandbox?: LocalProcessSandboxOptions | null;
   },
 ): Promise<RunProcessResult> {
+  if (opts.requireSpawnReceipt && (!opts.onSpawn || opts.remoteExecution)) throw new Error("required_spawn_receipt_unsupported");
   const onLogError =
     opts.onLogError ??
     ((err, id, msg) => console.warn({ err, runId: id }, msg));
@@ -4762,18 +4771,24 @@ export async function runChildProcess(
         const startedAt = new Date().toISOString();
         const processGroupId = resolveProcessGroupId(child);
 
-        const spawnPersistPromise =
-          typeof child.pid === "number" && child.pid > 0 && opts.onSpawn
-            ? opts
-                .onSpawn({ pid: child.pid, processGroupId, startedAt })
-                .catch((err) => {
-                  onLogError(
-                    err,
-                    runId,
-                    "failed to record child process metadata",
-                  );
-                })
-            : Promise.resolve();
+        let spawnReceiptFailed = Boolean(opts.requireSpawnReceipt && !(typeof child.pid === "number" && child.pid > 0));
+        let spawnReceiptSettled = false;
+        let spawnReceiptTimer: NodeJS.Timeout | undefined;
+        const receiptWork = typeof child.pid === "number" && child.pid > 0 && opts.onSpawn
+          ? Promise.resolve().then(() => opts.onSpawn!({ pid: child.pid!, processGroupId, startedAt })) : Promise.resolve();
+        const spawnPersistPromise = (opts.requireSpawnReceipt
+          ? Promise.race([receiptWork, new Promise<never>((_resolve, reject) => {
+              spawnReceiptTimer = setTimeout(() => reject(new Error("spawn_receipt_timeout")), Math.max(50, Math.min(opts.spawnReceiptTimeoutMs ?? 15000, 30000)));
+            })]) : receiptWork).catch((err) => {
+            if (opts.requireSpawnReceipt) {
+              spawnReceiptFailed = true;
+              child.stdin?.destroy();
+              try { if (processGroupId) process.kill(-processGroupId, "SIGKILL"); else child.kill("SIGKILL"); } catch { child.kill("SIGKILL"); }
+              return;
+            }
+            onLogError(err, runId, "failed to record child process metadata");
+          }).finally(() => { if (spawnReceiptTimer) clearTimeout(spawnReceiptTimer); });
+        void spawnPersistPromise.then(() => { spawnReceiptSettled = true; });
 
         runningProcesses.set(runId, {
           child,
@@ -4912,8 +4927,8 @@ export async function runChildProcess(
 
         const stdin = child.stdin;
         if (opts.stdin != null && stdin) {
-          void spawnPersistPromise.finally(() => {
-            if (child.killed || stdin.destroyed) return;
+          void spawnPersistPromise.then(() => {
+            if (spawnReceiptFailed || child.killed || stdin.destroyed) return;
             stdin.write(opts.stdin as string);
             stdin.end();
           });
@@ -4941,12 +4956,15 @@ export async function runChildProcess(
           "close",
           (code: number | null, signal: NodeJS.Signals | null) => {
             if (timeout) clearTimeout(timeout);
+            if (spawnReceiptTimer) clearTimeout(spawnReceiptTimer);
             clearTerminalCleanupTimers();
             runningProcesses.delete(runId);
+            if (opts.requireSpawnReceipt && !spawnReceiptSettled) spawnReceiptFailed = true;
             void logChain.finally(() => {
               void Promise.resolve()
                 .then(() => target.cleanup?.())
                 .finally(() => {
+                  if (spawnReceiptFailed) { reject(new RequiredSpawnReceiptError()); return; }
                   resolve({
                     exitCode: code,
                     signal,

@@ -34,7 +34,7 @@ export interface PromptApplicationRecord {
   dispatchedCount: number; executionStarted: false;
 }
 export interface PromptApplicationReceipt {
-  id: string; applicationId: string; agentId: string; action: "configure" | "rollback";
+  id: string; requestId: string; applicationId: string; agentId: string; action: "configure" | "rollback";
   generation: number; createdAt: string; executionStarted: false;
 }
 export interface PromptApplicationDispatchReceipt {
@@ -42,4 +42,13 @@ export interface PromptApplicationDispatchReceipt {
   state: "prepared" | "dispatched"; configuredAt: string; preparedAt: string;
   dispatchedAt: string | null; promptHash: string | null; effectiveContextHash: string;
   providerConsumed: false;
+}
+
+export const promptApplicationRequestQuerySchema = z.object({
+  applicationId: uuid.optional(), action: z.enum(["approve", "rollback"]).optional(), expectedGeneration: z.coerce.number().int().nonnegative().optional(),
+}).strict().refine(value => Object.keys(value).length === 0 || value.applicationId !== undefined && value.action !== undefined && value.expectedGeneration !== undefined);
+export type PromptApplicationRequestQuery = z.infer<typeof promptApplicationRequestQuerySchema>;
+export interface PromptApplicationRequestClosure {
+  outcome: "not_applied_closed"; requestId: string; action: "approve" | "rollback"; applicationId: string; agentId: string;
+  expectedGeneration: number; currentGeneration: number; reason: "generation_advanced" | "approval_expired";
 }

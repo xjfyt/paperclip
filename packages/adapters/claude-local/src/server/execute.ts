@@ -1,3 +1,4 @@
+import { appendControlledPromptLiteral, assertControlledPromptContext } from "./controlled-prompt.js";
 import { executePrivatePromptTest } from "./private-prompt-test.js";
 import { createProviderStoppedBoundary } from "@paperclipai/adapter-utils/provider-stopped-boundary";
 import { createUsageCheckpointLog } from "@paperclipai/adapter-utils/usage-checkpoint";
@@ -403,6 +404,7 @@ export async function runClaudeLogin(input: {
 }
 
 export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExecutionResult> {
+  assertControlledPromptContext(ctx);
   if (ctx.privatePromptTest) return executePrivatePromptTest(ctx);
   const providerStop = createProviderStoppedBoundary(ctx.onProviderStopped);
   const engineSelection = await resolveClaudeExecutionEngineForRun(ctx);
@@ -900,7 +902,12 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
       : `Claude exited with code ${proc.exitCode ?? -1}`;
   };
 
+  let controlledAttemptStarted = false;
   const runAttempt = async (resumeSessionId: string | null) => {
+    if (ctx.controlledPromptApplication && (resumeSessionId || controlledAttemptStarted || isPaperclipRecoveryWakePayload(context.paperclipWake))) {
+      throw new Error("prompt_application_attempt_not_fresh");
+    }
+    controlledAttemptStarted = true;
     await hydrateFreshSessionHandoff(ctx, { resumedSession: Boolean(resumeSessionId) });
     const renderedBootstrapPrompt =
       !resumeSessionId && bootstrapPromptTemplate.trim().length > 0
@@ -915,7 +922,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
       ? ""
       : renderTemplate(promptTemplate, templateData);
     const sessionHandoffNote = asString(context.paperclipSessionHandoffMarkdown, "").trim();
-    const prompt = joinPromptSections([
+    const basePrompt = joinPromptSections([
       instructionsPathDirective,
       renderedBootstrapPrompt,
       selectInitialCommunicationGuidance(context, { resumedSession: Boolean(resumeSessionId) }),
@@ -924,6 +931,8 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
       taskContextNote,
       renderedPrompt,
     ]);
+    const prompt = ctx.controlledPromptApplication
+      ? appendControlledPromptLiteral(basePrompt, ctx.controlledPromptApplication.literalRevision) : basePrompt;
     const promptMetrics = {
       promptChars: prompt.length,
       bootstrapPromptChars: renderedBootstrapPrompt.length,
@@ -967,6 +976,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
       });
     }
 
+    if (ctx.controlledPromptApplication) await ctx.controlledPromptApplication.prepare(prompt, effectiveEnv);
     const consumeAccounting = createClaudeStreamParser();
     const accountingLog = createUsageCheckpointLog(onLog, ctx.onUsage, stdout => {
       const parsed = consumeAccounting(stdout);
@@ -975,6 +985,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
         billingType, model: Object.keys(parseObject(parsed.resultJson?.modelUsage)).length > 1 ? "mixed" : parsed.model || model,
           usageByModel: claudeModelReceipts(parsed.resultJson?.modelUsage), complete: parsed.resultJson !== null };
     });
+    await ctx.controlledPromptApplication?.beforeStart();
     const proc = await runAdapterExecutionTargetProcess(runId, runtimeExecutionTarget, command, args, {
       onProcessStopped: providerStop.beginInvocation(),
       cwd,
@@ -982,7 +993,11 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
       stdin: prompt,
       timeoutSec,
       graceSec,
-      onSpawn,
+      requireSpawnReceipt: Boolean(ctx.controlledPromptApplication),
+      onSpawn: ctx.controlledPromptApplication ? async meta => {
+        await onSpawn?.(meta);
+        await ctx.controlledPromptApplication!.dispatched();
+      } : onSpawn,
       onRuntimeProgress: ctx.onRuntimeProgress,
       onLog: accountingLog,
       runLogTail: paperclipBridge?.runLogTail,

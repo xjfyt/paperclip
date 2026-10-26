@@ -76,6 +76,7 @@ import { createSshCommandManagedRuntimeRunner, parseSshRemoteExecutionSpec, runS
 import {
   ensureCommandResolvable,
   resolveCommandForLogs,
+  RequiredSpawnReceiptError,
   runChildProcess,
   type RunProcessResult,
   type TerminalResultCleanupOptions,
@@ -275,6 +276,8 @@ export interface PreparedAdapterExecutionTargetRuntime {
 export interface AdapterExecutionTargetProcessOptions {
   /** Local-only; remote transports must reject rather than weaken isolation. */
   inheritEnv?: boolean;
+  requireSpawnReceipt?: boolean;
+  spawnReceiptTimeoutMs?: number;
   cwd: string;
   env: Record<string, string>;
   stdin?: string;
@@ -864,6 +867,7 @@ export async function runAdapterExecutionTargetProcess(
   args: string[],
   options: AdapterExecutionTargetProcessOptions,
 ): Promise<RunProcessResult> {
+  if (options.requireSpawnReceipt && target?.kind === "remote") throw new Error("required_spawn_receipt_local_only");
   if (options.inheritEnv === false && target?.kind === "remote") throw new Error("isolated_environment_requires_local_target");
   if (target?.kind === "remote" && target.transport === "sandbox") {
     const runner = requireSandboxRunner(target);
@@ -925,6 +929,8 @@ export async function runAdapterExecutionTargetProcess(
     cwd: options.cwd,
     env,
     inheritEnv: options.inheritEnv,
+    requireSpawnReceipt: options.requireSpawnReceipt,
+    spawnReceiptTimeoutMs: options.spawnReceiptTimeoutMs,
     stdin: options.stdin,
     timeoutSec: options.timeoutSec,
     graceSec: options.graceSec,
@@ -933,6 +939,9 @@ export async function runAdapterExecutionTargetProcess(
     terminalResultCleanup: options.terminalResultCleanup,
     localProcessSandbox: target?.kind === "local" || !target ? options.localProcessSandbox : null,
     remoteExecution: adapterExecutionTargetToRemoteSpec(target),
+  }).catch(error => {
+    if (error instanceof RequiredSpawnReceiptError) options.onProcessStopped?.();
+    throw error;
   });
   // Closing an SSH client on timeout/disconnect does not prove the remote
   // provider exited. SSH status 255 is transport failure, never a stop receipt.

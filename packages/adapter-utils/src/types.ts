@@ -290,6 +290,16 @@ export interface AdapterExecutionContext {
     /** Must durably commit a hash-only prepared witness before returning. */
     prepare: (finalPrompt: string) => Promise<void>;
   };
+  /** Server-only, ordinary visibility approved. Never deserialize from config/context. */
+  controlledPromptApplication?: {
+    applicationId: string;
+    generation: number;
+    literalRevision: string;
+    prepare: (finalPrompt: string, effectiveEnv: Record<string, string>) => Promise<void>;
+    beforeStart: () => Promise<void>;
+    dispatched: () => Promise<void>;
+    stopped: () => Promise<void>;
+  };
   authToken?: string;
   /**
    * The injected OpenTelemetry startup trace context (tracer + root
