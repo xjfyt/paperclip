@@ -260,3 +260,6 @@ export { mimouseResearchCandidates, mimouseResearchPromotions } from "./mimouse_
 export * from "./mimouse_evaluation.js";
 
 export * from "./mimouse_langfuse.js";
+
+export * from "./mimouse_research_routines.js";
+export * from "./mimouse_evaluation_restores.js";

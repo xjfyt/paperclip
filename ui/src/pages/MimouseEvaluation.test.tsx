@@ -28,7 +28,9 @@ beforeEach(async () => {
 });
 afterEach(async () => { await act(async () => root.unmount()); client.clear(); host.remove(); });
 it("shows unknown costs and the separate controlled-restore panel in every locale without executing", async () => {
-  await mount(); const button = [...host.querySelectorAll("button")].find(item => item.textContent === "report-a")!;
+  await mount();
+  await vi.waitFor(async () => { await flush(); expect([...host.querySelectorAll("button")].some(item => item.textContent === "report-a")).toBe(true); });
+  const button = [...host.querySelectorAll("button")].find(item => item.textContent === "report-a")!;
   await act(async () => button.click()); await flush();
   for (const locale of ["en", "zh-CN", "es", "ja"]) {
     await act(async () => { await i18n.changeLanguage(locale); });

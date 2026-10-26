@@ -49,7 +49,7 @@ const SECRET_SENSITIVE_HTTP_METHODS = new Set(["POST", "PUT", "PATCH"]);
 export function isPrivateIntegrationHttpRequest(url: string | undefined): boolean {
   if (!url) return false;
   const pathname = normalizePath(url).replace(/^https?:\/\/[^/]*/i, "");
-  return /^\/api\/companies\/[^/]+\/(?:notifications|coding|feedback-inbox|feedback-langfuse|data-operations|research-candidates|skill-evaluations|integrations\/workbuddy)(?:\/|$)/i.test(pathname);
+  return /^\/api\/companies\/[^/]+\/(?:notifications|coding|feedback-inbox|feedback-langfuse|data-operations|research-candidates|research-routines|skill-evaluations|integrations\/workbuddy)(?:\/|$)/i.test(pathname);
 }
 
 /** Free-form agent feedback must never be copied into HTTP diagnostics. */

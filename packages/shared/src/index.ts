@@ -2887,3 +2887,5 @@ export { requestOperationApprovalSchema, type RequestOperationApprovalInput, typ
 export * from "./mimouse-research.js";
 
 export * from "./mimouse-evaluation.js";
+
+export * from "./mimouse-evaluation-restore.js";
