@@ -2,6 +2,18 @@
 
 核验日期：2026-10-25 UTC。基线为 v2026.1023.0 / 1b4c803816e82b0265c8422e1a804327a7ed8c54。开发分支 mimouse。此记录是可审查候选版的本地证据，不是全部需求完成或生产上线证明。
 
+## 3312键恢复与只读比较集成（2026-10-26 21:04 UTC）
+
+代码/server印章 `0cd351c41f760a56ee8f1b2b2e63b630b9f6c634`。已合入UUID语义绑定与仅元数据准备显式放弃、私有历史双版本只读比较、13种阻断码四语说明。保持未知收费journal、当前权限、固定历史上下文和未知成本失败关闭；普通runtime应用/回退、成本路由仍未完成。
+
+完整私有suite5文件80项通过，无跳过（`/tmp/paperclip-comparison-private-frozen.log`）；相邻UI7文件168项通过（`/tmp/paperclip-3312-ui-focused.log`）。shared、adapter-utils、Claude标准构建通过；完整UI类型/生产构建、server标准构建（包含完整类型）通过。server首次noEmit发现测试写了不存在的api_key actor来源，已修为与agent角色匹配的agent_key，未放宽生产类型/权限；之后标准build覆盖通过。初失败日志保留。
+
+source API145项（50.9秒）及编译server入口同套145项（1.0分钟）通过，日志 `/tmp/paperclip-3312-source-api.log`、`/tmp/paperclip-3312-compiled-api.log`；编译入口仍有workspace TS依赖及source fixtures，不是全dist安装验收。
+
+实际Chrome验证错误引用422→显式本地放弃→大写UUID新准备→取消，无真实执行；另以明确合成历史验证未知费用阻断、合成已知费用/预算上下限、四语、真实请求撤权403清空与恢复、比较领域数据不变，见[浏览器记录](checklists/PRIVATE-COMPARISON-BROWSER-20261026.md)。合成run/账本不算真实模型或计费证据。
+
+21:05 UTC当前冻结源码的严格分片聚合已通过：801文件、81批、9396项，0失败/跳过/todo；9个完整分片恰好覆盖库存。证据 `test-results/mimouse-ui/aggregate-2026-10-26T21-05-27-177Z-JM49j4/aggregate.json`；verificationInputs SHA-256 `79fcacfa45dbb05e693d88eba165a74c4b3f8138e2e416d84e0b6db42d6a4a35`，UI source SHA-256 `755dbdb2022524010d9cc2b097273ddab173142df23569bccdc48e5e3c0b4cc5`。这是同输入分片聚合，不是单次无中断全跑。下方799/9317项保留为旧94c7c51版本历史。
+
 ## 3260键私有试运行中央进展（2026-10-26 19:58 UTC）
 
 代码及server标准构建印章 `94c7c51ad65579480ed8da1a3d42acf25444b700`。shared/DB构建、迁移安全检查、schema snapshot drift通过；server完整类型及标准构建、UI完整类型/生产构建通过。0357正式迁移下42项（含真实重复键整文件/journal回滚、原数据保留、重迁移成功）、adapter与既有registry路由20项通过。UI最终定向5文件89项通过。

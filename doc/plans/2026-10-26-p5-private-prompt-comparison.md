@@ -2,6 +2,10 @@
 
 状态：本片提供受限历史比较；P5 整体仍为 **partial**。不执行模型，不选择/提升版本，不应用运行时配置，不解锁成本路由。
 
+## 中央集成补记（2026-10-26 21:04 UTC）
+
+已合入并通过完整private suite80项（包含新增DB大写UUID断言，无skip）、相邻UI168项、完整类型/标准构建及source/compiled入口各145项API。下文工作区“1通过24跳过/待中央”是当时记录；不能覆盖此补记。实际浏览器使用明确合成历史完成费用未知/已知/上限、四语及角色撤销清空验证，详见[验收记录](../mimouse/checklists/PRIVATE-COMPARISON-BROWSER-20261026.md)；不是实际CLI/模型或账单证明。新版全UI另见统一VERIFICATION，不从旧源码外推。
+
 ## 边界与操作
 
 入口位于提示词登记页，选择一个 prompt 后，填写固定 dataset UUID、两个不同 revision UUID，以及明确的历史 test UUID 全集，点击“只读比较历史”。接口为 `POST /api/companies/:companyId/prompt-registry/:promptId/comparison`；POST 仅承载 ID 和可选成本上限，不承载输出或分数。
