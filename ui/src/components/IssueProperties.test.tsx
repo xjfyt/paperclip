@@ -2,6 +2,7 @@
 
 import { i18n, coreTaskMessages } from "../i18n/core-task-test-resources";
 import { issuePropertyControlsMessages } from "../i18n/issue-property-controls-test-resources";
+import { issueMonitorMessages } from "../i18n/issue-monitor-test-resources";
 import { issueModelMessages } from "../i18n/issue-model-test-resources";
 import { issueWatchdogMessages } from "../i18n/issue-watchdog-test-resources";
 
@@ -3096,6 +3097,85 @@ describe("IssueProperties", () => {
     expect(container.textContent).not.toContain("Run approval now");
 
     act(() => root.unmount());
+  });
+
+  it.each(Object.entries(issueMonitorMessages))("localizes monitor editing while preserving policy and input in %s", async (locale, messages) => {
+    await i18n.changeLanguage(locale);
+    const nextCheckAt = "2026-11-01T12:30:00.000Z";
+    const policy = createExecutionPolicy({
+      maxReviewRounds: 7,
+      monitor: { nextCheckAt, notes: "Check 原始记录", serviceName: "deploy-原名", scheduledBy: "board", kind: "external_service", externalRef: null },
+    });
+    const onUpdate = vi.fn();
+    const root = renderProperties(container, {
+      issue: createIssue({ executionPolicy: policy }), childIssues: [], onUpdate, inline: true,
+    });
+    try {
+      await flush();
+      await act(() => findRowTrigger(container, "Monitor")!.click());
+      const date = container.querySelector<HTMLInputElement>('input[type="datetime-local"]')!;
+      const notes = container.querySelector<HTMLInputElement>(`input[aria-label="${messages.notes}"]`)!;
+      const service = container.querySelector<HTMLInputElement>(`input[aria-label="${messages.externalService}"]`)!;
+      const originalDateValue = date.value;
+      expect(date.getAttribute("aria-label")).toBe(messages.nextCheck);
+      expect(notes.value).toBe("Check 原始记录");
+      expect(service.value).toBe("deploy-原名");
+      await act(() => {
+        Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")!.set!.call(notes, "  新检查 日本語  ");
+        notes.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      await act(async () => { await i18n.changeLanguage(locale === "en" ? "ja" : "en"); });
+      expect(container.querySelector('input[type="datetime-local"]')).toBe(date);
+      expect(date.value).toBe(originalDateValue);
+      expect(notes.value).toBe("  新检查 日本語  ");
+      expect(service.value).toBe("deploy-原名");
+      expect(onUpdate).not.toHaveBeenCalled();
+      await act(async () => { await i18n.changeLanguage(locale); });
+      const schedule = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.trim() === messages.schedule)!;
+      await act(() => schedule.click());
+      expect(onUpdate).toHaveBeenCalledWith({ executionPolicy: {
+        ...policy, monitor: { ...policy.monitor, notes: "新检查 日本語", nextCheckAt },
+      } });
+      await act(() => findRowTrigger(container, "Monitor")!.click());
+      await act(() => Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.trim() === messages.clear)!.click());
+      expect(onUpdate).toHaveBeenLastCalledWith({ executionPolicy: {
+        mode: "normal", commentRequired: true, stages: [], maxReviewRounds: 7,
+      } });
+    } finally {
+      await act(() => root.unmount());
+    }
+  });
+
+  it.each(Object.entries(issueMonitorMessages))("localizes due, overdue and cleared monitor rows in %s", async (locale, messages) => {
+    await i18n.changeLanguage(locale);
+    const now = new Date(2026, 9, 26, 12, 0, 0);
+    const spy = vi.spyOn(Date, "now").mockReturnValue(now.getTime());
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const root = createRoot(container);
+    const render = async (nextCheckAt: string | null, cleared = false) => act(() => root.render(
+      <QueryClientProvider client={queryClient}>
+        <IssueProperties issue={createIssue({
+          executionPolicy: createExecutionPolicy(),
+          executionState: createExecutionState({ monitor: {
+            status: cleared ? "cleared" : "scheduled", nextCheckAt, lastTriggeredAt: null, attemptCount: 2,
+            notes: "原文", scheduledBy: "board", clearedAt: null, clearReason: null,
+          } }),
+        })} childIssues={[]} onUpdate={vi.fn()} inline />
+      </QueryClientProvider>,
+    ));
+    try {
+      await render(now.toISOString());
+      expect(findRowTrigger(container, "Monitor")?.textContent).toContain(messages.checkingSoon);
+      await render(new Date(now.getTime() - 18 * 60_000).toISOString());
+      expect(findRowTrigger(container, "Monitor")?.textContent).toContain(messages.firesNextTick);
+      expect(findRowTrigger(container, "Monitor")?.textContent).toContain(messages.today);
+      await render(null, true);
+      expect(findRowTrigger(container, "Monitor")?.textContent).toContain(messages.cleared);
+      expect(findRowTrigger(container, "Monitor")?.textContent).toContain(messages.afterAttempt.replace("{{attempt}}", "2"));
+    } finally {
+      await act(() => root.unmount());
+      spy.mockRestore();
+    }
   });
 
   it("renders monitor controls and clears an existing monitor", async () => {

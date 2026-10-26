@@ -1,4 +1,5 @@
-import { useTranslation } from "@/i18n";
+import { formatNumber, useTranslation } from "@/i18n";
+import { monitorEtaDisplay } from "@/i18n/monitor-display";
 import { isLockedIssueStub } from "@/components/LockedIssueChip";
 import { IssuePullRequestLinks } from "../IssuePullRequestLinks";
 import { useIssueWorkProducts } from "../../hooks/useIssueWorkProducts";
@@ -53,7 +54,6 @@ import {
   formatMonitorAbsolute,
   formatMonitorAbsoluteFull,
   formatMonitorEta,
-  formatMonitorEtaLabel,
   formatMonitorOffset,
   useMonitorCountdown,
 } from "../../lib/issue-monitor";
@@ -249,7 +249,7 @@ export function IssueProperties({
   documentDeepLink,
   sidePanelContentOnly = false,
 }: IssuePropertiesProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const policyResult = useExecutionPolicy(issue.executionPolicy);
   const policyAvailable = policyResult.success;
   const executionPolicy = policyResult.success ? policyResult.data : null;
@@ -1331,19 +1331,20 @@ export function IssueProperties({
   const monitorRelative = monitorNextCheckAt ? formatMonitorEta(monitorNextCheckAt, monitorNow) : null;
   const monitorIsDueNow = monitorRelative === "due now";
   const monitorIsOverdue = Boolean(monitorRelative?.startsWith("overdue by "));
+  const monitorDateOptions = { locale: i18n.language, todayLabel: t("issueMonitorUi.today") };
   const monitorPrimary = monitorNextCheckAt
-    ? formatMonitorEtaLabel(monitorNextCheckAt, monitorNow)
+    ? monitorEtaDisplay(monitorNextCheckAt, monitorNow, true)
     : monitorState?.status === "cleared"
-      ? "Cleared"
+      ? t("issueMonitorUi.cleared")
       : t("liveUi.none");
   const monitorSecondary = monitorNextCheckAt
     ? monitorIsDueNow
-      ? "checking momentarily…"
-      : `${formatMonitorAbsolute(monitorNextCheckAt, {}, monitorNow)}${monitorIsOverdue ? " · fires on next tick" : monitorAttemptCount > 0 ? ` · Attempt ${monitorAttemptCount}` : ""}`
+      ? t("issueMonitorUi.checkingSoon")
+      : `${formatMonitorAbsolute(monitorNextCheckAt, monitorDateOptions, monitorNow)}${monitorIsOverdue ? ` · ${t("issueMonitorUi.firesNextTick")}` : monitorAttemptCount > 0 ? ` · ${t("issueMonitorUi.attempt", { attempt: formatNumber(monitorAttemptCount) })}` : ""}`
     : monitorState?.status === "cleared"
       ? [
-          monitorLastTriggeredAt ? `last checked ${timeAgo(monitorLastTriggeredAt)}` : null,
-          monitorAttemptCount > 0 ? `after attempt ${monitorAttemptCount}` : null,
+          monitorLastTriggeredAt ? t("issueMonitorUi.lastChecked", { time: timeAgo(monitorLastTriggeredAt) }) : null,
+          monitorAttemptCount > 0 ? t("issueMonitorUi.afterAttempt", { attempt: formatNumber(monitorAttemptCount) }) : null,
         ].filter(Boolean).join(" · ")
       : null;
   const monitorTrigger = (
@@ -1373,36 +1374,36 @@ export function IssueProperties({
           onPointerDown={(event) => event.stopPropagation()}
         >
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
-            <span className="text-sm font-semibold">Monitor</span>
-            {monitorAttemptCount > 0 ? <span className="text-xs text-muted-foreground">Attempt {monitorAttemptCount}</span> : null}
+            <span className="text-sm font-semibold">{t("issueMonitorUi.monitor")}</span>
+            {monitorAttemptCount > 0 ? <span className="text-xs text-muted-foreground">{t("issueMonitorUi.attempt", { attempt: formatNumber(monitorAttemptCount) })}</span> : null}
           </div>
           <div className="space-y-3 px-4 py-3 text-left">
             <div>
-              <div className="text-xs text-muted-foreground">Next check</div>
-              <div className="text-sm">{formatMonitorAbsoluteFull(monitorNextCheckAt)}</div>
-              <div className="text-xs text-muted-foreground">{monitorRelative}</div>
+              <div className="text-xs text-muted-foreground">{t("issueMonitorUi.nextCheck")}</div>
+              <div className="text-sm">{formatMonitorAbsoluteFull(monitorNextCheckAt, monitorDateOptions)}</div>
+              <div className="text-xs text-muted-foreground">{monitorEtaDisplay(monitorNextCheckAt, monitorNow)}</div>
             </div>
             <div>
-              <div className="text-xs text-muted-foreground">Watching</div>
+              <div className="text-xs text-muted-foreground">{t("issueMonitorUi.watching")}</div>
               <div className="text-sm">{monitorServiceName ?? "—"}</div>
             </div>
             <div>
-              <div className="text-xs text-muted-foreground">Notes</div>
+              <div className="text-xs text-muted-foreground">{t("issueMonitorUi.notes")}</div>
               <div className="whitespace-normal text-sm">{monitorNotes ?? "—"}</div>
             </div>
             <div>
-              <div className="text-xs text-muted-foreground">Last triggered</div>
-              <div className="text-sm">{monitorLastTriggeredAt ? formatMonitorAbsoluteFull(monitorLastTriggeredAt) : "— not yet triggered"}</div>
+              <div className="text-xs text-muted-foreground">{t("issueMonitorUi.lastTriggered")}</div>
+              <div className="text-sm">{monitorLastTriggeredAt ? formatMonitorAbsoluteFull(monitorLastTriggeredAt, monitorDateOptions) : t("issueMonitorUi.notTriggered")}</div>
             </div>
           </div>
           <div className="flex gap-2 border-t border-border px-4 py-3">
             {onCheckMonitorNow ? (
               <Button type="button" size="sm" variant="outline" disabled={checkingMonitorNow} onClick={() => { setMonitorDetailsOpen(false); onCheckMonitorNow(); }}>
-                {checkingMonitorNow ? "Checking…" : "Check now"}
+                {checkingMonitorNow ? t("issueMonitorUi.checking") : t("issueMonitorUi.checkNow")}
               </Button>
             ) : null}
-            <Button type="button" size="sm" variant="outline" onClick={() => { setMonitorDetailsOpen(false); setMonitorOpen(true); }}>Edit</Button>
-            <Button type="button" size="sm" variant="outline" onClick={() => { setMonitorDetailsOpen(false); clearMonitor(); }}>Clear</Button>
+            <Button type="button" size="sm" variant="outline" onClick={() => { setMonitorDetailsOpen(false); setMonitorOpen(true); }}>{t("issueMonitorUi.edit")}</Button>
+            <Button type="button" size="sm" variant="outline" onClick={() => { setMonitorDetailsOpen(false); clearMonitor(); }}>{t("issueMonitorUi.clear")}</Button>
           </div>
         </TooltipContent>
       ) : null}
@@ -1579,6 +1580,7 @@ export function IssueProperties({
       <div className="flex flex-col gap-2 md:flex-row">
         <input
           type="datetime-local"
+          aria-label={t("issueMonitorUi.nextCheck")}
           className="rounded-md border border-border bg-transparent px-2 py-1 text-xs"
           value={monitorAtInput}
           onChange={(e) => setMonitorAtInput(e.target.value)}
@@ -1586,7 +1588,8 @@ export function IssueProperties({
         <input
           type="text"
           className="min-w-0 flex-1 rounded-md border border-border bg-transparent px-2 py-1 text-xs"
-          placeholder="What should the agent re-check?"
+          placeholder={t("issueMonitorUi.notesPlaceholder")}
+          aria-label={t("issueMonitorUi.notes")}
           value={monitorNotesInput}
           onChange={(e) => setMonitorNotesInput(e.target.value)}
         />
@@ -1595,7 +1598,8 @@ export function IssueProperties({
         <input
           type="text"
           className="min-w-0 flex-1 rounded-md border border-border bg-transparent px-2 py-1 text-xs"
-          placeholder="External service"
+          placeholder={t("issueMonitorUi.externalService")}
+          aria-label={t("issueMonitorUi.externalService")}
           value={monitorServiceInput}
           onChange={(e) => setMonitorServiceInput(e.target.value)}
         />
@@ -1606,7 +1610,7 @@ export function IssueProperties({
             disabled={!monitorAtInput}
             onClick={saveMonitor}
           >
-            Schedule
+            {t("issueMonitorUi.schedule")}
           </button>
           {executionPolicy?.monitor ? (
             <button
@@ -1614,7 +1618,7 @@ export function IssueProperties({
               className="inline-flex items-center rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
               onClick={clearMonitor}
             >
-              Clear
+              {t("issueMonitorUi.clear")}
             </button>
           ) : null}
         </div>

@@ -52,6 +52,8 @@ export interface DerivedMonitorState {
 }
 
 export interface MonitorDateTimeFormatOptions {
+  /** Display-only override; date comparison and time zone remain unchanged. */
+  todayLabel?: string;
   locale?: Intl.LocalesArgument;
   timeZone?: string;
 }
@@ -135,7 +137,7 @@ export function formatMonitorAbsolute(
     targetYmd.year === referenceYmd.year &&
     targetYmd.month === referenceYmd.month &&
     targetYmd.day === referenceYmd.day;
-  if (isToday) return `Today, ${time}`;
+  if (isToday) return `${options.todayLabel ?? "Today"}, ${time}`;
 
   const weekday = new Intl.DateTimeFormat(options.locale, {
     weekday: "short",
