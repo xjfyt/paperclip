@@ -1193,7 +1193,7 @@ describe("IssueProperties", () => {
       issue: createIssue(), childIssues: [], onUpdate: vi.fn(),
     });
     try {
-      await act(async () => queryClient.setQueryData(queryKeys.auth.session, { user: { id: "user-1" } }));
+      await act(async () => { queryClient.setQueryData(queryKeys.auth.session, { user: { id: "user-1" } }); });
       await flush();
       const search = container.querySelector<HTMLInputElement>(`input[aria-label="${messages.searchAssignees}"]`)!;
       expect(search?.placeholder).toBe(messages.searchAssignees);

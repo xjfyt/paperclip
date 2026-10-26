@@ -609,7 +609,7 @@ describe("live provider connection language", () => {
   it.each(["en", "zh-CN", "es", "ja"])("renders provider interpolation and key placeholders in %s", async locale => {
     await i18n.changeLanguage(locale);
     await mount("codex_local", false, true, false, false, false, {
-      intent: { provider: "openai", method: "api_key", name: "Customer account", ownership: "personal", agentIds: [], allAgents: true },
+      intent: { provider: "openai", method: "subscription", name: "Customer account", ownership: "personal", agentIds: [], allAgents: true },
       initialMethod: "api_key", onComplete: vi.fn(),
     });
     expect(host.textContent).toContain(i18n.t("agentSetupUi.provideApiKey", { provider: "OpenAI" }));
