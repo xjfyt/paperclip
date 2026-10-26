@@ -20,6 +20,7 @@
 - [反馈到固定回归集来源链](FEEDBACK-EVALUATION-LINEAGE.md)
 - [通知/来源链真实浏览器局部验收](checklists/NOTIFICATION-LINEAGE-BROWSER-20261026.md)
 - [四语覆盖与未完成项](i18n_remaining.md)
+- [任务属性真实浏览器验收](checklists/ISSUE-PROPERTIES-BROWSER-20261026.md)
 - [实现缺口与后续验收](REMAINING.md)
 - [逐项验收清单](checklists/ACCEPTANCE.csv)
 - [联调输入](checklists/ENVIRONMENT.md)
