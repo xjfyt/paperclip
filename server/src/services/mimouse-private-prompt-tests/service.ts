@@ -15,7 +15,7 @@ import type { WakeupOptions } from "../heartbeat/run-preparation.js";
 export type PrivatePromptTx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 export type PrivatePromptIdentity = { companyId: string; userId: string; sessionId: string };
 export type PrivatePromptRow = typeof tests.$inferSelect;
-export async function authorizePrivatePrompt(tx: PrivatePromptTx, actor: PrivatePromptIdentity) {
+export async function authorizePrivatePrompt(tx: PrivatePromptTx, actor: PrivatePromptIdentity, options: { allowPausedCompany?: boolean } = {}) {
   const [session] = await tx.select({ id: authSessions.id }).from(authSessions).innerJoin(authUsers, eq(authUsers.id, authSessions.userId)).where(and(
     eq(authSessions.id, actor.sessionId), eq(authSessions.userId, actor.userId), gt(authSessions.expiresAt, new Date()))).for("share");
   const [member] = await tx.select().from(companyMemberships).where(and(eq(companyMemberships.companyId, actor.companyId),
@@ -23,7 +23,11 @@ export async function authorizePrivatePrompt(tx: PrivatePromptTx, actor: Private
     inArray(companyMemberships.membershipRole, ["owner", "admin"]))).for("share");
   const [company] = await tx.select({ status: companies.status }).from(companies).where(eq(companies.id, actor.companyId)).for("share");
   if (!session || !member) throw forbidden("private_prompt_active_session_administrator_required");
-  if (!company || company.status !== "active") throw unprocessable("private_prompt_active_company_required");
+  // Paused access is opt-in for metadata/revocation only; private execution and
+  // comparison callers retain the active-company requirement by default.
+  if (!company || company.status !== "active" && !(options.allowPausedCompany === true && company.status === "paused")) {
+    throw unprocessable("private_prompt_active_company_required");
+  }
   return { type: "board" as const, source: "session" as const, userId: actor.userId, sessionId: actor.sessionId,
     companyIds: [actor.companyId], memberships: [{ companyId: actor.companyId, status: "active" as const, membershipRole: member.membershipRole }] };
 }

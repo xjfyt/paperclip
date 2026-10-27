@@ -113,6 +113,7 @@ Registry selection 已有幂等请求、head 行锁、expected-head CAS 和当�
 - `prepared` 只表示预检接纳；`start_requested` 是启动前持久栅栏；`dispatched` 只表示进程启动及严格持久回执，**不是 stdin 已写、provider 已消费或任务成功证明**。严格回执失败/同步异常/15 秒超时会关闭 stdin、终止本次本地进程并等待 close；默认普通与私有试验的历史非严格行为不改变。CLI 在等待 stdin 时仍可能有启动/hooks 副作用，不能称零副作用。
 - 回退可随时 CAS 撤回当前未来绑定，只影响后续新任务，不改其它 Agent 配置，不取消旧 run/lease，不终止已接纳运行，也不撤销外部效果。若回退先于成功 spawn witness，持久记录 `prompt_application.binding_withdrawn_before_input` 事件（`stdinWritten:false`、`providerStopped:false`），查询派生 `inputDisposition:not_applied_before_input`，迟到 witness 因 head 代次不匹配被拒绝；这个证明不代表正文未进入普通日志、CLI 未启动或旧进程已停止。若 dispatched 先赢，历史状态保留、旧运行仍可继续。
 - 未知启动的旧 issue 仍需要真实 provider-stop 证据才能恢复。不能因撤回绑定、缺 PID、换 controller 或迁移主机就声称停止；只在本 controller 的已记录 local 进程身份确实不存在时补充停止证据，否则保持明确阻断。
+- 公司暂停时仅保留当前有效 owner/admin 的应用元数据查询、请求恢复和未来绑定回退；回退仍需现有配置授权且不 wake。新准备、审批和派发继续要求公司 active，archived/失效会话/失效成员不放行；已有 `enabled` 在暂停时为 false，回退不受该新增应用开关限制。恢复公司后已撤回绑定保持空，不隐式重新部署。
 - 请求恢复使用同 requestId，元数据查询不重放。操作者可重新确认后显式重试同固定 payload；所有写入仍 CAS/摘要幂等。仅在同请求/目标锁后确认代次已永久前移或待审批已过期，返回 `not_applied_closed`；普通空查询、403/404/409/422 都不是未执行证明。
 
 代码：`server/src/services/mimouse-prompt-applications/`、`server/src/routes/mimouse-prompt-applications.ts`、heartbeat 的预算后异步 preflight/同步最终所有权 gate，以及 Claude `controlled-prompt.ts` 和严格 spawn receipt。API 主路径为公司 `prompt-registry/:promptId/applications`，另有 per-Agent head、requestId 查询、审批、回退和派发回执查询。

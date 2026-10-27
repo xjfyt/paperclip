@@ -2,7 +2,7 @@ import { appendHeartbeatRunEvent } from "../heartbeat-run-events.js";
 import { assertApplicationAttemptsStopped } from "./recovery.js";
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, lt, sql, isNull } from "drizzle-orm";
-import { activityLog, agents, heartbeatRunEvents, type Db } from "@paperclipai/db";
+import { activityLog, agents, companies, heartbeatRunEvents, type Db } from "@paperclipai/db";
 import { mimousePromptApplications as applications, mimousePromptApplicationHeads as heads,
   mimousePromptApplicationReceipts as receipts, mimousePromptApplicationDispatches as dispatches } from "@paperclipai/db/schema/mimouse_prompt_applications";
 import { approvePromptApplicationSchema, preparePromptApplicationSchema, rollbackPromptApplicationSchema,
@@ -16,6 +16,15 @@ import { applicationDigest, assertApplicationConfigurationAuthority, assertAppli
 export const promptApplicationsEnabled = () => process.env.PAPERCLIP_PROMPT_APPLICATIONS_ENABLED === "true";
 export type PromptApplicationRow = typeof applications.$inferSelect;
 function enabled() { if (!promptApplicationsEnabled()) throw unprocessable("prompt_application_disabled"); }
+/** Pausing blocks deployment, not inspection or withdrawal of a future binding. */
+async function authorizeApplicationMetadata(tx: PrivatePromptTx, actor: PrivatePromptIdentity) {
+  await authorizePrivatePrompt(tx, actor, { allowPausedCompany: true });
+  // authorizePrivatePrompt holds the company share lock for this transaction.
+  // Keep its existing principal return shape unchanged for private-trial callers.
+  const [company] = await tx.select({ status: companies.status }).from(companies).where(eq(companies.id, actor.companyId));
+  return promptApplicationsEnabled() && company?.status === "active";
+}
+
 async function lockRequest(tx: PrivatePromptTx, companyId: string, requestId: string) {
   await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${companyId}:prompt-application:${requestId}`}, 0))`);
 }
@@ -64,28 +73,28 @@ export function promptApplicationService(db: Db) {
   }
   return {
     async detail(actor: PrivatePromptIdentity, promptId: string, id: string) {
-      return db.transaction(async tx => { await authorizePrivatePrompt(tx, actor);
-        return { item: await record(tx, await get(tx, actor, promptId, id)), enabled: promptApplicationsEnabled() }; });
+      return db.transaction(async tx => { const enabled = await authorizeApplicationMetadata(tx, actor);
+        return { item: await record(tx, await get(tx, actor, promptId, id)), enabled }; });
     },
     async head(actor: PrivatePromptIdentity, agentId: string) {
       return db.transaction(async tx => {
-        await authorizePrivatePrompt(tx, actor);
+        const enabled = await authorizeApplicationMetadata(tx, actor);
         const [agent] = await tx.select({ id: agents.id }).from(agents).where(and(eq(agents.companyId, actor.companyId), eq(agents.id, agentId)));
         if (!agent) throw notFound("prompt_application_agent_not_found");
         const [head] = await tx.select().from(heads).where(and(eq(heads.companyId, actor.companyId), eq(heads.agentId, agentId)));
-        return { enabled: promptApplicationsEnabled(), generation: head?.generation ?? 0, applicationId: head?.applicationId ?? null, configuredAt: head?.configuredAt?.toISOString() ?? null };
+        return { enabled, generation: head?.generation ?? 0, applicationId: head?.applicationId ?? null, configuredAt: head?.configuredAt?.toISOString() ?? null };
       });
     },
     async list(actor: PrivatePromptIdentity, promptId: string, beforeId?: string) {
       return db.transaction(async tx => {
-        await authorizePrivatePrompt(tx, actor);
+        const enabled = await authorizeApplicationMetadata(tx, actor);
         const rows = await tx.select().from(applications).where(and(eq(applications.companyId, actor.companyId), eq(applications.promptId, promptId), beforeId ? lt(applications.id, beforeId) : undefined)).orderBy(desc(applications.id)).limit(51);
-        return { enabled: promptApplicationsEnabled(), items: await Promise.all(rows.slice(0, 50).map(row => record(tx, row))), nextBeforeId: rows.length > 50 ? rows[49]!.id : null };
+        return { enabled, items: await Promise.all(rows.slice(0, 50).map(row => record(tx, row))), nextBeforeId: rows.length > 50 ? rows[49]!.id : null };
       });
     },
     async request(actor: PrivatePromptIdentity, promptId: string, requestId: string, query: PromptApplicationRequestQuery = {}) {
       return db.transaction(async tx => {
-        await authorizePrivatePrompt(tx, actor);
+        const enabled = await authorizeApplicationMetadata(tx, actor);
         await lockRequest(tx, actor.companyId, requestId);
         let closure: PromptApplicationRequestClosure | null = null;
         let target: PromptApplicationRow | null = null;
@@ -104,12 +113,12 @@ export function promptApplicationService(db: Db) {
           if (reason) closure = { outcome: "not_applied_closed", requestId, action: query.action, applicationId: target.id, agentId: target.agentId,
             expectedGeneration: query.expectedGeneration, currentGeneration: generation, reason };
         }
-        return { enabled: promptApplicationsEnabled(), application: proposal ? await record(tx, proposal) : null, receipt: mutation ? receipt(mutation.receipt) : null, closure };
+        return { enabled, application: proposal ? await record(tx, proposal) : null, receipt: mutation ? receipt(mutation.receipt) : null, closure };
       });
     },
     async dispatches(actor: PrivatePromptIdentity, promptId: string, id: string, beforeId?: string) {
       return db.transaction(async tx => {
-        await authorizePrivatePrompt(tx, actor); await get(tx, actor, promptId, id);
+        await authorizeApplicationMetadata(tx, actor); await get(tx, actor, promptId, id);
         const rows = await tx.select().from(dispatches).where(and(eq(dispatches.companyId, actor.companyId), eq(dispatches.applicationId, id), beforeId ? lt(dispatches.id, beforeId) : undefined)).orderBy(desc(dispatches.id)).limit(51);
         return { items: await Promise.all(rows.slice(0, 50).map(async row => {
           const [withdrawn] = row.state === "prepared" ? await tx.select({ id: heartbeatRunEvents.id }).from(heartbeatRunEvents).where(and(
@@ -193,7 +202,7 @@ export function promptApplicationService(db: Db) {
       const input = rollbackPromptApplicationSchema.parse(raw), digest = applicationDigest({ action: "rollback", promptId, id, ...input });
       // Revocation is available even when new applications are disabled or drifted.
       return db.transaction(async tx => {
-        await authorizePrivatePrompt(tx, actor); await lockRequest(tx, actor.companyId, input.requestId); const row = await get(tx, actor, promptId, id); await lockAgent(tx, actor.companyId, row.agentId);
+        await authorizePrivatePrompt(tx, actor, { allowPausedCompany: true }); await lockRequest(tx, actor.companyId, input.requestId); const row = await get(tx, actor, promptId, id); await lockAgent(tx, actor.companyId, row.agentId);
         await assertApplicationConfigurationAuthority(tx, actor.companyId, row.agentId, actor.userId);
         const head = await lockApplicationHead(tx, actor.companyId, row.agentId), prior = await priorReceipt(tx, actor, id, input.requestId, digest); if (prior) return prior;
         if (head.generation !== input.expectedGeneration || head.applicationId !== row.id) throw conflict("prompt_application_current_binding_required");

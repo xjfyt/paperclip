@@ -29,6 +29,7 @@ import * as targetModule from "./target.js";
 import { promptApplicationService } from "./service.js";
 import { findPromptApplicationCandidate, preparePromptApplicationExecution } from "./execution.js";
 import { applicationAttemptStopped } from "./recovery.js";
+import { authorizePrivatePrompt } from "../mimouse-private-prompt-tests/service.js";
 import { comparisonFixture } from "../mimouse-private-prompt-tests/comparison-fixture.js";
 import { secretService } from "../secrets.js";
 import { heartbeatService } from "../heartbeat.js";
@@ -255,6 +256,61 @@ it("a rejected controlled candidate cannot auto-retry or become unbound after he
   expect(runs).toHaveLength(2); expect(runs.every(r => r.status === "failed" && r.errorCode === "prompt_application_blocked")).toBe(true);
   expect(runs.some(r => r.error?.includes("prompt_application_failed_attempt_requires_new_task"))).toBe(true);
   expect(boundary.inputs).toHaveLength(before);
+}, 90000);
+it("a paused company can inspect and withdraw a future binding without allowing deployment or weakening identity checks", async () => {
+  const p = await proposal(), approvedInput = approval(p.item), approved = await service.approve(actor, e.promptId, p.item.id, approvedInput);
+  const pending = await proposal(), fresh = await issueRun();
+  const capability = (await preparePromptApplicationExecution(db, execution(fresh.run, fresh.issue.id, { id: p.item.id, generation: approved.receipt.generation })))!;
+  await capability.prepare("approved ordinary prompt", { ANTHROPIC_API_KEY: keyValue }, home);
+  const beforeRuns = await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns).orderBy(heartbeatRuns.id), beforeWakes = await db.select().from(agentWakeupRequests), beforeInputs = boundary.inputs.length;
+  const rollbackInput = { requestId: randomUUID(), expectedGeneration: approved.receipt.generation };
+  const [session] = await db.select().from(authSessions).where(eq(authSessions.id, actor.sessionId));
+  const [member] = await db.select().from(companyMemberships).where(and(eq(companyMemberships.companyId, actor.companyId), eq(companyMemberships.principalId, actor.userId)));
+  const [grant] = await db.select().from(principalPermissionGrants).where(and(eq(principalPermissionGrants.companyId, actor.companyId), eq(principalPermissionGrants.principalId, actor.userId), eq(principalPermissionGrants.permissionKey, "agents:configure")));
+  await db.update(companies).set({ status: "paused" }).where(eq(companies.id, actor.companyId));
+  try {
+    expect((await service.list(actor, e.promptId)).enabled).toBe(false);
+    expect(await service.detail(actor, e.promptId, p.item.id)).toMatchObject({ enabled: false, item: { id: p.item.id, configured: true } });
+    expect(await service.head(actor, target.id)).toMatchObject({ enabled: false, applicationId: p.item.id });
+    expect(await service.request(actor, e.promptId, approvedInput.requestId)).toMatchObject({ enabled: false, receipt: { id: approved.receipt.id } });
+    expect((await service.dispatches(actor, e.promptId, p.item.id)).items).toHaveLength(1);
+    await expect(proposal()).rejects.toThrow("private_prompt_active_company_required");
+    await expect(service.approve(actor, e.promptId, pending.item.id, approval(pending.item))).rejects.toThrow("private_prompt_active_company_required");
+    await expect(db.transaction(tx => authorizePrivatePrompt(tx, actor))).rejects.toThrow("private_prompt_active_company_required");
+    await expect(capability.beforeStart()).rejects.toThrow("prompt_application_approver_revoked");
+    await expect(capability.dispatched()).rejects.toThrow("prompt_application_approver_revoked");
+
+    await db.update(companies).set({ status: "archived" }).where(eq(companies.id, actor.companyId));
+    await expect(service.list(actor, e.promptId)).rejects.toThrow("private_prompt_active_company_required");
+    await expect(service.rollback(actor, e.promptId, p.item.id, rollbackInput)).rejects.toThrow("private_prompt_active_company_required");
+    await db.update(companies).set({ status: "paused" }).where(eq(companies.id, actor.companyId));
+    await db.update(authSessions).set({ expiresAt: fixed }).where(eq(authSessions.id, actor.sessionId));
+    await expect(service.detail(actor, e.promptId, p.item.id)).rejects.toThrow("private_prompt_active_session_administrator_required");
+    await expect(service.rollback(actor, e.promptId, p.item.id, rollbackInput)).rejects.toThrow("private_prompt_active_session_administrator_required");
+    await db.update(authSessions).set({ expiresAt: session.expiresAt }).where(eq(authSessions.id, actor.sessionId));
+    await db.update(companyMemberships).set({ status: "suspended" }).where(eq(companyMemberships.id, member.id));
+    await expect(service.head(actor, target.id)).rejects.toThrow("private_prompt_active_session_administrator_required");
+    await expect(service.rollback(actor, e.promptId, p.item.id, rollbackInput)).rejects.toThrow("private_prompt_active_session_administrator_required");
+    await db.update(companyMemberships).set({ status: member.status }).where(eq(companyMemberships.id, member.id));
+    await db.delete(principalPermissionGrants).where(eq(principalPermissionGrants.id, grant.id));
+    await expect(service.rollback(actor, e.promptId, p.item.id, rollbackInput)).rejects.toThrow("prompt_application_agent_configuration_denied");
+    // Metadata still follows the pre-existing owner/admin read contract.
+    expect((await service.list(actor, e.promptId)).enabled).toBe(false);
+    await db.insert(principalPermissionGrants).values(grant);
+
+    const withdrawn = await service.rollback(actor, e.promptId, p.item.id, rollbackInput);
+    expect(withdrawn.receipt).toMatchObject({ action: "rollback", executionStarted: false });
+    expect(await service.request(actor, e.promptId, rollbackInput.requestId)).toMatchObject({ enabled: false, receipt: { id: withdrawn.receipt.id } });
+    expect((await service.head(actor, target.id)).applicationId).toBeNull();
+    expect(await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns).orderBy(heartbeatRuns.id)).toEqual(beforeRuns);
+    expect(await db.select().from(agentWakeupRequests)).toEqual(beforeWakes); expect(boundary.inputs).toHaveLength(beforeInputs);
+  } finally {
+    await db.update(authSessions).set({ expiresAt: session.expiresAt }).where(eq(authSessions.id, actor.sessionId));
+    await db.update(companyMemberships).set({ status: member.status }).where(eq(companyMemberships.id, member.id));
+    await db.insert(principalPermissionGrants).values(grant).onConflictDoNothing();
+    await db.update(companies).set({ status: "active" }).where(eq(companies.id, actor.companyId)); await finish(fresh.run.id);
+  }
+  expect(await service.head(actor, target.id)).toMatchObject({ enabled: true, applicationId: null });
 }, 90000);
 it("revoked configuration permission blocks prepare, while prior metadata stays readable", async () => {
   // Isolate the permission assertion from any preceding runtime failure.
