@@ -1,5 +1,5 @@
 import { assertRuntimeRoutingSession, runtimeRoutingClock } from "./clock.js";
-import { runtimeRoutingIssueMatches, runtimeRoutingRunMatches } from "./contract.js";
+import { runtimeRoutingIssueMatches, runtimeRoutingRunMatches, runtimeRoutingPreflightError } from "./contract.js";
 import { and, eq, isNull, ne } from "drizzle-orm";
 import { agentWakeupRequests, heartbeatRuns, issues, issueComments, issueDocuments, issueAttachments, type Db } from "@paperclipai/db";
 import { runtimeRoutingBindings as bindings, runtimeRoutingHeads as heads, runtimeRoutingPolicies as policies } from "@paperclipai/db/schema/runtime_cost_routing";
@@ -81,6 +81,7 @@ export async function claimRuntimeRoutingRun(tx: PrivatePromptTx, bindingId: str
 }
 export async function assertRuntimeRoutingEarlyBinding(db: Db, run: typeof heartbeatRuns.$inferSelect, issueId: string | null) {
   const possibleIds = [...new Set([issueId, run.issueId, run.nativeIssueId].filter((id): id is string => !!id))];
+  let bindingIdentified = false;
   return db.transaction(async tx => {
     let found: RuntimeRoutingBindingRow | null = null;
     for (const id of possibleIds) {
@@ -90,6 +91,7 @@ export async function assertRuntimeRoutingEarlyBinding(db: Db, run: typeof heart
       const [row] = await tx.select().from(bindings).where(eq(bindings.issueId, id)).for("share");
       if (!row) { const [issue] = await tx.select({ origin: issues.originKind }).from(issues).where(eq(issues.id, id));
         if (issue?.origin === "runtime_cost_routing") throw blocked("runtime_routing_binding_missing"); continue; }
+      bindingIdentified = true;
       if (found && found.id !== row.id) throw blocked("runtime_routing_issue_identity_mismatch"); found = row;
     }
     if (!found) return null;
@@ -100,7 +102,7 @@ export async function assertRuntimeRoutingEarlyBinding(db: Db, run: typeof heart
     if (prior) throw blocked("runtime_routing_first_attempt_required");
     await assertRuntimeRoutingBindingCurrent(tx, found, { companyId: found.companyId, userId: found.dispatchActorUserId, sessionId: found.dispatchActorSessionId });
     return found;
-  });
+  }).catch(error => { throw runtimeRoutingPreflightError(error, bindingIdentified); });
 }
 /** Reuses the application adapter hook, budget admission and final core ownership gate. */
 export async function guardRuntimeRoutingExecution(db: Db, input: HeartbeatRuntimeExecutionInput, application: AdapterExecutionContext["controlledPromptApplication"]): Promise<AdapterExecutionContext["controlledPromptApplication"]> {

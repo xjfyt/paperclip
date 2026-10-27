@@ -1,3 +1,4 @@
+import { PromptApplicationExecutionBlocked, applicationExecutionConflict } from "../mimouse-prompt-applications/contract.js";
 import type { heartbeatRuns, issues } from "@paperclipai/db";
 import type { RuntimeRoutingBindingRow } from "./store.js";
 import { privateConfigDigest } from "../mimouse-private-prompt-tests/profile.js";
@@ -23,4 +24,8 @@ export function runtimeRoutingRunMatches(row: RuntimeRoutingBindingRow, run: typ
   return row.companyId === run.companyId && row.runId === run.id && row.selectedAgentId === run.agentId && row.issueId === run.issueId && row.issueId === issueId &&
     row.state === "run_claimed" && !!row.dispatchActorSessionId && !!row.dispatchActorUserId && run.runtimeMode === "legacy" && !run.retryOfRunId && !run.scheduledRetryReason &&
     !run.contextSnapshot?.aiRouterSelection && !run.contextSnapshot?.aiConnection && !run.contextSnapshot?.routineId;
+}
+/** A bound failure is never an invitation to core's unbound retry/recovery lane. */
+export function runtimeRoutingPreflightError(error: unknown, bindingIdentified: boolean) {
+  return !bindingIdentified || error instanceof PromptApplicationExecutionBlocked ? error : applicationExecutionConflict("runtime_routing_execution_preflight_denied");
 }

@@ -2150,6 +2150,10 @@ export function createHeartbeatQueue(db: Db, dependencies: HeartbeatQueueDepende
       if (readNonEmptyString(enrichedContextSnapshot.taskId)) enrichedContextSnapshot.taskId = issueId;
     }
     const routingBindingId = await assertRuntimeRoutingWake(db, agentId, issueId, opts);
+    if (explicitResumeSession?.issueId && explicitResumeSession.issueId !== issueId) {
+      // A different target issue must not launder a controlled source session.
+      await assertRuntimeRoutingWake(db, agentId, explicitResumeSession.issueId, opts);
+    }
     if (issueId && isUuidLike(issueId)) {
       const [privateIssue] = await db.select({ id: mimousePrivatePromptTests.id }).from(mimousePrivatePromptTests)
         .where(eq(mimousePrivatePromptTests.issueId, issueId));

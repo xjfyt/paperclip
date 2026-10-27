@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { RuntimeRoutingCandidateSnapshot } from "@paperclipai/shared/runtime-cost-routing";
 import { selectRuntimeRoutingCandidate, runtimeRoutingQualityEligible } from "./selection.js";
 import { runtimeRoutingWakeAuthority, runtimeRoutingWakeOptions } from "./wake-authority.js";
-import { runtimeRoutingIssueMatches, runtimeRoutingRunMatches, runtimeRoutingTaskDigest } from "./contract.js";
+import { runtimeRoutingIssueMatches, runtimeRoutingRunMatches, runtimeRoutingTaskDigest, runtimeRoutingPreflightError } from "./contract.js";
 import { isPrivateIntegrationHttpRequest, privateIntegrationHttpLogUrl } from "../../middleware/http-log-policy.js";
 const candidate = (id: string, cost: string, passedCases = 2, totalCases = 2) => ({ candidate: { agentId: id, applicationId: id }, evidence: { observedCostCents: cost, passedCases, totalCases } }) as RuntimeRoutingCandidateSnapshot;
 describe("bounded runtime selection", () => {
@@ -66,4 +66,12 @@ it("private runtime policy HTTP paths never log supplied identifiers or query/bo
     expect(isPrivateIntegrationHttpRequest(url)).toBe(true);
     expect(privateIntegrationHttpLogUrl(url)).toBe("/api/companies/:companyId/runtime-cost-routing/:redacted");
   }
+});
+it("classifies identified routing preflight failures as nonretryable without leaking diagnostics", () => {
+  const error = new Error("private proof or database parameter secret");
+  expect(runtimeRoutingPreflightError(error, false)).toBe(error);
+  const blocked = runtimeRoutingPreflightError(error, true) as Error & { details: unknown };
+  expect(blocked.message).toBe("runtime_routing_execution_preflight_denied");
+  expect(blocked.details).toEqual({ code: "prompt_application_blocked" });
+  expect(runtimeRoutingPreflightError(blocked, true)).toBe(blocked);
 });

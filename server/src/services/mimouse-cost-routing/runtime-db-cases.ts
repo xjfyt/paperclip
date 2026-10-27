@@ -89,5 +89,7 @@ export async function verifyRuntimeRoutingDispatch(db: Db, actor: PrivatePromptI
   vi.stubEnv("PAPERCLIP_RUNTIME_COST_ROUTING_ENABLED", "false");
   const [ordinary] = await db.insert(issues).values({ companyId: actor.companyId, identifier: `ROUTING-${Date.now()}`, title: "Unbound identifier lookup", assigneeAgentId: agent.id, responsibleUserId: actor.userId }).returning();
   expect(await heartbeat.wakeup(agent.id, { reason: "issue_comment_mentioned", payload: { issueId: ordinary.identifier } })).toBeNull();
+  await expect(heartbeat.wakeup(agent.id, { source: "on_demand", requestedByActorType: "user", requestedByActorId: actor.userId,
+    payload: { issueId: ordinary.id, resumeFromRunId: run.id } })).rejects.toThrow("runtime_routing_generic_wake_denied");
   expect(ordinaryCalls()).toBe(before + 1);
 }
