@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Trans } from "react-i18next";
 import { useTranslation } from "@/i18n";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
@@ -42,6 +42,7 @@ export function SecretPopoverForm({
   const [value, setValue] = useState(initialValue);
   const [reveal, setReveal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [error, setError] = useState<{ kind: "raw"; message: string } | { kind: "generic" } | null>(null);
   const [touched, setTouched] = useState(false);
 
@@ -59,13 +60,15 @@ export function SecretPopoverForm({
 
   async function handleSubmit() {
     setTouched(true);
-    if (!canSubmit) return;
+    if (!canSubmit || submittingRef.current) return;
+    submittingRef.current = true;
     setSubmitting(true);
     setError(null);
     try {
       await onSubmit(trimmedName, value);
     } catch (submitError) {
       setError(submitError instanceof Error ? { kind: "raw", message: submitError.message } : { kind: "generic" });
+      submittingRef.current = false;
       setSubmitting(false);
     }
   }
@@ -104,7 +107,7 @@ export function SecretPopoverForm({
           onChange={(event) => setName(event.target.value)}
           onBlur={() => setTouched(true)}
           onKeyDown={(event) => {
-            if (event.key === "Enter") {
+            if (event.key === "Enter" && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229) {
               event.preventDefault();
               void handleSubmit();
             }

@@ -232,7 +232,7 @@ export function EnvironmentVariableRow({
             if (onNamePaste(text)) event.preventDefault();
           }}
           onKeyDown={(event) => {
-            if (event.key === "Enter") {
+            if (event.key === "Enter" && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229) {
               event.preventDefault();
               if (row.source === "text") valueInputRef.current?.focus();
               else valueCellRef.current?.querySelector<HTMLElement>("[role=combobox],select,input")?.focus();
@@ -312,7 +312,7 @@ export function EnvironmentVariableRow({
                     aria-label={t("environmentEditorUi.variableValue")}
                     onChange={(event) => onPatch({ textValue: event.target.value })}
                     onKeyDown={(event) => {
-                      if (event.key === "Enter" && isLast) {
+                      if (event.key === "Enter" && isLast && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229) {
                         event.preventDefault();
                         onEnterInValueLast();
                       }
