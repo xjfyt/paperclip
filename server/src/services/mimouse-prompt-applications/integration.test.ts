@@ -242,7 +242,7 @@ it("a rejected controlled candidate cannot auto-retry or become unbound after he
   const [issue] = await db.insert(issues).values({ companyId: actor.companyId, title: "Unsupported controlled override", assigneeAgentId: target.id,
     responsibleUserId: actor.userId, status: "todo", assigneeAdapterOverrides: { model: "not-the-approved-model" } }).returning();
   const before = boundary.inputs.length;
-  const wake = { source: "on_demand" as const, triggerDetail: "manual", reason: "issue_assigned", contextSnapshot: { issueId: issue.id }, requestedByActorType: "user" as const, requestedByActorId: actor.userId };
+  const wake = { source: "on_demand" as const, triggerDetail: "manual" as const, reason: "issue_assigned", contextSnapshot: { issueId: issue.id }, requestedByActorType: "user" as const, requestedByActorId: actor.userId };
   await heartbeat.wakeup(target.id, wake); await drainHeartbeatRunsToQuiescence(db, heartbeat);
   let runs = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.issueId, issue.id));
   expect(runs).toHaveLength(1); expect(runs[0]).toMatchObject({ status: "failed", errorCode: "prompt_application_blocked", scheduledRetryReason: null });
