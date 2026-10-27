@@ -403,7 +403,11 @@ export function IssueProperties({
   const [monitorServiceInput, setMonitorServiceInput] = useState(executionPolicy?.monitor?.serviceName ?? "");
   const [runtimeActionMessage, setRuntimeActionMessage] = useState<string | null>(null);
   const [runtimeActionErrorMessage, setRuntimeActionErrorMessage] = useState<{ key: string } | { message: string } | null>(null);
-  const [unarchiveErrorMessage, setUnarchiveErrorMessage] = useState<string | null>(null);
+  const [unarchiveErrorMessage, setUnarchiveErrorMessage] = useState<
+    { source: "local"; key: "issuePropertyControlsUi.unarchiveFailed" }
+    | { source: "server"; message: string }
+    | null
+  >(null);
   const [watchdogOpen, setWatchdogOpen] = useState(false);
   const [watchdogAgentInput, setWatchdogAgentInput] = useState(issue.watchdog?.watchdogAgentId ?? "");
   const [watchdogInstructionsInput, setWatchdogInstructionsInput] = useState(issue.watchdog?.instructions ?? "");
@@ -514,8 +518,8 @@ export function IssueProperties({
     },
     onError: (error) => {
       setUnarchiveErrorMessage(error instanceof Error && error.message.trim().length > 0
-        ? error.message
-        : "Failed to unarchive this issue. Please try again.");
+        ? { source: "server", message: error.message }
+        : { source: "local", key: "issuePropertyControlsUi.unarchiveFailed" });
     },
   });
 
@@ -1073,13 +1077,13 @@ export function IssueProperties({
         className="inline-flex items-center rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
         onClick={() => onUpdate({ status: "in_review" })}
       >
-        {stageType === "review" ? "Run review now" : "Run approval now"}
+        {t(stageType === "review" ? "issuePropertyControlsUi.runReview" : "issuePropertyControlsUi.runApproval")}
       </button>
     </PropertyRow>
   );
   const currentExecutionLabel = (() => {
     if (!issue.executionState?.currentStageType) return null;
-    const stageLabel = issue.executionState.currentStageType === "review" ? "Review" : "Approval";
+    const isReview = issue.executionState.currentStageType === "review";
     const participant = issue.executionState.currentParticipant;
     const participantLabel = participant
       ? (participant.type === "agent"
@@ -1087,9 +1091,13 @@ export function IssueProperties({
         : userLabel(participant.userId ?? null))
       : null;
     if (issue.executionState.status === "changes_requested") {
-      return `${stageLabel} requested changes${participantLabel ? ` by ${participantLabel}` : ""}`;
+      return participantLabel
+        ? t(isReview ? "issuePropertyControlsUi.reviewChangesBy" : "issuePropertyControlsUi.approvalChangesBy", { participant: participantLabel })
+        : t(isReview ? "issuePropertyControlsUi.reviewChanges" : "issuePropertyControlsUi.approvalChanges");
     }
-    return `${stageLabel} pending${participantLabel ? ` with ${participantLabel}` : ""}`;
+    return participantLabel
+      ? t(isReview ? "issuePropertyControlsUi.reviewPendingWith" : "issuePropertyControlsUi.approvalPendingWith", { participant: participantLabel })
+      : t(isReview ? "issuePropertyControlsUi.reviewPending" : "issuePropertyControlsUi.approvalPending");
   })();
   useEffect(() => {
     setMonitorAtInput(toDateTimeLocalValue(executionPolicy?.monitor?.nextCheckAt));
@@ -2092,7 +2100,7 @@ export function IssueProperties({
       ))}
       {blockedByRelations.length > 2 ? (
         <Badge asChild variant="outline" className="border-border text-muted-foreground hover:bg-accent/50">
-          <button type="button" onClick={() => setBlockedByOpen(true)}>+{blockedByRelations.length - 2} more</button>
+          <button type="button" onClick={() => setBlockedByOpen(true)}>{t("issuePropertyControlsUi.moreRelations", { count: blockedByRelations.length - 2 })}</button>
         </Badge>
       ) : null}
     </div>
@@ -2106,7 +2114,7 @@ export function IssueProperties({
       ))}
       {childIssues.length > 2 ? (
         <Badge asChild variant="outline" className="border-border text-muted-foreground hover:bg-accent/50">
-          <button type="button" onClick={() => setSubtasksOpen(true)}>+{childIssues.length - 2} more</button>
+          <button type="button" onClick={() => setSubtasksOpen(true)}>{t("issuePropertyControlsUi.moreRelations", { count: childIssues.length - 2 })}</button>
         </Badge>
       ) : null}
     </div>
@@ -2597,7 +2605,7 @@ export function IssueProperties({
                   onClick={onAddSubIssue}
                 >
                   <Plus className="h-3 w-3" />
-                  Add sub-task
+                  {t("issuePropertyControlsUi.addSubtask")}
                 </button>
               ) : null}
             </div>
@@ -2625,7 +2633,7 @@ export function IssueProperties({
               <IssuePullRequestLinks products={pullRequests} externalObjects={externalObjects?.map((entry) => entry.pill)} />
               {workProductsError ? (
                 <span className="text-xs text-muted-foreground">
-                  Couldn’t load pull requests. <button type="button" className="text-primary hover:underline" onClick={() => void refetchWorkProducts()}>Retry</button>
+                  {t("issuePropertyControlsUi.pullRequestsFailed")} <button type="button" className="text-primary hover:underline" onClick={() => void refetchWorkProducts()}>{t("issuePropertyControlsUi.retry")}</button>
                 </span>
               ) : null}
             </div>
@@ -2652,7 +2660,7 @@ export function IssueProperties({
 
         {!policyAvailable ? (
           <PropertyRow label="Execution policy" wrap>
-            <span role="status" className="text-sm text-muted-foreground">Execution policy unavailable. Refresh to try again.</span>
+            <span role="status" className="text-sm text-muted-foreground">{t("issuePropertyControlsUi.policyUnavailable")}</span>
           </PropertyRow>
         ) : (<>
         <PropertyPicker
@@ -2948,7 +2956,7 @@ export function IssueProperties({
                 />
                 {originatingViaAgentName ? (
                   <span className="shrink-0 truncate text-xs text-muted-foreground">
-                    via {originatingViaAgentName}
+                    {t("issuePropertyControlsUi.viaAgent", { agent: originatingViaAgentName })}
                   </span>
                 ) : null}
               </span>
@@ -2998,7 +3006,7 @@ export function IssueProperties({
                       truncation on genuinely long names is recoverable. */}
                   <span
                     className="flex min-w-0 max-w-full items-center gap-1.5 text-sm"
-                    title={`Archived by ${archivedByName} · ${formatDateTime(issue.archivedAt)}`}
+                    title={t("issuePropertyControlsUi.archivedBy", { agent: archivedByName, time: formatDateTime(issue.archivedAt) })}
                   >
                     {archivedByAgent
                       ? <AgentAvatar agent={archivedByAgent} size={16} className="h-3.5 w-3.5 shrink-0 text-muted-foreground"/>
@@ -3016,12 +3024,12 @@ export function IssueProperties({
                       disabled={unarchiveFromInbox.isPending}
                     >
                       <ArchiveRestore className="h-3 w-3" />
-                      {unarchiveFromInbox.isPending ? "Unarchiving…" : "Unarchive"}
+                      {t(unarchiveFromInbox.isPending ? "issuePropertyControlsUi.unarchiving" : "issuePropertyControlsUi.unarchive")}
                     </button>
                   </div>
                   {unarchiveErrorMessage ? (
                     <p className="text-xs text-destructive" role="alert">
-                      {unarchiveErrorMessage}
+                      {unarchiveErrorMessage.source === "local" ? t(unarchiveErrorMessage.key) : unarchiveErrorMessage.message}
                     </p>
                   ) : null}
                 </div>

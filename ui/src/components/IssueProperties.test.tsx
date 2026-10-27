@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { i18n, coreTaskMessages } from "../i18n/core-task-test-resources";
-import { issuePropertyControlsMessages } from "../i18n/issue-property-controls-test-resources";
+import { issuePropertyControlsMessages, propertyLabelMessages } from "../i18n/issue-property-controls-test-resources";
 import { issueRetryMessages } from "../i18n/issue-retry-test-resources";
 import { issueWorkspaceMessages } from "../i18n/issue-workspace-test-resources";
 import { issueMonitorMessages } from "../i18n/issue-monitor-test-resources";
@@ -12,6 +12,7 @@ import type { ComponentProps, ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import type {
+  Agent,
   ExecutionWorkspace,
   IssueExecutionPolicy,
   IssueExecutionState,
@@ -219,7 +220,7 @@ async function flush() {
 function findRowTrigger(container: HTMLElement, label: string): HTMLButtonElement | undefined {
   const labelSpan = container.querySelector(`[data-property-label="${label}"]`);
   const row = labelSpan?.closest('[data-property-row="true"]');
-  return ((row?.querySelector(`button[aria-label="Edit ${label.toLowerCase()}"]`) ?? row?.querySelector("button")) as HTMLButtonElement | null) ?? undefined;
+  return ((row?.querySelector("button[aria-expanded]") ?? row?.querySelector(`button[aria-label="Edit ${label.toLowerCase()}"]`) ?? row?.querySelector("button")) as HTMLButtonElement | null) ?? undefined;
 }
 
 async function waitForAssertion(assertion: () => void, attempts = 20) {
@@ -282,6 +283,17 @@ function createIssue(overrides: Partial<Issue> = {}): Issue {
     workMode: overrides.workMode ?? "standard",
   };
 }
+
+const propertyStateAgent: Agent = {
+  id: "00000000-0000-4000-8000-000000000013",
+  companyId: "company-1", name: "Coder 原名 / 日本語", urlKey: "coder",
+  role: "engineer", title: null, icon: null, status: "active", reportsTo: null,
+  capabilities: null, adapterType: "codex_local", adapterConfig: {}, runtimeConfig: {},
+  budgetMonthlyCents: 0, spentMonthlyCents: 0, pauseReason: null, pausedAt: null,
+  permissions: { canCreateAgents: false }, lastHeartbeatAt: null, metadata: null,
+  createdAt: new Date("2026-04-06T12:00:00.000Z"),
+  updatedAt: new Date("2026-04-06T12:05:00.000Z"),
+};
 
 function createLabel(overrides: Partial<IssueLabel> = {}): IssueLabel {
   return {
@@ -1772,8 +1784,9 @@ describe("IssueProperties", () => {
     act(() => root.unmount());
   });
 
-  it("summarizes long blocked-by and subtask relationships in their picker triggers", async () => {
-    const blockedBy = Array.from({ length: 7 }, (_, index) => ({
+  it.each(Object.entries(issuePropertyControlsMessages))("localizes long relationship summaries and preserves canonical hooks in %s", async (locale, messages) => {
+    await i18n.changeLanguage(locale);
+    const blockedBy = Array.from({ length: 7 }, (_, index): NonNullable<Issue["blockedBy"]>[number] => ({
       id: `blocker-${index + 1}`,
       identifier: `BLOCK-${index + 1}`,
       title: `Blocker ${index + 1}`,
@@ -1781,7 +1794,7 @@ describe("IssueProperties", () => {
       priority: "medium",
       assigneeAgentId: null,
       assigneeUserId: null,
-    })) as NonNullable<Issue["blockedBy"]>;
+    }));
     const childIssues = Array.from({ length: 7 }, (_, index) => createIssue({
       id: `child-${index + 1}`,
       identifier: `SUB-${index + 1}`,
@@ -1798,13 +1811,14 @@ describe("IssueProperties", () => {
     const blockedByTrigger = findRowTrigger(container, "Blocked by");
     expect(blockedByTrigger?.closest('[data-property-row="true"]')?.textContent).toContain("BLOCK-1");
     expect(blockedByTrigger?.closest('[data-property-row="true"]')?.textContent).toContain("BLOCK-2");
-    expect(blockedByTrigger?.closest('[data-property-row="true"]')?.textContent).toContain("+5 more");
+    expect(blockedByTrigger?.closest('[data-property-row="true"]')?.textContent).toContain(messages.moreRelations.replace("{{count}}", "5"));
     expect(blockedByTrigger?.closest('[data-property-row="true"]')?.textContent).not.toContain("BLOCK-7");
 
     const subtasksTrigger = findRowTrigger(container, "Subtasks");
+    expect(container.querySelector('[data-property-label="Subtasks"]')?.textContent).toBe(i18n.t("propertyLabels.subtasks"));
     expect(subtasksTrigger?.closest('[data-property-row="true"]')?.textContent).toContain("SUB-1");
     expect(subtasksTrigger?.closest('[data-property-row="true"]')?.textContent).toContain("SUB-2");
-    expect(subtasksTrigger?.closest('[data-property-row="true"]')?.textContent).toContain("+5 more");
+    expect(subtasksTrigger?.closest('[data-property-row="true"]')?.textContent).toContain(messages.moreRelations.replace("{{count}}", "5"));
     expect(subtasksTrigger?.closest('[data-property-row="true"]')?.textContent).not.toContain("SUB-7");
 
     await act(async () => {
@@ -1825,6 +1839,7 @@ describe("IssueProperties", () => {
 
     expect(container.textContent).toContain("SUB-7");
 
+    expect(container.querySelector('[data-property-label="Priority"]')).toBeNull();
     act(() => root.unmount());
   });
 
@@ -2987,7 +3002,8 @@ describe("IssueProperties", () => {
     act(() => root.unmount());
   });
 
-  it("shows a run review action after reviewers are configured and starts execution explicitly when clicked", async () => {
+  it.each(Object.entries(issuePropertyControlsMessages))("localizes the explicit run review action without changing its payload in %s", async (locale, messages) => {
+    await i18n.changeLanguage(locale);
     const onUpdate = vi.fn();
     const root = renderProperties(container, {
       issue: createIssue({
@@ -3008,7 +3024,7 @@ describe("IssueProperties", () => {
     await flush();
 
     const runReviewButton = Array.from(container.querySelectorAll("button"))
-      .find((button) => button.textContent?.includes("Run review now"));
+      .find((button) => button.textContent === messages.runReview);
     expect(runReviewButton).not.toBeUndefined();
 
     await act(async () => {
@@ -3020,7 +3036,9 @@ describe("IssueProperties", () => {
     act(() => root.unmount());
   });
 
-  it("shows a run approval action when approval is the next runnable stage", async () => {
+  it.each(Object.entries(issuePropertyControlsMessages))("localizes the explicit run approval action without changing its payload in %s", async (locale, messages) => {
+    await i18n.changeLanguage(locale);
+    const onUpdate = vi.fn();
     const root = renderProperties(container, {
       issue: createIssue({
         executionPolicy: createExecutionPolicy({
@@ -3035,12 +3053,15 @@ describe("IssueProperties", () => {
         }),
       }),
       childIssues: [],
-      onUpdate: vi.fn(),
+      onUpdate,
     });
     await flush();
 
-    expect(container.textContent).toContain("Run approval now");
-    expect(container.textContent).not.toContain("Run review now");
+    expect(container.textContent).toContain(messages.runApproval);
+    expect(container.textContent).not.toContain(messages.runReview);
+    const button = Array.from(container.querySelectorAll("button")).find(item => item.textContent === messages.runApproval)!;
+    await act(() => button.click());
+    expect(onUpdate).toHaveBeenCalledExactlyOnceWith({ status: "in_review" });
 
     act(() => root.unmount());
   });
@@ -3292,26 +3313,37 @@ describe("IssueProperties", () => {
     act(() => root.unmount());
   });
 
-  it.each([
+  it.each(Object.entries(issuePropertyControlsMessages).flatMap(([locale, messages]) => [
     { stages: {} },
     { stages: [null] },
     { stages: [{ type: "review", participants: {} }] },
     { monitor: { nextCheckAt: {}, notes: {} } },
-  ])("keeps malformed policies unavailable without exposing destructive edits: %j", async (executionPolicy) => {
+  ].map(executionPolicy => ({ locale, messages, executionPolicy }))))("keeps malformed policies unavailable without destructive edits in $locale: $executionPolicy", async ({ locale, messages, executionPolicy }) => {
+    await i18n.changeLanguage(locale);
     const onUpdate = vi.fn();
+    const issue = createIssue();
+    // Model a malformed wire response without asserting that it is a valid policy.
+    Object.defineProperty(issue, "executionPolicy", { value: executionPolicy });
     const root = renderProperties(container, {
-      issue: createIssue({ executionPolicy: executionPolicy as unknown as IssueExecutionPolicy }),
+      issue,
       childIssues: [], onUpdate, inline: true,
     });
     await flush();
 
-    expect(container.textContent).toContain("Execution policy unavailable. Refresh to try again.");
-    expect(container.textContent).toContain("Assignee");
-    expect(container.textContent).not.toContain("No reviewers");
-    expect(container.textContent).not.toContain("No approvers");
-    expect(container.textContent).not.toContain("Run review now");
+    expect(container.textContent).toContain(messages.policyUnavailable);
+    expect(container.querySelector('[data-property-label="Assignee"]')).not.toBeNull();
+    expect(findRowTrigger(container, "Reviewers")).toBeUndefined();
+    expect(findRowTrigger(container, "Approvers")).toBeUndefined();
+    expect(container.textContent).not.toContain(messages.runReview);
+    expect(container.textContent).not.toContain(messages.runApproval);
     expect(container.querySelector('[data-testid="monitor-row-trigger"]')).toBeNull();
     expect(container.querySelector('input[type="datetime-local"]')).toBeNull();
+    const nextLocale = locale === "ja" ? "es" : "ja";
+    await act(async () => { await i18n.changeLanguage(nextLocale); });
+    expect(container.textContent).toContain(issuePropertyControlsMessages[nextLocale].policyUnavailable);
+    expect(findRowTrigger(container, "Reviewers")).toBeUndefined();
+    expect(findRowTrigger(container, "Approvers")).toBeUndefined();
+    expect(container.querySelector('[data-testid="monitor-row-trigger"]')).toBeNull();
     expect(onUpdate).not.toHaveBeenCalled();
     act(() => root.unmount());
   });
@@ -4048,6 +4080,162 @@ describe("IssueProperties", () => {
     expect(unrefreshedPullRequestLink?.textContent).not.toContain("Not yet resolved");
 
     act(() => root.unmount());
+  });
+
+  it.each(Object.entries(issuePropertyControlsMessages).flatMap(([locale, messages]) =>
+    (["review", "approval"] as const).flatMap(stage =>
+      (["pending", "changes_requested"] as const).flatMap(status =>
+        [false, true].map(withParticipant => ({ locale, messages, stage, status, withParticipant })),
+      ),
+    ),
+  ))("localizes $stage $status with participant=$withParticipant in $locale", async ({ locale, messages, stage, status, withParticipant }) => {
+    await i18n.changeLanguage(locale);
+    mockAgentsApi.list.mockResolvedValue([propertyStateAgent]);
+    const participant: NonNullable<IssueExecutionState["currentParticipant"]> = stage === "review"
+      ? { type: "agent", agentId: propertyStateAgent.id, userId: null }
+      : { type: "user", agentId: null, userId: "user-2" };
+    const participantName = stage === "review" ? propertyStateAgent.name : "Morgan Product";
+    const executionPolicy = createExecutionPolicy({ stages: [{
+      id: "00000000-0000-4000-8000-000000000010", type: stage, approvalsNeeded: 1,
+      participants: [{ ...participant, id: "00000000-0000-4000-8000-000000000012" }],
+    }] });
+    const issue = createIssue({
+      executionPolicy,
+      executionState: createExecutionState({
+        status, currentStageType: stage, currentParticipant: withParticipant ? participant : null,
+        lastDecisionOutcome: status === "changes_requested" ? "changes_requested" : null,
+      }),
+    });
+    const onUpdate = vi.fn();
+    const { root, queryClient } = renderPropertiesWithQueryClient(container, { issue, childIssues: [], onUpdate, inline: true });
+    const messageKey = status === "changes_requested"
+      ? withParticipant ? stage === "review" ? "reviewChangesBy" : "approvalChangesBy" : stage === "review" ? "reviewChanges" : "approvalChanges"
+      : withParticipant ? stage === "review" ? "reviewPendingWith" : "approvalPendingWith" : stage === "review" ? "reviewPending" : "approvalPending";
+    const executionRow = () => container.querySelector('[data-property-label="Execution"]')?.closest('[data-property-row="true"]');
+    try {
+      const expected = messages[messageKey].replace("{{participant}}", participantName);
+      await waitForAssertion(() => expect(executionRow()?.textContent).toContain(expected));
+      expect(executionRow()?.querySelector('[data-property-value="true"] > span')?.getAttribute("title")).toBe(expected);
+      const runLabel = stage === "review" ? messages.runReview : messages.runApproval;
+      expect(Array.from(container.querySelectorAll("button")).some(button => button.textContent === runLabel)).toBe(status === "changes_requested");
+      const reads = mockAgentsApi.list.mock.calls.length;
+      const nextLocale = locale === "ja" ? "es" : "ja";
+      await act(async () => { await i18n.changeLanguage(nextLocale); });
+      const next = issuePropertyControlsMessages[nextLocale][messageKey].replace("{{participant}}", participantName);
+      expect(executionRow()?.textContent).toContain(next);
+      expect(issue.executionPolicy).toBe(executionPolicy);
+      expect(issue.executionState?.currentParticipant).toEqual(withParticipant ? participant : null);
+      expect(mockAgentsApi.list).toHaveBeenCalledTimes(reads);
+      expect(onUpdate).not.toHaveBeenCalled();
+    } finally { act(() => root.unmount()); queryClient.clear(); }
+  });
+
+  it.each(Object.entries(propertyLabelMessages))("translates classic fixed labels and attribution without changing canonical hooks in %s", async (locale, labels) => {
+    await i18n.changeLanguage(locale);
+    mockAgentsApi.list.mockResolvedValue([propertyStateAgent]);
+    mockInstanceSettingsApi.getExperimental.mockResolvedValue({ enableClassicTaskInterface: true });
+    const onUpdate = vi.fn();
+    const onAddSubIssue = vi.fn();
+    const { root, queryClient } = renderPropertiesWithQueryClient(container, {
+      issue: createIssue({ createdByAgentId: propertyStateAgent.id, createdByUserId: null, responsibleUserId: "user-2" }),
+      childIssues: [createIssue({ id: "child-1", identifier: "CHILD-1", title: "Subtask 用户原文" })],
+      onUpdate, onAddSubIssue, inline: true,
+    });
+    try {
+      await waitForAssertion(() => {
+        expect(container.querySelector('[data-property-label="Sub-tasks"]')?.textContent).toBe(labels.subtasks);
+        expect(container.textContent).toContain(i18n.t("issuePropertyControlsUi.viaAgent", { agent: propertyStateAgent.name }));
+      });
+      expect(container.querySelector('[data-property-section="true"] > div')?.textContent).toBe(labels.triage);
+      expect(container.querySelector('[data-property-label="Priority"]')).toBeNull();
+      expect(container.querySelector('a[href="/issues/CHILD-1"]')?.getAttribute("title")).toBe("Subtask 用户原文");
+      expect(container.textContent).toContain("Morgan Product");
+      const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent === i18n.t("issuePropertyControlsUi.addSubtask"))!;
+      await act(() => add.click());
+      expect(onAddSubIssue).toHaveBeenCalledTimes(1);
+      expect(onUpdate).not.toHaveBeenCalled();
+    } finally { act(() => root.unmount()); queryClient.clear(); }
+  });
+
+  it.each(Object.entries(issuePropertyControlsMessages))("localizes pull-request failure and retry without locale-triggered reads in %s", async (locale, messages) => {
+    await i18n.changeLanguage(locale);
+    mockIssuesApi.listWorkProducts.mockClear();
+    mockIssuesApi.listWorkProducts.mockRejectedValueOnce(new Error("Provider unavailable 原文"));
+    const onUpdate = vi.fn();
+    const { root, queryClient } = renderPropertiesWithQueryClient(container, { issue: createIssue(), childIssues: [], onUpdate, inline: true });
+    try {
+      await waitForAssertion(() => expect(container.textContent).toContain(messages.pullRequestsFailed));
+      expect(mockIssuesApi.listWorkProducts).toHaveBeenCalledExactlyOnceWith("issue-1", expect.objectContaining({ fresh: true }));
+      const nextLocale = locale === "ja" ? "es" : "ja";
+      await act(async () => { await i18n.changeLanguage(nextLocale); });
+      const next = issuePropertyControlsMessages[nextLocale];
+      expect(container.textContent).toContain(next.pullRequestsFailed);
+      expect(mockIssuesApi.listWorkProducts).toHaveBeenCalledTimes(1);
+      const retry = Array.from(container.querySelectorAll("button")).find(button => button.textContent === next.retry)!;
+      await act(() => retry.click());
+      await waitForAssertion(() => expect(container.querySelector('[data-property-label="Pull requests"]')).toBeNull());
+      expect(mockIssuesApi.listWorkProducts).toHaveBeenCalledTimes(2);
+      expect(mockIssuesApi.listWorkProducts).toHaveBeenLastCalledWith("issue-1", expect.objectContaining({ fresh: true }));
+      expect(onUpdate).not.toHaveBeenCalled();
+    } finally { act(() => root.unmount()); queryClient.clear(); }
+  });
+
+  it.each(Object.entries(issuePropertyControlsMessages).flatMap(([locale, messages]) =>
+    (["empty", "unknown", "server", "matchingEnglish"] as const).map(source => ({ locale, messages, source })),
+  ))("refreshes only local unarchive errors across locale changes: $source in $locale", async ({ locale, messages, source }) => {
+    await i18n.changeLanguage(locale);
+    mockAgentsApi.list.mockResolvedValue([propertyStateAgent]);
+    mockIssuesApi.unarchiveFromInbox.mockClear();
+    let rejectRequest!: (reason: unknown) => void;
+    mockIssuesApi.unarchiveFromInbox.mockReturnValueOnce(new Promise<never>((_resolve, reject) => { rejectRequest = reject; }));
+    const issue = createIssue({
+      archivedAt: new Date("2026-04-06T12:10:00.000Z"), archivedByActorType: "agent",
+      archivedByAgentId: propertyStateAgent.id, archivedByRunId: "run-1",
+    });
+    const onUpdate = vi.fn();
+    const { root, queryClient } = renderPropertiesWithQueryClient(container, { issue, childIssues: [], onUpdate, inline: true });
+    queryClient.setQueryData(queryKeys.issues.detail(issue.id), issue);
+    try {
+      const archivedRow = () => container.querySelector('[data-property-label="Archived"]')?.closest('[data-property-row="true"]');
+      await waitForAssertion(() => expect(archivedRow()?.textContent).toContain(propertyStateAgent.name));
+      const attribution = archivedRow()?.querySelector('[data-property-value="true"] span[title]');
+      const title = attribution?.getAttribute("title");
+      expect(title).toContain(propertyStateAgent.name);
+      const [prefix, suffix] = messages.archivedBy.replace("{{agent}}", propertyStateAgent.name).split("{{time}}");
+      expect(title?.startsWith(prefix)).toBe(true);
+      expect(title?.endsWith(suffix)).toBe(true);
+      const button = archivedRow()?.querySelector("button")!;
+      expect(button.textContent).toBe(messages.unarchive);
+      await act(() => button.click());
+      await waitForAssertion(() => expect(button.textContent).toBe(messages.unarchiving));
+      expect(button.disabled).toBe(true);
+      await act(() => button.click());
+      expect(mockIssuesApi.unarchiveFromInbox).toHaveBeenCalledExactlyOnceWith("issue-1");
+      const nextLocale = locale === "ja" ? "es" : "ja";
+      await act(async () => { await i18n.changeLanguage(nextLocale); });
+      const next = issuePropertyControlsMessages[nextLocale];
+      expect(button.textContent).toBe(next.unarchiving);
+      expect(attribution?.getAttribute("title")?.startsWith(next.archivedBy.replace("{{agent}}", propertyStateAgent.name).split("{{time}}")[0])).toBe(true);
+      const diagnostic = source === "matchingEnglish" ? issuePropertyControlsMessages.en.unarchiveFailed : "Archive policy denied 原文";
+      await act(() => rejectRequest(source === "unknown" ? { code: "unavailable" } : new Error(source === "empty" ? "  " : diagnostic)));
+      const isLocal = source === "empty" || source === "unknown";
+      await waitForAssertion(() => expect(archivedRow()?.querySelector('[role="alert"]')?.textContent).toBe(isLocal ? next.unarchiveFailed : diagnostic));
+      expect(button.textContent).toBe(next.unarchive);
+      expect(button.disabled).toBe(false);
+      await act(async () => { await i18n.changeLanguage(locale); });
+      expect(archivedRow()?.querySelector('[role="alert"]')?.textContent).toBe(isLocal ? messages.unarchiveFailed : diagnostic);
+      expect(mockIssuesApi.unarchiveFromInbox).toHaveBeenCalledTimes(1);
+      expect(onUpdate).not.toHaveBeenCalled();
+      // Retrying clears the failure and retains the existing cache-update contract.
+      await act(() => button.click());
+      await waitForAssertion(() => expect(queryClient.getQueryData<Issue>(queryKeys.issues.detail(issue.id))?.archivedAt).toBeNull());
+      expect(archivedRow()?.querySelector('[role="alert"]')).toBeNull();
+      expect(queryClient.getQueryData<Issue>(queryKeys.issues.detail(issue.id))).toMatchObject({
+        archivedByActorType: null, archivedByAgentId: null, archivedByRunId: null,
+      });
+      expect(mockIssuesApi.unarchiveFromInbox).toHaveBeenCalledTimes(2);
+      expect(mockIssuesApi.unarchiveFromInbox).toHaveBeenLastCalledWith("issue-1");
+    } finally { act(() => root.unmount()); queryClient.clear(); }
   });
 
   it("shows agent-archive attribution and unarchive only in the properties pane", async () => {

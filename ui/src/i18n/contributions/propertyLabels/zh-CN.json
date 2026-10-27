@@ -38,5 +38,6 @@
   "plan": "计划",
   "artifacts": "产物",
   "references": "引用",
-  "externalObjects": "外部对象"
+  "externalObjects": "外部对象",
+  "triage": "分诊"
 }

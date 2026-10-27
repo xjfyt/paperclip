@@ -38,5 +38,6 @@
   "plan": "Plan",
   "artifacts": "Artefactos",
   "references": "Referencias",
-  "externalObjects": "Objetos externos"
+  "externalObjects": "Objetos externos",
+  "triage": "Clasificación"
 }

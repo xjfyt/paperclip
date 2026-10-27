@@ -38,5 +38,6 @@
   "plan": "計画",
   "artifacts": "成果物",
   "references": "参照",
-  "externalObjects": "外部オブジェクト"
+  "externalObjects": "外部オブジェクト",
+  "triage": "トリアージ"
 }
