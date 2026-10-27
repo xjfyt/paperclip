@@ -1,5 +1,9 @@
 // @vitest-environment jsdom
 
+import { composerModelMessages } from "../../i18n/composer-model-test-resources";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { Agent } from "@paperclipai/shared";
+import { agentsApi } from "../../api/agents";
 import { i18n, composerAssigneeMessages } from "../../i18n/composer-assignee-test-resources";
 import { act, StrictMode, useState, type ReactElement } from "react";
 import { flushSync } from "react-dom";
@@ -304,6 +308,76 @@ function autocompleteOption(matchText: string) {
 }
 
 describe("TaskChatComposer", () => {
+  it.each(Object.entries(composerModelMessages).flatMap(([locale, messages]) => [false, true].map(mobile => ({ locale, messages, mobile }))))(
+    "preserves the real composer draft through model picker IME and locale changes ($locale, mobile=$mobile)",
+    async ({ locale, messages: m, mobile }) => {
+      await i18n.changeLanguage(locale);
+      vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} unobserve() {} });
+      const loadModels = vi.spyOn(agentsApi, "adapterModels").mockResolvedValue([
+        { id: "gpt-6-sol", label: "Private 用户model" }, { id: "gpt-6-astra", label: "GPT-6 Astra" },
+      ]);
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const onAdd = vi.fn().mockResolvedValue(undefined), onPendingAssigneeChange = vi.fn();
+      const agent = { id: "a1", name: "用户 Clippy", adapterType: "codex_local", adapterConfig: { model: "gpt-6-sol" } } as Agent;
+      const draftKey = `model-picker-draft:${locale}:${mobile}`;
+      const draft = "Keep **用户 draft** unchanged.";
+      localStorage.setItem(draftKey, draft);
+      const clickPicker = async (label: string) => {
+        const button = [...document.querySelectorAll<HTMLButtonElement>("button")].find(el => el.getAttribute("aria-label") === label);
+        expect(button).toBeDefined();
+        flushSync(() => button!.click()); await flushAsync();
+      };
+      try {
+        render(<QueryClientProvider client={queryClient}><TaskChatComposer onAdd={onAdd} workMode="standard" enableReassign mobile={mobile}
+          companyId="company-1" modelAgents={new Map([[agent.id, agent]])} draftKey={draftKey}
+          reassignOptions={[{ id: "agent:a1", label: agent.name }]} currentAssigneeValue="agent:a1"
+          onPendingAssigneeChange={onPendingAssigneeChange} /></QueryClientProvider>);
+        await clickPicker(m.selectModelEffort);
+        await clickPicker(m.chooseExactModel);
+        const search = document.querySelector<HTMLInputElement>(`input[aria-label="${m.search}"]`)!;
+        flushSync(() => {
+          Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(search, "custom-用户-model");
+          search.dispatchEvent(new Event("input", { bubbles: true }));
+          search.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+        });
+        const enter = (options: KeyboardEventInit = {}) => flushSync(() => search.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, ...options })));
+        enter();
+        flushSync(() => search.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true })));
+        enter({ isComposing: true }); enter({ keyCode: 229 });
+        expect(search.isConnected).toBe(true);
+        expect(search.value).toBe("custom-用户-model");
+        const requests = loadModels.mock.calls.length;
+        const nextLocale = locale === "ja" ? "es" : "ja";
+        await act(async () => { await i18n.changeLanguage(nextLocale); });
+        const next = composerModelMessages[nextLocale];
+        expect(search.getAttribute("aria-label")).toBe(next.search);
+        expect(search.value).toBe("custom-用户-model");
+        expect(loadModels).toHaveBeenCalledTimes(requests);
+        enter();
+        expect(document.querySelector('[data-testid="composer-run-settings-view"]')?.textContent).toContain("custom-用户-model");
+        await clickPicker(next.reset);
+        const range = document.querySelector<HTMLInputElement>(`input[aria-label="${next.effortLabel}"]`)!;
+        flushSync(() => {
+          Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(range, "1");
+          range.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+        expect(range.getAttribute("aria-valuetext")).toBe(next.effort.low);
+        if (mobile) await clickPicker(i18n.t("liveUi.closePicker"));
+        else { flushSync(() => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))); await flushAsync(); }
+        expect(editable().textContent).toBe(draft);
+        expect(localStorage.getItem(draftKey)).toBe(draft);
+        expect(onAdd).not.toHaveBeenCalled();
+        expect(onPendingAssigneeChange).not.toHaveBeenCalled();
+        expect(container.querySelector('[data-testid="task-chat-composer-assignee-label"]')?.textContent).toBe("用户 Clippy");
+        pressKey("Enter", { metaKey: true }); await flushAsync();
+        expect(onAdd).toHaveBeenCalledExactlyOnceWith(draft, undefined, undefined, undefined, expect.any(String), { model: null, effort: "low", fast: false });
+      } finally {
+        flushSync(() => root!.render(<></>));
+        queryClient.clear(); loadModels.mockRestore(); vi.unstubAllGlobals();
+      }
+    },
+  );
+
   it.each([false, true])("updates unassigned copy and preserves real names across all locales (mobile=%s)", async (mobile) => {
     const onAdd = vi.fn();
     for (const mode of ["standard", "ask", "planning"] as const) {

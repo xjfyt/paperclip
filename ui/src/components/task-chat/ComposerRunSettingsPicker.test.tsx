@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import "../../i18n/composer-model-test-resources";
 import { i18n, composerAssigneeMessages } from "../../i18n/composer-assignee-test-resources";
 import { act, useState, type ComponentProps } from "react";
 import { flushSync } from "react-dom";
