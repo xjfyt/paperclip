@@ -1,0 +1,11 @@
+{
+  "pauseTitle": "Pause the {{name}}?",
+  "pauseAnyway": "Pause anyway",
+  "duplicateConfirm": "Duplicate {{name}} as {{nextName}}?",
+  "discardConfig": "Discard unsaved agent configuration changes?",
+  "duplicateNotReady": "Agent is not ready to duplicate",
+  "duplicateSuccess": "Agent duplicated",
+  "duplicateFailed": "Failed to duplicate agent",
+  "duplicateFailedTitle": "Could not duplicate agent",
+  "duplicateAgent": "Duplicate Agent"
+}

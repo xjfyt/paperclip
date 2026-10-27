@@ -14,6 +14,7 @@ import { queryKeys } from "../lib/queryKeys";
 import { formatTokens } from "../lib/utils";
 import { systemLabel } from "../i18n/system-labels";
 import { validateLocaleMessages } from "../i18n/locale-validation";
+import { agentDetailConfirmMessages } from "../i18n/agent-detail-confirm-test-resources";
 import { i18n, agentDetailLabelsMessages as messages } from "../i18n/agent-detail-labels-test-resources";
 
 type AgentsApi = typeof import("../api/agents").agentsApi;
@@ -22,6 +23,7 @@ type AccessApi = typeof import("../api/access").accessApi;
 type SettingsApi = typeof import("../api/instanceSettings").instanceSettingsApi;
 const api = vi.hoisted(() => ({
   agent: vi.fn<AgentsApi["get"]>(), revisions: vi.fn<AgentsApi["listConfigRevisions"]>(),
+  bundle: vi.fn<AgentsApi["instructionsBundle"]>(), create: vi.fn<AgentsApi["create"]>(),
   rollback: vi.fn<AgentsApi["rollbackConfigRevision"]>(), pause: vi.fn<AgentsApi["pause"]>(),
   invoke: vi.fn<AgentsApi["invoke"]>(), terminate: vi.fn<AgentsApi["terminate"]>(),
   run: vi.fn<HeartbeatsApi["get"]>(), runs: vi.fn<HeartbeatsApi["list"]>(),
@@ -38,7 +40,8 @@ const context = vi.hoisted(() => ({
   closePanel: vi.fn(), setBreadcrumbs: vi.fn(), setSelectedCompanyId: vi.fn(), pushToast: vi.fn(), openNewIssue: vi.fn(),
 }));
 vi.mock("../api/agents", () => ({ agentsApi: { get: api.agent, listConfigRevisions: api.revisions,
-  rollbackConfigRevision: api.rollback, pause: api.pause, invoke: api.invoke, terminate: api.terminate } }));
+  rollbackConfigRevision: api.rollback, pause: api.pause, invoke: api.invoke, terminate: api.terminate,
+  instructionsBundle: api.bundle, create: api.create } }));
 vi.mock("../api/heartbeats", () => ({ heartbeatsApi: { get: api.run, list: api.runs, events: api.events,
   workspaceOperations: api.operations, workspaceOperationLog: api.operationLog } }));
 vi.mock("../api/access", () => ({ accessApi: { getCurrentBoardAccess: api.access, listUserDirectory: api.directory } }));
@@ -116,6 +119,7 @@ function builtIn(agent = makeAgent()): BuiltInAgentState {
 }
 const memberships: ResourceMemberships = { projectMemberships: {}, agentMemberships: {}, starredProjectIds: [],
   starredAgentIds: [], starredDocumentIds: [], projectStarredAt: {}, agentStarredAt: {}, documentStarredAt: {}, updatedAt: null };
+const confirmT = (key: keyof typeof agentDetailConfirmMessages.en, values = {}) => i18n.t(`agentDetailConfirmUi.${key}`, values);
 const t = (key: keyof typeof messages.en, values = {}) => i18n.t(`agentDetailLabelsUi.${key}`, values);
 let container: HTMLDivElement;
 let root: Root;
@@ -123,6 +127,9 @@ let client: QueryClient;
 beforeEach(async () => {
   await i18n.changeLanguage("en");
   Object.values(api).forEach(mock => mock.mockReset()); Object.values(context).forEach(mock => mock.mockReset());
+  api.bundle.mockResolvedValue({ agentId: "agent-original", companyId: company.id, mode: "managed", rootPath: "/tmp/raw-instructions",
+    managedRootPath: "/tmp/raw-instructions", entryFile: "AGENTS.md", resolvedEntryPath: "/tmp/raw-instructions/AGENTS.md",
+    editable: true, warnings: [], legacyPromptTemplateActive: false, legacyBootstrapPromptTemplateActive: false, files: [] });
   api.agent.mockResolvedValue(makeAgent()); api.revisions.mockResolvedValue([]); api.rollback.mockResolvedValue(makeAgent());
   api.pause.mockResolvedValue(makeAgent({ status: "paused" })); api.runs.mockResolvedValue([]);
   api.run.mockResolvedValue(makeRun({ errorCode: null })); api.events.mockResolvedValue([]); api.operations.mockResolvedValue([]);
@@ -144,6 +151,7 @@ async function mount(node: ReactNode, path = "/agents/raw-agent/revisions") {
   await waitFor(() => expect(client.isFetching()).toBe(0));
 }
 function page() { return <Routes>
+  <Route path="/agents/raw-copy/dashboard" element={<div>Duplicated route</div>} />
   <Route path="/agents/:agentId/:tab" element={<AgentDetail />} />
   <Route path="/agents/:agentId/:tab/:runId" element={<AgentDetail />} />
 </Routes>; }
@@ -160,7 +168,7 @@ function button(label: string, host: ParentNode = container) {
 }
 function reads() { return [api.agent, api.revisions, api.run, api.runs, api.events, api.operations, api.operationLog,
   api.issues, api.directory, api.access, api.general, api.experimental, api.builtIns, api.memberships, api.decisions].map(mock => mock.mock.calls.length); }
-function noWrites() { for (const mock of [api.rollback, api.pause, api.invoke, api.terminate, context.openNewIssue]) expect(mock).not.toHaveBeenCalled(); }
+function noWrites() { for (const mock of [api.rollback, api.pause, api.invoke, api.terminate, api.create, context.openNewIssue]) expect(mock).not.toHaveBeenCalled(); }
 
 it.each(locales)("validates complete sentence placeholders in %s", locale => {
   expect(validateLocaleMessages(messages[locale], messages.en)).toEqual([]);
@@ -191,9 +199,11 @@ it.each(locales)("updates actual page warnings and avatar in %s without changing
   expect(container.querySelector('[role="note"] .leading-snug')?.textContent).toBe(t("builtInWarning", { feature }).replace(/<\/?0>/g, ""));
   expect(document.querySelector('[role="alertdialog"]')).toBe(dialog);
   expect(dialog?.textContent).toContain(t("pauseWarning", { feature, featureLower: feature.toLowerCase() }));
-  expect(dialog?.textContent).toContain('System "原文"');
+  expect(dialog?.querySelector('[data-slot="alert-dialog-title"]')?.textContent).toBe(confirmT("pauseTitle", { name: 'System "原文"' }));
+  expect(button(confirmT("pauseAnyway"), dialog!)).toBeDefined();
+  expect(button(i18n.t("commonUi.cancel"), dialog!)).toBeDefined();
   expect(reads()).toEqual(counts); noWrites();
-  await act(async () => button("Cancel", dialog!).click());
+  await act(async () => button(i18n.t("commonUi.cancel"), dialog!).click());
   expect(document.querySelector('[role="alertdialog"]')).toBeNull(); noWrites();
   expect(container.querySelector("output")?.getAttribute("data-location")).toBe("/agents/raw-agent/revisions");
   expect(context.setSelectedCompanyId).not.toHaveBeenCalled();
@@ -206,7 +216,7 @@ it.each(locales)("keeps the built-in pause action explicitly confirmed in %s", a
   await language(locale);
   await act(async () => button(systemLabel("Pause")).click());
   expect(api.pause).not.toHaveBeenCalled();
-  await act(async () => button("Pause anyway", document.querySelector('[role="alertdialog"]')!).click());
+  await act(async () => button(confirmT("pauseAnyway"), document.querySelector('[role="alertdialog"]')!).click());
   await waitFor(() => expect(api.pause).toHaveBeenCalledExactlyOnceWith("agent-original", company.id));
   expect(api.terminate).not.toHaveBeenCalled(); expect(api.invoke).not.toHaveBeenCalled();
 });
@@ -279,4 +289,96 @@ it.each([{ exitCode: 0, signal: "SIGTERM" }, { exitCode: 1, signal: null }])("re
   await mount(<RunDetail run={run} agentRouteId="raw-agent" adapterType="codex_local" adapterConfig={{}} />);
   for (const locale of locales) { await language(locale); expect(container.textContent).not.toContain(t("signal", { signal: run.signal })); }
   expect(api.directory).not.toHaveBeenCalled(); noWrites();
+});
+
+it.each(locales)("validates the additional confirmation contribution in %s", locale => {
+  expect(validateLocaleMessages(agentDetailConfirmMessages[locale], agentDetailConfirmMessages.en)).toEqual([]);
+});
+
+it.each(locales.flatMap(locale => [false, true].map(raw => ({ locale, raw }))))("retains pause failure source after switching to $locale (raw=$raw)", async ({ locale, raw }) => {
+  api.builtIns.mockResolvedValue([builtIn()]);
+  api.pause.mockRejectedValue(raw ? new Error("Action failed") : { code: "opaque_failure" });
+  await mount(page());
+  await waitFor(() => expect(container.querySelector('[role="note"] strong')).not.toBeNull());
+  await act(async () => button(systemLabel("Pause")).click());
+  await act(async () => button(confirmT("pauseAnyway"), document.querySelector('[role="alertdialog"]')!).click());
+  await waitFor(() => expect(container.textContent).toContain("Action failed"));
+  const counts = reads(); await language(locale);
+  const failure = container.querySelector("p.text-destructive");
+  expect(failure?.textContent).toBe(raw ? "Action failed" : i18n.t("managementUi.actionFailed"));
+  expect(api.pause).toHaveBeenCalledExactlyOnceWith("agent-original", company.id);
+  expect(api.terminate).not.toHaveBeenCalled(); expect(reads()).toEqual(counts);
+});
+
+async function openDuplicate() {
+  // Match the accessible value directly; names can contain quotes or CSS syntax.
+  const menu = Array.from(container.querySelectorAll<HTMLButtonElement>("button"))
+    .find(candidate => candidate.getAttribute("aria-label") === i18n.t("browserQa.openActions", { name: makeAgent().name }));
+  expect(menu).toBeDefined(); await act(async () => menu!.click());
+  await waitFor(() => expect(button(confirmT("duplicateAgent"), document.body)).toBeDefined());
+}
+
+it.each(locales)("uses the latest %s duplicate confirmation with raw names and cancellation makes no requests", async locale => {
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+  await mount(page()); await waitFor(() => expect(container.querySelector("h1")?.textContent).toBe(makeAgent().name));
+  await openDuplicate();
+  const counts = reads(); await language(locale);
+  await act(async () => button(confirmT("duplicateAgent"), document.body).click());
+  expect(confirm).toHaveBeenCalledExactlyOnceWith(confirmT("duplicateConfirm", { name: makeAgent().name, nextName: `${makeAgent().name} Copy` }));
+  expect(api.bundle).not.toHaveBeenCalled(); noWrites(); expect(context.pushToast).not.toHaveBeenCalled();
+  expect(reads()).toEqual(counts);
+  expect(container.querySelector("output")?.getAttribute("data-location")).toBe("/agents/raw-agent/revisions");
+});
+
+it.each(locales)("keeps explicit duplicate payload and pending state unchanged through a switch to %s", async locale => {
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+  const created = makeAgent({ id: "copy-original-id", urlKey: "raw-copy", name: 'Copied "原文"' });
+  let resolve!: (agent: Awaited<ReturnType<AgentsApi["create"]>>) => void;
+  api.create.mockReturnValue(new Promise(done => { resolve = done; }));
+  await mount(page()); await waitFor(() => expect(container.querySelector("h1")?.textContent).toBe(makeAgent().name));
+  await openDuplicate(); await act(async () => button(confirmT("duplicateAgent"), document.body).click());
+  await waitFor(() => expect(api.create).toHaveBeenCalledTimes(1));
+  expect(api.bundle).toHaveBeenCalledExactlyOnceWith("agent-original", company.id);
+  expect(api.create).toHaveBeenCalledExactlyOnceWith(company.id, {
+    name: `${makeAgent().name} Copy`, role: "engineer", adapterType: "codex_local", adapterConfig: { model: "raw-model" },
+    runtimeConfig: {}, defaultEnvironmentId: null, budgetMonthlyCents: 0,
+    permissions: { canCreateAgents: false, canCreateSkills: true }, title: "Original engineer", capabilities: "Raw capability",
+  });
+  await openDuplicate(); const pending = button(confirmT("duplicateAgent"), document.body); expect(pending.disabled).toBe(true);
+  const counts = reads(); await language(locale);
+  expect(button(confirmT("duplicateAgent"), document.body)).toBe(pending); expect(pending.disabled).toBe(true);
+  await act(async () => pending.click()); expect(confirm).toHaveBeenCalledTimes(1); expect(api.create).toHaveBeenCalledTimes(1);
+  expect(reads()).toEqual(counts); expect(context.pushToast).not.toHaveBeenCalled();
+  await act(async () => resolve(created));
+  await waitFor(() => expect(context.pushToast).toHaveBeenCalledExactlyOnceWith({ title: confirmT("duplicateSuccess"), body: created.name, tone: "success" }));
+  expect(container.querySelector("output")?.getAttribute("data-location")).toBe("/agents/raw-copy/dashboard");
+  expect(api.pause).not.toHaveBeenCalled(); expect(api.terminate).not.toHaveBeenCalled();
+});
+
+it.each(locales.flatMap(locale => [false, true].map(raw => ({ locale, raw }))))("keeps duplicate local fallback separate from server text in $locale (raw=$raw)", async ({ locale, raw }) => {
+  vi.spyOn(window, "confirm").mockReturnValue(true);
+  api.create.mockRejectedValue(raw ? new Error("Failed to duplicate agent") : { code: "opaque_failure" });
+  await mount(page()); await waitFor(() => expect(container.querySelector("h1")?.textContent).toBe(makeAgent().name));
+  await openDuplicate(); await act(async () => button(confirmT("duplicateAgent"), document.body).click());
+  await waitFor(() => expect(context.pushToast).toHaveBeenCalledExactlyOnceWith({ title: confirmT("duplicateFailedTitle"), body: "Failed to duplicate agent", tone: "error" }));
+  const counts = reads(); await language(locale);
+  expect(container.querySelector("p.text-destructive")?.textContent).toBe(raw ? "Failed to duplicate agent" : confirmT("duplicateFailed"));
+  expect(api.create).toHaveBeenCalledTimes(1); expect(context.pushToast).toHaveBeenCalledTimes(1); expect(reads()).toEqual(counts);
+});
+
+it.each(locales)("retains disabled pause controls while an explicit request is pending in %s", async locale => {
+  api.builtIns.mockResolvedValue([builtIn()]);
+  let resolve!: (agent: Awaited<ReturnType<AgentsApi["pause"]>>) => void;
+  api.pause.mockReturnValue(new Promise(done => { resolve = done; }));
+  await mount(page()); await waitFor(() => expect(container.querySelector('[role="note"] strong')).not.toBeNull());
+  await act(async () => button(systemLabel("Pause")).click());
+  await act(async () => button(confirmT("pauseAnyway"), document.querySelector('[role="alertdialog"]')!).click());
+  await waitFor(() => expect(button(systemLabel("Pause")).disabled).toBe(true));
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+  const counts = reads(); await language(locale);
+  const pending = button(systemLabel("Pause")); expect(pending.disabled).toBe(true);
+  await act(async () => pending.click());
+  expect(api.pause).toHaveBeenCalledExactlyOnceWith("agent-original", company.id); expect(reads()).toEqual(counts);
+  expect(api.terminate).not.toHaveBeenCalled();
+  await act(async () => resolve(makeAgent({ status: "paused" })));
 });

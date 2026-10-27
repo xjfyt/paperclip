@@ -1,3 +1,4 @@
+import { describeManagementError, ManagementUiError, renderManagementError, type ManagementErrorDescriptor } from "@/i18n/management-errors";
 import { t as actionT } from "@/i18n";
 import { systemLabel, useSystemLabels } from "@/i18n/system-labels";
 import { useCallback, useRef, useState, type ReactNode } from "react";
@@ -50,6 +51,17 @@ import type {
   AgentInstructionsFileSummary,
   HeartbeatRun,
 } from "@paperclipai/shared";
+
+type AgentAction = "invoke" | "pause" | "resume" | "clear_error" | "approve" | "terminate";
+// Mutation discriminators stay canonical; only their local failure display uses locale keys.
+const agentActionFailureKeys: Record<AgentAction, string> = {
+  invoke: "managementUi.actionFailed",
+  pause: "managementUi.actionFailed",
+  resume: "managementUi.actionFailed",
+  clear_error: "managementUi.actionFailed",
+  approve: "managementUi.actionFailed",
+  terminate: "managementUi.actionFailed",
+};
 
 export function RunButton({
   onClick,
@@ -210,8 +222,10 @@ export function AgentActionButtons({
    * Optional inline error reporter. When provided it is used instead of a toast
    * for action failures (preserves the detail page's inline error banner). When
    * omitted, failures surface as toasts (used by the list view).
+   * Local fallbacks additionally carry their key so a detail page can retranslate
+   * stored errors without inspecting or rewriting server messages.
    */
-  onActionError?: (message: string | null) => void;
+  onActionError?: (message: string | null, source?: { kind: "local"; key: string }) => void;
   /** Called after termination succeeds so callers can leave now-hidden detail routes. */
   onTerminateSuccess?: (agent: Agent) => void;
   /** Extra content rendered just before the overflow menu (e.g. live-run link). */
@@ -251,11 +265,13 @@ export function AgentActionButtons({
   const isError = agent.status === "error";
 
   const reportError = useCallback(
-    (message: string) => {
+    (error: ManagementErrorDescriptor) => {
+      const message = renderManagementError(error);
       if (onActionError) {
-        onActionError(message);
+        if (typeof error === "string") onActionError(message);
+        else onActionError(message, { kind: "local", key: error.key });
       } else {
-        pushToast({ title: "Action failed", body: message, tone: "error" });
+        pushToast({ title: actionT("managementUi.actionFailed"), body: message, tone: "error" });
       }
     },
     [onActionError, pushToast],
@@ -274,7 +290,7 @@ export function AgentActionButtons({
   }, [agent.id, canonicalAgentRef, queryClient, resolvedCompanyId]);
 
   const agentAction = useMutation({
-    mutationFn: async (action: "invoke" | "pause" | "resume" | "clear_error" | "approve" | "terminate") => {
+    mutationFn: async (action: AgentAction) => {
       switch (action) {
         case "invoke": return agentsApi.invoke(agent.id, resolvedCompanyId ?? undefined);
         case "pause": return agentsApi.pause(agent.id, resolvedCompanyId ?? undefined);
@@ -298,8 +314,8 @@ export function AgentActionButtons({
         navigate(`/agents/${canonicalAgentRef}/runs/${(data as HeartbeatRun).id}`);
       }
     },
-    onError: (err) => {
-      reportError(err instanceof Error ? err.message : "Action failed");
+    onError: (err, action) => {
+      reportError(describeManagementError(err, agentActionFailureKeys[action]));
     },
   });
 
@@ -324,7 +340,7 @@ export function AgentActionButtons({
   const duplicateAgent = useMutation({
     mutationFn: async () => {
       if (!resolvedCompanyId) {
-        throw new Error("Agent is not ready to duplicate");
+        throw new ManagementUiError("agentDetailConfirmUi.duplicateNotReady");
       }
       const instructionsBundle = await loadDuplicateInstructionsBundle(agent.id, resolvedCompanyId);
       const payload = buildDuplicateAgentPayload(agent, instructionsBundle);
@@ -343,21 +359,23 @@ export function AgentActionButtons({
       if (resolvedCompanyId) {
         await queryClient.invalidateQueries({ queryKey: queryKeys.agents.list(resolvedCompanyId) });
       }
-      pushToast({ title: "Agent duplicated", body: createdAgent.name, tone: "success" });
+      pushToast({ title: actionT("agentDetailConfirmUi.duplicateSuccess"), body: createdAgent.name, tone: "success" });
       if (!confirmLateNavigationChanges(duplicateStartedDirtyRef)) return;
       navigate(`/agents/${agentRouteRef(createdAgent)}/dashboard`);
     },
     onError: (err) => {
-      const message = err instanceof Error ? err.message : "Failed to duplicate agent";
-      onActionError?.(message);
-      pushToast({ title: "Could not duplicate agent", body: message, tone: "error" });
+      const error = describeManagementError(err, "agentDetailConfirmUi.duplicateFailed");
+      const message = renderManagementError(error);
+      if (typeof error === "string") onActionError?.(message);
+      else onActionError?.(message, { kind: "local", key: error.key });
+      pushToast({ title: actionT("agentDetailConfirmUi.duplicateFailedTitle"), body: message, tone: "error" });
     },
   });
 
   const handleDuplicateAgent = useCallback(() => {
     if (duplicateAgent.isPending) return;
     const nextName = duplicateAgentName(agent.name);
-    const confirmed = window.confirm(`Duplicate ${agent.name} as ${nextName}?`);
+    const confirmed = window.confirm(actionT("agentDetailConfirmUi.duplicateConfirm", { name: agent.name, nextName }));
     setMoreOpen(false);
     if (!confirmed || !confirmNavigationStart(duplicateStartedDirtyRef)) return;
     duplicateAgent.mutate();
@@ -458,9 +476,9 @@ export function AgentActionButtons({
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogCancel>{actionT("commonUi.cancel")}</AlertDialogCancel>
               <AlertDialogAction onClick={() => agentAction.mutate("pause")}>
-                Pause anyway
+                {actionT("agentDetailConfirmUi.pauseAnyway")}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -489,7 +507,7 @@ export function AgentActionButtons({
             ) : (
               <Copy className="h-3 w-3" />
             )}
-            Duplicate Agent
+            {actionT("agentDetailConfirmUi.duplicateAgent")}
           </button>
           <button
             className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50"

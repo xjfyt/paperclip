@@ -1,0 +1,11 @@
+{
+  "pauseTitle": "{{name}} を一時停止しますか？",
+  "pauseAnyway": "一時停止する",
+  "duplicateConfirm": "{{name}} を {{nextName}} として複製しますか？",
+  "discardConfig": "未保存のエージェント設定の変更を破棄しますか？",
+  "duplicateNotReady": "このエージェントはまだ複製できません",
+  "duplicateSuccess": "エージェントを複製しました",
+  "duplicateFailed": "エージェントの複製に失敗しました",
+  "duplicateFailedTitle": "エージェントを複製できませんでした",
+  "duplicateAgent": "エージェントを複製"
+}

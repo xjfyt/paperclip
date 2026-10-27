@@ -1,0 +1,11 @@
+{
+  "pauseTitle": "¿Pausar {{name}}?",
+  "pauseAnyway": "Pausar de todos modos",
+  "duplicateConfirm": "¿Duplicar {{name}} como {{nextName}}?",
+  "discardConfig": "¿Descartar los cambios sin guardar en la configuración del agente?",
+  "duplicateNotReady": "El agente aún no está listo para duplicarse",
+  "duplicateSuccess": "Agente duplicado",
+  "duplicateFailed": "No se pudo duplicar el agente",
+  "duplicateFailedTitle": "No fue posible duplicar el agente",
+  "duplicateAgent": "Duplicar agente"
+}

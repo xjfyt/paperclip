@@ -1,0 +1,11 @@
+{
+  "pauseTitle": "暂停 {{name}}？",
+  "pauseAnyway": "仍然暂停",
+  "duplicateConfirm": "将 {{name}} 复制为 {{nextName}}？",
+  "discardConfig": "放弃尚未保存的 Agent 配置更改？",
+  "duplicateNotReady": "此 Agent 尚未准备好进行复制",
+  "duplicateSuccess": "已复制 Agent",
+  "duplicateFailed": "无法复制 Agent",
+  "duplicateFailedTitle": "未能复制 Agent",
+  "duplicateAgent": "复制 Agent"
+}

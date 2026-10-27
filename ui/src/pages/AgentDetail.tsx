@@ -325,7 +325,7 @@ export function confirmAgentConfigNavigation(
   confirm: (message: string) => boolean = (message) =>
     typeof window === "undefined" || window.confirm(message),
 ): boolean {
-  return !dirty || confirm(DISCARD_AGENT_CONFIG_CHANGES_MESSAGE);
+  return !dirty || confirm(mimouseT("agentDetailConfirmUi.discardConfig"));
 }
 
 export function agentConfigHistoryRestoreDelta(currentIndex: unknown, nextIndex: unknown): number | null {
@@ -1296,13 +1296,13 @@ export function AgentDetail() {
             workActionsDisabledReason="Repair this agent's reporting chain before assigning tasks or starting runs"
             hasPendingNavigationChanges={configDirty}
             onBeforeNavigate={prepareAgentNavigation}
-            onActionError={setActionError}
+            onActionError={(message, source) => setActionError(source?.kind === "local" ? { key: source.key } : message)}
             onTerminateSuccess={() => navigate("/agents/all", { replace: true })}
             hideTerminate={Boolean(builtInState)}
             pauseConfirm={
               builtInState
                 ? {
-                    title: `Pause the ${builtInState.definition.displayName}?`,
+                    title: mimouseT("agentDetailConfirmUi.pauseTitle", { name: builtInState.definition.displayName }),
                     description: mimouseT("agentDetailLabelsUi.pauseWarning", {
                       feature: builtInFeatureLabel,
                       featureLower: builtInFeatureLabel.toLowerCase(),

@@ -1,3 +1,5 @@
+import "../i18n/agent-detail-confirm-test-resources";
+import { i18n } from "../i18n";
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 
@@ -32,6 +34,20 @@ describe("agent detail tabs", () => {
     expect(confirmAgentConfigNavigation(true, confirm)).toBe(true);
     expect(confirmAgentConfigNavigation(false, confirm)).toBe(true);
     expect(confirm).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(["en", "zh-CN", "ja", "es"])("uses the latest %s discard prompt without changing the dirty guard", async locale => {
+    const confirm = vi.fn().mockReturnValue(false);
+    await i18n.changeLanguage(locale);
+    try {
+      expect(confirmAgentConfigNavigation(false, confirm)).toBe(true);
+      expect(confirm).not.toHaveBeenCalled();
+      expect(confirmAgentConfigNavigation(true, confirm)).toBe(false);
+      expect(confirm).toHaveBeenCalledExactlyOnceWith(i18n.t("agentDetailConfirmUi.discardConfig"));
+      confirm.mockReturnValue(true);
+      expect(confirmAgentConfigNavigation(true, confirm)).toBe(true);
+      expect(confirm).toHaveBeenCalledTimes(2);
+    } finally { await i18n.changeLanguage("en"); }
   });
 
   it("restores the prior history entry when Back or Forward navigation is rejected", () => {
