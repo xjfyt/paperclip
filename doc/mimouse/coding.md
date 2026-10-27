@@ -132,3 +132,28 @@ MR/CI 同步不会把旧式 SHA 勾选升级为新回执，任何候选状态仍
 此限制仅用于检查，不更改显式授权 push 的环境。实现依据：[Git 2.52.0 --no-lazy-fetch / GIT_NO_LAZY_FETCH](https://git-scm.com/docs/git/2.52.0#Documentation/git.txt---no-lazy-fetch)、[Git 2.52.0 GIT_ALLOW_PROTOCOL 与 GIT_OPTIONAL_LOCKS](https://git-scm.com/docs/git/2.52.0)、[Partial clone 缺失对象与多个 promisor remote](https://git-scm.com/docs/partial-clone)。
 
 逐项原计划范围及手测见 [PLAN-TRACEABILITY](PLAN-TRACEABILITY.md) 的 V2-CODE-01–10/T07。六格 blocked 是正确失败关闭，不是可信构建/上传已经实现；缺代码和缺机器/合同分别记录。
+
+## 编码目标模板（§8.1，计划文档）
+
+编码页填写任务 ID 后可先「编写编码目标」，无需已有执行工作区；任务详情保留入口。
+模板包含问题/价值、验收场景、允许修改仓库与相对路径、完整分支基点 SHA、原仓库测试命令、计划费用上限、最大修复轮数、产物要求、需要人审的动作。
+费用以分记录，0 表示计划无付费额度；修复计划为 0–2 轮。模板不要求额外的总时限字段。
+
+`GET/PUT /api/companies/:companyId/coding/tasks/:issueId/goal` 复用公司管理员边界并复查当前成员身份及任务隐私祖先。
+PUT 使用 `goal` 和必填可空 `baseRevisionId`，保存为既有任务文档 `coding-goal` 的固定 v1 格式，复用版本历史和文档锁；无需迁移。
+保存事务锁定任务/现有文档，复查权限，并将文档修订与只含 ID/版本的审计一起提交。
+相同内容返回当前版本、不再追加修订；旧版本改不同内容返回冲突，不覆盖他人的编辑。
+普通任务文档编辑若破坏结构，模板界面报错，不擅自重置正文。
+
+只保存计划，不执行命令、不唤醒 Agent、不分配或提高预算、不启用修复、不创建交付/MR、不推送或发布。
+允许路径不是新建的运行沙箱；金额与轮数不是已授权的修复策略。现有项目预算、工作区、修复显式授权及固定 SHA 证据门禁仍独立生效。
+模板不会把 Agent 的「已完成」变成测试、Runner、签名或发布证据，也不替代后续方案拆解/独立审查。
+
+界面按公司、用户、会话、身份重验代次及任务隔离草稿；切换路由/关闭后重新读取。
+重复点击只提交一次；写回失败/冲突/不匹配回执均要求显式重读当前保存版本，不自动重发，也不把后来读到的版本冒认为原请求已成功。
+
+新增 shared、service、jsdom 定向测试覆盖合同、权限复查、修订传递、元数据审计及中断/重复/晚到响应。
+`tests/mimouse/coding-goal.spec.ts` 提供真实隔离 PostgreSQL/HTTP 的并发修订、撤销成员、私有祖先、文档锁、审计失败回滚和无唤醒验收；由集成阶段单独运行，单元 mock 不作为数据库或供应商证明。
+完整「目标到交付」真实编码场景、实际允许仓库/测试命令与预算仍待 T07 验收；本节不表示原计划 V2-CODE-01 全部完成。
+
+本子切片 C1：4 个定向文件 61 项通过（768 MiB、单 worker），shared 包及目标编辑器局部 TypeScript 检查通过，token gates/no-git-push/diff 检查通过。未执行 PostgreSQL/API、全库类型/构建或真实 GitLab/模型任务；运行时四语言总表由集成阶段统一合成。

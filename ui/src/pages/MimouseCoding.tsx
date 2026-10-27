@@ -1,3 +1,4 @@
+import { MimouseCodingGoal } from "@/components/MimouseCodingGoal";
 import { MimouseCodingDiffReview } from "@/components/MimouseCodingDiffReview";
 import { MimouseCodingArtifacts } from "@/components/MimouseCodingArtifacts";
 import type { MimouseBuildMatrix as BuildMatrix } from "@paperclipai/shared";
@@ -21,7 +22,7 @@ export function MimouseCoding() {
   const { t: pageT, i18n: pageI18n } = useTranslation();
   const { setBreadcrumbs } = useBreadcrumbs();
   usePageEffect(() => { setBreadcrumbs([{ label: pageT("coding.title") }]); }, [setBreadcrumbs, pageI18n.language, pageT]);
-  const { selectedCompanyId } = useCompany(); const { t } = useTranslation();
+  const { selectedCompanyId } = useCompany(); const { t } = useTranslation(); const [pageSearch] = useSearchParams();
   const session = useQuery({ queryKey: queryKeys.auth.session, queryFn: () => authApi.getSession(), retry: false });
   if (!selectedCompanyId) return null;
   if (session.isPending || session.isFetching) return <p>{t("common.loading")}</p>;
@@ -29,7 +30,7 @@ export function MimouseCoding() {
   const userId = session.data?.user?.id ?? session.data?.session?.userId ?? "local-board";
   const sessionId = session.data?.session?.id ?? "local-board";
   const authEpoch = session.dataUpdatedAt;
-  return <CodingCompany companyId={selectedCompanyId} userId={userId} sessionId={sessionId} authEpoch={authEpoch} key={`${selectedCompanyId}:${userId}:${sessionId}:${authEpoch}`} />;
+  return <CodingCompany companyId={selectedCompanyId} userId={userId} sessionId={sessionId} authEpoch={authEpoch} key={`${selectedCompanyId}:${userId}:${sessionId}:${authEpoch}:${pageSearch.toString()}`} />;
 }
 function CodingCompany({ companyId, userId, sessionId, authEpoch }: { companyId: string; userId: string; sessionId: string; authEpoch: number }) {
   const { t } = useTranslation(); const [search] = useSearchParams(); const client = useQueryClient(); const root = `/companies/${companyId}/coding`; const key = ["mimouse-coding", companyId, userId, sessionId, authEpoch];
@@ -43,10 +44,12 @@ function CodingCompany({ companyId, userId, sessionId, authEpoch }: { companyId:
   return <div className="max-w-4xl space-y-5">
     <h1 className="text-xl font-semibold">{t("coding.title")}</h1><p>{t("coding.boundary")}</p>
     {(query.error || mutation.error) && <p role="alert">{t("coding.error")}</p>}
+    <div className="space-y-1"><label htmlFor="coding-issueId">{t("coding.issueId")}</label><Input id="coding-issueId" value={form.issueId} onChange={event => setForm({ ...form, issueId: event.target.value })} /></div>
+    <MimouseCodingGoal companyId={companyId} userId={userId} sessionId={sessionId} authEpoch={authEpoch} issueId={form.issueId} />
     <form className="rounded-lg border border-border p-4 space-y-2" onSubmit={event => { event.preventDefault(); mutation.mutate(() => api.post(root, { ...form, projectId: Number(form.projectId) })); }}>
       <h2 className="font-medium">{t("coding.register")}</h2>
-      {(Object.keys(form) as Array<keyof typeof form>).map(field => <div key={field} className="space-y-1"><label htmlFor={`coding-${field}`}>{t(`coding.${field}`)}</label><Input id={`coding-${field}`} value={form[field]} onChange={event => setForm({ ...form, [field]: event.target.value })} required /></div>)}
-      <p className="text-sm text-muted-foreground">{t("coding.cleanWorkspace")}</p><div className="flex justify-end"><Button disabled={mutation.isPending}>{t("common.save")}</Button></div>
+      {(Object.keys(form) as Array<keyof typeof form>).filter(field => field !== "issueId").map(field => <div key={field} className="space-y-1"><label htmlFor={`coding-${field}`}>{t(`coding.${field}`)}</label><Input id={`coding-${field}`} value={form[field]} onChange={event => setForm({ ...form, [field]: event.target.value })} required /></div>)}
+      <p className="text-sm text-muted-foreground">{t("coding.cleanWorkspace")}</p><div className="flex justify-end"><Button disabled={mutation.isPending || !form.issueId}>{t("common.save")}</Button></div>
     </form>
     {query.data?.deliveries.filter(row => !form.issueId || row.issueId === form.issueId).map(row => <section key={row.id} className="rounded-lg border border-border p-4 space-y-3">
       <p className="font-mono text-sm break-all">{row.headSha}</p><p>{t("coding.operationState")}: {row.operationState}</p>

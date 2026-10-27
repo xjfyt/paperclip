@@ -1,3 +1,5 @@
+import { saveCodingGoalSchema } from "@paperclipai/shared";
+import { codingGoalService } from "../services/mimouse-coding/goal-template.js";
 import { reviewBinding, reviewReceipt, reviewedHead } from "../services/mimouse-coding/diff-review.js";
 import { buildMatrixInventory } from "../services/mimouse-coding/build-matrix.js";
 import { codingRepairService } from "../services/mimouse-coding/repairs.js";
@@ -7,7 +9,7 @@ import { enqueueNotification } from "../services/mimouse-notifications/outbox.js
 import { Router, type Request } from "express";
 import { z } from "zod";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { companySecrets, executionWorkspaces, issues, mimouseCodingDeliveries as deliveries, mimouseCodingRepairAttempts as repairAttempts, type Db } from "@paperclipai/db";
+import { companyMemberships, companySecrets, executionWorkspaces, issues, mimouseCodingDeliveries as deliveries, mimouseCodingRepairAttempts as repairAttempts, type Db } from "@paperclipai/db";
 import { assertBoard, assertCompanyAccess, getActorInfo } from "./authz.js";
 import { forbidden, notFound, unprocessable } from "../errors.js";
 import { validate } from "../middleware/validate.js";
@@ -46,6 +48,28 @@ export function mimouseCodingRoutes(db: Db, deps: { service?: ReturnType<typeof 
   }
   async function safe<T>(action: () => Promise<T>) { try { return await action(); } catch (error) { throw unprocessable(error instanceof GitLabError ? error.code : "coding_operation_failed", { uncertain: error instanceof GitLabError && error.uncertain }); } }
   async function audit(req: Request, action: string, id: string) { const actor = getActorInfo(req); await logActivity(db, { companyId: String(req.params.companyId), actorType: actor.actorType, actorId: actor.actorId, action, entityType: "coding_delivery", entityId: id, details: {} }); }
+  async function goalAdmin(req: Request) {
+    const companyId = admin(req);
+    if (req.actor.source !== "local_implicit" && !req.actor.isInstanceAdmin) {
+      const [membership] = await db.select().from(companyMemberships).where(and(eq(companyMemberships.companyId, companyId),
+        eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, req.actor.userId ?? "")));
+      if (membership?.status !== "active" || !["owner", "admin"].includes(membership.membershipRole ?? "")) throw forbidden("Company administrator required");
+    }
+    return companyId;
+  }
+  // A planning document only. Deliberately bypasses issue mutation wake hooks.
+  router.get(`${root}/tasks/:issueId/goal`, async (req, res) => {
+    const companyId = await goalAdmin(req); const issueId = String(req.params.issueId);
+    if (!z.string().uuid().safeParse(issueId).success) throw notFound("Coding task not found");
+    await issueAccess(req, companyId, issueId); res.setHeader("Cache-Control", "no-store");
+    res.json(await codingGoalService(db).read(issueId));
+  });
+  router.put(`${root}/tasks/:issueId/goal`, validate(saveCodingGoalSchema), async (req, res) => {
+    const companyId = await goalAdmin(req); const issueId = String(req.params.issueId);
+    if (!z.string().uuid().safeParse(issueId).success) throw notFound("Coding task not found");
+    await issueAccess(req, companyId, issueId); const actor = getActorInfo(req);
+    res.json(await codingGoalService(db).save(companyId, issueId, req.body, actor, req.actor));
+  });
   router.post(`${root}/:id/repair-settings`, validate(repairSettingsSchema), async (req, res) => {
     const companyId = admin(req); const id = String(req.params.id);
     if (req.actor.type !== "board" || req.actor.source !== "session" || !req.actor.userId) throw forbidden("A signed-in owner is required for repair authorization");

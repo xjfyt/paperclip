@@ -2893,3 +2893,4 @@ export * from "./mimouse-evaluation-restore.js";
 export type { FeedbackEvidence, FeedbackEvidencePage } from "./mimouse-feedback.js";
 
 export * from "./mimouse-feedback-verification.js";
+export * from "./mimouse-coding-goal.js";
