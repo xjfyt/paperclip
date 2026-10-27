@@ -735,6 +735,11 @@
   "buildObservations": {
     "title": "Exact-job build observations",
     "boundary": "Observation is not admission. Platform, tests, code signatures and workflow closure remain unassessed; trusted-controller collection and C3 remain blocked. The existing build matrix is unchanged.",
+    "journalBoundary": "Unconfirmed request IDs are retained in this browser for this company, user and delivery. Clearing or losing browser storage, or concurrent tabs, prevents any exactly-once guarantee.",
+    "storageError": "The pending-request journal could not be safely read, written or confirmed. Sending is blocked. Do not clear browser storage to bypass this safeguard.",
+    "closeUnknown": "Close an unconfirmed request locally",
+    "closeBoundary": "This only blocks future local dispatches of the same request ID. It does not prove that the old request never happened and does not cancel CI or any remote action. An actively executing request cannot be closed. Confirm this local closure?",
+    "confirmClose": "Confirm local closure",
     "loginRequired": "Sign in with a company administrator session to view or request observations.",
     "readError": "Observations could not be read. Previously displayed evidence is hidden.",
     "disabled": "Build observation is disabled by the operator.",

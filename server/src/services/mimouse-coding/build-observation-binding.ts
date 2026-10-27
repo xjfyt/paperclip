@@ -27,14 +27,14 @@ export async function observationTransaction<T>(db: Db, work: (tx: ObservationTx
   });
 }
 /** Current persisted session and membership, never request-cached roles. */
-export async function authorizeObservation(tx: ObservationTx, actor: ObservationIdentity, deliveryId: string) {
+export async function authorizeObservation(tx: ObservationTx, actor: ObservationIdentity, deliveryId: string, options: { allowPausedCompany?: boolean } = {}) {
   const [session] = await tx.select({ id: authSessions.id }).from(authSessions).innerJoin(authUsers, eq(authUsers.id, authSessions.userId))
     .where(and(eq(authSessions.id, actor.sessionId), eq(authSessions.userId, actor.userId), gt(authSessions.expiresAt, sql`clock_timestamp()`))).for("share");
   const [company] = await tx.select({ status: companies.status }).from(companies).where(eq(companies.id, actor.companyId)).for("share");
   const [member] = await tx.select({ role: companyMemberships.membershipRole }).from(companyMemberships).where(and(
     eq(companyMemberships.companyId, actor.companyId), eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, actor.userId),
     eq(companyMemberships.status, "active"), inArray(companyMemberships.membershipRole, ["owner", "admin"]))).for("share");
-  if (!session || !member || company?.status !== "active") throw forbidden("observation_access_denied");
+  if (!session || !member || !company || company.status !== "active" && !(options.allowPausedCompany === true && company.status === "paused")) throw forbidden("observation_access_denied");
   const [delivery] = await tx.select().from(deliveries).where(and(eq(deliveries.companyId, actor.companyId), eq(deliveries.id, deliveryId))).for("share");
   if (!delivery) throw notFound("observation_delivery_not_found");
   // Lock the bounded privacy ancestry, including grants used by the shared

@@ -31,3 +31,10 @@
 - Fixtures 使用独占 `/tmp` owned PostgreSQL、正常全部迁移、真实持久 session/会员/任务及 JSON secret 合同；只注入假 HTTP/secret resolver，不注册真实访问。类型/测试入口显式指向本分支 DB/shared 源码。
 - Drizzle 在隔离 `/tmp` 输出目录从 0359 snapshot/journal 和本分支完整 schema 正常生成 0360；既有表/其他 schema 无变化。新表/约束/索引/FK 与 SQL 等价；SQL 保留 unique-index 先于复合 FK 的顺序及自定义 immutable UPDATE guard。
 - 新两表随 delivery/company 关系级联清理，不增加 DELETE 封锁。旧 `company-deletion.ts` 先删 companySecrets，但旧 delivery 的 secret FK 尚在，属于既有清理债务；本片不宣称整个 coding 公司清理流程已闭环。
+
+## 未确认写入的跨重挂载恢复补强
+- 每次 POST 前把四字段安全输入持久化到浏览器 pending journal 并回读校验，按 company/user/delivery 稳定隔离；session、authEpoch、head 变化只取消展示/请求，不遗忘未确认 ID。每 ID 独立 key，不保存 token、policy、artifact/envelope 原文。读写/回读异常阻止 POST。
+- 有 journal 时优先精确 GET 原 ID；current/latest 的 null、其他旧终态、403/404、expired/interrupted 都不构成“未发生”证明，也不清 journal 或自动创建新 ID。只有同 ID/input/delivery 的 durable terminal 才校验删除；多个未决逐项恢复。
+- 显式二步确认 `POST requests/:requestId/close-unknown`，严格原四字段＋`confirmClose:true`，path/body ID 一致；fresh session/当前管理员/任务隐私与 start 相同公司 advisory 锁。missing 写空 terminal negative marker，live lease 返回 409，expired 清 fence 并写空回执；重复关闭不增审计。仍沿用 DB clock 新请求额度。
+- 该 marker **仅阻止今后同 ID 派发**，不证明早先请求未发生，也不取消任何 CI/远端动作。feature OFF、配置漂移、公司暂停仍可关闭；paused 只开放已授权本地 metadata/close，不开放新观测外发。getter 不执行关闭写入。
+- 浏览器存储可能被用户/外部程序清除或丢失，且不是跨标签页原子锁；本机制不声称绝对 exactly-once。服务器当前请求入口只是辅助发现，不可覆盖已知未决 journal。

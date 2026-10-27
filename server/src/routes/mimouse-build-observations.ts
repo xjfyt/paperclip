@@ -1,7 +1,7 @@
 import { Router, type Request } from "express";
 import { z } from "zod";
 import type { Db } from "@paperclipai/db";
-import { startMimouseBuildObservationSchema } from "@paperclipai/shared";
+import { startMimouseBuildObservationSchema, closeMimouseBuildObservationSchema } from "@paperclipai/shared";
 import { forbidden, badRequest, HttpError, unprocessable } from "../errors.js";
 import { validate } from "../middleware/validate.js";
 import { buildObservationService, type BuildObservationServiceDependencies } from "../services/mimouse-coding/build-observation-service.js";
@@ -40,6 +40,11 @@ export function mimouseBuildObservationRoutes(db: Db, deps: BuildObservationServ
     const { actor, deliveryId } = identity(req); const query = z.object({ cursor: uuid.optional() }).strict().safeParse(req.query);
     if (!query.success) throw badRequest("observation_query_invalid");
     res.json(await safe(() => service.history(actor, deliveryId, query.data.cursor)));
+  });
+  router.post(`${root}/requests/:requestId/close-unknown`, validate(closeMimouseBuildObservationSchema), async (req, res) => {
+    const { actor, deliveryId } = identity(req); const input = closeMimouseBuildObservationSchema.parse(req.body);
+    if (String(req.params.requestId) !== input.requestId) throw badRequest("observation_request_invalid");
+    res.json(await safe(() => service.closeUnknown(actor, deliveryId, input)));
   });
   router.post(root, validate(startMimouseBuildObservationSchema), async (req, res) => {
     const { actor, deliveryId } = identity(req); const controller = new AbortController();

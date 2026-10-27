@@ -6,9 +6,10 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { MimouseBuildObservationContext, MimouseBuildObservationPage, MimouseBuildObservationReceipt,
   MimouseBuildObservationRequestOutcome } from "@paperclipai/shared";
 import { MimouseBuildObservations } from "./MimouseBuildObservations";
+import { ensureBuildObservationJournal, readBuildObservationJournal } from "@/lib/build-observation-journal";
 
 type ReadResult = MimouseBuildObservationContext | MimouseBuildObservationPage | MimouseBuildObservationRequestOutcome
-  | { request: MimouseBuildObservationRequestOutcome | null };
+  | { request: MimouseBuildObservationRequestOutcome | null } | null;
 const calls = vi.hoisted(() => ({ read: vi.fn<(path: string, signal: AbortSignal) => Promise<ReadResult>>(),
   post: vi.fn<(path: string, init?: RequestInit) => Promise<Response>>() }));
 vi.mock("@/api/coding-read", () => ({ readCodingEvidence: calls.read }));
@@ -48,13 +49,13 @@ async function job(value = "42") {
 }
 beforeEach(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-  vi.clearAllMocks(); vi.spyOn(crypto, "randomUUID").mockReturnValue(requestId);
+  vi.clearAllMocks(); localStorage.clear(); vi.spyOn(crypto, "randomUUID").mockReturnValue(requestId);
   calls.read.mockImplementation(async url => url.endsWith("/context") ? context : url.endsWith("/requests/current") ? { request: null } : url.includes("/requests/") ? outcome("terminal") : empty);
   calls.post.mockResolvedValue(Response.json(outcome("terminal")));
   host = document.createElement("div"); document.body.append(host); root = createRoot(host);
   client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
 });
-afterEach(async () => { await act(async () => root.unmount()); client.clear(); host.remove(); vi.restoreAllMocks(); });
+afterEach(async () => { await act(async () => root.unmount()); client.clear(); host.remove(); vi.restoreAllMocks(); localStorage.clear(); });
 
 it("is collapsed with zero I/O, then performs only manually opened local reads", async () => {
   await mount(); expect(calls.read).not.toHaveBeenCalled(); expect(calls.post).not.toHaveBeenCalled();
@@ -142,11 +143,12 @@ it("hides a directly returned receipt too when a later metadata read loses acces
 });
 
 it("restores a persisted recoverable request after remount without POST and retries the server-returned body only explicitly", async () => {
-  calls.read.mockImplementation(async url => url.endsWith("/context") ? context : url.endsWith("/requests/current") ? { request: outcome("retryable") } : empty);
+  calls.read.mockImplementation(async url => url.endsWith("/context") ? context : url.endsWith("/requests/current") ? { request: outcome("retryable") } : url.includes("/requests/") ? outcome("retryable") : empty);
   await mount(); await open(); expect(host.textContent).toContain(requestId); expect(calls.post).not.toHaveBeenCalled();
   await act(async () => root.render(<QueryClientProvider client={client}><div /></QueryClientProvider>)); await flush();
   await mount(); await open(); expect(host.textContent).toContain(requestId); expect(button("buildObservations.retry").disabled).toBe(false);
-  expect(calls.read.mock.calls.filter(([url]) => url.endsWith("/requests/current"))).toHaveLength(2); expect(calls.post).not.toHaveBeenCalled();
+  expect(calls.read.mock.calls.filter(([url]) => url.endsWith("/requests/current"))).toHaveLength(1);
+  expect(calls.read.mock.calls.filter(([url]) => url.endsWith(`/requests/${requestId}`))).toHaveLength(1); expect(calls.post).not.toHaveBeenCalled();
   await click(button("buildObservations.retry")); expect(calls.post).toHaveBeenCalledOnce();
   expect(calls.post.mock.calls[0][1]?.body).toBe(JSON.stringify(outcome("retryable").input));
 });
@@ -156,10 +158,10 @@ it("does not reinstall a dismissed terminal request on later metadata refresh", 
   await click(button("buildObservations.refresh")); expect(host.querySelector("input")).not.toBeNull(); expect(calls.post).not.toHaveBeenCalled();
 });
 it.each([{ sessionId: "session-two" }, { authEpoch: 2 }, { companyId: "other-company" }])("uses a fresh scoped recovery GET after identity navigation %# without resending", async extra => {
-  calls.read.mockImplementation(async url => url.endsWith("/context") ? context : url.endsWith("/requests/current") ? { request: outcome("running") } : empty);
+  calls.read.mockImplementation(async url => url.endsWith("/context") ? context : url.endsWith("/requests/current") ? { request: outcome("running") } : url.includes("/requests/") ? outcome("running") : empty);
   await mount(); await open(); await mount(extra); expect(host.querySelector("section")).toBeNull();
   await open(); expect(host.textContent).toContain(requestId); expect(host.textContent).toContain("buildObservations.state.running");
-  expect(calls.read.mock.calls.filter(([url]) => url.endsWith("/requests/current"))).toHaveLength(2); expect(calls.post).not.toHaveBeenCalled();
+  expect(calls.read.mock.calls.filter(([url]) => url.includes("/requests/"))).toHaveLength(2); expect(calls.post).not.toHaveBeenCalled();
 });
 it.each([403, 404])("a %s on initial request recovery hides evidence and never creates a replacement", async status => {
   calls.read.mockImplementation(async url => {
@@ -176,4 +178,76 @@ it("cannot start while initial persisted-request discovery is unresolved", async
     ? new Promise<ReadResult>(done => { resolve = done; }) : { receipts: [receipt], nextCursor: null });
   await mount(); await open(); expect(host.querySelector("input")).toBeNull(); expect(host.textContent).not.toContain(receipt.result.artifact?.sha256);
   await act(async () => resolve({ request: null })); await flush(); expect(host.querySelector("input")).not.toBeNull(); expect(calls.post).not.toHaveBeenCalled();
+});
+
+const journalScope = { companyId: props.companyId, userId: props.userId, deliveryId: props.deliveryId };
+function pendingJournal() { ensureBuildObservationJournal(journalScope, outcome("running").input); }
+it.each([{ sessionId: "session-two" }, { authEpoch: 2 }, { headSha: "c".repeat(40) }])("keeps a journaled request across same-user identity/head changes %# and recovers its exact ID", async extra => {
+  pendingJournal(); calls.read.mockImplementation(async url => url.endsWith("/context") ? context : url.endsWith(`/requests/${requestId}`) ? outcome("retryable") : url.endsWith("/requests/current") ? { request: null } : empty);
+  await mount(); await open(); await mount(extra); await open();
+  expect(host.textContent).toContain(requestId); expect(calls.read.mock.calls.filter(([url]) => url.endsWith(`/requests/${requestId}`))).toHaveLength(2);
+  expect(calls.read.mock.calls.some(([url]) => url.endsWith("/requests/current"))).toBe(false); expect(calls.post).not.toHaveBeenCalled();
+});
+it("does not reveal another user's journal or erase it", async () => {
+  pendingJournal(); await mount({ userId: "different-user" }); await open();
+  expect(host.textContent).not.toContain(requestId); expect(calls.read.mock.calls.some(([url]) => url.endsWith(`/requests/${requestId}`))).toBe(false);
+  expect(readBuildObservationJournal(journalScope)).toHaveLength(1); expect(calls.post).not.toHaveBeenCalled();
+});
+it.each(["403", "404", "null", "old-terminal"])("keeps a journal after exact recovery returns %s, without falling back to current or opening a new ID", async kind => {
+  pendingJournal(); calls.read.mockImplementation(async url => {
+    if (url.endsWith(`/requests/${requestId}`)) {
+      if (kind === "403" || kind === "404") throw Object.assign(Error("private"), { status: Number(kind) });
+      if (kind === "null") return null;
+      return { ...outcome("terminal"), requestId: "8537f5ba-ae42-4a48-89a1-79949638fd83" };
+    }
+    return url.endsWith("/context") ? context : url.endsWith("/requests/current") ? { request: outcome("terminal") } : empty;
+  });
+  await mount(); await open(); expect(host.textContent).toContain(requestId); expect(host.querySelector("input")).toBeNull();
+  expect(host.textContent).not.toContain("buildObservations.newRequest"); expect(readBuildObservationJournal(journalScope)).toHaveLength(1);
+  expect(calls.read.mock.calls.some(([url]) => url.endsWith("/requests/current"))).toBe(false); expect(calls.post).not.toHaveBeenCalled();
+});
+it("blocks POST when journal persistence or removal cannot be confirmed", async () => {
+  await mount(); await open(); await job();
+  vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw Error("quota-secret-details"); });
+  await click(button("buildObservations.observe")); expect(calls.post).not.toHaveBeenCalled(); expect(host.textContent).toContain("buildObservations.storageError");
+  expect(host.textContent).not.toContain("quota-secret-details");
+});
+it("does not forget a delayed reservation after remount even if current was initially null", async () => {
+  let resolve!: (response: Response) => void; calls.post.mockImplementation(() => new Promise<Response>(done => { resolve = done; }));
+  await mount(); await open(); await job(); await click(button("buildObservations.observe"));
+  expect(readBuildObservationJournal(journalScope)).toHaveLength(1);
+  await act(async () => root.render(<QueryClientProvider client={client}><div /></QueryClientProvider>)); await flush();
+  calls.read.mockImplementation(async url => { if (url.endsWith(`/requests/${requestId}`)) throw Object.assign(Error("not reserved yet"), { status: 404 });
+    return url.endsWith("/context") ? context : url.endsWith("/requests/current") ? { request: null } : empty; });
+  await mount(); await open(); expect(host.querySelector("input")).toBeNull(); expect(host.textContent).toContain(requestId);
+  await act(async () => resolve(Response.json(outcome("terminal")))); await flush();
+  expect(readBuildObservationJournal(journalScope)).toHaveLength(1); expect(calls.post).toHaveBeenCalledOnce();
+});
+it("selects the next unresolved journal rather than opening a fresh ID after one terminal receipt", async () => {
+  pendingJournal(); const firstKey = localStorage.key(0)!;
+  const second = { ...outcome("running").input, requestId: "8537f5ba-ae42-4a48-89a1-79949638fd83" };
+  localStorage.setItem(firstKey.replace(requestId, second.requestId), JSON.stringify(second));
+  calls.read.mockImplementation(async url => url.endsWith("/context") ? context : url.endsWith(`/requests/${requestId}`) ? outcome("terminal")
+    : url.endsWith(`/requests/${second.requestId}`) ? { ...outcome("running"), requestId: second.requestId, input: second } : empty);
+  await mount(); await open(); await click(button("buildObservations.newRequest"));
+  expect(host.textContent).toContain(second.requestId); expect(host.querySelector("input")).toBeNull();
+  expect(readBuildObservationJournal(journalScope)).toEqual([second]); expect(calls.post).not.toHaveBeenCalled();
+});
+it("requires two explicit actions to close unknown locally and clears only the matching durable terminal response", async () => {
+  pendingJournal(); calls.read.mockImplementation(async url => { if (url.endsWith(`/requests/${requestId}`)) throw Object.assign(Error("not found"), { status: 404 });
+    return url.endsWith("/context") ? context : empty; });
+  await mount(); await open(); expect(calls.post).not.toHaveBeenCalled();
+  await click(button("buildObservations.closeUnknown")); expect(host.textContent).toContain("buildObservations.closeBoundary"); expect(calls.post).not.toHaveBeenCalled();
+  await click(button("common.cancel")); expect(calls.post).not.toHaveBeenCalled();
+  await click(button("buildObservations.closeUnknown")); await click(button("buildObservations.confirmClose"));
+  expect(calls.post).toHaveBeenCalledWith(`${path}/requests/${requestId}/close-unknown`, expect.objectContaining({ method: "POST",
+    body: JSON.stringify({ ...outcome("running").input, confirmClose: true }), signal: expect.any(AbortSignal) }));
+  expect(readBuildObservationJournal(journalScope)).toEqual([]);
+});
+it("retains the journal when close is denied for an active request or its response is unknown", async () => {
+  pendingJournal(); calls.read.mockImplementation(async url => url.endsWith("/context") ? context : url.endsWith(`/requests/${requestId}`) ? outcome("running") : empty);
+  calls.post.mockRejectedValue(Object.assign(Error("observation_execution_active"), { status: 409 }));
+  await mount(); await open(); await click(button("buildObservations.closeUnknown")); await click(button("buildObservations.confirmClose"));
+  expect(readBuildObservationJournal(journalScope)).toHaveLength(1); expect(host.textContent).toContain("buildObservations.uncertain");
+  expect(host.textContent).not.toContain("buildObservations.newRequest"); expect(calls.post).toHaveBeenCalledOnce();
 });

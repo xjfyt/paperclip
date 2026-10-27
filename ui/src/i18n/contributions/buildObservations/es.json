@@ -1,6 +1,11 @@
 {
   "title": "Observaciones de compilación por trabajo exacto",
   "boundary": "Observar no equivale a autorizar. La plataforma, las pruebas, las firmas de código y el flujo de trabajo completo siguen sin evaluarse; la recopilación del controlador de confianza y C3 siguen bloqueadas. La matriz de compilación no cambia.",
+  "journalBoundary": "Los ID sin confirmar se conservan en este navegador por empresa, usuario y entrega. Borrar o perder el almacenamiento, o usar pestañas simultáneas, impide garantizar una ejecución exactamente una vez.",
+  "storageError": "No se pudo leer, guardar o confirmar de forma segura el registro pendiente. Los envíos están bloqueados. No borres el almacenamiento del navegador para eludir esta protección.",
+  "closeUnknown": "Cerrar localmente una solicitud sin confirmar",
+  "closeBoundary": "Esto solo impide futuros envíos locales del mismo ID. No demuestra que la solicitud anterior no se ejecutara ni cancela CI u otras acciones remotas. Una solicitud en ejecución no se puede cerrar. ¿Confirmas el cierre local?",
+  "confirmClose": "Confirmar cierre local",
   "loginRequired": "Inicia sesión como administrador de la empresa para ver o solicitar observaciones.",
   "readError": "No se pudieron leer las observaciones. Las pruebas mostradas antes están ocultas.",
   "disabled": "El operador no ha habilitado la observación de compilaciones.",

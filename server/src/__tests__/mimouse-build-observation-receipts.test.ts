@@ -3,7 +3,7 @@ import express, { type ErrorRequestHandler } from "express";
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
-import { activityLog, authUsers, authSessions, companyMemberships, companySecrets, mimouseCodingBuildObservationRequests as requests, mimouseCodingBuildObservationReceipts as receipts,
+import { activityLog, authUsers, authSessions, companies, companyMemberships, companySecrets, mimouseCodingBuildObservationRequests as requests, mimouseCodingBuildObservationReceipts as receipts,
   mimouseCodingDeliveries as deliveries } from "@paperclipai/db";
 import { startMimouseBuildObservationSchema } from "../../../packages/shared/src/mimouse-build-observations.js";
 import { mimouseCodingBuildObservationRequests as branchRequests } from "../../../packages/db/src/schema/mimouse_coding_build_observations.js";
@@ -43,7 +43,8 @@ afterAll(async () => { await f?.close(); vi.unstubAllGlobals(); vi.unstubAllEnvs
 beforeEach(async () => {
   calls = 0; resolutions = 0; hook = undefined;
   await f.db.delete(requests).where(eq(requests.companyId, f.actor.companyId));
-  await f.db.delete(activityLog).where(and(eq(activityLog.companyId, f.actor.companyId), eq(activityLog.action, "coding.build_observation.recorded")));
+  await f.db.delete(activityLog).where(eq(activityLog.companyId, f.actor.companyId));
+  await f.db.update(companies).set({ status: "active" }).where(eq(companies.id, f.actor.companyId));
   await f.mutate.delivery(original); await f.mutate.member({ status: "active", membershipRole: "owner" });
   await f.mutate.session({ expiresAt: new Date(Date.now() + 3600000) });
   await f.mutate.issue({ visibility: "open", responsibleUserId: f.actor.userId, createdByUserId: f.actor.userId, assigneeUserId: null });
@@ -180,6 +181,10 @@ it("mounts real session-checked API without credentials/policy inputs or cached 
   expect((await request(app).post(url).send(body)).status).toBe(200);
   expect((await request(app).get(`${url}/requests/${body.requestId}`)).status).toBe(200);
   expect((await request(app).get(`${url}/requests/current`)).status).toBe(200);
+  expect((await request(app).post(`${url}/requests/${body.requestId}/close-unknown`).send(body)).status).toBe(400);
+  expect((await request(app).post(`${url}/requests/${randomUUID()}/close-unknown`).send({ ...body, confirmClose: true })).status).toBe(400);
+  expect((await request(app).post(`${url}/requests/${body.requestId}/close-unknown`).send({ ...body, confirmClose: true, token: "forbidden" })).status).toBe(400);
+  expect((await request(app).post(`${url}/requests/${body.requestId}/close-unknown`).send({ ...body, confirmClose: true })).status).toBe(200);
   source = "local_implicit"; expect((await request(app).get(url)).status).toBe(403);
   source = "session"; await f.mutate.session({ expiresAt: new Date(0) }); expect((await request(app).get(url)).status).toBe(403);
   expect(calls).toBe(6); expect(resolutions).toBe(1);
@@ -221,4 +226,71 @@ it("recovers only the current authenticated actor's latest request without outbo
   await expect(service.get(other, f.deliveryId, body.requestId)).rejects.toThrow("observation_request_not_found");
   expect((await service.currentRequest(f.actor, f.deliveryId)).request).toEqual(result);
   expect(calls).toBe(6); expect(resolutions).toBe(1);
+});
+
+it("a durable close wins before delayed reservation and blocks the original POST without HTTP", async () => {
+  const body = await input(); const alternate = { ...f.actor, sessionId: randomUUID() }; const now = new Date();
+  await f.db.insert(authSessions).values({ id: alternate.sessionId, userId: alternate.userId, token: randomUUID(),
+    expiresAt: new Date(Date.now() + 3600000), createdAt: now, updatedAt: now });
+  let release: () => void = () => undefined; let entered: () => void = () => undefined;
+  const ready = new Promise<void>(resolve => { entered = resolve; }); const wait = new Promise<void>(resolve => { release = resolve; });
+  const held = f.db.transaction(async tx => {
+    await tx.select().from(authSessions).where(eq(authSessions.id, f.actor.sessionId)).for("update"); entered(); await wait;
+  }); await ready;
+  const late = service.start(f.actor, f.deliveryId, body);
+  let closed: Awaited<ReturnType<typeof service.closeUnknown>>;
+  try { closed = await service.closeUnknown(alternate, f.deliveryId, { ...body, confirmClose: true }); }
+  finally { release(); await held; }
+  const result = await late; expect(result.receipt?.id).toBe(closed.receipt?.id);
+  expect(result.receipt?.diagnostic).toBe("observation_closed_unconfirmed"); expect(result.receipt?.result.artifact).toBeUndefined();
+  expect(calls).toBe(0); expect(resolutions).toBe(0);
+  const replay = await service.closeUnknown(f.actor, f.deliveryId, { ...body, confirmClose: true });
+  expect(replay.receipt?.id).toBe(closed.receipt?.id);
+  expect(await f.db.select().from(activityLog).where(eq(activityLog.companyId, f.actor.companyId))).toHaveLength(1);
+});
+it("cannot close an unexpired execution; closing a completed request never rewrites its receipt", async () => {
+  const body = await input(); let release: () => void = () => undefined; let entered: () => void = () => undefined;
+  const ready = new Promise<void>(resolve => { entered = resolve; }); const wait = new Promise<void>(resolve => { release = resolve; });
+  hook = async call => { if (call === 1) { entered(); await wait; } };
+  const running = service.start(f.actor, f.deliveryId, body); await Promise.race([ready, running.then(() => undefined)]);
+  try { await expect(service.closeUnknown(f.actor, f.deliveryId, { ...body, confirmClose: true })).rejects.toThrow("observation_request_in_progress"); }
+  finally { release(); }
+  const result = await running; const closed = await service.closeUnknown(f.actor, f.deliveryId, { ...body, confirmClose: true });
+  expect(closed).toEqual(result); expect(await saved()).toHaveLength(1); expect(calls).toBe(6);
+  expect(await f.db.select().from(activityLog).where(eq(activityLog.companyId, f.actor.companyId))).toHaveLength(1);
+});
+it("closing an expired lease fences late finalization and cannot be overwritten", async () => {
+  const body = await input(); let release: () => void = () => undefined; let entered: () => void = () => undefined;
+  const ready = new Promise<void>(resolve => { entered = resolve; }); const wait = new Promise<void>(resolve => { release = resolve; });
+  hook = async call => { if (call === 6) { entered(); await wait; } };
+  const running = service.start(f.actor, f.deliveryId, body).catch((error: unknown) => error);
+  await Promise.race([ready, running.then(value => { if (value instanceof Error) throw value; })]);
+  await f.db.update(requests).set({ leaseExpiresAt: sql`clock_timestamp() - interval '1 second'` }).where(eq(requests.requestId, body.requestId));
+  const before = await service.get(f.actor, f.deliveryId, body.requestId); expect(before.state).toBe("retryable"); expect(await saved()).toHaveLength(0);
+  const closed = await service.closeUnknown(f.actor, f.deliveryId, { ...body, confirmClose: true }); release();
+  expect(await running).toBeInstanceOf(HttpError); expect((await saved())[0].id).toBe(closed.receipt?.id);
+  expect((await saved())[0].result.artifact).toBeUndefined(); expect(await saved()).toHaveLength(1);
+  expect((await service.start(f.actor, f.deliveryId, body)).receipt?.id).toBe(closed.receipt?.id); expect(calls).toBe(6);
+});
+it("can close with feature disabled, changed configuration and paused company without enabling egress", async () => {
+  const body = await input(); await f.db.update(companies).set({ status: "paused" }).where(eq(companies.id, f.actor.companyId));
+  const disabled = buildObservationService(f.db, { loadConfig: async () => ({ enabled: false, diagnostic: "config_invalid" }), transport, resolveSecret: resolver });
+  await expect(disabled.get(f.actor, f.deliveryId, body.requestId)).rejects.toThrow("observation_request_not_found");
+  expect(await disabled.currentRequest(f.actor, f.deliveryId)).toEqual({ request: null }); expect(await saved()).toHaveLength(0);
+  await expect(disabled.start(f.actor, f.deliveryId, body)).rejects.toThrow("observation_access_denied");
+  const closed = await disabled.closeUnknown(f.actor, f.deliveryId, { ...body, confirmClose: true }); expect(closed.state).toBe("terminal");
+  expect(closed.receipt?.currentness.status).toBe("unknown");
+  await f.db.update(companies).set({ status: "active" }).where(eq(companies.id, f.actor.companyId));
+  expect((await disabled.start(f.actor, f.deliveryId, body)).receipt?.id).toBe(closed.receipt?.id);
+  expect(calls).toBe(0); expect(resolutions).toBe(0);
+});
+it("binds negative markers to exact actor/body and keeps closure within DB-clock quota", async () => {
+  const body = await input(); const first = await service.closeUnknown(f.actor, f.deliveryId, { ...body, confirmClose: true });
+  await expect(service.closeUnknown(f.actor, f.deliveryId, { ...body, jobId: 18, confirmClose: true })).rejects.toThrow("observation_request_conflict");
+  await expect(service.closeUnknown({ ...f.actor, userId: "different-user" }, f.deliveryId, { ...body, confirmClose: true })).rejects.toThrow("observation_access_denied");
+  for (let i = 0; i < 9; i++) await service.closeUnknown(f.actor, f.deliveryId, { ...body, requestId: randomUUID(), confirmClose: true });
+  await expect(service.closeUnknown(f.actor, f.deliveryId, { ...body, requestId: randomUUID(), confirmClose: true })).rejects.toThrow("observation_company_rate_limited");
+  expect((await service.closeUnknown(f.actor, f.deliveryId, { ...body, confirmClose: true })).receipt?.id).toBe(first.receipt?.id);
+  expect(await f.db.select().from(activityLog).where(eq(activityLog.companyId, f.actor.companyId))).toHaveLength(10);
+  expect(calls).toBe(0); expect(resolutions).toBe(0);
 });

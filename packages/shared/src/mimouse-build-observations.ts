@@ -11,6 +11,9 @@ export const startMimouseBuildObservationSchema = z.object({
   requestId: z.string().uuid(), profileId, jobId: id, expectedBinding: digest,
 }).strict();
 export type StartMimouseBuildObservationInput = z.infer<typeof startMimouseBuildObservationSchema>;
+/** Explicit local tombstone only; never implies remote cancellation or non-execution. */
+export const closeMimouseBuildObservationSchema = startMimouseBuildObservationSchema.extend({ confirmClose: z.literal(true) }).strict();
+export type CloseMimouseBuildObservationInput = z.infer<typeof closeMimouseBuildObservationSchema>;
 
 const provenance = z.discriminatedUnion("status", [
   z.object({ status: z.literal("not_checked"), reason: z.enum([

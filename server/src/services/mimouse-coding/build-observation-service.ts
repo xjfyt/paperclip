@@ -1,10 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
-import { and, desc, eq, gt, ne, sql } from "drizzle-orm";
+import { and, desc, eq, gt, lte, ne, sql } from "drizzle-orm";
 import { activityLog, mimouseCodingBuildObservationRequests as requests, mimouseCodingBuildObservationReceipts as receipts, type Db } from "@paperclipai/db";
-import { mimouseBuildObservationSummarySchema, startMimouseBuildObservationSchema,
+import { mimouseBuildObservationSummarySchema, startMimouseBuildObservationSchema, closeMimouseBuildObservationSchema,
   type MimouseBuildObservationContext, type MimouseBuildObservationCurrentness, type MimouseBuildObservationPage,
   type MimouseBuildObservationReceipt, type MimouseBuildObservationRequestOutcome, type MimouseBuildObservationSummary,
-  type StartMimouseBuildObservationInput } from "@paperclipai/shared";
+  type StartMimouseBuildObservationInput, type CloseMimouseBuildObservationInput } from "@paperclipai/shared";
 import { conflict, HttpError, notFound, tooManyRequests, unprocessable } from "../../errors.js";
 import { authorizeObservation, bindObservation, observationDigest, observationTransaction, type ObservationIdentity, type ObservationTx } from "./build-observation-binding.js";
 import { loadBuildObservationConfig, type BuildObservationConfig } from "./build-observation-config.js";
@@ -49,9 +49,10 @@ export function buildObservationService(db: Db, deps: BuildObservationServiceDep
     return bindObservation(tx, actor, delivery, profile, loaded.digest);
   }
   async function current(tx: ObservationTx, actor: ObservationIdentity, deliveryId: string, profileId: string) {
-    return bindCurrent(tx, actor, await authorizeObservation(tx, actor, deliveryId), profileId);
+    return bindCurrent(tx, actor, await authorizeObservation(tx, actor, deliveryId, { allowPausedCompany: true }), profileId);
   }
   async function currentness(tx: ObservationTx, actor: ObservationIdentity, row: RequestRow, receipt: ReceiptRow): Promise<MimouseBuildObservationCurrentness> {
+    if (receipt.diagnostic === "observation_closed_unconfirmed") return { status: "unknown", reasons: ["historical_observation"] };
     try {
       const bound = await current(tx, actor, row.deliveryId, row.profileId); const now = await dbTime(tx);
       if (bound.snapshotDigest !== row.snapshotDigest) return { status: "stale", reasons: ["context_changed", "historical_observation"] };
@@ -78,7 +79,7 @@ export function buildObservationService(db: Db, deps: BuildObservationServiceDep
   }
   async function get(actor: ObservationIdentity, deliveryId: string, requestId: string) {
     return observationTransaction(db, async tx => {
-      await authorizeObservation(tx, actor, deliveryId);
+      await authorizeObservation(tx, actor, deliveryId, { allowPausedCompany: true });
       const [row] = await tx.select().from(requests).where(and(eq(requests.companyId, actor.companyId), eq(requests.deliveryId, deliveryId), eq(requests.requestId, requestId)));
       if (!row || row.actorUserId !== actor.userId) throw notFound("observation_request_not_found");
       return outcome(tx, actor, row);
@@ -98,11 +99,14 @@ export function buildObservationService(db: Db, deps: BuildObservationServiceDep
       .where(and(eq(requests.companyId, row.companyId), eq(requests.id, row.id), eq(requests.state, "running"), eq(requests.leaseToken, token),
         gt(requests.leaseExpiresAt, sql`clock_timestamp()`))).returning();
     if (!changed) throw conflict("observation_lease_lost");
+    await recordReceipt(tx, row, result, "coding.build_observation.recorded");
+  }
+  async function recordReceipt(tx: ObservationTx, row: RequestRow, result: MimouseBuildObservationSummary, action: string) {
     await tx.insert(receipts).values({ companyId: row.companyId, deliveryId: row.deliveryId, requestId: row.requestId,
       status: result.status === "observed" ? "observed" : "blocked", diagnostic: result.diagnostic, result, admission: "blocked",
       snapshotDigest: row.snapshotDigest, observedAt: result.observedAt ? new Date(result.observedAt) : null });
     await tx.insert(activityLog).values({ companyId: row.companyId, actorType: "user", actorId: row.actorUserId,
-      action: "coding.build_observation.recorded", entityType: "coding_delivery", entityId: row.deliveryId,
+      action, entityType: "coding_delivery", entityId: row.deliveryId,
       details: { requestId: row.requestId, diagnostic: result.diagnostic, admission: "blocked" } });
   }
   async function start(actor: ObservationIdentity, deliveryId: string, raw: StartMimouseBuildObservationInput, signal?: AbortSignal) {
@@ -178,7 +182,7 @@ export function buildObservationService(db: Db, deps: BuildObservationServiceDep
   }
   async function history(actor: ObservationIdentity, deliveryId: string, cursor?: string): Promise<MimouseBuildObservationPage> {
     return observationTransaction(db, async tx => {
-      await authorizeObservation(tx, actor, deliveryId);
+      await authorizeObservation(tx, actor, deliveryId, { allowPausedCompany: true });
       const [anchor] = cursor ? await tx.select().from(receipts).where(and(eq(receipts.companyId, actor.companyId), eq(receipts.deliveryId, deliveryId), eq(receipts.id, cursor))) : [];
       if (cursor && !anchor) throw notFound("observation_cursor_not_found");
       const rows = await tx.select({ receipt: receipts, request: requests }).from(receipts).innerJoin(requests,
@@ -192,11 +196,38 @@ export function buildObservationService(db: Db, deps: BuildObservationServiceDep
   }
   async function currentRequest(actor: ObservationIdentity, deliveryId: string) {
     return observationTransaction(db, async tx => {
-      await authorizeObservation(tx, actor, deliveryId);
+      await authorizeObservation(tx, actor, deliveryId, { allowPausedCompany: true });
       const [row] = await tx.select().from(requests).where(and(eq(requests.companyId, actor.companyId), eq(requests.deliveryId, deliveryId),
         eq(requests.actorUserId, actor.userId))).orderBy(desc(requests.createdAt), desc(requests.id)).limit(1);
       return { request: row ? await outcome(tx, actor, row) : null };
     });
   }
-  return { start, context, get, history, currentRequest };
+  async function closeUnknown(actor: ObservationIdentity, deliveryId: string, raw: CloseMimouseBuildObservationInput) {
+    const { confirmClose: _confirm, ...input } = closeMimouseBuildObservationSchema.parse(raw);
+    const requestDigest = observationDigest({ actorUserId: actor.userId, companyId: actor.companyId, deliveryId, input });
+    await observationTransaction(db, async tx => {
+      await authorizeObservation(tx, actor, deliveryId, { allowPausedCompany: true });
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`build-observation:${actor.companyId}`}, 0))`);
+      const [existing] = await tx.select().from(requests).where(and(eq(requests.companyId, actor.companyId), eq(requests.requestId, input.requestId))).for("update");
+      if (existing && (existing.requestDigest !== requestDigest || existing.actorUserId !== actor.userId || existing.deliveryId !== deliveryId)) throw conflict("observation_request_conflict");
+      if (existing?.state === "terminal") return;
+      const now = await dbTime(tx);
+      if (existing?.leaseExpiresAt && existing.leaseExpiresAt > now) throw conflict("observation_request_in_progress");
+      if (!existing) {
+        const recent = await tx.select({ id: requests.id }).from(requests).where(and(eq(requests.companyId, actor.companyId), gt(requests.createdAt, sql`clock_timestamp() - interval '1 hour'`))).limit(10);
+        if (recent.length >= 10) throw tooManyRequests("observation_company_rate_limited");
+      }
+      const [row] = existing ? await tx.update(requests).set({ state: "terminal", leaseToken: null, leaseExpiresAt: null, updatedAt: sql`clock_timestamp()` })
+        .where(and(eq(requests.id, existing.id), eq(requests.state, "running"), lte(requests.leaseExpiresAt, sql`clock_timestamp()`))).returning()
+        : await tx.insert(requests).values({ companyId: actor.companyId, deliveryId, actorUserId: actor.userId, actorSessionId: actor.sessionId,
+          requestId: input.requestId, requestDigest, snapshotDigest: input.expectedBinding, profileId: input.profileId, jobId: input.jobId,
+          state: "terminal", leaseToken: null, leaseExpiresAt: null, retryUntil: sql`clock_timestamp() + interval '5 minutes'` }).returning();
+      if (!row) throw conflict("observation_request_in_progress");
+      // This negative marker blocks future same-ID dispatch. It says NOTHING
+      // about whether an earlier read happened, and never cancels remote work.
+      await recordReceipt(tx, row, failure("observation_closed_unconfirmed"), "coding.build_observation.closed");
+    });
+    return get(actor, deliveryId, input.requestId);
+  }
+  return { start, context, get, history, currentRequest, closeUnknown };
 }
