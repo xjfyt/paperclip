@@ -32,6 +32,27 @@ test("includes production and legacy route implementations but not unrelated bas
 });
 
 const audit = source => collectAudit(source, "fixture.tsx", parse);
+test("includes standalone in in JSX and selected display attributes as manual-review candidates", () => {
+  const result = audit('const x = <><span> in </span><input title="in" aria-label={"in"} /></>;');
+  assert.deepEqual(result.candidates.map(row => row.text), ["in", "in", "in"]);
+  assert.deepEqual(result.candidates.map(row => row.kind), ["jsx-text", "jsx-attribute", "jsx-expression"]);
+  assert.ok(result.candidates.every(row => row.classification === "needs_manual_review"));
+});
+
+test("only adds the bounded standalone lowercase short-word allowlist", () => {
+  const words = ["in", "of", "on", "or", "to", "by", "as", "an", "a"];
+  assert.deepEqual(texts(`const x = <>${words.map(word => `<span>${word}</span>`).join("")}</>;`), words);
+  assert.deepEqual(texts('const x = <p>{"CI"}{"UI"}{"ID"}{"PR"}{"MR"}{"IN"}{"OF"}{"xy"}{"a1"}{"or_"}{"/in"}{"API"}</p>;'), ["API"]);
+});
+
+test("short words do not widen scanning to API payloads or non-display props or reclassify raw data", () => {
+  const result = audit(`api.update({ title: "in", description: "of", message: "on" });
+    const x = <a className="in" data-testid="of" href="/in" id="or" title={data.title}>{error.message}{t("in")}</a>;`);
+  assert.deepEqual(result.candidates, []);
+  assert.deepEqual(result.dynamicCandidates.map(row => row.expression), ["data.title", "error.message"]);
+  assert.ok(result.dynamicCandidates.every(row => row.classification === "needs_manual_review"));
+});
+
 test("inventories EmptyState message literals and raw diagnostics separately", () => {
   const result = audit(`const x = <EmptyState
     message={error instanceof Error ? error.message : "Unable to load routine"}

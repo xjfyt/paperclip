@@ -3,6 +3,8 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const displayAttributes = new Set(["aria-label", "aria-description", "title", "placeholder", "alt", "label", "description", "message"]);
 const toastFields = new Set(["title", "body", "description", "message"]);
+// Exact lowercase display fragments only; do not widen to arbitrary short IDs.
+const shortDisplayWords = new Set(["in", "of", "on", "or", "to", "by", "as", "an", "a"]);
 const names = ['Auth','InviteLanding','InstanceAccess','ProfileSettings','Dashboard','Issues','IssueDetail','Agents','AgentDetail','Approvals','ApprovalDetail','Routines','Costs','MimouseNotifications','MimouseFeedback','MimouseBuildMatrix','MimouseCoding','MimouseCodingRepair','MimouseWorkbuddy','Sidebar','SidebarProjects','SidebarAgents','SidebarAccountMenu','CompanySwitcher','CompanySettingsSidebar','CommandPalette','NewIssueDialog','IssueProperties','IssuesList','IssueFiltersPopover','CommentThread','BudgetPolicyCard','SubscriptionCostCard','ClaudeSubscriptionPanel','CodexSubscriptionPanel','CloudAccessGate','BootstrapPendingPage','AuthRevocationPanel','InviteAuthMethods','ThemeToggle','InboxAgentPolicyControl','AgentMultiSelect'];
 
 // Explicit, bounded inventory: App.tsx mounts the routines list and both detail
@@ -51,7 +53,7 @@ function collectAudit(source, file, parse) {
   }
   function add(node, value, kind) {
     const text = value.replace(/\s+/g, " ").trim();
-    if (!/[A-Za-z]{3}/.test(text) || seen.has(node.start)) return;
+    if ((!/[A-Za-z]{3}/.test(text) && !shortDisplayWords.has(text)) || seen.has(node.start)) return;
     seen.add(node.start);
     candidates.push({ ...location(node, kind), text });
   }
@@ -172,7 +174,7 @@ if (require.main === module) {
     method: "Bounded Babel AST inventory: JSX text/display attributes (including message), direct/conditional/template literals, pushToast/toast display fields and setSecretMessage.title. Dynamic display expressions are separate needs_manual_review locations, not untranslated strings.",
     limits: [
       "Not a complete route/call graph, data-flow analysis, rendered-text count or translation coverage percentage.",
-      "Literal candidates require three consecutive Latin letters; technical identifiers may be included. Preserve user content, API payloads and unknown server diagnostics after manual origin review.",
+      "Literal candidates require three consecutive Latin letters or an exact lowercase short display word: in/of/on/or/to/by/as/an/a. Other short text remains outside this predicate; technical identifiers may still be included. Preserve user content, API payloads and unknown server diagnostics after manual origin review.",
       "Only named notification calls and direct object fields are recognized; aliases, computed keys, callback returns, custom prop names and indirect objects need manual review. No automatic rewriting.",
       "Known t/mimouseT/i18n.t/mimouseI18n.t calls are omitted, not verified as translated. Dynamic snippets are source syntax truncated to 240 characters, never runtime data.",
     ],
