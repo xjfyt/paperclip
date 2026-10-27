@@ -1,5 +1,45 @@
 # 四语覆盖与剩余项
 
+## 2026-10-27 实际例行任务路由审计补漏（基线 aa3125c9）
+
+对应原计划 §4.2 / §4.4、V2-I18N-04/07。本次只修审计清单和候选识别，不改 UI、词典、业务行为，也不将字面量清零或键数增长等同于四语完成。
+
+`ui/src/App.tsx` 的 `routines/:routineId` 和 `routines/:routineId/:section` 实际挂载两套 `RoutineDetail`；原来仅含 `Routines` 的 basename 清单漏掉详情及其部分子组件。保留原 50 文件范围，另按**精确路径**加入以下 12 文件，不泛扫同名文件、测试或 story；这仍不是完整导入/调用图。
+
+| 新增精确路径 | 字面量候选 | 动态表达式位置 |
+| --- | ---: | ---: |
+| `ui/src/pages/RoutineDetail.tsx` | 36 | 16 |
+| `ui/src/pages/RoutineDetail.production.tsx` | 36 | 15 |
+| `ui/src/components/RoutineActivityRow.tsx` | 0 | 6 |
+| `ui/src/components/routine-sections/context.tsx` | 0 | 0 |
+| `ui/src/components/routine-sections/editable-sections.tsx` | 0 | 23 |
+| `ui/src/components/routine-sections/editable-sections.production.tsx` | 1 | 29 |
+| `ui/src/components/routine-sections/operate-sections.tsx` | 3 | 5 |
+| `ui/src/components/routine-triggers/RoutineTriggers.tsx` | 46 | 9 |
+| `ui/src/components/routine-triggers/TriggerCard.tsx` | 8 | 8 |
+| `ui/src/components/routine-triggers/TriggerWizard.tsx` | 49 | 15 |
+| `ui/src/components/routine-triggers/WebhookFields.tsx` | 11 | 6 |
+| `ui/src/components/routine-triggers/WebhookUrlWarning.tsx` | 2 | 2 |
+
+**同一 UI 基线的分母和口径：**旧脚本 50 文件 / 406 字面量候选；新语法在相同 50 文件得到 549 字面量候选和 1485 动态位置；上述新增 12 文件另有 192 字面量候选和 134 动态位置。因此新清单共 **62 文件、741 字面量候选、1619 动态表达式位置**，没有缺失文件。增加来自识别口径和范围变化，不是翻译退步或完成比例。源码集合摘要 `37a0e712276bae44c863920feea43ea0ee329d39a84dc52926b1a3e2548effea` 仅绑定此基线；详情文案修复整合后必须复跑，不能把本表数字称为新版本结果。
+
+脚本仍使用已有 Babel parser 的 AST，不是完整语义分析器。新增 JSX `message`（包含 `EmptyState`），以及直接 `pushToast` / `toast` 对象的 `title/body/description/message` 和 `setSecretMessage.title`；条件分支、模板静态片段进入字面量候选。JSX 显示表达式、toast 动态字段/对象/展开项另列 `dynamicCandidates`，只保留源码位置与最长 240 字符的源码表达式，不求值或抓取运行时内容。所有候选显式标为 `needs_manual_review`，不自动改写。
+
+- 例如基线 `operate-sections.tsx:32` 的 toast 标题、`:82` 的空状态、两套详情页的 toast/body/空状态现在能定位。`RoutineActivityRow.tsx` 虽有 **0 字面量候选，仍有 6 动态位置**，包括 `actionLabel`、`summarizeEvent` 和原始 JSON；零字面量绝不等于零残余。
+- 用户标题、正文、名称、Webhook 密钥/地址、API 持久化 payload 和未知服务端 `error.message` 保留原值；只有人工确定为应用拥有的系统显示文案才进入翻译任务。脚本不扫描任意对象的 `title/description`，以免把业务 payload 误标为 UI；出现于显示位置的用户数据/诊断仅要求人工确认来源，不视为应翻译。
+- `t/mimouseT/i18n.t/mimouseI18n.t` 调用按语法跳过，不验证键是否存在或四语是否齐全。自定义翻译别名、配置表、返回值/回调、间接对象、计算属性、toast action 等仍需人工追踪；动态位置数也不等于渲染字符串数。字面量仍要求连续三个拉丁字母，会包含技术标识并漏掉部分短文本/非拉丁文案。
+- 报告列出每个文件的两类计数、精确新增路径、原 basename 请求、未命中项、路由源文件摘要和方法边界；缺失请求文件会令命令返回非零，不静默缩小分母。历史 CSV 只代表当时口径，不作为本次清单或人工审核结论。
+
+复跑与轻量验证（复用已安装 parser，不安装依赖；独立 worktree 可将 `PARSER` 指向主工作树同一已安装入口）：
+
+```sh
+PARSER=./node_modules/.pnpm/@babel+parser@7.29.8/node_modules/@babel/parser/lib/index.js
+AUDIT_I18N_PARSER="$PARSER" node --test scripts/audit-mimouse-i18n.test.cjs
+node scripts/audit-mimouse-i18n.cjs --parser "$PARSER" --out /tmp/mimouse-i18n-audit.json
+```
+
+13 项直接 Node 确定性测试通过，保留原 6 项并覆盖新增显示字段、动态来源、翻译调用排除、API payload/协议元数据排除、精确路径及缺失项；两次完整清单输出除 `generatedAt` 外完全一致，`git diff --check` 通过。本次没有运行 UI 全量、类型/构建或真实浏览器；真实中日输入法、西语布局、全部动态系统文案与其他路由仍未闭环。
+
 ## 2026-10-27 00:30 UTC 3815键集成
 
 补齐高级任务watchdog/model/monitor/workspace、实际监测横幅/重试卡片、真实连接enrollment入口、反馈验证及受控提示词应用四语。字典键数不是全应用覆盖率；未知服务端诊断、用户内容和模型输出保留原文。注册迟到响应/重复点击已用21项红测复现后修复并完成344项相邻回归。最终整合类型/构建及全UI聚合仍在执行，不把之前快照结果迁移到此版本。
