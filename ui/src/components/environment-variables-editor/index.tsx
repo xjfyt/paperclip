@@ -316,8 +316,14 @@ export const EnvironmentVariablesEditor = forwardRef<EnvironmentVariablesEditorH
       const button = target.closest("button");
       if (!button || button.disabled) return;
       const label = `${button.getAttribute("aria-label") ?? ""} ${button.textContent ?? ""}`;
-      // Portaled create controls must keep their pre-create flush in every locale.
-      if (button.type === "submit" || button.dataset.envDraftAction === "create" || /\b(save|create|update|test|import)\b/i.test(label)) {
+      // Explicit actions must retain their draft flush independently of translated labels.
+      const draftAction = button.dataset.envDraftAction;
+      if (
+        button.type === "submit"
+        || draftAction === "create"
+        || draftAction === "save"
+        || /\b(save|create|update|test|import)\b/i.test(label)
+      ) {
         flushPendingDraft();
       }
     }

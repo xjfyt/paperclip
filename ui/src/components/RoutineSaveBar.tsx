@@ -127,6 +127,7 @@ export function RoutineSaveBar({
                       variant="destructive"
                       size="sm"
                       disabled={isSaving || disabled}
+                      data-env-draft-action="save"
                       onClick={onSave}
                     >
                       {isSaving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
@@ -152,6 +153,7 @@ export function RoutineSaveBar({
               <Button
                 size="sm"
                 disabled={isSaving || disabled}
+                data-env-draft-action="save"
                 onClick={onSave}
               >
                 {isSaving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
