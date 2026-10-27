@@ -115,7 +115,7 @@ async function verifyRuntimeRoutingSqlGuards(db: Db, actor: PrivatePromptIdentit
     await rejectsGuard(db.update(receipts).set({ action: "disable" }).where(and(eq(receipts.companyId, actor.companyId), eq(receipts.id, approved.id))), "runtime_routing_receipt_immutable");
     const leaseDeadline = performance.now() + 10000;
     for (;;) {
-      const clock = await db.execute(sql`select clock_timestamp() >= ${historical.approvalExpiresAt}::timestamptz as expired`);
+      const clock = await db.execute(sql`select clock_timestamp() >= ${historical.approvalExpiresAt.toISOString()}::timestamptz as expired`);
       if (clock[0].expired === true) break;
       if (performance.now() >= leaseDeadline) throw Error("Owned lifecycle fixture lease did not expire within 10 seconds");
       await new Promise<void>(resolve => setTimeout(resolve, 25));
