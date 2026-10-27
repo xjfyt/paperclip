@@ -1,3 +1,4 @@
+import { issueQueuedDeliveryMessages } from "../i18n/issue-queued-delivery-test-resources";
 import { issueTreeFeedbackMessages } from "../i18n/issue-tree-feedback-test-resources";
 import { issueDetailMessages } from "../i18n/issue-detail-test-resources";
 import { IssueChatFeedbackButtons } from "../components/AgentBubbleActionRow";
@@ -11,7 +12,7 @@ import type { agentChatsApi } from "../api/agentChats";
 import { restoreSubmittedCommentDraft } from "../lib/comment-submit-draft";
 import { issueCommentFeedbackMessages } from "../i18n/issue-comment-feedback-test-resources";
 import { CommentSubmissionUnknownError } from "../lib/comment-submit-result";
-import type { LiveRunForIssue } from "../api/heartbeats";
+import type { ActiveRunForIssue, LiveRunForIssue } from "../api/heartbeats";
 import { useImperativeHandle } from "react";
 import { issueInteractionFeedbackMessages } from "../i18n/issue-interaction-feedback-test-resources";
 import { issueFeedbackMessages } from "../i18n/issue-feedback-test-resources";
@@ -230,6 +231,12 @@ const mockPushToast = vi.hoisted(() => vi.fn());
 const pushFeedbackToast = (toast: ToastInput) => { mockPushToast(toast); mockFeedbackToast(toast); };
 const mockIssuesListRender = vi.hoisted(() => vi.fn());
 const mockIssueChatThreadRender = vi.hoisted(() => vi.fn());
+type ClassicInterruptThreadProps = {
+  onInterruptQueued?: (runId: string | null) => Promise<void>;
+  comments?: Array<{ id: string; body: string; queueState?: string; queueTargetRunId?: string | null }>;
+};
+const mockClassicInterruptThreadRender = vi.hoisted(() => vi.fn<(props: ClassicInterruptThreadProps) => void>());
+
 const mockImageGalleryRender = vi.hoisted(() => vi.fn());
 const mockIssueWorkspaceCardRender = vi.hoisted(() => vi.fn());
 const DIRECT_ADAPTER_TYPES = [
@@ -431,13 +438,14 @@ vi.mock("../components/IssueChatThread", () => ({
     onWorkModeChange?: (workMode: string) => void;
     issueWorkMode?: string;
     comments?: Array<{
+      id: string;
       body: string;
       clientStatus?: string;
       queueState?: string;
       queueTargetRunId?: string | null;
     }>;
     onAdd?: (body: string) => Promise<void>;
-    onInterruptQueued?: (runId: string) => Promise<void>;
+    onInterruptQueued?: (runId: string | null) => Promise<void>;
     onStopRun?: (runId: string) => Promise<void>;
     stopRunLabel?: string;
     stoppingRunLabel?: string;
@@ -450,6 +458,7 @@ vi.mock("../components/IssueChatThread", () => ({
     footer?: ReactNode;
   }) => {
     mockIssueChatThreadRender(props);
+    mockClassicInterruptThreadRender(props);
     return (
       <div data-testid="issue-chat-thread">
         Chat thread
@@ -1510,6 +1519,7 @@ describe("IssueDetail", () => {
     mockTaskSidePanelRender.mockClear();
     mockIssuesListRender.mockClear();
     mockIssueChatThreadRender.mockClear();
+    mockClassicInterruptThreadRender.mockClear();
     mockImageGalleryRender.mockClear();
     mockIssueWorkspaceCardRender.mockClear();
     mockNavigate.mockClear();
@@ -7827,6 +7837,56 @@ describe("IssueDetail", () => {
     });
     expect(mockPushToast).not.toHaveBeenCalled();
   });
+
+  it.each(Object.entries(issueQueuedDeliveryMessages).flatMap(([locale, messages]) =>
+    [true, false].map(isError => ({ locale, messages, isError }))))(
+    "localizes classic interrupt feedback in $locale (Error=$isError) without changing the queued request", async ({ locale, messages, isError }) => {
+      mockInstanceSettingsApi.getExperimental.mockResolvedValue({ enableStreamlinedUi: true, enableClassicTaskInterface: true });
+      mockIssuesApi.get.mockResolvedValue(createIssue({ status: "in_progress", assigneeAgentId: "agent-1", executionRunId: "run-active-1" }));
+      mockAgentsApi.list.mockResolvedValue([createAgent({ adapterType: "codex_local" })]);
+      const comment = createIssueComment({ id: "queued-comment-1", body: "Next direction 原文 {{keep}}" });
+      const queue = createQueuedCommentQueue({ protocol: "legacy", steeringDisposition: "unsupported",
+        entries: [{ comment, position: 0, canEdit: true, canDiscard: true }] });
+      const run: ActiveRunForIssue = { id: "run-active-1", runtimeMode: "legacy", status: "running", invocationSource: "issue", triggerDetail: null,
+        startedAt: "2026-04-21T00:00:00.000Z", finishedAt: null, createdAt: "2026-04-21T00:00:00.000Z",
+        agentId: "agent-1", agentName: "Coder 原文", adapterType: "codex_local", issueId: "issue-1" };
+      mockIssuesApi.listComments.mockResolvedValue([comment]);
+      mockHeartbeatsApi.activeRunForIssue.mockResolvedValue(run);
+      mockIssuesApi.getQueuedComments.mockClear().mockResolvedValue(queue);
+      let reject!: (error: unknown) => void;
+      const delivery = new Promise<IssueQueuedCommentQueue>((_resolve, rejectPromise) => { reject = rejectPromise; });
+      mockIssuesApi.interruptQueuedComments.mockReturnValue(delivery);
+      await act(async () => { await i18n.changeLanguage("en"); root.render(<QueryClientProvider client={queryClient}><IssueDetail /></QueryClientProvider>); });
+      const thread = () => {
+        const props = mockClassicInterruptThreadRender.mock.calls.at(-1)?.[0];
+        if (!props) throw new Error("Classic thread is not mounted");
+        return props;
+      };
+      await waitForAssertion(() => expect(thread().comments).toContainEqual(expect.objectContaining({ id: comment.id, body: comment.body, queueState: "queued" })));
+      let pending: Promise<void> | undefined;
+      await act(async () => { pending = thread().onInterruptQueued?.(run.id); });
+      await waitForAssertion(() => expect(mockIssuesApi.interruptQueuedComments).toHaveBeenCalledTimes(1));
+      expect(mockIssuesApi.getQueuedComments).toHaveBeenCalledExactlyOnceWith("PAP-1");
+      expect(mockIssuesApi.interruptQueuedComments).toHaveBeenCalledWith("PAP-1", { queueId: queue.queueId, targetRunId: queue.targetRunId, revision: queue.revision });
+      expect(mockIssuesApi.getQueuedComments.mock.invocationCallOrder[0]).toBeLessThan(mockIssuesApi.interruptQueuedComments.mock.invocationCallOrder[0]);
+      expect(thread().comments).toContainEqual(expect.objectContaining({ id: comment.id, body: comment.body, queueState: undefined }));
+      expect(container.textContent).not.toContain(messages.interruptFailed);
+      const error = isError ? new Error("Original interrupt diagnostic 原文") : { privatePayload: "not rendered" };
+      await act(async () => { await i18n.changeLanguage(locale); reject(error); await pending; });
+      expect(await pending).toBeUndefined();
+      await waitForAssertion(() => expect(container.textContent).toContain(messages.interruptFailed));
+      expect(thread().comments).toContainEqual(expect.objectContaining({ id: comment.id, body: comment.body, queueState: "queued", queueTargetRunId: run.id }));
+      expect(queryClient.getMutationCache().getAll().at(-1)?.state.error).toBe(error);
+      const nextLocale = locale === "en" ? "ja" : "en";
+      await act(async () => { await i18n.changeLanguage(nextLocale); });
+      expect(container.textContent).toContain(issueQueuedDeliveryMessages[nextLocale].interruptFailed);
+      expect(container.textContent).not.toContain("Original interrupt diagnostic 原文");
+      expect(container.textContent).not.toContain("not rendered");
+      expect(mockIssuesApi.interruptQueuedComments).toHaveBeenCalledTimes(1);
+      expect(mockIssuesApi.getQueuedComments).toHaveBeenCalledTimes(1);
+      expect(mockPushToast).not.toHaveBeenCalled();
+    },
+  );
 
   it("restores a failed classic interrupt inline without a toast or an unhandled rejection", async () => {
     mockInstanceSettingsApi.getExperimental.mockResolvedValue({ enableStreamlinedUi: true, enableClassicTaskInterface: true });

@@ -1469,6 +1469,7 @@ const IssueDetailChatTab = memo(function IssueDetailChatTab({
   externalReferences,
   linkCaseReferences,
 }: IssueDetailChatTabProps) {
+  const { t: queuedDeliveryT } = useMimouseTranslation();
   // Preserve master's Classic Task Interface seam: Streamlined UI changes the
   // TaskChatThread presentation but never swaps it for IssueChatThread.
   const { classicTaskInterfaceEnabled, streamlinedTaskDetailEnabled } =
@@ -1583,7 +1584,7 @@ const IssueDetailChatTab = memo(function IssueDetailChatTab({
     >
   >(() => new Map());
   const [classicQueuedDeliveryError, setClassicQueuedDeliveryError] =
-    useState<string | null>(null);
+    useState<"interruptFailed" | null>(null);
   useEffect(() => {
     setConsumedQueuedCommentIds(new Set());
     setDiscardedQueuedCommentIds(new Set());
@@ -2313,7 +2314,7 @@ const IssueDetailChatTab = memo(function IssueDetailChatTab({
           return next;
         });
         if (classicTaskInterfaceEnabled) {
-          setClassicQueuedDeliveryError("Couldn’t interrupt. Message is still queued.");
+          setClassicQueuedDeliveryError("interruptFailed");
           return;
         }
         await refreshQueueAfterConflict(error);
@@ -2617,7 +2618,7 @@ const IssueDetailChatTab = memo(function IssueDetailChatTab({
             footer={classicQueuedDeliveryError ? (
               <>
                 <p role="status" className="text-sm text-destructive">
-                  {classicQueuedDeliveryError}
+                  {queuedDeliveryT(`issueQueuedDeliveryUi.${classicQueuedDeliveryError}`)}
                 </p>
                 {footer}
               </>
