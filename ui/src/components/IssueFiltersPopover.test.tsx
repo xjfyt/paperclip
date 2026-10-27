@@ -272,4 +272,30 @@ describe("IssueFiltersPopover", () => {
     } finally { await act(async () => { root.unmount(); await changeLocale("en"); }); }
   });
 
+  it("translates missing creator identities live but never rewrites supplied You/Board names or filter IDs", async () => {
+    const root = createRoot(container), onChange = vi.fn();
+    const ids = ["user:self", "user:local-board", "user:named-you", "user:named-board"];
+    await act(async () => { await changeLocale("en"); root.render(<IssueFiltersPopover
+      state={{ ...defaultIssueFilterState, creators: ids }} activeFilterCount={4}
+      currentUserId="self" onChange={onChange}
+      creators={[{ id: ids[2], label: "You", kind: "user" }, { id: ids[3], label: "Board", kind: "user" }]} />); });
+    const cases = [
+      ["zh-CN", "移除创建人 你", "移除创建人 管理端", "移除创建人 You", "移除创建人 Board"],
+      ["es", "Quitar creador Tú", "Quitar creador Administración", "Quitar creador You", "Quitar creador Board"],
+      ["ja", "作成者 あなた を解除", "作成者 管理画面 を解除", "作成者 You を解除", "作成者 Board を解除"],
+      ["en", "Remove creator You", "Remove creator Board", "Remove creator You", "Remove creator Board"],
+    ] as const;
+    try {
+      for (const [locale, self, board, namedYou, namedBoard] of cases) {
+        await act(async () => { await changeLocale(locale); });
+        for (const label of [self, board, namedYou, namedBoard]) {
+          expect(container.querySelector(`button[aria-label="${label}"]`)).not.toBeNull();
+        }
+        const removeBoard = container.querySelector(`button[aria-label="${board}"]`) as HTMLButtonElement;
+        act(() => removeBoard.click());
+        expect(onChange).toHaveBeenLastCalledWith({ creators: [ids[0], ids[2], ids[3]] });
+      }
+    } finally { await act(async () => { root.unmount(); await changeLocale("en"); }); }
+  });
+
 });

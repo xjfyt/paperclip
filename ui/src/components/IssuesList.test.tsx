@@ -19,6 +19,7 @@ import {
   issueAgeSeparatorLabel,
 } from "./IssuesList";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { queryKeys } from "../lib/queryKeys";
 import { taskCollectionPreferencesStorageKey } from "../lib/task-collection-preferences";
 
 const companyState = vi.hoisted(() => ({
@@ -2201,6 +2202,92 @@ describe("IssuesList", () => {
     act(() => {
       root.unmount();
     });
+  });
+
+  it.each([true, false])("localizes identity-derived list/group/creator labels live (streamlined=%s) without changing IDs", async (streamlined) => {
+    mockInstanceSettingsApi.getExperimental.mockResolvedValue({ enableStreamlinedUi: streamlined });
+    mockAuthApi.getSession.mockResolvedValue({ user: { id: "self" }, session: null });
+    const users = [
+      { principalId: "self", status: "active", user: null },
+      { principalId: "local-board", status: "active", user: null },
+      { principalId: "named-you", status: "active", user: { id: "named-you", name: "You", email: null, image: null } },
+      { principalId: "named-board", status: "active", user: { id: "named-board", name: "Board", email: null, image: null } },
+    ];
+    mockAccessApi.listUserDirectory.mockResolvedValue({ users });
+    const issues = users.map(({ principalId }, index) => createIssue({
+      id: `issue-${index}`, title: `Task ${index}`, assigneeUserId: principalId, createdByUserId: principalId,
+    }));
+    const originalIssues = JSON.stringify(issues);
+    const storageKey = "paperclip:test-user-labels:company-1";
+    localStorage.setItem(storageKey, JSON.stringify({ groupBy: "assignee", viewMode: "list" }));
+    localStorage.setItem(`${storageKey}:issue-columns`, JSON.stringify(["assignee"]));
+    const { root, queryClient } = renderWithQueryClient(<IssuesList issues={issues} agents={[]} projects={[]}
+      viewStateKey="paperclip:test-user-labels" rowPresentation="task" onUpdateIssue={() => undefined} />, container);
+    const groupLabel = (id: string) => container.querySelector(`[data-issues-group-key="__user:${id}"] button[aria-expanded]`);
+    const options = () => document.body.querySelector('[data-filter-options="creators"]');
+    try {
+      await waitForAssertion(() => {
+        expect(groupLabel("self")?.textContent).toBe("You");
+        expect(container.querySelector('[data-testid="issue-row"]')?.getAttribute("data-presentation")).toBe(streamlined ? "task" : null);
+      });
+      const filter = container.querySelector<HTMLButtonElement>('button[title="Filter"]');
+      expect(filter).not.toBeNull();
+      await act(async () => filter!.click());
+      await waitForAssertion(() => expect(options()).not.toBeNull());
+      const cases = [
+        ["zh-CN", "你", "我", "管理端"], ["es", "Tú", "Yo", "Administración"],
+        ["ja", "あなた", "自分", "管理画面"], ["en", "You", "Me", "Board"],
+      ] as const;
+      for (const [locale, you, me, board] of cases) {
+        await act(async () => { await changeLocale(locale); });
+        await waitForAssertion(() => {
+          expect(groupLabel("self")?.textContent).toBe(you);
+          expect(groupLabel("local-board")?.textContent).toBe(board);
+          expect(groupLabel("named-you")?.textContent).toBe("You");
+          expect(groupLabel("named-board")?.textContent).toBe("Board");
+          const row = Array.from(container.querySelectorAll('[data-testid="issue-row"]')).find(element => element.textContent?.includes("Task 0"));
+          expect(row?.textContent).toContain(you);
+          const labels = Array.from(options()!.querySelectorAll("button")).map(button => button.textContent);
+          expect(labels).toEqual(expect.arrayContaining([me, board, "You", "Board"]));
+        });
+        const createInGroup = container.querySelector<HTMLButtonElement>('[data-issues-group-key="__user:local-board"] button[title]')!;
+        await act(async () => createInGroup.click());
+        expect(dialogState.openNewIssue).toHaveBeenLastCalledWith({ assigneeUserId: "local-board" });
+        expect(JSON.stringify(issues)).toBe(originalIssues);
+      }
+      // Raw search aliases are not translated, and an active search survives a locale change.
+      const search = options()!.parentElement!.querySelector("input")!;
+      const setSearch = async (value: string) => act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(search, value);
+        search.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      await setSearch("local-board");
+      await act(async () => { await changeLocale("ja"); });
+      await waitForAssertion(() => {
+        expect(search.value).toBe("local-board");
+        expect(Array.from(options()!.querySelectorAll("button")).map(button => button.textContent)).toEqual(["管理画面"]);
+      });
+      await setSearch("");
+      // Directory refresh preserves real names even for self and the exact local-board identity.
+      await act(async () => { queryClient.setQueryData(queryKeys.access.companyUserDirectory("company-1"), {
+        users: users.map(entry => entry.user ? entry : { ...entry, user: { id: entry.principalId,
+          name: entry.principalId === "self" ? "You" : "Board", email: null, image: null } }),
+      }); await changeLocale("zh-CN"); });
+      await waitForAssertion(() => {
+        expect(groupLabel("self")?.textContent).toBe("You");
+        expect(groupLabel("local-board")?.textContent).toBe("Board");
+        expect(options()?.textContent).not.toContain("管理端");
+        expect(options()?.textContent).not.toContain("我");
+      });
+      // Choose the first real-name Board option: labels may collide, IDs may not.
+      const boardOption = Array.from(options()!.querySelectorAll("button")).find(button => button.textContent === "Board")!;
+      await act(async () => boardOption.click());
+      await waitForAssertion(() => {
+        const stored = JSON.parse(localStorage.getItem(storageKey)!);
+        expect(stored.creators).toEqual(["user:local-board"]);
+      });
+      expect(JSON.stringify(issues)).toBe(originalIssues);
+    } finally { act(() => root.unmount()); queryClient.clear(); await act(async () => { await changeLocale("en"); }); }
   });
 
   it("shows human assignee names from company member profiles", async () => {

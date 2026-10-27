@@ -24,7 +24,7 @@ import {
 } from "../lib/issue-filters";
 import { externalObjectIconForCategory } from "../lib/external-objects";
 import { externalObjectStatusIcon } from "../lib/status-colors";
-import { formatAssigneeUserLabel } from "../lib/assignees";
+import { useAssigneeDisplayLabels } from "../i18n/assignee-display";
 import type { InboxApprovalFilter, InboxCategoryFilter } from "../lib/inbox";
 import { cn } from "../lib/utils";
 
@@ -123,7 +123,8 @@ export function IssueFiltersPopover({
   presentation?: "legacy" | "streamlined";
   inboxScopeFilters?: InboxScopeFilters;
 }) {
-  const { t, i18n } = useBrowserTranslation();
+  const { t } = useBrowserTranslation();
+  const { userLabel } = useAssigneeDisplayLabels(currentUserId);
   const streamlined = presentation === "streamlined";
   const [creatorSearch, setCreatorSearch] = useState("");
   const [assigneeSearch, setAssigneeSearch] = useState("");
@@ -164,11 +165,11 @@ export function IssueFiltersPopover({
       const userId = creatorId.startsWith("user:") ? creatorId.slice("user:".length) : creatorId;
       return {
         id: creatorId,
-        label: userId === currentUserId ? t("filterUi.you") : formatAssigneeUserLabel(userId, currentUserId) ?? userId.slice(0, 5),
+        label: userLabel(userId) ?? userId.slice(0, 5),
         kind: "user" as const,
       };
     }),
-    [creatorOptionById, currentUserId, state.creators, t, i18n.language],
+    [creatorOptionById, state.creators, userLabel],
   );
   const clearFilters = () => {
     onChange(defaultIssueFilterState);

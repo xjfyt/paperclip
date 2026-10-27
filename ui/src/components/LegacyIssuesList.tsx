@@ -17,8 +17,8 @@ import {
   shouldBlurPageSearchOnEnter,
   shouldBlurPageSearchOnEscape,
 } from "../lib/keyboardShortcuts";
-import { formatAssigneeUserLabel } from "../lib/assignees";
-import { buildCompanyUserLabelMap, buildCompanyUserProfileMap } from "../lib/company-members";
+import { useAssigneeDisplayLabels } from "../i18n/assignee-display";
+import { buildCompanyUserProfileMap } from "../lib/company-members";
 import { createIssueDetailPath, rememberIssueDetailLocationState, withIssueDetailHeaderSeed } from "../lib/issueDetailBreadcrumb";
 import { prefetchIssueDetailForNavigation } from "../lib/issueDetailCache";
 import {
@@ -881,10 +881,7 @@ export function IssuesList({
     return agents.find((a) => a.id === id)?.name ?? null;
   }, [agents]);
 
-  const companyUserLabelMap = useMemo(
-    () => buildCompanyUserLabelMap(companyMembers?.users),
-    [companyMembers?.users],
-  );
+  const { userLabel, currentUserOptionLabel } = useAssigneeDisplayLabels(currentUserId, companyMembers?.users);
   const companyUserProfileMap = useMemo(
     () => buildCompanyUserProfileMap(companyMembers?.users),
     [companyMembers?.users],
@@ -973,7 +970,7 @@ export function IssuesList({
     if (currentUserId) {
       options.set(`user:${currentUserId}`, {
         id: `user:${currentUserId}`,
-        label: currentUserId === "local-board" ? "Board" : "Me",
+        label: currentUserOptionLabel!,
         kind: "user",
         searchText: currentUserId === "local-board" ? "board me human local-board" : `me board human ${currentUserId}`,
       });
@@ -985,7 +982,7 @@ export function IssuesList({
         if (!options.has(id)) {
           options.set(id, {
             id,
-            label: formatAssigneeUserLabel(issue.createdByUserId, currentUserId) ?? issue.createdByUserId.slice(0, 5),
+            label: userLabel(issue.createdByUserId) ?? issue.createdByUserId.slice(0, 5),
             kind: "user",
             searchText: `${issue.createdByUserId} board user human`,
           });
@@ -1024,7 +1021,7 @@ export function IssuesList({
       if (a.kind !== b.kind) return a.kind === "user" ? -1 : 1;
       return a.label.localeCompare(b.label);
     });
-  }, [agents, currentUserId, issues]);
+  }, [agents, currentUserId, issues, currentUserOptionLabel, userLabel]);
 
   const visibleIssueColumnSet = useMemo(() => new Set(visibleIssueColumns), [visibleIssueColumns]);
   const availableIssueColumns = useMemo(
@@ -1279,7 +1276,7 @@ export function IssuesList({
         key === "__unassigned"
           ? "Unassigned"
           : key.startsWith("__user:")
-            ? (formatAssigneeUserLabel(key.slice("__user:".length), currentUserId, companyUserLabelMap) ?? "User")
+            ? (userLabel(key.slice("__user:".length)) ?? "User")
             : (agentName(key) ?? key.slice(0, 8)),
       items: groups[key]!,
     }));
@@ -1292,7 +1289,7 @@ export function IssuesList({
     currentUserId,
     workspaceNameMap,
     issueTitleMap,
-    companyUserLabelMap,
+    userLabel,
     projectById,
   ]);
 
@@ -2000,11 +1997,7 @@ export function IssuesList({
                   const assigneeUserProfile = issue.assigneeUserId
                     ? companyUserProfileMap.get(issue.assigneeUserId) ?? null
                     : null;
-                  const assigneeUserLabel = formatAssigneeUserLabel(
-                    issue.assigneeUserId,
-                    currentUserId,
-                    companyUserLabelMap,
-                  ) ?? assigneeUserProfile?.label ?? null;
+                  const assigneeUserLabel = userLabel(issue.assigneeUserId) ?? assigneeUserProfile?.label ?? null;
                   const originatingActor = deriveOriginatingActor(issue);
                   const originatingUserId = originatingActor?.kind === "user" ? originatingActor.id : null;
                   const originatingViaAgentId =
