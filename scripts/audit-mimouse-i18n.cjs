@@ -88,6 +88,81 @@ const quotaComponents = [
 const quotaFiles = quotaComponents.map(component => component.file);
 const quotaRenderBoundary = "Within a visible subscription quota section, loading shows a skeleton; nonempty quotaAccounts then render AccountQuotaPanels. Otherwise isClaudeQuotaPanel/isCodexQuotaPanel choose the conditional Claude/Codex fallbacks. Those fallbacks are not globally unused.";
 
+// Schema 4 adds only these four exact JSX inventories. Evidence-only helpers
+// and hosts below never recursively enlarge this or any earlier scope.
+const taskChatDirectory = "ui/src/components/task-chat/";
+const protocolDisplayComponents = [
+  { file: `${taskChatDirectory}TaskChatRunnerActivityGroup.tsx`, symbol: "TaskChatRunnerActivityGroup", hosts: [
+    { file: `${taskChatDirectory}TaskChatThreadView.tsx`, importSource: "./TaskChatRunnerActivityGroup" },
+    { file: `${taskChatDirectory}TaskChatRunnerTurn.tsx`, importSource: "./TaskChatRunnerActivityGroup" },
+    { file: `${taskChatDirectory}TaskChatLiveTail.tsx`, importSource: "./TaskChatRunnerActivityGroup" },
+  ] },
+  { file: `${taskChatDirectory}TaskChatProtocolCard.tsx`, symbol: "TaskChatProtocolCard", hosts: [
+    { file: "ui/src/components/TaskChatThread.tsx", importSource: "@/components/task-chat/TaskChatProtocolCard" },
+    { file: `${taskChatDirectory}TaskChatThreadView.tsx`, importSource: "./TaskChatProtocolCard" },
+    { file: `${taskChatDirectory}TaskChatRunnerTurn.tsx`, importSource: "./TaskChatProtocolCard" },
+    { file: `${taskChatDirectory}TaskChatLiveTail.tsx`, importSource: "./TaskChatProtocolCard" },
+  ] },
+  { file: `${taskChatDirectory}QuestionForm.tsx`, symbol: "QuestionForm", hosts: [
+    { file: `${taskChatDirectory}TaskChatProtocolCard.tsx`, importSource: "./QuestionForm" },
+  ] },
+  { file: `${taskChatDirectory}TaskChatRichInput.tsx`, symbol: "TaskChatRichInput", hosts: [
+    { file: `${taskChatDirectory}QuestionForm.tsx`, importSource: "./TaskChatRichInput" },
+  ] },
+];
+const protocolDisplayFiles = protocolDisplayComponents.map(component => component.file);
+const protocolThreadHosts = ["TaskChatThreadView", "TaskChatRunnerTurn", "TaskChatLiveTail"].map(symbol => ({
+  file: `${taskChatDirectory}${symbol}.tsx`, symbol,
+  hosts: [{ file: "ui/src/components/TaskChatThread.tsx", importSource: `@/components/task-chat/${symbol}` }],
+}));
+const protocolRoute = {
+  file: "ui/src/pages/IssueDetail.tsx", symbol: "IssueDetail", importSource: "./pages/IssueDetail",
+  source: "ui/src/App.tsx", routePattern: "issues/:issueId",
+  conditionalThread: { file: "ui/src/components/TaskChatThread.tsx", importSource: "../components/TaskChatThread",
+    symbol: "TaskChatThread", binding: "ThreadComponent", condition: "classicTaskInterfaceEnabled",
+    whenTrue: "IssueChatThread", whenFalse: "TaskChatThread" },
+};
+const protocolRenderBoundary = "IssueDetail selects TaskChatThread only when classicTaskInterfaceEnabled is false. Its settled history, runner turn and legacy live tail mount the Group; runtime takeover and timeline mount Card. Card workspace/runtime branches and QuestionForm/RichInput are the reviewed paths, not proof every Card branch is reachable. Group mounts the named TaskChatProtocolActivityDetails export; no direct TaskChatProtocolActivityRow mount is claimed.";
+const manualProtocolSources = [
+  { file: `${taskChatDirectory}tool-taxonomy.ts`, symbols: ["toolActivityPresentation", "toolActivityCopyDescriptor"], consumers: [
+    { file: `${taskChatDirectory}TaskChatRunnerActivityGroup.tsx`, importSource: "./tool-taxonomy", symbol: "toolActivityPresentation", usage: "call" },
+    { file: `${taskChatDirectory}task-chat-activity-presentation.ts`, importSource: "./tool-taxonomy", symbol: "toolActivityPresentation", usage: "call" },
+    { file: `${taskChatDirectory}completed-activity-summary.ts`, importSource: "./tool-taxonomy", symbol: "toolActivityPresentation", usage: "call" },
+    { file: `${taskChatDirectory}tool-activity-display.ts`, importSource: "./tool-taxonomy", symbol: "toolActivityCopyDescriptor", usage: "call" },
+  ] },
+  { file: `${taskChatDirectory}tool-activity-display.ts`, symbols: ["toolActivityDisplayLabels"], consumers: [
+    { file: `${taskChatDirectory}TaskChatRunnerActivityGroup.tsx`, importSource: "./tool-activity-display", symbol: "toolActivityDisplayLabels", usage: "call" },
+    { file: `${taskChatDirectory}task-chat-activity-presentation.ts`, importSource: "./tool-activity-display", symbol: "toolActivityDisplayLabels", usage: "call" },
+  ] },
+  { file: `${taskChatDirectory}task-chat-activity-presentation.ts`, symbols: ["protocolActivityPresentation", "protocolActivityLabel"], consumers: [
+    { file: `${taskChatDirectory}TaskChatRunnerActivityGroup.tsx`, importSource: "./task-chat-activity-presentation", symbol: "protocolActivityPresentation", usage: "call" },
+    { file: `${taskChatDirectory}TaskChatRunnerActivityGroup.tsx`, importSource: "./task-chat-activity-presentation", symbol: "protocolActivityLabel", usage: "call" },
+    { file: `${taskChatDirectory}completed-activity-summary.ts`, importSource: "./task-chat-activity-presentation", symbol: "protocolActivityPresentation", usage: "call" },
+  ] },
+  { file: `${taskChatDirectory}completed-activity-summary.ts`, symbols: ["completedActivitySummary"], consumers: [
+    { file: `${taskChatDirectory}TaskChatRunnerActivityGroup.tsx`, importSource: "./completed-activity-summary", symbol: "completedActivitySummary", usage: "call" },
+  ] },
+  { file: `${taskChatDirectory}TaskChatProtocolActivityRow.tsx`, symbols: ["TaskChatProtocolActivityDetails"], consumers: [
+    { file: `${taskChatDirectory}TaskChatRunnerActivityGroup.tsx`, importSource: "./TaskChatProtocolActivityRow", symbol: "TaskChatProtocolActivityDetails", usage: "jsx" },
+  ] },
+];
+const manualProtocolFiles = manualProtocolSources.map(source => source.file);
+function collectManualSourceEvidence(root) {
+  const hash = crypto.createHash("sha256"), missingManualSourceFiles = [];
+  const manualSourceEvidence = manualProtocolSources.map(entry => {
+    const file = path.join(root, entry.file);
+    if (!fs.existsSync(file) || !fs.statSync(file).isFile()) {
+      missingManualSourceFiles.push(entry.file);
+      return { ...entry, sourceSha256: null, classification: "needs_manual_review", method: "source-hash-only" };
+    }
+    const source = fs.readFileSync(file, "utf8");
+    hash.update(entry.file).update("\0").update(source).update("\0");
+    return { ...entry, sourceSha256: crypto.createHash("sha256").update(source).digest("hex"),
+      classification: "needs_manual_review", method: "source-hash-only" };
+  });
+  return { manualSourceEvidence, missingManualSourceFiles, manualSourceSha256: hash.digest("hex") };
+}
+
 function isTranslationCall(node) {
   if (node.type !== "CallExpression") return false;
   const callee = node.callee;
@@ -189,7 +264,8 @@ function matchesEntry(file, names) { return names.includes(path.basename(file, "
 function selectInventory(files) {
   const eligible = files.filter(file => /\.tsx$/.test(file) && !/(?:\.test\.|\.stories\.)/.test(file));
   const selected = [...new Set(eligible.filter(file => matchesEntry(file, names) || routedRoutineFiles.includes(file)
-    || consumedUiFiles.includes(file) || routedCompanyFiles.includes(file) || buildObservationFiles.includes(file) || quotaFiles.includes(file)))].sort();
+    || consumedUiFiles.includes(file) || routedCompanyFiles.includes(file) || buildObservationFiles.includes(file) || quotaFiles.includes(file)
+    || protocolDisplayFiles.includes(file)))].sort();
   return {
     selected,
     missingRoutedFiles: routedRoutineFiles.filter(file => !selected.includes(file)),
@@ -197,11 +273,14 @@ function selectInventory(files) {
     missingCompanyRouteFiles: routedCompanyFiles.filter(file => !selected.includes(file)),
     missingBuildObservationFiles: buildObservationFiles.filter(file => !selected.includes(file)),
     missingQuotaFiles: quotaFiles.filter(file => !selected.includes(file)),
+    missingProtocolDisplayFiles: protocolDisplayFiles.filter(file => !selected.includes(file)),
     unmatchedBasenames: names.filter(name => !selected.some(file => matchesEntry(file, [name]))),
   };
 }
 module.exports = { collectCandidates, collectAudit, matchesEntry, selectInventory, routedRoutineFiles, consumedUiComponents, consumedUiFiles,
-  routedCompanyPages, routedCompanyFiles, buildObservationComponents, buildObservationFiles, quotaComponents, quotaFiles, quotaRenderBoundary, browserMessageMethods };
+  routedCompanyPages, routedCompanyFiles, buildObservationComponents, buildObservationFiles, quotaComponents, quotaFiles, quotaRenderBoundary, browserMessageMethods,
+  protocolDisplayComponents, protocolDisplayFiles, protocolThreadHosts, protocolRoute, protocolRenderBoundary,
+  manualProtocolSources, manualProtocolFiles, collectManualSourceEvidence };
 
 if (require.main === module) {
   const root = path.resolve(__dirname, "..");
@@ -228,7 +307,8 @@ if (require.main === module) {
     }
   }
   files(path.join(root, "ui/src"));
-  const { selected, missingRoutedFiles, missingConsumedFiles, missingCompanyRouteFiles, missingBuildObservationFiles, missingQuotaFiles, unmatchedBasenames } = selectInventory(all);
+  const { selected, missingRoutedFiles, missingConsumedFiles, missingCompanyRouteFiles, missingBuildObservationFiles, missingQuotaFiles, missingProtocolDisplayFiles, unmatchedBasenames } = selectInventory(all);
+  const { manualSourceEvidence, missingManualSourceFiles, manualSourceSha256 } = collectManualSourceEvidence(root);
   const candidates = [], dynamicCandidates = [], counts = [], hash = crypto.createHash("sha256");
   for (const relative of selected) {
     const source = fs.readFileSync(path.join(root, relative), "utf8");
@@ -238,10 +318,13 @@ if (require.main === module) {
     candidates.push(...rows.candidates); dynamicCandidates.push(...rows.dynamicCandidates);
   }
   const result = {
-    schemaVersion: 3, generatedAt: new Date().toISOString(), parserVersion,
+    schemaVersion: 4, generatedAt: new Date().toISOString(), parserVersion,
     method: "Bounded Babel AST inventory: JSX text/display attributes (including message and ariaLabel), direct/conditional/template literals, pushToast/toast display fields, setSecretMessage.title and direct window.confirm/window.prompt/window.alert first-argument messages. Dynamic display expressions are separate needs_manual_review locations, not untranslated strings.",
     limits: [
       "Not a complete route/call graph, data-flow analysis, rendered-text count or translation coverage percentage.",
+      "Schema 4 adds four exact protocol-display TSX files as a separate scope; earlier scopes and candidate meanings are unchanged. Expanded totals are not directly comparable with schema 3. Original sourceSha256 covers only AST-inventoried files; manualSourceSha256 is separate.",
+      "The five manualSourceEvidence files (four TS helpers and one named-details TSX source) are source-hash-only, not AST candidate inventories. Helper return values, canonical matching/deduplication labels and provider/user provenance require manual review; zero automatic candidates is not translation proof. TaskChatProtocolActivityRow.tsx is not added to the scanned files.",
+      "Protocol import/render and helper-call edges are bounded explicit evidence checked by the script tests, not a CLI-inferred call graph or runtime reachability proof. Host metadata does not recursively select files; the Classic Task Interface and unverified Card branches are not claimed covered.",
       "Scope and syntax expanded from schema 2: two exact company routes, the build-observation component/direct host, the separate two-file quota scope, ariaLabel and window.confirm/window.prompt/window.alert messages. Candidate totals are not directly comparable with earlier reports.",
       "Consumed-component hosts document bounded verified import/render relationships, not every consumer or a routine route. Host metadata does not recursively add host files to the scanned inventory.",
       "Company route metadata and build-observation component/direct-host inventory are separate exact scopes; the original 21 routine files and three consumed components/five hosts are unchanged. The build-observation direct host is explicitly selected and deduplicated, not recursively discovered.",
@@ -257,12 +340,18 @@ if (require.main === module) {
     requestedCompanyRouteFiles: routedCompanyFiles, missingCompanyRouteFiles,
     requestedBuildObservationFiles: buildObservationFiles, missingBuildObservationFiles,
     requestedQuotaFiles: quotaFiles, missingQuotaFiles,
+    requestedProtocolDisplayFiles: protocolDisplayFiles, missingProtocolDisplayFiles,
+    requestedManualSourceFiles: manualProtocolFiles, missingManualSourceFiles, manualSourceEvidence, manualSourceSha256,
     scope: { eligibleTsxFiles: all.length, basenameMatchedFiles: selected.filter(file => matchesEntry(file, names)).length,
       routedMatchedFiles: routedRoutineFiles.length - missingRoutedFiles.length,
       consumedMatchedFiles: consumedUiFiles.length - missingConsumedFiles.length, consumedComponentHosts: consumedUiComponents,
       companyRouteMatchedFiles: routedCompanyFiles.length - missingCompanyRouteFiles.length, companyRoutes: routedCompanyPages,
       buildObservationMatchedFiles: buildObservationFiles.length - missingBuildObservationFiles.length, buildObservationComponentHosts: buildObservationComponents,
       quotaMatchedFiles: quotaFiles.length - missingQuotaFiles.length, quotaComponentHosts: quotaComponents, quotaRenderBoundary,
+      protocolDisplayMatchedFiles: protocolDisplayFiles.length - missingProtocolDisplayFiles.length,
+      protocolDisplayComponentHosts: protocolDisplayComponents, protocolThreadHosts, protocolRoute, protocolRenderBoundary,
+      manualSourceMatchedFiles: manualProtocolFiles.length - missingManualSourceFiles.length,
+      previousScopeMatchedFiles: selected.filter(file => !protocolDisplayFiles.includes(file)).length,
       browserMessages: { receiver: "window", methods: browserMessageMethods, messageArgumentIndex: 0 },
       routeSource: "ui/src/App.tsx", routePatterns: ["routines", "routines/:routineId", "routines/:routineId/:section"],
       routeSourceSha256: crypto.createHash("sha256").update(fs.readFileSync(path.join(root, "ui/src/App.tsx"))).digest("hex") },
@@ -270,7 +359,7 @@ if (require.main === module) {
   };
   fs.writeFileSync(path.resolve(outPath), JSON.stringify(result, null, 2) + "\n");
   console.log(JSON.stringify({ matchedFiles: result.matchedFiles, totalLiteralCandidates: result.totalLiteralCandidates, totalDynamicCandidates: result.totalDynamicCandidates,
-    sourceSha256: result.sourceSha256, unmatchedBasenames, missingRoutedFiles, missingConsumedFiles, missingCompanyRouteFiles, missingBuildObservationFiles, missingQuotaFiles,
+    sourceSha256: result.sourceSha256, manualSourceSha256, unmatchedBasenames, missingRoutedFiles, missingConsumedFiles, missingCompanyRouteFiles, missingBuildObservationFiles, missingQuotaFiles, missingProtocolDisplayFiles, missingManualSourceFiles,
     out: path.resolve(outPath) }, null, 2));
-  if (missingRoutedFiles.length || missingConsumedFiles.length || missingCompanyRouteFiles.length || missingBuildObservationFiles.length || missingQuotaFiles.length || unmatchedBasenames.length) process.exitCode = 1;
+  if (missingRoutedFiles.length || missingConsumedFiles.length || missingCompanyRouteFiles.length || missingBuildObservationFiles.length || missingQuotaFiles.length || missingProtocolDisplayFiles.length || missingManualSourceFiles.length || unmatchedBasenames.length) process.exitCode = 1;
 }

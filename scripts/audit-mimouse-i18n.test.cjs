@@ -6,7 +6,9 @@ const os = require("node:os");
 const { spawnSync } = require("node:child_process");
 const { collectCandidates, collectAudit, selectInventory, routedRoutineFiles, consumedUiComponents, consumedUiFiles,
   routedCompanyPages, routedCompanyFiles, buildObservationComponents, buildObservationFiles,
-  quotaComponents, quotaFiles, quotaRenderBoundary, browserMessageMethods } = require("./audit-mimouse-i18n.cjs");
+  quotaComponents, quotaFiles, quotaRenderBoundary, browserMessageMethods,
+  protocolDisplayComponents, protocolDisplayFiles, protocolThreadHosts, protocolRoute, protocolRenderBoundary,
+  manualProtocolSources, manualProtocolFiles, collectManualSourceEvidence } = require("./audit-mimouse-i18n.cjs");
 const parserEntry = process.env.AUDIT_I18N_PARSER
   ? path.resolve(process.env.AUDIT_I18N_PARSER)
   : path.resolve(__dirname, "../node_modules/.pnpm/@babel+parser@7.29.8/node_modules/@babel/parser/lib/index.js");
@@ -276,6 +278,7 @@ test("App imports and mounts the company pages, build-observation host and Costs
   const source = fs.readFileSync(path.join(__dirname, "../ui/src/App.tsx"), "utf8");
   const ast = parse(source, { sourceType: "module", plugins: ["typescript", "jsx"] });
   const pages = [...routedCompanyPages,
+    protocolRoute,
     { file: "ui/src/pages/MimouseCoding.tsx", importSource: "./pages/MimouseCoding", routePattern: "coding" },
     { file: "ui/src/pages/Costs.tsx", importSource: "./pages/Costs", routePattern: "costs" }];
   for (const page of pages) {
@@ -372,20 +375,24 @@ function cliFixture(t, missing) {
   const files = [
     ...selectInventory([]).unmatchedBasenames.map(name => `ui/src/pages/${name}.tsx`),
     ...routedRoutineFiles, ...consumedUiFiles, ...routedCompanyFiles, ...buildObservationFiles, ...quotaFiles,
+    ...protocolDisplayFiles, ...manualProtocolFiles,
   ];
   for (const file of files.filter(file => file !== missing)) write(file, "export const View = () => <span />;");
   if (missing) write(`ui/src/elsewhere/${path.basename(missing)}`, "export const Unused = () => <span />;");
   const out = path.join(root, "report.json");
-  const result = spawnSync(process.execPath, [path.join(root, "scripts/audit-mimouse-i18n.cjs"), "--parser", parserEntry, "--out", out], { encoding: "utf8", timeout: 10_000 });
-  assert.ifError(result.error);
-  assert.equal(result.signal, null, result.stderr);
-  return { result, report: JSON.parse(fs.readFileSync(out, "utf8")) };
+  const run = () => {
+    const result = spawnSync(process.execPath, [path.join(root, "scripts/audit-mimouse-i18n.cjs"), "--parser", parserEntry, "--out", out], { encoding: "utf8", timeout: 10_000 });
+    assert.ifError(result.error);
+    assert.equal(result.signal, null, result.stderr);
+    return { result, report: JSON.parse(fs.readFileSync(out, "utf8")) };
+  };
+  return { root, write, run, ...run() };
 }
 
 test("CLI keeps consumed host metadata separate from the unchanged routine route scope", t => {
   const { result, report } = cliFixture(t);
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(report.schemaVersion, 3);
+  assert.equal(report.schemaVersion, 4);
   assert.deepEqual(report.requestedConsumedFiles, consumedUiFiles);
   assert.deepEqual(report.missingConsumedFiles, []);
   assert.deepEqual(report.scope.consumedComponentHosts, consumedUiComponents);
@@ -441,4 +448,207 @@ test("CLI reports every missing new exact path even if a same-basename file exis
     assert.ok(!report.requestedBasenames.includes("Companies") && !report.requestedBasenames.includes("CompanySettings") && !report.requestedBasenames.includes("MimouseBuildObservations"));
     assert.ok(quotaFiles.every(file => !report.requestedBasenames.includes(path.basename(file, ".tsx"))));
   }
+});
+
+test("protocol display selects four exact TSX files, never its manual sources or same-basename substitutes", () => {
+  assert.deepEqual(protocolDisplayFiles, ["TaskChatRunnerActivityGroup", "TaskChatProtocolCard", "QuestionForm", "TaskChatRichInput"]
+    .map(name => `ui/src/components/task-chat/${name}.tsx`));
+  const wrongPaths = protocolDisplayFiles.flatMap(file => [
+    `ui/src/elsewhere/${path.basename(file)}`, ...["production", "legacy", "test", "stories"].map(suffix => file.replace(".tsx", `.${suffix}.tsx`)),
+  ]);
+  const selected = selectInventory([...protocolDisplayFiles, ...protocolDisplayFiles, ...manualProtocolFiles, ...wrongPaths]);
+  assert.deepEqual(selected.selected, [...protocolDisplayFiles].sort());
+  assert.deepEqual(selected.missingProtocolDisplayFiles, []);
+  assert.deepEqual(selectInventory(wrongPaths).missingProtocolDisplayFiles, protocolDisplayFiles);
+  assert.deepEqual(selectInventory(manualProtocolFiles).selected, []);
+  assert.equal(routedRoutineFiles.length, 21);
+  assert.equal(consumedUiFiles.length, 3);
+  assert.equal(consumedUiComponents.flatMap(component => component.hosts).length, 5);
+  assert.deepEqual([routedCompanyFiles.length, buildObservationFiles.length, quotaFiles.length], [2, 2, 2]);
+  assert.ok(protocolDisplayFiles.every(file => ![...routedRoutineFiles, ...consumedUiFiles, ...routedCompanyFiles, ...buildObservationFiles, ...quotaFiles].includes(file)));
+});
+
+function valueConsumer(source, importSource, symbol, usage) {
+  const ast = parse(source, { sourceType: "module", plugins: ["typescript", "jsx"] });
+  const declaration = ast.program.body.find(node => node.type === "ImportDeclaration" && node.source.value === importSource && node.importKind !== "type");
+  const binding = declaration?.specifiers.find(node => node.type === "ImportSpecifier" && node.imported.name === symbol && node.importKind !== "type");
+  if (!binding) return false;
+  let consumed = false;
+  walkAst(ast.program, node => {
+    if (usage === "jsx" && node.type === "JSXOpeningElement" && node.name.type === "JSXIdentifier" && node.name.name === binding.local.name) consumed = true;
+    if (usage === "call" && node.type === "CallExpression" && node.callee.type === "Identifier" && node.callee.name === binding.local.name) consumed = true;
+  });
+  return consumed;
+}
+
+function assertSourceEdge(file, consumer) {
+  const root = path.resolve(__dirname, "..");
+  const extension = path.extname(file);
+  const resolved = consumer.importSource.startsWith("@/") ? `ui/src/${consumer.importSource.slice(2)}${extension}`
+    : path.posix.normalize(`${path.posix.dirname(consumer.file)}/${consumer.importSource}${extension}`);
+  assert.equal(resolved, file);
+  const target = parse(fs.readFileSync(path.join(root, file), "utf8"), { sourceType: "module", plugins: ["typescript", "jsx"] });
+  assert.ok(target.program.body.some(node => node.type === "ExportNamedDeclaration" && node.declaration?.type === "FunctionDeclaration"
+    && node.declaration.id.name === consumer.symbol), `${file} must export the actual ${consumer.symbol} function`);
+  const source = fs.readFileSync(path.join(root, consumer.file), "utf8");
+  assert.ok(valueConsumer(source, consumer.importSource, consumer.symbol, consumer.usage), `${consumer.file} must ${consumer.usage} the named ${consumer.symbol} import`);
+}
+
+test("protocol metadata matches real named import/render hosts and manual helper-call edges", () => {
+  assert.equal(protocolDisplayComponents.flatMap(component => component.hosts).length, 9);
+  assert.equal(protocolThreadHosts.length, 3);
+  for (const component of [...protocolDisplayComponents, ...protocolThreadHosts]) {
+    for (const host of component.hosts) assertSourceEdge(component.file, { ...host, symbol: component.symbol, usage: "jsx" });
+  }
+  assert.equal(manualProtocolSources.length, 5);
+  assert.equal(manualProtocolFiles.filter(file => file.endsWith(".ts")).length, 4);
+  for (const entry of manualProtocolSources) {
+    assert.ok(entry.consumers.length > 0);
+    for (const consumer of entry.consumers) {
+      assert.ok(entry.symbols.includes(consumer.symbol));
+      assertSourceEdge(entry.file, consumer);
+    }
+  }
+  const row = manualProtocolSources.find(entry => entry.file.endsWith("/TaskChatProtocolActivityRow.tsx"));
+  assert.deepEqual(row.symbols, ["TaskChatProtocolActivityDetails"]);
+  assert.equal(row.consumers.length, 1);
+  assert.equal(row.consumers[0].symbol, "TaskChatProtocolActivityDetails");
+  assert.equal(row.consumers[0].usage, "jsx");
+  assert.ok(protocolRenderBoundary.includes("no direct TaskChatProtocolActivityRow mount"));
+});
+
+test("import-only, wrong-export, type-only and wrong-usage references do not prove a consumed display", () => {
+  const prefix = 'import { TaskChatProtocolActivityDetails as Details } from "./TaskChatProtocolActivityRow";';
+  assert.equal(valueConsumer(`${prefix} const View = () => <Details />;`, "./TaskChatProtocolActivityRow", "TaskChatProtocolActivityDetails", "jsx"), true);
+  assert.equal(valueConsumer(prefix, "./TaskChatProtocolActivityRow", "TaskChatProtocolActivityDetails", "jsx"), false);
+  assert.equal(valueConsumer('import { TaskChatProtocolActivityRow as Details } from "./TaskChatProtocolActivityRow"; const View = () => <Details />;', "./TaskChatProtocolActivityRow", "TaskChatProtocolActivityDetails", "jsx"), false);
+  assert.equal(valueConsumer('import type { TaskChatProtocolActivityDetails as Details } from "./TaskChatProtocolActivityRow"; const View = () => <Details />;', "./TaskChatProtocolActivityRow", "TaskChatProtocolActivityDetails", "jsx"), false);
+  assert.equal(valueConsumer('import { type TaskChatProtocolActivityDetails as Details } from "./TaskChatProtocolActivityRow"; const View = () => <Details />;', "./TaskChatProtocolActivityRow", "TaskChatProtocolActivityDetails", "jsx"), false);
+  assert.equal(valueConsumer(`${prefix} const View = () => <Details />;`, "./TaskChatProtocolActivityRow", "TaskChatProtocolActivityDetails", "call"), false);
+  assert.equal(valueConsumer('import { display as label } from "./helper"; const x = label(input);', "./helper", "display", "call"), true);
+});
+
+test("IssueDetail really selects and renders the imported TaskChatThread only outside the Classic interface", () => {
+  assert.equal(protocolRoute.source, "ui/src/App.tsx");
+  assert.equal(protocolRoute.routePattern, "issues/:issueId");
+  const source = fs.readFileSync(path.join(__dirname, "..", protocolRoute.file), "utf8");
+  const ast = parse(source, { sourceType: "module", plugins: ["typescript", "jsx"] });
+  const thread = protocolRoute.conditionalThread;
+  assert.equal(path.posix.normalize(`${path.posix.dirname(protocolRoute.file)}/${thread.importSource}.tsx`), thread.file);
+  const declaration = ast.program.body.find(node => node.type === "ImportDeclaration" && node.source.value === thread.importSource && node.importKind !== "type");
+  const binding = declaration?.specifiers.find(node => node.type === "ImportSpecifier" && node.imported.name === thread.symbol && node.importKind !== "type");
+  assert.ok(binding);
+  let selection, rendered = false;
+  walkAst(ast.program, node => {
+    if (node.type === "VariableDeclarator" && node.id.name === thread.binding) selection = node.init;
+    if (node.type === "JSXOpeningElement" && node.name.type === "JSXIdentifier" && node.name.name === thread.binding) rendered = true;
+  });
+  assert.equal(selection?.type, "ConditionalExpression");
+  assert.equal(selection.test.type, "Identifier");
+  assert.equal(selection.test.name, thread.condition);
+  assert.equal(selection.consequent.name, thread.whenTrue);
+  assert.equal(selection.alternate.name, binding.local.name);
+  assert.equal(thread.whenFalse, thread.symbol);
+  assert.equal(rendered, true);
+});
+
+test("schema 4 keeps protocol AST counts and manual source evidence separate from all prior scopes", t => {
+  const { result, report } = cliFixture(t);
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(report.requestedProtocolDisplayFiles, protocolDisplayFiles);
+  assert.deepEqual(report.missingProtocolDisplayFiles, []);
+  assert.equal(report.scope.protocolDisplayMatchedFiles, 4);
+  assert.deepEqual(report.scope.protocolDisplayComponentHosts, protocolDisplayComponents);
+  assert.deepEqual(report.scope.protocolThreadHosts, protocolThreadHosts);
+  assert.deepEqual(report.scope.protocolRoute, protocolRoute);
+  assert.equal(report.scope.protocolRenderBoundary, protocolRenderBoundary);
+  assert.deepEqual(report.requestedManualSourceFiles, manualProtocolFiles);
+  assert.deepEqual(report.missingManualSourceFiles, []);
+  assert.equal(report.scope.manualSourceMatchedFiles, 5);
+  assert.equal(report.scope.previousScopeMatchedFiles, report.matchedFiles - 4);
+  assert.ok(manualProtocolFiles.every(file => !report.files.some(row => row.file === file)));
+  assert.ok(report.manualSourceEvidence.every(row => row.classification === "needs_manual_review" && row.method === "source-hash-only" && /^[a-f0-9]{64}$/.test(row.sourceSha256)));
+  assert.match(report.manualSourceSha256, /^[a-f0-9]{64}$/);
+  assert.ok(report.limits.some(limit => limit.includes("not AST candidate inventories")));
+  assert.ok(report.limits.some(limit => limit.includes("not a CLI-inferred call graph")));
+  assert.ok(report.limits.some(limit => limit.includes("earlier scopes and candidate meanings are unchanged")));
+});
+
+test("each missing protocol AST or manual evidence file fails closed even with wrong-path and production substitutes", t => {
+  for (const missing of [...protocolDisplayFiles, ...manualProtocolFiles]) {
+    const fixture = cliFixture(t, missing);
+    fixture.write(missing.replace(/(\.tsx?)$/, ".production$1"), "export const Unused = () => <p>Unused English</p>;");
+    const { result, report } = fixture.run();
+    assert.equal(result.status, 1, `${missing}: ${result.stderr}`);
+    assert.deepEqual(report.missingProtocolDisplayFiles, protocolDisplayFiles.includes(missing) ? [missing] : []);
+    assert.deepEqual(report.missingManualSourceFiles, manualProtocolFiles.includes(missing) ? [missing] : []);
+    assert.deepEqual(report.missingRoutedFiles, []);
+    assert.deepEqual(report.missingConsumedFiles, []);
+    assert.deepEqual(report.unmatchedBasenames, []);
+    assert.equal(report.files.some(row => row.file === missing), false);
+    const evidence = report.manualSourceEvidence.find(row => row.file === missing);
+    if (evidence) assert.equal(evidence.sourceSha256, null);
+  }
+});
+
+test("helper and named-details source changes alter only the manual hash, never AST counts or the original source hash", t => {
+  const fixture = cliFixture(t);
+  const original = fixture.report;
+  for (const file of manualProtocolFiles) {
+    const previous = fixture.run().report;
+    fixture.write(file, file.endsWith(".tsx") ? 'export const Details = () => <p>New details copy</p>;'
+      : 'const canonical = { wire: "tool_execution", label: "Running tool" }; export function display() { return "New helper copy"; }');
+    const { result, report } = fixture.run();
+    assert.equal(result.status, 0, result.stderr);
+    assert.notEqual(report.manualSourceSha256, previous.manualSourceSha256);
+    assert.notEqual(report.manualSourceEvidence.find(row => row.file === file).sourceSha256, previous.manualSourceEvidence.find(row => row.file === file).sourceSha256);
+    assert.equal(report.sourceSha256, original.sourceSha256);
+    assert.deepEqual(report.files, original.files);
+    assert.deepEqual(report.candidates, original.candidates);
+    assert.deepEqual(report.dynamicCandidates, original.dynamicCandidates);
+  }
+  assert.deepEqual(collectManualSourceEvidence(fixture.root).missingManualSourceFiles, []);
+});
+
+test("protocol manual review never labels canonical tables, payloads or user/provider dynamic values untranslated", () => {
+  const result = audit(`const canonical = { key: "file_change", label: "Edited files" }; api.send({ action: "submit", title: "Raw provider title" });
+    function copy() { return "Local helper requires origin review"; }
+    const View = () => <section aria-label={summary.fullLabel}><span>{copy()}</span><span>{item.summary}</span>
+      <span>{item.status}</span><span>{"USD"}</span><span>{t("protocol.title", { raw: "Raw user value" })}</span></section>;`);
+  assert.deepEqual(result.candidates.map(row => row.text), ["USD"]);
+  assert.deepEqual(result.dynamicCandidates.map(row => row.expression), ["summary.fullLabel", "copy()", "item.summary", "item.status"]);
+  assert.ok([...result.candidates, ...result.dynamicCandidates].every(row => row.classification === "needs_manual_review"));
+});
+
+test("schema 4 extends the published 78-file inventory by exactly four paths without changing prior scope contracts", () => {
+  const baseline = JSON.parse(fs.readFileSync(path.join(__dirname, "../doc/mimouse/checklists/I18N-AUDIT-20261027-5142.json"), "utf8"));
+  assert.equal(baseline.schemaVersion, 3);
+  assert.equal(baseline.matchedFiles, 78);
+  assert.equal(baseline.totalLiteralCandidates, 278);
+  assert.equal(baseline.totalDynamicCandidates, 1849);
+  const oldFiles = baseline.files.map(row => row.file);
+  const root = path.resolve(__dirname, "..");
+  const files = fs.readdirSync(path.join(root, "ui/src"), { recursive: true })
+    .filter(file => file.endsWith(".tsx")).map(file => `ui/src/${file.split(path.sep).join("/")}`);
+  const inventory = selectInventory(files);
+  assert.equal(inventory.selected.length, 82);
+  assert.deepEqual(inventory.selected.filter(file => !protocolDisplayFiles.includes(file)), oldFiles);
+  assert.deepEqual(routedRoutineFiles, baseline.requestedRoutedFiles);
+  assert.deepEqual(consumedUiFiles, baseline.requestedConsumedFiles);
+  assert.deepEqual(consumedUiComponents, baseline.scope.consumedComponentHosts);
+  assert.deepEqual(routedCompanyFiles, baseline.requestedCompanyRouteFiles);
+  assert.deepEqual(routedCompanyPages, baseline.scope.companyRoutes);
+  assert.deepEqual(buildObservationFiles, baseline.requestedBuildObservationFiles);
+  assert.deepEqual(buildObservationComponents, baseline.scope.buildObservationComponentHosts);
+  assert.deepEqual(quotaFiles, baseline.requestedQuotaFiles);
+  assert.deepEqual(quotaComponents, baseline.scope.quotaComponentHosts);
+  assert.equal(quotaRenderBoundary, baseline.scope.quotaRenderBoundary);
+  assert.deepEqual(browserMessageMethods, baseline.scope.browserMessages.methods);
+  // Compare row contracts, not totals: subsequent display translations legitimately
+  // remove candidates, and the four new files deliberately expand the inventory.
+  const rows = audit('const View = () => <span title="Owned label">{item.summary}</span>;');
+  assert.deepEqual(Object.keys(rows.candidates[0]), Object.keys(baseline.candidates[0]));
+  assert.deepEqual(Object.keys(rows.dynamicCandidates[0]), Object.keys(baseline.dynamicCandidates[0]));
+  assert.equal(rows.candidates[0].classification, "needs_manual_review");
+  assert.equal(rows.dynamicCandidates[0].classification, "needs_manual_review");
 });
