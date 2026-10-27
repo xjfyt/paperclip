@@ -68,7 +68,7 @@ it.each(Object.entries(taskProtocolRuntimeMessages))("renders closed question re
       const items = transcriptToTaskChatItems([entry], { runId: "original-run", agentName: "Original agent", running: false });
       expect(buildTurnTimelineRows(items, false)).toHaveLength(1);
       const onDecision = vi.fn();
-      await act(async () => { root.render(<MemoryRouter><ThemeProvider><TaskChatRunnerTurn runId="original-run" agentName="Original agent" items={items} status="succeeded" onRuntimeRequestDecision={onDecision} /></ThemeProvider></MemoryRouter>); });
+      await act(async () => { root.render(<MemoryRouter><ThemeProvider><TaskChatRunnerTurn runId="original-run" startedAtMs={null} agentName="Original agent" items={items} status="succeeded" onRuntimeRequestDecision={onDecision} /></ThemeProvider></MemoryRouter>); });
       const receipt = host.querySelector<HTMLDetailsElement>('[data-testid="task-chat-runtime-request"]')!;
       const labelKey = status === "resolved" ? "questionsAnswered" : status === "cancelled" ? "questionsCancelled" : "questionsExpired";
       expect(receipt.querySelector("summary")?.textContent).toBe(messages[labelKey]);

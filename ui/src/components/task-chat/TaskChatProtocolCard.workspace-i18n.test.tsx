@@ -37,7 +37,7 @@ async function render(entry: Extract<TranscriptEntry, { kind: "workspace_change"
   expect(rows[0]).toMatchObject({ kind: "protocol", surface: "workspace_change", changeSetId: entry.changeSetId, revision: 7 });
   const onDecision = vi.fn();
   await act(async () => { root.render(<MemoryRouter><ThemeProvider><TaskChatRunnerTurn
-    runId="original-run" agentName="Original agent" items={items} status="succeeded" onRuntimeRequestDecision={onDecision}
+    runId="original-run" startedAtMs={null} agentName="Original agent" items={items} status="succeeded" onRuntimeRequestDecision={onDecision}
   /></ThemeProvider></MemoryRouter>); });
   return onDecision;
 }

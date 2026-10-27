@@ -55,7 +55,7 @@ it.each(locales)("has matching safe four-language resources in %s", locale => {
   expect(validateLocaleMessages(messages[locale], messages.en)).toEqual([]);
 });
 
-const validationCases = [
+const validationCases: Array<{ name: string; value: string; validation: NonNullable<PaperclipQuestionSet["questions"][number]["textValidation"]>; key: keyof typeof messages.en; vars?: Record<string, number> }> = [
   { name: "minimum length", value: "abc", validation: { minLength: 4 }, key: "minLength_other", vars: { count: 4 } },
   { name: "maximum length", value: "abcd", validation: { maxLength: 3 }, key: "maxLength_other", vars: { count: 3 } },
   { name: "singular maximum length", value: "ab", validation: { maxLength: 1 }, key: "maxLength_one", vars: { count: 1 } },
@@ -65,7 +65,7 @@ const validationCases = [
   { name: "integer", value: "1.5", validation: { inputType: "integer" }, key: "validInteger" },
   { name: "minimum value", value: "2", validation: { inputType: "number", minimum: 3.5 }, key: "minimum", vars: { value: 3.5 } },
   { name: "maximum value", value: "5", validation: { inputType: "number", maximum: 4.5 }, key: "maximum", vars: { value: 4.5 } },
-] satisfies Array<{ name: string; value: string; validation: NonNullable<PaperclipQuestionSet["questions"][number]["textValidation"]>; key: keyof typeof messages.en; vars?: Record<string, number> }>;
+];
 it.each(locales.flatMap(locale => validationCases.map(test => ({ locale, ...test }))))("renders $name validation in $locale and hot-switches without editing the draft", async ({ locale, value, validation, key, vars }) => {
   await language(locale);
   const questionSet = set({ initialText: value, textValidation: validation });
