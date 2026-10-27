@@ -1,0 +1,19 @@
+{
+  "plan": "計画",
+  "tool": "ツール実行",
+  "research": "調査",
+  "delegation": "委任",
+  "model": "モデル",
+  "context": "コンテキスト",
+  "artifact": "成果物",
+  "review": "レビューモード",
+  "hook": "フック",
+  "memory": "メモリ引用",
+  "safety": "安全性レビュー",
+  "terminal": "端末入力",
+  "wait": "意図的な待機",
+  "notice": "プロバイダー通知",
+  "child": "子エージェント",
+  "unknown": "不明",
+  "unavailable": "利用できない情報源"
+}

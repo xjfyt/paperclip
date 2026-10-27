@@ -1,3 +1,4 @@
+import { localProviderChrome } from "./local-provider-chrome";
 import { systemLabel, useSystemLabels } from "@/i18n/system-labels";
 import { t as mimouseT, useTranslation as useMimouseTranslation } from "@/i18n";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -148,6 +149,7 @@ type TranscriptBlock =
     }
   | {
       type: "provider_activity";
+      chrome?: { titleKey: string; summaryKey?: string };
       ts: string;
       family: Extract<TranscriptEntry, { kind: "provider_activity" }>["family"];
       eventType: string;
@@ -598,7 +600,7 @@ export function normalizeTranscript(entries: TranscriptEntry[], streaming: boole
     }
 
     if (entry.kind === "provider_activity") {
-      blocks.push({ type: "provider_activity", ts: entry.ts, family: entry.family, eventType: entry.eventType, status: entry.status, title: entry.title, summary: entry.summary, payload: entry.payload });
+      blocks.push({ type: "provider_activity", ts: entry.ts, family: entry.family, eventType: entry.eventType, status: entry.status, title: entry.title, summary: entry.summary, payload: entry.payload, chrome: localProviderChrome(entry) });
       continue;
     }
 
@@ -875,14 +877,14 @@ function TranscriptProviderActivity({ block, density }: { block: Extract<Transcr
   return <div className={cn("rounded-xl border p-2", block.status === "failed" ? "border-red-500/30 bg-red-500/[0.05]" : "border-border/70 bg-muted/20")} data-provider-family={block.family}>
     <button type="button" className="flex min-h-8 w-full items-center gap-2 text-left" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
       <span aria-hidden="true">{block.status === "running" ? "⏳" : block.status === "failed" ? "✕" : block.status === "interrupted" ? "■" : "✓"}</span>
-      <strong className={cn("font-mono", density === "compact" ? "text-(length:--text-micro)" : "text-xs")}>{block.title}</strong>
-      <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{block.summary}</span>
+      <strong className={cn("font-mono", density === "compact" ? "text-(length:--text-micro)" : "text-xs")}>{block.chrome ? mimouseT(block.chrome.titleKey) : block.title}</strong>
+      <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{block.chrome?.summaryKey ? mimouseT(block.chrome.summaryKey) : block.summary}</span>
       {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
     </button>
     {open ? <div className="mt-2 space-y-2 border-l border-border pl-5 text-xs">
       {steps.length > 0 ? <ol className="space-y-1">{steps.map((step, index) => <li key={String(step.stepId ?? index)}><span className="mr-2" aria-hidden="true">{step.status === "completed" ? "✓" : step.status === "blocked" ? "!" : "○"}</span>{String(step.body ?? "")}</li>)}</ol> : null}
-      {children.length > 0 ? <ul className="space-y-1">{children.map((child, index) => <li key={String(child.childId ?? index)}><strong>{String(child.role ?? "Child agent")}</strong> · {String(child.status ?? "unknown")}<div className="text-muted-foreground">{String(child.summary ?? "")}</div></li>)}</ul> : null}
-      {sources.length > 0 ? <ul className="space-y-1">{sources.map((source, index) => { const url = typeof source.url === "string" && /^https?:\/\//.test(source.url) ? source.url : null; return <li key={String(source.sourceId ?? index)}>{url ? <a className="underline" href={url} target="_blank" rel="noreferrer">{String(source.title ?? url)}</a> : String(source.title ?? "Unavailable source")} <span className="text-muted-foreground">{mimouseT("workflowHelp.providerReported")}</span></li>; })}</ul> : null}
+      {children.length > 0 ? <ul className="space-y-1">{children.map((child, index) => <li key={String(child.childId ?? index)}><strong>{String(child.role ?? mimouseT("providerChromeUi.child"))}</strong> · {String(child.status ?? mimouseT("providerChromeUi.unknown"))}<div className="text-muted-foreground">{String(child.summary ?? "")}</div></li>)}</ul> : null}
+      {sources.length > 0 ? <ul className="space-y-1">{sources.map((source, index) => { const url = typeof source.url === "string" && /^https?:\/\//.test(source.url) ? source.url : null; return <li key={String(source.sourceId ?? index)}>{url ? <a className="underline" href={url} target="_blank" rel="noreferrer">{String(source.title ?? url)}</a> : String(source.title ?? mimouseT("providerChromeUi.unavailable"))} <span className="text-muted-foreground">{mimouseT("workflowHelp.providerReported")}</span></li>; })}</ul> : null}
       {output ? <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded bg-background p-2 font-mono">{output}</pre> : null}
       {block.family === "provider_notice" && Array.isArray(block.payload.details) ? <dl className="space-y-1">{block.payload.details.slice(0, 64).map((value, index) => { const detail = asRecord(value); return detail && typeof detail.name === "string" && typeof detail.value === "string" ? <div key={index}><dt className="text-muted-foreground">{detail.name}</dt><dd className="whitespace-pre-wrap break-words">{detail.value}</dd></div> : null; })}</dl> : null}
       {block.family === "model_identity" ? <div><span className="text-muted-foreground">{mimouseT("workflowHelp.requested")}</span> {String(block.payload.requestedModel ?? "—")} · <span className="text-muted-foreground">{mimouseT("workflowHelp.effective")}</span> {String(block.payload.effectiveModel ?? "—")}</div> : null}

@@ -1,0 +1,19 @@
+{
+  "plan": "计划",
+  "tool": "工具执行",
+  "research": "调研",
+  "delegation": "委派",
+  "model": "模型",
+  "context": "上下文",
+  "artifact": "产物",
+  "review": "审核模式",
+  "hook": "钩子",
+  "memory": "记忆引用",
+  "safety": "安全审核",
+  "terminal": "终端输入",
+  "wait": "主动等待",
+  "notice": "供应商通知",
+  "child": "子智能体",
+  "unknown": "未知",
+  "unavailable": "来源不可用"
+}

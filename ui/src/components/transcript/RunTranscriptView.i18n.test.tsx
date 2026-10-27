@@ -242,3 +242,48 @@ describe.each(locales)("run transcript in %s", (locale, strings) => {
     for (const expected of ["Provider raw title Ω", "Provider raw summary Ω", "diagnostic_Ω", "Provider denied Ω"]) expect(host.textContent).toContain(expected);
   });
 });
+
+// Local UI-projection provenance must never be inferred from provider text.
+import { providerChromeMessages } from "@/i18n/provider-chrome-test-resources";
+import { parsePaperclipRunnerStdoutLine } from "@/adapters/paperclip-runner";
+import { nativeRunEventsToTranscript } from "./native-run-events";
+import type { HeartbeatRunEvent } from "@paperclipai/shared";
+const chromeFamilies = [
+  ["plan", "plan"], ["tool.execution", "tool"], ["research", "research"], ["delegation", "delegation"],
+  ["model", "model"], ["context", "context"], ["artifact", "artifact"], ["review", "review"], ["hook", "hook"],
+  ["memory", "memory"], ["safety", "safety"], ["terminal", "terminal"], ["wait", "wait"], ["provider.notice", "notice"],
+] as const;
+it.each(Object.entries(providerChromeMessages))("localizes only generated family chrome and preserves raw projections in %s", async (locale, messages) => {
+  const entries = chromeFamilies.flatMap(([event]) => parsePaperclipRunnerStdoutLine(JSON.stringify({ type: "paperclip.prp.event", event: {
+    eventType: `${event}.started`, payload: { summary: "Provider original Ω", children: [{}], sources: [{}], title: "Supplied title Ω", status: "running" },
+  } }), ts));
+  const before = JSON.stringify(entries); expect(entries).toHaveLength(14);
+  await language(locale); await render({ entries });
+  expect([...host.querySelectorAll('[data-provider-family] button strong')].map(node => node.textContent)).toEqual(chromeFamilies.map(([, key]) => messages[key]));
+  expect(host.textContent).toContain("Provider original Ω");
+  expect(host.textContent).toContain(messages.child); expect(host.textContent).toContain(messages.unknown); expect(host.textContent).toContain(messages.unavailable);
+  const firstButton = host.querySelector('[data-provider-family] button');
+  await language(locale === "ja" ? "zh-CN" : "ja");
+  expect(host.querySelector('[data-provider-family] button')).toBe(firstButton);
+  expect(JSON.stringify(entries)).toBe(before);
+  await render({ entries, mode: "raw" }); const raw = host.innerHTML;
+  await language(locale); expect(host.innerHTML).toBe(raw); expect(JSON.stringify(entries)).toBe(before);
+  // Copies and externally supplied entries cannot spoof local title provenance,
+  // even with an identical English title, family or a payload marker.
+  const copied = structuredClone(entries);
+  await render({ entries: copied });
+  expect(host.querySelector('[data-provider-family] button strong')?.textContent).toBe("Plan");
+  const external: TranscriptEntry = { kind: "provider_activity", ts, family: "provider_notice", eventType: "provider.notice.started", status: "running", title: "Provider notice", summary: "Provider notice", payload: { titleKey: "providerChromeUi.notice", localSummary: true, children: [{ role: "Child agent", status: "unknown", summary: "raw child" }], sources: [{ title: "Unavailable source" }] } };
+  await render({ entries: [external] });
+  expect(host.querySelector('[data-provider-family] button strong')?.textContent).toBe("Provider notice");
+  for (const value of ["Child agent", "unknown", "Unavailable source", "raw child"]) expect(host.textContent).toContain(value);
+});
+it.each(Object.entries(providerChromeMessages))("native notice fallback has local provenance but external diagnostics stay raw in %s", async (locale, messages) => {
+  const event: HeartbeatRunEvent = { id: 1, companyId: "company", runId: "run", agentId: "agent", seq: 1, eventType: "provider.notice.recorded", stream: "system", level: "info", color: null, message: null, createdAt: new Date(ts), payload: { prpEvent: { schema: "paperclip.prp.event.v1", sourceEventId: "source", sourceSeq: 1, sourceInstanceId: "runner", sourceKind: "runner", runId: "run", normalizedSessionId: "session", eventType: "provider.notice.recorded", schemaVersion: 1, priority: 1, emittedAt: ts, payload: { schema: "paperclip.provider.notice.v1", severity: "error" } } } };
+  const entries = nativeRunEventsToTranscript([event]); const before = JSON.stringify(entries);
+  await language(locale); await render({ entries });
+  const notice = host.querySelector('[data-provider-family="provider_notice"] button');
+  expect(notice?.querySelector("strong")?.textContent).toBe(messages.notice);
+  expect(notice?.textContent?.split(messages.notice)).toHaveLength(3);
+  expect(JSON.stringify(entries)).toBe(before);
+});

@@ -1,0 +1,19 @@
+{
+  "plan": "Plan",
+  "tool": "Tool execution",
+  "research": "Research",
+  "delegation": "Delegation",
+  "model": "Model",
+  "context": "Context",
+  "artifact": "Artifact",
+  "review": "Review mode",
+  "hook": "Hook",
+  "memory": "Memory citation",
+  "safety": "Safety review",
+  "terminal": "Terminal input",
+  "wait": "Intentional wait",
+  "notice": "Provider notice",
+  "child": "Child agent",
+  "unknown": "unknown",
+  "unavailable": "Unavailable source"
+}

@@ -1,0 +1,19 @@
+{
+  "plan": "Plan",
+  "tool": "Ejecución de herramienta",
+  "research": "Investigación",
+  "delegation": "Delegación",
+  "model": "Modelo",
+  "context": "Contexto",
+  "artifact": "Artefacto",
+  "review": "Modo de revisión",
+  "hook": "Hook",
+  "memory": "Cita de memoria",
+  "safety": "Revisión de seguridad",
+  "terminal": "Entrada de terminal",
+  "wait": "Espera intencional",
+  "notice": "Aviso del proveedor",
+  "child": "Agente secundario",
+  "unknown": "desconocido",
+  "unavailable": "Fuente no disponible"
+}

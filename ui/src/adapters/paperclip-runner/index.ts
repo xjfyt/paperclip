@@ -1,3 +1,4 @@
+import { markLocalProviderChrome } from "@/components/transcript/local-provider-chrome";
 import type { PaperclipQuestion, PaperclipQuestionResponse, PaperclipQuestionSet, TranscriptEntry } from "@paperclipai/adapter-utils";
 import type { UIAdapterModule } from "../types";
 import { parseCodexStdoutLine, buildPaperclipRunnerConfig } from "@paperclipai/adapter-codex-local/ui";
@@ -717,7 +718,7 @@ function parsePrpEvent(
     const summary = family === "model_identity"
       ? text(payload.summary, text(payload.effectiveModel, text(payload.requestedModel, text(payload.provider, eventType))))
       : text(payload.summary, text(payload.name, text(payload.query, eventType)));
-    return [{ kind: "provider_activity", ts, family, eventType, status, title, summary, payload }];
+    return [markLocalProviderChrome({ kind: "provider_activity", ts, family, eventType, status, title, summary, payload })];
   }
   if (eventType === "workspace.change.updated" || eventType === "workspace.diff.recorded") {
     return [workspaceChangeEntry(payload, ts)];

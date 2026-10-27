@@ -1,3 +1,4 @@
+import { markLocalProviderChrome } from "./local-provider-chrome";
 import type { HeartbeatRunEvent } from "@paperclipai/shared";
 import type { TranscriptEntry } from "@/adapters";
 import { isRunLogOnlyProviderEvent } from "./run-log-only-events";
@@ -830,7 +831,7 @@ export function nativeRunEventsToTranscript(events: readonly HeartbeatRunEvent[]
     // and category for the shared notice row instead of serializing an input blob.
     if (event.eventType === "provider.notice.recorded" && payload.schema === "paperclip.provider.notice.v1") {
       if (isRunLogOnlyProviderEvent(event.eventType, payload)) continue;
-      entries.push({
+      entries.push(markLocalProviderChrome({
         kind: "provider_activity",
         ts,
         family: "provider_notice",
@@ -839,7 +840,7 @@ export function nativeRunEventsToTranscript(events: readonly HeartbeatRunEvent[]
         title: "Provider notice",
         summary: text(payload.summary)?.trim() || text(payload.message)?.trim() || "Provider notice",
         payload,
-      });
+      }, !text(payload.summary)?.trim() && !text(payload.message)?.trim()));
       continue;
     }
 
