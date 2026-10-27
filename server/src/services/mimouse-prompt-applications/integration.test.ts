@@ -24,6 +24,7 @@ vi.mock("@paperclipai/adapter-utils/execution-target", async original => {
     boundary.inputs.push(options.stdin); await boundary.settle?.(); return result;
   } };
 });
+import * as executionModule from "./execution.js";
 import * as targetModule from "./target.js";
 import { promptApplicationService } from "./service.js";
 import { findPromptApplicationCandidate, preparePromptApplicationExecution } from "./execution.js";
@@ -210,6 +211,29 @@ it("real heartbeat and ordinary Claude prompt assembly reach only the inert Node
   expect(boundary.inputs.at(-1)).toContain(e.revisions[1].content); expect(boundary.inputs.at(-1)).not.toMatch(/PRIVATE_INPUT_SENTINEL|PRIVATE_SKILL_SENTINEL|WRONG_TRIMMED_SUMMARY/);
   const [receipt] = await db.select().from(mimousePromptApplicationDispatches).where(eq(mimousePromptApplicationDispatches.runId, runs[0].id));
   expect(receipt.state).toBe("dispatched"); expect(receipt.promptHash).toMatch(/^[a-f0-9]{64}$/);
+  await service.rollback(actor, e.promptId, p.item.id, { requestId: randomUUID(), expectedGeneration: approved.receipt.generation });
+}, 90000);
+it("claimed adapter drift after candidate admission fails once without an unbound retry", async () => {
+  const p = await proposal(), approved = await service.approve(actor, e.promptId, p.item.id, approval(p.item));
+  const [issue] = await db.insert(issues).values({ companyId: actor.companyId, title: "Claimed adapter drift", assigneeAgentId: target.id,
+    responsibleUserId: actor.userId, status: "todo" }).returning();
+  const before = boundary.inputs.length, original = executionModule.findPromptApplicationCandidate;
+  const hook = vi.spyOn(executionModule, "findPromptApplicationCandidate").mockImplementationOnce(async (...args) => {
+    const found = await original(...args);
+    // Simulate a persisted claimed identity that disagrees with the loaded agent;
+    // this must be checked after the durable candidate marker, before execution.
+    args[1].runnerProfileJson = { adapterDispatch: { adapterType: "process" } };
+    await db.update(heartbeatRuns).set({ runnerProfileJson: args[1].runnerProfileJson }).where(eq(heartbeatRuns.id, args[1].id));
+    return found;
+  });
+  try {
+    await heartbeat.wakeup(target.id, { source: "on_demand", triggerDetail: "manual", reason: "issue_assigned", contextSnapshot: { issueId: issue.id }, requestedByActorType: "user", requestedByActorId: actor.userId });
+    await drainHeartbeatRunsToQuiescence(db, heartbeat);
+  } finally { hook.mockRestore(); }
+  const runs = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.issueId, issue.id));
+  expect(runs).toHaveLength(1); expect(runs[0]).toMatchObject({ status: "failed", errorCode: "prompt_application_blocked", scheduledRetryReason: null });
+  expect(runs[0].error).toContain("Agent adapter changed during startup"); expect(boundary.inputs).toHaveLength(before);
+  expect((await db.select().from(heartbeatRunEvents).where(and(eq(heartbeatRunEvents.runId, runs[0].id), eq(heartbeatRunEvents.eventType, "prompt_application.candidate"))))).toHaveLength(1);
   await service.rollback(actor, e.promptId, p.item.id, { requestId: randomUUID(), expectedGeneration: approved.receipt.generation });
 }, 90000);
 it("a rejected controlled candidate cannot auto-retry or become unbound after head withdrawal and controller recreation", async () => {

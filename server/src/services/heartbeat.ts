@@ -2141,6 +2141,12 @@ export function heartbeatService(
         return;
       }
 
+      // Identify the controlled first attempt before any adapter/config drift
+      // failure, so a generic retry cannot erase its application scope.
+      const dispatchIssueId = readNonEmptyString(parseObject(run.contextSnapshot).issueId);
+      const privatePromptEarlyBinding = await assertPrivatePromptEarlyBinding(db, run, dispatchIssueId);
+      const promptApplicationCandidate = privatePromptEarlyBinding ? null : await findPromptApplicationCandidate(db, run, dispatchIssueId);
+
       // The claimed adapter identity is immutable recovery evidence. Do not
       // execute a newly selected adapter under a previous adapter's claim.
       const selectedAdapter = claimedAdapterType(run);
@@ -2148,9 +2154,6 @@ export function heartbeatService(
         throw new Error("Agent adapter changed during startup; start a new turn with the updated agent.");
       }
 
-      const dispatchIssueId = readNonEmptyString(parseObject(run.contextSnapshot).issueId);
-      const privatePromptEarlyBinding = await assertPrivatePromptEarlyBinding(db, run, dispatchIssueId);
-      const promptApplicationCandidate = privatePromptEarlyBinding ? null : await findPromptApplicationCandidate(db, run, dispatchIssueId);
       const resumingAdmittedConversationTurn = !!runOptions.nativeLeaseOwner
         && typeof run.contextSnapshot?.conversationSessionGeneration === "number";
       if (dispatchIssueId && isConversation(await getIssueExecutionContext(run.companyId, dispatchIssueId))
