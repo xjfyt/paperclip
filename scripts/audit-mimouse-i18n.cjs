@@ -5,8 +5,9 @@ const displayAttributes = new Set(["aria-label", "aria-description", "title", "p
 const toastFields = new Set(["title", "body", "description", "message"]);
 const names = ['Auth','InviteLanding','InstanceAccess','ProfileSettings','Dashboard','Issues','IssueDetail','Agents','AgentDetail','Approvals','ApprovalDetail','Routines','Costs','MimouseNotifications','MimouseFeedback','MimouseBuildMatrix','MimouseCoding','MimouseCodingRepair','MimouseWorkbuddy','Sidebar','SidebarProjects','SidebarAgents','SidebarAccountMenu','CompanySwitcher','CompanySettingsSidebar','CommandPalette','NewIssueDialog','IssueProperties','IssuesList','IssueFiltersPopover','CommentThread','BudgetPolicyCard','SubscriptionCostCard','ClaudeSubscriptionPanel','CodexSubscriptionPanel','CloudAccessGate','BootstrapPendingPage','AuthRevocationPanel','InviteAuthMethods','ThemeToggle','InboxAgentPolicyControl','AgentMultiSelect'];
 
-// Explicit, bounded addition: App.tsx mounts both detail implementations at
-// routines/:routineId and routines/:routineId/:section. This is NOT a call graph.
+// Explicit, bounded inventory: App.tsx mounts the routines list and both detail
+// implementations. Paths overlapping the basename inventory are deduplicated.
+// This is NOT a call graph.
 const routedRoutineFiles = [
   "ui/src/pages/RoutineDetail.tsx",
   "ui/src/pages/RoutineDetail.production.tsx",
@@ -20,6 +21,8 @@ const routedRoutineFiles = [
   "ui/src/components/routine-triggers/TriggerWizard.tsx",
   "ui/src/components/routine-triggers/WebhookFields.tsx",
   "ui/src/components/routine-triggers/WebhookUrlWarning.tsx",
+  "ui/src/pages/Routines.production.tsx",
+  "ui/src/components/RoutineList.tsx",
 ];
 
 function isTranslationCall(node) {
@@ -169,7 +172,7 @@ if (require.main === module) {
     unmatchedBasenames, requestedRoutedFiles: routedRoutineFiles, missingRoutedFiles,
     scope: { eligibleTsxFiles: all.length, basenameMatchedFiles: selected.filter(file => matchesEntry(file, names)).length,
       routedMatchedFiles: routedRoutineFiles.length - missingRoutedFiles.length,
-      routeSource: "ui/src/App.tsx", routePatterns: ["routines/:routineId", "routines/:routineId/:section"],
+      routeSource: "ui/src/App.tsx", routePatterns: ["routines", "routines/:routineId", "routines/:routineId/:section"],
       routeSourceSha256: crypto.createHash("sha256").update(fs.readFileSync(path.join(root, "ui/src/App.tsx"))).digest("hex") },
     totalLiteralCandidates: candidates.length, totalDynamicCandidates: dynamicCandidates.length, files: counts, candidates, dynamicCandidates,
   };

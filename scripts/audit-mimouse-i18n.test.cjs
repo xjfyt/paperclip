@@ -87,12 +87,17 @@ test("reports displayed dynamic values for review without tracing or rewriting u
 test("uses exact route-related paths and reports missing inventory rather than silently narrowing it", () => {
   const inventory = selectInventory([
     ...routedRoutineFiles, "ui/src/pages/Auth.tsx", "ui/src/elsewhere/RoutineDetail.tsx",
+    "ui/src/pages/Routines.production.tsx", "ui/src/elsewhere/RoutineList.tsx",
     "ui/src/components/routine-sections/operate-sections.test.tsx",
     "ui/src/components/routine-triggers/TriggerWizard.stories.tsx",
   ]);
-  assert.equal(routedRoutineFiles.length, 12);
+  assert.equal(routedRoutineFiles.length, 14);
   assert.deepEqual(inventory.selected, ["ui/src/pages/Auth.tsx", ...routedRoutineFiles].sort());
+  assert.equal(inventory.selected.filter(file => file === "ui/src/pages/Routines.production.tsx").length, 1);
   assert.deepEqual(inventory.missingRoutedFiles, []);
   const missing = routedRoutineFiles[0];
   assert.deepEqual(selectInventory(routedRoutineFiles.slice(1)).missingRoutedFiles, [missing]);
+  for (const file of ["ui/src/pages/Routines.production.tsx", "ui/src/components/RoutineList.tsx"]) {
+    assert.deepEqual(selectInventory(routedRoutineFiles.filter(entry => entry !== file)).missingRoutedFiles, [file]);
+  }
 });
