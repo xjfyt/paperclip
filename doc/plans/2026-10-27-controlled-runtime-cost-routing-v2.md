@@ -1,7 +1,7 @@
 # Controlled runtime cost routing v2
 
-Date: 2026-10-27. Status: implemented v2 scope; integrated migration and
-real-PostgreSQL/heartbeat C2 qualification still pending at this documentation pass.
+Date: 2026-10-27. Status: restricted-profile local C2 qualified at `752d4813`;
+final integrated build/API/full-UI regression remains pending.
 
 ## Version and scope
 
@@ -164,17 +164,42 @@ The direct Node contract suite is `scripts/test-runtime-cost-routing-contracts.m
 (run with the repository's installed `tsx` loader). It covers default OFF,
 strict input boundaries, decimal precision, evidence identity/coverage, scoped
 recovery and schema fences without opening a database or executing a CLI.
-Focused contract/type checks and inert producer/service/UI checks are separate
-from integrated qualification. At this documentation pass, migration 0359 and the
-real PostgreSQL/heartbeat C2 fixture have **not yet established a pass**. Their
-results must be reported against the final integrated code rather than inferred
-from schema inspection, mocks, older test totals, or earlier builds.
 
-Outstanding integration coverage includes migration constraints and immutable
-lifecycle guards, genuine CLI-output parsing using inert fixtures, current
-authority/drift rejection, pause/disable, before-wake binding, concurrency,
-unknown-response recovery, explicit expiry closure and zero duplicate wake.
-A local mock C2 run must not invoke a real model, CLI/vendor, paid service or
-notification recipient. No full-suite, C3/C4, paid vendor, complete ordinary-tools
-quality or deployment-readiness pass is claimed here. Existing 85-item status
-counts remain unchanged until integration evidence justifies a separate update.
+### Qualified local C2, not a vendor or complete-regression pass
+
+The real PostgreSQL/private-heartbeat integration fixture passed **26/26** at
+`752d4813` (local execution log: `/tmp/paperclip-routing-real-pg-fifth.log`). Its
+entry is `server/src/services/mimouse-private-prompt-tests/integration.test.ts`,
+including the routing evidence, closure and runtime DB cases. Candidate costs
+come from each candidate's own private heartbeat/accounting receipt chain, not
+fabricated qualifying ledger rows. Lock tests observe the actual owned backend
+waiting; the budget case uses the existing budget service, a settled fixture
+ledger of 0.25 USD cents and a 1-cent reservation. Those fixture amounts are not
+paid vendor invoices or future task quotes.
+
+Four earlier **25/26** attempts remain part of the record: missing explicit
+configuration authority, a raw Date SQL parameter, a real checkout-phase bug,
+and an inadequate budget fixture. Repairs supplied the required grant rather
+than bypassing permission checks, corrected parameter encoding, enforced the
+live exact-run identity while rejecting terminal replay, and replaced the budget
+mock with the real policy/reservation path. The final pass does not erase those
+failures or expand the supported profile.
+
+Supporting focused checks reported for this integration are 193 related unit
+tests across 10 files, 12 shared contract checks, and 59 focused UI tests. The
+4280-key UI has passed full UI type checking and production build; key counts are
+not coverage, and focused UI tests are **not** a full UI regression result.
+
+At this documentation pass, the standard server build is being rerun after four
+reported TypeScript errors were fixed. Two prior standalone build SIGKILLs and
+the first standard-build failure remain recorded. A final successful complete
+build, compiled API regression and full UI test aggregation are not yet claimed.
+The final integration owner must record those results against the final input;
+older full-suite snapshots cannot substitute for them.
+
+This local C2 qualification uses inert Node/mock execution without a real model,
+Claude CLI/vendor, paid service or notification recipient. It does not prove
+ordinary-tool quality, complete context, production migration/backup recovery,
+C3/C4 provider behavior, all-profile support, or deployment readiness. The
+maintenance/backup and retention requirements above still apply. Existing
+85-item status counts remain unchanged until a separate status review.
