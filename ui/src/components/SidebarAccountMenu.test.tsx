@@ -1,5 +1,9 @@
 // @vitest-environment jsdom
 
+import type { AuthSession } from "@paperclipai/shared";
+import type { HealthStatus } from "@/api/health";
+import type { SignOutResult } from "@/api/auth";
+import { i18n, shellNavigationMessages } from "@/i18n/shell-navigation-test-resources";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -75,8 +79,7 @@ vi.mock("../context/ThemeContext", () => ({
   }),
 }));
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 async function act(callback: () => void | Promise<void>) {
   await callback();
@@ -127,7 +130,8 @@ function boardAccess(
 describe("SidebarAccountMenu", () => {
   let container: HTMLDivElement;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await i18n.changeLanguage("en");
     container = document.createElement("div");
     document.body.appendChild(container);
     mockAuthApi.getSession.mockResolvedValue({
@@ -148,7 +152,8 @@ describe("SidebarAccountMenu", () => {
     mockGetCurrentBoardAccess.mockResolvedValue(boardAccess("owner"));
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await i18n.changeLanguage("en");
     container.remove();
     document.body.innerHTML = "";
     vi.clearAllMocks();
@@ -752,6 +757,114 @@ describe("SidebarAccountMenu", () => {
 
     await act(async () => {
       root.unmount();
+    });
+  });
+
+  describe.each(Object.entries(shellNavigationMessages))("production account localization (%s)", (locale, messages) => {
+    it("keeps the open menu, identity, SHA, links and pending sign-out stable during a live switch", async () => {
+      const commit = "8751e2de4626ff5e7355fe28b30509991cfff920";
+      const session: AuthSession = {
+        session: { id: "session-1", userId: "user-1" },
+        user: { id: "user-1", name: "Jane <项目> 日本語", email: "jane@example.test", image: null },
+        sentryDsn: null,
+      };
+      const health: HealthStatus = { status: "ok", deploymentMode: "authenticated", commit };
+      mockAuthApi.getSession.mockResolvedValue(session);
+      mockHealthApi.get.mockResolvedValue(health);
+      vi.stubGlobal("location", new URL("https://paperclip.staging.paperclip.app"));
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+      queryClient.setQueryData(queryKeys.health, health);
+      const root = createRoot(container);
+      const onOpenChange = vi.fn<(open: boolean) => void>();
+      let finishSignOut!: (result: SignOutResult) => void;
+      mockAuthApi.signOut.mockReturnValue(new Promise<SignOutResult>(resolve => { finishSignOut = resolve; }));
+      try {
+        await act(() => root.render(<QueryClientProvider client={queryClient}><TooltipProvider>
+          <ProductionSidebarAccountMenu deploymentMode="authenticated" open onOpenChange={onOpenChange} />
+        </TooltipProvider></QueryClientProvider>));
+        await vi.waitFor(() => expect(document.body.querySelector('a[title]')?.getAttribute("title")).toBe(commit));
+        await vi.waitFor(() => expect(document.body.textContent).toContain("Invite people to your organization."));
+        const popover = document.body.querySelector('[data-slot="popover-content"]');
+        const readCounts = [mockAuthApi.getSession.mock.calls.length, mockHealthApi.get.mock.calls.length, mockGetCurrentBoardAccess.mock.calls.length];
+        await act(async () => { await i18n.changeLanguage(locale); });
+        expect(document.body.querySelector('[data-slot="popover-content"]')).toBe(popover);
+        expect(popover?.textContent).toContain(session.user.name);
+        expect(popover?.textContent).toContain(session.user.email);
+        expect(popover?.querySelector("h2")?.textContent).toBe(session.user.name);
+        expect(popover?.querySelector(`a[aria-label="${messages.viewProfile}"]`)?.getAttribute("href")).toBe("/u/user-1");
+        const sha = popover?.querySelector(`a[title="${commit}"]`);
+        expect(sha?.getAttribute("aria-label")).toBe(messages.viewCommit.replace("{{commit}}", commit));
+        expect(sha?.getAttribute("href")).toBe(`https://github.com/paperclipai/paperclip/commit/${commit}`);
+        expect(sha?.textContent).toBe(`SHA ${commit.slice(0, 7)}`);
+        const docs = popover?.querySelector('a[href="https://docs.paperclip.ing/"]');
+        expect(docs?.textContent).toBe(messages.documentation + messages.documentationDescription);
+        expect(docs?.getAttribute("target")).toBe("_blank");
+        const invite = popover?.querySelector('a[href="/company/settings/members?tab=invites"]');
+        expect(invite?.textContent).toBe(messages.invite + messages.inviteDescription);
+        expect(invite?.hasAttribute("target")).toBe(false);
+        expect([mockAuthApi.getSession.mock.calls.length, mockHealthApi.get.mock.calls.length, mockGetCurrentBoardAccess.mock.calls.length]).toEqual(readCounts);
+        expect(mockAuthApi.signOut).not.toHaveBeenCalled();
+        expect(onOpenChange).not.toHaveBeenCalled();
+        expect(mockSetSidebarOpen).not.toHaveBeenCalled();
+        expect(mockNavigateTopLevel).not.toHaveBeenCalled();
+        const signOut = Array.from(popover?.querySelectorAll("button") ?? []).find(button => button.textContent?.includes(messages.signOutDescription));
+        expect(signOut?.textContent).toContain(messages.signOut);
+        await act(() => signOut?.click());
+        await vi.waitFor(() => expect(signOut?.disabled).toBe(true));
+        expect(signOut?.textContent).toContain(messages.signingOut);
+        expect(mockAuthApi.signOut).toHaveBeenCalledOnce();
+        await act(async () => { await i18n.changeLanguage(locale === "ja" ? "zh-CN" : "ja"); });
+        const next = shellNavigationMessages[locale === "ja" ? "zh-CN" : "ja"];
+        expect(signOut?.textContent).toContain(next.signingOut);
+        expect(signOut?.disabled).toBe(true);
+        expect(onOpenChange).not.toHaveBeenCalled();
+        expect(mockAuthApi.signOut).toHaveBeenCalledOnce();
+        expect([mockAuthApi.getSession.mock.calls.length, mockHealthApi.get.mock.calls.length, mockGetCurrentBoardAccess.mock.calls.length]).toEqual(readCounts);
+        await act(() => { finishSignOut({ success: true }); });
+        await vi.waitFor(() => expect(onOpenChange).toHaveBeenCalledExactlyOnceWith(false));
+        expect(mockNavigateTopLevel).not.toHaveBeenCalled();
+      } finally {
+        await act(() => root.unmount());
+        queryClient.clear();
+      }
+    });
+
+    it("translates only absent identity fallbacks and preserves invite/sign-out visibility", async () => {
+      const session: AuthSession = { session: { id: "session-1", userId: "user-1" }, user: { id: "user-1", name: null, email: null, image: null }, sentryDsn: null };
+      mockAuthApi.getSession.mockResolvedValue(session);
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+      const health: HealthStatus = { status: "ok", hiddenSettings: ["company.invites"] };
+      queryClient.setQueryData(queryKeys.health, health);
+      const root = createRoot(container);
+      const onOpenChange = vi.fn<(open: boolean) => void>();
+      const renderMenu = async (authenticated: boolean) => act(() => root.render(
+        <QueryClientProvider client={queryClient}><TooltipProvider><ProductionSidebarAccountMenu
+          deploymentMode={authenticated ? "authenticated" : "local_trusted"} open onOpenChange={onOpenChange}
+        /></TooltipProvider></QueryClientProvider>,
+      ));
+      try {
+        await renderMenu(false);
+        await vi.waitFor(() => expect(document.body.textContent).toContain("Local workspace board"));
+        await act(async () => { await i18n.changeLanguage(locale); });
+        expect(document.body.querySelector("h2")?.textContent).toBe(messages.board);
+        expect(document.body.textContent).toContain(messages.localBoard);
+        expect(document.body.textContent).not.toContain(messages.signOutDescription);
+        expect(document.body.querySelector('a[href="/company/settings/members?tab=invites"]')).toBeNull();
+        await renderMenu(true);
+        expect(document.body.textContent).toContain(messages.signedIn);
+        expect(document.body.textContent).toContain(messages.signOutDescription);
+        expect(document.body.querySelector('a[href="/company/settings/members?tab=invites"]')).toBeNull();
+        expect(mockAuthApi.signOut).not.toHaveBeenCalled();
+        expect(onOpenChange).not.toHaveBeenCalled();
+        const docs = document.body.querySelector<HTMLAnchorElement>('a[href="https://docs.paperclip.ing/"]');
+        docs?.addEventListener("click", event => event.preventDefault());
+        await act(() => docs?.click());
+        expect(onOpenChange).toHaveBeenCalledExactlyOnceWith(false);
+        expect(mockSetSidebarOpen).not.toHaveBeenCalled();
+      } finally {
+        await act(() => root.unmount());
+        queryClient.clear();
+      }
     });
   });
 

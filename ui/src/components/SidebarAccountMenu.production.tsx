@@ -157,9 +157,9 @@ export function SidebarAccountMenu({
 
   const signOutMutation = useSignOut({ onSignedOut: closeNavigationChrome });
 
-  const displayName = session?.user.name?.trim() || "Board";
+  const displayName = session?.user.name?.trim() || mimouseUiT("shellNavigationUi.board");
   const secondaryLabel =
-    session?.user.email?.trim() || (deploymentMode === "authenticated" ? "Signed in" : "Local workspace board");
+    session?.user.email?.trim() || mimouseUiT(deploymentMode === "authenticated" ? "shellNavigationUi.signedIn" : "shellNavigationUi.localBoard");
   const initials = deriveInitials(displayName);
   const profileHref = userProfilePath(session?.user);
 
@@ -204,7 +204,7 @@ export function SidebarAccountMenu({
             <div className="relative flex items-start gap-3">
               <Link
                 to={profileHref}
-                aria-label="View profile"
+                aria-label={mimouseUiT("shellNavigationUi.viewProfile")}
                 onClick={closeNavigationChrome}
                 className="absolute inset-0 rounded-xl transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
@@ -223,7 +223,7 @@ export function SidebarAccountMenu({
                     href={`https://github.com/paperclipai/paperclip/commit/${stagingCommit}`}
                     target="_blank"
                     rel="noreferrer"
-                    aria-label={`View commit ${stagingCommit} on GitHub`}
+                    aria-label={mimouseUiT("shellNavigationUi.viewCommit", { commit: stagingCommit })}
                     title={stagingCommit}
                   >
                     SHA {stagingCommit.slice(0, 7)}
@@ -235,8 +235,8 @@ export function SidebarAccountMenu({
             <div className="mt-4 space-y-1">
               {showInvite && inviteHref ? (
                 <MenuAction
-                  label="Invite"
-                  description="Invite people to your organization."
+                  label={mimouseUiT("shellNavigationUi.invite")}
+                  description={mimouseUiT("shellNavigationUi.inviteDescription")}
                   icon={UserPlus}
                   href={inviteHref}
                   topLevel={isCloud}
@@ -244,8 +244,8 @@ export function SidebarAccountMenu({
                 />
               ) : null}
               <MenuAction
-                label="Documentation"
-                description="Open Paperclip docs in a new tab."
+                label={mimouseUiT("shellNavigationUi.documentation")}
+                description={mimouseUiT("shellNavigationUi.documentationDescription")}
                 icon={BookOpen}
                 href={DOCS_URL}
                 external
@@ -267,10 +267,10 @@ export function SidebarAccountMenu({
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block text-sm font-medium text-foreground">
-                      {signOutMutation.isPending ? "Signing out..." : "Sign out"}
+                      {mimouseUiT(signOutMutation.isPending ? "shellNavigationUi.signingOut" : "shellNavigationUi.signOut")}
                     </span>
                     <span className="block text-xs text-muted-foreground">
-                      End this browser session.
+                      {mimouseUiT("shellNavigationUi.signOutDescription")}
                     </span>
                   </span>
                 </button>

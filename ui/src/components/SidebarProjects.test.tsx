@@ -4,7 +4,8 @@ import type { ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { Project, ResourceMemberships } from "@paperclipai/shared";
+import { i18n, shellNavigationMessages } from "@/i18n/shell-navigation-test-resources";
+import type { Project, ResourceMemberships, ResourceMembershipUpdateResult } from "@paperclipai/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SidebarProjects } from "./SidebarProjects";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -129,12 +130,10 @@ vi.mock("@/plugins/slots", () => ({
   ),
 }));
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 if (!globalThis.PointerEvent) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (globalThis as any).PointerEvent = MouseEvent;
+  vi.stubGlobal("PointerEvent", MouseEvent);
 }
 
 async function act(callback: () => void | Promise<void>) {
@@ -198,8 +197,8 @@ function projectLinkLabels(container: HTMLElement) {
     .filter(Boolean);
 }
 
-async function openProjectsMenu(container: HTMLElement) {
-  const trigger = container.querySelector('button[aria-label="Projects section actions"]');
+async function openProjectsMenu(container: HTMLElement, label = "Projects section actions") {
+  const trigger = container.querySelector(`button[aria-label="${label}"]`);
   expect(trigger).not.toBeNull();
 
   await act(async () => {
@@ -237,7 +236,8 @@ describe("SidebarProjects", () => {
   let queryClient: QueryClient;
   let memberships: ResourceMemberships;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await i18n.changeLanguage("en");
     container = document.createElement("div");
     document.body.appendChild(container);
     root = null;
@@ -327,6 +327,7 @@ describe("SidebarProjects", () => {
       });
     }
     queryClient.clear();
+    await i18n.changeLanguage("en");
     container.remove();
     document.body.innerHTML = "";
     localStorage.clear();
@@ -489,4 +490,86 @@ describe("SidebarProjects", () => {
     );
     expect(projectLinkLabels(container)).toEqual(["Bravo", "Charlie"]);
   });
+  describe.each(Object.entries(shellNavigationMessages))("project navigation localization (%s)", (locale, messages) => {
+    it("has matching complete messages with only the intended raw placeholders", () => {
+      expect(Object.keys(messages).sort()).toEqual(Object.keys(shellNavigationMessages.en).sort());
+      for (const [key, value] of Object.entries(messages)) {
+        expect(value.trim()).not.toBe("");
+        expect(value.match(/{{[^}]+}}/g) ?? []).toEqual(
+          shellNavigationMessages.en[key as keyof typeof messages].match(/{{[^}]+}}/g) ?? [],
+        );
+      }
+    });
+
+    it("keeps the open project action menu and raw target stable, leaving only after an explicit click", async () => {
+      const project = makeProject({ name: "项目 日本語 <Alpha> & Beta", visibility: "private", pauseReason: "budget" });
+      mockProjectsApi.list.mockResolvedValue([project]);
+      let finishLeave!: (result: ResourceMembershipUpdateResult) => void;
+      mockResourceMembershipsApi.updateProject.mockReturnValue(new Promise<ResourceMembershipUpdateResult>(resolve => { finishLeave = resolve; }));
+      await renderSidebarProjects();
+      await vi.waitFor(() => expect(projectLinkLabels(container)).toEqual([project.name]));
+      await openProjectMenu(`Open actions for ${project.name}`);
+      const menu = document.body.querySelector('[role="menu"]');
+      const readCounts = [mockProjectsApi.list.mock.calls.length, mockAuthApi.getSession.mock.calls.length, mockResourceMembershipsApi.listMine.mock.calls.length];
+      await act(async () => { await i18n.changeLanguage(locale); });
+      expect(document.body.querySelector('[role="menu"]')).toBe(menu);
+      expect(menu?.textContent).toContain(messages.leaveProject);
+      expect(projectLinkLabels(container)).toEqual([project.name]);
+      expect(container.querySelector('a[href="/projects/alpha/issues"]')).not.toBeNull();
+      const projectButton = Array.from(container.querySelectorAll("button")).find(button => button.getAttribute("aria-label") === messages.projectActions.replace("{{name}}", project.name));
+      expect(projectButton).toBeTruthy();
+      expect(container.querySelector(`svg[aria-label="${messages.privateProject}"]`)).not.toBeNull();
+      expect(container.querySelector(`span[title="${messages.projectBudgetPaused}"]`)?.getAttribute("aria-label")).toBe(messages.projectBudgetPaused);
+      expect(mockResourceMembershipsApi.updateProject).not.toHaveBeenCalled();
+      expect(mockPersistOrder).not.toHaveBeenCalled();
+      expect(mockOpenNewProject).not.toHaveBeenCalled();
+      expect(mockSetSidebarOpen).not.toHaveBeenCalled();
+      expect(localStorage.getItem("paperclip.projectSortMode:company-1:user-1")).toBeNull();
+      expect([mockProjectsApi.list.mock.calls.length, mockAuthApi.getSession.mock.calls.length, mockResourceMembershipsApi.listMine.mock.calls.length]).toEqual(readCounts);
+      const leave = menu?.querySelector<HTMLElement>('[role="menuitem"]');
+      await act(() => leave?.click());
+      await vi.waitFor(() => expect(mockResourceMembershipsApi.updateProject).toHaveBeenCalledExactlyOnceWith("company-1", project.id, { state: "left", starred: undefined }));
+      // The real membership hook optimistically hides a left project; switching must not undo or repeat it.
+      await act(async () => { await i18n.changeLanguage(locale === "ja" ? "zh-CN" : "ja"); });
+      expect(projectLinkLabels(container)).toEqual([]);
+      expect(mockResourceMembershipsApi.updateProject).toHaveBeenCalledOnce();
+      expect([mockProjectsApi.list.mock.calls.length, mockAuthApi.getSession.mock.calls.length, mockResourceMembershipsApi.listMine.mock.calls.length]).toEqual(readCounts);
+      memberships = { ...memberships, projectMemberships: { [project.id]: "left" } };
+      await act(() => { finishLeave({ resourceType: "project", resourceId: project.id, state: "left", starredAt: null, updatedAt: new Date("2026-01-01") }); });
+      await vi.waitFor(() => expect(mockResourceMembershipsApi.listMine.mock.calls.length).toBe(readCounts[2] + 1));
+      expect(project.name).toBe("项目 日本語 <Alpha> & Beta");
+      expect(project.pauseReason).toBe("budget");
+      expect(project.visibility).toBe("private");
+    });
+
+    it("updates the open section menu without changing sort state or invoking create/reorder actions", async () => {
+      await renderSidebarProjects();
+      await openProjectsMenu(container);
+      const menu = document.body.querySelector('[role="menu"]');
+      const readCounts = [mockProjectsApi.list.mock.calls.length, mockAuthApi.getSession.mock.calls.length, mockResourceMembershipsApi.listMine.mock.calls.length];
+      await act(async () => { await i18n.changeLanguage(locale); });
+      expect(document.body.querySelector('[role="menu"]')).toBe(menu);
+      expect(container.querySelector(`button[aria-label="${messages.projectsActions}"]`)?.textContent).toBe(messages.projects);
+      expect(menu?.querySelector('a[href="/projects"]')?.textContent).toBe(messages.browseProjects);
+      expect(menu?.querySelector('[role="group"]')?.getAttribute("aria-label")).toBe(messages.projectSort);
+      expect(Array.from(menu?.querySelectorAll('[role="menuitemradio"]') ?? []).map(item => item.textContent)).toEqual([messages.sortTop, messages.sortAlphabetical, messages.sortRecent]);
+      expect(menu?.querySelector('[role="menuitemradio"][aria-checked="true"]')?.textContent).toBe(messages.sortTop);
+      expect(projectLinkLabels(container)).toEqual(["Bravo", "Alpha", "Charlie"]);
+      expect([mockProjectsApi.list.mock.calls.length, mockAuthApi.getSession.mock.calls.length, mockResourceMembershipsApi.listMine.mock.calls.length]).toEqual(readCounts);
+      expect(mockResourceMembershipsApi.updateProject).not.toHaveBeenCalled();
+      expect(mockPersistOrder).not.toHaveBeenCalled();
+      expect(mockOpenNewProject).not.toHaveBeenCalled();
+      await chooseSortMode(messages.sortAlphabetical);
+      expect(localStorage.getItem("paperclip.projectSortMode:company-1:user-1")).toBe("alphabetical");
+      expect(projectLinkLabels(container)).toEqual(["Alpha", "Bravo", "Charlie"]);
+      await act(async () => { await i18n.changeLanguage(locale === "ja" ? "zh-CN" : "ja"); });
+      expect(localStorage.getItem("paperclip.projectSortMode:company-1:user-1")).toBe("alphabetical");
+      expect(projectLinkLabels(container)).toEqual(["Alpha", "Bravo", "Charlie"]);
+      const next = shellNavigationMessages[locale === "ja" ? "zh-CN" : "ja"];
+      await act(() => container.querySelector<HTMLButtonElement>(`button[aria-label="${next.newProject}"]`)?.click());
+      expect(mockOpenNewProject).toHaveBeenCalledOnce();
+      expect(mockPersistOrder).not.toHaveBeenCalled();
+    });
+  });
+
 });

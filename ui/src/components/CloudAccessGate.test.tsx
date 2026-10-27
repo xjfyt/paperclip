@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { i18n, shellNavigationMessages } from "@/i18n/shell-navigation-test-resources";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { focusManager, QueryClient, QueryClientProvider, QueryObserver } from "@tanstack/react-query";
@@ -42,7 +43,8 @@ describe("CloudAccessGate restart recovery", () => {
   let failure: () => Response;
   const fetchMock = vi.fn();
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await i18n.changeLanguage("en");
     clearLocalSignOutNotice();
     vi.useFakeTimers();
     failingPath = null;
@@ -59,12 +61,13 @@ describe("CloudAccessGate restart recovery", () => {
     client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     flushSync(() => root.unmount());
     client.clear();
     focusManager.setFocused(undefined);
     container.remove();
     vi.useRealTimers();
+    await i18n.changeLanguage("en");
     vi.unstubAllGlobals();
     vi.clearAllMocks();
     clearLocalSignOutNotice();
@@ -290,4 +293,35 @@ describe("CloudAccessGate restart recovery", () => {
     expect(container.querySelector("[data-redirect]")?.getAttribute("data-redirect"))
       .toBe("/auth?next=%2FCON%2Fagents%2Fconan%2Finstructions%3Ftab%3Dedit");
   });
+  describe.each(Object.entries(shellNavigationMessages))("reconnect banner localization (%s)", (locale, messages) => {
+    it.each(checks)("keeps the outlet draft and retry schedule during a language switch after %s fails", async (path, queryKey) => {
+      await render();
+      const editor = container.querySelector("textarea")!;
+      editor.value = "未保存の草稿 / 项目 <raw>";
+      editor.focus();
+      editor.setSelectionRange(2, 5);
+      failingPath = path;
+      failure = () => new Response("Bad gateway", { status: 502 });
+      await client.refetchQueries({ queryKey });
+      await flushReact();
+      const callsBeforeSwitch = fetchMock.mock.calls.length;
+      await i18n.changeLanguage(locale);
+      await flushReact();
+      expect(container.querySelector('[role="status"]')?.textContent).toBe(messages.reconnectingBanner);
+      expect(container.querySelector("textarea")).toBe(editor);
+      expect(editor.value).toBe("未保存の草稿 / 项目 <raw>");
+      expect(document.activeElement).toBe(editor);
+      expect([editor.selectionStart, editor.selectionEnd]).toEqual([2, 5]);
+      expect(fetchMock).toHaveBeenCalledTimes(callsBeforeSwitch);
+      expect(container.querySelector("[data-redirect]")).toBeNull();
+      expect(fetchMock.mock.calls.every(([, init]) => !init.method || init.method === "GET")).toBe(true);
+      failingPath = null;
+      await vi.advanceTimersByTimeAsync(5_100);
+      await flushReact();
+      expect(container.querySelector('[role="status"]')).toBeNull();
+      expect(container.querySelector("textarea")).toBe(editor);
+      expect(editor.value).toBe("未保存の草稿 / 项目 <raw>");
+    });
+  });
+
 });

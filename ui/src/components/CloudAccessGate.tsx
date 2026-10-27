@@ -223,7 +223,7 @@ export function CloudAccessGate({ allowMembershipRequest = false }: { allowMembe
     <>
       {isReconnecting && (
         <div role="status" className="bg-muted px-4 py-2 text-center text-sm text-muted-foreground">
-          Connection interrupted. Reconnecting automatically…
+          {gateT("shellNavigationUi.reconnectingBanner")}
         </div>
       )}
       <Outlet />
