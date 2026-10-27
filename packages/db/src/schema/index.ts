@@ -278,3 +278,4 @@ export { mimouseFeedbackVerifications } from "./mimouse_feedback_verifications.j
 export * from "./mimouse_prompt_applications.js";
 
 export * from "./runtime_cost_routing.js";
+export * from "./mimouse_coding_build_observations.js";
