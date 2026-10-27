@@ -26,7 +26,7 @@ function button(label: string, scope: ParentNode = document) {
   const target = [...scope.querySelectorAll<HTMLButtonElement>("button")].find(el => el.textContent?.trim().startsWith(label) || el.getAttribute("aria-label") === label);
   expect(target, label).toBeDefined(); return target!;
 }
-const payload = (value: string) => ({ RAW_KEY: { type: "plain", value } });
+const payload = (value: string): Record<string, EnvBinding> => ({ RAW_KEY: { type: "plain", value } });
 function SaveHarness({ changed, saved, conflict, disabled = false, isSaving = false }: {
   changed: (next: Record<string, EnvBinding> | undefined) => void;
   saved: (next: Record<string, EnvBinding>) => void;
