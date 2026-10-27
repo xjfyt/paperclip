@@ -42,6 +42,7 @@ export interface PromptApplicationDispatchReceipt {
   state: "prepared" | "dispatched"; configuredAt: string; preparedAt: string;
   dispatchedAt: string | null; promptHash: string | null; effectiveContextHash: string;
   providerConsumed: false;
+  inputDisposition: "unconfirmed" | "not_applied_before_input";
 }
 
 export const promptApplicationRequestQuerySchema = z.object({

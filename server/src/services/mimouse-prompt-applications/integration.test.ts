@@ -1,0 +1,177 @@
+import { createRequire } from "node:module";
+import { createServer } from "node:net";
+import { randomUUID } from "node:crypto";
+import { mkdtemp, readFile, writeFile, appendFile, rm, mkdir } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { afterAll, beforeAll, expect, it, vi } from "vitest";
+import { and, eq, sql } from "drizzle-orm";
+import { activityLog, agents, authSessions, authUsers, companies, companyMemberships, companySkills, companySkillVersions, costEvents,
+  createDb, ensurePostgresDatabase, applyPendingMigrations, environments, heartbeatRuns, heartbeatRunEvents, issues, agentWakeupRequests,
+  mimousePrompts, mimousePromptRevisions, mimouseEvaluationDatasets, principalPermissionGrants, type Db } from "@paperclipai/db";
+import { mimousePrivatePromptTests } from "@paperclipai/db/schema/mimouse_private_prompt_tests";
+import { mimousePromptApplications, mimousePromptApplicationHeads, mimousePromptApplicationDispatches } from "@paperclipai/db/schema/mimouse_prompt_applications";
+vi.mock("../../adapters/plugin-loader.js", () => ({ buildExternalAdapters: async () => [] }));
+const boundary = vi.hoisted(() => ({ inputs: [] as string[], settle: null as (() => Promise<void>) | null, beforeSpawn: null as (() => Promise<void>) | null }));
+vi.mock("@paperclipai/adapter-utils/execution-target", async original => {
+  const actual = await original<typeof import("@paperclipai/adapter-utils/execution-target")>();
+  return { ...actual, runAdapterExecutionTargetProcess: async (runId: string, target: any, command: string, args: string[], options: any) => {
+    if (command !== "claude" || target?.kind !== "local" || !options.requireSpawnReceipt || args.includes("--resume") || args.includes("--bare")) throw Error("Real CLI/model/unsupported lane forbidden in fixture");
+    const script = `let body='';process.stdin.setEncoding('utf8');process.stdin.on('data',d=>body+=d);process.stdin.on('end',()=>process.stdout.write(JSON.stringify({type:'result',subtype:'success',result:body,is_error:false,usage:{input_tokens:1,output_tokens:1},total_cost_usd:0})+'\\n'));`;
+    await boundary.beforeSpawn?.();
+    // Only this inert Node child is permitted at the actual provider boundary.
+    const result = await actual.runAdapterExecutionTargetProcess(runId, null, process.execPath, ["-e", script], options);
+    boundary.inputs.push(options.stdin); await boundary.settle?.(); return result;
+  } };
+});
+import { promptApplicationService } from "./service.js";
+import { findPromptApplicationCandidate, preparePromptApplicationExecution } from "./execution.js";
+import { applicationAttemptStopped } from "./recovery.js";
+import { comparisonFixture } from "../mimouse-private-prompt-tests/comparison-fixture.js";
+import { secretService } from "../secrets.js";
+import { heartbeatService } from "../heartbeat.js";
+import { drainHeartbeatRunsToQuiescence } from "../../__tests__/helpers/drain-heartbeat-runs.js";
+import { getServerAdapter } from "../../adapters/registry.js";
+import { legacyControllerClaim } from "../legacy-controller-lease.js";
+import type { HeartbeatRuntimeExecutionInput } from "../heartbeat/runtime-execution.js";
+let home: string, db: Db, pg: { initialise(): Promise<void>; start(): Promise<void>; stop(): Promise<void> };
+let actor: { companyId: string; userId: string; sessionId: string }, target: typeof agents.$inferSelect, environmentId: string;
+let service: ReturnType<typeof promptApplicationService>, heartbeat: ReturnType<typeof heartbeatService>;
+const e = comparisonFixture(), keyValue = "fixture-not-a-real-provider-key", fixed = new Date("2020-01-01T00:00:00Z");
+beforeAll(async () => {
+  home = await mkdtemp(join(tmpdir(), "paperclip-prompt-application-")); await writeFile(join(home, ".owned-test"), "controlled-prompt-disposable-v1");
+  vi.stubEnv("PAPERCLIP_HOME", home); vi.stubEnv("PAPERCLIP_SECRETS_MASTER_KEY_FILE", join(home, "master.key")); vi.stubEnv("PAPERCLIP_SECRETS_MASTER_KEY", "");
+  vi.stubEnv("PAPERCLIP_PROMPT_APPLICATIONS_ENABLED", "true"); vi.stubEnv("PAPERCLIP_TELEMETRY_DISABLED", "1"); vi.stubEnv("DO_NOT_TRACK", "1");
+  vi.stubEnv("PAPERCLIP_DISABLE_CWD_ENV_FILE", "true"); vi.stubEnv("DATABASE_URL", ""); vi.stubEnv("DATABASE_MIGRATION_URL", "");
+  for (const key of ["ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "ANTHROPIC_BEDROCK_BASE_URL", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY"]) vi.stubEnv(key, "");
+  await mkdir(join(home, "bin")); await writeFile(join(home, "bin", "claude"), "#!/bin/sh\n# Inert hash-only fixture. Must never execute.\nexit 97\n", { mode: 0o700 });
+  vi.stubEnv("PATH", `${join(home, "bin")}:${process.env.PATH}`);
+  vi.stubGlobal("fetch", vi.fn(async () => { throw Error("Network forbidden in controlled prompt fixture"); }));
+  const port = await new Promise<number>((accept, reject) => { const socket = createServer(); socket.once("error", reject); socket.listen(0, "127.0.0.1", () => {
+    const address = socket.address(); if (!address || typeof address === "string") return reject(Error("Missing loopback port")); socket.close(error => error ? reject(error) : accept(address.port)); }); });
+  const require = createRequire(new URL("../../../../packages/db/package.json", import.meta.url));
+  const { default: EmbeddedPostgres } = await import(require.resolve("embedded-postgres"));
+  pg = new EmbeddedPostgres({ databaseDir: join(home, "db"), user: "paperclip", password: "paperclip", port, persistent: true,
+    initdbFlags: ["--encoding=UTF8", "--locale=C", "--lc-messages=C"], onLog: () => {}, onError: () => {} });
+  await pg.initialise(); await appendFile(join(home, "db", "postgresql.conf"), "\nunix_socket_directories = ''\nlisten_addresses = '127.0.0.1'\n"); await pg.start();
+  await ensurePostgresDatabase(`postgres://paperclip:paperclip@127.0.0.1:${port}/postgres`, "paperclip");
+  const url = `postgres://paperclip:paperclip@127.0.0.1:${port}/paperclip`; await applyPendingMigrations(url); db = createDb(url);
+  expect(resolve(String((await db.execute(sql`show data_directory`))[0].data_directory))).toBe(resolve(join(home, "db")));
+  actor = e.actor; const now = new Date();
+  await db.insert(authUsers).values({ id: actor.userId, name: "Controlled fixture", email: "controlled@example.invalid", createdAt: now, updatedAt: now });
+  await db.insert(authSessions).values({ id: actor.sessionId, userId: actor.userId, token: randomUUID(), expiresAt: new Date(Date.now() + 3600000), createdAt: now, updatedAt: now });
+  await db.insert(companies).values({ id: actor.companyId, name: "Controlled fixture", issuePrefix: "PCA", defaultResponsibleUserId: actor.userId });
+  await db.insert(companyMemberships).values({ companyId: actor.companyId, principalType: "user", principalId: actor.userId, membershipRole: "owner", status: "active" });
+  await db.insert(principalPermissionGrants).values({ companyId: actor.companyId, principalType: "user", principalId: actor.userId, permissionKey: "agents:configure", scope: null });
+  await db.insert(agents).values({ id: e.tests[0].agentId, companyId: actor.companyId, name: "Historical private harness", role: "engineer", adapterType: "process", status: "idle" });
+  await db.insert(companySkills).values({ id: e.version.companySkillId, companyId: actor.companyId, key: "controlled", slug: "controlled", name: "Controlled", markdown: "Synthetic history only" });
+  await db.insert(companySkillVersions).values({ ...e.version, revisionNumber: 1 });
+  await db.insert(mimousePrompts).values({ id: e.promptId, companyId: actor.companyId, promptKey: "controlled" });
+  for (const r of e.revisions) await db.insert(mimousePromptRevisions).values({ ...r, requestId: randomUUID(), requestDigest: "fixture", actorUserId: actor.userId });
+  await db.insert(mimouseEvaluationDatasets).values({ ...e.dataset, requestId: randomUUID(), requestDigest: "fixture", name: "Fixed", actorId: actor.userId });
+  for (const issue of e.issues) await db.insert(issues).values({ ...issue, title: "Synthetic private historical evidence", status: "done" });
+  for (const t of e.tests) await db.insert(agentWakeupRequests).values({ id: t.wakeupRequestId!, companyId: actor.companyId, agentId: t.agentId, source: "on_demand", status: "completed", runId: t.heartbeatRunId });
+  for (const run of e.runs) await db.insert(heartbeatRuns).values(run);
+  await db.insert(mimousePrivatePromptTests).values(e.tests);
+  for (const t of e.tests) await db.insert(costEvents).values({ companyId: actor.companyId, agentId: t.agentId, issueId: t.issueId, heartbeatRunId: t.heartbeatRunId,
+    provider: "fixture", model: "fixture", costCents: 0.125, billingType: "api", costStatus: "reported", occurredAt: now });
+  const local = (await db.select().from(environments).where(eq(environments.driver, "local")))[0] ?? (await db.insert(environments).values({ name: "Owned local fixture", driver: "local", status: "active" }).returning())[0];
+  environmentId = local.id;
+  const secret = await secretService(db).create(actor.companyId, { name: "Fixture API key", provider: "local_encrypted", value: keyValue }, { userId: actor.userId });
+  [target] = await db.insert(agents).values({ companyId: actor.companyId, name: "Ordinary fixture", role: "engineer", status: "idle", adapterType: "claude_local", defaultEnvironmentId: local.id,
+    adapterConfig: { engine: "cli", model: "claude-fixture", cwd: home, promptTemplate: "Ordinary template for {{agent.name}}.", dangerouslySkipPermissions: false,
+      env: { ANTHROPIC_API_KEY: { type: "secret_ref", secretId: secret.id, version: 1 } } } }).returning();
+  await secretService(db).createBinding({ companyId: actor.companyId, secretId: secret.id, targetType: "agent", targetId: target.id, configPath: "env.ANTHROPIC_API_KEY", versionSelector: 1 });
+  service = promptApplicationService(db); heartbeat = heartbeatService(db);
+}, 90000);
+afterAll(async () => { boundary.beforeSpawn = null; boundary.settle = null;
+  await heartbeat?.drainActiveRunExecutions(); await (db as any)?.$client?.end(); await pg?.stop();
+  if (home && await readFile(join(home, ".owned-test"), "utf8") === "controlled-prompt-disposable-v1") await rm(home, { recursive: true, force: true }); vi.unstubAllGlobals(); vi.unstubAllEnvs(); }, 30000);
+const approval = (item: any, requestId = randomUUID()) => ({ requestId, expectedGeneration: item.expectedGeneration, approvalDigest: item.approvalDigest,
+  confirmOrdinaryVisibility: true as const, confirmBareComparisonNotToolQuality: true as const, confirmNewTasksOnly: true as const, confirmNoAutomaticRun: true as const });
+async function proposal() { const head = await service.head(actor, target.id); return service.prepare(actor, e.promptId, { requestId: randomUUID(), agentId: target.id,
+  expectedGeneration: head.generation, comparison: e.input, approvalValidForMinutes: 60 }); }
+async function issueRun(createdAt = new Date()) {
+  const [issue] = await db.insert(issues).values({ companyId: actor.companyId, title: "Fresh ordinary fixture", assigneeAgentId: target.id, responsibleUserId: actor.userId, status: "todo", createdAt }).returning();
+  const [run] = await db.insert(heartbeatRuns).values({ companyId: actor.companyId, agentId: target.id, issueId: issue.id, scopeKind: "issue", contextSnapshot: { issueId: issue.id },
+    status: "running", runtimeMode: "legacy", ...legacyControllerClaim("legacy"), createdAt }).returning();
+  await db.update(issues).set({ executionRunId: run.id }).where(eq(issues.id, issue.id)); return { issue, run };
+}
+function execution(run: typeof heartbeatRuns.$inferSelect, issueId: string, candidate: { id: string; generation: number }): HeartbeatRuntimeExecutionInput {
+  return { run, agent: target, task: { issueId, context: { issueId, forceFreshSession: true }, executionContinuation: null },
+    runtime: { adapter: getServerAdapter("claude_local"), nativeRuntimeResolution: { kind: "legacy" }, runtimeForAdapter: { sessionId: null, sessionParams: null, sessionDisplayId: null, taskKey: issueId } },
+    workspace: { executionTarget: { kind: "local", environmentId }, executionWorkspace: { cwd: home }, remoteExecution: null },
+    config: { runtimeConfig: { ...target.adapterConfig, env: { ANTHROPIC_API_KEY: keyValue } }, resolvedConfig: { ...target.adapterConfig, env: { ANTHROPIC_API_KEY: keyValue } }, configuredTaskEnvironment: { ANTHROPIC_API_KEY: keyValue } },
+    session: { sessionConfigMetadata: { fingerprint: "fixture", version: 1 } }, control: { promptApplicationCandidate: candidate, executionControl: { controller: new AbortController() } } } as unknown as HeartbeatRuntimeExecutionInput;
+}
+async function finish(runId: string) { await db.update(heartbeatRuns).set({ status: "failed", controllerLeaseExpiresAt: null, executionStage: "settled", finishedAt: new Date() }).where(eq(heartbeatRuns.id, runId)); }
+it("prepare and approval are immutable, idempotent, no-wake and do not mutate agent config", async () => {
+  const before = await db.select().from(agentWakeupRequests), config = structuredClone(target.adapterConfig);
+  const p = await proposal(), input = approval(p.item), result = await service.approve(actor, e.promptId, p.item.id, input);
+  expect(result.receipt.generation).toBe(p.item.expectedGeneration + 1); expect(result.receipt.executionStarted).toBe(false);
+  expect((await service.approve(actor, e.promptId, p.item.id, input)).receipt.id).toBe(result.receipt.id);
+  expect((await service.request(actor, e.promptId, input.requestId)).receipt?.requestId).toBe(input.requestId);
+  expect((await db.select().from(agents).where(eq(agents.id, target.id)))[0].adapterConfig).toEqual(config);
+  expect(await db.select().from(agentWakeupRequests)).toEqual(before); expect(boundary.inputs).toHaveLength(0);
+  expect(p.item.snapshot.completeContextCaptured).toBe(false); expect(p.item.snapshot.ordinaryToolsQualityProven).toBe(false);
+  await expect(db.update(mimousePromptApplications).set({ reportHash: "0".repeat(64) }).where(eq(mimousePromptApplications.id, p.item.id))).rejects.toThrow();
+  await service.rollback(actor, e.promptId, p.item.id, { requestId: randomUUID(), expectedGeneration: result.receipt.generation });
+});
+it("CAS admits only one simultaneous approval and closes stale request recovery without replay", async () => {
+  const a = await proposal(), b = await proposal(), ia = approval(a.item), ib = approval(b.item);
+  const results = await Promise.allSettled([service.approve(actor, e.promptId, a.item.id, ia), service.approve(actor, e.promptId, b.item.id, ib)]);
+  expect(results.filter(r => r.status === "fulfilled")).toHaveLength(1);
+  const win = results[0].status === "fulfilled" ? a : b, lose = win === a ? b : a, lostInput = win === a ? ib : ia;
+  const proof = await service.request(actor, e.promptId, lostInput.requestId, { action: "approve", applicationId: lose.item.id, expectedGeneration: lostInput.expectedGeneration });
+  expect(proof.closure).toMatchObject({ outcome: "not_applied_closed", reason: "generation_advanced", requestId: lostInput.requestId });
+  await service.rollback(actor, e.promptId, win.item.id, { requestId: randomUUID(), expectedGeneration: (await service.head(actor, target.id)).generation });
+});
+it("old tasks and queued runs are excluded, new overlays fail closed", async () => {
+  const p = await proposal(), approved = await service.approve(actor, e.promptId, p.item.id, approval(p.item));
+  const old = await issueRun(fixed); expect(await findPromptApplicationCandidate(db, old.run, old.issue.id)).toBeNull(); await finish(old.run.id);
+  const fresh = await issueRun(); expect(await findPromptApplicationCandidate(db, fresh.run, fresh.issue.id)).toEqual({ id: p.item.id, generation: approved.receipt.generation });
+  await db.update(issues).set({ assigneeAdapterOverrides: { model: "different" } }).where(eq(issues.id, fresh.issue.id));
+  await expect(findPromptApplicationCandidate(db, fresh.run, fresh.issue.id)).rejects.toThrow("prompt_application_task_or_runtime_overlay_unsupported"); await finish(fresh.run.id);
+  await service.rollback(actor, e.promptId, p.item.id, { requestId: randomUUID(), expectedGeneration: approved.receipt.generation });
+});
+it("withdrawal before the required spawn witness blocks late literal input without claiming process stop", async () => {
+  const p = await proposal(), approved = await service.approve(actor, e.promptId, p.item.id, approval(p.item)), fresh = await issueRun();
+  const input = execution(fresh.run, fresh.issue.id, { id: p.item.id, generation: approved.receipt.generation });
+  const capability = (await preparePromptApplicationExecution(db, input))!;
+  await capability.prepare("ordinary prompt plus approved literal", { ANTHROPIC_API_KEY: keyValue }); await capability.beforeStart();
+  await service.rollback(actor, e.promptId, p.item.id, { requestId: randomUUID(), expectedGeneration: approved.receipt.generation });
+  await expect(capability.dispatched()).rejects.toThrow("prompt_application_dispatch_generation_changed");
+  const [receipt] = await db.select().from(mimousePromptApplicationDispatches).where(eq(mimousePromptApplicationDispatches.runId, fresh.run.id)); expect(receipt.state).toBe("prepared");
+  await finish(fresh.run.id);
+  expect(await db.transaction(tx => applicationAttemptStopped(tx, actor.companyId, fresh.run.id))).toBe(false);
+  const [next] = await db.insert(heartbeatRuns).values({ companyId: actor.companyId, agentId: target.id, issueId: fresh.issue.id, scopeKind: "issue", status: "queued", runtimeMode: "legacy" }).returning();
+  await expect(findPromptApplicationCandidate(db, next, fresh.issue.id)).rejects.toThrow("prompt_application_previous_attempt_unresolved"); await finish(next.id);
+});
+it("a dispatched witness that wins before withdrawal remains historical and does not get relabeled un-applied", async () => {
+  const p = await proposal(), approved = await service.approve(actor, e.promptId, p.item.id, approval(p.item)), fresh = await issueRun();
+  const capability = (await preparePromptApplicationExecution(db, execution(fresh.run, fresh.issue.id, { id: p.item.id, generation: approved.receipt.generation })))!;
+  await capability.prepare("fixed final prompt", { ANTHROPIC_API_KEY: keyValue }); await capability.beforeStart(); await capability.dispatched();
+  await service.rollback(actor, e.promptId, p.item.id, { requestId: randomUUID(), expectedGeneration: approved.receipt.generation });
+  expect((await db.select().from(mimousePromptApplicationDispatches).where(eq(mimousePromptApplicationDispatches.runId, fresh.run.id)))[0].state).toBe("dispatched");
+  await capability.stopped(); await finish(fresh.run.id);
+});
+it("real heartbeat and ordinary Claude prompt assembly reach only the inert Node fixture", async () => {
+  const p = await proposal(), approved = await service.approve(actor, e.promptId, p.item.id, approval(p.item));
+  const [issue] = await db.insert(issues).values({ companyId: actor.companyId, title: "Actual ordinary runtime fixture", assigneeAgentId: target.id, responsibleUserId: actor.userId, status: "todo" }).returning();
+  boundary.settle = async () => { await db.update(issues).set({ status: "done" }).where(eq(issues.id, issue.id)); };
+  const before = boundary.inputs.length;
+  await heartbeat.wakeup(target.id, { source: "on_demand", triggerDetail: "manual", reason: "issue_assigned", contextSnapshot: { issueId: issue.id }, requestedByActorType: "user", requestedByActorId: actor.userId });
+  await drainHeartbeatRunsToQuiescence(db, heartbeat); boundary.settle = null;
+  const runs = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.issueId, issue.id));
+  expect(runs.map(r => ({ status: r.status, error: r.error }))).toEqual([{ status: "succeeded", error: null }]);
+  expect(boundary.inputs.length).toBe(before + 1); expect(boundary.inputs.at(-1)).toContain("Ordinary template for Ordinary fixture.");
+  expect(boundary.inputs.at(-1)).toContain(e.revisions[1].content); expect(boundary.inputs.at(-1)).not.toMatch(/PRIVATE_INPUT_SENTINEL|PRIVATE_SKILL_SENTINEL|WRONG_TRIMMED_SUMMARY/);
+  const [receipt] = await db.select().from(mimousePromptApplicationDispatches).where(eq(mimousePromptApplicationDispatches.runId, runs[0].id));
+  expect(receipt.state).toBe("dispatched"); expect(receipt.promptHash).toMatch(/^[a-f0-9]{64}$/);
+  await service.rollback(actor, e.promptId, p.item.id, { requestId: randomUUID(), expectedGeneration: approved.receipt.generation });
+}, 90000);
+it("revoked configuration permission blocks prepare, while prior metadata stays readable", async () => {
+  await db.delete(principalPermissionGrants).where(and(eq(principalPermissionGrants.companyId, actor.companyId), eq(principalPermissionGrants.principalId, actor.userId), eq(principalPermissionGrants.permissionKey, "agents:configure")));
+  await expect(proposal()).rejects.toThrow("prompt_application_agent_configuration_denied"); expect((await service.list(actor, e.promptId)).items.length).toBeGreaterThan(0);
+  expect(JSON.stringify(await db.select().from(activityLog))).not.toMatch(/PRIVATE_INPUT_SENTINEL|PRIVATE_SKILL_SENTINEL|fixture-not-a-real-provider-key/);
+});

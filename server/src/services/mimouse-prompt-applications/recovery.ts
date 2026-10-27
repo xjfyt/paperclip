@@ -25,5 +25,11 @@ export async function applicationAttemptStopped(tx: PrivatePromptTx, companyId: 
 }
 export async function assertApplicationAttemptsStopped(tx: PrivatePromptTx, companyId: string, agentId: string) {
   const rows = await tx.select({ runId: dispatches.runId }).from(dispatches).where(and(eq(dispatches.companyId, companyId), eq(dispatches.agentId, agentId)));
-  for (const row of rows) if (!await applicationAttemptStopped(tx, companyId, row.runId, true)) throw conflict("prompt_application_previous_attempt_unresolved");
+  for (const row of rows) {
+    const [withdrawn] = await tx.select({ id: heartbeatRunEvents.id }).from(heartbeatRunEvents).where(and(eq(heartbeatRunEvents.companyId, companyId),
+      eq(heartbeatRunEvents.runId, row.runId), eq(heartbeatRunEvents.eventType, "prompt_application.binding_withdrawn_before_input"), isNull(heartbeatRunEvents.sourceEventId))).limit(1);
+    // This bypass is ONLY for configuring a future binding. candidate() still
+    // requires real process-stop evidence before the old issue can continue.
+    if (!withdrawn && !await applicationAttemptStopped(tx, companyId, row.runId, true)) throw conflict("prompt_application_previous_attempt_unresolved");
+  }
 }

@@ -20,11 +20,12 @@ export function applicationTaskIsNew(input: { configuredAt: Date; issueCreatedAt
 }
 async function candidate(tx: PrivatePromptTx, run: typeof heartbeatRuns.$inferSelect, issueId: string | null) {
   if (!issueId) return null;
+  await tx.select({ id: agents.id }).from(agents).where(and(eq(agents.companyId, run.companyId), eq(agents.id, run.agentId))).for("share");
+  const [head] = await tx.select().from(heads).where(and(eq(heads.companyId, run.companyId), eq(heads.agentId, run.agentId))).for("share");
   const [pending] = await tx.select().from(dispatches).where(and(eq(dispatches.companyId, run.companyId), eq(dispatches.issueId, issueId), eq(dispatches.state, "prepared")));
-  if (pending && pending.runId !== run.id && !await applicationAttemptStopped(tx, run.companyId, pending.runId, true)) {
+  if (pending && pending.runId !== run.id && !await applicationAttemptStopped(tx, run.companyId, pending.runId, false)) {
     throw conflict("prompt_application_previous_attempt_unresolved");
   }
-  const [head] = await tx.select().from(heads).where(and(eq(heads.companyId, run.companyId), eq(heads.agentId, run.agentId))).for("share");
   if (!head?.applicationId || !head.configuredAt) return null;
   const [issue] = await tx.select().from(issues).where(and(eq(issues.companyId, run.companyId), eq(issues.id, issueId))).for("share");
   if (!issue) throw conflict("prompt_application_issue_not_found");

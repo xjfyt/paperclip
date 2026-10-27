@@ -1,7 +1,8 @@
+import { appendHeartbeatRunEvent } from "../heartbeat-run-events.js";
 import { assertApplicationAttemptsStopped } from "./recovery.js";
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, lt, sql } from "drizzle-orm";
-import { activityLog, agents, type Db } from "@paperclipai/db";
+import { and, desc, eq, lt, sql, isNull } from "drizzle-orm";
+import { activityLog, agents, heartbeatRunEvents, type Db } from "@paperclipai/db";
 import { mimousePromptApplications as applications, mimousePromptApplicationHeads as heads,
   mimousePromptApplicationReceipts as receipts, mimousePromptApplicationDispatches as dispatches } from "@paperclipai/db/schema/mimouse_prompt_applications";
 import { approvePromptApplicationSchema, preparePromptApplicationSchema, rollbackPromptApplicationSchema,
@@ -108,9 +109,15 @@ export function promptApplicationService(db: Db) {
       return db.transaction(async tx => {
         await authorizePrivatePrompt(tx, actor); await get(tx, actor, promptId, id);
         const rows = await tx.select().from(dispatches).where(and(eq(dispatches.companyId, actor.companyId), eq(dispatches.applicationId, id), beforeId ? lt(dispatches.id, beforeId) : undefined)).orderBy(desc(dispatches.id)).limit(51);
-        return { items: rows.slice(0, 50).map(row => ({ id: row.id, applicationId: row.applicationId, agentId: row.agentId, runId: row.runId,
-          issueId: row.issueId, generation: row.generation, state: row.state, configuredAt: row.configuredAt.toISOString(), preparedAt: row.preparedAt.toISOString(),
-          dispatchedAt: row.dispatchedAt?.toISOString() ?? null, promptHash: row.promptHash, effectiveContextHash: row.effectiveContextHash, providerConsumed: false as const })), nextBeforeId: rows.length > 50 ? rows[49]!.id : null };
+        return { items: await Promise.all(rows.slice(0, 50).map(async row => {
+          const [withdrawn] = row.state === "prepared" ? await tx.select({ id: heartbeatRunEvents.id }).from(heartbeatRunEvents).where(and(
+            eq(heartbeatRunEvents.companyId, actor.companyId), eq(heartbeatRunEvents.runId, row.runId), isNull(heartbeatRunEvents.sourceEventId),
+            eq(heartbeatRunEvents.eventType, "prompt_application.binding_withdrawn_before_input"))).limit(1) : [];
+          return { id: row.id, applicationId: row.applicationId, agentId: row.agentId, runId: row.runId,
+            issueId: row.issueId, generation: row.generation, state: row.state, configuredAt: row.configuredAt.toISOString(), preparedAt: row.preparedAt.toISOString(),
+            dispatchedAt: row.dispatchedAt?.toISOString() ?? null, promptHash: row.promptHash, effectiveContextHash: row.effectiveContextHash, providerConsumed: false as const,
+            inputDisposition: withdrawn ? "not_applied_before_input" as const : "unconfirmed" as const };
+        })), nextBeforeId: rows.length > 50 ? rows[49]!.id : null };
       });
     },
     async prepare(actor: PrivatePromptIdentity, promptId: string, raw: PreparePromptApplication) {
@@ -185,13 +192,20 @@ export function promptApplicationService(db: Db) {
         await assertApplicationConfigurationAuthority(tx, actor.companyId, row.agentId, actor.userId);
         const head = await lockApplicationHead(tx, actor.companyId, row.agentId), prior = await priorReceipt(tx, actor, id, input.requestId, digest); if (prior) return prior;
         if (head.generation !== input.expectedGeneration || head.applicationId !== row.id) throw conflict("prompt_application_current_binding_required");
-        await assertApplicationAttemptsStopped(tx, actor.companyId, row.agentId);
-        if (!await agentExecutionsHaveStopped(tx as unknown as Db, [row.agentId])) throw conflict("prompt_application_agent_execution_not_stopped");
+        // Withdrawal changes future binding only, not run/lease/process state.
+        // Agent + head locks serialize against the strict spawn witness writer.
+        const awaitingInput = await tx.select().from(dispatches).where(and(eq(dispatches.companyId, actor.companyId),
+          eq(dispatches.applicationId, row.id), eq(dispatches.state, "prepared"))).for("update");
         const generation = head.generation + 1;
         const [saved] = await tx.insert(receipts).values({ companyId: actor.companyId, agentId: row.agentId, applicationId: row.id, action: "rollback", generation,
           actorUserId: actor.userId, actorSessionId: actor.sessionId, requestId: input.requestId, requestDigest: digest }).returning();
         await tx.update(heads).set({ generation, applicationId: null, configuredAt: null }).where(eq(heads.agentId, row.agentId));
-        await audit(tx, actor, "prompt_application.rolled_back", row.id, { agentId: row.agentId, receiptId: saved.id, generation, executionStarted: false, pastEffectsReverted: false });
+        for (const pending of awaitingInput) await appendHeartbeatRunEvent(tx as unknown as Db, { companyId: actor.companyId, agentId: row.agentId, runId: pending.runId,
+          eventType: "prompt_application.binding_withdrawn_before_input", stream: "system", level: "info",
+          message: "Future prompt binding withdrawn before the required spawn witness; process stop is unconfirmed.",
+          payload: { applicationId: row.id, receiptId: saved.id, generation: pending.generation, stdinWritten: false, providerStopped: false } });
+        await audit(tx, actor, "prompt_application.rolled_back", row.id, { agentId: row.agentId, receiptId: saved.id, generation, executionStarted: false,
+          pastEffectsReverted: false, futureBindingOnly: true, providerStopConfirmed: false, withdrawnBeforeInput: awaitingInput.length });
         return { receipt: receipt(saved), duplicate: false };
       });
     },
