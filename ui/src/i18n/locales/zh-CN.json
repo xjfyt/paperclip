@@ -3436,7 +3436,8 @@
     "count_one": "{{count}} 项例行任务",
     "filed_other": "已归档 {{count}} 项例行任务。",
     "filed_one": "已归档 {{count}} 项例行任务。",
-    "filedIn": "归入"
+    "filedIn": "归入",
+    "inProject": "在"
   },
   "routineScheduleUi": {
     "webhooks_one": "{{count}} 个已启用 Webhook",
