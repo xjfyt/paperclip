@@ -2654,7 +2654,7 @@ type IssueDetailActivityTabProps = {
   externalReferences?: MarkdownExternalReferenceMap;
 };
 
-function IssueDetailActivityTab({
+export function IssueDetailActivityTab({
   issue,
   issueId,
   companyId,

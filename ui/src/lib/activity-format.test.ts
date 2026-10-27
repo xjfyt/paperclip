@@ -1,11 +1,26 @@
 import type { Agent } from "@paperclipai/shared";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { i18n, issueActivityMessages } from "../i18n/issue-activity-test-resources";
+import { reviewPolicyMessages } from "../i18n/review-policy-test-resources";
+import { validateLocaleMessages } from "../i18n/locale-validation";
 import { formatActivityVerb, formatIssueActivityAction } from "./activity-format";
+
+beforeEach(async () => { await i18n.changeLanguage("en"); });
+afterEach(async () => { await i18n.changeLanguage("en"); });
+function makeAgent(id: string, name: string): Agent {
+  return { id, name, companyId: "company-1", urlKey: id, role: "engineer", title: null, icon: null,
+    status: "active", reportsTo: null, capabilities: null, adapterType: "codex_local", adapterConfig: {}, runtimeConfig: {},
+    budgetMonthlyCents: 0, spentMonthlyCents: 0, pauseReason: null, pausedAt: null, permissions: { canCreateAgents: false },
+    lastHeartbeatAt: null, metadata: null, createdAt: new Date("2026-01-01"), updatedAt: new Date("2026-01-01") };
+}
+function fill(template: string, values: Record<string, string | number>): string {
+  return template.replace(/{{(\w+)}}/g, (_match, key: string) => String(values[key]));
+}
 
 describe("activity formatting", () => {
   const agentMap = new Map<string, Agent>([
-    ["agent-reviewer", { id: "agent-reviewer", name: "Reviewer Bot" } as Agent],
-    ["agent-approver", { id: "agent-approver", name: "Approver Bot" } as Agent],
+    ["agent-reviewer", makeAgent("agent-reviewer", "Reviewer Bot")],
+    ["agent-approver", makeAgent("agent-approver", "Approver Bot")],
   ]);
 
   it("labels a Slack settlement as idle while retaining actual review wording", () => {
@@ -160,5 +175,110 @@ describe("activity formatting", () => {
     expect(formatIssueActivityAction("issue.successful_run_handoff_escalated")).toBe(
       "Run finished without a next step - recovery escalated",
     );
+  });
+});
+
+
+describe.each(Object.entries(issueActivityMessages))("issue activity localization (%s)", (locale, messages) => {
+  beforeEach(async () => { await i18n.changeLanguage(locale); });
+  const name = "原文 <Agent> 日本語";
+  const options = {
+    agentMap: new Map([["agent-1", makeAgent("agent-1", name)]]),
+    userProfileMap: new Map([["user-1", { label: "Raw 用户 <name>", image: null }]]), currentUserId: "current-user",
+  };
+  it("covers all known action labels with matching complete four-language resources", () => {
+    expect(validateLocaleMessages(messages, issueActivityMessages.en)).toEqual([]);
+    for (const [key, label] of Object.entries(messages.actions)) {
+      expect(formatIssueActivityAction(key.replace("_", "."))).toBe(label);
+    }
+    expect(formatIssueActivityAction("future.plugin_action.v2")).toBe("future plugin action v2");
+  });
+  it("localizes known status/priority values and keeps the original unknown-value formatting and input", () => {
+    for (const [status, label] of Object.entries(messages.status)) {
+      expect(formatIssueActivityAction("issue.updated", { status })).toBe(fill(messages.statusChangedTo, { to: label }));
+    }
+    for (const [priority, label] of Object.entries(messages.priority)) {
+      expect(formatIssueActivityAction("issue.updated", { priority })).toBe(fill(messages.priorityChangedTo, { to: label }));
+    }
+    const details = { status: "in_review", externalConversationState: "waiting", priority: "high", _previous: { status: "in_progress", priority: "low" } };
+    const original = JSON.stringify(details);
+    expect(formatIssueActivityAction("issue.updated", details)).toBe([
+      fill(messages.statusChangedFrom, { from: messages.status.in_progress, to: messages.status.idle }),
+      fill(messages.priorityChangedFrom, { from: messages.priority.low, to: messages.priority.high }),
+    ].join(messages.listSeparator));
+    expect(JSON.stringify(details)).toBe(original);
+    expect(formatIssueActivityAction("issue.updated", { status: "future_state.X", _previous: { status: "old_state" } }))
+      .toBe(fill(messages.statusChangedFrom, { from: "old state", to: "future state.X" }));
+    expect(formatIssueActivityAction("issue.updated", { priority: "future_priority" }))
+      .toBe(fill(messages.priorityChangedTo, { to: "future priority" }));
+    expect(formatIssueActivityAction("issue.updated", { status: null })).toBe(fill(messages.statusChangedTo, { to: messages.none }));
+    expect(formatIssueActivityAction("issue.updated", { status: 7 })).toBe(fill(messages.statusChangedTo, { to: 7 }));
+  });
+  it("preserves provided names and translates only local participant fallbacks and full assignment phrases", () => {
+    for (const [details, label] of [
+      [{ assigneeAgentId: "agent-1" }, name], [{ assigneeAgentId: "missing" }, messages.agent],
+      [{ assigneeUserId: "user-1" }, "Raw 用户 <name>"], [{ assigneeUserId: "local-board" }, messages.board],
+      [{ assigneeUserId: "current-user" }, messages.you], [{ assigneeUserId: "unknown-user" }, fill(messages.user, { id: "unkno" })],
+    ] as const) {
+      expect(formatIssueActivityAction("issue.updated", details, options)).toBe(fill(messages.assigneeChanged, { name: label }));
+    }
+    expect(formatIssueActivityAction("issue.updated", { assigneeAgentId: null, title: "Raw_title", description: "# raw_body" }))
+      .toBe([messages.assigneeCleared, messages.titleUpdated, messages.descriptionUpdated].join(messages.listSeparator));
+  });
+  it("uses complete named/count relation phrases without changing additions or removals", () => {
+    for (const [relation, action] of [["blocker", "issue.blockers_updated"], ["reviewer", "issue.reviewers_updated"], ["approver", "issue.approvers_updated"]] as const) {
+      for (const count of [0, 1, 2]) {
+        const entities = Array.from({ length: count }, () => relation === "blocker" ? { id: "raw-id", identifier: "PAP-42", title: "Raw_title" } : { type: "agent", agentId: "agent-1" });
+        for (const direction of ["Added", "Removed"] as const) {
+          const key = relation === "blocker" ? direction === "Added" ? "addedBlockedByIssues" : "removedBlockedByIssues" : direction === "Added" ? "addedParticipants" : "removedParticipants";
+          const details = { [key]: entities };
+          const original = JSON.stringify(details);
+          const template = count === 0 ? messages.relations[`${relation}Updated`] : messages.relations[`${relation}${direction}${count === 1 ? "Named" : "Count"}`];
+          expect(formatIssueActivityAction(action, details, options)).toBe(fill(template, { count, name: relation === "blocker" ? "PAP-42" : name }));
+          expect(JSON.stringify(details)).toBe(original);
+        }
+      }
+    }
+    expect(formatIssueActivityAction("issue.reviewers_updated", { addedParticipants: [{ type: "agent" }], removedParticipants: [{ type: "user" }] }, options)).toBe(messages.relations.reviewerUpdated);
+    expect(formatIssueActivityAction("issue.blockers_updated", { addedBlockedByIssues: [{}] })).toBe(fill(messages.relations.blockerAddedNamed, { name: messages.task }));
+  });
+  it("preserves document keys/titles and service values inside action-specific complete phrases", () => {
+    for (const [key, template] of Object.entries(messages.monitorServices)) {
+      expect(formatIssueActivityAction(key.replace("_", "."), { serviceName: "  service_raw <日本語>  " })).toBe(fill(template, { service: "service_raw <日本語>" }));
+    }
+    for (const [key, template] of Object.entries(messages.documents)) {
+      const details = { key: "AGENTS.md", title: "原文 <日本語> _title" };
+      expect(formatIssueActivityAction(key.replace("_", "."), details)).toBe(fill(template, { document: "AGENTS.md (原文 <日本語> _title)" }));
+      expect(details).toEqual({ key: "AGENTS.md", title: "原文 <日本語> _title" });
+    }
+    expect(formatIssueActivityAction("issue.monitor_future", { serviceName: " raw_service " })).toBe(fill(messages.unknownMonitorService, { action: "issue monitor future", service: "raw_service" }));
+  });
+  it("retains confirmation versus suggestion/question outcomes and the exact review-policy contract", () => {
+    for (const outcome of ["accepted", "rejected"] as const) {
+      for (const [interactionKind, label] of Object.entries(messages.outcomes[outcome])) {
+        expect(formatIssueActivityAction(`issue.thread_interaction_${outcome}`, { interactionKind })).toBe(label);
+      }
+    }
+    for (const [action, label] of Object.entries(messages.reviewDecisions)) expect(formatIssueActivityAction("issue.stalled_review_decided", { action })).toBe(label);
+    expect(formatIssueActivityAction("issue.thread_interaction_accepted", { interactionKind: "future_kind" })).toBe(messages.actions.issue_thread_interaction_accepted);
+    expect(formatIssueActivityAction("issue.stalled_review_decided", { action: "future_verdict" })).toBe(messages.actions.issue_stalled_review_decided);
+    const policies = reviewPolicyMessages[locale as keyof typeof reviewPolicyMessages];
+    for (const [policy, label] of [[null, policies.anyoneValue], ["anyone", policies.anyoneValue], ["human_only", policies.humanOnlyValue], ["not_creator", policies.notCreatorValue], ["future_policy", "future policy"], ["constructor", "constructor"]] as const) {
+      expect(formatIssueActivityAction("issue.updated", { reviewPolicy: policy })).toBe(fill(messages.reviewPolicyChanged, { policy: label }));
+    }
+  });
+  it("keeps decomposition counts and existing fallback rules", () => {
+    const details = { status: "completed", childIssueIds: ["a", "b", "c", "", null], newlyCreatedChildIssueIds: ["a"] };
+    expect(formatIssueActivityAction("issue.accepted_plan_decomposition_updated", details)).toBe(fill(messages.decomposition.completedSummary, { summary: fill(messages.decomposition.createdAndReused, { created: 1, reused: 2 }) }));
+    expect(formatIssueActivityAction("issue.accepted_plan_decomposition_updated", { status: "completed" })).toBe(messages.decomposition.completed);
+    expect(formatIssueActivityAction("issue.accepted_plan_decomposition_updated", { status: "in_flight", requestedChildCount: 0 })).toBe(fill(messages.decomposition.inFlightSummary, { summary: fill(messages.decomposition.requested, { count: 0 }) }));
+    expect(formatIssueActivityAction("issue.accepted_plan_decomposition_updated", { requestedChildCount: Number.NaN })).toBe(messages.actions.issue_accepted_plan_decomposition_updated);
+  });
+  it("does not change the separate activity-feed formatter", () => {
+    expect(formatActivityVerb("issue.updated", { status: "in_progress", priority: "high" })).toBe("changed status to in progress on");
+    expect(formatActivityVerb("issue.reviewers_updated", { addedParticipants: [{ type: "agent", agentId: "agent-1" }] }, options)).toBe(`added reviewer ${name} to`);
+    expect(formatActivityVerb("issue.thread_interaction_accepted", { interactionKind: "suggest_tasks" })).toBe("accepted the task suggestions on");
+    expect(formatActivityVerb("tool_gateway.call_completed", { tool: "raw_tool" })).toBe("used raw tool on");
+    expect(formatActivityVerb("future.action_name")).toBe("future action name");
   });
 });

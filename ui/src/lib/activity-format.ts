@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import type { Agent } from "@paperclipai/shared";
 import type { CompanyUserProfile } from "./company-members";
 import { formatReviewPolicyValue } from "./review-policy";
@@ -314,14 +315,14 @@ function formatAcceptedPlanDecompositionDetail(details: ActivityDetails): string
   const totalChildren = readStringArrayLength(details.childIssueIds);
   const newlyCreated = readStringArrayLength(details.newlyCreatedChildIssueIds);
   const reused = Math.max(0, totalChildren - newlyCreated);
-  const parts: string[] = [];
-  if (newlyCreated > 0) parts.push(`created ${newlyCreated} new`);
-  if (reused > 0) parts.push(`reused ${reused} existing`);
-  if (parts.length === 0 && requested !== null) parts.push(`${requested} requested`);
-  const summary = parts.length > 0 ? parts.join(", ") : null;
-  if (status === "completed" && summary) return `decomposition completed (${summary})`;
-  if (status === "completed") return "decomposition completed";
-  if (status === "in_flight" && summary) return `decomposition in flight (${summary})`;
+  const summary = newlyCreated > 0 && reused > 0
+    ? t("issueActivityUi.decomposition.createdAndReused", { created: newlyCreated, reused })
+    : newlyCreated > 0 ? t("issueActivityUi.decomposition.created", { count: newlyCreated })
+      : reused > 0 ? t("issueActivityUi.decomposition.reused", { count: reused })
+        : requested !== null ? t("issueActivityUi.decomposition.requested", { count: requested }) : null;
+  if (status === "completed" && summary) return t("issueActivityUi.decomposition.completedSummary", { summary });
+  if (status === "completed") return t("issueActivityUi.decomposition.completed");
+  if (status === "in_flight" && summary) return t("issueActivityUi.decomposition.inFlightSummary", { summary });
   return summary;
 }
 
@@ -344,15 +345,31 @@ function formatIssueUpdatedVerb(details: ActivityDetails): string | null {
   return null;
 }
 
+// Issue-detail labels are localized separately so the legacy feed verbs retain their contract.
+function formatIssueDetailUserLabel(userId: string | null | undefined, options: ActivityFormatOptions): string {
+  if (!userId || userId === "local-board") return t("issueActivityUi.board");
+  if (options.currentUserId && userId === options.currentUserId) return t("issueActivityUi.you");
+  return options.userProfileMap?.get(userId)?.label ?? t("issueActivityUi.user", { id: userId.slice(0, 5) });
+}
+
+function issueDetailValue(kind: "status" | "priority", value: unknown): string {
+  const known = kind === "status"
+    ? ["backlog", "todo", "in_progress", "in_review", "done", "cancelled", "blocked", "idle"]
+    : ["critical", "high", "medium", "low"];
+  return typeof value === "string" && known.includes(value)
+    ? t(`issueActivityUi.${kind}.${value}`)
+    : value == null ? t("issueActivityUi.none") : humanizeValue(value);
+}
+
 function formatAssigneeName(details: ActivityDetails, options: ActivityFormatOptions): string | null {
   if (!details) return null;
   const agentId = details.assigneeAgentId;
   const userId = details.assigneeUserId;
   if (typeof agentId === "string" && agentId) {
-    return options.agentMap?.get(agentId)?.name ?? "agent";
+    return options.agentMap?.get(agentId)?.name ?? t("issueActivityUi.agent");
   }
   if (typeof userId === "string" && userId) {
-    return formatUserLabel(userId, options);
+    return formatIssueDetailUserLabel(userId, options);
   }
   return null;
 }
@@ -364,34 +381,34 @@ function formatIssueUpdatedAction(details: ActivityDetails, options: ActivityFor
 
   if (details.status !== undefined) {
     const from = previous.status;
-    const to = humanizeValue(details.status === "in_review" && details.externalConversationState === "waiting" ? "idle" : details.status);
+    const to = issueDetailValue("status", details.status === "in_review" && details.externalConversationState === "waiting" ? "idle" : details.status);
     parts.push(
       from
-        ? `changed the status from ${humanizeValue(from)} to ${to}`
-        : `changed the status to ${to}`,
+        ? t("issueActivityUi.statusChangedFrom", { from: issueDetailValue("status", from), to })
+        : t("issueActivityUi.statusChangedTo", { to }),
     );
   }
   if (details.priority !== undefined) {
     const from = previous.priority;
     parts.push(
       from
-        ? `changed the priority from ${humanizeValue(from)} to ${humanizeValue(details.priority)}`
-        : `changed the priority to ${humanizeValue(details.priority)}`,
+        ? t("issueActivityUi.priorityChangedFrom", { from: issueDetailValue("priority", from), to: issueDetailValue("priority", details.priority) })
+        : t("issueActivityUi.priorityChangedTo", { to: issueDetailValue("priority", details.priority) }),
     );
   }
   if (details.assigneeAgentId !== undefined || details.assigneeUserId !== undefined) {
     const assigneeName = formatAssigneeName(details, options);
-    parts.push(assigneeName ? `made ${assigneeName} responsible for the task` : "cleared the responsible");
+    parts.push(assigneeName ? t("issueActivityUi.assigneeChanged", { name: assigneeName }) : t("issueActivityUi.assigneeCleared"));
   }
   if (details.reviewPolicy !== undefined) {
     // `null` is the default ("anyone can approve"), so it must not read as
     // "changed the review policy to none" (PAP-16506).
-    parts.push(`changed who can approve to ${formatReviewPolicyValue(details.reviewPolicy)}`);
+    parts.push(t("issueActivityUi.reviewPolicyChanged", { policy: formatReviewPolicyValue(details.reviewPolicy) }));
   }
-  if (details.title !== undefined) parts.push("updated the title");
-  if (details.description !== undefined) parts.push("updated the description");
+  if (details.title !== undefined) parts.push(t("issueActivityUi.titleUpdated"));
+  if (details.description !== undefined) parts.push(t("issueActivityUi.descriptionUpdated"));
 
-  return parts.length > 0 ? parts.join(", ") : null;
+  return parts.length > 0 ? parts.join(t("issueActivityUi.listSeparator")) : null;
 }
 
 function formatStructuredIssueChange(input: {
@@ -483,6 +500,35 @@ export function formatActivityVerb(
   return ACTIVITY_ROW_VERBS[action] ?? action.replace(/[._]/g, " ");
 }
 
+function formatIssueDetailStructuredChange(action: string, details: ActivityDetails, options: ActivityFormatOptions): string | null {
+  if (!details) return null;
+  const relation = action === "issue.blockers_updated" ? "blocker"
+    : action === "issue.reviewers_updated" ? "reviewer" : action === "issue.approvers_updated" ? "approver" : null;
+  if (!relation) return null;
+  const participantLabel = (participant: ActivityParticipant) => participant.type === "agent"
+    ? options.agentMap?.get(participant.agentId ?? "")?.name ?? t("issueActivityUi.agent")
+    : formatIssueDetailUserLabel(participant.userId, options);
+  const issueLabel = (reference: ActivityIssueReference) => reference.identifier || reference.title
+    || reference.id?.slice(0, 8) || t("issueActivityUi.task");
+  const added = relation === "blocker" ? readIssueReferences(details, "addedBlockedByIssues").map(issueLabel)
+    : readParticipants(details, "addedParticipants").map(participantLabel);
+  const removed = relation === "blocker" ? readIssueReferences(details, "removedBlockedByIssues").map(issueLabel)
+    : readParticipants(details, "removedParticipants").map(participantLabel);
+  if (added.length > 0 && removed.length === 0) {
+    return t(`issueActivityUi.relations.${relation}Added${added.length === 1 ? "Named" : "Count"}`, { count: added.length, name: added[0] });
+  }
+  if (removed.length > 0 && added.length === 0) {
+    return t(`issueActivityUi.relations.${relation}Removed${removed.length === 1 ? "Named" : "Count"}`, { count: removed.length, name: removed[0] });
+  }
+  return t(`issueActivityUi.relations.${relation}Updated`);
+}
+
+function issueActivityLabel(action: string): string {
+  return Object.hasOwn(ISSUE_ACTIVITY_LABELS, action)
+    ? t(`issueActivityUi.actions.${action.replaceAll(".", "_")}`, { defaultValue: ISSUE_ACTIVITY_LABELS[action] })
+    : action.replace(/[._]/g, " ");
+}
+
 export function formatIssueActivityAction(
   action: string,
   details?: Record<string, unknown> | null,
@@ -493,12 +539,7 @@ export function formatIssueActivityAction(
     if (issueUpdatedAction) return issueUpdatedAction;
   }
 
-  const structuredChange = formatStructuredIssueChange({
-    action,
-    details,
-    options,
-    forIssueDetail: true,
-  });
+  const structuredChange = formatIssueDetailStructuredChange(action, details, options);
   if (structuredChange) return structuredChange;
 
   if (action === "issue.accepted_plan_decomposition_updated") {
@@ -509,18 +550,23 @@ export function formatIssueActivityAction(
   if (action === "issue.stalled_review_decided") {
     const decision = typeof details?.action === "string" ? details.action : null;
     const label = decision ? STALLED_REVIEW_DECISION_LABELS[decision] : null;
-    if (label) return label;
+    if (label) return t(`issueActivityUi.reviewDecisions.${decision}`, { defaultValue: label });
   }
 
   const outcomeLabel = formatInteractionOutcomeLabel(action, details);
-  if (outcomeLabel) return outcomeLabel;
+  if (outcomeLabel) {
+    const outcome = action === "issue.thread_interaction_accepted" ? "accepted" : "rejected";
+    return t(`issueActivityUi.outcomes.${outcome}.${details?.interactionKind}`, { defaultValue: outcomeLabel });
+  }
 
   if (action.startsWith("issue.monitor_") && details) {
     const serviceName = typeof details.serviceName === "string" && details.serviceName.trim()
       ? details.serviceName.trim()
       : null;
-    const base = ISSUE_ACTIVITY_LABELS[action] ?? action.replace(/[._]/g, " ");
-    return serviceName ? `${base} for ${serviceName}` : base;
+    if (!serviceName) return issueActivityLabel(action);
+    return Object.hasOwn(ISSUE_ACTIVITY_LABELS, action)
+      ? t(`issueActivityUi.monitorServices.${action.replaceAll(".", "_")}`, { service: serviceName })
+      : t("issueActivityUi.unknownMonitorService", { action: issueActivityLabel(action), service: serviceName });
   }
 
   if (
@@ -533,10 +579,10 @@ export function formatIssueActivityAction(
     ) &&
     details
   ) {
-    const key = typeof details.key === "string" ? details.key : "document";
+    const key = typeof details.key === "string" ? details.key : t("issueActivityUi.document");
     const title = typeof details.title === "string" && details.title ? ` (${details.title})` : "";
-    return `${ISSUE_ACTIVITY_LABELS[action] ?? action} ${key}${title}`;
+    return t(`issueActivityUi.documents.${action.replaceAll(".", "_")}`, { document: `${key}${title}` });
   }
 
-  return ISSUE_ACTIVITY_LABELS[action] ?? action.replace(/[._]/g, " ");
+  return issueActivityLabel(action);
 }
