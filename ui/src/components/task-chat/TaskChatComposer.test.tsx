@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 
+import { taskComposerFileTypeMessages } from "../../i18n/task-composer-file-types-test-resources";
+import { fileKindForName } from "./task-chat-attachments";
 import { taskComposerErrorMessages } from "../../i18n/task-composer-errors-test-resources";
 import { composerModelMessages } from "../../i18n/composer-model-test-resources";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -1972,6 +1974,70 @@ describe("TaskChatComposer", () => {
     await flushAsync();
 
     expect(editable().textContent).toBe(`[/deploy](${SLASH_HREF}) `);
+  });
+
+  describe("localized attached file types", () => {
+    const variants = [
+      ["TXT", "Text", "text"], ["docx", "Doc", "document"], ["xlsx", "Sheet", "sheet"],
+      ["tar", "Archive", "archive"], ["mp3", "Audio", "audio"], ["mp4", "Video", "video"],
+      ["ts", "Code", "code"], ["log", "Log", "log"], ["patch", "Patch", "patch"],
+      ["pdf", "PDF", null], ["zip", "ZIP", null], ["json", "JSON", null], ["md", "Markdown", null],
+      ["csv", "CSV", null], ["tsv", "TSV", null], ["yaml", "YAML", null], ["xml", "XML", null],
+      ["html", "HTML", null], ["css", "CSS", null], ["sql", "SQL", null], ["unknown", "File", "file"],
+    ] as const;
+
+    it.each(Object.entries(taskComposerFileTypeMessages).flatMap(([locale, copy]) => [
+      { locale, copy, group: "natural", samples: variants.filter(([, , key]) => key !== null) },
+      { locale, copy, group: "technical", samples: variants.filter(([, , key]) => key === null) },
+    ]))("translates display kinds only while preserving receipts, removal and payload in $locale ($group)", async ({ locale, copy, samples }) => {
+      expect(validateLocaleMessages(copy, taskComposerFileTypeMessages.en)).toEqual([]);
+      await i18n.changeLanguage(locale);
+      const files = samples.map(([extension]) => new File(["bytes"], `用户 original.${extension}`, { type: "application/octet-stream" }));
+      const receipts: IssueAttachment[] = files.map((file, index) => ({
+        id: `9af8228f-0be7-45ae-a104-${String(index).padStart(12, "0")}`,
+        companyId: "company-1", issueId: "issue-1", issueCommentId: null, assetId: `asset-${index}`,
+        provider: "local", objectKey: `raw/path/${file.name}`, contentType: file.type, byteSize: file.size,
+        sha256: "test-sha256", originalFilename: file.name.replace("original", "server"),
+        createdByAgentId: null, createdByUserId: "user-1", createdAt: new Date(0), updatedAt: new Date(0),
+        contentPath: `/api/attachments/9af8228f-0be7-45ae-a104-${String(index).padStart(12, "0")}/content`,
+      }));
+      const onAttachImage = vi.fn<(file: File) => Promise<IssueAttachment | void>>(async file => receipts[files.indexOf(file)]);
+      const onAdd = vi.fn().mockResolvedValue(undefined);
+      const draftKey = `localized-file-types:${locale}`;
+      render(<TaskChatComposer onAdd={onAdd} workMode="standard" onAttachImage={onAttachImage} draftKey={draftKey} />);
+      typeText("Original **用户 draft**");
+      for (const file of files) { pasteFiles([file]); await flushAsync(); }
+      const editor = editable();
+      const checkChips = (messages: typeof copy) => {
+        const chips = [...container.querySelectorAll('[data-slot="attachment"]')];
+        expect(chips).toHaveLength(samples.length);
+        samples.forEach(([, rawLabel, key], index) => {
+          expect(chips[index].querySelector('[data-slot="attachment-title"]')?.textContent).toBe(receipts[index].originalFilename);
+          expect(chips[index].querySelector('[data-slot="attachment-description"]')?.textContent).toBe(`${key ? messages[key] : rawLabel} · 5 B`);
+          expect(fileKindForName(receipts[index].originalFilename!).label).toBe(rawLabel);
+        });
+      };
+      checkChips(copy);
+      const stored = localStorage.getItem(`${draftKey}:attachments:v1`);
+      expect(stored).not.toBeNull();
+      const next = locale === "ja" ? "es" : "ja";
+      await act(async () => { await i18n.changeLanguage(next); });
+      checkChips(taskComposerFileTypeMessages[next]);
+      expect(localStorage.getItem(`${draftKey}:attachments:v1`)).toBe(stored);
+      expect(editable()).toBe(editor); expect(editable().textContent).toBe("Original **用户 draft**");
+      expect(onAttachImage.mock.calls).toEqual(files.map(file => [file])); expect(onAdd).not.toHaveBeenCalled();
+      const remove = container.querySelector<HTMLButtonElement>('button[aria-label="' + i18n.t("taskComposerUi.removeAttachment", { name: receipts.at(-1)!.originalFilename }) + '"]')!;
+      await act(async () => remove.click());
+      expect(container.querySelectorAll('[data-slot="attachment"]')).toHaveLength(samples.length - 1);
+      expect(onAdd).not.toHaveBeenCalled();
+      await act(async () => sendButton().click());
+      const retained = receipts.slice(0, -1);
+      expect(onAdd).toHaveBeenCalledExactlyOnceWith(
+        "Original **用户 draft**\n\n" + retained.map(receipt => `[${receipt.originalFilename}](${receipt.contentPath})`).join("\n"),
+        undefined, undefined, retained.map(receipt => receipt.id), expect.any(String),
+      );
+      expect(onAttachImage).toHaveBeenCalledTimes(files.length);
+    });
   });
 
   describe("localized local errors and goal hints", () => {

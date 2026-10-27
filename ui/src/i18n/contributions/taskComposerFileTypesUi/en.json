@@ -1,0 +1,12 @@
+{
+  "text": "Text",
+  "document": "Doc",
+  "sheet": "Sheet",
+  "archive": "Archive",
+  "audio": "Audio",
+  "video": "Video",
+  "code": "Code",
+  "log": "Log",
+  "patch": "Patch",
+  "file": "File"
+}

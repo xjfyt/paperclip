@@ -334,6 +334,19 @@ function AssigneeIdentityAvatar({
   return null;
 }
 
+const attachmentKindKeys = new Map([
+  ["Text", "taskComposerFileTypesUi.text"],
+  ["Doc", "taskComposerFileTypesUi.document"],
+  ["Sheet", "taskComposerFileTypesUi.sheet"],
+  ["Archive", "taskComposerFileTypesUi.archive"],
+  ["Audio", "taskComposerFileTypesUi.audio"],
+  ["Video", "taskComposerFileTypesUi.video"],
+  ["Code", "taskComposerFileTypesUi.code"],
+  ["Log", "taskComposerFileTypesUi.log"],
+  ["Patch", "taskComposerFileTypesUi.patch"],
+  ["File", "taskComposerFileTypesUi.file"],
+]);
+
 const attachmentErrorKeys = {
   unsupportedFileType: "taskComposerUi.unsupportedFileType",
   missingFileUrl: "taskComposerErrorsUi.missingFileUrl",
@@ -1455,6 +1468,7 @@ export function TaskChatComposer({
             >
               {visibleAttachments.map((attachment) => {
                 const kind = fileKindForName(attachment.name);
+                const kindLabelKey = attachmentKindKeys.get(kind.label);
                 const KindIcon = kind.icon;
                 const sizeLabel = formatFileSize(attachment.size);
                 return (
@@ -1485,7 +1499,7 @@ export function TaskChatComposer({
                           ? mimouseUiT("taskComposerUi.uploading")
                           : attachment.status === "error"
                             ? (attachment.error ?? mimouseUiT(attachment.errorKey ? attachmentErrorKeys[attachment.errorKey] : "taskComposerUi.uploadFailed"))
-                            : [kind.label, sizeLabel]
+                            : [kindLabelKey ? mimouseUiT(kindLabelKey) : kind.label, sizeLabel]
                                 .filter(Boolean)
                                 .join(" · ")}
                       </AttachmentDescription>

@@ -1,0 +1,12 @@
+{
+  "text": "文本",
+  "document": "文档",
+  "sheet": "电子表格",
+  "archive": "压缩包",
+  "audio": "音频",
+  "video": "视频",
+  "code": "代码",
+  "log": "日志",
+  "patch": "补丁",
+  "file": "文件"
+}
