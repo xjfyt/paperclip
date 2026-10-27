@@ -2,6 +2,17 @@
 
 记录起始日期：2026-10-25 UTC。基线为 v2026.1023.0 / 1b4c803816e82b0265c8422e1a804327a7ed8c54。开发分支 mimouse。此记录是可审查候选版的本地证据，不是全部需求完成或生产上线证明。
 
+## 0361公司永久删除依赖修复（2026-10-27，后端限定补丁）
+
+- 冻结实现及实际server构建印章 `48c9c1d0612e08b37c86e9266a18d8730bdcc2b9`。保留既有公司访问/board授权、不可撤销UI确认、公司锁和生命周期行为；不把archive当永久删除，也未删除真实公司。
+- 0361在四组既有不可变函数中保持UPDATE拒绝，只为匹配公司ID＋当前xid的内部事务开启DELETE；八表deferred约束要求公司在约束检查时已不存在。仅设置上下文后删receipt/participant而保留公司不能提交。此上下文不是API授权，不是防SQL owner机制；新helper使用锁定后的规范UUID和uuid::text。
+- 固定Mimouse/runtime v2/私有结果/审批与反馈/通知/WorkBuddy/evaluation/research依赖顺序；显式语句均限定目标公司，保留邻公司及实例全局行。0360观测回执随delivery级联；普通证据更新/删除保护不放开。既有terminate/schedule外部影响不承诺随SQL回滚。
+- 标准server全步骤通过（`/tmp/paperclip-company-delete-server-build.log`），主tsc串行159.1秒、最大RSS4849544KiB。DB标准构建及迁移编号/安全检查通过（`/tmp/paperclip-company-db-build.log`）；已核对dist包含0361与当前journal。安全检查保留20条历史baseline/1条stale提示，未新增豁免。新snapshot与0360 schema完全一致，ID/prevId链正确。
+- 标准server配置中央**17项删除专项通过**（routing10＋真实PG7，`/tmp/paperclip-company-central-tests.log`），另**29项观测邻接PG/API通过**（`/tmp/paperclip-company-observation-neighbor.log`）。覆盖完整两公司图、大写UUID、正常/上下文UPDATE拒绝、错公司/旧xid、partial/提前约束失败、晚失败全部SQL回滚、context不泄漏与global行保留。候选首次Unix socket受限未进入测试；保留日志后用既有TCP-only路径正常重跑，未放宽归属保护。
+- 新标记隔离数据库的编译server入口完整API **164项通过（1.2分钟）**（`/tmp/paperclip-company-compiled-api.log`）；仍有workspace TS依赖与源码fixture，不是all-dist消费者或真实生产授权验收。
+- **本补丁无UI、shared或Drizzle表定义TS变更**，`/tmp/paperclip-company-unchanged-surface.log`为0字节；本批未重跑完整UI或浏览器。上一冻结版本df1c12c2的838文件10792项UI、UI类型/构建属于其历史输入证据，不冒称本SHA重新聚合。后端与迁移已按当前输入独立验证。
+- [永久删除验收清单](checklists/COMPANY-PERMANENT-DELETION-20261027.md)记录0361的5秒锁/30秒每语句上限、备份/停写维护、整文件回滚后人工重试，以及真实历史数据、并发、文件/object storage、外部凭据撤销与灾备恢复未证明范围。已修复所复现的旧数据库清理阻断，不代表删除了所有外部副本或穷尽所有历史形状。
+
 ## 4578键：评论身份保护、实际草稿恢复与持久构建观测（2026-10-27）
 
 - 冻结实现及实际server构建印章 `0cf14b8716212920e4b6dd1b8d73b30edaad6be5`。本批接通受权精确job观测、0360请求/回执、持久pending journal及显式close-unknown；仍默认关闭，全部admission及既有六目标矩阵保持blocked。签名声明/产物字节观测不证明可信controller、工作流闭包、平台/测试/代码签名或C3。
