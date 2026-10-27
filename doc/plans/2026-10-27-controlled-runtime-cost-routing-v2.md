@@ -53,6 +53,7 @@ Base: `/api/companies/:companyId/runtime-cost-routing`.
 | `GET /` | Current head and authorized metadata; no execution |
 | `POST /prepare` | Immutable proposal and server-derived candidate snapshots |
 | `POST /policies/:policyId/approve` | Human-confirmed digest and generation CAS; no wake |
+| `POST /policies/:policyId/close-expired` | Explicit closure of an expired, never-approved proposal; no head change or wake |
 | `POST /disable` | Generation CAS clears future policy use; no wake or cancellation |
 | `POST /tasks` | Explicit new task creation, candidate selection and durable binding in one transaction; no wake |
 | `POST /bindings/:bindingId/run` | Separately confirmed execution/possible charges; one owned wake intent |
@@ -86,11 +87,22 @@ creation and execution remain gated. Authentication changes require fresh
 readback, not replay of old confirmations.
 
 All-null readback means **unknown**, not failed. An authoritative receipt or a
-proven persisted generation advance or already-claimed binding is required before
-clearing uncertainty. Clock-only approval expiry does not prove permanent closure:
-GET stays read-only and returns unknown unless a durable monotone fact closes the
-request. A future explicit closure mutation would need its own persisted fence.
-A lost response cannot authorize another wake or a new request ID.
+proven persisted generation advance, already-claimed binding or explicit expired
+proposal closure is required before clearing uncertainty. Clock-only approval
+expiry does not prove permanent closure: GET stays read-only and returns unknown
+unless a durable monotone fact closes the request.
+
+To resolve an expired generation-zero proposal without unsafe retry, the human
+can explicitly POST `close-expired` with its expected generation. Under the same
+head → policy lock order, DB time must be at/after expiry and the proposal must
+never have an approval receipt. The only permitted update is the one-way
+`approvalClosedAt: null → DB timestamp`; immutable input/evidence, the company
+head, permissions and approved policies do not change. Repeating the same
+policy/generation closure is idempotent. Database constraints and the migration's
+immutability trigger enforce the lifecycle exception. The original pending
+approval request can then read the marker as `approval_expired`, without another
+request journal or any wake. A lost response cannot authorize another wake or
+a new approval request ID.
 Withdrawal invalidates future use; it does not cancel an in-flight process,
 reverse billed costs, or restore an old policy/application automatically.
 

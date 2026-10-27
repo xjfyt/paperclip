@@ -109,12 +109,21 @@ test("readback accepts metadata only and requires action-specific scope", () => 
     bad(contract.runtimeRoutingRequestQuerySchema, value);
   }
 });
-test("read-only recovery never treats clock-only expiry as a durable closure", () => {
-  assert.deepEqual(contract.runtimeRoutingRequestClosureReasons, ["generation_advanced", "binding_already_claimed"]);
+test("explicit expiration closure accepts only generation, never supplied marker or clock", () => {
+  ok(contract.closeExpiredRuntimeRoutingPolicySchema, { expectedGeneration: 0 });
+  for (const patch of [{ approvalClosedAt: "2026-10-27T00:00:00.000Z" }, { now: "2026-10-27T00:00:00.000Z" },
+    { approved: false }, { confirmExecution: true }, { policy: {} }, { requestId: id(50) }]) {
+    bad(contract.closeExpiredRuntimeRoutingPolicySchema, { expectedGeneration: 0, ...patch });
+  }
+  bad(contract.closeExpiredRuntimeRoutingPolicySchema, { expectedGeneration: -1 });
+  assert.deepEqual(contract.runtimeRoutingRequestClosureReasons, ["generation_advanced", "binding_already_claimed", "approval_expired"]);
 });
 test("schema carries scoped FKs, request uniqueness and closed binding states without a database", () => {
   const configs = [runtimeRoutingPolicies, runtimeRoutingHeads, runtimeRoutingReceipts, runtimeRoutingBindings].map(getTableConfig);
   assert.deepEqual(configs.map(c => c.name), ["runtime_routing_policies", "runtime_routing_heads", "runtime_routing_receipts", "runtime_routing_bindings"]);
+  assert.equal(configs[0].columns.find(c => c.name === "approval_closed_at").notNull, false);
+  const closureCheck = configs[0].checks.find(c => c.name === "runtime_routing_policy_closure");
+  assert.match(new PgDialect().sqlToQuery(closureCheck.value).sql, /approval_closed_at.*IS NULL OR.*approval_closed_at.*>=.*approval_expires_at/);
   assert.equal(configs[1].columns.find(c => c.name === "generation").default, 0);
   assert.equal(configs[1].columns.find(c => c.name === "policy_id").notNull, false);
   assert.equal(configs[3].foreignKeys.length, 4);

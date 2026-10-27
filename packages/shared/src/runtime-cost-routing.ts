@@ -39,6 +39,11 @@ export const approveRuntimeRoutingPolicySchema = z.object({
   confirmBareTextProxy: z.literal(true), confirmHistoricalCostNotQuote: z.literal(true),
   confirmNewTasksOnly: z.literal(true), confirmNoAutomaticRun: z.literal(true),
 }).strict();
+/** Explicit no-wake closure; policy identity is the route parameter and idempotency key.
+ * The server requires DB-clock expiry and no approval receipt before writing once. */
+export const closeExpiredRuntimeRoutingPolicySchema = z.object({
+  expectedGeneration: generation,
+}).strict();
 export const disableRuntimeRoutingPolicySchema = z.object({
   requestId: uuid, expectedGeneration: generation.refine(value => value > 0),
 }).strict();
@@ -53,6 +58,7 @@ export const runRuntimeRoutingTaskSchema = z.object({
 }).strict();
 export type PrepareRuntimeRoutingPolicy = z.infer<typeof prepareRuntimeRoutingPolicySchema>;
 export type ApproveRuntimeRoutingPolicy = z.infer<typeof approveRuntimeRoutingPolicySchema>;
+export type CloseExpiredRuntimeRoutingPolicy = z.infer<typeof closeExpiredRuntimeRoutingPolicySchema>;
 export type DisableRuntimeRoutingPolicy = z.infer<typeof disableRuntimeRoutingPolicySchema>;
 export type CreateRuntimeRoutingTask = z.infer<typeof createRuntimeRoutingTaskSchema>;
 export type RunRuntimeRoutingTask = z.infer<typeof runRuntimeRoutingTaskSchema>;
@@ -95,7 +101,7 @@ export interface RuntimeRoutingCandidateSnapshot {
 export interface RuntimeRoutingPolicyRecord {
   id: string; requestId: string; companyId: string; actorUserId: string; expectedGeneration: number;
   policy: RuntimeRoutingPolicy; candidates: RuntimeRoutingCandidateSnapshot[]; approvalDigest: string;
-  approvalExpiresAt: string; createdAt: string; executionStarted: false;
+  approvalExpiresAt: string; approvalClosedAt: string | null; createdAt: string; executionStarted: false;
 }
 export interface RuntimeRoutingReceipt {
   id: string; requestId: string; policyId: string; action: "approve" | "disable";
@@ -128,7 +134,9 @@ export const runtimeRoutingRequestQuerySchema = z.object({
 });
 export type RuntimeRoutingRequestQuery = z.infer<typeof runtimeRoutingRequestQuerySchema>;
 /** Readback closes only on persisted monotone facts, never a clock-only expiry. */
-export const runtimeRoutingRequestClosureReasons = ["generation_advanced", "binding_already_claimed"] as const;
+// approval_expired is valid ONLY when an explicit close-expired mutation persisted
+// approvalClosedAt; merely comparing either clock with expiry cannot close recovery.
+export const runtimeRoutingRequestClosureReasons = ["generation_advanced", "binding_already_claimed", "approval_expired"] as const;
 export interface RuntimeRoutingRequestClosure {
   outcome: "not_applied_closed"; requestId: string; action: RuntimeRoutingRequestQuery["action"];
   reason: typeof runtimeRoutingRequestClosureReasons[number];

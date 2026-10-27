@@ -14,6 +14,8 @@ export const runtimeRoutingPolicies = pgTable("runtime_routing_policies", {
   expectedGeneration: integer("expected_generation").notNull(), policy: jsonb("policy").$type<RuntimeRoutingPolicy>().notNull(),
   candidates: jsonb("candidates").$type<RuntimeRoutingCandidateSnapshot[]>().notNull(), approvalDigest: text("approval_digest").notNull(),
   approvalExpiresAt: timestamp("approval_expires_at", { withTimezone: true }).notNull(),
+  // The sole proposal lifecycle update: explicit POST, expired and never approved.
+  approvalClosedAt: timestamp("approval_closed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, t => ({
   scope: uniqueIndex("runtime_routing_policy_scope").on(t.companyId, t.id),
@@ -21,6 +23,7 @@ export const runtimeRoutingPolicies = pgTable("runtime_routing_policies", {
   generation: check("runtime_routing_policy_generation", sql`${t.expectedGeneration} >= 0 AND ${t.expectedGeneration} < 2147483647`),
   hashes: check("runtime_routing_policy_hashes", sql`${t.requestDigest} ~ '^[a-f0-9]{64}$' AND ${t.approvalDigest} ~ '^[a-f0-9]{64}$'`),
   expiry: check("runtime_routing_policy_expiry", sql`${t.approvalExpiresAt} > ${t.createdAt}`),
+  closure: check("runtime_routing_policy_closure", sql`${t.approvalClosedAt} IS NULL OR ${t.approvalClosedAt} >= ${t.approvalExpiresAt}`),
   pool: check("runtime_routing_policy_pool", sql`jsonb_typeof(${t.candidates}) = 'array' AND jsonb_array_length(${t.candidates}) BETWEEN 1 AND 20`),
 }));
 export const runtimeRoutingReceipts = pgTable("runtime_routing_receipts", {
