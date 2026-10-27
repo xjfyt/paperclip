@@ -1,3 +1,5 @@
+import { LocalizedUiError } from "../lib/localized-ui-error";
+import { issueTreeExecutionMessages } from "../i18n/issue-tree-execution-test-resources";
 import { issueQueuedDeliveryMessages } from "../i18n/issue-queued-delivery-test-resources";
 import { issueTreeFeedbackMessages } from "../i18n/issue-tree-feedback-test-resources";
 import { issueDetailMessages } from "../i18n/issue-detail-test-resources";
@@ -6153,6 +6155,59 @@ describe("IssueDetail", () => {
     await waitForAssertion(() => expect(container.querySelector('[data-slot="dialog-content"]')).not.toBeNull());
     return { children, hold, state };
   }
+
+  it.each(Object.entries(issueTreeExecutionMessages).flatMap(([locale, messages]) =>
+    [true, false].map(localGuard => ({ locale, messages, localGuard }))))(
+    "localizes the tree resume guard in $locale only for its local source (local=$localGuard)", async ({ locale, messages, localGuard }) => {
+      mockIssuesApi.previewTreeControl.mockReset().mockResolvedValue(createResumePreview());
+      await openPausedTreeFeedbackHost();
+      const dialog = container.querySelector('[data-slot="dialog-content"]');
+      let apply: HTMLButtonElement | undefined;
+      await waitForAssertion(() => {
+        apply = Array.from(dialog?.querySelectorAll<HTMLButtonElement>("button") ?? []).find(button => button.textContent === "Resume subtree");
+        expect(apply?.disabled).toBe(false);
+      });
+      const originalMessage = "No active subtree pause hold is available to resume.";
+      const serverError = new Error(originalMessage);
+      const response = createDeferred<Awaited<ReturnType<typeof issuesApi.releaseTreeHold>>>();
+      mockIssuesApi.releaseTreeHold.mockReturnValue(response.promise);
+      if (localGuard) {
+        // A real state refetch can remove the hold after this dialog's preview succeeds.
+        mockIssuesApi.getTreeControlState.mockResolvedValue({ activePauseHold: null });
+        await act(async () => {
+          await queryClient.refetchQueries({ queryKey: ["issues", "tree-control-state", "PAP-1"] });
+        });
+        await waitForAssertion(() => expect(queryClient.getQueryData(["issues", "tree-control-state", "PAP-1"])).toEqual({ activePauseHold: null }));
+        expect(container.querySelector('[data-slot="dialog-content"]')).toBe(dialog);
+        expect(apply?.disabled).toBe(false);
+        await act(async () => { await i18n.changeLanguage(locale); apply?.click(); });
+      } else {
+        await act(async () => { apply?.click(); });
+        await waitForAssertion(() => expect(mockIssuesApi.releaseTreeHold).toHaveBeenCalledTimes(1));
+        expect(mockIssuesApi.releaseTreeHold).toHaveBeenCalledWith("PAP-1", "hold-1", { reason: null, metadata: { wakeAgents: true } });
+        expect(apply?.disabled).toBe(true);
+        await act(async () => { await i18n.changeLanguage(locale); response.reject(serverError); });
+      }
+      await waitForAssertion(() => expect(queryClient.getMutationCache().getAll().at(-1)?.state.status).toBe("error"));
+      const error = queryClient.getMutationCache().getAll().at(-1)?.state.error;
+      expect(error).toBeInstanceOf(Error);
+      expect(error?.message).toBe(originalMessage);
+      if (localGuard) expect(error).toBeInstanceOf(LocalizedUiError);
+      else { expect(error).toBe(serverError); expect(error).not.toBeInstanceOf(LocalizedUiError); }
+      expect(mockIssuesApi.releaseTreeHold).toHaveBeenCalledTimes(localGuard ? 0 : 1);
+      expect(mockIssuesApi.createTreeHold).not.toHaveBeenCalled();
+      await waitForAssertion(() => expect(dialog?.querySelector('[role="alert"]')?.textContent)
+        .toBe(localGuard ? messages.noActivePauseHold : originalMessage));
+      const previewCalls = mockIssuesApi.previewTreeControl.mock.calls.length;
+      const nextLocale = locale === "en" ? "ja" : "en";
+      await act(async () => { await i18n.changeLanguage(nextLocale); });
+      expect(dialog?.querySelector('[role="alert"]')?.textContent)
+        .toBe(localGuard ? issueTreeExecutionMessages[nextLocale].noActivePauseHold : originalMessage);
+      expect(mockIssuesApi.previewTreeControl).toHaveBeenCalledTimes(previewCalls);
+      expect(mockIssuesApi.releaseTreeHold).toHaveBeenCalledTimes(localGuard ? 0 : 1);
+      expect(mockPushToast).not.toHaveBeenCalled();
+    },
+  );
 
   it.each(Object.entries(issueTreeFeedbackMessages).flatMap(([locale, messages]) =>
     [0, 1, 3].map(count => ({ locale, messages, count }))))(

@@ -1,3 +1,4 @@
+import { LocalizedUiError } from "../lib/localized-ui-error";
 import { commentSelfAssigneeOption } from "@/lib/composer-assignee-copy";
 import { MimouseCodingLink } from "@/components/MimouseCodingLink";
 import { t as mimouseT, useTranslation as useMimouseTranslation } from "@/i18n";
@@ -486,6 +487,10 @@ function treeControlPreviewErrorCopy(error: unknown): string {
       return mimouseT("issueTreeFeedbackUi.previewInvalid");
   }
   return error instanceof Error ? error.message : mimouseT("issueTreeFeedbackUi.previewFailed");
+}
+
+function treeControlExecutionErrorCopy(error: Error | null | undefined): string | undefined {
+  return error instanceof LocalizedUiError ? mimouseT(error.translationKey) : error?.message;
 }
 
 export function canBoardResolveRecoveryAction(
@@ -4351,7 +4356,8 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       if (mode === "resume") {
         const pauseHoldId = treeControlState?.activePauseHold?.holdId;
         if (!pauseHoldId) {
-          throw new Error(
+          throw new LocalizedUiError(
+            "issueTreeExecutionUi.noActivePauseHold",
             "No active subtree pause hold is available to resume.",
           );
         }
@@ -7844,7 +7850,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
                 role="alert"
                 className={cn("text-sm text-destructive", shellSectionClass)}
               >
-                {executeTreeControl.error.message}
+                {treeControlExecutionErrorCopy(executeTreeControl.error)}
               </p>
             )}
 
@@ -8472,7 +8478,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
             error={
               treeControlPreviewError
                 ? treeControlPreviewErrorCopy(treeControlPreviewError)
-                : executeTreeControl.error?.message
+                : treeControlExecutionErrorCopy(executeTreeControl.error)
             }
             pending={executeTreeControl.isPending}
             valid={canApplyTreeControl}
