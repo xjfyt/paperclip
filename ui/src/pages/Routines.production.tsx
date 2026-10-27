@@ -1053,7 +1053,7 @@ export function Routines() {
                       );
                     }}
                   />
-                  <span>in</span>
+                  <span>{mimouseT("routineOps.inProject")}</span>
                   <InlineEntitySelector
                     ref={projectSelectorRef}
                     value={draft.projectId}

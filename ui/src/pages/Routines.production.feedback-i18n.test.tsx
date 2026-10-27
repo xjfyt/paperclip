@@ -343,3 +343,19 @@ it.each(locales.flatMap(locale => [true, false].map(production => ({ locale, pro
   expect(host.querySelector("[data-location]")?.textContent).toBe("/routines?folder=folder-1");
   expect(mutations()).toEqual([0, 0, 0, 0, 0, 0, 0]);
 });
+
+
+it.each(locales.flatMap(locale => [true, false].map(production => ({ locale, production }))))("localizes the project connector in the real create dialog in $locale (production: $production)", async ({ locale, production }) => {
+  await i18n.changeLanguage(locale); await mount("?folder=folder-1", production);
+  await settle(() => button(i18n.t("workflow.createRoutine")).click());
+  const dialog = document.querySelector('[role="dialog"]')!;
+  const expected: Record<string, string> = { en: "in", "zh-CN": "在", es: "en", ja: "対象" };
+  const labels = [...dialog.querySelectorAll("span")].map(node => node.textContent);
+  expect(labels).toContain(expected[locale]);
+  if (locale !== "en") expect(labels).not.toContain("in");
+  const input = dialog.querySelector<HTMLTextAreaElement>("textarea")!;
+  await settle(() => inputValue(input, "User project draft 原文"));
+  expect(input.value).toBe("User project draft 原文");
+  expect(host.querySelector("[data-location]")?.textContent).toBe("/routines?folder=folder-1");
+  expect(mutations()).toEqual([0, 0, 0, 0, 0, 0, 0]);
+});
