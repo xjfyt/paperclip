@@ -13,10 +13,12 @@ import { instanceSettingsService } from "../../server/src/services/instance-sett
 import { routineService } from "../../server/src/services/routines.js";
 import { codingService } from "../../server/src/services/mimouse-coding/service.js";
 import { codingRepairWorker } from "../../server/src/services/mimouse-coding/repair-worker.js";
+import { createHeartbeatRetries, type HeartbeatRetryDependencies } from "../../server/src/services/heartbeat/retries.js";
+import { codingRepairRunDeadlineElapsed } from "../../server/src/services/mimouse-coding/repair-deadline.js";
 import { codingRepairService } from "../../server/src/services/mimouse-coding/repairs.js";
 import { createRoutineSchema } from "../../packages/shared/src/validators/routine.js";
 const require = createRequire(new URL("../../server/package.json", import.meta.url));
-const { eq } = await import(require.resolve("drizzle-orm"));
+const { eq, sql } = await import(require.resolve("drizzle-orm"));
 const exec = promisify(execFile);
 let oldFlag: string | undefined;
 test.beforeEach(() => { oldFlag = process.env.PAPERCLIP_CODING_REPAIR_ENABLED; process.env.PAPERCLIP_CODING_REPAIR_ENABLED = "true"; });
@@ -41,10 +43,10 @@ async function fixture(request: APIRequestContext) {
   const state = { wakeups: 0, cancellations: [] as string[], cancelUncertain: false, uncertain: false, pipelineId: 10, jobName: "unit-test", reason: "script_failure" };
   const heartbeat = { wakeup: async (agentId: string, opts: any) => {
     state.wakeups++; if (state.uncertain) throw Error("uncertain dispatch");
-    const [wake] = await db.insert(agentWakeupRequests).values({ companyId: company.id, agentId, source: "assignment", status: "completed",
+    const [wake] = await db.insert(agentWakeupRequests).values({ companyId: company.id, agentId, source: opts.source, triggerDetail: opts.triggerDetail, reason: opts.reason, requestedByActorType: opts.requestedByActorType ?? null, requestedByActorId: opts.requestedByActorId ?? null, status: "completed",
       idempotencyKey: opts.idempotencyKey, payload: opts.payload }).returning();
     const [run] = await db.insert(heartbeatRuns).values({ companyId: company.id, agentId, scopeKind: "issue", issueId: opts.contextSnapshot.issueId,
-      wakeupRequestId: wake.id, status: "succeeded", startedAt: new Date(), finishedAt: new Date(), contextSnapshot: opts.contextSnapshot }).returning();
+      invocationSource: opts.source, triggerDetail: opts.triggerDetail, responsibleUserId: owner, wakeupRequestId: wake.id, status: "succeeded", startedAt: new Date(), finishedAt: new Date(), contextSnapshot: opts.contextSnapshot }).returning();
     await db.update(agentWakeupRequests).set({ runId: run.id }).where(eq(agentWakeupRequests.id, wake.id));
     return run; // Durable fixture receipts only; never execute an adapter.
   }, cancelRun: async (runId: string) => {
@@ -216,3 +218,106 @@ test("deadline survives task done, worker disable, and uncertain stop restart wi
     await f.db.update(heartbeatRuns).set({ status: "cancelled", finishedAt: new Date() }).where(eq(heartbeatRuns.id, manual.id));
   } finally { await f.cleanup(); }
 });
+
+
+test("automatic retry chain keeps the absolute deadline and exact stop identities across restart", async ({ request }) => {
+  const f = await fixture(request);
+  try {
+    const attempt = await f.repairs.reserve(f.company.id, f.delivery.id); const result = await f.repairs.dispatch(f.company.id, attempt.id);
+    const [initial] = await f.db.select().from(heartbeatRuns).where(eq(heartbeatRuns.issueId, result!.linkedIssueId!));
+    const [source] = await f.db.update(heartbeatRuns).set({ status: "failed", errorCode: "process_lost", resultJson: { executionRecovery: { kind: "bootstrap", providerWorkStarted: false } } }).where(eq(heartbeatRuns.id, initial.id)).returning();
+    const retries = createHeartbeatRetries(f.db, {
+      getAgentInvokability: async () => ({ invokable: true }), resolveSessionBeforeForWakeup: async () => null,
+      resolveResponsibleUserIdForRunContext: async () => f.owner, appendRunEvent: async () => {},
+    } as unknown as HeartbeatRetryDependencies);
+    const scheduled = await retries.scheduleBoundedRetryForRun(source, f.agent, { delayMs: 1000, maxAttempts: 3 });
+    expect(scheduled.outcome).toBe("scheduled"); if (scheduled.outcome !== "scheduled") throw Error("fixture retry not created");
+    const [child] = await f.db.update(heartbeatRuns).set({ status: "failed", errorCode: "process_lost", resultJson: source.resultJson }).where(eq(heartbeatRuns.id, scheduled.run.id)).returning();
+    const second = await retries.scheduleBoundedRetryForRun(child, f.agent, { delayMs: 1000, maxAttempts: 3 });
+    expect(second.outcome).toBe("scheduled"); if (second.outcome !== "scheduled") throw Error("second-hop retry not created");
+    const [grandchild] = await f.db.update(heartbeatRuns).set({ status: "running", startedAt: new Date() }).where(eq(heartbeatRuns.id, second.run.id)).returning();
+    await f.db.update(issues).set({ status: "done" }).where(eq(issues.id, result!.linkedIssueId!));
+    await f.repairs.reconcile(f.company.id, attempt.id);
+    const [current] = await f.db.select().from(attempts).where(eq(attempts.id, attempt.id));
+    expect(current.state).toBe("dispatched");
+    const policy = { ...current.snapshot.policy as Record<string, unknown>, approvedAt: new Date(Date.now() - 120000).toISOString(), expiresAt: new Date(Date.now() - 60000).toISOString() };
+    await f.db.update(attempts).set({ snapshot: { ...current.snapshot, policy } }).where(eq(attempts.id, attempt.id));
+    expect(await codingRepairRunDeadlineElapsed(f.db, grandchild)).toBe(true);
+    const denied = await retries.scheduleBoundedRetryForRun(grandchild, f.agent, { delayMs: 1, maxAttempts: 4 });
+    expect(denied.outcome).toBe("not_scheduled");
+    const [manual] = await f.db.insert(heartbeatRuns).values({ companyId: f.company.id, agentId: f.agent.id, scopeKind: "issue", issueId: child.issueId,
+      status: "scheduled_retry", invocationSource: "on_demand", triggerDetail: "manual", retryOfRunId: source.id,
+      contextSnapshot: { ...child.contextSnapshot }, scheduledRetryAt: new Date(Date.now() + 86400000) }).returning();
+    const untouched: string[] = [manual.id];
+    for (const bad of ["forged_actor", "coalesced"]) {
+      const id = randomUUID();
+      const [originalWake] = await f.db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, scheduled.run.wakeupRequestId!));
+      const [wake] = await f.db.insert(agentWakeupRequests).values({ ...originalWake, id: randomUUID(), runId: id,
+        requestedByActorType: bad === "forged_actor" ? "user" : "system" }).returning();
+      const [unowned] = await f.db.insert(heartbeatRuns).values({ ...scheduled.run, id, wakeupRequestId: wake.id }).returning();
+      if (bad === "coalesced") await f.db.insert(agentWakeupRequests).values({ ...wake, id: randomUUID(), requestedByActorType: "user" });
+      expect(await codingRepairRunDeadlineElapsed(f.db, unowned)).toBe(false); untouched.push(id);
+    }
+    f.state.cancelUncertain = true; await f.repairs.reconcile(f.company.id, attempt.id);
+    const [pending] = await f.db.select().from(attempts).where(eq(attempts.id, attempt.id));
+    expect(pending.state).toBe("deadline_stopping");
+    expect(pending.snapshot.deadline).toMatchObject({ scope: "verified_automatic_repair_retries", runs: [
+      { runId: source.id, state: "execution_terminal" }, { runId: child.id, state: "execution_terminal" }, { runId: grandchild.id, state: "stop_requested" },
+    ] });
+    f.state.cancelUncertain = false; await codingRepairService(f.db, f.deps).reconcile(f.company.id, attempt.id);
+    expect(f.state.cancellations).toEqual([grandchild.id, grandchild.id]);
+    expect((await f.db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, manual.id)))[0].status).toBe("scheduled_retry");
+    const [stopped] = await f.db.select().from(attempts).where(eq(attempts.id, attempt.id));
+    expect(stopped.state).toBe("deadline_unverified");
+    expect(stopped.snapshot.deadline).toMatchObject({ lineageComplete: false, remoteStopVerified: false, descendantsStopVerified: false });
+    const view = await request.get(`/api/companies/${f.company.id}/coding/${f.delivery.id}/repairs`);
+    expect((await view.json()).attempts[0].deadline).toMatchObject({ scope: "verified_automatic_repair_retries", lineageComplete: false,
+      runs: [{ runId: source.id }, { runId: child.id }, { runId: grandchild.id, state: "local_stop_verified" }] });
+    for (const id of untouched) {
+      expect((await f.db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, id)))[0].status).toBe("scheduled_retry");
+      await f.db.update(heartbeatRuns).set({ status: "cancelled", finishedAt: new Date() }).where(eq(heartbeatRuns.id, id));
+    }
+  } finally { await f.cleanup(); }
+});
+
+
+for (const closure of ["deadline", "completed"] as const) {
+  test(`retry admission cannot pass concurrent ${closure} reconciliation`, async ({ request }) => {
+    const f = await fixture(request); let release: (() => void) | undefined; let holder: Promise<unknown> | undefined; let pending: Promise<unknown> | undefined;
+    try {
+      const attempt = await f.repairs.reserve(f.company.id, f.delivery.id); const result = await f.repairs.dispatch(f.company.id, attempt.id);
+      const [initial] = await f.db.select().from(heartbeatRuns).where(eq(heartbeatRuns.issueId, result!.linkedIssueId!));
+      const [source] = await f.db.update(heartbeatRuns).set({ status: "failed", errorCode: "process_lost", resultJson: { executionRecovery: { kind: "bootstrap", providerWorkStarted: false } } }).where(eq(heartbeatRuns.id, initial.id)).returning();
+      let acquired!: (pid: number) => void;
+      const ready = new Promise<number>(resolve => { acquired = resolve; });
+      const wait = new Promise<void>(resolve => { release = resolve; });
+      await f.db.update(issues).set({ status: "done" }).where(eq(issues.id, result!.linkedIssueId!));
+      holder = f.db.transaction(async tx => {
+        await tx.select().from(issues).where(eq(issues.id, result!.linkedIssueId!)).for("update");
+        const [backend] = await tx.execute(sql`select pg_backend_pid()::int as pid`); acquired(Number(backend.pid));
+        await wait;
+      });
+      const pid = await ready;
+      const retries = createHeartbeatRetries(f.db, {
+        getAgentInvokability: async () => ({ invokable: true }), resolveSessionBeforeForWakeup: async () => null,
+        resolveResponsibleUserIdForRunContext: async () => f.owner, appendRunEvent: async () => {},
+      } as unknown as HeartbeatRetryDependencies);
+      pending = retries.scheduleBoundedRetryForRun(source, f.agent, { delayMs: 1 });
+      void pending.catch(() => {});
+      await expect.poll(async () => {
+        const [row] = await f.db.execute(sql`select count(*)::int as waiting from pg_stat_activity where ${pid} = any(pg_blocking_pids(pid))`);
+        return Number(row.waiting);
+      }, { timeout: 10000 }).toBeGreaterThan(0);
+      if (closure === "deadline") {
+        const [current] = await f.db.select().from(attempts).where(eq(attempts.id, attempt.id));
+        const policy = { ...current.snapshot.policy as Record<string, unknown>, approvedAt: new Date(Date.now() - 120000).toISOString(), expiresAt: new Date(Date.now() - 60000).toISOString() };
+        await f.db.update(attempts).set({ snapshot: { ...current.snapshot, policy } }).where(eq(attempts.id, attempt.id));
+      }
+      await f.repairs.reconcile(f.company.id, attempt.id);
+      expect((await f.db.select().from(attempts).where(eq(attempts.id, attempt.id)))[0].state).toBe(closure === "deadline" ? "deadline_stopped" : "completed");
+      release(); await holder;
+      expect(await pending).toMatchObject({ outcome: "not_scheduled", errorCode: "coding_repair_retry_blocked" });
+      expect(await f.db.select().from(heartbeatRuns).where(eq(heartbeatRuns.retryOfRunId, source.id))).toHaveLength(0);
+    } finally { release?.(); await holder; await pending?.catch(() => {}); await f.cleanup(); }
+  });
+}

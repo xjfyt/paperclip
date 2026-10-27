@@ -46,7 +46,7 @@ PAPERCLIP_GITLAB_POLL_ENABLED 默认关闭。操作者明确启用后，worker �
 - 本地适配器 Agent 就绪且空闲；项目启用硬预算与未知费用阻断，平台预算门禁同时生效。
 - 最新失败 pipeline 和失败 job 回执必须属于同一项目、pipeline 和固定 SHA。仅 script_failure 可自动进入修复；环境故障等交给人工，不伪装代码错误。
 
-单次授权允许 1–2 次尝试、1–60 分钟派发窗口及明确正整数费用上限（分）；同一不可延长的策略快照也用于初始修复运行的受控到期停止。同一失败指纹、已用尝试、未知费用、预算耗尽、过期或授权撤销都会停止新派发。指纹使用提交、阶段、job 名称及失败原因，不因流水线生成新的 job ID 就重置。
+单次授权允许 1–2 次尝试、1–60 分钟派发窗口及明确正整数费用上限（分）；同一不可延长的策略快照也用于初始修复运行及经持久链路核验的自动重试的受控到期停止。同一失败指纹、已用尝试、未知费用、预算耗尽、过期或授权撤销都会停止新派发。指纹使用提交、阶段、job 名称及失败原因，不因流水线生成新的 job ID 就重置。
 
 worker 在数据库事务中预留尝试，调用现有 routineService.runPipelineStageEntryRoutine，并在例行任务事务锁内再次核验模板版本。子任务继承原隔离工作区和父任务私有边界。并发争抢不能产生两个相同 pipeline 的修复任务。
 
@@ -56,13 +56,26 @@ worker 在数据库事务中预留尝试，调用现有 routineService.runPipeli
 
 ### 初始修复运行的受控到期停止（2026-10-26）
 
-新派发在调用 heartbeat 前，把初始子任务、Agent、工作区及专用 wakeKey 写入 attempt.snapshot。初始 wake 禁止并入旧运行，后续消息也不能合流进该专用运行。期限检查只约束经公司、例行版本/回执、子任务归属及唯一 wake/run 交叉核验的**初始运行**；不会扫描取消整个 Agent、项目、后代任务或用户后来手动续跑。
+新派发在调用 heartbeat 前，把初始子任务、Agent、工作区及专用 wakeKey 写入 attempt.snapshot。初始 wake 禁止并入旧运行，后续消息也不能合流进该专用运行。期限检查只约束经公司、例行版本/回执、子任务归属及唯一 wake/run 交叉核验的**初始运行**（自动重试扩展见下节）；不会扫描取消整个 Agent、项目、后代任务或用户后来手动续跑。
 
 到期后先持久化 elapsedObservedAt、确切 runId 与 stopRequestedAt，再调用既有 heartbeat.cancelRun。只有其执行取消 acknowledged 回执才记 local_stop_verified/stopVerifiedAt；单独的数据库 cancelled 不算停止证明。无 run 的排队项以精确 wake CAS 取消；skipped/failed 收敛为 queue_terminal，不冒充供应商停止。完成/失败本身用 execution_terminal 区分，remoteStopVerified 与 descendantsStopVerified 始终 false。GET repairs 返回这份有界 deadline 回执；不返回 dispatch 内部快照。
 
 任务提前标 done/blocked/cancelled 不会让仍运行或取消未确认的初始运行退出监控。取消抛错保留 deadline_stopping、相同 runId 和原请求时间；重启只重试该确切运行，目标更换、任务转移或历史记录缺少绑定转 deadline_unverified/needs_human。持久租约避免竞争 worker 同时拥有停止流程；过期租约可恢复，迟到写回必须匹配原租约。
 
-开关 false 与 task drain 只禁止新 reserve/dispatch，安全计时器仍对此前已授权的活动 attempt 对账/到期收敛；暖备及服务停止不执行扫描。默认关闭不会创建/唤醒任务。worker 五秒 tick、活动项三十秒复查，一轮只处理一个项，取消自身可能等待适配器；积压、暂停或故障都可能延迟，因此不承诺精确最大超时。重新启动后的未知进程所有权不靠旧 PID 强杀，也不把本地句柄终止当远端或脱离进程组后代已停止。自动重试产生的后继 run/后代传播及可信远端停止仍属 CODE-05 缺口。
+开关 false 与 task drain 只禁止新 reserve/dispatch，安全计时器仍对此前已授权的活动 attempt 对账/到期收敛；暖备及服务停止不执行扫描。默认关闭不会创建/唤醒任务。worker 五秒 tick、活动项三十秒复查，一轮只处理一个项，取消自身可能等待适配器；积压、暂停或故障都可能延迟，因此不承诺精确最大超时。重新启动后的未知进程所有权不靠旧 PID 强杀，也不把本地句柄终止当远端或脱离进程组后代已停止。下节补齐受支持的自动重试链；全任务树/其他控制器传播及可信远端停止仍属 CODE-05 缺口。
+
+
+### 已核验自动重试的到期边界（2026-10-27）
+
+到期范围扩展到 bounded retry 调度器和 missing-issue-comment 调度器持久创建的自动后继，而不是任意共享 marker 的运行。每条边必须回溯到上述初始例行派发：公司、Agent、任务、负责人及原工作区绑定一致；`retryOfRunId` 数据列、上下文和 wake payload 一致；wake/run 双向唯一、automation/system/null actor、重试原因和计划次数/时刻吻合。最多核验 64 个运行；未知边、循环或溢出不算全部已停，但不会阻止独立核验成功的目标受控停止。手动、其他 Agent、合流或伪造边不取得取消授权。
+
+支持的重试在 issue→attempt 锁顺序下复查授权原截止时间、预计调度时间、尝试状态和原 Agent 配置哈希；等待其他锁/授权后、写 wake 前再检查期限。不会延长 expiresAt，也不允许工作区隔离重建改变已批准工作区。完成对账持同一 attempt 锁重新读整条已知执行链，因此“初始已终态但后继仍在运行”不能提前 completed；未知/转移任务保留监控并更新时间，避免饿死后续待处理项。到期认领先关闭自动重试准入，再收集目标。
+
+新增多运行回执 `scope=verified_automatic_repair_retries`、`lineageComplete` 和 `runs[]`，每项含确切 run/wake/前驱 ID、请求时间及停止证据。单初始运行仍保留 `initial_repair_run_only`。停止前持久化整个目标集合，重启逐一核验同一集合，不换成“当前运行”；已确认项不重复停止，未知项只重试原身份。集合变化交人工。API 原样返回这份有界元数据；当前 UI 展示状态/诊断，不把该 scope 解读为全部后代或远端停止。
+
+为避免另一自动通道丢弃授权上下文，专用修复不进入即时恢复、review participant、liveness continuation、成功交接和 review-path 自动唤醒。原授权只允许直接本地适配器；排队后改成 native profile 在 runtime selection 前以 configuration-incomplete 阻断，不创建 native 合同、coordinator 或新供应商工作。marker 在这些入口只能保守阻止新自动工作，不能授予取消权限。用户另行手动操作不被接管；已有外部/历史 native 执行、远端终止及整棵任务树不在本切片保证内。
+
+验证：新增 lineage/篡改/合流/多级重试/未知停止重启/绝对截止与调度接线、无副作用 native/lifecycle 拒绝的定向单元测试；真实 PostgreSQL/API 夹具覆盖实际 scheduler 两级后继、early done、假边不取消、准确 stop roster、持有 issue 锁与完成/到期对账竞争。子任务仅运行无 DB 的定向套件；真实 DB/API、完整类型/构建和供应商验收由集成阶段分别记录，不把 mock 结果当成并发或供应商证明。
 
 独立 `PAPERCLIP_CODING_REPAIR_WORKER_ENABLED=false` 可完全停用该后台计时器，默认不设置；这与“停止新派发”不同，会停止已有授权运行的自动到期收敛，不应在仍需受控截止时关闭。隔离 Playwright fixture 显式关闭该计时器及 `HEARTBEAT_SCHEDULER_ENABLED`，仅由注入替身手动调用 service/worker，避免真实后台抢租约或启动假运行。
 

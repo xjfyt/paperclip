@@ -657,6 +657,13 @@ async function runReleaseRecoveryTail(
     return { outcome: { kind: "released" }, postCommitEffects };
   }
 
+  // A repair's bounded scheduler owns its retry grant. This separate recovery
+  // lane rebuilds context and may transfer agents, so it cannot inherit that
+  // grant. Marker presence only suppresses new work; it grants no stop power.
+  if (typeof run.contextSnapshot.codingRepairAttemptId === "string") {
+    return { outcome: { kind: "released" }, postCommitEffects };
+  }
+
   const sessionBefore = await host.resolveSessionBeforeForWakeup({
     companyId: issue.companyId,
     agentId: recoveryAgent.id,

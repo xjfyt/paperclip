@@ -74,6 +74,25 @@ describe.skipIf(!support.supported)("heartbeat runtime selection boundary", () =
   const coordinators = (id: string) => db.select().from(nativeRunFinalizations).where(eq(nativeRunFinalizations.runId, id));
   const sandbox = { kind: "remote" as const, transport: "sandbox" as const, remoteCwd: "/workspace", reusableLeaseConfigured: false };
 
+  it("rejects marked repair native selection without a contract, coordinator, or ownership transfer", async () => {
+    const { input, run } = await fixture(); const before = await read(run.id);
+    input.run.contextSnapshot = { codingRepairAttemptId: randomUUID() };
+    await expect(selectHeartbeatRuntime(db, input)).rejects.toMatchObject({ code: "configuration_incomplete",
+      resultJson: { configurationIncomplete: { reason: "coding_repair_native_runtime_unsupported" } } });
+    expect(await read(run.id)).toEqual(before);
+    expect(await coordinators(run.id)).toHaveLength(0); expect(await db.select().from(completionContracts)).toHaveLength(0);
+    expect(prepareNativeWorkspaceSync).not.toHaveBeenCalled(); expect(buildNativeRuntimeContext).not.toHaveBeenCalled();
+    expect(input.stopControllerLease).not.toHaveBeenCalled(); expect(input.onNativeOwnershipHeld).not.toHaveBeenCalled();
+  });
+
+  it("keeps a marked direct-adapter repair in the existing legacy selection lane", async () => {
+    const { input, run } = await fixture("process"); input.run.contextSnapshot = { codingRepairAttemptId: randomUUID() };
+    const selected = await selectHeartbeatRuntime(db, input);
+    expect(selected).toMatchObject({ selected: true, nativeExecution: null });
+    expect(await read(run.id)).toMatchObject({ runtimeMode: "legacy" });
+    expect(await coordinators(run.id)).toHaveLength(0); expect(prepareNativeWorkspaceSync).not.toHaveBeenCalled();
+  });
+
   it("persists the native input, completion contract, and coordinator before transferring cleanup ownership", async () => {
     const { input, run } = await fixture();
     vi.mocked(prepareNativeWorkspaceSync).mockImplementationOnce(async args => {

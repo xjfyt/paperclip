@@ -1,3 +1,4 @@
+import { codingRepairRetryAdmissionBlock, isDedicatedCodingRepairRun } from "../mimouse-coding/repair-deadline.js";
 import { deriveTaskKeyWithHeartbeatFallback } from "./run-state.js";
 import {
   WORKSPACE_VALIDATION_FAILURE_CODE,
@@ -687,13 +688,23 @@ export function createHeartbeatRetries(db: Db, dependencies: HeartbeatRetryDepen
             | "issue_terminal_status"
             | "issue_not_in_progress"
             | "continuation_user_authorization_missing"
-            | "issue_execution_lock_changed";
+            | "issue_execution_lock_changed"
+            | "coding_repair_retry_blocked";
           issueId: string | null;
           details: Record<string, unknown>;
         };
 
     const scheduleResult = await db.transaction(
       async (tx): Promise<ScheduledRetryTransactionResult> => {
+        if (isDedicatedCodingRepairRun(run)) {
+          // Preserve issue → attempt lock order. The durable attempt closes
+          // admission before deadline collection or terminal reconciliation.
+          if (issueId) await tx.execute(sql`select id from issues where company_id = ${run.companyId} and id = ${issueId} for update`);
+          const blocked = shouldQuarantineWorkspaceForRetry ? "coding_repair_workspace_change_unsupported"
+            : await codingRepairRetryAdmissionBlock(tx as unknown as Db, run, schedule.dueAt);
+          if (blocked) return { outcome: "not_scheduled", issueId, errorCode: "coding_repair_retry_blocked",
+            reason: "The bounded coding repair no longer permits an automatic retry.", details: { code: blocked } };
+        }
         // All automatic failure paths share the same predecessor claim. A
         // duplicate monitor, restart sweep or wake must reuse its successor.
         if (
@@ -979,6 +990,11 @@ export function createHeartbeatRetries(db: Db, dependencies: HeartbeatRetryDepen
           retryContextSnapshot.explicitUserContinuation = continuation;
           retryContextSnapshot.previousRunId = continuation.previousRunId;
         }
+
+        // Other admission reads and predecessor locks may have crossed expiry.
+        const repairBlocked = await codingRepairRetryAdmissionBlock(tx as unknown as Db, run, schedule.dueAt);
+        if (repairBlocked) return { outcome: "not_scheduled", issueId, errorCode: "coding_repair_retry_blocked",
+          reason: "The bounded coding repair no longer permits an automatic retry.", details: { code: repairBlocked } };
 
         const wakeupRequest = await tx
           .insert(agentWakeupRequests)

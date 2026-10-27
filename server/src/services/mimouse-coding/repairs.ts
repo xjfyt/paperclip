@@ -51,6 +51,16 @@ export function codingRepairService(db: Db, deps: { client?: typeof gitlabClient
   }
   async function finish(attempt: Attempt, state: string, code: string | null, routineRunId?: string, issueId?: string) {
     await db.transaction(async tx => {
+      if (attempt.state === "dispatched" && ["completed", "blocked"].includes(state)) {
+        const [current] = await tx.select().from(attempts).where(and(eq(attempts.companyId, attempt.companyId), eq(attempts.id, attempt.id))).for("update");
+        if (!current || current.state !== attempt.state) return;
+        if (await codingRepairInitialExecutionPending(tx as unknown as Db, current)) {
+          // Retain monitoring without starving later due attempts on an
+          // unverifiable/transferred task or a successor admission race.
+          await tx.update(attempts).set({ updatedAt: new Date() }).where(and(eq(attempts.id, current.id), eq(attempts.state, current.state)));
+          return;
+        }
+      }
       const saved = await tx.update(attempts).set({ state, lastCode: code, routineRunId: routineRunId ?? attempt.routineRunId, issueId: issueId ?? attempt.issueId, lease: null, leaseExpiresAt: null, updatedAt: new Date() })
         .where(and(eq(attempts.id, attempt.id), eq(attempts.state, attempt.state), ...(attempt.lease ? [eq(attempts.lease, attempt.lease)] : []))).returning();
       if (saved.length) await tx.update(deliveries).set({ repairStatus: state === "dispatched" ? "repair_running" : state === "completed" ? "awaiting_review" : "needs_human", repairLastCode: code }).where(eq(deliveries.id, attempt.deliveryId));

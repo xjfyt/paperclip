@@ -1,3 +1,4 @@
+import { isDedicatedCodingRepairRun } from "../mimouse-coding/repair-deadline.js";
 import {
   ConfigurationIncompleteFailure,
   type buildPaperclipWakePayload,
@@ -250,6 +251,14 @@ function readNonEmptyString(value: unknown): string | null {
 export async function selectHeartbeatRuntime(db: Db, input: HeartbeatRuntimeSelectionInput): Promise<HeartbeatRuntimeSelectionResult> {
   const { run, agent, nativeRuntimeResolution, issuesSvc, runtimeEnv, beforeNativeRuntimeSelection, onAdapterEvent,
     onNativeLifecycleSelected, onProviderResourceDisposition, onNativeOwnershipHeld, stopControllerLease } = input;
+  // The bounded repair grant authorizes direct local adapters only. Do not
+  // let a queued run adopt a newly selected native profile and escape into
+  // native replacement/capacity/continuation lanes outside that grant.
+  if (nativeRuntimeResolution.kind === "native" && isDedicatedCodingRepairRun(run)) {
+    throw new ConfigurationIncompleteFailure("Bounded coding repair requires its approved direct adapter", {
+      configurationIncomplete: { reason: "coding_repair_native_runtime_unsupported", companyId: run.companyId, agentId: run.agentId },
+    });
+  }
   const { issueRef, issueContext, context, executionContinuation, safeWakeComments, safeWakeCommentContext,
     paperclipWakePayload, acceptedPlanContinuationWake } = input.task;
   const { persistedNativeExecutionInput, persistedRunnerProfile, taskSessionCredentialCompatible, taskSessionDecodedParams,

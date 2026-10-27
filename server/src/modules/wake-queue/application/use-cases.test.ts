@@ -659,6 +659,17 @@ describe("releaseIssueExecution", () => {
     });
   });
 
+  it("does not let a dedicated repair escape into the unbounded immediate recovery lane", async () => {
+    const transaction = createFakeTransaction(); const host = createFakeHost();
+    const run = { ...RUN, contextSnapshot: { codingRepairAttemptId: "marker-only-blocks" } };
+    const issueLock = createFakeIssueLock(host, transaction, ISSUE, run);
+    const result = await createReleaseIssueExecution({ issueLock, recovery: createFakeRecovery() })({ companyId: RUN.companyId, runId: RUN.id, now: new Date() });
+    expect(result.outcome.kind).toBe("released");
+    expect(transaction.queueImmediateRecoveryRun).not.toHaveBeenCalled();
+    expect(transaction.queueReviewParticipantRecoveryRun).not.toHaveBeenCalled();
+    expect(host.resolveSessionBeforeForWakeup).not.toHaveBeenCalled();
+  });
+
   it("resolves the responsible user for an immediate recovery run before queuing it", async () => {
     const resolveResponsibleUserId = vi.fn(
       async (_input: Parameters<WakeQueueHost["resolveResponsibleUserId"]>[0]) => "resolved-user",

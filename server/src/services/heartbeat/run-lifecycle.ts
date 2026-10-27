@@ -1,3 +1,4 @@
+import { codingRepairRetryAdmissionBlock, isDedicatedCodingRepairRun } from "../mimouse-coding/repair-deadline.js";
 import {
   DEFERRED_WAKE_CONTEXT_KEY,
   EXECUTION_PATH_HEARTBEAT_RUN_STATUSES,
@@ -1397,6 +1398,8 @@ export function createHeartbeatLifecycle(db: Db, dependencies: HeartbeatLifecycl
   async function handleRunLivenessContinuation(
     run: typeof heartbeatRuns.$inferSelect,
   ) {
+    // This lane rebuilds context; only the bounded repair scheduler may retry.
+    if (isDedicatedCodingRepairRun(run)) return;
     const context = parseObject(run.contextSnapshot);
     if (
       readNonEmptyString(context.goalControlRequestId) ||
@@ -1606,6 +1609,7 @@ export function createHeartbeatLifecycle(db: Db, dependencies: HeartbeatLifecycl
     run: typeof heartbeatRuns.$inferSelect,
     agent: typeof agents.$inferSelect,
   ) {
+    if (isDedicatedCodingRepairRun(run)) return;
     if (run.status !== "succeeded") return;
     const context = parseObject(run.contextSnapshot);
     const issueId =
@@ -1924,6 +1928,7 @@ export function createHeartbeatLifecycle(db: Db, dependencies: HeartbeatLifecycl
   async function handleIssueReviewPathDisposition(
     run: typeof heartbeatRuns.$inferSelect,
   ) {
+    if (isDedicatedCodingRepairRun(run)) return;
     const contextSnapshot = parseObject(run.contextSnapshot);
     if (readNonEmptyString(contextSnapshot.goalControlRequestId)) return;
     const issueId =
@@ -2356,6 +2361,7 @@ export function createHeartbeatLifecycle(db: Db, dependencies: HeartbeatLifecycl
         )
         .then((rows) => rows[0] ?? null);
       if (!issue) return null;
+      if (await codingRepairRetryAdmissionBlock(tx as unknown as Db, run)) return null;
 
       const wakeupRequest = await tx
         .insert(agentWakeupRequests)
