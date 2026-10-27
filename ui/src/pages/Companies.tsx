@@ -1,3 +1,4 @@
+import { apiErrorText } from "@/i18n/api-errors";
 import { useTranslation } from "@/i18n";
 import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -122,7 +123,7 @@ export function Companies() {
 
       <div className="h-6">
         {loading && <p className="text-sm text-muted-foreground">{t("companiesDirectoryUi.loading")}</p>}
-        {error && <p className="text-sm text-destructive">{error.message}</p>}
+        {error && <p className="text-sm text-destructive">{apiErrorText(error, "")}</p>}
       </div>
 
       <div className="grid gap-4">

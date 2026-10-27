@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { ApiUnavailableError } from "@/api/response";
+import { apiErrorMessages } from "@/i18n/api-errors-test-resources";
 
 import { i18n, coreTaskMessages } from "../i18n/core-task-test-resources";
 
@@ -983,4 +985,20 @@ describe("SidebarAgents", () => {
 
     expect(mockAgentsApi.resume).not.toHaveBeenCalled();
   });
+  it.each([SidebarAgents, ProductionSidebarAgents].flatMap(Sidebar => [true, false].map(local => ({ Sidebar, local }))))(
+    "keeps typed pause error as a display-only toast descriptor, local=$local", async ({ Sidebar, local }) => {
+      const failure = local ? new ApiUnavailableError(503) : new Error(apiErrorMessages.en.unavailable);
+      mockAgentsApi.pause.mockRejectedValueOnce(failure);
+      await renderSidebarAgents(true, Sidebar); await openAgentMenu();
+      const action = [...document.body.querySelectorAll('[data-slot="dropdown-menu-item"]')].find(element => element.textContent?.includes("Pause agent"));
+      expect(action).toBeDefined();
+      await act(async () => action!.dispatchEvent(new MouseEvent("click", { bubbles: true }))); await flushReact();
+      const toast = mockPushToast.mock.calls.at(-1)?.[0];
+      expect(toast).toMatchObject({ body: apiErrorMessages.en.unavailable, tone: "error" });
+      expect(toast.bodyMessage).toEqual(local ? { key: "apiErrorUi.unavailable" } : undefined);
+      expect(mockAgentsApi.pause).toHaveBeenCalledExactlyOnceWith("agent-1", "company-1");
+      expect(failure.message).toBe(apiErrorMessages.en.unavailable);
+    },
+  );
+
 });

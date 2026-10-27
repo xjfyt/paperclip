@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { ApiUnavailableError } from "@/api/response";
+import { apiErrorMessages } from "@/i18n/api-errors-test-resources";
 
 import { act, type ComponentProps } from "react";
 import { createRoot } from "react-dom/client";
@@ -252,4 +254,28 @@ describe("CompanySettings actual-page localization", () => {
       expect(window.confirm).not.toHaveBeenCalled(); expect(mocks.archive).not.toHaveBeenCalled();
     } finally { await view.close(); }
   });
+  it.each((["archive", "save", "upload", "remove"] as const).flatMap(action => [true, false].map(local => ({ action, local }))))(
+    "keeps typed $action outage translatable after rejection, local=$local", async ({ action, local }) => {
+      const failure = local ? new ApiUnavailableError(503) : new Error(apiErrorMessages.en.unavailable);
+      const api = action === "archive" ? mocks.archive : action === "upload" ? mocks.upload : mocks.update;
+      api.mockRejectedValueOnce(failure);
+      const view = await render();
+      try {
+        if (action === "save") {
+          await setInput(container.querySelector<HTMLInputElement>('input[type="text"]')!, "Draft 原文");
+          await act(async () => button(messagesByLocale.en.saveChanges).click());
+        } else if (action === "upload") await chooseFile();
+        else await act(async () => button(action === "archive" ? messagesByLocale.en.archiveOrganization : messagesByLocale.en.removeLogo).click());
+        await waitFor(() => expect(container.textContent).toContain(apiErrorMessages.en.unavailable));
+        for (const [locale, messages] of Object.entries(apiErrorMessages)) {
+          await act(async () => { await i18n.changeLanguage(locale); });
+          expect(container.textContent).toContain(local ? messages.unavailable : apiErrorMessages.en.unavailable);
+        }
+        expect(api).toHaveBeenCalledTimes(1);
+        expect(failure.message).toBe(apiErrorMessages.en.unavailable);
+        expect(mocks.navigate).not.toHaveBeenCalled();
+      } finally { await view.close(); }
+    },
+  );
+
 });

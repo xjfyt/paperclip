@@ -1,3 +1,5 @@
+import { apiUnavailableUiMessage, describeApiUiError, renderApiUiMessage } from "@/i18n/api-errors";
+import type { LocalizedUiMessage } from "@/lib/localized-ui-error";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AGENT_ADAPTER_TYPES } from "@paperclipai/shared";
@@ -75,6 +77,8 @@ function localizedInviteFeedback(tone: AuthFeedback["tone"], key: string, values
 }
 
 function mapInviteAuthFeedback(error: unknown, authMode: AuthMode, email: string): AuthFeedback {
+  const unavailable = apiUnavailableUiMessage(error);
+  if (unavailable) return { tone: "error", translationKey: unavailable.key, message: getAuthErrorMessage(error) ?? "" };
   const code = getAuthErrorCode(error), message = getAuthErrorMessage(error);
   const emailLabel = email.trim() || inviteT("inviteUi.thatEmail");
   if (code === "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL") return localizedInviteFeedback("info", "accountExists", { email: emailLabel });
@@ -198,7 +202,7 @@ function InviteLandingContent() {
   const [adapterType, setAdapterType] = useState<AgentAdapterType>("claude_local");
   const [capabilities, setCapabilities] = useState("");
   const [result, setResult] = useState<{ kind: "bootstrap" | "join"; payload: unknown } | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<LocalizedUiMessage | null>(null);
   const [authFeedback, setAuthFeedback] = useState<AuthFeedback | null>(null);
   const [autoAcceptStarted, setAutoAcceptStarted] = useState(false);
   const authErrorId = "invite-auth-error";
@@ -347,7 +351,7 @@ function InviteLandingContent() {
     },
     onError: (err) => {
       if (!active.current) return;
-      setError(err instanceof Error ? err.message : inviteT("inviteUi.acceptFailed"));
+      setError(describeApiUiError(err, { key: "inviteUi.acceptFailed" }));
     },
   });
 
@@ -643,7 +647,7 @@ function InviteLandingContent() {
                     onChange={(event) => setCapabilities(event.target.value)}
                   />
                 </label>
-                {error ? <p className="text-xs text-red-400">{error}</p> : null}
+                {error ? <p className="text-xs text-red-400">{renderApiUiMessage(error)}</p> : null}
                 <Button
                   className="w-full h-auto whitespace-normal rounded-none"
                   disabled={acceptMutation.isPending || agentName.trim().length === 0}
@@ -820,7 +824,7 @@ function InviteLandingContent() {
                       : (invite.inviteType === "bootstrap_ceo" ? inviteT("inviteUi.bootstrapHelp") : inviteT("inviteUi.acceptHelp", { company: companyDisplayName }))}
                   </p>
                 </div>
-                {error ? <p className="text-xs text-red-400">{error}</p> : null}
+                {error ? <p className="text-xs text-red-400">{renderApiUiMessage(error)}</p> : null}
                 {shouldAutoAcceptHumanInvite ? (
                   <div className="text-sm text-zinc-400">
                     {acceptMutation.isPending ? inviteT("inviteUi.submitting") : inviteT("inviteUi.finishingSignIn")}

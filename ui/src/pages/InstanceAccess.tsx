@@ -1,3 +1,4 @@
+import { apiErrorText } from "@/i18n/api-errors";
 import { useTranslation, formatDate, formatNumber } from "@/i18n";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -109,7 +110,7 @@ export function InstanceAccess() {
       usersQuery.error instanceof ApiError && usersQuery.error.status === 403
         ? settingsT("settingsUi.adminRequired")
         : usersQuery.error instanceof Error
-          ? usersQuery.error.message
+          ? apiErrorText(usersQuery.error, "")
           : settingsT("settingsUi.usersFailed");
     return <div className="text-sm text-destructive">{message}</div>;
   }
@@ -180,7 +181,7 @@ export function InstanceAccess() {
             <div className="text-sm text-muted-foreground">{settingsT("settingsUi.loadingUserAccess")}</div>
           ) : userAccessQuery.error ? (
             <div className="text-sm text-destructive">
-              {userAccessQuery.error instanceof Error ? userAccessQuery.error.message : settingsT("settingsUi.userAccessFailed")}
+              {apiErrorText(userAccessQuery.error, { key: "settingsUi.userAccessFailed" })}
             </div>
           ) : (
             <>

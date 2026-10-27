@@ -1,3 +1,5 @@
+import { apiErrorText, describeApiUiError, renderApiUiMessage } from "@/i18n/api-errors";
+import type { LocalizedUiMessage } from "@/lib/localized-ui-error";
 import { navigateTopLevel } from "@/lib/browserNavigation";
 import { useTranslation } from "@/i18n";
 import { useEffect, useId, useRef, useState } from "react";
@@ -37,7 +39,7 @@ export function ProfileSettings() {
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
   const [name, setName] = useState("");
   const [image, setImage] = useState("");
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<LocalizedUiMessage | null>(null);
   const sessionQuery = useQuery({
     queryKey: queryKeys.auth.session,
     queryFn: () => authApi.getSession(),
@@ -89,7 +91,7 @@ export function ProfileSettings() {
       setImage(profile.image ?? "");
     },
     onError: (error) => {
-      setActionError(error instanceof Error ? error.message : settingsT("settingsUi.updateProfileFailed"));
+      setActionError(describeApiUiError(error, { key: "settingsUi.updateProfileFailed" }));
     },
   });
 
@@ -112,7 +114,7 @@ export function ProfileSettings() {
       setImage(profile.image ?? "");
     },
     onError: (error) => {
-      setActionError(error instanceof Error ? error.message : settingsT("settingsUi.uploadAvatarFailed"));
+      setActionError(describeApiUiError(error, { key: "settingsUi.uploadAvatarFailed" }));
     },
   });
 
@@ -124,7 +126,7 @@ export function ProfileSettings() {
       setImage(profile.image ?? "");
     },
     onError: (error) => {
-      setActionError(error instanceof Error ? error.message : settingsT("settingsUi.removeAvatarFailed"));
+      setActionError(describeApiUiError(error, { key: "settingsUi.removeAvatarFailed" }));
     },
   });
 
@@ -135,7 +137,7 @@ export function ProfileSettings() {
   if (sessionQuery.error || !sessionQuery.data) {
     return (
       <div className="text-sm text-destructive">
-        {sessionQuery.error instanceof Error ? sessionQuery.error.message : settingsT("settingsUi.profileFailed")}
+        {apiErrorText(sessionQuery.error, { key: "settingsUi.profileFailed" })}
       </div>
     );
   }
@@ -160,7 +162,7 @@ export function ProfileSettings() {
 
       {actionError ? (
         <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-          {actionError}
+          {renderApiUiMessage(actionError)}
         </div>
       ) : null}
 

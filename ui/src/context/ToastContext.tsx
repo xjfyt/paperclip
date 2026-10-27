@@ -1,3 +1,4 @@
+import type { ApiUnavailableUiMessage } from "@/i18n/api-errors";
 import type { AgentAppearance } from "@paperclipai/shared";
 import {
   createContext,
@@ -33,6 +34,8 @@ export interface ToastInput {
   dedupeKey?: string;
   title: string;
   body?: string;
+  /** Display-only local error descriptor; original body still owns dedupe. */
+  bodyMessage?: ApiUnavailableUiMessage;
   tone?: ToastTone;
   ttlMs?: number;
   action?: ToastAction;
@@ -43,6 +46,8 @@ export interface ToastItem {
   id: string;
   title: string;
   body?: string;
+  /** Display-only local error descriptor; original body still owns dedupe. */
+  bodyMessage?: ApiUnavailableUiMessage;
   tone: ToastTone;
   ttlMs: number;
   action?: ToastAction;
@@ -149,6 +154,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           id,
           title: input.title,
           body: input.body,
+          bodyMessage: input.bodyMessage,
           tone,
           ttlMs,
           action: input.action,

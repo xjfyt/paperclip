@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { ApiUnavailableError } from "@/api/response";
+import { apiErrorMessages } from "@/i18n/api-errors-test-resources";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -220,4 +222,15 @@ describe("Companies page", () => {
     await menuClick("unarchive"); expect(mockCompaniesApi.update).toHaveBeenCalledExactlyOnceWith("company-1", { status: "active" });
     expect(company.status).toBe("archived"); expect(mockCompaniesApi.remove).not.toHaveBeenCalled();
   });
+  it.each([true, false])("retranslates only typed directory outages, local=%s", async local => {
+    state.error = local ? new ApiUnavailableError(503) : new Error(apiErrorMessages.en.unavailable);
+    await renderPage();
+    for (const [locale, messages] of Object.entries(apiErrorMessages)) {
+      await act(async () => { await i18n.changeLanguage(locale); });
+      expect(container.textContent).toContain(local ? messages.unavailable : apiErrorMessages.en.unavailable);
+    }
+    expect(state.error.message).toBe(apiErrorMessages.en.unavailable);
+    expect(mockCompaniesApi.remove).not.toHaveBeenCalled();
+  });
+
 });

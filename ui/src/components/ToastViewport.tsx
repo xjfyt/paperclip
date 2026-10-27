@@ -67,7 +67,7 @@ function AnimatedToast({
           <p className="text-sm font-semibold leading-5">{toast.title}</p>
           {toast.body && (
             <p className="mt-1 text-xs leading-4 opacity-70">
-              {toast.body}
+              {toast.bodyMessage ? browserT(toast.bodyMessage.key) : toast.body}
             </p>
           )}
           {toast.action &&

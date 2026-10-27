@@ -1,3 +1,4 @@
+import { apiErrorText } from "@/i18n/api-errors";
 import { t, useTranslation } from "@/i18n";
 import { ChangeEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -299,14 +300,12 @@ export function CompanySettings() {
                   {(logoUploadMutation.isError || logoUploadError) && (
                     <span className="text-xs text-destructive">
                       {logoUploadError ??
-                        (logoUploadMutation.error instanceof Error
-                          ? logoUploadMutation.error.message
-                          : t("companySettingsGeneralUi.logoUploadFailed"))}
+                        apiErrorText(logoUploadMutation.error, { key: "companySettingsGeneralUi.logoUploadFailed" })}
                     </span>
                   )}
                   {clearLogoMutation.isError && (
                     <span className="text-xs text-destructive">
-                      {clearLogoMutation.error.message}
+                      {apiErrorText(clearLogoMutation.error, "")}
                     </span>
                   )}
                   {logoUploadMutation.isPending && (
@@ -334,9 +333,7 @@ export function CompanySettings() {
           )}
           {generalMutation.isError && (
             <span className="text-xs text-destructive">
-              {generalMutation.error instanceof Error
-                  ? generalMutation.error.message
-                  : t("companySettingsGeneralUi.saveFailed")}
+              {apiErrorText(generalMutation.error, { key: "companySettingsGeneralUi.saveFailed" })}
             </span>
           )}
         </div>
@@ -412,9 +409,7 @@ export function CompanySettings() {
             </Button>
             {archiveMutation.isError && (
               <span className="text-xs text-destructive">
-                {archiveMutation.error instanceof Error
-                  ? archiveMutation.error.message
-                  : t("companySettingsGeneralUi.archiveFailed")}
+                {apiErrorText(archiveMutation.error, { key: "companySettingsGeneralUi.archiveFailed" })}
               </span>
             )}
           </div>

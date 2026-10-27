@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { ApiUnavailableError } from "@/api/response";
+import { apiErrorMessages } from "@/i18n/api-errors-test-resources";
 import { i18n } from "@/i18n";
 
 import { flushSync } from "react-dom";
@@ -1326,6 +1328,27 @@ describe("InviteLandingPage", () => {
       await act(async () => { await i18n.changeLanguage("zh-CN"); });
       expect(container.textContent).toContain(i18n.t("inviteUi.accountExists", { email: "fixture@example.invalid" })); expect(signUpEmailMock).toHaveBeenCalledTimes(1);
       expect(container.querySelector<HTMLInputElement>('input[name="email"]')!.value).toBe("fixture@example.invalid");
+    } finally { await act(async () => root.unmount()); client.clear(); await i18n.changeLanguage("en"); }
+  });
+
+  it.each([true, false])("retains acceptance error provenance and hot-switches without resubmitting, local=%s", async local => {
+    await i18n.changeLanguage("en");
+    const failure = local ? new ApiUnavailableError(503) : new Error(apiErrorMessages.en.unavailable);
+    acceptInviteMock.mockRejectedValue(failure);
+    getSessionMock.mockResolvedValue({ session: { id: "session-1", userId: "user-1" }, user: { id: "user-1", name: "Original 用户", email: "original@example.test" } });
+    const root = createRoot(container), client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    try {
+      await act(async () => root.render(<MemoryRouter initialEntries={["/invite/pcp_invite_test"]}><QueryClientProvider client={client}><Routes><Route path="/invite/:token" element={<InviteLandingPage />} /></Routes></QueryClientProvider></MemoryRouter>));
+      for (let attempt = 0; attempt < 20 && !container.textContent?.includes(failure.message); attempt++) await flushReact();
+      expect(acceptInviteMock).toHaveBeenCalledExactlyOnceWith("pcp_invite_test", { requestType: "human" });
+      for (const [locale, messages] of Object.entries(apiErrorMessages)) {
+        await act(async () => { await i18n.changeLanguage(locale); }); await flushReact();
+        expect(container.textContent).toContain(local ? messages.unavailable : apiErrorMessages.en.unavailable);
+        expect(container.textContent).toContain("Acme Robotics");
+        expect(container.textContent).toContain("Welcome aboard.");
+        expect(acceptInviteMock).toHaveBeenCalledTimes(1);
+      }
+      expect(failure.message).toBe(apiErrorMessages.en.unavailable);
     } finally { await act(async () => root.unmount()); client.clear(); await i18n.changeLanguage("en"); }
   });
 

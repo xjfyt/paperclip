@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { ApiUnavailableError } from "@/api/response";
+import { apiErrorMessages } from "@/i18n/api-errors-test-resources";
 import { i18n } from "@/i18n";
 
 import { act } from "react";
@@ -140,5 +142,22 @@ describe("InstanceAccess company directory", () => {
       await eventually(() => expect(mocks.setUserCompanyAccess).toHaveBeenCalledWith(user.id, [companyA.id]));
     } finally { await act(async () => { await i18n.changeLanguage("en"); }); }
   });
+
+  it.each((["users", "membership"] as const).flatMap(action => [true, false].map(local => ({ action, local }))))(
+    "renders typed $action outages without rewriting equal server text, local=$local", async ({ action, local }) => {
+      const failure = local ? new ApiUnavailableError(503) : new Error(apiErrorMessages.en.unavailable);
+      const api = action === "users" ? mocks.searchAdminUsers : mocks.getUserCompanyAccess;
+      api.mockRejectedValue(failure);
+      await renderPage();
+      await eventually(() => expect(container.textContent).toContain(apiErrorMessages.en.unavailable));
+      for (const [locale, messages] of Object.entries(apiErrorMessages)) {
+        await act(async () => { await i18n.changeLanguage(locale); });
+        expect(container.textContent).toContain(local ? messages.unavailable : apiErrorMessages.en.unavailable);
+      }
+      expect(api).toHaveBeenCalledTimes(1);
+      expect(failure.message).toBe(apiErrorMessages.en.unavailable);
+      await act(async () => { await i18n.changeLanguage("en"); });
+    },
+  );
 
 });

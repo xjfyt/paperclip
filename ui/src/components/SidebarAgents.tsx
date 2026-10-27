@@ -1,3 +1,4 @@
+import { apiUnavailableUiMessage } from "@/i18n/api-errors";
 import { t as actionT } from "@/i18n";
 import { useTranslation } from "@/i18n";
 import { usePrimaryAgentPresentation } from "@/components/primary-agent/PrimaryAgentPresentation";
@@ -546,6 +547,7 @@ export function SidebarAgents({ streamlined = false }: { streamlined?: boolean }
       pushToast({
         title: action === "pause" ? t("coreTaskUi.pauseFailed") : t("coreTaskUi.resumeFailed"),
         body: error instanceof Error ? error.message : agent.name,
+        bodyMessage: apiUnavailableUiMessage(error),
         tone: "error",
       });
     },

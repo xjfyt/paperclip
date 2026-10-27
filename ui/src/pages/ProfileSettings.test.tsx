@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { ApiUnavailableError } from "@/api/response";
+import { apiErrorMessages } from "@/i18n/api-errors-test-resources";
 import { i18n } from "@/i18n";
 
 import { act } from "react";
@@ -9,6 +11,7 @@ import { sanitizeAssetNamespace } from "@paperclipai/shared";
 import { ProfileSettings } from "./ProfileSettings";
 
 const mockAuthApi = vi.hoisted(() => ({
+  capabilities: vi.fn(async () => ({ password: true, providers: [] })),
   getSession: vi.fn(),
   signInEmail: vi.fn(),
   signUpEmail: vi.fn(),
@@ -27,6 +30,8 @@ const mockSetBreadcrumbs = vi.hoisted(() => vi.fn());
 vi.mock("@/api/auth", () => ({
   authApi: mockAuthApi,
 }));
+
+vi.mock("@/components/InboxAgentPolicyControl", () => ({ InboxAgentPolicyControl: () => null }));
 
 vi.mock("@/api/assets", () => ({
   assetsApi: mockAssetsApi,
@@ -217,5 +222,33 @@ describe("ProfileSettings", () => {
       expect(mockAuthApi.updateProfile).toHaveBeenCalledWith({ name: "Jane Example", image: "https://example.com/jane.png" });
     } finally { await act(async () => root.unmount()); client.clear(); await i18n.changeLanguage("en"); }
   });
+
+  it.each((["session", "save", "upload"] as const).flatMap(action => [true, false].map(local => ({ action, local }))))(
+    "retains a $action outage descriptor across locale switches, local=$local", async ({ action, local }) => {
+      const error = local ? new ApiUnavailableError(503) : new Error(apiErrorMessages.en.unavailable);
+      const api = action === "session" ? mockAuthApi.getSession : action === "save" ? mockAuthApi.updateProfile : mockAssetsApi.uploadImage;
+      api.mockRejectedValueOnce(error);
+      const root = createRoot(container), client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+      try {
+        await act(async () => root.render(<QueryClientProvider client={client}><ProfileSettings /></QueryClientProvider>));
+        await flushReact(); await flushReact();
+        if (action === "save") {
+          const save = [...container.querySelectorAll("button")].find(button => button.textContent?.includes(i18n.t("settingsUi.saveProfile")));
+          await act(async () => save!.click());
+        } else if (action === "upload") {
+          const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
+          Object.defineProperty(input, "files", { configurable: true, value: [new File(["png"], "原图.png", { type: "image/png" })] });
+          await act(async () => input.dispatchEvent(new Event("change", { bubbles: true })));
+        }
+        await flushReact(); await flushReact();
+        for (const [locale, messages] of Object.entries(apiErrorMessages)) {
+          await act(async () => { await i18n.changeLanguage(locale); });
+          expect(container.textContent).toContain(local ? messages.unavailable : apiErrorMessages.en.unavailable);
+        }
+        expect(api).toHaveBeenCalledTimes(1);
+        expect(error.message).toBe(apiErrorMessages.en.unavailable);
+      } finally { await act(async () => root.unmount()); client.clear(); await i18n.changeLanguage("en"); }
+    },
+  );
 
 });
