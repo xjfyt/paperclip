@@ -1,0 +1,15 @@
+{
+  "doneCount": "Completadas: {{done}}/{{total}}",
+  "inProgressCount": "{{total}} en curso",
+  "blockedCount": "Bloqueadas: {{total}}",
+  "runsAcrossSubtasks_one": "{{total}} ejecución en {{subtasks}}",
+  "runsAcrossSubtasks_other": "{{total}} ejecuciones en {{subtasks}}",
+  "subtasks_one": "{{total}} subtarea",
+  "subtasks_other": "{{total}} subtareas",
+  "foldedSubtasks": "({{subtasks}})",
+  "tokens": "{{tokens}} tokens",
+  "runtime": "{{duration}} de ejecución",
+  "statusCount": "{{status}}: {{total}}",
+  "nextUp": "A continuación",
+  "waitingBlockers": "Esperando a que se resuelvan los bloqueos"
+}

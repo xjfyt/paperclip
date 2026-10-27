@@ -1,4 +1,4 @@
-import { t as mimouseT, useTranslation as useMimouseTranslation, i18n as mimouseI18n } from "@/i18n";
+import { formatNumber, t as mimouseT, useTranslation as useMimouseTranslation, i18n as mimouseI18n } from "@/i18n";
 import { AgentIdentity } from "@/components/AgentIdentity";
 import { startTransition, useDeferredValue, useEffect, useMemo, useState, useCallback, useRef } from "react";
 import type { ReactNode } from "react";
@@ -632,28 +632,28 @@ function SubIssueProgressSummaryStrip({
         <div className="min-w-0 flex-1 space-y-2">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
             <span className="font-medium text-foreground">
-              {summary.doneCount}/{summary.totalCount} done
+              {mimouseT("issueListProgressUi.doneCount", { done: formatNumber(summary.doneCount), total: formatNumber(summary.totalCount) })}
             </span>
             <span className="text-muted-foreground">
-              {summary.inProgressCount} in progress
+              {mimouseT("issueListProgressUi.inProgressCount", { total: formatNumber(summary.inProgressCount) })}
             </span>
             <span className="text-muted-foreground">
-              {summary.blockedCount} blocked
+              {mimouseT("issueListProgressUi.blockedCount", { total: formatNumber(summary.blockedCount) })}
             </span>
             {showCostSummary && (
               <>
                 <span
                   className="text-muted-foreground tabular-nums"
-                  title={`${costSummary.runCount.toLocaleString()} run${
-                    costSummary.runCount === 1 ? "" : "s"
-                  } across ${costSummary.issueCount} sub-task${
-                    costSummary.issueCount === 1 ? "" : "s"
-                  }`}
+                  title={mimouseT("issueListProgressUi.runsAcrossSubtasks", {
+                    count: costSummary.runCount,
+                    total: formatNumber(costSummary.runCount),
+                    subtasks: mimouseT("issueListProgressUi.subtasks", { count: costSummary.issueCount, total: formatNumber(costSummary.issueCount) }),
+                  })}
                 >
-                  {formatTokens(totalTokens)} tokens
+                  {mimouseT("issueListProgressUi.tokens", { tokens: formatTokens(totalTokens) })}
                 </span>
                 <span className="text-muted-foreground tabular-nums">
-                  {formatDurationMs(costSummary.runtimeMs)} runtime
+                  {mimouseT("issueListProgressUi.runtime", { duration: formatDurationMs(costSummary.runtimeMs) })}
                 </span>
               </>
             )}
@@ -671,7 +671,10 @@ function SubIssueProgressSummaryStrip({
                 key={status}
                 className={cn("h-full", progressSegmentClasses[status])}
                 style={{ width: `${(count / summary.totalCount) * 100}%` }}
-                title={`${issueStatusLabels[status]}: ${count}`}
+                title={mimouseT("issueListProgressUi.statusCount", {
+                  status: mimouseT(`statuses.${status}`, { defaultValue: issueStatusLabels[status] }),
+                  total: formatNumber(count),
+                })}
                 aria-hidden="true"
               />
             ))}
@@ -682,7 +685,7 @@ function SubIssueProgressSummaryStrip({
           {target && targetIssue ? (
             <>
               <div className="text-xs font-medium text-muted-foreground">
-                {target.kind === "next" ? "Next up" : "Waiting on blockers"}
+                {mimouseT(target.kind === "next" ? "issueListProgressUi.nextUp" : "issueListProgressUi.waitingBlockers")}
               </div>
               <Link
                 to={createIssueDetailPath(targetPathId)}
@@ -2217,7 +2220,9 @@ function StreamlinedIssuesList({
                           <>
                             {hasChildren && !isExpanded ? (
                               <span className="ml-1.5 text-xs text-muted-foreground">
-                                ({totalDescendants} sub-task{totalDescendants !== 1 ? "s" : ""})
+                                {mimouseT("issueListProgressUi.foldedSubtasks", {
+                                  subtasks: mimouseT("issueListProgressUi.subtasks", { count: totalDescendants, total: formatNumber(totalDescendants) }),
+                                })}
                               </span>
                             ) : null}
                             {issueBadge ? (

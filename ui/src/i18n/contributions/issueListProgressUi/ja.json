@@ -1,0 +1,15 @@
+{
+  "doneCount": "{{done}}/{{total}} 完了",
+  "inProgressCount": "{{total}} 件進行中",
+  "blockedCount": "{{total}} 件ブロック中",
+  "runsAcrossSubtasks_one": "{{subtasks}}で {{total}} 回実行",
+  "runsAcrossSubtasks_other": "{{subtasks}}で {{total}} 回実行",
+  "subtasks_one": "{{total}} 件のサブタスク",
+  "subtasks_other": "{{total}} 件のサブタスク",
+  "foldedSubtasks": "（{{subtasks}}）",
+  "tokens": "{{tokens}} トークン",
+  "runtime": "実行時間 {{duration}}",
+  "statusCount": "{{status}}: {{total}}",
+  "nextUp": "次のタスク",
+  "waitingBlockers": "ブロックの解除待ち"
+}

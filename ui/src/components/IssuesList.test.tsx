@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 
 import { changeLocale } from "../i18n";
+import { i18n, issueListProgressMessages } from "../i18n/issue-list-progress-test-resources";
+import { validateLocaleMessages } from "../i18n/locale-validation";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import type { AnchorHTMLAttributes, ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { Issue, Project } from "@paperclipai/shared";
+import type { Issue, IssueCostSummary, Project } from "@paperclipai/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   IssuesList,
@@ -27,6 +29,7 @@ const dialogState = vi.hoisted(() => ({
 const mockIssuesApi = vi.hoisted(() => ({
   list: vi.fn(),
   listLabels: vi.fn(),
+  getCostSummary: vi.fn(),
 }));
 
 const mockKanbanBoard = vi.hoisted(() => vi.fn());
@@ -138,6 +141,7 @@ vi.mock("./IssueRow", () => ({
     treeGuides,
     showIdentifier,
     trailingMeta,
+    titleSuffix,
   }: {
     issue: Issue;
     desktopMetaLeading?: ReactNode;
@@ -153,6 +157,7 @@ vi.mock("./IssueRow", () => ({
     treeGuides?: number;
     showIdentifier?: boolean;
     trailingMeta?: ReactNode;
+    titleSuffix?: ReactNode;
   }) => (
     <div
       data-testid="issue-row"
@@ -167,6 +172,7 @@ vi.mock("./IssueRow", () => ({
       data-title-class={titleClassName ?? undefined}
     >
       <span>{issue.title}</span>
+      <span data-testid="issue-title-suffix">{titleSuffix}</span>
       {leadingControl}
       {externalObjectSummary ? (
         <span data-testid="external-object-summary">{externalObjectSummary.total}</span>
@@ -339,7 +345,8 @@ function renderWithQueryClient(node: ReactNode, container: HTMLDivElement) {
 describe("IssuesList", () => {
   let container: HTMLDivElement;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await changeLocale("en");
     container = document.createElement("div");
     document.body.appendChild(container);
     dialogState.openNewIssue.mockReset();
@@ -347,6 +354,7 @@ describe("IssuesList", () => {
     mockNavigate.mockReset();
     mockIssuesApi.list.mockReset();
     mockIssuesApi.listLabels.mockReset();
+    mockIssuesApi.getCostSummary.mockReset();
     mockAuthApi.getSession.mockReset();
     mockAccessApi.listMembers.mockReset();
     mockAccessApi.listUserDirectory.mockReset();
@@ -817,7 +825,8 @@ describe("IssuesList", () => {
     });
   });
 
-  it("renders the opt-in sub-issue progress summary with workflow next-up linking", async () => {
+  it.each(Object.entries(issueListProgressMessages))("localizes the opt-in progress summary while preserving workflow next-up links in %s", async (locale, messages) => {
+    await i18n.changeLanguage(locale);
     const doneIssue = createIssue({
       id: "issue-done",
       identifier: "PAP-1",
@@ -828,7 +837,7 @@ describe("IssuesList", () => {
     const nextIssue = createIssue({
       id: "issue-next",
       identifier: "PAP-2",
-      title: "Implement next slice",
+      title: "Implement next slice 用户原文",
       status: "todo",
       createdAt: new Date("2026-04-02T00:00:00.000Z"),
       blockedBy: [{
@@ -873,19 +882,156 @@ describe("IssuesList", () => {
       expect(progress).not.toBeNull();
       expect(progress?.getAttribute("aria-valuenow")).toBe("1");
       expect(progress?.getAttribute("aria-valuemax")).toBe("3");
-      expect(container.textContent).toContain("1/3 done");
-      expect(container.textContent).toContain("0 in progress");
-      expect(container.textContent).toContain("1 blocked");
+      expect(container.textContent).toContain(messages.doneCount.replace("{{done}}", "1").replace("{{total}}", "3"));
+      expect(container.textContent).toContain(messages.inProgressCount.replace("{{total}}", "0"));
+      expect(container.textContent).toContain(messages.blockedCount.replace("{{total}}", "1"));
       expect(container.textContent).not.toContain("Done 1");
-      expect(container.textContent).toContain("Next up");
+      expect(container.textContent).toContain(messages.nextUp);
       const link = container.querySelector('a[href="/issues/PAP-2"]');
-      expect(link?.textContent).toContain("Implement next slice");
-      expect(container.querySelector('[title="Cancelled: 1"]')).toBeNull();
+      expect(link?.textContent).toContain("Implement next slice 用户原文");
+      const segments = Array.from(progress!.querySelectorAll("span"));
+      expect(segments.map(segment => segment.title)).toEqual(["todo", "done", "blocked"].map(status =>
+        messages.statusCount.replace("{{status}}", i18n.t(`statuses.${status}`)).replace("{{total}}", "1"),
+      ));
+      for (const segment of segments) expect(Number.parseFloat(segment.style.width)).toBeCloseTo(100 / 3);
     });
 
     act(() => {
       root.unmount();
     });
+  });
+
+  it.each(Object.entries(issueListProgressMessages))("keeps the progress contribution contract aligned in %s", (_locale, messages) => {
+    expect(validateLocaleMessages(messages, issueListProgressMessages.en)).toEqual([]);
+    for (const value of Object.values(messages)) {
+      expect(value.trim()).not.toBe("");
+      expect(value).not.toMatch(/<\/?[A-Za-z]|javascript\s*:|data\s*:/i);
+    }
+  });
+
+  it.each(Object.entries(issueListProgressMessages).flatMap(([locale, messages]) =>
+    [1, 2].map(count => ({ locale, messages, count })),
+  ))("localizes $count folded descendants and retains tree state across language changes in $locale", async ({ locale, messages, count }) => {
+    await i18n.changeLanguage(locale);
+    const parent = createIssue({ id: "parent-original", identifier: "PAP-ROOT", title: "Parent 用户原文" });
+    const children = Array.from({ length: count }, (_, index) => createIssue({
+      id: `child-${index}`, identifier: `PAP-CHILD-${index}`, parentId: parent.id, title: `Child 日本語 ${index}`,
+    }));
+    const onUpdateIssue = vi.fn();
+    const { root, queryClient } = renderWithQueryClient(<IssuesList
+      issues={[parent, ...children]} agents={[]} projects={[]} viewStateKey="paperclip:test-folded-i18n"
+      rowPresentation="task" onUpdateIssue={onUpdateIssue}
+    />, container);
+    try {
+      const parentRow = () => container.querySelector('[data-issue-row-id="parent-original"]');
+      await waitForAssertion(() => expect(parentRow()?.querySelector("button")).not.toBeNull());
+      const collapse = parentRow()?.querySelector<HTMLButtonElement>(`button[aria-label="${i18n.t("taskListUi.collapseSubtasks")}"]`)!;
+      await act(() => collapse.click());
+      const subtasks = messages[new Intl.PluralRules(locale).select(count) === "one" ? "subtasks_one" : "subtasks_other"].replace("{{total}}", String(count));
+      const suffix = parentRow()?.querySelector('[data-testid="issue-title-suffix"]');
+      expect(suffix?.textContent).toBe(messages.foldedSubtasks.replace("{{subtasks}}", subtasks));
+      expect(container.querySelector('[data-issue-row-id="child-0"]')).toBeNull();
+      const nextLocale = locale === "ja" ? "es" : "ja";
+      await act(async () => { await i18n.changeLanguage(nextLocale); });
+      const nextMessages = issueListProgressMessages[nextLocale];
+      const nextSubtasks = nextMessages[new Intl.PluralRules(nextLocale).select(count) === "one" ? "subtasks_one" : "subtasks_other"].replace("{{total}}", String(count));
+      expect(parentRow()?.querySelector('[data-testid="issue-title-suffix"]')).toBe(suffix);
+      expect(suffix?.textContent).toBe(nextMessages.foldedSubtasks.replace("{{subtasks}}", nextSubtasks));
+      expect(parentRow()?.textContent).toContain(parent.title);
+      expect(container.querySelector('[data-issue-row-id="child-0"]')).toBeNull();
+      const expand = parentRow()?.querySelector<HTMLButtonElement>(`button[aria-label="${i18n.t("taskListUi.expandSubtasks")}"]`)!;
+      await act(() => expand.click());
+      expect(suffix?.textContent).toBe("");
+      for (const child of children) {
+        expect(container.querySelector(`[data-issue-row-id="${child.id}"]`)?.textContent).toContain(child.title);
+      }
+      expect(onUpdateIssue).not.toHaveBeenCalled();
+      expect(mockIssuesApi.getCostSummary).not.toHaveBeenCalled();
+    } finally { act(() => root.unmount()); queryClient.clear(); }
+  });
+
+  it.each(Object.entries(issueListProgressMessages).flatMap(([locale, messages]) =>
+    [[0, 0], [1, 1], [1, 2], [2, 1], [2, 2], [1234, 1234]].map(([runCount, issueCount]) => ({ locale, messages, runCount, issueCount })),
+  ))("localizes $runCount runs across $issueCount subtasks without new reads or writes in $locale", async ({ locale, messages, runCount, issueCount }) => {
+    await i18n.changeLanguage(locale);
+    const cost: IssueCostSummary = {
+      issueId: "parent-original", issueCount, includeDescendants: true, costCents: 17,
+      inputTokens: 1000, cachedInputTokens: 200, outputTokens: 300, runCount, runtimeMs: 65000,
+    };
+    mockIssuesApi.getCostSummary.mockResolvedValue(cost);
+    const issues = [
+      createIssue({ id: "done-original", identifier: "PAP-DONE", status: "done", title: "Done 原始" }),
+      createIssue({ id: "active-original", identifier: "PAP-ACTIVE", status: "in_progress", title: "Active 日本語" }),
+    ];
+    const onUpdateIssue = vi.fn();
+    const { root, queryClient } = renderWithQueryClient(<IssuesList
+      issues={issues} agents={[]} projects={[]} viewStateKey="paperclip:test-progress-cost"
+      showProgressSummary parentIssueIdForCostSummary="parent-original" onUpdateIssue={onUpdateIssue}
+    />, container);
+    const costTooltip = (language: string, translations: typeof messages) => {
+      const number = new Intl.NumberFormat(language);
+      const plural = new Intl.PluralRules(language);
+      const subtasks = translations[plural.select(issueCount) === "one" ? "subtasks_one" : "subtasks_other"].replace("{{total}}", number.format(issueCount));
+      return translations[plural.select(runCount) === "one" ? "runsAcrossSubtasks_one" : "runsAcrossSubtasks_other"]
+        .replace("{{total}}", number.format(runCount)).replace("{{subtasks}}", subtasks);
+    };
+    try {
+      await waitForAssertion(() => expect(container.textContent).toContain(messages.tokens.replace("{{tokens}}", "1.5k")));
+      const tokenSpan = Array.from(container.querySelectorAll("span[title]")).find(span => span.getAttribute("title") === costTooltip(locale, messages));
+      expect(tokenSpan?.textContent).toBe(messages.tokens.replace("{{tokens}}", "1.5k"));
+      expect(container.textContent).toContain(messages.runtime.replace("{{duration}}", "1m 5s"));
+      expect(container.textContent).toContain(messages.inProgressCount.replace("{{total}}", "1"));
+      expect(mockIssuesApi.getCostSummary).toHaveBeenCalledExactlyOnceWith("parent-original", { excludeRoot: true });
+      const progress = container.querySelector('[role="progressbar"]');
+      const link = container.querySelector('a[href="/issues/PAP-ACTIVE"]');
+      expect(link?.textContent).toContain("Active 日本語");
+      const nextLocale = locale === "ja" ? "es" : "ja";
+      await act(async () => { await i18n.changeLanguage(nextLocale); });
+      const nextMessages = issueListProgressMessages[nextLocale];
+      expect(container.querySelector('[role="progressbar"]')).toBe(progress);
+      expect(progress?.getAttribute("aria-valuenow")).toBe("1");
+      expect(progress?.getAttribute("aria-valuemax")).toBe("2");
+      expect(tokenSpan?.getAttribute("title")).toBe(costTooltip(nextLocale, nextMessages));
+      expect(tokenSpan?.textContent).toBe(nextMessages.tokens.replace("{{tokens}}", "1.5k"));
+      expect(container.querySelector('a[href="/issues/PAP-ACTIVE"]')).toBe(link);
+      expect(link?.textContent).toContain("Active 日本語");
+      expect(mockIssuesApi.getCostSummary).toHaveBeenCalledTimes(1);
+      expect(onUpdateIssue).not.toHaveBeenCalled();
+      expect(cost).toMatchObject({ issueId: "parent-original", runCount, issueCount, inputTokens: 1000, cachedInputTokens: 200, outputTokens: 300, runtimeMs: 65000 });
+    } finally { act(() => root.unmount()); queryClient.clear(); }
+  });
+
+  it.each([{ enabled: false, issueCount: 3 }, { enabled: true, issueCount: 1 }])("does not read costs when the progress summary is gated off: %j", async ({ enabled, issueCount }) => {
+    const { root, queryClient } = renderWithQueryClient(<IssuesList
+      issues={Array.from({ length: issueCount }, (_, index) => createIssue({ id: `issue-${index}`, identifier: `PAP-${index}` }))}
+      agents={[]} projects={[]} viewStateKey="paperclip:test-progress-disabled"
+      showProgressSummary={enabled} parentIssueIdForCostSummary="parent-original" onUpdateIssue={vi.fn()}
+    />, container);
+    try {
+      await flush();
+      expect(container.querySelector('[role="progressbar"]')).toBeNull();
+      expect(mockIssuesApi.getCostSummary).not.toHaveBeenCalled();
+    } finally { act(() => root.unmount()); queryClient.clear(); }
+  });
+
+  it("keeps zero-cost metrics hidden without hiding progress or inventing runs", async () => {
+    const cost: IssueCostSummary = {
+      issueId: "parent-original", issueCount: 2, includeDescendants: true, costCents: 0,
+      inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, runCount: 0, runtimeMs: 0,
+    };
+    mockIssuesApi.getCostSummary.mockResolvedValue(cost);
+    const { root, queryClient } = renderWithQueryClient(<IssuesList
+      issues={[createIssue(), createIssue({ id: "issue-2", identifier: "PAP-2" })]} agents={[]} projects={[]}
+      viewStateKey="paperclip:test-progress-zero" showProgressSummary parentIssueIdForCostSummary="parent-original" onUpdateIssue={vi.fn()}
+    />, container);
+    try {
+      await waitForAssertion(() => expect(mockIssuesApi.getCostSummary).toHaveBeenCalledTimes(1));
+      await flush();
+      expect(container.querySelector('[role="progressbar"]')).not.toBeNull();
+      expect(container.textContent).not.toContain("0 tokens");
+      expect(container.textContent).not.toContain("0s runtime");
+      expect(Array.from(container.querySelectorAll("span[title]")).some(span => span.title.includes("runs across"))).toBe(false);
+    } finally { act(() => root.unmount()); queryClient.clear(); }
   });
 
   it("adds checklist affordances for workflow-sorted sub-issue lists", async () => {
@@ -1219,7 +1365,8 @@ describe("IssuesList", () => {
     });
   });
 
-  it("shows waiting on blockers when every remaining sub-issue is blocked", async () => {
+  it.each(Object.entries(issueListProgressMessages))("localizes waiting on blockers without changing the target in %s", async (locale, messages) => {
+    await i18n.changeLanguage(locale);
     const { root } = renderWithQueryClient(
       <IssuesList
         issues={[
@@ -1248,7 +1395,7 @@ describe("IssuesList", () => {
     );
 
     await waitForAssertion(() => {
-      expect(container.textContent).toContain("Waiting on blockers");
+      expect(container.textContent).toContain(messages.waitingBlockers);
       const link = container.querySelector('a[href="/issues/PAP-2"]');
       expect(link?.textContent).toContain("Blocked follow-up");
     });

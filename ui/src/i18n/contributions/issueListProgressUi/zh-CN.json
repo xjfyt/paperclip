@@ -1,0 +1,15 @@
+{
+  "doneCount": "已完成 {{done}}/{{total}}",
+  "inProgressCount": "{{total}} 项进行中",
+  "blockedCount": "{{total}} 项受阻",
+  "runsAcrossSubtasks_one": "{{subtasks}}，共运行 {{total}} 次",
+  "runsAcrossSubtasks_other": "{{subtasks}}，共运行 {{total}} 次",
+  "subtasks_one": "{{total}} 个子任务",
+  "subtasks_other": "{{total}} 个子任务",
+  "foldedSubtasks": "（{{subtasks}}）",
+  "tokens": "{{tokens}} 个词元",
+  "runtime": "运行时长 {{duration}}",
+  "statusCount": "{{status}}：{{total}}",
+  "nextUp": "下一步",
+  "waitingBlockers": "等待阻塞项解除"
+}
