@@ -88,16 +88,18 @@ test("uses exact route-related paths and reports missing inventory rather than s
   const inventory = selectInventory([
     ...routedRoutineFiles, "ui/src/pages/Auth.tsx", "ui/src/elsewhere/RoutineDetail.tsx",
     "ui/src/pages/Routines.production.tsx", "ui/src/elsewhere/RoutineList.tsx",
+    "ui/src/elsewhere/index.tsx", "ui/src/elsewhere/Row.tsx", "ui/src/elsewhere/FolderControls.tsx",
+    "ui/src/elsewhere/AgentSetupPrompt.tsx", "ui/src/elsewhere/SecretPicker.tsx",
     "ui/src/components/routine-sections/operate-sections.test.tsx",
     "ui/src/components/routine-triggers/TriggerWizard.stories.tsx",
   ]);
-  assert.equal(routedRoutineFiles.length, 14);
+  assert.equal(routedRoutineFiles.length, 21);
   assert.deepEqual(inventory.selected, ["ui/src/pages/Auth.tsx", ...routedRoutineFiles].sort());
   assert.equal(inventory.selected.filter(file => file === "ui/src/pages/Routines.production.tsx").length, 1);
   assert.deepEqual(inventory.missingRoutedFiles, []);
   const missing = routedRoutineFiles[0];
   assert.deepEqual(selectInventory(routedRoutineFiles.slice(1)).missingRoutedFiles, [missing]);
-  for (const file of ["ui/src/pages/Routines.production.tsx", "ui/src/components/RoutineList.tsx"]) {
+  for (const file of routedRoutineFiles) {
     assert.deepEqual(selectInventory(routedRoutineFiles.filter(entry => entry !== file)).missingRoutedFiles, [file]);
   }
 });

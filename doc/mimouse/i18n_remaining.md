@@ -1,5 +1,21 @@
 # 四语覆盖与剩余项
 
+## 2026-10-27 03:33 UTC 共享依赖清单补充（整合后须重跑）
+
+本批最后一组已确认的例行任务共享依赖按精确路径加入，不扩大为全 UI 或递归调用图扫描：
+
+| 精确路径 | 已核对的消费关系 |
+| --- | --- |
+| `ui/src/components/folders/FolderControls.tsx` | 两套 `Routines` 页面导入 |
+| `ui/src/components/AgentSetupPrompt.tsx` | `routine-triggers/WebhookFields.tsx` 导入并渲染 |
+| `ui/src/components/environment-variables-editor/index.tsx` | 两套 `editable-sections` 导入环境编辑器 |
+| `ui/src/components/environment-variables-editor/Row.tsx` | 环境编辑器 `index.tsx` 导入并渲染 |
+| `ui/src/components/environment-variables-editor/CreateSecretPopover.tsx` | `Row.tsx` 导入创建和转换密钥表单 |
+| `ui/src/components/environment-variables-editor/ConvertToSecretPopover.tsx` | 兼容重导出入口；实际转换表单在 `CreateSecretPopover.tsx`，不另算渲染实现 |
+| `ui/src/components/environment-variables-editor/SecretPicker.tsx` | `Row.tsx` 导入并渲染 |
+
+7 个路径此前均未被选中，精确清单从 14 增至 21；原 basename 与精确路径仍有 `Routines.production.tsx` 一处重叠，合并去重后实际扫描 **70 文件**。这是源文件清单分母，包含重导出入口，不是 70 条独立用户路径或全应用覆盖率。13 项 Node 测试通过，逐一核对 21 路径缺失提示，并排除其他目录的同名 `index`、`Row`、`FolderControls`、`AgentSetupPrompt`、`SecretPicker`；语法和 diff 检查通过。最终文案、候选计数和源码摘要仍待本批全部代码整合后复跑，下文 63 文件和 62/741/1619 均保留为各时点历史证据。
+
 ## 2026-10-27 03:29 UTC 列表路由清单补充（整合后须重跑）
 
 复查 `App.tsx:357` 的 `routines` 实际路由，精确清单另加入 `ui/src/pages/Routines.production.tsx`，以及两套列表均导入的 `ui/src/components/RoutineList.tsx`。前者**已经被原有 `Routines` basename 规则选中**，不是新增扫描文件；本次显式列出以便单独检查缺失。精确路径从 12 增至 14，合并旧 50 文件并去重后的文件分母为 **63，不是 64**；同名的其他路径不因本次扩围入选。

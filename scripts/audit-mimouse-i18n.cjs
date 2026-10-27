@@ -23,6 +23,14 @@ const routedRoutineFiles = [
   "ui/src/components/routine-triggers/WebhookUrlWarning.tsx",
   "ui/src/pages/Routines.production.tsx",
   "ui/src/components/RoutineList.tsx",
+  "ui/src/components/folders/FolderControls.tsx",
+  "ui/src/components/AgentSetupPrompt.tsx",
+  "ui/src/components/environment-variables-editor/index.tsx",
+  "ui/src/components/environment-variables-editor/Row.tsx",
+  "ui/src/components/environment-variables-editor/CreateSecretPopover.tsx",
+  // Compatibility re-export; the rendered convert form lives in CreateSecretPopover.
+  "ui/src/components/environment-variables-editor/ConvertToSecretPopover.tsx",
+  "ui/src/components/environment-variables-editor/SecretPicker.tsx",
 ];
 
 function isTranslationCall(node) {
