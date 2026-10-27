@@ -6,6 +6,7 @@ import { queryKeys } from "@/lib/queryKeys";
 import { useCompany } from "@/context/CompanyContext";
 import { useBreadcrumbs } from "@/context/BreadcrumbContext";
 import { useTranslation } from "@/i18n";
+import { RuntimeCostRouting } from "./RuntimeCostRouting";
 import { Button } from "@/components/ui/button";
 import { costRoutingPreviewApi as api } from "@/api/cost-routing-preview";
 import { routingPolicySchema, type RoutingPolicyRecord, type RoutingPreviewRecord } from "@paperclipai/shared/cost-routing-preview";
@@ -22,7 +23,9 @@ export function CostRoutingPreview() {
   const identity = userId ? `${userId}:${session.data?.session?.id ?? "session"}`
     : health.isSuccess && !health.isFetching && health.data.deploymentMode === "local_trusted" ? "local-board" : null;
   if (!identity) return <p role="alert">{t("costRoutingPreview.error")}</p>;
-  return <CompanyPolicy key={`${selectedCompanyId}:${identity}`} companyId={selectedCompanyId} identity={identity} />;
+  return <div className="space-y-6"><CompanyPolicy key={`${selectedCompanyId}:${identity}`} companyId={selectedCompanyId} identity={identity} />
+    {userId && session.data?.session?.id && <RuntimeCostRouting companyId={selectedCompanyId} userId={userId} sessionId={session.data.session.id} authEpoch={session.dataUpdatedAt} />}
+  </div>;
 }
 function CompanyPolicy({ companyId, identity }: { companyId: string; identity: string }) {
   const { t } = useTranslation();

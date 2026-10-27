@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { CostRoutingPreview } from "./CostRoutingPreview";
+vi.mock("./RuntimeCostRouting", () => ({ RuntimeCostRouting: () => null }));
 const calls = vi.hoisted(() => ({ current: vi.fn(), preview: vi.fn(), save: vi.fn(), session: vi.fn() }));
 vi.mock("@/context/BreadcrumbContext", () => ({ useBreadcrumbs: () => ({ setBreadcrumbs: () => {} }) }));
 vi.mock("@/api/cost-routing-preview", () => ({ costRoutingPreviewApi: calls }));
