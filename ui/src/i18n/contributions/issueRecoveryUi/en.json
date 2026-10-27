@@ -174,5 +174,8 @@
   "noRecoveryAction": "No recovery action to resolve.",
   "resolutionFailed": "Recovery resolution failed",
   "resolutionFailedBody": "Unable to resolve recovery action",
-  "createdRunBody": "{{identifier}} will run on a fresh isolated workspace."
+  "createdRunBody": "{{identifier}} will run on a fresh isolated workspace.",
+  "noReconcileWorkspace": "This task has no execution workspace to reconcile.",
+  "repairFailed": "Repair failed",
+  "noRepairWorkspace": "This task has no execution workspace to repair."
 }

@@ -174,5 +174,8 @@
   "noRecoveryAction": "没有可处理的恢复操作。",
   "resolutionFailed": "恢复处理失败",
   "resolutionFailedBody": "无法处理恢复操作",
-  "createdRunBody": "{{identifier}} 将在新的隔离工作区中运行。"
+  "createdRunBody": "{{identifier}} 将在新的隔离工作区中运行。",
+  "noReconcileWorkspace": "此任务没有可协调的执行工作区。",
+  "repairFailed": "修复失败",
+  "noRepairWorkspace": "此任务没有可修复的执行工作区。"
 }

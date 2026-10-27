@@ -174,5 +174,8 @@
   "noRecoveryAction": "解決する復旧アクションがありません。",
   "resolutionFailed": "復旧の解決に失敗しました",
   "resolutionFailedBody": "復旧アクションを解決できませんでした",
-  "createdRunBody": "{{identifier}} は新しい隔離ワークスペースで実行されます。"
+  "createdRunBody": "{{identifier}} は新しい隔離ワークスペースで実行されます。",
+  "noReconcileWorkspace": "このタスクには整合する実行ワークスペースがありません。",
+  "repairFailed": "修復に失敗しました",
+  "noRepairWorkspace": "このタスクには修復する実行ワークスペースがありません。"
 }

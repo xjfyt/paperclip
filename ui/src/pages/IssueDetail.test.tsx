@@ -1,3 +1,10 @@
+import { issueFeedbackMessages } from "../i18n/issue-feedback-test-resources";
+import { issueRecoveryMessages } from "../i18n/issue-recovery-test-resources";
+import type { TaskChatThreadProps } from "../components/TaskChatThread";
+import type { ToastInput } from "../context/ToastContext";
+import type { RunForIssue } from "../api/activity";
+import type { agentsApi } from "../api/agents";
+import type { executionWorkspacesApi } from "../api/execution-workspaces";
 import { issueRetryMessages } from "../i18n/issue-retry-test-resources";
 import { i18n } from "../i18n";
 import { monitorSurfaceMessages } from "../i18n/monitor-surface-test-resources";
@@ -10,6 +17,8 @@ import { RichWorkProductCard } from "../components/task-chat/RichWorkProductCard
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type {
   Agent,
+  ExecutionWorkspace,
+  IssueRecoveryAction,
   Issue,
   IssueAttachment,
   IssueComment,
@@ -51,6 +60,7 @@ import type { issuesApi } from "../api/issues";
 
 const mockIssuesApi = vi.hoisted(() => ({
   get: vi.fn(),
+  create: vi.fn<typeof issuesApi.create>(),
   list: vi.fn(),
   listAll: vi.fn(),
   listAcceptedPlanDecompositions: vi.fn(),
@@ -102,6 +112,7 @@ const mockHeartbeatsApi = vi.hoisted(() => ({
 }));
 
 const mockAgentsApi = vi.hoisted(() => ({
+  retryFailedRun: vi.fn<typeof agentsApi.retryFailedRun>(),
   list: vi.fn(),
 }));
 
@@ -126,6 +137,18 @@ const mockInstanceSettingsApi = vi.hoisted(() => ({
   getGeneral: vi.fn(),
   getExperimental: vi.fn(),
 }));
+
+const mockExecutionWorkspacesApi = vi.hoisted(() => ({
+  reconcile: vi.fn<typeof executionWorkspacesApi.reconcile>(),
+}));
+type FeedbackThreadProps = Pick<TaskChatThreadProps,
+  "onRetryFailedRun" | "retryFailedRunId" | "issueBrief" | "runFinalizationActions" |
+  "onResolveRecoveryAction" | "onReissueIsolatedRecoveryAction" | "reissueIsolatedRecoveryActionPending" |
+  "onReconcileForwardRecoveryAction" | "onBreakGlassOverrideRecoveryAction" |
+  "onQuarantineRestoreRecoveryAction" | "reconcileRecoveryActionPending" | "quarantineRestoreRecoveryActionPending"
+>;
+const mockFeedbackThreadRender = vi.hoisted(() => vi.fn<(props: FeedbackThreadProps) => void>());
+const mockFeedbackToast = vi.hoisted(() => vi.fn<(toast: ToastInput) => void>());
 
 const mockNavigate = vi.hoisted(() => vi.fn());
 const mockLocation = vi.hoisted(() => ({
@@ -153,6 +176,7 @@ const mockSetBreadcrumbToolbar = vi.hoisted(() => vi.fn());
 const mockSetBreadcrumbPanelControl = vi.hoisted(() => vi.fn());
 const mockSetMobileToolbar = vi.hoisted(() => vi.fn());
 const mockPushToast = vi.hoisted(() => vi.fn());
+const pushFeedbackToast = (toast: ToastInput) => { mockPushToast(toast); mockFeedbackToast(toast); };
 const mockIssuesListRender = vi.hoisted(() => vi.fn());
 const mockIssueChatThreadRender = vi.hoisted(() => vi.fn());
 const mockImageGalleryRender = vi.hoisted(() => vi.fn());
@@ -204,6 +228,11 @@ vi.mock("../api/approvals", () => ({
 vi.mock("../api/agents", () => ({
   agentsApi: mockAgentsApi,
 }));
+
+vi.mock("../api/execution-workspaces", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../api/execution-workspaces")>();
+  return { ...actual, executionWorkspacesApi: { ...actual.executionWorkspacesApi, ...mockExecutionWorkspacesApi } };
+});
 
 vi.mock("../api/access", () => ({
   accessApi: mockAccessApi,
@@ -319,7 +348,7 @@ vi.mock("../context/BreadcrumbContext", () => ({
 
 vi.mock("../context/ToastContext", () => ({
   useToastActions: () => ({
-    pushToast: mockPushToast,
+    pushToast: pushFeedbackToast,
   }),
 }));
 
@@ -407,7 +436,7 @@ vi.mock("../components/IssueChatThread", () => ({
 // on the shared thread-render spy, and exposes the same run-control buttons as
 // the IssueChatThread stub above.
 vi.mock("../components/TaskChatThread", () => ({
-  TaskChatThread: (props: {
+  TaskChatThread: (props: FeedbackThreadProps & {
     comments?: Array<{ metadata?: { recovery?: DispositionRecoverySnapshot } | null }>;
     workProducts?: IssueWorkProduct[];
     threadHeader?: ReactNode;
@@ -427,6 +456,7 @@ vi.mock("../components/TaskChatThread", () => ({
     footer?: ReactNode;
   }) => {
     mockIssueChatThreadRender(props);
+    mockFeedbackThreadRender(props);
     return (
       <div data-testid="task-chat-thread">
         {props.threadHeader}
@@ -784,6 +814,9 @@ function createIssue(overrides: Partial<Issue> = {}): Issue {
     title: "Issue detail smoke",
     description: "Loads after the initial pending query.",
     status: "todo",
+    workMode: "standard",
+    reviewPolicy: null,
+    responsibleUserId: null,
     priority: "medium",
     assigneeAgentId: null,
     assigneeUserId: null,
@@ -819,7 +852,7 @@ function createIssue(overrides: Partial<Issue> = {}): Issue {
     ancestors: [],
     documentSummaries: [],
     ...overrides,
-  } as Issue;
+  };
 }
 
 function createIssueComment(
@@ -1424,12 +1457,272 @@ describe("IssueDetail", () => {
     mockOpenNewProject.mockClear();
     mockOpenNewGoal.mockClear();
     mockPushToast.mockClear();
+    mockFeedbackToast.mockClear();
+    mockFeedbackThreadRender.mockClear();
+    mockAgentsApi.retryFailedRun.mockReset();
+    mockIssuesApi.create.mockReset();
+    mockExecutionWorkspacesApi.reconcile.mockReset();
     mockLocation.pathname = "/issues/PAP-1";
     mockLocation.search = "";
     mockLocation.hash = "";
     mockLocation.state = null;
     mockRouteParams.issueId = "PAP-1";
     mockRouteParams.companyPrefix = "PAP";
+  });
+
+  function feedbackThread() {
+    const props = mockFeedbackThreadRender.mock.calls.at(-1)?.[0];
+    if (!props) throw new Error("IssueDetail has not mounted its task thread");
+    return props;
+  }
+
+  async function renderFeedbackHost(locale: string, issue = createIssue()) {
+    mockIssuesApi.get.mockResolvedValue(issue);
+    await act(async () => { await i18n.changeLanguage(locale); });
+    await act(async () => root.render(<QueryClientProvider client={queryClient}><IssueDetail /></QueryClientProvider>));
+    await waitForAssertion(() => expect(mockFeedbackThreadRender).toHaveBeenCalled());
+  }
+
+  async function archiveFeedbackHost() {
+    const more = container.querySelector<HTMLButtonElement>(`button[aria-label="${i18n.t("workflow.moreTaskActions")}"]`);
+    expect(more).not.toBeNull();
+    await act(async () => more!.click());
+    const archive = Array.from(document.querySelectorAll<HTMLButtonElement>("button"))
+      .find((button) => button.textContent?.trim() === i18n.t("workflow.archiveInbox"));
+    expect(archive).toBeDefined();
+    await act(async () => archive!.click());
+  }
+
+  it.each(Object.entries(issueFeedbackMessages))("localizes failed-run retry feedback on the actual host in %s without changing request identity", async (locale, messages) => {
+    const failedRun: RunForIssue = {
+      runId: "failed-run-original", agentId: "original-agent", status: "failed", adapterType: "codex_local",
+      startedAt: null, finishedAt: null, createdAt: "2026-04-21T00:00:00Z", invocationSource: "on_demand",
+      usageJson: null, resultJson: null,
+    };
+    mockActivityApi.runsForIssue.mockResolvedValue([failedRun]);
+    const queued = createDeferred<Awaited<ReturnType<typeof agentsApi.retryFailedRun>>>();
+    mockAgentsApi.retryFailedRun.mockReturnValueOnce(queued.promise);
+    await renderFeedbackHost(locale);
+    let retryPromise: Promise<void> | void;
+    await act(async () => { retryPromise = feedbackThread().onRetryFailedRun?.(failedRun.runId); });
+    await waitForAssertion(() => expect(feedbackThread().retryFailedRunId).toBe(failedRun.runId));
+    expect(mockAgentsApi.retryFailedRun).toHaveBeenCalledExactlyOnceWith("original-agent", "failed-run-original", "company-1");
+    expect(mockFeedbackToast).not.toHaveBeenCalled();
+    await act(async () => { queued.resolve({ runId: null, issueId: "issue-1" }); await retryPromise; });
+    await waitForAssertion(() => expect(mockFeedbackToast).toHaveBeenLastCalledWith({ title: messages.retryQueued, body: messages.retryQueuedBody, tone: "success" }));
+    await waitForAssertion(() => expect(feedbackThread().retryFailedRunId).toBeNull());
+    for (const error of [new Error("原始 server error <tag> {{detail}}"), { privatePayload: "must not be rendered" }]) {
+      mockAgentsApi.retryFailedRun.mockRejectedValueOnce(error);
+      await act(async () => { await expect(feedbackThread().onRetryFailedRun?.(failedRun.runId)).rejects.toBe(error); });
+      expect(mockFeedbackToast).toHaveBeenLastCalledWith({ title: messages.retryFailed, body: error instanceof Error ? error.message : messages.retryFailedBody, tone: "error" });
+    }
+    await act(async () => { await expect(feedbackThread().onRetryFailedRun?.("missing-run")).rejects.toThrow(messages.failedRunMissing); });
+    expect(mockAgentsApi.retryFailedRun).toHaveBeenCalledTimes(3);
+    expect(mockFeedbackToast).toHaveBeenLastCalledWith({ title: messages.retryFailed, body: messages.failedRunMissing, tone: "error" });
+    mockAgentsApi.retryFailedRun.mockResolvedValueOnce({ runId: "retry-successor", issueId: "issue-1" });
+    mockFeedbackToast.mockClear();
+    await act(async () => { await feedbackThread().onRetryFailedRun?.(failedRun.runId); });
+    expect(mockFeedbackToast).not.toHaveBeenCalled();
+  });
+
+  it.each(Object.entries(issueFeedbackMessages))("localizes task save fallbacks and preserves raw server errors in %s", async (locale, messages) => {
+    await renderFeedbackHost(locale);
+    const description = "User authored 描述 {{keep}}";
+    for (const error of [new Error("原始保存错误 {{keep}}"), { privatePayload: "must not be rendered" }]) {
+      mockIssuesApi.update.mockRejectedValueOnce(error);
+      await act(async () => { await expect(feedbackThread().issueBrief?.onSave?.(description)).rejects.toBe(error); });
+      expect(mockIssuesApi.update).toHaveBeenLastCalledWith("PAP-1", { description });
+      expect(mockFeedbackToast).toHaveBeenLastCalledWith({ title: messages.updateFailed, body: error instanceof Error ? error.message : messages.updateFailedBody, tone: "error" });
+    }
+  });
+
+  it.each(Object.entries(issueFeedbackMessages))("localizes stop/finalize feedback and preserves partial success and order in %s", async (locale, messages) => {
+    mockHeartbeatsApi.cancel.mockReset().mockResolvedValue(undefined);
+    mockIssuesApi.update.mockReset();
+    await renderFeedbackHost(locale, createIssue({ status: "in_progress", assigneeAgentId: "agent-1", executionRunId: "run-active-1" }));
+    const action = (id: string) => {
+      const found = feedbackThread().runFinalizationActions?.find((item) => item.id === id);
+      if (!found) throw new Error(`Missing finalization action ${id}`);
+      return found;
+    };
+    for (const status of ["done", "cancelled"] as const) {
+      const id = status === "done" ? "done" : "cancel";
+      const cancelled = createDeferred<void>();
+      mockHeartbeatsApi.cancel.mockReturnValueOnce(cancelled.promise);
+      mockIssuesApi.update.mockResolvedValueOnce(createIssue({ status }));
+      const priorUpdates = mockIssuesApi.update.mock.calls.length;
+      let finalizing: Promise<void> | void;
+      await act(async () => { finalizing = action(id).onSelect("run-active-1"); });
+      await waitForAssertion(() => expect(action(id).isPending).toBe(true));
+      expect(action("done").disabled).toBe(true);
+      expect(action("cancel").disabled).toBe(true);
+      expect(mockIssuesApi.update).toHaveBeenCalledTimes(priorUpdates);
+      await act(async () => { cancelled.resolve(); await finalizing; });
+      await waitForAssertion(() => expect(action(id).isPending).toBe(false));
+      expect(mockIssuesApi.update).toHaveBeenLastCalledWith("PAP-1", { status });
+      expect(mockHeartbeatsApi.cancel.mock.invocationCallOrder.at(-1)).toBeLessThan(mockIssuesApi.update.mock.invocationCallOrder.at(-1)!);
+      expect(mockFeedbackToast).toHaveBeenLastCalledWith({ title: status === "done" ? messages.stoppedDone : messages.stoppedCancelled, tone: "success" });
+      for (const error of [new Error("Status write 原文 {{keep}}"), { privatePayload: "must not be rendered" }]) {
+        mockIssuesApi.update.mockRejectedValueOnce(error);
+        await act(async () => { await action(id).onSelect("run-active-1"); });
+        expect(mockFeedbackToast).toHaveBeenLastCalledWith({ title: messages.stoppedUpdateFailed, body: error instanceof Error ? messages.stoppedUpdateFailedBody.replace("{{message}}", error.message) : messages.stoppedUpdateFailedFallback, tone: "error" });
+      }
+      for (const error of [new Error("Cancel 原文"), { privatePayload: "must not be rendered" }]) {
+        const updateCount = mockIssuesApi.update.mock.calls.length;
+        mockHeartbeatsApi.cancel.mockRejectedValueOnce(error);
+        await act(async () => { await action(id).onSelect("run-active-1"); });
+        expect(mockIssuesApi.update).toHaveBeenCalledTimes(updateCount);
+        expect(mockFeedbackToast).toHaveBeenLastCalledWith({ title: status === "done" ? messages.stopDoneFailed : messages.stopCancelFailed, body: error instanceof Error ? error.message : messages.stopFinalizeFailedBody, tone: "error" });
+      }
+    }
+  });
+
+  it.each(Object.entries(issueFeedbackMessages))("localizes archive/undo feedback and retains inbox rollback in %s", async (locale, messages) => {
+    const issue = createIssue();
+    const mineKey = queryKeys.issues.listMineByMe("company-1");
+    queryClient.setQueryData<Issue[]>(mineKey, [issue]);
+    mockLocation.state = createIssueDetailLocationState("Inbox", "/inbox/mine", "inbox");
+    mockIssuesApi.archiveFromInbox.mockReset().mockResolvedValue({ id: issue.id, archivedAt: new Date() });
+    mockIssuesApi.unarchiveFromInbox.mockReset().mockResolvedValue({ ok: true });
+    await renderFeedbackHost(locale, issue);
+    for (const error of [new Error("Inbox archive 原文"), { privatePayload: "must not be rendered" }]) {
+      mockIssuesApi.archiveFromInbox.mockRejectedValueOnce(error);
+      await archiveFeedbackHost();
+      await waitForAssertion(() => expect(mockFeedbackToast).toHaveBeenLastCalledWith({ title: messages.archiveFailed, body: error instanceof Error ? error.message : messages.archiveFailedBody, tone: "error" }));
+      expect(queryClient.getQueryData<Issue[]>(mineKey)?.map((item) => item.id)).toEqual([issue.id]);
+    }
+    await archiveFeedbackHost();
+    await waitForAssertion(() => expect(mockFeedbackToast).toHaveBeenLastCalledWith(expect.objectContaining({ title: messages.inboxArchived, tone: "success", action: { label: messages.undo, onClick: expect.any(Function) } })));
+    const archiveToast = mockFeedbackToast.mock.calls.at(-1)![0];
+    expect(mockNavigate).toHaveBeenLastCalledWith("/inbox/mine", { replace: true });
+    expect(mockIssuesApi.archiveFromInbox).toHaveBeenLastCalledWith(issue.id);
+    for (const error of [new Error("Inbox undo 原文"), { privatePayload: "must not be rendered" }]) {
+      mockIssuesApi.unarchiveFromInbox.mockRejectedValueOnce(error);
+      await act(async () => archiveToast.action?.onClick?.());
+      await waitForAssertion(() => expect(mockFeedbackToast).toHaveBeenLastCalledWith({ title: messages.undoFailed, body: error instanceof Error ? error.message : messages.undoFailedBody, tone: "error" }));
+      expect(queryClient.getQueryData<Issue[]>(mineKey)).toEqual([]);
+    }
+    await act(async () => archiveToast.action?.onClick?.());
+    await waitForAssertion(() => expect(mockFeedbackToast).toHaveBeenLastCalledWith({ title: messages.inboxRestored, tone: "success" }));
+    expect(mockIssuesApi.unarchiveFromInbox).toHaveBeenLastCalledWith(issue.id);
+    expect(queryClient.getQueryData<Issue[]>(mineKey)?.map((item) => item.id)).toEqual([issue.id]);
+  });
+
+  it("uses the current locale for new completion feedback without rewriting existing toasts", async () => {
+    const archived = createDeferred<{ id: string; archivedAt: Date }>();
+    mockIssuesApi.archiveFromInbox.mockReturnValueOnce(archived.promise);
+    mockLocation.state = createIssueDetailLocationState("Inbox", "/inbox/mine", "inbox");
+    await renderFeedbackHost("en");
+    await archiveFeedbackHost();
+    expect(mockFeedbackToast).not.toHaveBeenCalled();
+    await act(async () => { await i18n.changeLanguage("ja"); archived.resolve({ id: "issue-1", archivedAt: new Date() }); });
+    await waitForAssertion(() => expect(mockFeedbackToast).toHaveBeenCalledTimes(1));
+    const existingToast = mockFeedbackToast.mock.calls[0][0];
+    expect(existingToast.title).toBe(issueFeedbackMessages.ja.inboxArchived);
+    expect(existingToast.action?.label).toBe(issueFeedbackMessages.ja.undo);
+    await act(async () => { await i18n.changeLanguage("es"); existingToast.action?.onClick?.(); });
+    await waitForAssertion(() => expect(mockFeedbackToast).toHaveBeenLastCalledWith({ title: issueFeedbackMessages.es.inboxRestored, tone: "success" }));
+    expect(existingToast.title).toBe(issueFeedbackMessages.ja.inboxArchived);
+    expect(existingToast.action?.label).toBe(issueFeedbackMessages.ja.undo);
+  });
+
+  function feedbackRecoveryAction(overrides: Partial<IssueRecoveryAction> = {}): IssueRecoveryAction {
+    return {
+      id: "recovery-action-1", companyId: "company-1", sourceIssueId: "issue-1", recoveryIssueId: null,
+      kind: "workspace_validation", status: "active", ownerType: "board", ownerAgentId: null, ownerUserId: null,
+      previousOwnerAgentId: "original-owner", returnOwnerAgentId: "return-owner", cause: "workspace_branch_diverged",
+      fingerprint: "original-fingerprint", evidence: { workspaceValidation: { persistedExecutionWorkspaceId: "workspace-original" } },
+      nextAction: "board_decision", wakePolicy: null, monitorPolicy: null, attemptCount: 0, maxAttempts: null,
+      timeoutAt: null, lastAttemptAt: null, outcome: null, resolutionNote: null, resolvedAt: null,
+      createdAt: new Date("2026-04-21T00:00:00Z"), updatedAt: new Date("2026-04-21T00:00:00Z"), ...overrides,
+    };
+  }
+
+  function feedbackWorkspace(): ExecutionWorkspace {
+    const now = new Date("2026-04-21T00:00:00Z");
+    return {
+      id: "workspace-original", companyId: "company-1", projectId: "project-1", projectWorkspaceId: null,
+      sourceIssueId: "issue-1", mode: "isolated_workspace", strategyType: "git_worktree", name: "Workspace 原名",
+      status: "active", deliveryState: "unknown", cwd: "/workspace/original", repoUrl: null, baseRef: "feature/original",
+      branchName: "feature/live", providerType: "git_worktree", providerRef: null, derivedFromExecutionWorkspaceId: null,
+      lastUsedAt: now, openedAt: now, closedAt: null, cleanupEligibleAt: null, cleanupReason: null, config: null,
+      metadata: null, createdAt: now, updatedAt: now,
+    };
+  }
+
+  it.each(Object.entries(issueRecoveryMessages))("localizes recovery mutation feedback on the actual host in %s", async (locale, messages) => {
+    const action = feedbackRecoveryAction();
+    const issue = createIssue({ activeRecoveryAction: action, executionWorkspaceId: "workspace-page-drifted", title: "Source 原题", description: "User text 原文", priority: "high", projectId: "project-1", parentId: "parent-1" });
+    await renderFeedbackHost(locale, issue);
+    const request = { baseRef: "feature/live", liveBranch: "feature/live", liveHeadSha: "original-sha", expectedBranch: "feature/recorded" };
+    const created = createDeferred<Issue>();
+    mockIssuesApi.create.mockReturnValueOnce(created.promise);
+    await act(async () => feedbackThread().onReissueIsolatedRecoveryAction?.(request));
+    await waitForAssertion(() => expect(feedbackThread().reissueIsolatedRecoveryActionPending).toBe(true));
+    expect(mockFeedbackToast).not.toHaveBeenCalled();
+    expect(mockIssuesApi.create).toHaveBeenCalledExactlyOnceWith("company-1", {
+      title: "Re-issue (isolated): Source 原题",
+      description: "Re-issued from PAP-1 on an isolated git worktree after a workspace branch divergence.\n\n- Base ref (live branch): `feature/live`\n- Recorded branch: `feature/recorded`\n\n---\n\nUser text 原文",
+      priority: "high", projectId: "project-1", parentId: "parent-1", assigneeAgentId: "return-owner",
+      executionWorkspacePreference: "isolated_workspace", executionWorkspaceSettings: { mode: "isolated_workspace", workspaceStrategy: { type: "git_worktree", baseRef: "feature/live" } },
+    });
+    await act(async () => created.resolve(createIssue({ id: "new-issue", identifier: "PAP-900" })));
+    await waitForAssertion(() => expect(mockFeedbackToast).toHaveBeenLastCalledWith({ title: messages.reissueCreated, body: messages.createdRunBody.replace("{{identifier}}", "PAP-900"), tone: "success" }));
+    expect(mockNavigate).toHaveBeenLastCalledWith("/issues/PAP-900");
+    await waitForAssertion(() => expect(feedbackThread().reissueIsolatedRecoveryActionPending).toBe(false));
+    mockIssuesApi.create.mockResolvedValueOnce(createIssue({ id: "without-identifier", identifier: null }));
+    mockNavigate.mockClear();
+    await act(async () => feedbackThread().onReissueIsolatedRecoveryAction?.(request));
+    await waitForAssertion(() => expect(mockFeedbackToast).toHaveBeenLastCalledWith({ title: messages.reissueCreated, body: messages.reissueCreatedBody, tone: "success" }));
+    expect(mockNavigate).not.toHaveBeenCalled();
+    for (const error of [new Error("Reissue 原始诊断 {{keep}}"), { privatePayload: "must not be rendered" }]) {
+      mockIssuesApi.create.mockRejectedValueOnce(error);
+      const before = mockFeedbackToast.mock.calls.length;
+      await act(async () => feedbackThread().onReissueIsolatedRecoveryAction?.(request));
+      await waitForAssertion(() => expect(mockFeedbackToast).toHaveBeenLastCalledWith({ title: messages.reissueFailed, body: error instanceof Error ? error.message : messages.reissueFailedBody, tone: "error" }));
+      expect(mockFeedbackToast).toHaveBeenCalledTimes(before + 1);
+    }
+    for (const mode of ["forward", "override", "quarantine_restore"] as const) {
+      const invoke = () => mode === "forward" ? feedbackThread().onReconcileForwardRecoveryAction?.()
+        : mode === "override" ? feedbackThread().onBreakGlassOverrideRecoveryAction?.("Operator 原始理由 {{keep}}")
+        : feedbackThread().onQuarantineRestoreRecoveryAction?.();
+      const reconciled = createDeferred<ExecutionWorkspace>();
+      mockExecutionWorkspacesApi.reconcile.mockReturnValueOnce(reconciled.promise);
+      await act(async () => invoke());
+      await waitForAssertion(() => expect(feedbackThread().reconcileRecoveryActionPending).toBe(true));
+      expect(feedbackThread().quarantineRestoreRecoveryActionPending).toBe(true);
+      expect(mockExecutionWorkspacesApi.reconcile).toHaveBeenLastCalledWith("workspace-original", mode === "override" ? { mode, reason: "Operator 原始理由 {{keep}}" } : { mode });
+      await act(async () => reconciled.resolve(feedbackWorkspace()));
+      await waitForAssertion(() => expect(mockFeedbackToast).toHaveBeenLastCalledWith({ title: mode === "quarantine_restore" ? messages.workspaceRepaired : messages.workspaceReconciled, body: mode === "quarantine_restore" ? messages.workspaceRepairedBody : messages.workspaceReconciledBody, tone: "success" }));
+      await waitForAssertion(() => expect(feedbackThread().reconcileRecoveryActionPending).toBe(false));
+      for (const error of [new Error("Reconcile 原始诊断 {{keep}}"), { privatePayload: "must not be rendered" }]) {
+        mockExecutionWorkspacesApi.reconcile.mockRejectedValueOnce(error);
+        const before = mockFeedbackToast.mock.calls.length;
+        await act(async () => invoke());
+        await waitForAssertion(() => expect(mockFeedbackToast).toHaveBeenLastCalledWith({ title: messages.reconcileFailed, body: error instanceof Error ? error.message : messages.reconcileFailedBody, tone: "error" }));
+        expect(mockFeedbackToast).toHaveBeenCalledTimes(before + 1);
+      }
+    }
+    for (const error of [new Error("Resolve 原始诊断 {{keep}}"), { privatePayload: "must not be rendered" }]) {
+      mockIssuesApi.resolveRecoveryAction.mockRejectedValueOnce(error);
+      const before = mockFeedbackToast.mock.calls.length;
+      await act(async () => feedbackThread().onResolveRecoveryAction?.("done"));
+      await waitForAssertion(() => expect(mockFeedbackToast).toHaveBeenLastCalledWith({ title: messages.resolutionFailed, body: error instanceof Error ? error.message : messages.resolutionFailedBody, tone: "error" }));
+      expect(mockFeedbackToast).toHaveBeenCalledTimes(before + 1);
+      expect(mockIssuesApi.resolveRecoveryAction).toHaveBeenLastCalledWith("PAP-1", { actionId: action.id, outcome: "restored", sourceIssueStatus: "done" });
+    }
+    mockIssuesApi.resolveRecoveryAction.mockReset();
+  });
+
+  it.each(Object.entries(issueRecoveryMessages))("localizes missing-workspace guards without dispatching in %s", async (locale, messages) => {
+    await renderFeedbackHost(locale, createIssue({ activeRecoveryAction: feedbackRecoveryAction({ evidence: {} }), executionWorkspaceId: null }));
+    await act(async () => feedbackThread().onReconcileForwardRecoveryAction?.());
+    expect(mockFeedbackToast).toHaveBeenLastCalledWith({ title: messages.reconcileFailed, body: messages.noReconcileWorkspace, tone: "error" });
+    await act(async () => feedbackThread().onBreakGlassOverrideRecoveryAction?.("Original reason"));
+    expect(mockFeedbackToast).toHaveBeenLastCalledWith({ title: messages.reconcileFailed, body: messages.noReconcileWorkspace, tone: "error" });
+    await act(async () => feedbackThread().onQuarantineRestoreRecoveryAction?.());
+    expect(mockFeedbackToast).toHaveBeenLastCalledWith({ title: messages.repairFailed, body: messages.noRepairWorkspace, tone: "error" });
+    expect(mockExecutionWorkspacesApi.reconcile).not.toHaveBeenCalled();
   });
 
   it.each(Object.entries(issueRetryMessages))("localizes the actual activity-tab scheduled retry host and keeps its request identity in %s", async (locale, messages) => {
@@ -1536,6 +1829,7 @@ describe("IssueDetail", () => {
   afterEach(async () => {
     await act(async () => {
       root.unmount();
+      await i18n.changeLanguage("en");
     });
     queryClient.clear();
     container.remove();
@@ -2251,7 +2545,8 @@ describe("IssueDetail", () => {
     await act(async () => {
       root.render(<QueryClientProvider client={queryClient}><IssueDetail /></QueryClientProvider>);
     });
-    await waitForAssertion(() => expect(queryClient.getQueryData(queryKeys.issues.detail("PAP-1"))).toBeDefined());
+    // Cache population can precede the render that installs the document-link handler.
+    await waitForAssertion(() => expect(container.querySelector('[data-testid="task-chat-thread"]')).not.toBeNull());
     const getCalls = mockIssuesApi.get.mock.calls.length;
     const link = document.createElement("a");
     link.href = "/PAP/issues/issue-1#document-plan";

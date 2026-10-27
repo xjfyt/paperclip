@@ -390,8 +390,8 @@ function createRunCancelledStatusUpdateError(
 ): StopAndFinalizeRunError {
   const message =
     err instanceof Error
-      ? `Run was stopped, but updating the task failed: ${err.message}`
-      : "Run was stopped, but updating the task failed. Retry the task status update.";
+      ? mimouseT("issueFeedbackUi.stoppedUpdateFailedBody", { message: err.message })
+      : mimouseT("issueFeedbackUi.stoppedUpdateFailedFallback");
   const error = new Error(message) as StopAndFinalizeRunError;
   error.runCancelledBeforeStatusUpdateFailed = true;
   return error;
@@ -1586,7 +1586,7 @@ const IssueDetailChatTab = memo(function IssueDetailChatTab({
   const retryFailedRun = useMutation({
     mutationFn: async (runId: string) => {
       const failedRun = resolvedLinkedRuns.find((run) => run.runId === runId);
-      if (!failedRun) throw new Error("Failed run is no longer available.");
+      if (!failedRun) throw new Error(mimouseT("issueFeedbackUi.failedRunMissing"));
       return agentsApi.retryFailedRun(
         failedRun.agentId,
         failedRun.runId,
@@ -1596,8 +1596,8 @@ const IssueDetailChatTab = memo(function IssueDetailChatTab({
     onSuccess: (result) => {
       if (!result.runId) {
         pushToast({
-          title: "Retry queued",
-          body: "The exact request will retry when this task is ready.",
+          title: mimouseT("issueFeedbackUi.retryQueued"),
+          body: mimouseT("issueFeedbackUi.retryQueuedBody"),
           tone: "success",
         });
       }
@@ -1615,8 +1615,8 @@ const IssueDetailChatTab = memo(function IssueDetailChatTab({
     },
     onError: (error) => {
       pushToast({
-        title: "Run retry failed",
-        body: error instanceof Error ? error.message : "Unable to retry run",
+        title: mimouseT("issueFeedbackUi.retryFailed"),
+        body: error instanceof Error ? error.message : mimouseT("issueFeedbackUi.retryFailedBody"),
         tone: "error",
       });
     },
@@ -4027,7 +4027,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
 
       try {
         await issuesApi.unarchiveFromInbox(id);
-        pushToast({ title: "Task restored to inbox", tone: "success" });
+        pushToast({ title: mimouseT("issueFeedbackUi.inboxRestored"), tone: "success" });
       } catch (error) {
         if (companyId) {
           beginLocalInboxArchive(companyId, id);
@@ -4035,11 +4035,11 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
           boundLocalInboxArchive(companyId, id);
         }
         pushToast({
-          title: "Undo failed",
+          title: mimouseT("issueFeedbackUi.undoFailed"),
           body:
             error instanceof Error
               ? error.message
-              : "Unable to restore this task to the inbox",
+              : mimouseT("issueFeedbackUi.undoFailedBody"),
           tone: "error",
         });
       } finally {
@@ -4203,9 +4203,9 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
         );
       }
       pushToast({
-        title: "Task update failed",
+        title: mimouseT("issueFeedbackUi.updateFailed"),
         body:
-          err instanceof Error ? err.message : "Unable to save task changes",
+          err instanceof Error ? err.message : mimouseT("issueFeedbackUi.updateFailedBody"),
         tone: "error",
       });
     },
@@ -4238,11 +4238,11 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
     },
     onError: (err) => {
       pushToast({
-        title: "Recovery resolution failed",
+        title: mimouseT("issueRecoveryUi.resolutionFailed"),
         body:
           err instanceof Error
             ? err.message
-            : "Unable to resolve recovery action",
+            : mimouseT("issueRecoveryUi.resolutionFailedBody"),
         tone: "error",
       });
     },
@@ -4452,8 +4452,8 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       pushToast({
         title:
           status === "done"
-            ? "Run stopped and task done"
-            : "Run stopped and task cancelled",
+            ? mimouseT("issueFeedbackUi.stoppedDone")
+            : mimouseT("issueFeedbackUi.stoppedCancelled"),
         tone: "success",
       });
     },
@@ -4461,14 +4461,14 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       const runWasStopped = didRunCancelBeforeStatusUpdateFail(err);
       pushToast({
         title: runWasStopped
-          ? "Run stopped; task update failed"
+          ? mimouseT("issueFeedbackUi.stoppedUpdateFailed")
           : status === "done"
-            ? "Stop and done failed"
-            : "Stop and cancel failed",
+            ? mimouseT("issueFeedbackUi.stopDoneFailed")
+            : mimouseT("issueFeedbackUi.stopCancelFailed"),
         body:
           err instanceof Error
             ? err.message
-            : "Unable to stop the run and update the task",
+            : mimouseT("issueFeedbackUi.stopFinalizeFailedBody"),
         tone: "error",
       });
     },
@@ -5509,10 +5509,10 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
         { replace: true },
       );
       pushToast({
-        title: "Task archived from inbox",
+        title: mimouseT("issueFeedbackUi.inboxArchived"),
         tone: "success",
         action: {
-          label: "Undo",
+          label: mimouseT("issueFeedbackUi.undo"),
           onClick: () => {
             void undoInboxArchive(
               id,
@@ -5529,11 +5529,11 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
         restoreIssueToInboxCaches(queryClient, context.previousData, id);
       }
       pushToast({
-        title: "Archive failed",
+        title: mimouseT("issueFeedbackUi.archiveFailed"),
         body:
           err instanceof Error
             ? err.message
-            : "Unable to archive this task from the inbox",
+            : mimouseT("issueFeedbackUi.archiveFailedBody"),
         tone: "error",
       });
     },
@@ -6616,35 +6616,35 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       if (!actionId) return;
       switch (outcome) {
         case "todo":
-          void resolveRecoveryAction.mutateAsync({
+          resolveRecoveryAction.mutate({
             actionId,
             outcome: "restored",
             sourceIssueStatus: "todo",
           });
           return;
         case "done":
-          void resolveRecoveryAction.mutateAsync({
+          resolveRecoveryAction.mutate({
             actionId,
             outcome: "restored",
             sourceIssueStatus: "done",
           });
           return;
         case "in_review":
-          void resolveRecoveryAction.mutateAsync({
+          resolveRecoveryAction.mutate({
             actionId,
             outcome: "restored",
             sourceIssueStatus: "in_review",
           });
           return;
         case "false_positive_done":
-          void resolveRecoveryAction.mutateAsync({
+          resolveRecoveryAction.mutate({
             actionId,
             outcome: "false_positive",
             sourceIssueStatus: "done",
           });
           return;
         case "false_positive_in_review":
-          void resolveRecoveryAction.mutateAsync({
+          resolveRecoveryAction.mutate({
             actionId,
             outcome: "false_positive",
             sourceIssueStatus: "in_review",
@@ -6652,7 +6652,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
           return;
       }
     },
-    [activeRecoveryActionId, resolveRecoveryAction.mutateAsync],
+    [activeRecoveryActionId, resolveRecoveryAction.mutate],
   );
   const handleTryAgainNoLiveExecutionPath = useCallback(() => {
     handleResolveRecoveryAction("todo");
@@ -6665,7 +6665,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
     mutationFn: async (
       request: import("../components/IssueRecoveryActionCard").RecoveryReissueRequest,
     ) => {
-      if (!issue) throw new Error("Task is not loaded yet.");
+      if (!issue) throw new Error(mimouseT("issueRecoveryUi.taskNotLoaded"));
       const sourceLabel = issue.identifier ?? "the stalled task";
       const descriptionLines = [
         `Re-issued from ${sourceLabel} on an isolated git worktree after a workspace branch divergence.`,
@@ -6700,10 +6700,10 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
     onSuccess: (created) => {
       invalidateIssueCollections();
       pushToast({
-        title: "Isolated re-issue created",
+        title: mimouseT("issueRecoveryUi.reissueCreated"),
         body: created.identifier
-          ? `${created.identifier} will run on a fresh isolated workspace.`
-          : "A fresh isolated re-issue was created.",
+          ? mimouseT("issueRecoveryUi.createdRunBody", { identifier: created.identifier })
+          : mimouseT("issueRecoveryUi.reissueCreatedBody"),
         tone: "success",
       });
       if (created.identifier) {
@@ -6712,11 +6712,11 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
     },
     onError: (err) => {
       pushToast({
-        title: "Re-issue failed",
+        title: mimouseT("issueRecoveryUi.reissueFailed"),
         body:
           err instanceof Error
             ? err.message
-            : "Unable to create an isolated re-issue.",
+            : mimouseT("issueRecoveryUi.reissueFailedBody"),
         tone: "error",
       });
     },
@@ -6725,9 +6725,9 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
     (
       request: import("../components/IssueRecoveryActionCard").RecoveryReissueRequest,
     ) => {
-      void reissueIsolatedRecoveryAction.mutateAsync(request);
+      reissueIsolatedRecoveryAction.mutate(request);
     },
-    [reissueIsolatedRecoveryAction.mutateAsync],
+    [reissueIsolatedRecoveryAction.mutate],
   );
 
   // Actions 1 & 2 (workspace_validation): reconcile the recorded workspace branch to the live one
@@ -6756,24 +6756,24 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       pushToast(
         variables.mode === "quarantine_restore"
           ? {
-              title: "Workspace repaired",
-              body: "Dirty changes were quarantined onto a rescue branch and the recorded branch restored; the task will resume.",
+              title: mimouseT("issueRecoveryUi.workspaceRepaired"),
+              body: mimouseT("issueRecoveryUi.workspaceRepairedBody"),
               tone: "success",
             }
           : {
-              title: "Workspace branch reconciled",
-              body: "The recorded branch now matches the live branch; the task will resume.",
+              title: mimouseT("issueRecoveryUi.workspaceReconciled"),
+              body: mimouseT("issueRecoveryUi.workspaceReconciledBody"),
               tone: "success",
             },
       );
     },
     onError: (err) => {
       pushToast({
-        title: "Reconcile failed",
+        title: mimouseT("issueRecoveryUi.reconcileFailed"),
         body:
           err instanceof Error
             ? err.message
-            : "Unable to reconcile the workspace branch.",
+            : mimouseT("issueRecoveryUi.reconcileFailedBody"),
         tone: "error",
       });
     },
@@ -6791,32 +6791,32 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
   const handleReconcileForwardRecoveryAction = useCallback(() => {
     if (!reconcileExecutionWorkspaceId) {
       pushToast({
-        title: "Reconcile failed",
-        body: "This task has no execution workspace to reconcile.",
+        title: mimouseT("issueRecoveryUi.reconcileFailed"),
+        body: mimouseT("issueRecoveryUi.noReconcileWorkspace"),
         tone: "error",
       });
       return;
     }
-    void reconcileRecoveryAction.mutateAsync({
+    reconcileRecoveryAction.mutate({
       workspaceId: reconcileExecutionWorkspaceId,
       mode: "forward",
     });
   }, [
     reconcileExecutionWorkspaceId,
-    reconcileRecoveryAction.mutateAsync,
+    reconcileRecoveryAction.mutate,
     pushToast,
   ]);
   const handleBreakGlassOverrideRecoveryAction = useCallback(
     (reason: string) => {
       if (!reconcileExecutionWorkspaceId) {
         pushToast({
-          title: "Reconcile failed",
-          body: "This task has no execution workspace to reconcile.",
+          title: mimouseT("issueRecoveryUi.reconcileFailed"),
+          body: mimouseT("issueRecoveryUi.noReconcileWorkspace"),
           tone: "error",
         });
         return;
       }
-      void reconcileRecoveryAction.mutateAsync({
+      reconcileRecoveryAction.mutate({
         workspaceId: reconcileExecutionWorkspaceId,
         mode: "override",
         reason,
@@ -6824,7 +6824,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
     },
     [
       reconcileExecutionWorkspaceId,
-      reconcileRecoveryAction.mutateAsync,
+      reconcileRecoveryAction.mutate,
       pushToast,
     ],
   );
@@ -6833,19 +6833,19 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
   const handleQuarantineRestoreRecoveryAction = useCallback(() => {
     if (!reconcileExecutionWorkspaceId) {
       pushToast({
-        title: "Repair failed",
-        body: "This task has no execution workspace to repair.",
+        title: mimouseT("issueRecoveryUi.repairFailed"),
+        body: mimouseT("issueRecoveryUi.noRepairWorkspace"),
         tone: "error",
       });
       return;
     }
-    void reconcileRecoveryAction.mutateAsync({
+    reconcileRecoveryAction.mutate({
       workspaceId: reconcileExecutionWorkspaceId,
       mode: "quarantine_restore",
     });
   }, [
     reconcileExecutionWorkspaceId,
-    reconcileRecoveryAction.mutateAsync,
+    reconcileRecoveryAction.mutate,
     pushToast,
   ]);
 
