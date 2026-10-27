@@ -6,6 +6,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { FolderListItem, RoutineListItem } from "@paperclipai/shared";
 import { i18n } from "@/i18n";
+import { Routines as StreamlinedRoutines } from "./Routines";
+import enRoutineOps from "@/i18n/contributions/routineOps/en.json";
+import zhRoutineOps from "@/i18n/contributions/routineOps/zh-CN.json";
+import esRoutineOps from "@/i18n/contributions/routineOps/es.json";
+import jaRoutineOps from "@/i18n/contributions/routineOps/ja.json";
 import { Routines, buildRoutineGroups, buildRoutineSections, sortRoutines } from "./Routines.production";
 
 type RowProps = ComponentProps<typeof import("@/components/RoutineList").RoutineListRow>;
@@ -30,6 +35,7 @@ vi.mock("@/api/projects", () => ({ projectsApi: { list: async () => [] } }));
 vi.mock("@/api/access", () => ({ accessApi: { listUserDirectory: async () => ({ users: [] }) } }));
 vi.mock("@/api/issues", () => ({ issuesApi: { list: async () => [], update: vi.fn() } }));
 vi.mock("@/api/heartbeats", () => ({ heartbeatsApi: { liveRunsForCompany: async () => [] } }));
+vi.mock("@/hooks/useStreamlinedUiEnabled", () => ({ useStreamlinedUiEnabled: () => ({ enabled: true }) }));
 vi.mock("@/hooks/useSharedPolling", () => ({ useSharedPollingQuery: () => ({ enabled: false }), usePublishSharedQueryData: () => {} }));
 vi.mock("@/context/CompanyContext", () => ({ useCompany: () => ({ selectedCompanyId: fixture.companyId }) }));
 vi.mock("@/context/BreadcrumbContext", () => ({ useBreadcrumbs: () => ({ setBreadcrumbs: fixture.breadcrumbs }) }));
@@ -76,8 +82,9 @@ function routine(overrides: Partial<RoutineListItem> = {}): RoutineListItem {
 async function settle(action: () => void = () => {}) {
   await act(async () => { action(); await new Promise(resolve => setTimeout(resolve, 10)); });
 }
-async function mount(search = "") {
-  await act(async () => root.render(<MemoryRouter initialEntries={[`/routines${search}`]}><QueryClientProvider client={client}><Routines /><Location /></QueryClientProvider></MemoryRouter>));
+async function mount(search = "", production = true) {
+  const Component = production ? Routines : StreamlinedRoutines;
+  await act(async () => root.render(<MemoryRouter initialEntries={[`/routines${search}`]}><QueryClientProvider client={client}><Component /><Location /></QueryClientProvider></MemoryRouter>));
   await settle();
 }
 function button(text: string, within: ParentNode = document): HTMLButtonElement {
@@ -98,6 +105,9 @@ async function switchLanguage(locale: string) {
   expect(mutations()).toEqual(before);
 }
 beforeEach(() => {
+  for (const [locale, routineOps] of Object.entries({ en: enRoutineOps, "zh-CN": zhRoutineOps, es: esRoutineOps, ja: jaRoutineOps })) {
+    i18n.addResourceBundle(locale, "translation", { routineOps }, true, true);
+  }
   vi.resetAllMocks(); fixture.companyId = "company-1"; fixture.rows.clear(); fixture.rail = null; fixture.form = null; fixture.deletion = null; fixture.bulk = null; fixture.run = null;
   window.history.replaceState({}, "", "/"); localStorage.clear(); sessionStorage.clear();
   routines = [routine()];
@@ -304,5 +314,32 @@ it.each(locales)("refreshes the recent-run breadcrumb label without changing its
   await switchLanguage(locale);
   expect(fixture.issues.mock.lastCall![0].issueLinkState).toEqual({ issueDetailBreadcrumb: { label: i18n.t("commonUi.recentRuns"), href: "/routines?tab=runs" }, issueDetailSource: "issues" });
   expect(host.querySelector("[data-location]")?.textContent).toBe("/routines?tab=runs");
+  expect(mutations()).toEqual([0, 0, 0, 0, 0, 0, 0]);
+});
+
+
+it.each(locales.flatMap(locale => [true, false].map(production => ({ locale, production }))))("localizes folder placement and singular/plural folder-header counts in $locale (production: $production)", async ({ locale, production }) => {
+  await i18n.changeLanguage(locale); await mount("", production);
+  const headerCounts = () => [...host.querySelectorAll("span.text-muted-foreground")].map(node => node.textContent);
+  expect(headerCounts()).toContain(i18n.t("routineOps.count", { count: 1 }));
+  routines = [...routines, routine({ id: "routine-2", title: "Second title 原文" })];
+  await act(async () => { await client.invalidateQueries(); }); await settle();
+  expect(headerCounts()).toContain(i18n.t("routineOps.count", { count: 2 }));
+  await settle(() => fixture.rail!.onSelect("folder-1"));
+  expect(headerCounts()).toContain(i18n.t("routineOps.count", { count: 2 }));
+  routines = routines.slice(0, 1);
+  await act(async () => { await client.invalidateQueries(); }); await settle();
+  expect(headerCounts()).toContain(i18n.t("routineOps.count", { count: 1 }));
+  await settle(() => button(i18n.t("workflow.createRoutine")).click());
+  const expected: Record<string, string> = { en: "filed in", "zh-CN": "归入", es: "archivada en", ja: "分類先" };
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain(expected[locale]);
+  const input = document.querySelector<HTMLTextAreaElement>("textarea")!;
+  await settle(() => inputValue(input, "Unchanged folder draft 原文"));
+  const nextLocale = locale === "ja" ? "es" : "ja";
+  await switchLanguage(nextLocale);
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain(expected[nextLocale]);
+  expect(input.value).toBe("Unchanged folder draft 原文");
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Customer folder 原文");
+  expect(host.querySelector("[data-location]")?.textContent).toBe("/routines?folder=folder-1");
   expect(mutations()).toEqual([0, 0, 0, 0, 0, 0, 0]);
 });

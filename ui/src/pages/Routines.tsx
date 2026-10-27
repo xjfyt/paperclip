@@ -1126,7 +1126,7 @@ export function Routines() {
                       );
                     }}
                   />
-                  <span>filed in</span>
+                  <span>{mimouseT("routineOps.filedIn")}</span>
                   <Select
                     value={draft.folderId ?? "__unfiled"}
                     onValueChange={(value) => setDraft((current) => ({
@@ -1274,7 +1274,7 @@ export function Routines() {
                 <div className="flex min-w-0 items-center gap-2 text-sm">
                   <FolderSwatch color={activeFolder?.color} />
                   <span className="truncate font-medium">{folderSelection === "unfiled" ? mimouseT("commonUi.unfiled") : activeFolder?.name ?? mimouseT("routineOps.folder")}</span>
-                  <span className="text-muted-foreground">{sortedRoutines.length} routine{sortedRoutines.length === 1 ? "" : "s"}</span>
+                  <span className="text-muted-foreground">{mimouseT("routineOps.count", { count: sortedRoutines.length })}</span>
                 </div>
               )}
             </div>
@@ -1460,7 +1460,7 @@ function FolderIconHeader({ label, count }: { label: string; count: number }) {
     <div className="flex min-w-0 items-center gap-2 text-sm">
       <Repeat className="h-3.5 w-3.5 text-muted-foreground" />
       <span className="truncate font-medium">{label}</span>
-      <span className="text-muted-foreground">{count} routine{count === 1 ? "" : "s"}</span>
+      <span className="text-muted-foreground">{mimouseT("routineOps.count", { count })}</span>
     </div>
   );
 }

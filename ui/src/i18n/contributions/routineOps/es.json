@@ -72,5 +72,6 @@
   "count_other": "{{count}} rutinas",
   "count_one": "{{count}} rutina",
   "filed_other": "Se archivaron {{count}} rutinas.",
-  "filed_one": "Se archivó {{count}} rutina."
+  "filed_one": "Se archivó {{count}} rutina.",
+  "filedIn": "archivada en"
 }

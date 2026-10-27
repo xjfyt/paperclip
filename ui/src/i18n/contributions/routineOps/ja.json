@@ -72,5 +72,6 @@
   "count_other": "{{count}} 件のルーチン",
   "count_one": "{{count}} 件のルーチン",
   "filed_other": "{{count}} 件のルーチンを分類しました。",
-  "filed_one": "{{count}} 件のルーチンを分類しました。"
+  "filed_one": "{{count}} 件のルーチンを分類しました。",
+  "filedIn": "分類先"
 }

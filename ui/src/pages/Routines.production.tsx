@@ -1095,7 +1095,7 @@ export function Routines() {
                       );
                     }}
                   />
-                  <span>filed in</span>
+                  <span>{mimouseT("routineOps.filedIn")}</span>
                   <Select
                     value={draft.folderId ?? "__unfiled"}
                     onValueChange={(value) => setDraft((current) => ({
