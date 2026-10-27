@@ -407,6 +407,31 @@ function didRunCancelBeforeStatusUpdateFail(
 }
 
 type CommentReassignment = IssueCommentReassignment;
+
+type CommentMutationTarget = {
+  issue: Issue;
+  issueRef: string | undefined;
+  companyId: string;
+  userId: string | null;
+  sessionId: string | null;
+  conversationAgentId: string | null;
+  cacheRefs: Set<string>;
+  resolvedIssueRef?: string;
+  resolveIssueRef: () => Promise<string>;
+  recordRecent: boolean;
+};
+
+type CommentMutationInput = {
+  target: CommentMutationTarget;
+  body: string;
+  reopen?: boolean;
+  interrupt?: boolean;
+  attachmentIds?: string[];
+  clientRequestId?: string;
+  reassignment?: CommentReassignment;
+  assigneeAdapterOverrides?: Issue["assigneeAdapterOverrides"];
+};
+
 type ActionableIssueThreadInteraction =
   | SuggestTasksInteraction
   | RequestConfirmationInteraction
@@ -3455,6 +3480,17 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
     enabled: !!selectedCompanyId,
   });
   const currentUserId = session?.user?.id ?? session?.session?.userId ?? null;
+  const currentCommentScopeRef = useRef({
+    issueId: issue?.id, issueRef: issueId, companyId: issue?.companyId,
+    userId: currentUserId, sessionId: session?.session?.id ?? null, conversationAgentId: conversation?.agent.id ?? null, active: true,
+  });
+  useLayoutEffect(() => {
+    currentCommentScopeRef.current = {
+      issueId: issue?.id, issueRef: issueId, companyId: issue?.companyId,
+      userId: currentUserId, sessionId: session?.session?.id ?? null, conversationAgentId: conversation?.agent.id ?? null, active: true,
+    };
+  }, [issue?.id, issueId, issue?.companyId, currentUserId, session?.session?.id, conversation?.agent.id]);
+  useLayoutEffect(() => () => { currentCommentScopeRef.current.active = false; }, []);
   useEffect(() => {
     if (!streamlinedUiEnabled || !issue || !sessionResolved) return;
     recordRecentTask(issue, currentUserId);
@@ -3852,25 +3888,30 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
     [issue],
   );
 
+  const visibleOptimisticComments = useMemo(() => optimisticComments.filter((comment) =>
+    comment.companyId === issue?.companyId && (comment.issueId === issue?.id ||
+      (conversation && comment.issueId === draftIssue?.id)),
+  ), [optimisticComments, issue?.id, issue?.companyId, conversation, draftIssue?.id]);
+
   const suggestedAssigneeValue = useMemo(
     () =>
       suggestedCommentAssigneeValue(
         issue ?? {},
-        mergeIssueComments(comments ?? [], optimisticComments),
+        mergeIssueComments(comments ?? [], visibleOptimisticComments),
         currentUserId,
       ),
-    [issue, comments, optimisticComments, currentUserId],
+    [issue, comments, visibleOptimisticComments, currentUserId],
   );
 
   const threadComments = useMemo(
     () =>
-      mergeIssueComments(comments ?? [], optimisticComments).map((comment) => {
+      mergeIssueComments(comments ?? [], visibleOptimisticComments).map((comment) => {
         if ("clientId" in comment && comment.clientId)
           commentRenderKeys.current.set(comment.id, comment.clientId);
         const clientId = commentRenderKeys.current.get(comment.id);
         return clientId ? { ...comment, clientId } : comment;
       }),
-    [comments, optimisticComments],
+    [comments, visibleOptimisticComments],
   );
   const breadcrumbTitle = issue?.title ?? issueId ?? "Task";
   const breadcrumbIdentifier =
@@ -4677,38 +4718,87 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
     },
   });
 
+  const assertCommentTargetActor = (target: CommentMutationTarget) => {
+    const current = queryClient.getQueryData<Awaited<ReturnType<typeof authApi.getSession>>>(queryKeys.auth.session);
+    if ((current?.user?.id ?? current?.session?.userId ?? null) !== target.userId ||
+      (current?.session?.id ?? null) !== target.sessionId) throw new Error(mimouseT("issueRecoveryUi.taskNotLoaded"));
+  };
+  const isCurrentCommentTarget = (target: CommentMutationTarget) => {
+    const current = currentCommentScopeRef.current;
+    if (!current.active || current.companyId !== target.companyId || current.userId !== target.userId || current.sessionId !== target.sessionId) return false;
+    if (target.conversationAgentId) {
+      return current.conversationAgentId === target.conversationAgentId && (
+        current.issueId === target.issue.id ||
+        (!target.issueRef && current.issueId === target.resolvedIssueRef)
+      );
+    }
+    return !current.conversationAgentId && (
+      current.issueId === target.issue.id || current.issueRef === target.issueRef
+    );
+  };
+  const commentTargetKey = (target: CommentMutationTarget) =>
+    target.issueRef ?? target.resolvedIssueRef ?? target.issue.id;
+  const invalidateCommentTarget = (
+    target: CommentMutationTarget,
+    kind: "detail" | "thread" | "runs" | "collections" | "treeControl",
+  ) => {
+    if (kind === "collections") {
+      for (const queryKey of [
+        queryKeys.issues.list(target.companyId),
+        queryKeys.issues.listMineByMe(target.companyId),
+        queryKeys.issues.listTouchedByMe(target.companyId),
+        queryKeys.issues.listUnreadTouchedByMe(target.companyId),
+        queryKeys.sidebarBadges(target.companyId),
+      ]) void queryClient.invalidateQueries({ queryKey });
+      return;
+    }
+    for (const ref of target.cacheRefs) {
+      const keys = kind === "runs"
+        ? [queryKeys.issues.runs(ref), queryKeys.issues.liveRuns(ref), queryKeys.issues.activeRun(ref)]
+        : kind === "treeControl" ? [["issues", "tree-control-state", ref]]
+        : [queryKeys.issues.detail(ref), queryKeys.issues.activity(ref), queryKeys.issues.interactions(ref)];
+      for (const queryKey of keys) void queryClient.invalidateQueries({
+        queryKey,
+        ...(kind === "thread" ? { refetchType: "inactive" as const } : {}),
+      });
+    }
+  };
+
   const addComment = useMutation({
-    mutationFn: async ({ body, reopen, interrupt, attachmentIds, clientRequestId }: {
-      body: string; reopen?: boolean; interrupt?: boolean; attachmentIds?: string[]; clientRequestId?: string;
-    }) => {
-      if (issue?.conversationAgentId) clearLegacyChatMessageRequests(`${issue.companyId}:${currentUserId}:${issue.conversationAgentId}`);
-      return issuesApi.addComment(await resolveWritableIssueId(), body, reopen, interrupt, attachmentIds, clientRequestId ?? crypto.randomUUID());
+    mutationFn: async ({ target, body, reopen, interrupt, attachmentIds, clientRequestId }: CommentMutationInput) => {
+      assertCommentTargetActor(target);
+      if (target.issue.conversationAgentId) clearLegacyChatMessageRequests(`${target.companyId}:${target.userId}:${target.issue.conversationAgentId}`);
+      const ref = await target.resolveIssueRef();
+      target.resolvedIssueRef = ref;
+      target.cacheRefs.add(ref);
+      assertCommentTargetActor(target);
+      return issuesApi.addComment(ref, body, reopen, interrupt, attachmentIds, clientRequestId);
     },
-    onMutate: async ({ body, reopen, interrupt }) => {
+    onMutate: async ({ target, body, reopen, interrupt }) => {
       // Start cache cancellation immediately but do not put it in front of the
       // optimistic echo. The new-runner startup placeholder must paint in the
       // same frame as send, even when an in-flight comments query is slow to
       // cancel.
       const cancelComments = queryClient.cancelQueries({
-        queryKey: queryKeys.issues.comments(issueId!),
+        queryKey: queryKeys.issues.comments(commentTargetKey(target)),
       });
       const cancelIssue = queryClient.cancelQueries({
-        queryKey: queryKeys.issues.detail(issueId!),
+        queryKey: queryKeys.issues.detail(commentTargetKey(target)),
       });
 
       const previousIssue = queryClient.getQueryData<Issue>(
-        queryKeys.issues.detail(issueId!),
+        queryKeys.issues.detail(commentTargetKey(target)),
       );
       const queuedComment = !interrupt
-        ? readIssueRunStateFromCache(queryClient, issueId!, issue)
+        ? readIssueRunStateFromCache(queryClient, commentTargetKey(target), target.issue)
             .interruptibleIssueRun
         : null;
-      const optimisticComment = issue
+      const optimisticComment = target.issue
         ? createOptimisticIssueComment({
-            companyId: issue.companyId,
-            issueId: issue.id,
+            companyId: target.companyId,
+            issueId: target.issue.id,
             body,
-            authorUserId: currentUserId,
+            authorUserId: target.userId,
             clientStatus: queuedComment ? "queued" : "pending",
             queueTargetRunId: queuedComment?.id ?? null,
           })
@@ -4719,7 +4809,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       }
       if (previousIssue) {
         queryClient.setQueryData(
-          queryKeys.issues.detail(issueId!),
+          queryKeys.issues.detail(commentTargetKey(target)),
           applyOptimisticIssueCommentUpdate(previousIssue, { reopen }),
         );
       }
@@ -4732,7 +4822,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
         previousIssue,
       };
     },
-    onSuccess: async (comment, _variables, context) => {
+    onSuccess: async (comment, { target }, context) => {
       if (
         context?.optimisticCommentId &&
         cancelledQueuedOptimisticCommentIdsRef.current.has(
@@ -4749,12 +4839,12 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
         );
         try {
           await issuesApi.cancelComment(comment.issueId, comment.id);
-          invalidateIssueDetail();
-          invalidateIssueThreadLazily();
-          invalidateIssueCollections();
+          invalidateCommentTarget(target, "detail");
+          invalidateCommentTarget(target, "thread");
+          invalidateCommentTarget(target, "collections");
           return;
         } catch (err) {
-          pushToast({
+          if (isCurrentCommentTarget(target)) pushToast({
             title: mimouseT("issueCommentFeedbackUi.cancelFailed"),
             body:
               err instanceof Error
@@ -4771,14 +4861,14 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
           return next;
         });
         void queryClient.invalidateQueries({
-          queryKey: queryKeys.issues.queuedComments(issueId ?? comment.issueId),
+          queryKey: queryKeys.issues.queuedComments(target.issueRef ?? comment.issueId),
         });
       }
       if (context?.optimisticCommentId) {
         commentRenderKeys.current.set(comment.id, context.optimisticCommentId);
       }
       queryClient.setQueryData<InfiniteData<IssueComment[], string | null>>(
-        queryKeys.issues.comments(issueId ?? comment.issueId),
+        queryKeys.issues.comments(target.issueRef ?? comment.issueId),
         (current) =>
           current
             ? {
@@ -4797,15 +4887,15 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
           ),
         );
       }
-      if (streamlinedUiEnabled && issue && sessionResolved) {
+      if (target.recordRecent) {
         recordRecentTask(
-          issue,
-          currentUserId,
+          target.issue,
+          target.userId,
           new Date(comment.createdAt).getTime(),
         );
       }
     },
-    onError: (err, _variables, context) => {
+    onError: (err, { target }, context) => {
       if (context?.optimisticCommentId) {
         setOptimisticComments((current) =>
           current.filter(
@@ -4815,11 +4905,11 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       }
       if (context?.previousIssue) {
         queryClient.setQueryData(
-          queryKeys.issues.detail(issueId!),
+          queryKeys.issues.detail(commentTargetKey(target)),
           context.previousIssue,
         );
       }
-      pushToast({
+      if (isCurrentCommentTarget(target)) pushToast({
         title:
           err instanceof CommentSubmissionUnknownError
             ? mimouseT("issueCommentFeedbackUi.saveUnconfirmed")
@@ -4829,23 +4919,24 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       });
     },
     onSettled: (result, _error, variables) => {
-      if (result && !issueId) void queryClient.invalidateQueries({ queryKey: queryKeys.issues.comments(result.issueId) });
-      if (_error) void queryClient.invalidateQueries({ queryKey: ["issues", "tree-control-state"] });
-      invalidateIssueThreadLazily();
+      const { target } = variables;
+      if (result && !target.issueRef) void queryClient.invalidateQueries({ queryKey: queryKeys.issues.comments(result.issueId) });
+      if (_error) invalidateCommentTarget(target, "treeControl");
+      invalidateCommentTarget(target, "thread");
       // Binding happens when the comment saves, after the upload's earlier
       // refetch. Refresh even after an unknown response: the write may exist.
       if (variables.attachmentIds?.length) {
-        for (const ref of issueCacheRefs) {
+        for (const ref of target.cacheRefs) {
           void queryClient.invalidateQueries({
             queryKey: queryKeys.issues.attachments(ref),
           });
         }
       }
       if (variables.interrupt) {
-        invalidateIssueRunState();
+        invalidateCommentTarget(target, "runs");
       }
       if (variables.reopen) {
-        invalidateIssueCollections();
+        invalidateCommentTarget(target, "collections");
       }
     },
   });
@@ -5055,24 +5146,13 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
   });
 
   const addCommentAndReassign = useMutation({
-    mutationFn: ({
-      body,
-      reopen,
-      interrupt,
-      reassignment,
-      attachmentIds,
-      clientRequestId,
-      runSettings,
-    }: {
-      body: string;
-      reopen?: boolean;
-      interrupt?: boolean;
-      reassignment?: CommentReassignment;
-      attachmentIds?: string[];
-      clientRequestId?: string;
-      runSettings?: ComposerRunSettings;
-    }) =>
-      issuesApi.update(issueId!, {
+    mutationFn: async ({ target, body, reopen, interrupt, reassignment, attachmentIds, clientRequestId, assigneeAdapterOverrides }: CommentMutationInput) => {
+      assertCommentTargetActor(target);
+      const ref = target.issueRef ?? await target.resolveIssueRef();
+      target.resolvedIssueRef = ref;
+      target.cacheRefs.add(ref);
+      assertCommentTargetActor(target);
+      return issuesApi.update(ref, {
         comment: body,
         commentClientRequestId: clientRequestId,
         ...(attachmentIds?.length ? { attachmentIds } : {}),
@@ -5080,43 +5160,35 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
           assigneeAgentId: reassignment.assigneeAgentId,
           assigneeUserId: reassignment.assigneeUserId,
         } : {}),
-        ...(runSettings || reassignment ? {
-          assigneeAdapterOverrides: runSettings
-            ? mergeComposerRunSettings(
-                issue?.assigneeAdapterOverrides,
-                agentMap.get(reassignment?.assigneeAgentId ?? issue?.assigneeAgentId ?? "")?.adapterType,
-                runSettings,
-                Boolean(reassignment),
-              )
-            : null,
-        } : {}),
+        ...(assigneeAdapterOverrides !== undefined ? { assigneeAdapterOverrides } : {}),
         ...(reopen ? { status: "todo" } : {}),
         ...(interrupt ? { interrupt } : {}),
-      }),
-    onMutate: async ({ body, reopen, reassignment, interrupt }) => {
+      });
+    },
+    onMutate: async ({ target, body, reopen, reassignment, interrupt }) => {
       // Cache cancellation can wait on an active request for several seconds.
       // Start it now, but paint the optimistic echo before awaiting it so a
       // reassignment never clears the composer into an empty thread.
       const cancelComments = queryClient.cancelQueries({
-        queryKey: queryKeys.issues.comments(issueId!),
+        queryKey: queryKeys.issues.comments(commentTargetKey(target)),
       });
       const cancelIssue = queryClient.cancelQueries({
-        queryKey: queryKeys.issues.detail(issueId!),
+        queryKey: queryKeys.issues.detail(commentTargetKey(target)),
       });
 
       const previousIssue = queryClient.getQueryData<Issue>(
-        queryKeys.issues.detail(issueId!),
+        queryKeys.issues.detail(commentTargetKey(target)),
       );
       const queuedComment = !interrupt
-        ? readIssueRunStateFromCache(queryClient, issueId!, issue)
+        ? readIssueRunStateFromCache(queryClient, commentTargetKey(target), target.issue)
             .interruptibleIssueRun
         : null;
-      const optimisticComment = issue
+      const optimisticComment = target.issue
         ? createOptimisticIssueComment({
-            companyId: issue.companyId,
-            issueId: issue.id,
+            companyId: target.companyId,
+            issueId: target.issue.id,
             body,
-            authorUserId: currentUserId,
+            authorUserId: target.userId,
             clientStatus: queuedComment ? "queued" : "pending",
             queueTargetRunId: queuedComment?.id ?? null,
           })
@@ -5127,7 +5199,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       }
       if (previousIssue) {
         queryClient.setQueryData(
-          queryKeys.issues.detail(issueId!),
+          queryKeys.issues.detail(commentTargetKey(target)),
           applyOptimisticIssueCommentUpdate(previousIssue, {
             reopen,
             reassignment,
@@ -5143,9 +5215,9 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
         previousIssue,
       };
     },
-    onSuccess: async (result, _variables, context) => {
+    onSuccess: async (result, { target }, context) => {
       const { comment, ...nextIssue } = result;
-      queryClient.setQueryData(queryKeys.issues.detail(issueId!), nextIssue);
+      queryClient.setQueryData(queryKeys.issues.detail(commentTargetKey(target)), nextIssue);
       if (
         comment &&
         context?.optimisticCommentId &&
@@ -5162,13 +5234,13 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
           ),
         );
         try {
-          await issuesApi.cancelComment(issueId!, comment.id);
-          invalidateIssueDetail();
-          invalidateIssueThreadLazily();
-          invalidateIssueCollections();
+          await issuesApi.cancelComment(commentTargetKey(target), comment.id);
+          invalidateCommentTarget(target, "detail");
+          invalidateCommentTarget(target, "thread");
+          invalidateCommentTarget(target, "collections");
           return;
         } catch (err) {
-          pushToast({
+          if (isCurrentCommentTarget(target)) pushToast({
             title: mimouseT("issueCommentFeedbackUi.cancelFailed"),
             body:
               err instanceof Error
@@ -5185,7 +5257,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
           return next;
         });
         void queryClient.invalidateQueries({
-          queryKey: queryKeys.issues.queuedComments(issueId!),
+          queryKey: queryKeys.issues.queuedComments(commentTargetKey(target)),
         });
       }
       if (comment) {
@@ -5195,7 +5267,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
             context.optimisticCommentId,
           );
         queryClient.setQueryData<InfiniteData<IssueComment[], string | null>>(
-          queryKeys.issues.comments(issueId!),
+          queryKeys.issues.comments(commentTargetKey(target)),
           (current) =>
             current
               ? {
@@ -5216,7 +5288,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
         );
       }
     },
-    onError: (err, _variables, context) => {
+    onError: (err, { target }, context) => {
       if (context?.optimisticCommentId) {
         setOptimisticComments((current) =>
           current.filter(
@@ -5226,11 +5298,11 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       }
       if (context?.previousIssue) {
         queryClient.setQueryData(
-          queryKeys.issues.detail(issueId!),
+          queryKeys.issues.detail(commentTargetKey(target)),
           context.previousIssue,
         );
       }
-      pushToast({
+      if (isCurrentCommentTarget(target)) pushToast({
         title:
           err instanceof CommentSubmissionUnknownError
             ? mimouseT("issueCommentFeedbackUi.saveUnconfirmed")
@@ -5240,19 +5312,20 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       });
     },
     onSettled: (_result, _error, variables) => {
-      if (_error) void queryClient.invalidateQueries({ queryKey: ["issues", "tree-control-state"] });
-      invalidateIssueThreadLazily();
+      const { target } = variables;
+      if (_error) invalidateCommentTarget(target, "treeControl");
+      invalidateCommentTarget(target, "thread");
       if (variables.attachmentIds?.length) {
-        for (const ref of issueCacheRefs) {
+        for (const ref of target.cacheRefs) {
           void queryClient.invalidateQueries({
             queryKey: queryKeys.issues.attachments(ref),
           });
         }
       }
       if (variables.interrupt) {
-        invalidateIssueRunState();
+        invalidateCommentTarget(target, "runs");
       }
-      invalidateIssueCollections();
+      invalidateCommentTarget(target, "collections");
     },
   });
 
@@ -6444,20 +6517,66 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       clientRequestId?: string,
       runSettings?: ComposerRunSettings,
     ) => {
+      if (!issue) throw new Error(mimouseT("issueRecoveryUi.taskNotLoaded"));
+      // Mutation options can change while onMutate awaits query cancellation.
+      // Freeze request identity and every target-dependent input before mutate.
+      const ensureIssue = conversation?.ensureIssue;
+      const requestedMode = pendingDraftWorkMode.current;
+      const target: CommentMutationTarget = {
+        issue: { ...issue },
+        issueRef: issueId,
+        companyId: issue.companyId,
+        userId: currentUserId,
+        sessionId: session?.session?.id ?? null,
+        conversationAgentId: conversation?.agent.id ?? null,
+        cacheRefs: new Set(issueCacheRefs),
+        recordRecent: Boolean(streamlinedUiEnabled && sessionResolved),
+        resolveIssueRef: async () => {
+          if (!ensureIssue) return target.issueRef ?? target.issue.id;
+          assertCommentTargetActor(target);
+          const resolved = await ensureIssue();
+          assertCommentTargetActor(target);
+          if (resolved.companyId !== target.companyId ||
+            resolved.conversationAgentId !== target.conversationAgentId ||
+            (target.userId !== null && resolved.conversationUserId !== target.userId) ||
+            (target.issueRef && resolved.id !== target.issue.id)) {
+            throw new Error(mimouseT("issueRecoveryUi.taskNotLoaded"));
+          }
+          target.resolvedIssueRef = resolved.id;
+          target.cacheRefs.add(resolved.id);
+          if (requestedMode !== null && requestedMode !== resolved.workMode) {
+            await issuesApi.update(resolved.id, { workMode: requestedMode });
+          }
+          if (isCurrentCommentTarget(target) && pendingDraftWorkMode.current === requestedMode) {
+            pendingDraftWorkMode.current = null;
+          }
+          return resolved.id;
+        },
+      };
+      const variables: CommentMutationInput = {
+        target, body, reopen,
+        attachmentIds: attachmentIds ? [...attachmentIds] : undefined,
+        clientRequestId: clientRequestId ?? (reassignment || runSettings ? undefined : crypto.randomUUID()),
+        ...(reassignment ? { reassignment: { ...reassignment } } : {}),
+        ...(runSettings || reassignment ? {
+          assigneeAdapterOverrides: runSettings
+            ? structuredClone(mergeComposerRunSettings(
+                issue.assigneeAdapterOverrides,
+                agentMap.get(reassignment?.assigneeAgentId ?? issue.assigneeAgentId ?? "")?.adapterType,
+                { ...runSettings },
+                Boolean(reassignment),
+              ))
+            : null,
+        } : {}),
+      };
       if (reassignment || runSettings) {
-        await addCommentAndReassign.mutateAsync({
-          body,
-          reopen,
-          reassignment,
-          attachmentIds,
-          clientRequestId,
-          runSettings,
-        });
+        await addCommentAndReassign.mutateAsync(variables);
         return;
       }
-      await addComment.mutateAsync({ body, reopen, attachmentIds, clientRequestId });
+      await addComment.mutateAsync(variables);
     },
-    [addComment, addCommentAndReassign],
+    [addComment, addCommentAndReassign, issue, issueId, conversation, currentUserId,
+      issueCacheRefs, streamlinedUiEnabled, sessionResolved, session?.session?.id, agentMap],
   );
   const handleCommentImageUpload = useCallback(
     async (file: File) => {

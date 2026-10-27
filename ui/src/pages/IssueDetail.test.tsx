@@ -1,3 +1,5 @@
+import { AgentChat } from "./AgentChat";
+import type { agentChatsApi } from "../api/agentChats";
 import { restoreSubmittedCommentDraft } from "../lib/comment-submit-draft";
 import { issueCommentFeedbackMessages } from "../i18n/issue-comment-feedback-test-resources";
 import { CommentSubmissionUnknownError } from "../lib/comment-submit-result";
@@ -23,6 +25,7 @@ import { RichWorkProductCard } from "../components/task-chat/RichWorkProductCard
 import { QueryClient, QueryClientProvider, type InfiniteData } from "@tanstack/react-query";
 import type {
   Agent,
+  AuthSession,
   ExecutionWorkspace,
   IssueRecoveryAction,
   Issue,
@@ -119,6 +122,9 @@ const mockIssuesApi = vi.hoisted(() => ({
   skipInteraction: vi.fn<typeof issuesApi.skipInteraction>(),
 }));
 
+const mockAgentChatsApi = vi.hoisted(() => ({ get: vi.fn<typeof agentChatsApi.get>(), ensure: vi.fn<typeof agentChatsApi.ensure>() }));
+vi.mock("../api/agentChats", () => ({ agentChatsApi: mockAgentChatsApi }));
+
 const mockActivityApi = vi.hoisted(() => ({
   forIssue: vi.fn(),
   runsForIssue: vi.fn(),
@@ -189,7 +195,9 @@ const mockSetPanelVisible = vi.hoisted(() => vi.fn());
 const mockRequestPanelMaximize = vi.hoisted(() => vi.fn());
 const mockClearPanelMaximizeRequest = vi.hoisted(() => vi.fn());
 const mockPanelState = vi.hoisted(() => ({ panelVisible: true }));
+const mockCompanySelection = vi.hoisted(() => ({ id: "company-1" }));
 const mockRouteParams = vi.hoisted(() => ({
+  agentRef: "",
   issueId: "PAP-1",
   companyPrefix: "PAP",
 }));
@@ -316,7 +324,7 @@ vi.mock("../context/CompanyContext", () => ({
         status: "active",
       },
     ],
-    selectedCompanyId: "company-1",
+    selectedCompanyId: mockCompanySelection.id,
     selectedCompany: {
       id: "company-1",
       name: "Paperclip",
@@ -1503,6 +1511,10 @@ describe("IssueDetail", () => {
     mockLocation.hash = "";
     mockLocation.state = null;
     mockRouteParams.issueId = "PAP-1";
+    mockRouteParams.agentRef = "";
+    mockCompanySelection.id = "company-1";
+    mockAgentChatsApi.get.mockReset().mockResolvedValue(null);
+    mockAgentChatsApi.ensure.mockReset();
     mockRouteParams.companyPrefix = "PAP";
   });
 
@@ -2174,6 +2186,210 @@ describe("IssueDetail", () => {
     expect(mockIssuesApi.addComment).toHaveBeenCalledTimes(2);
     expect(mockIssuesApi.addComment).toHaveBeenNthCalledWith(1, "PAP-1", firstComment.body, undefined, undefined, [], "request-first");
     expect(mockIssuesApi.addComment).toHaveBeenNthCalledWith(2, "PAP-1", secondComment.body, undefined, undefined, [], "request-second");
+  });
+
+  const commentNavigationCases = [false, true].flatMap((reassign) =>
+    (["before-request", "after-request"] as const).flatMap((phase) =>
+      (["success", "error", "unknown", "cancel-failure"] as const).map((outcome) => ({ reassign, phase, outcome })),
+    ),
+  );
+  it.each(commentNavigationCases)("pins the comment target across navigation ($reassign, $phase, $outcome)", async ({ reassign, phase, outcome }) => {
+    const source = createIssue({ title: "Original task" });
+    const destination = createIssue({ id: "issue-2", identifier: "PAP-2", title: "Destination task", companyId: "company-2" });
+    const originalComment = createIssueComment({ id: "original-receipt", body: "Task A content 原文", clientRequestId: "request-A" });
+    const destinationComment = createIssueComment({ id: "destination-comment", issueId: destination.id, companyId: destination.companyId, body: "Task B content" });
+    const cancellation = createDeferred<void>();
+    const receipt = createDeferred<IssueComment>();
+    const updateReceipt = createDeferred<Issue & { comment: IssueComment }>();
+    const error = outcome === "unknown" ? new CommentSubmissionUnknownError() : new Error("Task A raw error 原文");
+    mockIssuesApi.addComment.mockReset().mockReturnValue(receipt.promise);
+    mockIssuesApi.update.mockReset().mockReturnValue(updateReceipt.promise);
+    mockIssuesApi.cancelComment.mockRejectedValueOnce(new Error("Task A cancellation failed 原文"));
+    await renderFeedbackHost("en", source);
+    vi.spyOn(queryClient, "cancelQueries").mockReturnValue(cancellation.promise);
+    const invalidation = vi.spyOn(queryClient, "invalidateQueries");
+    let posting: Promise<unknown> | undefined;
+    const attachmentIds = ["attachment-A"];
+    const reassignment = { assigneeAgentId: "agent-2", assigneeUserId: null };
+    await act(async () => {
+      posting = Promise.resolve(feedbackThread().onAdd(originalComment.body, true, reassign ? reassignment : undefined, attachmentIds, "request-A")).catch((failure: unknown) => failure);
+    });
+    // Caller-owned objects may change while cancellation waits; the request may not.
+    attachmentIds.push("attachment-B");
+    reassignment.assigneeAgentId = "agent-new";
+    await waitForAssertion(() => expect(feedbackThread().comments.some((entry) => entry.body === originalComment.body)).toBe(true));
+    expect(mockIssuesApi.addComment).not.toHaveBeenCalled();
+    expect(mockIssuesApi.update).not.toHaveBeenCalled();
+    const api = reassign ? mockIssuesApi.update : mockIssuesApi.addComment;
+    if (outcome === "cancel-failure") {
+      const optimisticId = feedbackThread().comments.find((entry) => entry.body === originalComment.body)!.id;
+      const cancel = feedbackThread().onCancelQueued!;
+      await act(async () => { cancel(optimisticId); cancel(optimisticId); });
+      expect(mockRestoreCommentDraft).toHaveBeenCalledExactlyOnceWith(originalComment.body);
+    }
+    if (phase === "after-request") {
+      await act(async () => cancellation.resolve());
+      await waitForAssertion(() => expect(api).toHaveBeenCalledTimes(1));
+    }
+    mockIssuesApi.get.mockImplementation(async (ref: string) => ref === "PAP-2" || ref === destination.id ? destination : source);
+    mockIssuesApi.listComments.mockImplementation(async (ref: string) => ref === "PAP-2" || ref === destination.id ? [destinationComment] : []);
+    queryClient.setQueryData(queryKeys.issues.detail("PAP-2"), destination);
+    mockRouteParams.issueId = "PAP-2";
+    mockLocation.pathname = "/issues/PAP-2";
+    await act(async () => root.render(<QueryClientProvider client={queryClient}><IssueDetail /></QueryClientProvider>));
+    await waitForAssertion(() => expect(container.textContent).toContain(destination.title));
+    expect(feedbackThread().comments.some((entry) => entry.body === originalComment.body)).toBe(false);
+    mockFeedbackToast.mockClear();
+    mockRestoreCommentDraft.mockClear();
+    invalidation.mockClear();
+    await act(async () => cancellation.resolve());
+    await waitForAssertion(() => expect(api).toHaveBeenCalledTimes(1));
+    if (reassign) expect(api).toHaveBeenCalledWith("PAP-1", { comment: originalComment.body, commentClientRequestId: "request-A", attachmentIds: ["attachment-A"], assigneeAgentId: "agent-2", assigneeUserId: null, assigneeAdapterOverrides: null, status: "todo" });
+    else expect(api).toHaveBeenCalledWith("PAP-1", originalComment.body, true, undefined, ["attachment-A"], "request-A");
+    let result: unknown;
+    await act(async () => {
+      if (outcome === "error" || outcome === "unknown") {
+        if (reassign) updateReceipt.reject(error); else receipt.reject(error);
+      } else if (reassign) updateReceipt.resolve({ ...source, comment: originalComment });
+      else receipt.resolve(originalComment);
+      result = await posting;
+    });
+    if (outcome === "error" || outcome === "unknown") expect(result).toBe(error);
+    expect(queryClient.getQueryData<Issue>(queryKeys.issues.detail("PAP-2"))).toEqual(destination);
+    expect(queryClient.getQueryData<InfiniteData<IssueComment[], string | null>>(queryKeys.issues.comments("PAP-2"))?.pages.flat()).toEqual([destinationComment]);
+    expect(feedbackThread().comments.some((entry) => entry.body === originalComment.body)).toBe(false);
+    expect(mockFeedbackToast).not.toHaveBeenCalled();
+    expect(mockRestoreCommentDraft).not.toHaveBeenCalled();
+    expect(api).toHaveBeenCalledTimes(1);
+    expect(reassign ? mockIssuesApi.addComment : mockIssuesApi.update).not.toHaveBeenCalled();
+    expect(invalidation.mock.calls.some(([filters]) => filters?.queryKey?.some((key) => ["PAP-2", "issue-2", "company-2"].includes(String(key))))).toBe(false);
+    if (outcome === "cancel-failure") expect(mockIssuesApi.cancelComment).toHaveBeenCalledExactlyOnceWith(reassign ? "PAP-1" : source.id, originalComment.id);
+    else expect(mockIssuesApi.cancelComment).not.toHaveBeenCalled();
+    if (outcome === "success" || outcome === "cancel-failure") {
+      expect(queryClient.getQueryData<InfiniteData<IssueComment[], string | null>>(queryKeys.issues.comments("PAP-1"))?.pages.flat()).toContainEqual(originalComment);
+    }
+  });
+
+  it.each([false, true])("keeps explicit manual retry identity and never retries unknown comments automatically (reassign=%s)", async (reassign) => {
+    const error = new CommentSubmissionUnknownError();
+    const comment = createIssueComment({ body: "Retry original body", clientRequestId: "retry-request-original" });
+    const reassignment = reassign ? { assigneeAgentId: "agent-2", assigneeUserId: null } : undefined;
+    mockIssuesApi.addComment.mockReset();
+    mockIssuesApi.update.mockReset();
+    if (reassign) mockIssuesApi.update.mockRejectedValueOnce(error).mockResolvedValueOnce({ ...createIssue(), comment });
+    else mockIssuesApi.addComment.mockRejectedValueOnce(error).mockResolvedValueOnce(comment);
+    await renderFeedbackHost("en");
+    const api = reassign ? mockIssuesApi.update : mockIssuesApi.addComment;
+    await act(async () => { await expect(feedbackThread().onAdd(comment.body, undefined, reassignment, ["attachment-original"], comment.clientRequestId ?? undefined)).rejects.toBe(error); });
+    await flushReact();
+    expect(api).toHaveBeenCalledTimes(1);
+    expect(mockFeedbackToast).toHaveBeenCalledExactlyOnceWith({ title: issueCommentFeedbackMessages.en.saveUnconfirmed, body: error.message, tone: "error" });
+    await act(async () => { await feedbackThread().onAdd(comment.body, undefined, reassignment, ["attachment-original"], comment.clientRequestId ?? undefined); });
+    expect(api).toHaveBeenCalledTimes(2);
+    expect(api.mock.calls[1]).toEqual(api.mock.calls[0]);
+    await waitForAssertion(() => expect(feedbackThread().comments.filter((entry) => entry.id === comment.id)).toHaveLength(1));
+  });
+
+  it.each([false, true].flatMap((reassign) => (["user", "session"] as const).map((change) => ({ reassign, change }))))("rejects a stale actor before comment dispatch ($reassign, $change)", async ({ reassign, change }) => {
+    const originalSession: AuthSession = { session: { id: "session-1", userId: "user-1" }, user: { id: "user-1", name: null, email: null, image: null }, sentryDsn: null };
+    mockAuthApi.getSession.mockResolvedValue(originalSession);
+    mockIssuesApi.addComment.mockReset();
+    mockIssuesApi.update.mockReset();
+    await renderFeedbackHost("en");
+    const gate = createDeferred<void>();
+    vi.spyOn(queryClient, "cancelQueries").mockReturnValue(gate.promise);
+    let posting: Promise<unknown> | undefined;
+    await act(async () => { posting = Promise.resolve(feedbackThread().onAdd("Old actor body", undefined, reassign ? { assigneeAgentId: "agent-2", assigneeUserId: null } : undefined, [], "old-actor-request")).catch((error: unknown) => error); });
+    const userId = change === "user" ? "user-2" : "user-1";
+    await act(async () => { queryClient.setQueryData<AuthSession>(queryKeys.auth.session, { ...originalSession, session: { id: "session-2", userId }, user: { ...originalSession.user, id: userId } }); });
+    await flushReact();
+    await act(async () => { gate.resolve(); expect(await posting).toBeInstanceOf(Error); });
+    expect(mockIssuesApi.addComment).not.toHaveBeenCalled();
+    expect(mockIssuesApi.update).not.toHaveBeenCalled();
+    expect(mockFeedbackToast).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])("preserves repeated submission identities while the visible target changes (reassign=%s)", async (reassign) => {
+    const source = createIssue();
+    const destination = createIssue({ id: "issue-2", identifier: "PAP-2", title: "Next target" });
+    const originalComment = createIssueComment({ id: "receipt-A", body: "Original A", clientRequestId: "same-request-A" });
+    const nextComment = createIssueComment({ id: "receipt-B", issueId: destination.id, body: "New B", clientRequestId: "request-B" });
+    const gate = createDeferred<void>();
+    mockIssuesApi.addComment.mockReset().mockImplementation(async (ref: string) => ref === "PAP-1" ? originalComment : nextComment);
+    mockIssuesApi.update.mockReset().mockImplementation(async (ref: string) => ref === "PAP-1" ? { ...source, comment: originalComment } : { ...destination, comment: nextComment });
+    await renderFeedbackHost("en", source);
+    vi.spyOn(queryClient, "cancelQueries").mockReturnValue(gate.promise);
+    const reassignment = reassign ? { assigneeAgentId: "agent-2", assigneeUserId: null } : undefined;
+    const posts: Array<Promise<unknown>> = [];
+    const onAddA = feedbackThread().onAdd;
+    await act(async () => {
+      posts.push(Promise.resolve(onAddA(originalComment.body, undefined, reassignment, [], "same-request-A")));
+      posts.push(Promise.resolve(onAddA(originalComment.body, undefined, reassignment, [], "same-request-A")));
+    });
+    mockIssuesApi.get.mockImplementation(async (ref: string) => ref === "PAP-1" ? source : destination);
+    queryClient.setQueryData(queryKeys.issues.detail("PAP-2"), destination);
+    mockRouteParams.issueId = "PAP-2";
+    mockLocation.pathname = "/issues/PAP-2";
+    await act(async () => root.render(<QueryClientProvider client={queryClient}><IssueDetail /></QueryClientProvider>));
+    await waitForAssertion(() => expect(container.textContent).toContain(destination.title));
+    await act(async () => { posts.push(Promise.resolve(feedbackThread().onAdd(nextComment.body, undefined, reassignment, [], "request-B"))); });
+    await act(async () => { gate.resolve(); await Promise.all(posts); });
+    const api = reassign ? mockIssuesApi.update : mockIssuesApi.addComment;
+    expect(api).toHaveBeenCalledTimes(3);
+    expect(api.mock.calls[0]).toEqual(api.mock.calls[1]);
+    expect(api.mock.calls.map((call) => call[0])).toEqual(["PAP-1", "PAP-1", "PAP-2"]);
+    if (reassign) expect(api.mock.calls[2][1]).toMatchObject({ comment: nextComment.body, commentClientRequestId: "request-B" });
+    else expect(api.mock.calls[2]).toEqual(["PAP-2", nextComment.body, undefined, undefined, [], "request-B"]);
+    expect(queryClient.getQueryData<InfiniteData<IssueComment[], string | null>>(queryKeys.issues.comments("PAP-1"))?.pages.flat()).toEqual([originalComment]);
+    await waitForAssertion(() => expect(feedbackThread().comments.map((comment) => comment.id)).toEqual([nextComment.id]));
+    expect(mockFeedbackToast).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])("binds draft creation through the real AgentChat ensure contract after navigation (settings=%s)", async (settings) => {
+    const agentA = createAgent({ id: "agent-1", name: "Agent A", adapterType: "codex_local" });
+    const agentB = createAgent({ id: "agent-2", name: "Agent B", companyId: "company-2" });
+    const issueA = createIssue({ conversationAgentId: agentA.id, conversationUserId: null, assigneeAgentId: agentA.id });
+    const issueB = createIssue({ id: "issue-2", identifier: "B-2", companyId: agentB.companyId, conversationAgentId: agentB.id, conversationUserId: null, assigneeAgentId: agentB.id });
+    const creationA = createDeferred<Issue>();
+    const creationB = createDeferred<Issue>();
+    const cancellation = createDeferred<void>();
+    mockInstanceSettingsApi.getExperimental.mockResolvedValue({ enableAgentChat: true, enableStreamlinedUi: true });
+    mockAgentsApi.list.mockImplementation(async (companyId: string) => companyId === agentA.companyId ? [agentA] : [agentB]);
+    mockAgentChatsApi.ensure.mockImplementation((companyId, agentId) => companyId === agentA.companyId && agentId === agentA.id ? creationA.promise : creationB.promise);
+    mockIssuesApi.get.mockImplementation(async (ref: string) => ref === issueA.id ? issueA : issueB);
+    mockIssuesApi.addComment.mockReset().mockImplementation(async (ref: string, body: string) => createIssueComment({ issueId: ref, companyId: ref === issueA.id ? issueA.companyId : issueB.companyId, body }));
+    mockIssuesApi.update.mockReset().mockImplementation(async (ref: string, input: { comment?: string }) => ({ ...(ref === issueA.id ? issueA : issueB), comment: createIssueComment({ issueId: ref, body: input.comment ?? "" }) }));
+    mockRouteParams.agentRef = agentA.id;
+    await act(async () => root.render(<QueryClientProvider client={queryClient}><AgentChat /></QueryClientProvider>));
+    await waitForAssertion(() => expect(mockFeedbackThreadRender).toHaveBeenCalled());
+    vi.spyOn(queryClient, "cancelQueries").mockImplementation((filters) => filters?.queryKey?.includes(`chat:${agentA.id}`) ? cancellation.promise : Promise.resolve());
+    let postingA: Promise<unknown> | undefined;
+    let postingB: Promise<unknown> | undefined;
+    const runSettings = { model: "gpt-5", effort: "high", fast: true };
+    await act(async () => { postingA = Promise.resolve(feedbackThread().onAdd("Original A body", undefined, undefined, ["attachment-A"], "request-A", settings ? runSettings : undefined)).catch((error: unknown) => error); });
+    runSettings.model = "changed-model";
+    expect(mockAgentChatsApi.ensure).not.toHaveBeenCalled();
+    mockRouteParams.agentRef = agentB.id;
+    mockCompanySelection.id = agentB.companyId;
+    mockFeedbackThreadRender.mockClear();
+    await act(async () => root.render(<QueryClientProvider client={queryClient}><AgentChat /></QueryClientProvider>));
+    await waitForAssertion(() => expect(mockFeedbackThreadRender).toHaveBeenCalled());
+    await act(async () => { postingB = Promise.resolve(feedbackThread().onAdd("New B body", undefined, undefined, [], "request-B")).catch((error: unknown) => error); });
+    await waitForAssertion(() => expect(mockAgentChatsApi.ensure).toHaveBeenCalledWith(agentB.companyId, agentB.id));
+    await act(async () => cancellation.resolve());
+    await flushReact();
+    await act(async () => { creationB.resolve(issueB); creationA.resolve(issueA); await postingA; await postingB; });
+    expect(mockAgentChatsApi.ensure).toHaveBeenCalledTimes(2);
+    expect(mockAgentChatsApi.ensure).toHaveBeenCalledWith(agentA.companyId, agentA.id);
+    expect(queryClient.getQueryData(queryKeys.agentChats.detail(agentA.companyId, null, agentA.id))).toEqual(issueA);
+    expect(queryClient.getQueryData(queryKeys.agentChats.detail(agentB.companyId, null, agentB.id))).toEqual(issueB);
+    expect(await postingA).toBeUndefined();
+    expect(await postingB).toBeUndefined();
+    if (settings) expect(mockIssuesApi.update).toHaveBeenCalledExactlyOnceWith(issueA.id, { comment: "Original A body", commentClientRequestId: "request-A", attachmentIds: ["attachment-A"], assigneeAdapterOverrides: { adapterConfig: { model: "gpt-5", modelReasoningEffort: "high", fastMode: true } } });
+    else expect(mockIssuesApi.addComment).toHaveBeenCalledWith(issueA.id, "Original A body", undefined, undefined, ["attachment-A"], "request-A");
+    expect(mockIssuesApi.addComment).toHaveBeenCalledWith(issueB.id, "New B body", undefined, undefined, [], "request-B");
+    expect(feedbackThread().comments.some((comment) => comment.body === "Original A body")).toBe(false);
+    expect(mockFeedbackToast).not.toHaveBeenCalled();
   });
 
   it.each(Object.entries(issueRetryMessages))("localizes the actual activity-tab scheduled retry host and keeps its request identity in %s", async (locale, messages) => {
