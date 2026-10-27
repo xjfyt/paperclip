@@ -1,0 +1,19 @@
+{
+  "title": "Configuración del agente",
+  "description": "Pega esto en tu agente para que se encargue de la configuración.",
+  "label": "Configurar con un agente",
+  "recipient": "tu agente",
+  "namedRecipient": "tu {{name}}",
+  "copied": "¡Copiado!",
+  "close": "Cerrar configuración del agente",
+  "prompt": "Instrucciones de configuración",
+  "failed": "No se pudo copiar automáticamente. Selecciona y copia las instrucciones de arriba o inténtalo de nuevo.",
+  "copiedClipboard": "Copiado al portapapeles",
+  "copying": "Copiando…",
+  "retry": "Intentar copiar de nuevo",
+  "copy": "Copiar instrucciones",
+  "ready": "Listo para pegar en {{recipient}}.",
+  "give": "Dale estas instrucciones a {{recipient}}.",
+  "compatibility": "Compatible con Codex, ChatGPT, Claude y más.",
+  "announcement": "Instrucciones de configuración copiadas. Listo para pegar en {{recipient}}."
+}

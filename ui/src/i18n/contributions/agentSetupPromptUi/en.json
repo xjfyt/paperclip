@@ -1,0 +1,19 @@
+{
+  "title": "Agent setup",
+  "description": "Paste this into your agent to take care of setup.",
+  "label": "Set up with an agent",
+  "recipient": "your agent",
+  "namedRecipient": "your {{name}}",
+  "copied": "Copied!",
+  "close": "Close agent setup",
+  "prompt": "Setup prompt",
+  "failed": "Could not copy automatically. Select and copy the prompt above, or try again.",
+  "copiedClipboard": "Copied to clipboard",
+  "copying": "Copying…",
+  "retry": "Try copying again",
+  "copy": "Copy prompt",
+  "ready": "Ready to paste into {{recipient}}.",
+  "give": "Give this prompt to {{recipient}}.",
+  "compatibility": "Works with Codex, ChatGPT, Claude, and more.",
+  "announcement": "Setup prompt copied. Ready to paste into {{recipient}}."
+}

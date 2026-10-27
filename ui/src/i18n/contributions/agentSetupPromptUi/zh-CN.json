@@ -1,0 +1,19 @@
+{
+  "title": "Agent 设置",
+  "description": "将此内容粘贴给 Agent，让其完成设置。",
+  "label": "使用 Agent 设置",
+  "recipient": "您的 Agent",
+  "namedRecipient": "您的 {{name}}",
+  "copied": "已复制！",
+  "close": "关闭 Agent 设置",
+  "prompt": "设置提示词",
+  "failed": "无法自动复制。请选择并复制上方提示词，或重试。",
+  "copiedClipboard": "已复制到剪贴板",
+  "copying": "正在复制…",
+  "retry": "重试复制",
+  "copy": "复制提示词",
+  "ready": "可粘贴给{{recipient}}。",
+  "give": "将此提示词交给{{recipient}}。",
+  "compatibility": "支持 Codex、ChatGPT、Claude 等。",
+  "announcement": "设置提示词已复制。可粘贴给{{recipient}}。"
+}

@@ -1,0 +1,19 @@
+{
+  "title": "エージェントの設定",
+  "description": "エージェントに貼り付けて設定を任せてください。",
+  "label": "エージェントで設定",
+  "recipient": "お使いのエージェント",
+  "namedRecipient": "お使いの {{name}}",
+  "copied": "コピーしました！",
+  "close": "エージェント設定を閉じる",
+  "prompt": "設定用プロンプト",
+  "failed": "自動コピーできませんでした。上のプロンプトを選択してコピーするか、もう一度お試しください。",
+  "copiedClipboard": "クリップボードにコピーしました",
+  "copying": "コピー中…",
+  "retry": "もう一度コピー",
+  "copy": "プロンプトをコピー",
+  "ready": "{{recipient}}に貼り付ける準備ができました。",
+  "give": "このプロンプトを{{recipient}}に渡してください。",
+  "compatibility": "Codex、ChatGPT、Claude などで利用できます。",
+  "announcement": "設定用プロンプトをコピーしました。{{recipient}}に貼り付ける準備ができました。"
+}
