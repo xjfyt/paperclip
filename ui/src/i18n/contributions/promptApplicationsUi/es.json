@@ -2,7 +2,7 @@
   "title": "Aplicación controlada a un agente",
   "boundary": "Desactivada por defecto. Preparar y aprobar un vínculo no despierta agentes, inicia modelos, autoriza cargos ni envía nada al exterior. La selección del registro es independiente.",
   "profile": "Soporte inicial: Claude CLI integrado, entorno local y versión fija explícita de clave API de empresa. Suscripciones, native, ACP, enrutadores, ejecución remota y superposiciones se rechazan, sin conversión silenciosa.",
-  "scope": "Solo tareas sin proyecto creadas tras aprobar, en su primer envío con sesión nueva. Tareas existentes, sesiones reanudadas, reintentos, recuperación y activaciones posteriores no heredan el vínculo. El texto se añade literalmente sin sustituir plantillas ni instrucciones.",
+  "scope": "Solo tareas sin proyecto creadas tras aprobar, en su primer envío con sesión nueva. Tareas existentes, sesiones reanudadas, reintentos, recuperación y activaciones posteriores no heredan el vínculo. El texto se añade literalmente sin sustituir plantillas ni instrucciones. Una continuación posterior puede conservar el prompt ya introducido en la sesión; revertir no borra ese historial.",
   "visibility": "No es ejecución privada: el texto puede llegar a registros normales, herramientas autorizadas, salidas, comentarios y artefactos, y a sus lectores autorizados. Ocultar credenciales no hace privado el texto.",
   "disabled": "La aplicación está desactivada o sin verificar. Aún no se puede aprobar un vínculo de ejecución aquí.",
   "evidenceReady": "Comparación histórica seleccionada explícitamente. La preparación vuelve a validar las pruebas exactas y el destino.",
@@ -70,5 +70,6 @@
   "notAppliedClosed": "El servidor demostró que esta solicitud no se aplicó y ya no puede aplicarse por su generación fija o plazo de aprobación. Se cerró la recuperación local; inspeccione el estado actual antes de crear otra propuesta.",
   "baselineRevisionId": "UUID de revisión base",
   "testCount": "Cantidad fija de pruebas históricas",
-  "credentialVersions": "IDs / versiones de credenciales de empresa fijadas (sin secretos)"
+  "credentialVersions": "IDs / versiones de credenciales de empresa fijadas (sin secretos)",
+  "proposalVisibility": "Preparar una propuesta guarda metadatos de despliegue visibles para los propietarios y administradores autorizados de esta empresa, incluidos los identificadores de versión, conjunto de datos y pruebas, y el límite de coste. Estos metadatos no incluyen casos privados, resultados ni el contenido del prompt."
 }

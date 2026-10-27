@@ -188,7 +188,7 @@ function ApplicationSession(props: Props) {
   const canApprove = Boolean(row && row.actorUserId === props.userId && enabled && head && head.agentId === row.agentId && head.generation === row.expectedGeneration && head.applicationId !== row.id && Date.parse(row.approvalExpiresAt) > Date.now());
   return <section className="space-y-3 border-t border-border pt-4" aria-label={label("title")}>
     <h2 className="text-lg font-semibold">{label("title")}</h2>
-    <p>{label("boundary")}</p><p className="text-sm text-muted-foreground">{label("profile")}</p><p>{label("scope")}</p><p>{label("visibility")}</p>
+    <p>{label("boundary")}</p><p>{label("proposalVisibility")}</p><p className="text-sm text-muted-foreground">{label("profile")}</p><p>{label("scope")}</p><p>{label("visibility")}</p>
     {notice && <p role="status">{label(notice)}</p>}{!enabled && <p>{label("disabled")}</p>}
     {!denied && <>
       <fieldset disabled={locked || !enabled || !props.promptId} className="space-y-2">

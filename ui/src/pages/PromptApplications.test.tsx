@@ -41,7 +41,7 @@ beforeEach(async () => {
 });
 afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.restoreAllMocks(); });
 it("does not prepare, approve, rollback or dispatch on mount or locale changes", async () => {
-  await mount(); for (const locale of ["en", "zh-CN", "es", "ja"]) { await act(async () => { await i18n.changeLanguage(locale); }); for (const key of ["boundary", "scope", "profile", "visibility", "dispatchBoundary"]) expect(host.textContent).toContain(label(key)); }
+  await mount(); for (const locale of ["en", "zh-CN", "es", "ja"]) { await act(async () => { await i18n.changeLanguage(locale); }); for (const key of ["boundary", "proposalVisibility", "scope", "profile", "visibility", "dispatchBoundary"]) expect(host.textContent).toContain(label(key)); }
   for (const key of ["prepare", "approve", "rollback", "dispatches"] as const) expect(calls[key]).not.toHaveBeenCalled();
   for (const data of [zh, es, ja]) expect(Object.keys(data).sort()).toEqual(Object.keys(en).sort());
 });

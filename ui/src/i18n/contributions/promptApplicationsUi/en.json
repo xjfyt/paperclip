@@ -2,7 +2,7 @@
   "title": "Controlled application to one agent",
   "boundary": "Off by default. Preparing and approving a binding does not wake an agent, start a model, authorize charges or send anything externally. Registry selection remains separate.",
   "profile": "Initial support: built-in Claude CLI, local environment, explicitly pinned company API-key version. Subscription, native, ACP, router, remote and configuration overlays are rejected, never silently converted.",
-  "scope": "Only tasks created after approval, with no project, at their first fresh dispatch. Existing tasks, resumed sessions, retries, recovery and later wakes do not inherit this binding. The revision is appended literally; existing templates and instructions are not replaced.",
+  "scope": "Only tasks created after approval, with no project, at their first fresh dispatch. Existing tasks, resumed sessions, retries, recovery and later wakes do not inherit this binding. The revision is appended literally; existing templates and instructions are not replaced. A later continuation may still retain the prompt already introduced in the session; rollback cannot erase that history.",
   "visibility": "Not private execution: prompt text may reach ordinary run logs, authorized tools, outputs, task comments and artifacts, and their authorized readers. Secret redaction does not keep prompt text private.",
   "disabled": "Application is disabled or has not been verified. No runtime binding can be approved here yet.",
   "evidenceReady": "An explicitly selected historical comparison is ready. Preparation revalidates its exact evidence and target.",
@@ -70,5 +70,6 @@
   "notAppliedClosed": "The server has proven this request was not applied and can no longer apply at its fixed generation or approval deadline. Local recovery is closed; inspect current state before making a new proposal.",
   "baselineRevisionId": "Baseline revision UUID",
   "testCount": "Fixed historical test count",
-  "credentialVersions": "Pinned company credential IDs / versions (not secret values)"
+  "credentialVersions": "Pinned company credential IDs / versions (not secret values)",
+  "proposalVisibility": "Preparing a proposal stores deployment metadata visible to this company’s authorized owners and administrators, including revision, dataset and test IDs and the cost cap. Private case text, results and prompt contents are not included in this metadata."
 }
