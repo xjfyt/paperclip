@@ -1,0 +1,23 @@
+{
+  "runtimePermission": "Runtime permission",
+  "runtimeInput": "Runtime input",
+  "response": "Response",
+  "submitting": "Submitting…",
+  "submitResponse": "Submit response",
+  "deny": "Deny",
+  "cancel": "Cancel",
+  "resolveInSession": "Resolve this request in the active runtime session.",
+  "resolveFailed": "The runtime request could not be resolved.",
+  "status_pending": "pending",
+  "status_resolved": "resolved",
+  "status_expired": "expired",
+  "status_cancelled": "cancelled",
+  "questionsAnswered": "Questions answered",
+  "questionsCancelled": "Questions cancelled",
+  "questionsExpired": "Questions expired",
+  "questionsResolved": "Questions resolved",
+  "legacyAnswers": "Answer details were not recorded by this older runtime.",
+  "noAnswers_cancelled": "No answers were submitted; this request was cancelled.",
+  "noAnswers_expired": "No answers were submitted; this request was expired.",
+  "noAnswers_pending": "No answers were submitted; this request was pending."
+}

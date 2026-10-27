@@ -1,0 +1,23 @@
+{
+  "runtimePermission": "Permiso del entorno de ejecución",
+  "runtimeInput": "Entrada del entorno de ejecución",
+  "response": "Respuesta",
+  "submitting": "Enviando…",
+  "submitResponse": "Enviar respuesta",
+  "deny": "Denegar",
+  "cancel": "Cancelar",
+  "resolveInSession": "Resuelve esta solicitud en la sesión de ejecución activa.",
+  "resolveFailed": "No se pudo resolver la solicitud del entorno de ejecución.",
+  "status_pending": "pendiente",
+  "status_resolved": "resuelta",
+  "status_expired": "caducada",
+  "status_cancelled": "cancelada",
+  "questionsAnswered": "Preguntas respondidas",
+  "questionsCancelled": "Preguntas canceladas",
+  "questionsExpired": "Preguntas caducadas",
+  "questionsResolved": "Preguntas resueltas",
+  "legacyAnswers": "Este entorno de ejecución antiguo no registró los detalles de las respuestas.",
+  "noAnswers_cancelled": "No se enviaron respuestas; esta solicitud fue cancelada.",
+  "noAnswers_expired": "No se enviaron respuestas; esta solicitud ha caducado.",
+  "noAnswers_pending": "No se enviaron respuestas; esta solicitud estaba pendiente."
+}

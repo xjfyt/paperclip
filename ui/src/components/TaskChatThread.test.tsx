@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { i18n, taskProtocolRuntimeMessages } from "@/i18n/task-protocol-runtime-test-resources";
+import type { TranscriptEntry } from "@/adapters";
 import "@/i18n/task-protocol-workspace-test-resources";
 
 import type { ComponentProps, ReactElement } from "react";
@@ -4706,5 +4708,72 @@ describe("TaskChatThread composer execution controls", () => {
   it("does not offer Stop for settled work even when a callback is available", () => {
     render(<TaskChatThread comments={[]} onAdd={async () => {}} issueStatus="todo" onCancelRun={vi.fn()} />);
     expect(container.querySelector('[data-testid="task-chat-composer-stop"]')).toBeNull();
+  });
+});
+
+
+describe("localized runtime takeover through the actual thread", () => {
+  afterEach(async () => { await act(async () => { await i18n.changeLanguage("en"); }); });
+  it.each(Object.entries(taskProtocolRuntimeMessages).flatMap(([locale, messages]) =>
+    (["input", "permission"] as const).map(requestType => ({ locale, messages, requestType })),
+  ))("preserves request identity, draft and pending attempts in $locale ($requestType)", async ({ locale, messages, requestType }) => {
+    await act(async () => { await i18n.changeLanguage(locale); });
+    const entry: Extract<TranscriptEntry, { kind: "runtime_request" }> = {
+      kind: "runtime_request", ts: "2026-10-27T00:00:01Z", requestId: "request/原始 Ω", requestKind: requestType === "input" ? "user_input" : "permission_approval",
+      turnId: "original-turn", requestType, status: "pending", prompt: "Provider prompt Ω <tag>", choices: [{ key: "decline", label: "Deny" }], fields: [],
+    };
+    const original = JSON.stringify(entry);
+    nativeTranscriptState.transcriptByRun.set("original-run", [entry]);
+    type Result = Awaited<ReturnType<typeof heartbeatsApi.resolveRuntimeRequest>>;
+    let complete!: (value: Result) => void;
+    let fail!: (reason: unknown) => void;
+    const resolve = vi.spyOn(heartbeatsApi, "resolveRuntimeRequest").mockImplementation(() => new Promise<Result>((accept, reject) => { complete = accept; fail = reject; }));
+    render(<TaskChatThread comments={[]} onAdd={async () => {}} issueStatus="in_progress" issueId="original-issue" draftKey="original-draft" activeRun={{
+      id: "original-run", runtimeMode: "native", status: "running", invocationSource: "issue", triggerDetail: null,
+      startedAt: "2026-10-27T00:00:00Z", finishedAt: null, createdAt: "2026-10-27T00:00:00Z",
+      agentId: "original-agent", agentName: "Original agent", adapterType: "paperclip_runner",
+    }} />);
+    const card = container.querySelector('[data-testid="task-chat-runtime-request"]')!;
+    expect(card).not.toBeNull();
+    expect(container.querySelectorAll('[data-testid="task-chat-runtime-request"]')).toHaveLength(1);
+    expect(container.textContent).toContain(requestType === "input" ? messages.runtimeInput : messages.runtimePermission);
+    expect(card.textContent).toContain(entry.prompt);
+    const rawAnswer = "  Original **answer** Ω\n{{count}}  ";
+    if (requestType === "input") {
+      const field = card.querySelector("textarea")!;
+      expect(card.querySelector("label span")?.textContent).toBe(messages.response);
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(field, rawAnswer);
+        field.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    }
+    const action = () => Array.from(card.querySelectorAll("button")).find(button => button.textContent === (requestType === "input" ? i18n.t("taskProtocolRuntimeUi.submitResponse") : "Deny"))!;
+    const expected = { runId: "original-run", requestId: entry.requestId, turnId: entry.turnId, requestKind: entry.requestKind,
+      resolution: requestType === "input" ? { action: "submit", answers: { answer: { answers: [rawAnswer] } } } : { action: "decline" } };
+    for (const [attempt, failure] of [null, new Error("The runtime request could not be resolved."), new Error("Server diagnostic Ω <tag> {{count}}")].entries()) {
+      await act(async () => { action().click(); });
+      expect(resolve).toHaveBeenCalledTimes(attempt + 1);
+      expect(resolve).toHaveBeenLastCalledWith(expected);
+      expect(card.textContent).toContain(i18n.t("taskProtocolRuntimeUi.submitting"));
+      expect(Array.from(card.querySelectorAll("button")).every(button => button.disabled)).toBe(true);
+      const nextLocale = i18n.language === "ja" ? "es" : "ja";
+      await act(async () => { await i18n.changeLanguage(nextLocale); });
+      expect(card.textContent).toContain(taskProtocolRuntimeMessages[nextLocale].submitting);
+      await act(async () => { card.querySelector<HTMLButtonElement>("button")!.click(); });
+      expect(resolve).toHaveBeenCalledTimes(attempt + 1);
+      await act(async () => { fail(failure); });
+      expect(card.querySelector('[role="alert"]')?.textContent).toBe(failure instanceof Error ? failure.message : taskProtocolRuntimeMessages[nextLocale].resolveFailed);
+      await act(async () => { await i18n.changeLanguage(locale); });
+      expect(card.querySelector('[role="alert"]')?.textContent).toBe(failure instanceof Error ? failure.message : messages.resolveFailed);
+      if (requestType === "input") expect(card.querySelector("textarea")?.value).toBe(rawAnswer);
+      expect(card.querySelector("tag")).toBeNull();
+    }
+    await act(async () => { action().click(); });
+    expect(resolve).toHaveBeenCalledTimes(4);
+    await act(async () => { complete({ accepted: true, commandId: "original-command" }); });
+    expect(card.querySelector('[role="alert"]')).toBeNull();
+    expect(Array.from(card.querySelectorAll("button")).every(button => button.disabled)).toBe(true);
+    expect(JSON.stringify(entry)).toBe(original);
+    for (const [payload] of resolve.mock.calls) expect(payload).toEqual(expected);
   });
 });

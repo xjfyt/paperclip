@@ -608,6 +608,7 @@ function RuntimeQuestionHistory({
 }: {
   item: TaskChatRuntimeRequestItem;
 }) {
+  const { t } = useChromeTranslation();
   const questionSet = item.questionSet;
   if (!questionSet) return null;
   return (
@@ -634,8 +635,8 @@ function RuntimeQuestionHistory({
           ))}
           <p className="text-xs text-muted-foreground">
             {item.status === "resolved"
-              ? "Answer details were not recorded by this older runtime."
-              : `No answers were submitted; this request was ${item.status}.`}
+              ? t("taskProtocolRuntimeUi.legacyAnswers")
+              : t(`taskProtocolRuntimeUi.noAnswers_${item.status}`)}
           </p>
         </div>
       )}
@@ -648,14 +649,15 @@ function RuntimeQuestionReceipt({
 }: {
   item: TaskChatRuntimeRequestItem;
 }) {
+  const { t } = useChromeTranslation();
   const label =
     item.status === "resolved"
-      ? "Questions answered"
+      ? t("taskProtocolRuntimeUi.questionsAnswered")
       : item.status === "cancelled"
-        ? "Questions cancelled"
+        ? t("taskProtocolRuntimeUi.questionsCancelled")
         : item.status === "expired"
-          ? "Questions expired"
-          : "Questions resolved";
+          ? t("taskProtocolRuntimeUi.questionsExpired")
+          : t("taskProtocolRuntimeUi.questionsResolved");
   return (
     <details className="group" data-testid="task-chat-runtime-request">
       <summary className="flex min-h-8 cursor-pointer list-none items-center gap-2 rounded-sm px-1 py-1.5 text-sm leading-5 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -679,7 +681,7 @@ function RuntimeQuestionReceipt({
       <div className="pb-3 pl-7 pr-1">
         <div className="mb-3">
           <p className="text-sm font-medium text-foreground">
-            {item.questionSet?.title ?? "Runtime input"}
+            {item.questionSet?.title ?? t("taskProtocolRuntimeUi.runtimeInput")}
           </p>
           <p className="mt-1 text-sm text-muted-foreground">{item.prompt}</p>
         </div>
@@ -704,20 +706,23 @@ function RuntimeRequestCard({
   imageUploadHandler?: (file: File) => Promise<string>;
   mentions?: MentionOption[];
 }) {
+  const { t } = useChromeTranslation();
   const title =
     item.questionSet?.title ??
     (item.requestType === "permission"
-      ? "Runtime permission"
-      : "Runtime input");
+      ? t("taskProtocolRuntimeUi.runtimePermission")
+      : t("taskProtocolRuntimeUi.runtimeInput"));
   const fields =
     item.fields.length > 0
       ? item.fields
-      : [{ name: "answer", label: "Response", placeholder: null }];
+      : [{ name: "answer", label: t("taskProtocolRuntimeUi.response"), placeholder: null }];
   const [values, setValues] = useState<Record<string, string>>(() =>
     draftKey ? loadStructuredDraft(draftKey, {}) : {},
   );
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<
+    { kind: "raw"; message: string } | { kind: "local"; key: "resolveFailed" } | null
+  >(null);
   useEffect(() => {
     if (!draftKey) setValues({});
     setSubmitting(false);
@@ -747,8 +752,8 @@ function RuntimeRequestCard({
       setSubmitting(false);
       setError(
         cause instanceof Error
-          ? cause.message
-          : "The runtime request could not be resolved.",
+          ? { kind: "raw", message: cause.message }
+          : { kind: "local", key: "resolveFailed" },
       );
     }
   };
@@ -780,6 +785,7 @@ function RuntimeRequestCard({
       icon={ShieldCheck}
       title={title}
       status={item.status}
+      statusLabel={t(`taskProtocolRuntimeUi.status_${item.status}`)}
       summary={item.prompt}
       testId="task-chat-runtime-request"
       presentation={presentation}
@@ -847,7 +853,7 @@ function RuntimeRequestCard({
               size="sm"
               disabled={!onDecision || submitting || !canSubmitInput}
             >
-              {submitting ? "Submitting…" : "Submit response"}
+              {submitting ? t("taskProtocolRuntimeUi.submitting") : t("taskProtocolRuntimeUi.submitResponse")}
             </Button>
             {item.choices.some((choice) => choice.key === "decline") ? (
               <Button
@@ -857,7 +863,7 @@ function RuntimeRequestCard({
                 disabled={!onDecision || submitting}
                 onClick={() => void submit({ action: "decline" })}
               >
-                Deny
+                {t("taskProtocolRuntimeUi.deny")}
               </Button>
             ) : null}
             {presentation === "timeline" ? (
@@ -868,7 +874,7 @@ function RuntimeRequestCard({
                 disabled={!onDecision || submitting}
                 onClick={() => void submit({ action: "cancel" })}
               >
-                Cancel
+                {t("taskProtocolRuntimeUi.cancel")}
               </Button>
             ) : null}
           </div>
@@ -900,19 +906,19 @@ function RuntimeRequestCard({
                   }
                 }}
               >
-                {submitting ? "Submitting…" : choice.label}
+                {submitting ? t("taskProtocolRuntimeUi.submitting") : choice.label}
               </Button>
             ))}
         </div>
       ) : null}
       {item.status === "pending" && !onDecision ? (
         <p className="mt-2 text-xs text-muted-foreground">
-          Resolve this request in the active runtime session.
+          {t("taskProtocolRuntimeUi.resolveInSession")}
         </p>
       ) : null}
       {error ? (
         <p className="mt-2 text-xs text-destructive" role="alert">
-          {error}
+          {error.kind === "local" ? t(`taskProtocolRuntimeUi.${error.key}`) : error.message}
         </p>
       ) : null}
     </CardShell>

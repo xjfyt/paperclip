@@ -1,0 +1,23 @@
+{
+  "runtimePermission": "运行时权限",
+  "runtimeInput": "运行时输入",
+  "response": "回复",
+  "submitting": "提交中…",
+  "submitResponse": "提交回复",
+  "deny": "拒绝",
+  "cancel": "取消",
+  "resolveInSession": "请在当前运行时会话中处理此请求。",
+  "resolveFailed": "无法处理此运行时请求。",
+  "status_pending": "待处理",
+  "status_resolved": "已处理",
+  "status_expired": "已过期",
+  "status_cancelled": "已取消",
+  "questionsAnswered": "问题已回答",
+  "questionsCancelled": "问题已取消",
+  "questionsExpired": "问题已过期",
+  "questionsResolved": "问题已处理",
+  "legacyAnswers": "此旧版运行时未记录回答详情。",
+  "noAnswers_cancelled": "未提交任何回答，此请求已取消。",
+  "noAnswers_expired": "未提交任何回答，此请求已过期。",
+  "noAnswers_pending": "未提交任何回答，此请求待处理。"
+}

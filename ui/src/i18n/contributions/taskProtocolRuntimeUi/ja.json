@@ -1,0 +1,23 @@
+{
+  "runtimePermission": "ランタイムの権限",
+  "runtimeInput": "ランタイムへの入力",
+  "response": "回答",
+  "submitting": "送信中…",
+  "submitResponse": "回答を送信",
+  "deny": "拒否",
+  "cancel": "キャンセル",
+  "resolveInSession": "現在のランタイムセッションでこのリクエストを処理してください。",
+  "resolveFailed": "ランタイムのリクエストを処理できませんでした。",
+  "status_pending": "保留中",
+  "status_resolved": "処理済み",
+  "status_expired": "期限切れ",
+  "status_cancelled": "キャンセル済み",
+  "questionsAnswered": "質問に回答済み",
+  "questionsCancelled": "質問をキャンセル済み",
+  "questionsExpired": "質問の期限切れ",
+  "questionsResolved": "質問を処理済み",
+  "legacyAnswers": "この旧バージョンのランタイムでは回答の詳細は記録されていません。",
+  "noAnswers_cancelled": "回答は送信されていません。このリクエストはキャンセルされました。",
+  "noAnswers_expired": "回答は送信されていません。このリクエストは期限切れです。",
+  "noAnswers_pending": "回答は送信されていません。このリクエストは保留中です。"
+}
