@@ -35,6 +35,33 @@ const routedRoutineFiles = [
   "ui/src/components/environment-variables-editor/SecretPicker.tsx",
 ];
 
+// Separately bounded, manually verified import/render relationships. These are
+// consumed UI components, not routine routes or a complete dependency graph.
+// Keep exact paths: a same-basename production/legacy file is not a substitute.
+const consumedUiComponents = [
+  {
+    file: "ui/src/components/task-chat/ComposerRunSettingsPicker.tsx",
+    hosts: [
+      { file: "ui/src/components/IssueChatThread.tsx", importSource: "./task-chat/ComposerRunSettingsPicker" },
+      { file: "ui/src/components/task-chat/TaskChatComposer.tsx", importSource: "./ComposerRunSettingsPicker" },
+    ],
+  },
+  {
+    file: "ui/src/components/transcript/RunTranscriptView.tsx",
+    hosts: [
+      { file: "ui/src/pages/AgentDetail.tsx", importSource: "../components/transcript/RunTranscriptView" },
+    ],
+  },
+  {
+    file: "ui/src/components/task-chat/TaskChatComposer.tsx",
+    hosts: [
+      { file: "ui/src/components/TaskChatThread.tsx", importSource: "@/components/task-chat/TaskChatComposer" },
+      { file: "ui/src/components/NewIssueDialog.tsx", importSource: "./task-chat/TaskChatComposer" },
+    ],
+  },
+];
+const consumedUiFiles = consumedUiComponents.map(component => component.file);
+
 function isTranslationCall(node) {
   if (node.type !== "CallExpression") return false;
   const callee = node.callee;
@@ -126,14 +153,15 @@ function collectCandidates(source, file, parse) { return collectAudit(source, fi
 function matchesEntry(file, names) { return names.includes(path.basename(file, ".tsx").replace(/\.production$/, "")); }
 function selectInventory(files) {
   const eligible = files.filter(file => /\.tsx$/.test(file) && !/(?:\.test\.|\.stories\.)/.test(file));
-  const selected = [...new Set(eligible.filter(file => matchesEntry(file, names) || routedRoutineFiles.includes(file)))].sort();
+  const selected = [...new Set(eligible.filter(file => matchesEntry(file, names) || routedRoutineFiles.includes(file) || consumedUiFiles.includes(file)))].sort();
   return {
     selected,
     missingRoutedFiles: routedRoutineFiles.filter(file => !selected.includes(file)),
+    missingConsumedFiles: consumedUiFiles.filter(file => !selected.includes(file)),
     unmatchedBasenames: names.filter(name => !selected.some(file => matchesEntry(file, [name]))),
   };
 }
-module.exports = { collectCandidates, collectAudit, matchesEntry, selectInventory, routedRoutineFiles };
+module.exports = { collectCandidates, collectAudit, matchesEntry, selectInventory, routedRoutineFiles, consumedUiComponents, consumedUiFiles };
 
 if (require.main === module) {
   const root = path.resolve(__dirname, "..");
@@ -160,7 +188,7 @@ if (require.main === module) {
     }
   }
   files(path.join(root, "ui/src"));
-  const { selected, missingRoutedFiles, unmatchedBasenames } = selectInventory(all);
+  const { selected, missingRoutedFiles, missingConsumedFiles, unmatchedBasenames } = selectInventory(all);
   const candidates = [], dynamicCandidates = [], counts = [], hash = crypto.createHash("sha256");
   for (const relative of selected) {
     const source = fs.readFileSync(path.join(root, relative), "utf8");
@@ -174,20 +202,23 @@ if (require.main === module) {
     method: "Bounded Babel AST inventory: JSX text/display attributes (including message), direct/conditional/template literals, pushToast/toast display fields and setSecretMessage.title. Dynamic display expressions are separate needs_manual_review locations, not untranslated strings.",
     limits: [
       "Not a complete route/call graph, data-flow analysis, rendered-text count or translation coverage percentage.",
+      "Consumed-component hosts document bounded verified import/render relationships, not every consumer or a routine route. Host metadata does not recursively add host files to the scanned inventory.",
       "Literal candidates require three consecutive Latin letters or an exact lowercase short display word: in/of/on/or/to/by/as/an/a. Other short text remains outside this predicate; technical identifiers may still be included. Preserve user content, API payloads and unknown server diagnostics after manual origin review.",
       "Only named notification calls and direct object fields are recognized; aliases, computed keys, callback returns, custom prop names and indirect objects need manual review. No automatic rewriting.",
       "Known t/mimouseT/i18n.t/mimouseI18n.t calls are omitted, not verified as translated. Dynamic snippets are source syntax truncated to 240 characters, never runtime data.",
     ],
     sourceSha256: hash.digest("hex"), requestedBasenames: names, matchedFiles: selected.length,
     unmatchedBasenames, requestedRoutedFiles: routedRoutineFiles, missingRoutedFiles,
+    requestedConsumedFiles: consumedUiFiles, missingConsumedFiles,
     scope: { eligibleTsxFiles: all.length, basenameMatchedFiles: selected.filter(file => matchesEntry(file, names)).length,
       routedMatchedFiles: routedRoutineFiles.length - missingRoutedFiles.length,
+      consumedMatchedFiles: consumedUiFiles.length - missingConsumedFiles.length, consumedComponentHosts: consumedUiComponents,
       routeSource: "ui/src/App.tsx", routePatterns: ["routines", "routines/:routineId", "routines/:routineId/:section"],
       routeSourceSha256: crypto.createHash("sha256").update(fs.readFileSync(path.join(root, "ui/src/App.tsx"))).digest("hex") },
     totalLiteralCandidates: candidates.length, totalDynamicCandidates: dynamicCandidates.length, files: counts, candidates, dynamicCandidates,
   };
   fs.writeFileSync(path.resolve(outPath), JSON.stringify(result, null, 2) + "\n");
   console.log(JSON.stringify({ matchedFiles: result.matchedFiles, totalLiteralCandidates: result.totalLiteralCandidates, totalDynamicCandidates: result.totalDynamicCandidates,
-    sourceSha256: result.sourceSha256, unmatchedBasenames, missingRoutedFiles, out: path.resolve(outPath) }, null, 2));
-  if (missingRoutedFiles.length || unmatchedBasenames.length) process.exitCode = 1;
+    sourceSha256: result.sourceSha256, unmatchedBasenames, missingRoutedFiles, missingConsumedFiles, out: path.resolve(outPath) }, null, 2));
+  if (missingRoutedFiles.length || missingConsumedFiles.length || unmatchedBasenames.length) process.exitCode = 1;
 }

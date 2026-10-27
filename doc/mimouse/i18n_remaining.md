@@ -1,6 +1,20 @@
 # 四语覆盖与剩余项
 
-## 2026-10-27 4286键受控路由界面
+## 2026-10-27 下一批实际子组件审计范围补漏
+
+新增范围独立于既有 **21 项例行任务精确路径**：只加入以下三个已核对导入且渲染的组件路径，不把新组件或宿主称为例行任务路由，不按 basename 引入同名 `.production`、legacy、测试或 story 文件。
+
+| 新增精确路径 | 已核对的直接宿主（有界记录，并非完整调用图） |
+| --- | --- |
+| `ui/src/components/task-chat/ComposerRunSettingsPicker.tsx` | `IssueChatThread.tsx`、`task-chat/TaskChatComposer.tsx` |
+| `ui/src/components/transcript/RunTranscriptView.tsx` | 当前 `App.tsx` 导入的 `pages/AgentDetail.tsx` |
+| `ui/src/components/task-chat/TaskChatComposer.tsx` | `TaskChatThread.tsx`、`NewIssueDialog.tsx` |
+
+报告另列 `requestedConsumedFiles`、`missingConsumedFiles`、`scope.consumedMatchedFiles` 与 `scope.consumedComponentHosts`；任何新增必需路径缺失会返回非零，同名错误目录不能代替它。宿主元数据只描述已核对关系，不递归扩大扫描清单；原 basename 范围、例行路由模式及候选判定均不变。
+
+新增 Node 用例覆盖精确路径/重复去重/错误路径拒绝/逐项缺失、实际宿主 import 与 JSX、CLI 缺失非零和独立元数据；复用已安装 Babel parser，512 MB、单并发 **21 项通过**（原 16 项保留），两脚本语法与 diff 检查通过。未运行全 UI、类型、构建或浏览器，也未生成正式审计报告。本批整合后须重新生成清单分母、候选数和源码摘要；下节 **70 文件 / 501 / 1664** 仍是旧冻结证据，不能作为扩围后结果或相减计算进度。候选仍只是 `needs_manual_review`，不是未译数量或覆盖率；用户内容、供应商输出和原始诊断继续人工判断来源，不自动翻译。
+
+## 2026-10-27 4286键受控路由界面（已发布快照）
 
 受控成本路由已补四语言确认、故障恢复、已知状态凭据说明与公司内任务入口；生成资源4286键一致，完整类型/生产构建通过，最终UI全量结果见VERIFICATION。当前数量不是覆盖率；原70文件有界审计仍不等于完整界面清单，实际模型选择器、运行日志和评论恢复文案仍需后续切片整合，不能把未发布工作树当当前已完成。
 
