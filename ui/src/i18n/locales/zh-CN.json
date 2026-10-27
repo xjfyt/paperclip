@@ -2743,6 +2743,10 @@
     "savedDeclaration": "声明已记录。这是管理员陈述，不是供应商认证。",
     "sourceReferences": "来源 ID：投递 / 人工核对 / 审批资源"
   },
+  "notificationWindow": {
+    "failedRunUnsupported": "失败运行通知逐条投递，不支持合并窗口；此前保存的正数不会生效。保存其他修改前，请明确将窗口重设为 0 后再保存，严重程度保持不变；既有投递不受影响。",
+    "reset": "改为逐条投递（0 秒）"
+  },
   "notifications": {
     "title": "通知中心",
     "selectCompany": "请先选择组织。",

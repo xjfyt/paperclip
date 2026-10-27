@@ -2743,6 +2743,10 @@
     "savedDeclaration": "Declaración registrada. Es una afirmación del administrador, no un certificado del proveedor.",
     "sourceReferences": "IDs de origen: entrega / revisión humana / aprobación"
   },
+  "notificationWindow": {
+    "failedRunUnsupported": "Las notificaciones de ejecuciones fallidas se envían por separado y no admiten una ventana de agrupación. Los valores positivos guardados anteriormente no tienen efecto. Para guardar otros cambios, restablece explícitamente la ventana a 0 y guarda; se conserva la gravedad. Las entregas existentes no cambian.",
+    "reset": "Usar entrega individual (0 segundos)"
+  },
   "notifications": {
     "title": "Notificaciones",
     "selectCompany": "Selecciona una organización.",

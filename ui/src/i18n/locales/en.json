@@ -2743,6 +2743,10 @@
     "savedDeclaration": "Declaration recorded. This is an administrator statement, not a provider certificate.",
     "sourceReferences": "Source IDs: delivery / human review / approval"
   },
+  "notificationWindow": {
+    "failedRunUnsupported": "Failed-run notifications are individual and do not support a merge window. Any previously saved positive value has no effect. To save other changes, explicitly reset the window to 0, then save; severity is preserved. Existing deliveries are unchanged.",
+    "reset": "Use individual delivery (0 seconds)"
+  },
   "notifications": {
     "title": "Notifications",
     "selectCompany": "Select an organization.",
