@@ -7,23 +7,27 @@ import { repairAgentConfigHash, savedRepairPolicySchema } from "./repair-policy.
 
 type Attempt = typeof attempts.$inferSelect;
 type Run = typeof runs.$inferSelect;
+type Wake = typeof wakes.$inferSelect;
+type RepairStopState = "pending" | "stop_requested" | "local_stop_verified" | "queued_cancelled" | "queue_terminal" | "execution_terminal" | "unverified";
 export type RepairCancelRun = (id: string, reason?: string, options?: CancelRunOptions) => Promise<unknown>;
 export type RepairDispatchBinding = { version: 1; issueId: string; agentId: string; wakeKey: string; workspaceId: string };
 export type RepairDeadlineReceipt = {
   version: 1; deadlineAt: string; elapsedObservedAt: string;
-  state: "pending" | "stop_requested" | "local_stop_verified" | "queued_cancelled" | "queue_terminal" | "execution_terminal" | "unverified";
+  state: RepairStopState;
   runId?: string; stopRequestedAt?: string; stopVerifiedAt?: string; code: string;
   scope: "initial_repair_run_only" | "verified_automatic_repair_retries"; runs?: RepairRunDeadlineReceipt[]; lineageComplete?: boolean; remoteStopVerified: false; descendantsStopVerified: false;
 };
 type RepairRunDeadlineReceipt = {
   runId: string; wakeId: string; retryOfRunId: string | null;
-  state: RepairDeadlineReceipt["state"]; stopRequestedAt?: string; stopVerifiedAt?: string;
+  state: RepairStopState; stopRequestedAt?: string; stopVerifiedAt?: string;
 };
+type RepairInitialExecution = { binding: RepairDispatchBinding; wake: Wake; run: Run | null };
+type RepairExecutionLineage = RepairInitialExecution & { owned: Run[]; complete: boolean };
 const MAX_REPAIR_RUNS = 64;
 const object = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const active = ["queued", "running", "scheduled_retry"];
 /** Conservative isolation only; a marker never grants cancellation authority. */
-export function isDedicatedCodingRepairRun(run: { contextSnapshot: Record<string, unknown> | null } | null | undefined) {
+export function isDedicatedCodingRepairRun(run: { contextSnapshot: Record<string, unknown> | null } | null | undefined): boolean {
   return typeof run?.contextSnapshot?.codingRepairAttemptId === "string";
 }
 export function repairDispatchBinding(attempt: Attempt): RepairDispatchBinding | null {
@@ -32,11 +36,11 @@ export function repairDispatchBinding(attempt: Attempt): RepairDispatchBinding |
     typeof value.workspaceId === "string" && value.wakeKey === `${attempt.requestKey}:initial`
     ? value as RepairDispatchBinding : null;
 }
-export function repairDeadlineElapsed(attempt: Attempt, now = Date.now()) {
+export function repairDeadlineElapsed(attempt: Attempt, now = Date.now()): boolean {
   const policy = savedRepairPolicySchema.safeParse(attempt.snapshot.policy);
   return !policy.success || Date.parse(policy.data.expiresAt) <= now;
 }
-export function repairRunStopEvidence(run: Pick<Run, "status" | "startedAt" | "resultJson">): RepairDeadlineReceipt["state"] {
+export function repairRunStopEvidence(run: Pick<Run, "status" | "startedAt" | "resultJson">): RepairStopState {
   if (active.includes(run.status)) return "stop_requested";
   if (run.status === "cancelled" && object(run.resultJson?.executionCancellation).state === "acknowledged") return "local_stop_verified";
   if (run.status === "cancelled" && !run.startedAt) return "queued_cancelled";
@@ -44,7 +48,7 @@ export function repairRunStopEvidence(run: Pick<Run, "status" | "startedAt" | "r
   if (["succeeded", "failed", "timed_out"].includes(run.status)) return "execution_terminal";
   return "unverified";
 }
-async function initialRun(db: Db, attempt: Attempt) {
+async function initialRun(db: Db, attempt: Attempt): Promise<RepairInitialExecution | null> {
   const binding = repairDispatchBinding(attempt);
   const policy = savedRepairPolicySchema.safeParse(attempt.snapshot.policy);
   if (!binding || !policy.success || binding.agentId !== policy.data.agentId || policy.data.routineId !== attempt.routineId || policy.data.routineRevisionId !== attempt.routineRevisionId) return null;
@@ -75,10 +79,10 @@ async function initialRun(db: Db, attempt: Attempt) {
 }
 
 /** Only reciprocal server retry receipts extend the initial dispatch grant. */
-async function repairExecutionLineage(db: Db, attempt: Attempt) {
+async function repairExecutionLineage(db: Db, attempt: Attempt): Promise<RepairExecutionLineage | null> {
   const initial = await initialRun(db, attempt);
   if (!initial) return null;
-  const owned = initial.run ? [initial.run] : [];
+  const owned: Run[] = initial.run ? [initial.run] : [];
   let complete = true;
   for (let index = 0; index < owned.length; index++) {
     const parent = owned[index];
@@ -118,7 +122,7 @@ async function repairExecutionLineage(db: Db, attempt: Attempt) {
 }
 
 /** Issue done/blocked is not evidence that its authorized retry chain settled. */
-export async function codingRepairInitialExecutionPending(db: Db, attempt: Attempt) {
+export async function codingRepairInitialExecutionPending(db: Db, attempt: Attempt): Promise<boolean> {
   if (!repairDispatchBinding(attempt)) return false; // Historical attempts have no stop authority.
   const bound = await repairExecutionLineage(db, attempt);
   if (!bound || !bound.complete) return true;
@@ -126,11 +130,17 @@ export async function codingRepairInitialExecutionPending(db: Db, attempt: Attem
   return bound.owned.some(run => ["stop_requested", "unverified"].includes(repairRunStopEvidence(run)));
 }
 
-async function repairAttemptForRun(db: Db, run: Pick<Run, "companyId" | "contextSnapshot">, lock = false) {
+async function repairAttemptForRun(db: Db, run: Pick<Run, "companyId" | "contextSnapshot">, lock = false): Promise<Attempt | null> {
   const id = run.contextSnapshot?.codingRepairAttemptId;
   if (typeof id !== "string" || !/^[a-f0-9-]{36}$/.test(id)) return null;
   const query = db.select().from(attempts).where(and(eq(attempts.companyId, run.companyId), eq(attempts.id, id)));
-  const [attempt] = await (lock ? query.for("update") : query);
+  // Await each query shape separately instead of comparing a union of
+  // Drizzle's locked and unlocked fluent-builder types.
+  if (lock) {
+    const [attempt] = await query.for("update");
+    return attempt ?? null;
+  }
+  const [attempt] = await query;
   return attempt ?? null;
 }
 
@@ -154,7 +164,7 @@ export async function codingRepairRetryAdmissionBlock(db: Db, run: Run, notBefor
 }
 
 /** Ordinary/manual runs are untouched; copied markers cannot authorize a stop. */
-export async function codingRepairRunDeadlineElapsed(db: Db, run: Pick<Run, "id" | "companyId" | "contextSnapshot">) {
+export async function codingRepairRunDeadlineElapsed(db: Db, run: Pick<Run, "id" | "companyId" | "contextSnapshot">): Promise<boolean> {
   const attempt = await repairAttemptForRun(db, run);
   if (!attempt || !repairDeadlineElapsed(attempt)) return false;
   const bound = await repairExecutionLineage(db, attempt);
@@ -162,7 +172,7 @@ export async function codingRepairRunDeadlineElapsed(db: Db, run: Pick<Run, "id"
 }
 
 /** Persist intent before cancellation. Restart may only retry the very same run. */
-export async function stopExpiredCodingRepair(db: Db, source: Attempt, cancelRun?: RepairCancelRun) {
+export async function stopExpiredCodingRepair(db: Db, source: Attempt, cancelRun?: RepairCancelRun): Promise<boolean> {
   if (!repairDeadlineElapsed(source)) return false;
   const lease = randomUUID(); const now = new Date();
   const [attempt] = await db.update(attempts).set({ state: "deadline_stopping", lease,
@@ -182,7 +192,7 @@ export async function stopExpiredCodingRepair(db: Db, source: Attempt, cancelRun
     ...(typeof previous.runId === "string" ? { runId: previous.runId } : {}),
     ...(typeof previous.stopRequestedAt === "string" ? { stopRequestedAt: previous.stopRequestedAt } : {}),
   };
-  async function save(state: string) {
+  async function save(state: string): Promise<void> {
     return db.transaction(async tx => {
       const changed = await tx.update(attempts).set({ state, snapshot: { ...attempt.snapshot, deadline: receipt }, lastCode: receipt.code,
         lease: null, leaseExpiresAt: null, updatedAt: new Date() }).where(and(eq(attempts.id, attempt.id), eq(attempts.lease, lease))).returning({ id: attempts.id });
