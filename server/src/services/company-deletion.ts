@@ -2,6 +2,8 @@ import type { Db } from "@paperclipai/db";
 import { eq, inArray } from "drizzle-orm";
 import { createAgentLifecycle, scheduleAgentLifecycle } from "./agent-lifecycle.js";
 import { agentLifecycleCompanyDeletion } from "../modules/agent-lifecycle/company-deletion.js";
+import { beginCompanyDeletionContext } from "./company-deletion-context.js";
+import { mimouseCompanyDeletion } from "./mimouse-company-deletion.js";
 import {
   companies,
   agents,
@@ -58,12 +60,14 @@ export async function deleteCompany(db: Db, id: string) {
         const [existing] = await tx.select({ id: companies.id }).from(companies)
           .where(eq(companies.id, id)).for("no key update");
         if (!existing) return null;
+        await beginCompanyDeletionContext(tx, existing.id);
         // Routing bindings restrict deletion of their runs, issues and agents.
         // Heads and bindings also retain receipts, which retain policies.
         await tx.delete(runtimeRoutingBindings).where(eq(runtimeRoutingBindings.companyId, id));
         await tx.delete(runtimeRoutingHeads).where(eq(runtimeRoutingHeads.companyId, id));
         await tx.delete(runtimeRoutingReceipts).where(eq(runtimeRoutingReceipts.companyId, id));
         await tx.delete(runtimeRoutingPolicies).where(eq(runtimeRoutingPolicies.companyId, id));
+        await mimouseCompanyDeletion.deleteCompanyData(tx, id);
         // Finance can reference costs and both can reference runs. Incidents
         // reference policies and approvals; delete these dependents first.
         await tx.delete(financeEvents).where(eq(financeEvents.companyId, id));

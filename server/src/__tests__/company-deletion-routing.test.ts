@@ -4,15 +4,19 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import type { Db } from "@paperclipai/db";
 import { deleteCompany } from "../services/company-deletion.js";
 
-const { createAgentLifecycle, terminateAgent, scheduleAgentLifecycle, deleteCompanyData } = vi.hoisted(() => ({
+const { createAgentLifecycle, terminateAgent, scheduleAgentLifecycle, deleteCompanyData, deleteMimouseData } = vi.hoisted(() => ({
   createAgentLifecycle: vi.fn(),
   terminateAgent: vi.fn(),
   scheduleAgentLifecycle: vi.fn(),
   deleteCompanyData: vi.fn(),
+  deleteMimouseData: vi.fn(),
 }));
 vi.mock("../services/agent-lifecycle.js", () => ({ createAgentLifecycle, scheduleAgentLifecycle }));
 vi.mock("../modules/agent-lifecycle/company-deletion.js", () => ({
   agentLifecycleCompanyDeletion: { deleteCompanyData },
+}));
+vi.mock("../services/mimouse-company-deletion.js", () => ({
+  mimouseCompanyDeletion: { deleteCompanyData: deleteMimouseData },
 }));
 
 const companyId = "00000000-0000-4000-8000-000000000001";
@@ -74,6 +78,8 @@ function fixture(options: { ordinary?: boolean; missingCompany?: boolean; failTa
     },
   });
   const tx = {
+    nestedIndex: 0,
+    execute: vi.fn(async (_query: SQL) => []),
     select: vi.fn(select),
     delete: vi.fn((table: Table) => ({
       where(condition: SQL) {
@@ -117,6 +123,7 @@ function fixture(options: { ordinary?: boolean; missingCompany?: boolean; failTa
   terminateAgent.mockImplementation(async (id: string) => { events.push(`terminate:${id}`); });
   scheduleAgentLifecycle.mockImplementation(async (_db: Db, id: string) => { events.push(`schedule:${id}`); });
   deleteCompanyData.mockImplementation(async () => { events.push("delete:agent-lifecycle"); });
+  deleteMimouseData.mockImplementation(async () => { events.push("delete:mimouse"); });
   return { db, tx, transaction, company, events, deletions, reads, failure, initialRows, routingRows: () => rows };
 }
 
@@ -139,6 +146,13 @@ describe("company deletion runtime routing compatibility", () => {
       "delete:projects", "delete:agent-lifecycle", "delete:companies", "transaction:commit",
     ]);
     expect(deleteCompanyData).toHaveBeenCalledExactlyOnceWith(test.tx, companyId);
+    expect(deleteMimouseData).toHaveBeenCalledExactlyOnceWith(test.tx, companyId);
+    expect(test.events.indexOf("delete:mimouse")).toBeGreaterThan(test.events.indexOf("delete:runtime_routing_policies"));
+    expect(test.events.indexOf("delete:mimouse")).toBeLessThan(test.events.indexOf("delete:finance_events"));
+    expect(test.tx.execute).toHaveBeenCalledTimes(1);
+    const context = dialect.sqlToQuery(test.tx.execute.mock.calls[0][0]);
+    expect(context.params).toEqual([companyId]);
+    expect(context.sql).toContain("txid_current()::text, true");
     expect(test.reads).toEqual([
       { table: "agents", sql: '"agents"."company_id" = $1', params: [companyId] },
       { table: "companies", sql: '"companies"."id" = $1', params: [companyId] },
@@ -174,6 +188,7 @@ describe("company deletion runtime routing compatibility", () => {
     await expect(deleteCompany(test.db, companyId)).resolves.toBeNull();
     expect(test.events).toEqual(["transaction:start", "lock:no key update", "transaction:commit"]);
     expect(test.tx.delete).not.toHaveBeenCalled();
+    expect(test.tx.execute).not.toHaveBeenCalled();
     expect(deleteCompanyData).not.toHaveBeenCalled();
     expect(terminateAgent).not.toHaveBeenCalled();
     expect(scheduleAgentLifecycle).not.toHaveBeenCalled();

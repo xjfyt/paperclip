@@ -250,6 +250,13 @@ connection, before enabling the new server and UI.
 
 ## Migration snapshots
 
+Company permanent deletion uses a transaction-local company ID and transaction
+ID from migration `0361`. Immutable evidence UPDATE guards remain unchanged;
+exceptional DELETEs require matching context and deferred checks that the
+company is absent when those checks run. This is not caller authorization or a
+SQL-owner security boundary. Do not force deferred checks before company
+cleanup finishes. See [the deletion contract and fixture scope](plans/2026-10-27-company-permanent-deletion.md).
+
 `drizzle-kit generate` diffs `packages/db/src/schema/` against the newest snapshot in `packages/db/src/migrations/meta/`. That snapshot must describe the schema that every migration produces when they run in order. A snapshot that drifts from the schema makes the *next* migration wrong, because `generate` folds the drift into it. The drift can add a column that an earlier migration already created, which makes that migration fail on a fresh database. It can also drop a column that the schema still uses.
 
 - Create every migration with `pnpm --filter @paperclipai/db generate`. Do not hand-write a snapshot.
