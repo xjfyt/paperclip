@@ -141,6 +141,7 @@ type TranscriptBlock =
       type: "event";
       ts: string;
       label: string;
+      fallbackTextKey?: "runFailed" | "completed";
       tone: "info" | "warn" | "error" | "neutral";
       text: string;
       detail?: string;
@@ -267,7 +268,7 @@ function summarizeToolInput(name: string, input: unknown, density: TranscriptDen
   const record = asRecord(input);
   if (!record) {
     const serialized = compactWhitespace(formatUnknown(input));
-    return serialized ? truncate(serialized, compactMax) : `Inspect ${name} input`;
+    return serialized ? truncate(serialized, compactMax) : mimouseT("runTranscriptUi.inspectInput", { name });
   }
 
   const command = typeof record.command === "string"
@@ -288,14 +289,14 @@ function summarizeToolInput(name: string, input: unknown, density: TranscriptDen
   if (Array.isArray(record.paths) && record.paths.length > 0) {
     const first = record.paths.find((value): value is string => typeof value === "string" && value.trim().length > 0);
     if (first) {
-      return truncate(`${record.paths.length} paths, starting with ${first}`, compactMax);
+      return truncate(mimouseT("runTranscriptUi.paths", { count: record.paths.length, first }), compactMax);
     }
   }
 
   const keys = Object.keys(record);
-  if (keys.length === 0) return `No ${name} input`;
-  if (keys.length === 1) return truncate(`${keys[0]} payload`, compactMax);
-  return truncate(`${keys.length} fields: ${keys.slice(0, 3).join(", ")}`, compactMax);
+  if (keys.length === 0) return mimouseT("runTranscriptUi.noInput", { name });
+  if (keys.length === 1) return truncate(mimouseT("runTranscriptUi.payload", { name: keys[0] }), compactMax);
+  return truncate(mimouseT("runTranscriptUi.fields", { count: keys.length, fields: keys.slice(0, 3).join(", ") }), compactMax);
 }
 
 function parseStructuredToolResult(result: string | undefined) {
@@ -342,15 +343,15 @@ function displayToolName(name: string, input: unknown): string {
 }
 
 function summarizeToolResult(result: string | undefined, isError: boolean | undefined, density: TranscriptDensity): string {
-  if (!result) return isError ? "Tool failed" : "Waiting for result";
+  if (!result) return mimouseT(isError ? "runTranscriptUi.toolFailed" : "runTranscriptUi.waitingResult");
   const structured = parseStructuredToolResult(result);
   if (structured) {
     if (structured.body) {
       return truncate(structured.body.split("\n")[0] ?? structured.body, density === "compact" ? 84 : 140);
     }
-    if (structured.status === "completed") return "Completed";
+    if (structured.status === "completed") return mimouseT("runTranscriptUi.completed");
     if (structured.status === "failed" || structured.status === "error") {
-      return structured.exitCode ? `Failed with exit code ${structured.exitCode}` : "Failed";
+      return structured.exitCode ? mimouseT("runTranscriptUi.failedExitCode", { code: structured.exitCode }) : mimouseT("runTranscriptUi.failed");
     }
   }
   const lines = result
@@ -406,36 +407,36 @@ function summarizeToolDecision(decision: ToolRunDecision | null): { label: strin
   if (!decision) return null;
   if (decision.pendingAction) {
     return {
-      label: "Needs approval",
+      label: mimouseT("runTranscriptUi.needsApproval"),
       className: "text-amber-700 dark:text-amber-300",
-      detail: `Action request ${decision.pendingAction.actionRequestId.slice(0, 8)}`,
+      detail: mimouseT("runTranscriptUi.actionRequest", { id: decision.pendingAction.actionRequestId.slice(0, 8) }),
     };
   }
   if (decision.denialReason || decision.invocation.status === "denied" || decision.outcome === "denied") {
     return {
-      label: "Denied",
+      label: mimouseT("runTranscriptUi.denied"),
       className: "text-red-700 dark:text-red-300",
       detail: decision.denialReason ?? decision.reasonCode ?? undefined,
     };
   }
   if (decision.invocation.status === "failed" || decision.invocation.status === "timed_out" || decision.outcome === "failure" || decision.outcome === "timeout") {
     return {
-      label: decision.invocation.status === "timed_out" || decision.outcome === "timeout" ? "Timed out" : "Failed",
+      label: mimouseT(decision.invocation.status === "timed_out" || decision.outcome === "timeout" ? "runTranscriptUi.timedOut" : "runTranscriptUi.failed"),
       className: "text-red-700 dark:text-red-300",
       detail: decision.denialReason ?? decision.reasonCode ?? undefined,
     };
   }
   if (decision.actionRequest?.status === "approved") {
-    return { label: "Approved", className: "text-emerald-700 dark:text-emerald-300" };
+    return { label: mimouseT("runTranscriptUi.approved"), className: "text-emerald-700 dark:text-emerald-300" };
   }
   if (decision.actionRequest?.status === "executed") {
-    return { label: "Executed", className: "text-emerald-700 dark:text-emerald-300" };
+    return { label: mimouseT("runTranscriptUi.executed"), className: "text-emerald-700 dark:text-emerald-300" };
   }
   if (decision.decision === "allow" || decision.invocation.status === "authorized" || decision.invocation.status === "executing" || decision.invocation.status === "succeeded") {
-    return { label: "Allowed", className: "text-emerald-700 dark:text-emerald-300" };
+    return { label: mimouseT("runTranscriptUi.allowed"), className: "text-emerald-700 dark:text-emerald-300" };
   }
   if (decision.decision === "require_approval" || decision.invocation.approvalState === "pending") {
-    return { label: "Needs approval", className: "text-amber-700 dark:text-amber-300" };
+    return { label: mimouseT("runTranscriptUi.needsApproval"), className: "text-amber-700 dark:text-amber-300" };
   }
   return {
     label: humanizeLabel(decision.invocation.status),
@@ -705,6 +706,7 @@ export function normalizeTranscript(entries: TranscriptEntry[], streaming: boole
         label: "result",
         tone: entry.isError ? "error" : "info",
         text: entry.text.trim() || entry.errors[0] || (entry.isError ? "Run failed" : "Completed"),
+        fallbackTextKey: !entry.text.trim() && !entry.errors[0] ? (entry.isError ? "runFailed" : "completed") : undefined,
         detail:
           !entry.isError && entry.text.trim().length > 0
             ? `${formatTokens(entry.inputTokens)} / ${formatTokens(entry.outputTokens)} / $${entry.costUsd.toFixed(6)}`
@@ -921,7 +923,7 @@ function TranscriptMessageBlock({
       {!isAssistant && (
         <div className="mb-1.5 flex items-center gap-2 text-(length:--text-micro) font-semibold uppercase tracking-(--tracking-caps) text-muted-foreground">
           <User className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} />
-          <span>User</span>
+          <span>{mimouseT("runTranscriptUi.user")}</span>
         </div>
       )}
       <MarkdownBody
@@ -975,6 +977,7 @@ function TranscriptThinkingBlock({
 }
 
 function ToolDecisionBadge({ decision }: { decision: ToolRunDecision | null }) {
+  useMimouseTranslation();
   const summary = summarizeToolDecision(decision);
   if (!summary) return null;
   return (
@@ -985,6 +988,7 @@ function ToolDecisionBadge({ decision }: { decision: ToolRunDecision | null }) {
 }
 
 function ToolDecisionInlineDetail({ decision }: { decision: ToolRunDecision | null }) {
+  useMimouseTranslation();
   const summary = summarizeToolDecision(decision);
   if (!summary?.detail) return null;
   return (
@@ -995,6 +999,7 @@ function ToolDecisionInlineDetail({ decision }: { decision: ToolRunDecision | nu
 }
 
 function ToolDecisionDetails({ decision, compact }: { decision: ToolRunDecision | null; compact: boolean }) {
+  useMimouseTranslation();
   if (!decision) return null;
   const actionRequest = decision.actionRequest;
   return (
@@ -1003,7 +1008,7 @@ function ToolDecisionDetails({ decision, compact }: { decision: ToolRunDecision 
       compact ? "text-(length:--text-micro)" : "text-xs",
     )}>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <span className="font-semibold uppercase tracking-(--tracking-eyebrow) text-muted-foreground">Decision</span>
+        <span className="font-semibold uppercase tracking-(--tracking-eyebrow) text-muted-foreground">{mimouseT("runTranscriptUi.decision")}</span>
         <ToolDecisionBadge decision={decision} />
         {decision.reasonCode && <span className="font-mono text-muted-foreground">{decision.reasonCode}</span>}
       </div>
@@ -1013,10 +1018,10 @@ function ToolDecisionDetails({ decision, compact }: { decision: ToolRunDecision 
         </div>
       )}
       <div className="mt-2 grid gap-1 font-mono text-muted-foreground sm:grid-cols-2">
-        <span>invocation {decision.invocation.id.slice(0, 8)}</span>
-        <span>audit {decision.auditEvents.length}</span>
-        {actionRequest && <span>action {actionRequest.status} {actionRequest.id.slice(0, 8)}</span>}
-        {actionRequest?.interactionId && <span>card {actionRequest.interactionId.slice(0, 8)}</span>}
+        <span>{mimouseT("runTranscriptUi.invocation", { id: decision.invocation.id.slice(0, 8) })}</span>
+        <span>{mimouseT("runTranscriptUi.audit", { count: decision.auditEvents.length })}</span>
+        {actionRequest && <span>{mimouseT("runTranscriptUi.action", { status: actionRequest.status, id: actionRequest.id.slice(0, 8) })}</span>}
+        {actionRequest?.interactionId && <span>{mimouseT("runTranscriptUi.card", { id: actionRequest.interactionId.slice(0, 8) })}</span>}
       </div>
       {decision.pendingAction?.previewMarkdown && (
         <MarkdownBody className="mt-2 text-(length:--text-micro) leading-5 text-foreground/75 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
@@ -1042,10 +1047,10 @@ function TranscriptToolCard({
   const parsedResult = parseStructuredToolResult(block.result);
   const statusLabel =
     block.status === "running"
-      ? "Running"
+      ? mimouseT("runTranscriptUi.running")
       : block.status === "error"
-        ? "Errored"
-        : "Completed";
+        ? mimouseT("runTranscriptUi.errored")
+        : mimouseT("runTranscriptUi.completed");
   const statusTone =
     block.status === "running"
       ? "text-blue-700 dark:text-blue-300"
@@ -1099,7 +1104,7 @@ function TranscriptToolCard({
           type="button"
           className="mt-0.5 inline-flex h-5 w-5 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
           onClick={() => setOpen((value) => !value)}
-          aria-label={open ? "Collapse tool details" : "Expand tool details"}
+          aria-label={mimouseT(open ? "runTranscriptUi.collapseTool" : "runTranscriptUi.expandTool")}
         >
           {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
         </button>
@@ -1111,7 +1116,7 @@ function TranscriptToolCard({
               <div>
                 <div className="mb-1 text-(length:--text-nano) font-semibold uppercase tracking-(--tracking-caps) text-muted-foreground">{mimouseT("workflow.input")}</div>
                 <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-(length:--text-micro) text-foreground/80">
-                  {formatToolPayload(block.input) || "<empty>"}
+                  {formatToolPayload(block.input) || mimouseT("runTranscriptUi.emptyInput")}
                 </pre>
               </div>
               <div>
@@ -1120,7 +1125,7 @@ function TranscriptToolCard({
                   "overflow-x-auto whitespace-pre-wrap break-words font-mono text-(length:--text-micro)",
                   block.status === "error" ? "text-red-700 dark:text-red-300" : "text-foreground/80",
                 )}>
-                  {block.result ? formatToolPayload(block.result) : "Waiting for result..."}
+                  {block.result ? formatToolPayload(block.result) : mimouseT("runTranscriptUi.waitingResultDetail")}
                 </pre>
               </div>
             </div>
@@ -1161,10 +1166,8 @@ function TranscriptCommandGroup({
   const isRunning = Boolean(runningItem);
   const showExpandedErrorState = open && hasError;
   const title = isRunning
-    ? "Executing command"
-    : block.items.length === 1
-      ? "Executed command"
-      : `Executed ${block.items.length} commands`;
+    ? mimouseT("runTranscriptUi.executingCommand")
+    : mimouseT("runTranscriptUi.executedCommands", { count: block.items.length });
   const subtitle = runningItem
     ? summarizeToolInput("command_execution", runningItem.input, density)
     : null;
@@ -1235,7 +1238,7 @@ function TranscriptCommandGroup({
             event.stopPropagation();
             setOpen((value) => !value);
           }}
-          aria-label={open ? "Collapse command details" : "Expand command details"}
+          aria-label={mimouseT(open ? "runTranscriptUi.collapseCommand" : "runTranscriptUi.expandCommand")}
         >
           {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
         </button>
@@ -1301,12 +1304,12 @@ function TranscriptToolGroup({
   const toolLabel =
     uniqueNames.length === 1
       ? humanizeLabel(uniqueNames[0])
-      : `${uniqueNames.length} tools`;
+      : mimouseT("runTranscriptUi.tools", { count: uniqueNames.length });
   const title = isRunning
-    ? `Using ${toolLabel}`
+    ? mimouseT("runTranscriptUi.usingTool", { name: toolLabel })
     : block.items.length === 1
-      ? `Used ${toolLabel}`
-      : `Used ${toolLabel} (${block.items.length} calls)`;
+      ? mimouseT("runTranscriptUi.usedTool", { name: toolLabel })
+      : mimouseT("runTranscriptUi.usedToolCalls", { name: toolLabel, count: block.items.length });
   const subtitle = runningItem
     ? summarizeToolInput(runningItem.name, runningItem.input, density)
     : null;
@@ -1366,7 +1369,7 @@ function TranscriptToolGroup({
           type="button"
           className={cn("inline-flex h-5 w-5 items-center justify-center text-muted-foreground transition-colors hover:text-foreground", subtitle && "mt-0.5")}
           onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
-          aria-label={open ? "Collapse tool details" : "Expand tool details"}
+          aria-label={mimouseT(open ? "runTranscriptUi.collapseTool" : "runTranscriptUi.expandTool")}
         >
           {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
         </button>
@@ -1395,7 +1398,7 @@ function TranscriptToolGroup({
                   : item.status === "error" ? "text-red-700 dark:text-red-300"
                   : "text-emerald-700 dark:text-emerald-300"
                 )}>
-                  {item.status === "running" ? "Running" : item.status === "error" ? "Errored" : "Completed"}
+                  {mimouseT(item.status === "running" ? "runTranscriptUi.running" : item.status === "error" ? "runTranscriptUi.errored" : "runTranscriptUi.completed")}
                 </span>
                 <ToolDecisionBadge decision={findToolDecision(toolDecisionMaps, item)} />
               </div>
@@ -1403,7 +1406,7 @@ function TranscriptToolGroup({
                 <div>
                   <div className="mb-0.5 text-(length:--text-nano) font-semibold uppercase tracking-(--tracking-caps) text-muted-foreground">{mimouseT("workflow.input")}</div>
                   <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-(length:--text-micro) text-foreground/80">
-                    {formatToolPayload(item.input) || "<empty>"}
+                    {formatToolPayload(item.input) || mimouseT("runTranscriptUi.emptyInput")}
                   </pre>
                 </div>
                 {item.result && (
@@ -1465,6 +1468,8 @@ function TranscriptEventRow({
   density: TranscriptDensity;
   externalReferences?: MarkdownExternalReferenceMap;
 }) {
+  useMimouseTranslation();
+  const text = block.fallbackTextKey ? mimouseT(`runTranscriptUi.${block.fallbackTextKey}`) : block.text;
   const compact = density === "compact";
   const toneClasses =
     block.tone === "error"
@@ -1494,14 +1499,14 @@ function TranscriptEventRow({
               )}
               externalReferences={externalReferences}
             >
-              {block.text}
+              {text}
             </MarkdownBody>
           ) : (
             <div className={cn("whitespace-pre-wrap break-words", compact ? "text-(length:--text-micro)" : "text-xs")}>
               <span className="text-(length:--text-nano) font-semibold uppercase tracking-(--tracking-label) text-muted-foreground/70">
                 {block.label}
               </span>
-              {block.text ? <span className="ml-2">{block.text}</span> : null}
+              {text ? <span className="ml-2">{text}</span> : null}
             </div>
           )}
           {block.detail && (
@@ -1619,6 +1624,7 @@ function TranscriptStderrGroup({
   block: Extract<TranscriptBlock, { type: "stderr_group" }>;
   density: TranscriptDensity;
 }) {
+  useMimouseTranslation();
   const [open, setOpen] = useState(false);
   const compact = density === "compact";
   return (
@@ -1631,7 +1637,7 @@ function TranscriptStderrGroup({
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen((v) => !v); } }}
       >
         <span className={cn("text-(length:--text-nano) font-semibold uppercase tracking-(--tracking-eyebrow)")}>
-          {block.lines.length} log {block.lines.length === 1 ? "line" : "lines"}
+          {mimouseT("runTranscriptUi.logLines", { count: block.lines.length })}
         </span>
         {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
       </div>
@@ -1656,6 +1662,7 @@ function TranscriptSystemGroup({
   block: Extract<TranscriptBlock, { type: "system_group" }>;
   density: TranscriptDensity;
 }) {
+  useMimouseTranslation();
   const [open, setOpen] = useState(false);
   return (
     <div className="rounded-xl border border-blue-500/20 bg-blue-500/[0.04] p-2 text-blue-700 dark:text-blue-300">
@@ -1668,7 +1675,7 @@ function TranscriptSystemGroup({
       >
         <TerminalSquare className="h-3.5 w-3.5 shrink-0" />
         <span className="text-(length:--text-nano) font-semibold uppercase tracking-(--tracking-eyebrow)">
-          {block.lines.length} system {block.lines.length === 1 ? "message" : "messages"}
+          {mimouseT("runTranscriptUi.systemMessages", { count: block.lines.length })}
         </span>
         {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
       </div>
@@ -1852,12 +1859,14 @@ export function RunTranscriptView({
   limit,
   streaming = false,
   collapseStdout = false,
-  emptyMessage = "No transcript yet.",
+  emptyMessage,
   className,
   thinkingClassName,
   externalReferences,
 }: RunTranscriptViewProps) {
+  useMimouseTranslation();
   const toolDecisionMaps = useMemo(() => buildToolDecisionMaps(toolDecisions), [toolDecisions]);
+  // Locale belongs to rendering, not transcript normalization or block identity.
   const blocks = useMemo(
     () => (mode === "raw" ? [] : normalizeTranscript(entries, streaming)),
     [entries, mode, streaming],
@@ -1869,7 +1878,7 @@ export function RunTranscriptView({
   if (entries.length === 0) {
     return (
       <div className={cn("rounded-2xl border border-dashed border-border/70 bg-background/40 p-4 text-sm text-muted-foreground", className)}>
-        {emptyMessage}
+        {emptyMessage ?? mimouseT("runTranscriptUi.empty")}
       </div>
     );
   }
