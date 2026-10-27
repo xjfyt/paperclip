@@ -1,3 +1,4 @@
+import { useTranslation } from "@/i18n";
 import { useCallback, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarClock, Plus, Webhook } from "lucide-react";
@@ -63,6 +64,7 @@ function scheduleCron(draft: TriggerDraft) {
 }
 
 export function RoutineTriggers() {
+  const { t } = useTranslation();
   const ctx = useRoutineDetail();
   const [params, setParams] = useSearchParams();
   const setupId = params.get("triggerSetup");
@@ -190,7 +192,7 @@ export function RoutineTriggers() {
       ))}
       {ctx.secretMessage && (
         <div className="space-y-3 rounded-md border p-4">
-          <p className="text-sm font-medium">{ctx.secretMessage.title}</p>
+          <p className="text-sm font-medium">{t(ctx.secretMessage.titleKey, { count: ctx.secretMessage.count })}</p>
           {ctx.secretMessage.entries.map((entry) => (
             <div key={entry.webhookUrl} className="space-y-3">
               <CopyField label="Webhook URL" value={entry.webhookUrl} />

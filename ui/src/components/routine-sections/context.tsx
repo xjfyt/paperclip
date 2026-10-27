@@ -79,7 +79,9 @@ export function createDefaultNewTrigger(): NewTriggerDraft {
 }
 
 export type SecretMessage = {
-  title: string;
+  // Keep system copy semantic so one-time credentials survive a locale change.
+  titleKey: "routineDetailUi.webhookCreated" | "routineDetailUi.webhookRotated" | "routineDetailUi.webhookRestored";
+  count?: number;
   entries: Array<{ webhookUrl: string; webhookSecret: string }>;
 };
 

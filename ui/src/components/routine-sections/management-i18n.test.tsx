@@ -107,7 +107,7 @@ it.each(signingCases)("localizes legacy trigger controls in $locale ($signingMod
   fixture.value = { ...fixture.value, routine: { triggers: [] },
     newTrigger: { kind: "webhook", signingMode, replayWindowSec: "300" }, setNewTrigger: setTrigger,
     createTrigger: { isPending: false, mutate: create }, updateTrigger: { mutate: vi.fn() }, deleteTrigger: { mutate: vi.fn() }, rotateTrigger: { mutate: vi.fn() },
-    secretMessage: { title: "Original message", entries: [{ webhookUrl: url, webhookSecret: secret }] }, copySecretValue: copy, setSecretMessage: vi.fn() };
+    secretMessage: { titleKey: "routineDetailUi.webhookRestored", count: 1, entries: [{ webhookUrl: url, webhookSecret: secret }] }, copySecretValue: copy, setSecretMessage: vi.fn() };
   const host = document.createElement("div"), root = createRoot(host);
   try {
     await act(async () => { root.render(<production.TriggersSection />); });
@@ -127,7 +127,7 @@ it.each(signingCases)("localizes legacy trigger controls in $locale ($signingMod
     expect(copy).toHaveBeenCalledWith(messages.routineWebhookSecret, secret);
     await act(async () => { await i18n.changeLanguage(locale === "ja" ? "es" : "ja"); });
     expect(host.textContent).toContain(i18n.t(`managementUi.${descriptionKeys[signingMode]}`, values));
-    expect(host.textContent).toContain("Original message");
+    expect(host.textContent).toContain(i18n.t("routineDetailUi.webhookRestored", { count: 1 }));
     expect(setTrigger).not.toHaveBeenCalled();
     expect(create).not.toHaveBeenCalled();
   } finally { await act(async () => { root.unmount(); }); }

@@ -127,7 +127,7 @@ describe("TriggersSection", () => {
   });
 
   it("shows restored one-time credentials on the triggers screen", async () => {
-    await render({ title: "Webhook key restored", entries: [{ webhookUrl: "https://paperclip.example/webhook", webhookSecret: "restored-secret" }] });
+    await render({ titleKey: "routineDetailUi.webhookRestored", count: 1, entries: [{ webhookUrl: "https://paperclip.example/webhook", webhookSecret: "restored-secret" }] });
     expect(container.textContent).toContain("restored-secret");
     expect(container.querySelector('[aria-label="Copy Secret key"]')).not.toBeNull();
     expect(button("Done")).toBeTruthy();

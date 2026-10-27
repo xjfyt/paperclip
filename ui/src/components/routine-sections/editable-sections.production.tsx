@@ -573,7 +573,7 @@ export function TriggersSection() {
       {secretMessage ? (
         <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4 text-sm">
           <div>
-            <p className="font-medium">{secretMessage.title}</p>
+            <p className="font-medium">{t(secretMessage.titleKey, { count: secretMessage.count })}</p>
             <p className="text-xs text-muted-foreground">
               {t("managementUi.routineSecretOnce")}
             </p>
