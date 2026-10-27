@@ -1,0 +1,18 @@
+{
+  "builtIn": "Built-in",
+  "local": "Local",
+  "paperclipHost": "Paperclip host",
+  "localTitle": "Local - Paperclip host",
+  "loadingEnvironment": "Loading environment",
+  "sandbox": "Sandbox",
+  "managedByPaperclip": "Managed by Paperclip",
+  "sandboxProvider": "{{provider}} sandbox provider",
+  "environmentTitle": "{{name}} - {{detail}}",
+  "unknownEnvironment": "Unknown environment",
+  "unknownEnvironmentTitle": "Unknown environment - {{id}}",
+  "roleSecurity": "Security",
+  "roleEngineer": "Engineer",
+  "roleDesigner": "Designer",
+  "roleResearcher": "Researcher",
+  "roleGeneral": "General"
+}

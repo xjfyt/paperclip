@@ -1,0 +1,18 @@
+{
+  "builtIn": "内置",
+  "local": "本地",
+  "paperclipHost": "Paperclip 主机",
+  "localTitle": "本地 - Paperclip 主机",
+  "loadingEnvironment": "正在加载环境",
+  "sandbox": "沙箱",
+  "managedByPaperclip": "由 Paperclip 管理",
+  "sandboxProvider": "{{provider}} 沙箱提供方",
+  "environmentTitle": "{{name}} - {{detail}}",
+  "unknownEnvironment": "未知环境",
+  "unknownEnvironmentTitle": "未知环境 - {{id}}",
+  "roleSecurity": "安全",
+  "roleEngineer": "工程师",
+  "roleDesigner": "设计师",
+  "roleResearcher": "研究员",
+  "roleGeneral": "通用"
+}

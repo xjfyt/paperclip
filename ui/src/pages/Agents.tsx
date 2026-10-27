@@ -1,4 +1,5 @@
-import { useTranslation as useMimouseTranslation, t as mimouseT } from "@/i18n";
+import { agentRoleLabel } from "../i18n/agent-role-display";
+import { useTranslation as useMimouseTranslation, t as mimouseT, i18n as mimouseI18n } from "@/i18n";
 import { PrimaryAgentIndicator } from "@/components/primary-agent/PrimaryAgentPresentation";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { useAgentChatEnabled } from "../hooks/useAgentChatEnabled";
@@ -28,7 +29,7 @@ import { PageTabBar } from "../components/PageTabBar";
 import { Tabs } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, Bot, Plus, List, Network } from "lucide-react";
-import { AGENT_ROLE_LABELS, type Agent, type Environment, type EnvironmentCapabilities } from "@paperclipai/shared";
+import { type Agent, type Environment, type EnvironmentCapabilities } from "@paperclipai/shared";
 import {
   resourceMembershipState,
   useResourceMemberships,
@@ -36,8 +37,6 @@ import {
 import { usePublishSharedQueryData, useSharedPollingQuery } from "../hooks/useSharedPolling";
 
 import { getAdapterLabel } from "../adapters/adapter-display-registry";
-
-const roleLabels = AGENT_ROLE_LABELS as Record<string, string>;
 
 // Lazy-loaded so the roster page doesn't statically pull in the full
 // AgentConfigForm module graph (the modal reuses its adapter/model pickers).
@@ -50,12 +49,12 @@ const ConfigureBuiltInAgentModal = lazy(() =>
 export const AGENT_FILTER_TABS = ["all", "active", "paused", "error", "builtin"] as const;
 type FilterTab = (typeof AGENT_FILTER_TABS)[number];
 
-const AGENT_FILTER_TAB_ITEMS: { value: FilterTab; label: string }[] = [
-  { value: "all", label: "All" },
-  { value: "active", label: "Active" },
-  { value: "paused", label: "Paused" },
-  { value: "error", label: "Error" },
-  { value: "builtin", label: "Built-in" },
+const AGENT_FILTER_TAB_ITEMS: { value: FilterTab; labelKey: string }[] = [
+  { value: "all", labelKey: "commonUi.all" },
+  { value: "active", labelKey: "commonUi.active" },
+  { value: "paused", labelKey: "commonUi.paused" },
+  { value: "error", labelKey: "commonUi.error" },
+  { value: "builtin", labelKey: "agentDirectoryUi.builtIn" },
 ];
 
 function isFilterTab(value: string): value is FilterTab {
@@ -68,17 +67,21 @@ interface EnvironmentDescriptor {
   title: string;
 }
 
-const localEnvironmentDescriptor: EnvironmentDescriptor = {
-  label: "Local",
-  detail: "Paperclip host",
-  title: "Local - Paperclip host",
-};
+function localEnvironmentDescriptor(): EnvironmentDescriptor {
+  return {
+    label: mimouseT("agentDirectoryUi.local"),
+    detail: mimouseT("agentDirectoryUi.paperclipHost"),
+    title: mimouseT("agentDirectoryUi.localTitle"),
+  };
+}
 
-const loadingEnvironmentDescriptor: EnvironmentDescriptor = {
-  label: "—",
-  detail: "Loading environment",
-  title: "Loading environment",
-};
+function loadingEnvironmentDescriptor(): EnvironmentDescriptor {
+  return {
+    label: "—",
+    detail: mimouseT("agentDirectoryUi.loadingEnvironment"),
+    title: mimouseT("agentDirectoryUi.loadingEnvironment"),
+  };
+}
 
 // Agents in these states never appear in the agents list — `terminated` is
 // hidden like an archived company, and `pending_approval` is a hiring gate that
@@ -123,7 +126,7 @@ function getSandboxProviderLabel(
   const provider = typeof environment.config.provider === "string"
     ? environment.config.provider.trim()
     : "";
-  if (!provider) return "Sandbox";
+  if (!provider) return mimouseT("agentDirectoryUi.sandbox");
   return capabilities?.sandboxProviders?.[provider]?.displayName ?? provider;
 }
 
@@ -132,25 +135,25 @@ function describeEnvironment(
   capabilities?: EnvironmentCapabilities | null,
 ): EnvironmentDescriptor {
   const detail = isPlatformManagedEnvironment(environment)
-    ? "Managed by Paperclip"
+    ? mimouseT("agentDirectoryUi.managedByPaperclip")
     : environment.driver === "sandbox"
-      ? `${getSandboxProviderLabel(environment, capabilities)} sandbox provider`
+      ? mimouseT("agentDirectoryUi.sandboxProvider", { provider: getSandboxProviderLabel(environment, capabilities) })
       : environment.driver === "local"
-        ? "Paperclip host"
+        ? mimouseT("agentDirectoryUi.paperclipHost")
         : formatEnvironmentDriver(environment.driver);
 
   return {
     label: environment.name,
     detail,
-    title: `${environment.name} - ${detail}`,
+    title: mimouseT("agentDirectoryUi.environmentTitle", { name: environment.name, detail }),
   };
 }
 
 function describeMissingEnvironment(environmentId: string): EnvironmentDescriptor {
   return {
-    label: "Unknown environment",
+    label: mimouseT("agentDirectoryUi.unknownEnvironment"),
     detail: environmentId.slice(0, 8),
-    title: `Unknown environment - ${environmentId}`,
+    title: mimouseT("agentDirectoryUi.unknownEnvironmentTitle", { id: environmentId }),
   };
 }
 
@@ -161,7 +164,7 @@ function resolveAgentEnvironment(
   capabilities?: EnvironmentCapabilities | null,
 ): EnvironmentDescriptor {
   const environmentId = agent.defaultEnvironmentId ?? instanceDefaultEnvironmentId;
-  if (!environmentId) return localEnvironmentDescriptor;
+  if (!environmentId) return localEnvironmentDescriptor();
   const environment = environmentsById.get(environmentId);
   return environment
     ? describeEnvironment(environment, capabilities)
@@ -219,8 +222,10 @@ export function Agents({ initialView = "list" }: { initialView?: AgentsView } = 
   const builtInAgentsEnabled = instanceSettings?.experimental.enableBuiltInAgents === true;
   const tab: FilterTab = requestedTab === "builtin" && !builtInAgentsEnabled ? "all" : requestedTab;
   const visibleTabItems = useMemo(
-    () => AGENT_FILTER_TAB_ITEMS.filter((item) => item.value !== "builtin" || builtInAgentsEnabled),
-    [builtInAgentsEnabled],
+    () => AGENT_FILTER_TAB_ITEMS
+      .filter((item) => item.value !== "builtin" || builtInAgentsEnabled)
+      .map((item) => ({ value: item.value, label: mimouseT(item.labelKey) })),
+    [builtInAgentsEnabled, mimouseI18n.language],
   );
 
   const { data: builtInAgents } = useQuery({
@@ -318,7 +323,7 @@ export function Agents({ initialView = "list" }: { initialView?: AgentsView } = 
       );
     }
     return map;
-  }, [agents, environmentsById, environmentCapabilities, instanceSettings?.defaultEnvironmentId]);
+  }, [agents, environmentsById, environmentCapabilities, instanceSettings?.defaultEnvironmentId, mimouseI18n.language]);
 
   useEffect(() => {
     setBreadcrumbs([{ label: "Agents" }]);
@@ -344,8 +349,8 @@ export function Agents({ initialView = "list" }: { initialView?: AgentsView } = 
   const showEnvironmentColumn = environmentsEnabled && (environments === undefined || environments.length > 1);
   const resolveRenderedEnvironment = (agentId: string) => (
     environmentDataLoading
-      ? loadingEnvironmentDescriptor
-      : environmentByAgentId.get(agentId) ?? localEnvironmentDescriptor
+      ? loadingEnvironmentDescriptor()
+      : environmentByAgentId.get(agentId) ?? localEnvironmentDescriptor()
   );
 
   const renderAgentRow = (agent: Agent) => {
@@ -381,7 +386,7 @@ export function Agents({ initialView = "list" }: { initialView?: AgentsView } = 
         titleClassName="flex-1 @5xl:flex-none @5xl:w-56"
         titleTextClassName="truncate"
         subtitleClassName="truncate"
-        subtitle={`${roleLabels[agent.role] ?? agent.role}${agent.title ? ` - ${agent.title}` : ""}`}
+        subtitle={`${agentRoleLabel(agent.role)}${agent.title ? ` - ${agent.title}` : ""}`}
         to={agentUrl(agent)}
         className={cn(
           "group py-3",
@@ -593,7 +598,7 @@ function OrgTreeNode({
           <div className="min-w-(--sz-7rem) truncate">
             <span className="text-sm font-medium">{node.name}</span>
             <span className="text-xs text-muted-foreground ml-2">
-              {roleLabels[node.role] ?? node.role}
+              {agentRoleLabel(node.role)}
               {agent?.title ? ` - ${agent.title}` : ""}
             </span>
           </div>
@@ -639,8 +644,8 @@ function OrgTreeNode({
                   agent={agent}
                   environment={
                     environmentDataLoading
-                      ? loadingEnvironmentDescriptor
-                      : environmentByAgentId.get(agent.id) ?? localEnvironmentDescriptor
+                      ? loadingEnvironmentDescriptor()
+                      : environmentByAgentId.get(agent.id) ?? localEnvironmentDescriptor()
                   }
                   showEnvironment={showEnvironment}
                 />

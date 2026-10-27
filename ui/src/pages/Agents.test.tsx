@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 
+import "../i18n/agent-directory-test-resources";
+
 import { i18n, agentTaskQuotaMessages } from "../i18n/agent-task-quota-test-resources";
 import { queryKeys } from "../lib/queryKeys";
 import type { ReactNode } from "react";
@@ -364,6 +366,122 @@ describe("Agents", () => {
   });
 
   describe.each([["streamlined", Agents], ["production", ProductionAgents]] as const)("localized %s agent directory", (mode, AgentList) => {
+    const displayCopy = {
+      en: { tabs: ["All", "Active", "Paused", "Error", "Built-in"], roles: ["Security", "Engineer", "Designer", "Researcher", "General"], local: "Local", host: "Paperclip host", loading: "Loading environment", managed: "Managed by Paperclip", sandbox: "Sandbox", provider: "PROVIDER sandbox provider", unknown: "Unknown environment" },
+      "zh-CN": { tabs: ["全部", "活动", "已暂停", "错误", "内置"], roles: ["安全", "工程师", "设计师", "研究员", "通用"], local: "本地", host: "Paperclip 主机", loading: "正在加载环境", managed: "由 Paperclip 管理", sandbox: "沙箱", provider: "PROVIDER 沙箱提供方", unknown: "未知环境" },
+      es: { tabs: ["Todos", "Activo", "Pausado", "Error", "Integrados"], roles: ["Seguridad", "Ingeniero", "Diseñador", "Investigador", "General"], local: "Local", host: "Host de Paperclip", loading: "Cargando entorno", managed: "Administrado por Paperclip", sandbox: "Sandbox", provider: "Proveedor de sandbox PROVIDER", unknown: "Entorno desconocido" },
+      ja: { tabs: ["すべて", "有効", "一時停止", "エラー", "組み込み"], roles: ["セキュリティ", "エンジニア", "デザイナー", "リサーチャー", "汎用"], local: "ローカル", host: "Paperclip ホスト", loading: "環境を読み込み中", managed: "Paperclip が管理", sandbox: "サンドボックス", provider: "PROVIDER サンドボックスプロバイダー", unknown: "不明な環境" },
+    };
+
+    it.each(Object.entries(displayCopy))("localizes mounted tabs, roles and environment states in %s with stable wire filters", async (locale, copy) => {
+      await i18n.changeLanguage(locale);
+      const roles = ["security", "engineer", "designer", "researcher", "general", "ceo", "devops", "Role 用户"];
+      const environmentIds = [null, "env-local", "env-managed", "env-provider", "missing-environment-用户", "env-ssh", "env-fallback", "env-raw-provider"];
+      const agents = roles.map((role, index) => makeAgent({ id: `agent-${index}`, name: `Agent 用户 ${index}`, urlKey: `raw-${index}`, role: role as Agent["role"], title: `Title 原文 ${index}`, defaultEnvironmentId: environmentIds[index], status: index === 1 ? "paused" : index === 2 ? "error" : "active" }));
+      const environments = [
+        makeEnvironment({ id: "env-local", name: "Named host 原文", driver: "local", config: {} }),
+        makeEnvironment({ id: "env-managed", name: "Managed 名称", metadata: { managedByPaperclip: true } }),
+        makeEnvironment({ id: "env-provider", name: "Provider env 原文", config: { provider: "daytona" } }),
+        makeEnvironment({ id: "env-ssh", name: "SSH target 原文", driver: "ssh", config: {} }),
+        makeEnvironment({ id: "env-fallback", name: "Fallback env 原文", config: {} }),
+        makeEnvironment({ id: "env-raw-provider", name: "Raw provider env 原文", config: { provider: "Vendor 原名" } }),
+      ];
+      const original = JSON.stringify({ agents, environments });
+      let finishEnvironments!: (value: Environment[]) => void;
+      mockAgentsApi.list.mockResolvedValue(agents);
+      mockAgentsApi.org.mockResolvedValue(agents.map(agent => ({ id: agent.id, name: agent.name, role: agent.role, status: agent.status, reports: [] })));
+      mockEnvironmentsApi.list.mockReturnValue(new Promise<Environment[]>(resolve => { finishEnvironments = resolve; }));
+      mockInstanceSettingsApi.get.mockResolvedValue(makeInstanceSettings({ enableBuiltInAgents: true, enableEnvironments: true }));
+      mockBuiltInAgentsApi.list.mockResolvedValue([makeBuiltInAgentState({ agentId: "agent-3", agent: agents[3] })]);
+      root = createRoot(container);
+      const render = async () => { await act(async () => root!.render(<QueryClientProvider client={queryClient}><ToastProvider><AgentList /></ToastProvider></QueryClientProvider>)); await flushReact(); await flushReact(); };
+      await render();
+      await act(async () => container.querySelector<HTMLButtonElement>(`button[aria-label="${i18n.t("workflow.listView")}"]`)!.click());
+      await flushReact();
+      expect(container.textContent).toContain(copy.loading);
+      expect(container.querySelector(`[title="${copy.loading}"]`)).not.toBeNull();
+      const next = locale === "ja" ? "es" : "ja";
+      await act(async () => { await i18n.changeLanguage(next); });
+      expect(container.textContent).toContain(displayCopy[next].loading);
+      await act(async () => finishEnvironments(environments));
+      await flushReact(); await flushReact();
+      const assertDisplay = (expected: typeof copy) => {
+        expect([...container.querySelectorAll('[role="tab"]')].map(tab => tab.textContent)).toEqual(expected.tabs);
+        const environmentDetails = [expected.host, expected.host, expected.managed, expected.provider.replace("PROVIDER", "Daytona"), "missing-", "SSH", expected.provider.replace("PROVIDER", expected.sandbox), expected.provider.replace("PROVIDER", "Vendor 原名")];
+        agents.forEach((agent, index) => {
+          const row = findAgentRow(container, agent.name)!;
+          expect(row).not.toBeNull();
+          expect(row.getAttribute("href")).toContain(`/agents/raw-${index}`);
+          expect(row.textContent).toContain(`${expected.roles[index] ?? ["CEO", "DevOps", "Role 用户"][index - 5]} - Title 原文 ${index}`);
+          const environmentName = index === 0 ? expected.local : index === 4 ? expected.unknown : environments.find(environment => environment.id === environmentIds[index])!.name;
+          const title = index === 4 ? `${expected.unknown} - missing-environment-用户` : `${environmentName} - ${environmentDetails[index]}`;
+          expect(row.querySelector(`[title="${title}"]`)).not.toBeNull();
+          expect(row.textContent).toContain(environmentName);
+          expect(row.textContent).toContain(environmentDetails[index]);
+        });
+        expect(container.textContent).not.toContain(expected.loading);
+        expect(container.textContent).not.toContain("agentDirectoryUi.");
+      };
+      assertDisplay(displayCopy[next]);
+      const calls = () => [mockAgentsApi.list, mockAgentsApi.org, mockEnvironmentsApi.list, mockEnvironmentsApi.capabilities, mockBuiltInAgentsApi.list].map(mock => mock.mock.calls.map(args => [...args]));
+      const beforeLanguageChange = calls();
+      await act(async () => { await i18n.changeLanguage(locale); });
+      assertDisplay(copy);
+      expect(calls()).toEqual(beforeLanguageChange);
+      if (mode === "production") {
+        await act(async () => container.querySelector<HTMLButtonElement>(`button[aria-label="${i18n.t("workflow.orgChartView")}"]`)!.click());
+        await flushReact();
+        assertDisplay(copy);
+        await act(async () => { await i18n.changeLanguage(next); });
+        assertDisplay(displayCopy[next]);
+        await act(async () => container.querySelector<HTMLButtonElement>(`button[aria-label="${i18n.t("workflow.listView")}"]`)!.click());
+      }
+      for (const [index, wire] of ["all", "active", "paused", "error", "builtin"].entries()) {
+        if (wire !== "all") {
+          await act(async () => { container.querySelectorAll<HTMLElement>('[role="tab"]')[index].dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 })); });
+          expect(mockRouterState.navigate).toHaveBeenLastCalledWith(`/agents/${wire}`);
+        }
+        mockRouterState.pathname = `/agents/${wire}`;
+        await render();
+        const shown = agents.filter(agent => wire === "all" || (wire === "builtin" ? agent.id === "agent-3" : agent.status === wire));
+        expect([...container.querySelectorAll('a[href^="/agents/raw-"]')].map(row => row.getAttribute("href"))).toEqual(shown.map(agent => `/agents/${agent.urlKey}`));
+      }
+      mockSidebarState.isMobile = true;
+      await render();
+      const section = container.querySelector<HTMLSelectElement>("select")!;
+      expect([...section.options].map(option => option.value)).toEqual(["all", "active", "paused", "error", "builtin"]);
+      expect([...section.options].map(option => option.textContent)).toEqual(mode === "production" ? displayCopy[next].tabs : copy.tabs);
+      await act(async () => { section.value = "all"; section.dispatchEvent(new Event("change", { bubbles: true })); });
+      expect(mockRouterState.navigate).toHaveBeenLastCalledWith("/agents/all");
+      expect(mockAgentsApi.list).toHaveBeenCalledWith("company-1");
+      expect(mockEnvironmentsApi.list).toHaveBeenCalledExactlyOnceWith("company-1");
+      expect(mockBuiltInAgentsApi.provision).not.toHaveBeenCalled();
+      expect(mockOpenNewAgent).not.toHaveBeenCalled();
+      expect(JSON.stringify({ agents, environments })).toBe(original);
+    });
+
+    it.each(Object.entries(displayCopy))("keeps disabled and single-environment branches hidden in %s", async (locale, copy) => {
+      await i18n.changeLanguage(locale);
+      mockInstanceSettingsApi.get.mockResolvedValue(makeInstanceSettings({ enableEnvironments: false, enableBuiltInAgents: false }));
+      root = createRoot(container);
+      await act(async () => root!.render(<QueryClientProvider client={queryClient}><ToastProvider><AgentList /></ToastProvider></QueryClientProvider>));
+      await flushReact(); await flushReact();
+      await act(async () => container.querySelector<HTMLButtonElement>(`button[aria-label="${i18n.t("workflow.listView")}"]`)!.click());
+      expect([...container.querySelectorAll('[role="tab"]')].map(tab => tab.textContent)).toEqual(copy.tabs.slice(0, 4));
+      expect(container.textContent).not.toContain(copy.host);
+      expect(mockEnvironmentsApi.list).not.toHaveBeenCalled();
+      expect(mockEnvironmentsApi.capabilities).not.toHaveBeenCalled();
+      expect(mockBuiltInAgentsApi.list).not.toHaveBeenCalled();
+      await act(async () => { queryClient.setQueryData(queryKeys.instance.settings, makeInstanceSettings({ enableEnvironments: true })); });
+      await flushReact(); await flushReact();
+      expect(mockEnvironmentsApi.list).toHaveBeenCalledExactlyOnceWith("company-1");
+      expect(container.textContent).not.toContain("Daytona Sandbox");
+      expect(container.textContent).not.toContain(copy.host);
+      await act(async () => { await i18n.changeLanguage(locale === "ja" ? "es" : "ja"); });
+      expect(container.textContent).not.toContain("Daytona Sandbox");
+      expect(container.querySelectorAll('[role="tab"]')).toHaveLength(4);
+    });
+
     it.each(Object.entries(agentTaskQuotaMessages))("shows the correct no-company scope in %s without creating anything", async (locale, copy) => {
       await i18n.changeLanguage(locale);
       mockCompanyState.selectedCompanyId = null;

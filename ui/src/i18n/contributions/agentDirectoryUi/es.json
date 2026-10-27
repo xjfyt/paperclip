@@ -1,0 +1,18 @@
+{
+  "builtIn": "Integrados",
+  "local": "Local",
+  "paperclipHost": "Host de Paperclip",
+  "localTitle": "Local - Host de Paperclip",
+  "loadingEnvironment": "Cargando entorno",
+  "sandbox": "Sandbox",
+  "managedByPaperclip": "Administrado por Paperclip",
+  "sandboxProvider": "Proveedor de sandbox {{provider}}",
+  "environmentTitle": "{{name}} - {{detail}}",
+  "unknownEnvironment": "Entorno desconocido",
+  "unknownEnvironmentTitle": "Entorno desconocido - {{id}}",
+  "roleSecurity": "Seguridad",
+  "roleEngineer": "Ingeniero",
+  "roleDesigner": "Diseñador",
+  "roleResearcher": "Investigador",
+  "roleGeneral": "General"
+}

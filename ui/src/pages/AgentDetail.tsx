@@ -41,7 +41,8 @@ import { copyTextToClipboard } from "../lib/clipboard";
 import { AgentSkillsTab } from "./agent-skills/AgentSkillsTab";
 import { AgentConfigForm } from "../components/AgentConfigForm";
 import { getAdapterDisplay } from "../adapters/adapter-display-registry";
-import { adapterLabels, roleLabels, help } from "../components/agent-config-primitives";
+import { adapterLabels, help } from "../components/agent-config-primitives";
+import { agentRoleLabel } from "../i18n/agent-role-display";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { useAdapterCapabilities } from "@/adapters/use-adapter-capabilities";
 import { redactCommandText as redactCommandSecretText } from "@paperclipai/adapter-utils";
@@ -1270,7 +1271,7 @@ export function AgentDetail() {
                 ? <img src={`/brands/${agent.adapterType === "claude_local" ? "claude" : "codex"}-color.svg`} className="size-4" alt="" />
                 : null}
               <span>{getAdapterDisplay(agent.adapterType === "paperclip_runner" && agent.adapterConfig.provider === "openai_dot" ? "openai_dot" : agent.adapterType).label}</span><span>·</span>
-              <span>{agent.title || roleLabels[agent.role] || agent.role}</span>
+              <span>{agent.title || agentRoleLabel(agent.role)}</span>
             </div>
             <AgentLifecycleStatus agent={currentAgent} refreshError={lifecycle.isError} onRetry={() => agentAction.mutate("retryLifecycle")} retryPending={agentAction.isPending} />
             <SetPrimaryAgentButton agent={agent} />
@@ -1768,7 +1769,7 @@ export function AgentOverview({
             <StatusBadge status={agent.status} />
           </div>
           <div className="space-y-3">
-            <SummaryRow label={mimouseT("workflow.role")}><span className="text-sm">{roleLabels[agent.role] ?? agent.role}</span></SummaryRow>
+            <SummaryRow label={mimouseT("workflow.role")}><span className="text-sm">{agentRoleLabel(agent.role)}</span></SummaryRow>
             <SummaryRow label={mimouseT("commonUi.title")}><span className="text-sm">{agent.title ?? mimouseT("agentOverviewUi.titleNotSet")}</span></SummaryRow>
             <SummaryRow label={mimouseT("workflow.reportsTo")}>
               {reportsToAgent ? (
