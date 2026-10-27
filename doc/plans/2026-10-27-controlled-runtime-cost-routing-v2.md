@@ -1,13 +1,17 @@
 # Controlled runtime cost routing v2
 
-Date: 2026-10-27. Status: implementation contract; local inert C2 validation only.
+Date: 2026-10-27. Status: implemented v2 scope; integrated migration and
+real-PostgreSQL/heartbeat C2 qualification still pending at this documentation pass.
 
 ## Version and scope
 
 The v1 cost-routing preview stays read-only and blocked. Its reports are not
 upgraded into dispatch authority. V2 is a distinct, default-OFF feature with one
 company policy head and monotonically increasing generations. No missing row,
-legacy report, or environment omission enables routing.
+legacy report, or environment omission enables routing. The runtime feature gate
+requires `PAPERCLIP_RUNTIME_COST_ROUTING_ENABLED=true`; leave it unset/false until
+qualification and an explicit operator decision. Enabling the flag, opening the
+UI, preparing a pool, or approving a policy never implicitly creates or runs work.
 
 The initial supported target is the built-in Claude local CLI using a pinned
 company API-key secret and an already approved literal prompt application. Only
@@ -51,16 +55,19 @@ Base: `/api/companies/:companyId/runtime-cost-routing`.
 | Operation | Effect |
 | --- | --- |
 | `GET /` | Current head and authorized metadata; no execution |
+| `GET /policies/:policyId`, `GET /bindings/:bindingId` | Creator-authorized policy/binding metadata; no execution |
 | `POST /prepare` | Immutable proposal and server-derived candidate snapshots |
 | `POST /policies/:policyId/approve` | Human-confirmed digest and generation CAS; no wake |
 | `POST /policies/:policyId/close-expired` | Explicit closure of an expired, never-approved proposal; no head change or wake |
 | `POST /disable` | Generation CAS clears future policy use; no wake or cancellation |
 | `POST /tasks` | Explicit new task creation, candidate selection and durable binding in one transaction; no wake |
 | `POST /bindings/:bindingId/run` | Separately confirmed execution/possible charges; one owned wake intent |
-| `GET /requests/:requestId` | Session-scoped metadata recovery; never execution or replay |
+| `GET /requests/:requestId` | Freshly authenticated creator metadata recovery; never execution or replay |
 
-Task creation and execution are different approvals. Task text is ordinary task
-content, not copied private trial material. Pending browser recovery retains only
+Task creation and execution are different approvals. The human explicitly
+confirms the task content's ordinary company visibility, then separately confirms
+execution and possible charges before running it. Task text is not copied private
+trial material. Pending browser recovery retains only
 IDs, hashes and action metadata, never task text, private outputs or secrets.
 The binding pins the task digest; edits require a new reviewed binding rather
 than silently changing the approved work.
@@ -80,9 +87,12 @@ ordinary unqualified execution.
 
 ## Recovery and withdrawal
 
-Request IDs are bounded, company-scoped, digest-bound and actor/session-scoped.
-Repeat calls cannot change payload or target. Readback is permitted while the
-company is paused, as is disabling future routing. Preparation, approval, task
+Request IDs are bounded, company-scoped, digest-bound and creator-owned; stored
+receipts record the acting session. Browser pending journals are additionally
+scoped to the company, user and session. A creator's newly authenticated session
+can request authorized metadata without inheriting permission to replay old
+confirmations. Repeat calls cannot change payload or target. Readback is permitted
+while the company is paused, as is disabling future routing. Preparation, approval, task
 creation and execution remain gated. Authentication changes require fresh
 readback, not replay of old confirmations.
 
@@ -106,13 +116,44 @@ a new approval request ID.
 Withdrawal invalidates future use; it does not cancel an in-flight process,
 reverse billed costs, or restore an old policy/application automatically.
 
-## Storage, ownership and verification
+## Storage and retention
 
 New tables: `runtime_routing_policies`, `runtime_routing_receipts`,
 `runtime_routing_heads`, and `runtime_routing_bindings`. Scoped foreign keys and
 unique request/generation/task/run constraints supplement transactional authority
 checks. `agent_wakeup_requests` has an unconditional terminal-inclusive partial
 unique fence for `runtime-cost-routing:%` intents. V1 tables are unchanged.
+
+The binding foreign keys intentionally prevent physical deletion of referenced
+issues, Agents and heartbeat runs. Prefer archive/retirement controls that retain
+the evidence, not direct row deletion or disabling constraints. Policy withdrawal
+also retains the historical decision and receipt chain.
+
+The company-deletion service now removes the new v2 dependents in order:
+bindings → heads → receipts → policies, before their referenced company objects.
+The new policy/receipt immutability guards reject updates, except the narrowly permitted expiry
+marker, but do not introduce a blanket DELETE trigger that blocks this cleanup.
+This fixes the new v2 cleanup dependency; it does **not** resolve pre-existing
+legacy DELETE-trigger debt or prove complete company deletion across all older
+histories. Keep that limitation visible rather than bypassing legacy guards.
+
+## Migration 0359 and operational preparation
+
+`0359_confused_kid_colt.sql` is additive but requires a maintenance window. Before
+applying it, leave the feature OFF, drain application/worker writes, and take a
+restorable database backup with the deployment's normal backup procedure. Preserve
+the migration journal and verify recovery prerequisites before making changes.
+The existing wake-request uniqueness scan is not online/concurrent DDL; bounded
+lock and statement timeouts are not a promise of uninterrupted service.
+
+If migration application fails or times out, keep routing OFF and inspect the
+transaction outcome and migration history before retrying. Do not delete evidence,
+remove triggers, or relax constraints to force a pass. Disabling the feature is a
+runtime rollback for future work, not a database downgrade, process cancellation,
+or refund. Production rollout still requires migration/backup verification and
+the integration checks below.
+
+## Ownership and verification limits
 
 Shared validators, schema and this design are one review unit; the integration
 owner generates migration SQL/journal. Runtime, proof producer/qualifier, and UI
@@ -123,7 +164,17 @@ The direct Node contract suite is `scripts/test-runtime-cost-routing-contracts.m
 (run with the repository's installed `tsx` loader). It covers default OFF,
 strict input boundaries, decimal precision, evidence identity/coverage, scoped
 recovery and schema fences without opening a database or executing a CLI.
-Integration must additionally test real producer parsing with inert output,
-current-authority/drift rejection, pause/disable, before-wake binding, concurrency,
-unknown response recovery and zero duplicate wake. No C3/C4, paid vendor call,
-full ordinary-tools quality, or deployment readiness is claimed by these checks.
+Focused contract/type checks and inert producer/service/UI checks are separate
+from integrated qualification. At this documentation pass, migration 0359 and the
+real PostgreSQL/heartbeat C2 fixture have **not yet established a pass**. Their
+results must be reported against the final integrated code rather than inferred
+from schema inspection, mocks, older test totals, or earlier builds.
+
+Outstanding integration coverage includes migration constraints and immutable
+lifecycle guards, genuine CLI-output parsing using inert fixtures, current
+authority/drift rejection, pause/disable, before-wake binding, concurrency,
+unknown-response recovery, explicit expiry closure and zero duplicate wake.
+A local mock C2 run must not invoke a real model, CLI/vendor, paid service or
+notification recipient. No full-suite, C3/C4, paid vendor, complete ordinary-tools
+quality or deployment-readiness pass is claimed here. Existing 85-item status
+counts remain unchanged until integration evidence justifies a separate update.
