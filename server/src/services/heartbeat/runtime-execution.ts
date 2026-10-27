@@ -1,3 +1,5 @@
+import { applicationExecutionConflict } from "../mimouse-prompt-applications/contract.js";
+import { assertRuntimeRoutingEarlyBinding, guardRuntimeRoutingExecution } from "../mimouse-cost-routing/execution.js";
 import { preparePromptApplicationExecution, type PromptApplicationCandidate } from "../mimouse-prompt-applications/execution.js";
 import { findPrivatePromptExecution, executePrivatePromptHeartbeat } from "../mimouse-private-prompt-tests/execution.js";
 import { parseNativeSessionGoalControl } from "./scheduling.js";
@@ -239,6 +241,8 @@ export async function executeHeartbeatRuntime(db: Db, input: HeartbeatRuntimeExe
     issueRef?.workMode === "skill_test"
       ? { kind: "skill_test" as const, issueId: issueRef.id }
       : { kind: "standard" as const };
+  const routingBinding = await assertRuntimeRoutingEarlyBinding(db, run, issueId);
+  if (routingBinding && nativeRuntimeResolution.kind !== "legacy") throw applicationExecutionConflict("runtime_routing_native_runtime_denied");
   const privatePromptBinding = await findPrivatePromptExecution(db, run.companyId, issueId);
   const authToken =
     !privatePromptBinding &&
@@ -882,7 +886,7 @@ export async function executeHeartbeatRuntime(db: Db, input: HeartbeatRuntimeExe
               authToken: authToken ?? undefined,
             }));
           },
-          async () => { controlledPromptApplication = await preparePromptApplicationExecution(db, input); },
+          async () => { controlledPromptApplication = await guardRuntimeRoutingExecution(db, input, await preparePromptApplicationExecution(db, input)); },
         );
       if (!guardedDispatch.dispatched) return { dispatched: false };
       adapterResult = await guardedDispatch.resultPromise;

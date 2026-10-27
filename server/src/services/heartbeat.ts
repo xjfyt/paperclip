@@ -1,3 +1,5 @@
+import { applicationExecutionConflict } from "./mimouse-prompt-applications/contract.js";
+import { assertRuntimeRoutingEarlyBinding } from "./mimouse-cost-routing/execution.js";
 import { codingRepairRunDeadlineElapsed } from "./mimouse-coding/repair-deadline.js";
 import { findPromptApplicationCandidate } from "./mimouse-prompt-applications/execution.js";
 import { assertPrivatePromptEarlyBinding } from "./mimouse-private-prompt-tests/service.js";
@@ -2144,6 +2146,7 @@ export function heartbeatService(
       // Identify the controlled first attempt before any adapter/config drift
       // failure, so a generic retry cannot erase its application scope.
       const dispatchIssueId = readNonEmptyString(parseObject(run.contextSnapshot).issueId);
+      const runtimeRoutingBinding = await assertRuntimeRoutingEarlyBinding(db, run, dispatchIssueId);
       const privatePromptEarlyBinding = await assertPrivatePromptEarlyBinding(db, run, dispatchIssueId);
       const promptApplicationCandidate = privatePromptEarlyBinding ? null : await findPromptApplicationCandidate(db, run, dispatchIssueId);
 
@@ -4359,6 +4362,7 @@ export function heartbeatService(
           target: executionTarget,
           workspaceId: persistedExecutionWorkspace?.id ?? null,
         });
+        if (runtimeRoutingBinding && nativeRuntimeResolution.kind !== "legacy") throw applicationExecutionConflict("runtime_routing_native_runtime_denied");
         const hasInstructionFilesystem = nativeRuntimeResolution.kind !== "native"
           ? adapter.supportsInstructionsBundle === true
           : !["claude_managed_agents_api", "aws_agentcore_harness_api", "openai_dot_mcp"].includes(nativeRuntimeResolution.profile.backend);

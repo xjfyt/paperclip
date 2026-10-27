@@ -1,3 +1,4 @@
+import { assertRuntimeRoutingCheckout } from "./mimouse-cost-routing/execution.js";
 import { notifyChatPublicationWork } from "./chat-work-notifications.js";
 import { recordChatHandoff, recordChatCompletion, existingChatCompletionReply, acknowledgeChatCompletionReply } from "./chat-completion-delivery.js";
 import { mirrorSlackBoardComment, slackBoardReplyBindings } from "./slack-board-messages.js";
@@ -11724,6 +11725,7 @@ export function issueService(db: Db) {
         .where(eq(issues.id, id))
         .then((rows) => rows[0] ?? null);
       if (!issueCompany) throw notFound("Issue not found");
+      await assertRuntimeRoutingCheckout(db, id, agentId, checkoutRunId);
       await assertAssignableAgent(db, issueCompany.companyId, agentId, {
         kind: "work",
       });

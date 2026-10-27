@@ -70,7 +70,12 @@ export async function promptApplicationImplementationDigest() {
   }
   // Changes to the server contract invalidate approval as well as adapter code.
   const extension = path.extname(fileURLToPath(import.meta.url));
-  for (const contract of ["target", "service", "execution", "recovery", "contract", "workspace", "../heartbeat/run-completion", "../heartbeat/run-lifecycle", "../heartbeat/workspaces", "../recovery/service", "../heartbeat", "../heartbeat/runtime-execution", "../../adapters/registry", "../../routes/mimouse-prompt-applications"]) {
+  for (const contract of ["target", "service", "execution", "recovery", "contract", "workspace", "../heartbeat/run-completion", "../heartbeat/run-lifecycle", "../heartbeat/workspaces", "../recovery/service", "../heartbeat", "../heartbeat/runtime-execution", "../../adapters/registry", "../../routes/mimouse-prompt-applications",
+    "../heartbeat/queue", "../issues", "../mimouse-cost-routing/service", "../mimouse-cost-routing/store", "../mimouse-cost-routing/clock",
+    "../mimouse-cost-routing/selection", "../mimouse-cost-routing/candidates", "../mimouse-cost-routing/execution", "../mimouse-cost-routing/contract",
+    "../mimouse-cost-routing/evidence", "../mimouse-cost-routing/evidence-service", "../mimouse-cost-routing/wake-authority",
+    "../mimouse-private-prompt-tests/service", "../mimouse-private-prompt-tests/compare", "../mimouse-private-prompt-tests/profile",
+    "../cost-routing-preview/proof", "../../routes/mimouse-cost-routing"]) {
     entries.push([`server/${contract}`, await fileHash(fileURLToPath(new URL(`${contract}${extension}`, import.meta.url)))]);
   }
   return applicationDigest(entries);

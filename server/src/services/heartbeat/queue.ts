@@ -1,3 +1,4 @@
+import { assertRuntimeRoutingReservedWake, assertRuntimeRoutingWake, admitRuntimeRoutingWake, claimRuntimeRoutingRun } from "../mimouse-cost-routing/execution.js";
 import { isDedicatedCodingRepairRun } from "../mimouse-coding/repair-deadline.js";
 import { mimousePrivatePromptTests } from "@paperclipai/db/schema/mimouse_private_prompt_tests";
 import { privatePromptWakeAuthority } from "../mimouse-private-prompt-tests/wake-authority.js";
@@ -2126,20 +2127,35 @@ export function createHeartbeatQueue(db: Db, dependencies: HeartbeatQueueDepende
     let issueId =
       readNonEmptyString(enrichedContextSnapshot.issueId) ?? issueIdFromPayload;
     if (executionReconciliationWake && !issueId) return null;
+    assertRuntimeRoutingReservedWake(opts);
     const privateTestId = privatePromptWakeAuthority(opts);
     const reservedPrivateWake = opts.idempotencyKey?.startsWith("private-prompt-test:") ||
       reason === "private_prompt_test" || "privatePromptTest" in contextSnapshot || "privatePromptTestId" in contextSnapshot;
     if (reservedPrivateWake && !privateTestId) throw new HttpError(403, "private_prompt_wake_authority_required");
-    if (issueId) {
+
+    let agent = await getAgent(agentId);
+    if (!agent) throw notFound("Agent not found");
+    // Resolve the effective task before any admission receipts or automatic
+    // normalization. A resume-only request and a human identifier must pass
+    // the same durable task fence as a directly supplied UUID.
+    const explicitResumeSession = await resolveExplicitResumeSessionOverride(agent, payload, taskKey);
+    issueId ??= explicitResumeSession?.issueId ?? null;
+    if (issueId && !isUuidLike(issueId)) {
+      const [resolved] = await db.select({ id: issues.id }).from(issues).where(and(
+        eq(issues.companyId, agent.companyId), eq(issues.identifier, issueId.toUpperCase()))).limit(1);
+      if (resolved) issueId = resolved.id;
+    }
+    if (issueId && isUuidLike(issueId)) {
+      enrichedContextSnapshot.issueId = issueId;
+      if (readNonEmptyString(enrichedContextSnapshot.taskId)) enrichedContextSnapshot.taskId = issueId;
+    }
+    const routingBindingId = await assertRuntimeRoutingWake(db, agentId, issueId, opts);
+    if (issueId && isUuidLike(issueId)) {
       const [privateIssue] = await db.select({ id: mimousePrivatePromptTests.id }).from(mimousePrivatePromptTests)
         .where(eq(mimousePrivatePromptTests.issueId, issueId));
       if (privateIssue && privateIssue.id !== privateTestId) throw new HttpError(403, "private_prompt_generic_wake_denied");
       if (privateTestId && privateIssue?.id !== privateTestId) throw new HttpError(403, "private_prompt_wake_binding_denied");
     } else if (privateTestId) throw new HttpError(403, "private_prompt_wake_binding_denied");
-
-
-    let agent = await getAgent(agentId);
-    if (!agent) throw notFound("Agent not found");
     // Mentions only annotate comments. Ignore legacy callers before creating
     // a run or deferred request; assignment and review have their own wakes.
     if (reason === "issue_comment_mentioned" || enrichedContextSnapshot.wakeReason === "issue_comment_mentioned") return null;
@@ -2387,11 +2403,6 @@ export function createHeartbeatQueue(db: Db, dependencies: HeartbeatQueueDepende
       return null;
     }
 
-    const explicitResumeSession = await resolveExplicitResumeSessionOverride(
-      agent,
-      payload,
-      taskKey,
-    );
     if (explicitResumeSession) {
       enrichedContextSnapshot.resumeFromRunId =
         explicitResumeSession.resumeFromRunId;
@@ -2492,6 +2503,7 @@ export function createHeartbeatQueue(db: Db, dependencies: HeartbeatQueueDepende
         }
       }
     }
+    if (await assertRuntimeRoutingWake(db, agentId, issueId, opts) !== routingBindingId) throw new HttpError(409, "runtime_routing_task_scope_changed");
     // Propagate projectId into context so resolveWorkspaceForRun can bind the
     // project workspace even when context.projectId wasn't set by the caller.
     if (projectId && !readNonEmptyString(enrichedContextSnapshot.projectId)) {
@@ -2680,6 +2692,10 @@ export function createHeartbeatQueue(db: Db, dependencies: HeartbeatQueueDepende
             sql`select id from issues where id = ${issueId} and company_id = ${agent.companyId} for update`,
           );
 
+          if (routingBindingId) {
+            const routingAdmission = await admitRuntimeRoutingWake(tx, routingBindingId, agentId, issueId);
+            if (routingAdmission.replay) return { kind: "replayed" as const, run: routingAdmission.run };
+          }
           if (privateTestId) {
             const [test] = await tx.select().from(mimousePrivatePromptTests).where(and(
               eq(mimousePrivatePromptTests.id, privateTestId), eq(mimousePrivatePromptTests.companyId, agent.companyId),
@@ -4101,6 +4117,7 @@ export function createHeartbeatQueue(db: Db, dependencies: HeartbeatQueueDepende
             })
             .where(eq(agentWakeupRequests.id, wakeupRequest.id));
 
+          if (routingBindingId) await claimRuntimeRoutingRun(tx, routingBindingId, newRun.id);
           if (privateTestId) {
             await tx.update(mimousePrivatePromptTests).set({ status: "queued", wakeupRequestId: wakeupRequest.id,
               heartbeatRunId: newRun.id, updatedAt: new Date() }).where(and(eq(mimousePrivatePromptTests.id, privateTestId),

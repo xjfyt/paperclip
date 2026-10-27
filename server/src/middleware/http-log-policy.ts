@@ -45,7 +45,7 @@ const SECRET_SENSITIVE_HTTP_PATHS = [
 ];
 const SECRET_SENSITIVE_HTTP_METHODS = new Set(["POST", "PUT", "PATCH"]);
 
-const PRIVATE_INTEGRATION_PATH = /^\/api\/companies\/[^/]+\/(feedback-wecom|cost-routing|capability-evidence|notifications|coding|feedback-inbox|feedback-langfuse|data-operations|research-candidates|research-routines|skill-evaluations|prompt-registry|integrations\/workbuddy)(?:\/|$)/i;
+const PRIVATE_INTEGRATION_PATH = /^\/api\/companies\/[^/]+\/(feedback-wecom|cost-routing|runtime-cost-routing|capability-evidence|notifications|coding|feedback-inbox|feedback-langfuse|data-operations|research-candidates|research-routines|skill-evaluations|prompt-registry|integrations\/workbuddy)(?:\/|$)/i;
 
 /** Only an allowlisted static namespace may reach diagnostics, never supplied IDs.
  * Match raw paths before URL normalization so malformed tails cannot escape. */
