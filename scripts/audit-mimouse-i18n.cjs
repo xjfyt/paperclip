@@ -3,6 +3,7 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const displayAttributes = new Set(["aria-label", "ariaLabel", "aria-description", "title", "placeholder", "alt", "label", "description", "message"]);
 const toastFields = new Set(["title", "body", "description", "message"]);
+const browserMessageMethods = ["confirm", "prompt", "alert"];
 // Exact lowercase display fragments only; do not widen to arbitrary short IDs.
 const shortDisplayWords = new Set(["in", "of", "on", "or", "to", "by", "as", "an", "a"]);
 const names = ['Auth','InviteLanding','InstanceAccess','ProfileSettings','Dashboard','Issues','IssueDetail','Agents','AgentDetail','Approvals','ApprovalDetail','Routines','Costs','MimouseNotifications','MimouseFeedback','MimouseBuildMatrix','MimouseCoding','MimouseCodingRepair','MimouseWorkbuddy','Sidebar','SidebarProjects','SidebarAgents','SidebarAccountMenu','CompanySwitcher','CompanySettingsSidebar','CommandPalette','NewIssueDialog','IssueProperties','IssuesList','IssueFiltersPopover','CommentThread','BudgetPolicyCard','SubscriptionCostCard','ClaudeSubscriptionPanel','CodexSubscriptionPanel','CloudAccessGate','BootstrapPendingPage','AuthRevocationPanel','InviteAuthMethods','ThemeToggle','InboxAgentPolicyControl','AgentMultiSelect'];
@@ -78,6 +79,14 @@ const buildObservationComponents = [
 // Explicitly include this direct host (already selected by the old basename
 // scope); this does not recursively add hosts of any other component.
 const buildObservationFiles = ["ui/src/components/MimouseBuildObservations.tsx", "ui/src/pages/MimouseCoding.tsx"];
+// A separate exact quota scope: Costs is already in the basename inventory.
+// Neither this metadata nor the host links recursively select other files.
+const quotaComponents = [
+  { file: "ui/src/components/AccountQuotaPanels.tsx", hosts: [{ file: "ui/src/components/ProviderQuotaCard.tsx", importSource: "./AccountQuotaPanels" }] },
+  { file: "ui/src/components/ProviderQuotaCard.tsx", hosts: [{ file: "ui/src/pages/Costs.tsx", importSource: "../components/ProviderQuotaCard" }] },
+];
+const quotaFiles = quotaComponents.map(component => component.file);
+const quotaRenderBoundary = "Within a visible subscription quota section, loading shows a skeleton; nonempty quotaAccounts then render AccountQuotaPanels. Otherwise isClaudeQuotaPanel/isCodexQuotaPanel choose the conditional Claude/Codex fallbacks. Those fallbacks are not globally unused.";
 
 function isTranslationCall(node) {
   if (node.type !== "CallExpression") return false;
@@ -149,12 +158,14 @@ function collectAudit(source, file, parse) {
       expression(property.value, `${prefix}-${field}`, `${prefix}-${field}-dynamic`);
     }
   }
-  function nativeConfirm(node) {
+  function browserMessage(node) {
     const callee = node.callee;
     if (callee.type !== "MemberExpression" || callee.computed
       || callee.object.type !== "Identifier" || callee.object.name !== "window"
-      || callee.property.name !== "confirm") return;
-    expression(node.arguments[0], "window-confirm", "window-confirm-dynamic");
+      || !browserMessageMethods.includes(callee.property.name)) return;
+    // The prompt default and all other arguments are user values, not messages.
+    const kind = `window-${callee.property.name}`;
+    expression(node.arguments[0], kind, `${kind}-dynamic`);
   }
   function walk(node, parent) {
     if (!node || typeof node !== "object") return;
@@ -163,7 +174,7 @@ function collectAudit(source, file, parse) {
       add(node.value, node.value.value, "jsx-attribute");
     }
     if (node.type === "JSXExpressionContainer" && (parent?.type !== "JSXAttribute" || displayAttributes.has(parent.name?.name))) expression(node.expression);
-    if (node.type === "CallExpression") { notification(node); nativeConfirm(node); }
+    if (node.type === "CallExpression") { notification(node); browserMessage(node); }
     for (const [key, value] of Object.entries(node)) {
       if (["loc", "start", "end", "extra", "comments", "tokens"].includes(key)) continue;
       if (Array.isArray(value)) { for (const item of value) walk(item, node); }
@@ -178,18 +189,19 @@ function matchesEntry(file, names) { return names.includes(path.basename(file, "
 function selectInventory(files) {
   const eligible = files.filter(file => /\.tsx$/.test(file) && !/(?:\.test\.|\.stories\.)/.test(file));
   const selected = [...new Set(eligible.filter(file => matchesEntry(file, names) || routedRoutineFiles.includes(file)
-    || consumedUiFiles.includes(file) || routedCompanyFiles.includes(file) || buildObservationFiles.includes(file)))].sort();
+    || consumedUiFiles.includes(file) || routedCompanyFiles.includes(file) || buildObservationFiles.includes(file) || quotaFiles.includes(file)))].sort();
   return {
     selected,
     missingRoutedFiles: routedRoutineFiles.filter(file => !selected.includes(file)),
     missingConsumedFiles: consumedUiFiles.filter(file => !selected.includes(file)),
     missingCompanyRouteFiles: routedCompanyFiles.filter(file => !selected.includes(file)),
     missingBuildObservationFiles: buildObservationFiles.filter(file => !selected.includes(file)),
+    missingQuotaFiles: quotaFiles.filter(file => !selected.includes(file)),
     unmatchedBasenames: names.filter(name => !selected.some(file => matchesEntry(file, [name]))),
   };
 }
 module.exports = { collectCandidates, collectAudit, matchesEntry, selectInventory, routedRoutineFiles, consumedUiComponents, consumedUiFiles,
-  routedCompanyPages, routedCompanyFiles, buildObservationComponents, buildObservationFiles };
+  routedCompanyPages, routedCompanyFiles, buildObservationComponents, buildObservationFiles, quotaComponents, quotaFiles, quotaRenderBoundary, browserMessageMethods };
 
 if (require.main === module) {
   const root = path.resolve(__dirname, "..");
@@ -216,7 +228,7 @@ if (require.main === module) {
     }
   }
   files(path.join(root, "ui/src"));
-  const { selected, missingRoutedFiles, missingConsumedFiles, missingCompanyRouteFiles, missingBuildObservationFiles, unmatchedBasenames } = selectInventory(all);
+  const { selected, missingRoutedFiles, missingConsumedFiles, missingCompanyRouteFiles, missingBuildObservationFiles, missingQuotaFiles, unmatchedBasenames } = selectInventory(all);
   const candidates = [], dynamicCandidates = [], counts = [], hash = crypto.createHash("sha256");
   for (const relative of selected) {
     const source = fs.readFileSync(path.join(root, relative), "utf8");
@@ -227,14 +239,15 @@ if (require.main === module) {
   }
   const result = {
     schemaVersion: 3, generatedAt: new Date().toISOString(), parserVersion,
-    method: "Bounded Babel AST inventory: JSX text/display attributes (including message and ariaLabel), direct/conditional/template literals, pushToast/toast display fields, setSecretMessage.title and direct window.confirm messages. Dynamic display expressions are separate needs_manual_review locations, not untranslated strings.",
+    method: "Bounded Babel AST inventory: JSX text/display attributes (including message and ariaLabel), direct/conditional/template literals, pushToast/toast display fields, setSecretMessage.title and direct window.confirm/window.prompt/window.alert first-argument messages. Dynamic display expressions are separate needs_manual_review locations, not untranslated strings.",
     limits: [
       "Not a complete route/call graph, data-flow analysis, rendered-text count or translation coverage percentage.",
-      "Scope and syntax expanded from schema 2: two exact company routes, the build-observation component/direct host, ariaLabel and window.confirm. Candidate totals are not directly comparable with earlier reports.",
+      "Scope and syntax expanded from schema 2: two exact company routes, the build-observation component/direct host, the separate two-file quota scope, ariaLabel and window.confirm/window.prompt/window.alert messages. Candidate totals are not directly comparable with earlier reports.",
       "Consumed-component hosts document bounded verified import/render relationships, not every consumer or a routine route. Host metadata does not recursively add host files to the scanned inventory.",
       "Company route metadata and build-observation component/direct-host inventory are separate exact scopes; the original 21 routine files and three consumed components/five hosts are unchanged. The build-observation direct host is explicitly selected and deduplicated, not recursively discovered.",
+      "The separate quota scope selects only AccountQuotaPanels and ProviderQuotaCard; Costs is an already selected entry host. Normal account panels and conditional legacy fallbacks do not establish global usage or translation coverage.",
       "Literal candidates require three consecutive Latin letters or an exact lowercase short display word: in/of/on/or/to/by/as/an/a. Other short text remains outside this predicate; technical identifiers may still be included. Preserve user content, API payloads and unknown server diagnostics after manual origin review.",
-      "Only named notification calls, direct object fields and direct window.confirm syntax are recognized; aliases, computed keys, shadowed globals, callback returns, other custom prop names and indirect objects need manual review. No automatic rewriting or binding/data-flow resolution.",
+      "Only named notification calls, direct object fields and direct window.confirm/window.prompt/window.alert first arguments are recognized; prompt defaults and other arguments are excluded. Aliases, computed keys, shadowed globals, callback returns, other custom prop names and indirect objects need manual review. No automatic rewriting or binding/data-flow resolution.",
       "Technical identifiers and canonical labels translated by child wrappers may remain candidates; needs_manual_review does not mean untranslated. Template interpolation records source syntax only, never user values.",
       "Known t/mimouseT/i18n.t/mimouseI18n.t calls are omitted, not verified as translated. Dynamic snippets are source syntax truncated to 240 characters, never runtime data.",
     ],
@@ -243,18 +256,21 @@ if (require.main === module) {
     requestedConsumedFiles: consumedUiFiles, missingConsumedFiles,
     requestedCompanyRouteFiles: routedCompanyFiles, missingCompanyRouteFiles,
     requestedBuildObservationFiles: buildObservationFiles, missingBuildObservationFiles,
+    requestedQuotaFiles: quotaFiles, missingQuotaFiles,
     scope: { eligibleTsxFiles: all.length, basenameMatchedFiles: selected.filter(file => matchesEntry(file, names)).length,
       routedMatchedFiles: routedRoutineFiles.length - missingRoutedFiles.length,
       consumedMatchedFiles: consumedUiFiles.length - missingConsumedFiles.length, consumedComponentHosts: consumedUiComponents,
       companyRouteMatchedFiles: routedCompanyFiles.length - missingCompanyRouteFiles.length, companyRoutes: routedCompanyPages,
       buildObservationMatchedFiles: buildObservationFiles.length - missingBuildObservationFiles.length, buildObservationComponentHosts: buildObservationComponents,
+      quotaMatchedFiles: quotaFiles.length - missingQuotaFiles.length, quotaComponentHosts: quotaComponents, quotaRenderBoundary,
+      browserMessages: { receiver: "window", methods: browserMessageMethods, messageArgumentIndex: 0 },
       routeSource: "ui/src/App.tsx", routePatterns: ["routines", "routines/:routineId", "routines/:routineId/:section"],
       routeSourceSha256: crypto.createHash("sha256").update(fs.readFileSync(path.join(root, "ui/src/App.tsx"))).digest("hex") },
     totalLiteralCandidates: candidates.length, totalDynamicCandidates: dynamicCandidates.length, files: counts, candidates, dynamicCandidates,
   };
   fs.writeFileSync(path.resolve(outPath), JSON.stringify(result, null, 2) + "\n");
   console.log(JSON.stringify({ matchedFiles: result.matchedFiles, totalLiteralCandidates: result.totalLiteralCandidates, totalDynamicCandidates: result.totalDynamicCandidates,
-    sourceSha256: result.sourceSha256, unmatchedBasenames, missingRoutedFiles, missingConsumedFiles, missingCompanyRouteFiles, missingBuildObservationFiles,
+    sourceSha256: result.sourceSha256, unmatchedBasenames, missingRoutedFiles, missingConsumedFiles, missingCompanyRouteFiles, missingBuildObservationFiles, missingQuotaFiles,
     out: path.resolve(outPath) }, null, 2));
-  if (missingRoutedFiles.length || missingConsumedFiles.length || missingCompanyRouteFiles.length || missingBuildObservationFiles.length || unmatchedBasenames.length) process.exitCode = 1;
+  if (missingRoutedFiles.length || missingConsumedFiles.length || missingCompanyRouteFiles.length || missingBuildObservationFiles.length || missingQuotaFiles.length || unmatchedBasenames.length) process.exitCode = 1;
 }

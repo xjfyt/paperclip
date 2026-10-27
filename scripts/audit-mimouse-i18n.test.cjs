@@ -5,7 +5,8 @@ const fs = require("node:fs");
 const os = require("node:os");
 const { spawnSync } = require("node:child_process");
 const { collectCandidates, collectAudit, selectInventory, routedRoutineFiles, consumedUiComponents, consumedUiFiles,
-  routedCompanyPages, routedCompanyFiles, buildObservationComponents, buildObservationFiles } = require("./audit-mimouse-i18n.cjs");
+  routedCompanyPages, routedCompanyFiles, buildObservationComponents, buildObservationFiles,
+  quotaComponents, quotaFiles, quotaRenderBoundary, browserMessageMethods } = require("./audit-mimouse-i18n.cjs");
 const parserEntry = process.env.AUDIT_I18N_PARSER
   ? path.resolve(process.env.AUDIT_I18N_PARSER)
   : path.resolve(__dirname, "../node_modules/.pnpm/@babel+parser@7.29.8/node_modules/@babel/parser/lib/index.js");
@@ -71,6 +72,34 @@ test("omits translated ariaLabel and confirm keys without widening to arbitrary 
     window["confirm"]("Computed key outside scope"); globalThis.confirm("Other global outside scope");
     const payload = { ariaLabel: "Non JSX payload", message: "Not a confirmation" };`);
   assert.deepEqual(result, { candidates: [], dynamicCandidates: [] });
+});
+
+test("inventories prompt and alert first-argument messages but never prompt defaults or user value arguments", () => {
+  const result = audit(`window.prompt("Rename organization", "Original user-authored name");
+    window.prompt(\`Rename \${company.name}\`, \`Current \${user.value}\`);
+    window.prompt(t("rename.prompt", { name: company.name }), "Untranslated raw default");
+    window.alert("Organization archived", "Ignored extra value");
+    window.alert(\`Archived \${company.name}\`);
+    window.alert(ok ? t("success") : "Unable to archive");
+    window.prompt(); window.alert();`);
+  assert.deepEqual(result.candidates.map(row => row.text), ["Rename organization", "Rename", "Organization archived", "Archived", "Unable to archive"]);
+  assert.deepEqual(result.candidates.map(row => row.kind), ["window-prompt", "window-prompt", "window-alert", "window-alert", "window-alert"]);
+  assert.deepEqual(result.dynamicCandidates.map(row => [row.expression, row.kind]), [
+    ["company.name", "window-prompt-dynamic"], ["company.name", "window-alert-dynamic"],
+  ]);
+  assert.ok([...result.candidates, ...result.dynamicCandidates].every(row => row.classification === "needs_manual_review"));
+});
+
+test("browser-message support is limited to the three direct window methods and excludes translated messages", () => {
+  assert.deepEqual(browserMessageMethods, ["confirm", "prompt", "alert"]);
+  for (const method of browserMessageMethods) {
+    const result = audit(`window.${method}(mimouseT("message.key", { value: user.value }), user.value);
+      window.${method}(\`\${i18n.t("message.key")}\`, "Do not translate default");
+      window.${method}(mimouseI18n.t(dynamicKey));
+      ${method}("Bare call outside scope"); custom.${method}("Custom API outside scope");
+      window["${method}"]("Computed call outside scope"); globalThis.${method}("Other global outside scope");`);
+    assert.deepEqual(result, { candidates: [], dynamicCandidates: [] });
+  }
 });
 
 test("includes standalone in in JSX and selected display attributes as manual-review candidates", () => {
@@ -220,6 +249,20 @@ test("adds only two exact company routes and the explicit build-observation comp
   assert.ok([...routedCompanyFiles, ...buildObservationFiles].every(file => !routedRoutineFiles.includes(file) && !consumedUiFiles.includes(file)));
 });
 
+test("keeps quota exact paths separate without production, legacy or wrong-directory expansion", () => {
+  assert.deepEqual(quotaFiles, ["ui/src/components/AccountQuotaPanels.tsx", "ui/src/components/ProviderQuotaCard.tsx"]);
+  const wrongPaths = quotaFiles.flatMap(file => [
+    `ui/src/elsewhere/${path.basename(file)}`, file.replace(".tsx", ".production.tsx"),
+    file.replace(".tsx", ".legacy.tsx"), file.replace(".tsx", ".test.tsx"), file.replace(".tsx", ".stories.tsx"),
+  ]);
+  assert.deepEqual(selectInventory([...quotaFiles, ...quotaFiles, ...wrongPaths]).selected, quotaFiles);
+  assert.deepEqual(selectInventory(wrongPaths).selected, []);
+  assert.deepEqual(selectInventory(wrongPaths).missingQuotaFiles, quotaFiles);
+  assert.ok(quotaFiles.every(file => !routedRoutineFiles.includes(file) && !consumedUiFiles.includes(file)
+    && !routedCompanyFiles.includes(file) && !buildObservationFiles.includes(file)));
+  assert.equal(quotaComponents.flatMap(component => component.hosts).length, 2);
+});
+
 function walkAst(node, visit) {
   if (!node || typeof node !== "object") return;
   visit(node);
@@ -229,10 +272,12 @@ function walkAst(node, visit) {
   }
 }
 
-test("App imports and mounts both exact company pages and the build-observation host at their real routes", () => {
+test("App imports and mounts the company pages, build-observation host and Costs quota entry at their real routes", () => {
   const source = fs.readFileSync(path.join(__dirname, "../ui/src/App.tsx"), "utf8");
   const ast = parse(source, { sourceType: "module", plugins: ["typescript", "jsx"] });
-  const pages = [...routedCompanyPages, { file: "ui/src/pages/MimouseCoding.tsx", importSource: "./pages/MimouseCoding", routePattern: "coding" }];
+  const pages = [...routedCompanyPages,
+    { file: "ui/src/pages/MimouseCoding.tsx", importSource: "./pages/MimouseCoding", routePattern: "coding" },
+    { file: "ui/src/pages/Costs.tsx", importSource: "./pages/Costs", routePattern: "costs" }];
   for (const page of pages) {
     assert.equal(path.posix.normalize(`ui/src/${page.importSource}.tsx`), page.file);
     assert.ok(fs.statSync(path.join(__dirname, "..", page.file)).isFile());
@@ -260,7 +305,11 @@ test("recorded hosts really import and render the exact consumed components", ()
     file: "ui/src/components/MimouseBuildObservations.tsx",
     hosts: [{ file: "ui/src/pages/MimouseCoding.tsx", importSource: "@/components/MimouseBuildObservations" }],
   }]);
-  for (const { file, hosts } of [...consumedUiComponents, ...buildObservationComponents]) {
+  assert.deepEqual(quotaComponents, [
+    { file: "ui/src/components/AccountQuotaPanels.tsx", hosts: [{ file: "ui/src/components/ProviderQuotaCard.tsx", importSource: "./AccountQuotaPanels" }] },
+    { file: "ui/src/components/ProviderQuotaCard.tsx", hosts: [{ file: "ui/src/pages/Costs.tsx", importSource: "../components/ProviderQuotaCard" }] },
+  ]);
+  for (const { file, hosts } of [...consumedUiComponents, ...buildObservationComponents, ...quotaComponents]) {
     assert.ok(fs.statSync(path.join(root, file)).isFile(), file);
     assert.ok(hosts.length > 0, file);
     for (const host of hosts) {
@@ -289,6 +338,27 @@ test("recorded hosts really import and render the exact consumed components", ()
   }
 });
 
+test("quota host keeps loading, normal account panels and provider fallbacks as separate conditional branches", () => {
+  const source = fs.readFileSync(path.join(__dirname, "../ui/src/components/ProviderQuotaCard.tsx"), "utf8");
+  const ast = parse(source, { sourceType: "module", plugins: ["typescript", "jsx"] });
+  let branches;
+  walkAst(ast.program, node => {
+    if (node.type === "ConditionalExpression" && node.test.type === "Identifier" && node.test.name === "quotaLoading") branches = node;
+  });
+  assert.ok(branches, "quota loading branch must exist");
+  const symbol = node => node?.type === "JSXElement" && node.openingElement.name.name;
+  assert.equal(symbol(branches.consequent), "QuotaPanelSkeleton");
+  const normal = branches.alternate;
+  assert.equal(normal.type, "ConditionalExpression");
+  assert.equal(source.slice(normal.test.start, normal.test.end), "quotaAccounts?.length");
+  assert.equal(symbol(normal.consequent), "AccountQuotaPanels");
+  assert.equal(normal.alternate.test.name, "isClaudeQuotaPanel");
+  assert.equal(symbol(normal.alternate.consequent), "ClaudeSubscriptionPanel");
+  assert.equal(normal.alternate.alternate.test.name, "isCodexQuotaPanel");
+  assert.equal(symbol(normal.alternate.alternate.consequent), "CodexSubscriptionPanel");
+  assert.ok(quotaRenderBoundary.includes("nonempty quotaAccounts") && quotaRenderBoundary.includes("not globally unused"));
+});
+
 function cliFixture(t, missing) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "mimouse-i18n-inventory-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -301,7 +371,7 @@ function cliFixture(t, missing) {
   write("ui/src/App.tsx", "export const App = () => null;");
   const files = [
     ...selectInventory([]).unmatchedBasenames.map(name => `ui/src/pages/${name}.tsx`),
-    ...routedRoutineFiles, ...consumedUiFiles, ...routedCompanyFiles, ...buildObservationFiles,
+    ...routedRoutineFiles, ...consumedUiFiles, ...routedCompanyFiles, ...buildObservationFiles, ...quotaFiles,
   ];
   for (const file of files.filter(file => file !== missing)) write(file, "export const View = () => <span />;");
   if (missing) write(`ui/src/elsewhere/${path.basename(missing)}`, "export const Unused = () => <span />;");
@@ -332,6 +402,13 @@ test("CLI keeps consumed host metadata separate from the unchanged routine route
   assert.deepEqual(report.missingBuildObservationFiles, []);
   assert.deepEqual(report.scope.buildObservationComponentHosts, buildObservationComponents);
   assert.equal(report.scope.buildObservationMatchedFiles, 2);
+  assert.deepEqual(report.requestedQuotaFiles, quotaFiles);
+  assert.deepEqual(report.missingQuotaFiles, []);
+  assert.deepEqual(report.scope.quotaComponentHosts, quotaComponents);
+  assert.equal(report.scope.quotaMatchedFiles, 2);
+  assert.equal(report.scope.quotaRenderBoundary, quotaRenderBoundary);
+  assert.deepEqual(report.scope.browserMessages, { receiver: "window", methods: ["confirm", "prompt", "alert"], messageArgumentIndex: 0 });
+  assert.ok(report.limits.some(limit => limit.includes("prompt defaults and other arguments are excluded")));
   assert.equal(report.files.filter(row => row.file === "ui/src/pages/MimouseCoding.tsx").length, 1);
   assert.equal(report.files.some(row => row.file === "ui/src/components/TaskChatThread.tsx"), false);
   assert.ok(report.limits.some(limit => limit.includes("not every consumer or a routine route")));
@@ -351,15 +428,17 @@ test("CLI fails closed for a missing consumed component instead of accepting its
 });
 
 test("CLI reports every missing new exact path even if a same-basename file exists", t => {
-  for (const missing of [...routedCompanyFiles, ...buildObservationFiles]) {
+  for (const missing of [...routedCompanyFiles, ...buildObservationFiles, ...quotaFiles]) {
     const { result, report } = cliFixture(t, missing);
     assert.equal(result.status, 1, `${missing}: ${result.stderr}`);
     assert.deepEqual(report.missingCompanyRouteFiles, routedCompanyFiles.includes(missing) ? [missing] : []);
     assert.deepEqual(report.missingBuildObservationFiles, buildObservationFiles.includes(missing) ? [missing] : []);
+    assert.deepEqual(report.missingQuotaFiles, quotaFiles.includes(missing) ? [missing] : []);
     assert.deepEqual(report.missingRoutedFiles, []);
     assert.deepEqual(report.missingConsumedFiles, []);
     assert.deepEqual(report.unmatchedBasenames, []);
     assert.equal(report.files.some(row => row.file === missing), false);
     assert.ok(!report.requestedBasenames.includes("Companies") && !report.requestedBasenames.includes("CompanySettings") && !report.requestedBasenames.includes("MimouseBuildObservations"));
+    assert.ok(quotaFiles.every(file => !report.requestedBasenames.includes(path.basename(file, ".tsx"))));
   }
 });
