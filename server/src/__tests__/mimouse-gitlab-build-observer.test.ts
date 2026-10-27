@@ -2,6 +2,7 @@ import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MIMOUSE_PROVENANCE_PROFILE, type MimouseBuildProvenanceStatement, type MimouseBuildTrustPolicy } from "@paperclipai/shared";
 import { guardedRemoteHttpFetch } from "../services/remote-http-fetch.js";
+import { buildObservationExpired } from "../services/mimouse-coding/build-observation-freshness.js";
 import { observeMimouseGitlabBuild } from "../services/mimouse-coding/gitlab-build-observer.js";
 import { GITLAB_BUILD_OBSERVATION_LIMITS, type GitlabBuildObservationConfig, type GitlabBuildObservationContext,
   type GitlabBuildObservationTransport } from "../services/mimouse-coding/gitlab-build-observation-contract.js";
@@ -266,4 +267,33 @@ describe("whole-observation deadline and cancellation", () => {
     const result = await collect(f, async () => new Response(body), active.signal);
     expect(result.diagnostic).toBe("cancelled"); expect(JSON.stringify(result)).not.toContain(token); expect(cancelled).toHaveBeenCalledTimes(1);
   });
+});
+
+describe("authenticated caller dispatch fences", () => {
+  it("runs a fresh fence before all six exact requests", async () => {
+    const f = fixture(); let checks = 0;
+    const result = await observeMimouseGitlabBuild({ context: f.context, token, provenancePolicy: f.policy }, f.config,
+      { transport: f.transport, now: () => new Date(now), beforeDispatch: async () => { expect(f.calls.length).toBe(checks++); } });
+    expect(result.status).toBe("observed"); expect(checks).toBe(6);
+  });
+  it("never dispatches after a failing or timed-out fresh fence", async () => {
+    const f = fixture();
+    const denied = await observeMimouseGitlabBuild({ context: f.context, token }, f.config,
+      { transport: f.transport, beforeDispatch: async () => { throw Error("private authorization details"); } });
+    expect(denied.diagnostic).toBe("transport_failed"); expect(f.calls).toHaveLength(0);
+    vi.useFakeTimers(); let release: () => void = () => undefined;
+    const pending = observeMimouseGitlabBuild({ context: f.context, token }, { ...f.config, totalTimeoutMs: 10 },
+      { transport: f.transport, beforeDispatch: () => new Promise<void>(resolve => { release = resolve; }) });
+    await vi.advanceTimersByTimeAsync(20); expect((await pending).diagnostic).toBe("deadline_exceeded");
+    release(); await Promise.resolve(); expect(f.calls).toHaveLength(0);
+  });
+});
+
+it("expires an actual verified signature by build start even while finish is fresh", async () => {
+  const f = fixture(); const result = await collect(f);
+  expect(result.provenance.status).toBe("verified_claim");
+  const later = new Date("2026-10-27T11:58:01Z");
+  expect(later.getTime() - Date.parse(f.job.finished_at)).toBeLessThan(f.policy.maxBuildAgeSeconds * 1000);
+  expect(buildObservationExpired({ maxObservationAgeSeconds: 3600, provenancePolicy: f.policy }, result.provenance,
+    new Date(result.observedAt ?? "invalid"), later)).toBe(true);
 });

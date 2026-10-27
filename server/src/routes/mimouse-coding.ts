@@ -1,3 +1,4 @@
+import { mimouseBuildObservationRoutes } from "./mimouse-build-observations.js";
 import { saveCodingGoalSchema } from "@paperclipai/shared";
 import { codingGoalService } from "../services/mimouse-coding/goal-template.js";
 import { reviewBinding, reviewReceipt, reviewedHead } from "../services/mimouse-coding/diff-review.js";
@@ -24,7 +25,7 @@ const confirmSchema = z.object({ headSha: sha, confirm: z.literal(true), title: 
 const evidenceSchema = z.object({ headSha: sha, checks: z.array(z.object({ commitSha: sha, command: z.string().min(1).max(2000), exitCode: z.number().int().nullable(), startedAt: z.string().datetime(), finishedAt: z.string().datetime(), logRef: z.string().min(1).max(2000), status: z.enum(["passed", "failed", "blocked", "not_run"]) }).strict()).max(100) }).strict();
 const artifactsSchema = z.object({ headSha: sha, version: z.string().min(1).max(100), artifacts: z.array(z.object({ path: z.string().min(1).max(1000), platform: z.enum(["windows", "macos", "linux"]), arch: z.enum(["x86_64", "arm64"]), buildJob: z.string().min(1).max(200) }).strict()).min(1).max(30) }).strict();
 export function mimouseCodingRoutes(db: Db, deps: { service?: ReturnType<typeof codingService> } = {}) {
-  const router = Router(); const service = deps.service ?? codingService(db); const root = "/companies/:companyId/coding";
+  const router = Router(); router.use(mimouseBuildObservationRoutes(db)); const service = deps.service ?? codingService(db); const root = "/companies/:companyId/coding";
   function admin(req: Request) {
     const companyId = String(req.params.companyId); assertBoard(req); assertCompanyAccess(req, companyId);
     const role = req.actor.memberships?.find(item => item.companyId === companyId);

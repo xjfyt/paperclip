@@ -85,7 +85,7 @@ function metadataJson(bytes: Uint8Array): unknown {
  * execution; the existing guarded transport may decode HTTP content encoding. */
 export async function observeMimouseGitlabBuild(input: {
   context: unknown; token: string; provenancePolicy?: unknown; signal?: AbortSignal;
-}, operatorConfig?: unknown, deps: { transport?: GitlabBuildObservationTransport; now?: () => Date } = {}): Promise<GitlabBuildObservationResult> {
+}, operatorConfig?: unknown, deps: { transport?: GitlabBuildObservationTransport; now?: () => Date; beforeDispatch?: () => Promise<void> } = {}): Promise<GitlabBuildObservationResult> {
   const result = initialResult();
   if (operatorConfig === undefined || mimouseBuildVerificationDisabledSchema.safeParse(operatorConfig).success) {
     return { ...result, status: "disabled", diagnostic: "disabled" };
@@ -134,6 +134,8 @@ export async function observeMimouseGitlabBuild(input: {
       checkAbort();
       let response: Response;
       try {
+        if (deps.beforeDispatch) await bounded(deps.beforeDispatch());
+        checkAbort();
         const pending = transport(`${origin}/api/v4/projects/${config.projectId}${path}`, { method: "GET", redirect: "manual", signal,
           headers: { "PRIVATE-TOKEN": token, "Accept-Encoding": "identity" } }).then(value => {
           if (signal.aborted) { cancelBody(value); fail(abortCode()); } return value;
