@@ -135,6 +135,7 @@ function CardShell({
   icon: Icon,
   title,
   status,
+  statusLabel,
   summary,
   children,
   testId,
@@ -143,6 +144,7 @@ function CardShell({
   icon: typeof Circle;
   title: string;
   status: string | null;
+  statusLabel?: string;
   summary?: string;
   children?: React.ReactNode;
   testId: string;
@@ -162,7 +164,7 @@ function CardShell({
           )}
         >
           <StatusIcon status={status} className="h-3.5 w-3.5" />
-          {status.replaceAll("_", " ")}
+          {statusLabel ?? status.replaceAll("_", " ")}
         </span>
       ) : null}
     </div>
@@ -216,7 +218,7 @@ function CardShell({
                 )}
               >
                 <StatusIcon status={status} className="h-3.5 w-3.5" />
-                {status.replaceAll("_", " ")}
+                {statusLabel ?? status.replaceAll("_", " ")}
               </span>
             ) : null}
           </div>
@@ -390,26 +392,27 @@ function diffStats(file: TaskChatWorkspaceChangeItem["files"][number]) {
 }
 
 function WorkspaceChangeCard({ item }: { item: TaskChatWorkspaceChangeItem }) {
+  const { t } = useChromeTranslation();
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
   const selected =
     item.files.find((file) => file.path === selectedPath) ?? null;
   const visibleFiles = expanded ? item.files : item.files.slice(0, 3);
   const fileCount = item.totals.files || item.files.length;
-  const fileLabel = `${fileCount} ${fileCount === 1 ? "file" : "files"}`;
   const stats = [
     item.totals.additions == null ? null : `+${item.totals.additions}`,
     item.totals.deletions == null ? null : `−${item.totals.deletions}`,
   ].filter(Boolean).join(" ");
   const summary = item.complete
-    ? `${fileLabel} changed${stats ? ` · ${stats}` : ""}`
-    : "Workspace changes in progress";
+    ? t(`taskProtocolWorkspaceUi.${stats ? "filesChangedWithStats" : "filesChanged"}`, { count: fileCount, stats })
+    : t("taskProtocolWorkspaceUi.inProgress");
   return (
     <>
       <CardShell
         icon={GitBranch}
-        title="Workspace changes"
+        title={t("taskProtocolWorkspaceUi.title")}
         status={item.complete ? "completed" : "running"}
+        statusLabel={t(`taskProtocolWorkspaceUi.${item.complete ? "completed" : "running"}`)}
         summary={summary}
         testId="task-chat-workspace-change"
       >
@@ -428,8 +431,9 @@ function WorkspaceChangeCard({ item }: { item: TaskChatWorkspaceChangeItem }) {
                     : file.path}
                 </span>
                 <span className="text-xs capitalize text-muted-foreground">
-                  {file.binary ? "binary · " : ""}
-                  {file.operation.replaceAll("_", " ")}
+                  {file.binary
+                    ? t("taskProtocolWorkspaceUi.binaryOperation", { operation: t(`taskProtocolWorkspaceUi.operation_${file.operation}`) })
+                    : t(`taskProtocolWorkspaceUi.operation_${file.operation}`)}
                 </span>
               </span>
               {diffStats(file)}
@@ -445,8 +449,8 @@ function WorkspaceChangeCard({ item }: { item: TaskChatWorkspaceChangeItem }) {
               onClick={() => setExpanded((value) => !value)}
             >
               {expanded
-                ? "Show fewer files"
-                : `Show ${item.files.length - 3} more files`}
+                ? t("taskProtocolWorkspaceUi.showFewer")
+                : t("taskProtocolWorkspaceUi.showMore", { count: item.files.length - 3 })}
             </Button>
           ) : null}
           {item.files.length > 0 ? (
@@ -456,7 +460,7 @@ function WorkspaceChangeCard({ item }: { item: TaskChatWorkspaceChangeItem }) {
               variant="outline"
               onClick={() => setSelectedPath(item.files[0].path)}
             >
-              Review diff
+              {t("taskProtocolWorkspaceUi.reviewDiff")}
             </Button>
           ) : null}
         </div>
@@ -470,13 +474,13 @@ function WorkspaceChangeCard({ item }: { item: TaskChatWorkspaceChangeItem }) {
         <DialogContent className="w-full max-w-(--pct-90) overflow-hidden">
           <DialogHeader>
             <DialogTitle className="font-mono text-sm">
-              {selected?.path ?? "Workspace diff"}
+              {selected?.path ?? t("taskProtocolWorkspaceUi.diffTitle")}
             </DialogTitle>
           </DialogHeader>
           {item.files.length > 1 ? (
             <div
               className="flex max-w-full gap-1 overflow-x-auto pb-1"
-              aria-label="Changed files"
+              aria-label={t("taskProtocolWorkspaceUi.changedFiles")}
             >
               {item.files.map((file) => (
                 <Button
@@ -493,7 +497,7 @@ function WorkspaceChangeCard({ item }: { item: TaskChatWorkspaceChangeItem }) {
           ) : null}
           {selected?.binary ? (
             <p className="rounded-sm bg-muted/50 p-3 text-sm text-muted-foreground">
-              Binary file; text diff is unavailable.
+              {t("taskProtocolWorkspaceUi.binaryDiffUnavailable")}
             </p>
           ) : selected?.diff ? (
             <pre className="max-h-(--sz-70vh) overflow-auto whitespace-pre rounded-sm bg-muted/50 p-3 font-mono text-xs">
@@ -501,7 +505,7 @@ function WorkspaceChangeCard({ item }: { item: TaskChatWorkspaceChangeItem }) {
             </pre>
           ) : (
             <p className="rounded-sm bg-muted/50 p-3 text-sm text-muted-foreground">
-              No inline patch was recorded for this file.
+              {t("taskProtocolWorkspaceUi.noInlinePatch")}
             </p>
           )}
         </DialogContent>

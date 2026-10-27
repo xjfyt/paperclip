@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import "@/i18n/task-protocol-workspace-test-resources";
 
 import { act, forwardRef, useImperativeHandle, type ForwardedRef } from "react";
 import { flushSync } from "react-dom";

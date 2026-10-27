@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import "@/i18n/task-protocol-workspace-test-resources";
 
 import type { ExecutionProjection } from "@paperclipai/shared";
 import { act } from "react";

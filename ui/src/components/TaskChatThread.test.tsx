@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import "@/i18n/task-protocol-workspace-test-resources";
 
 import type { ComponentProps, ReactElement } from "react";
 import { act, createRef, forwardRef, useImperativeHandle, type ForwardedRef } from "react";
