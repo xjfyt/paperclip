@@ -19,6 +19,7 @@
   "uncertain": "The response is unconfirmed. Keep this request ID and read its outcome before any retry; do not create a replacement request.",
   "recover": "Read request outcome",
   "retry": "Retry this recoverable request",
+  "nextPending": "Recover the next pending request",
   "newRequest": "Prepare a new observation",
   "refresh": "Refresh local context and history",
   "history": "Recent observations (up to 10)",

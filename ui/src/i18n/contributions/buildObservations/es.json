@@ -19,6 +19,7 @@
   "uncertain": "La respuesta no está confirmada. Conserva este ID y consulta el resultado antes de reintentar; no crees otra solicitud para sustituirla.",
   "recover": "Consultar resultado de la solicitud",
   "retry": "Reintentar esta solicitud recuperable",
+  "nextPending": "Recuperar la siguiente solicitud pendiente",
   "newRequest": "Preparar otra observación",
   "refresh": "Actualizar contexto local e historial",
   "history": "Observaciones recientes (hasta 10)",

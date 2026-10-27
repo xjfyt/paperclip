@@ -229,7 +229,7 @@ it("selects the next unresolved journal rather than opening a fresh ID after one
   localStorage.setItem(firstKey.replace(requestId, second.requestId), JSON.stringify(second));
   calls.read.mockImplementation(async url => url.endsWith("/context") ? context : url.endsWith(`/requests/${requestId}`) ? outcome("terminal")
     : url.endsWith(`/requests/${second.requestId}`) ? { ...outcome("running"), requestId: second.requestId, input: second } : empty);
-  await mount(); await open(); await click(button("buildObservations.newRequest"));
+  await mount(); await open(); await click(button("buildObservations.nextPending"));
   expect(host.textContent).toContain(second.requestId); expect(host.querySelector("input")).toBeNull();
   expect(readBuildObservationJournal(journalScope)).toEqual([second]); expect(calls.post).not.toHaveBeenCalled();
 });
@@ -250,4 +250,21 @@ it("retains the journal when close is denied for an active request or its respon
   await mount(); await open(); await click(button("buildObservations.closeUnknown")); await click(button("buildObservations.confirmClose"));
   expect(readBuildObservationJournal(journalScope)).toHaveLength(1); expect(host.textContent).toContain("buildObservations.uncertain");
   expect(host.textContent).not.toContain("buildObservations.newRequest"); expect(calls.post).toHaveBeenCalledOnce();
+});
+
+it("allows explicit next-pending recovery while paused context is forbidden without enabling new observations", async () => {
+  pendingJournal(); const firstKey = localStorage.key(0)!;
+  const second = { ...outcome("running").input, requestId: "8537f5ba-ae42-4a48-89a1-79949638fd83" };
+  localStorage.setItem(firstKey.replace(requestId, second.requestId), JSON.stringify(second));
+  calls.read.mockImplementation(async url => {
+    if (url.endsWith("/context")) throw Object.assign(Error("paused"), { status: 403 });
+    if (url.endsWith(`/requests/${requestId}`)) return outcome("terminal");
+    if (url.endsWith(`/requests/${second.requestId}`)) return { ...outcome("running"), requestId: second.requestId, input: second };
+    return empty;
+  });
+  await mount(); await open(); expect(button("buildObservations.nextPending").disabled).toBe(false);
+  await click(button("buildObservations.nextPending"));
+  expect(host.textContent).toContain(second.requestId); expect(host.querySelector("input")).toBeNull();
+  expect(host.textContent).not.toContain("buildObservations.observe"); expect(calls.post).not.toHaveBeenCalled();
+  expect(readBuildObservationJournal(journalScope)).toEqual([second]);
 });

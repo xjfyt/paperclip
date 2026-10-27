@@ -22,6 +22,7 @@ function ObservationPanel({ companyId, userId, sessionId, authEpoch, deliveryId,
   const [request, setRequest] = useState<StartMimouseBuildObservationInput | null>(null);
   const [outcome, setOutcome] = useState<MimouseBuildObservationRequestOutcome | null>(null);
   const [busy, setBusy] = useState(false), [failed, setFailed] = useState(false), [recovered, setRecovered] = useState(false);
+  const [nextPending, setNextPending] = useState<StartMimouseBuildObservationInput | null>(null);
   const [confirmClose, setConfirmClose] = useState(false);
   const [hideEvidence, setHideEvidence] = useState(false);
   const [requestLoaded, setRequestLoaded] = useState(false); const hydrated = useRef(false);
@@ -51,6 +52,7 @@ function ObservationPanel({ companyId, userId, sessionId, authEpoch, deliveryId,
         if (!durableBuildObservationTerminal(journalScope, expected, result)) throw Error("observation_terminal_unconfirmed");
         if (journalOwned.current) clearBuildObservationJournal(journalScope, expected, result);
         journalOwned.current = false; setTerminalConfirmed(true);
+        setNextPending(readBuildObservationJournal(journalScope)[0] ?? null);
       } else {
         ensureBuildObservationJournal(journalScope, expected); journalOwned.current = true; setTerminalConfirmed(false);
       }
@@ -132,11 +134,12 @@ function ObservationPanel({ companyId, userId, sessionId, authEpoch, deliveryId,
       jobId: numericJob, expectedBinding: selected.expectedBinding });
     if (body.success) void submit(body.data);
   }
-  function prepareNew() {
-    if (!terminalConfirmed || busy || journalError) return;
+  function prepareNew(mode: "pending" | "new") {
+    if (!terminalConfirmed || busy || journalError || mode === "new" && (!readable || !available.length)) return;
     try {
       const next = readBuildObservationJournal(journalScope)[0] ?? null;
-      setRequest(next); setOutcome(null); setRecovered(false); setFailed(false); setTerminalConfirmed(false);
+      if (mode === "pending" && !next || mode === "new" && next) { setNextPending(next); return; }
+      setNextPending(null); setRequest(next); setOutcome(null); setRecovered(false); setFailed(false); setTerminalConfirmed(false);
       journalOwned.current = next !== null;
       if (next) { hydrated.current = false; setRequestLoaded(false); setLookup({ input: next }); }
     } catch { storageFailure(); }
@@ -170,7 +173,9 @@ function ObservationPanel({ companyId, userId, sessionId, authEpoch, deliveryId,
           {outcome && <p>{t(`buildObservations.state.${outcome.state}`)}</p>}
           <Button variant="outline" disabled={busy} onClick={() => { void recover(); }}>{t("buildObservations.recover")}</Button>
           {recovered && outcome?.state === "retryable" && <Button disabled={busy || journalError} onClick={() => { if (request && recovered && outcome?.state === "retryable") void submit(request); }}>{t("buildObservations.retry")}</Button>}
-          {terminalConfirmed && outcome?.state === "terminal" && <Button variant="outline" disabled={busy || journalError || !readable} onClick={prepareNew}>{t("buildObservations.newRequest")}</Button>}
+          {terminalConfirmed && outcome?.state === "terminal" && (nextPending
+            ? <Button variant="outline" disabled={busy || journalError} onClick={() => prepareNew("pending")}>{t("buildObservations.nextPending")}</Button>
+            : <Button variant="outline" disabled={busy || journalError || !readable || !available.length} onClick={() => prepareNew("new")}>{t("buildObservations.newRequest")}</Button>)}
           {!terminalConfirmed && <Button variant="outline" disabled={busy || journalError} onClick={() => setConfirmClose(true)}>{t("buildObservations.closeUnknown")}</Button>}
           {confirmClose && <div className="space-y-2 border border-border p-3">
             <p>{t("buildObservations.closeBoundary")}</p>
