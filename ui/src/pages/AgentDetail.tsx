@@ -124,7 +124,6 @@ import {
   type LiveEvent,
   type WorkspaceOperation,
   isResponsibleUserDenialCode,
-  responsibleUserLabel,
 } from "@paperclipai/shared";
 import { ResponsibleUserDenialNotice } from "../components/ResponsibleUserDenialNotice";
 import { RunWorkspaceRecoverySurface } from "../components/RunWorkspaceRecoverySurface";
@@ -590,7 +589,15 @@ function workspaceOperationStatusTone(status: WorkspaceOperation["status"]) {
   }
 }
 
+const workspaceOperationStatusKeys = {
+  running: "statuses.running",
+  succeeded: "statuses.succeeded",
+  failed: "statuses.failed",
+  skipped: "agentRunMetadataUi.skipped",
+} satisfies Record<WorkspaceOperation["status"], string>;
+
 function WorkspaceOperationStatusBadge({ status }: { status: WorkspaceOperation["status"] }) {
+  useMimouseTranslation();
   return (
     <Badge variant="outline"
       className={cn(
@@ -598,7 +605,7 @@ function WorkspaceOperationStatusBadge({ status }: { status: WorkspaceOperation[
         workspaceOperationStatusTone(status),
       )}
     >
-      {status.replace("_", " ")}
+      {Object.hasOwn(workspaceOperationStatusKeys, status) ? mimouseT(workspaceOperationStatusKeys[status]) : status.replace("_", " ")}
     </Badge>
   );
 }
@@ -3691,7 +3698,7 @@ export function RunDetail({ run: initialRun, agentRouteId, adapterType, adapterC
                 className="text-xs text-muted-foreground"
               >{mimouseT("workflow.onBehalfOf")}{" "}
                 <span className="text-foreground">
-                  {responsibleUserName ?? responsibleUserLabel(null)}
+                  {responsibleUserName ?? mimouseT("agentRunMetadataUi.responsibleUser")}
                 </span>
               </div>
             )}

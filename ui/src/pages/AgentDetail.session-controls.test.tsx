@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
+import "../i18n/agent-run-metadata-test-resources";
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   instanceGeneralSettingsSchema, instanceExperimentalSettingsWithManagedSchema,
-  type AgentKeyCreated, type HeartbeatRun, type HeartbeatRunEvent,
+  type AgentKeyCreated, type HeartbeatRun, type HeartbeatRunEvent, type WorkspaceOperation,
 } from "@paperclipai/shared";
 import type { ClaudeLoginResult } from "../api/agents";
 import type { IssueForRun } from "../api/activity";
@@ -13,6 +14,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { KeysTab, LogViewer, RunDetail } from "./AgentDetail";
 import { TooltipProvider } from "../components/ui/tooltip";
 import { i18n } from "../i18n";
+import { queryKeys } from "../lib/queryKeys";
 import { validateLocaleMessages } from "../i18n/locale-validation";
 import en from "../i18n/contributions/agentSessionControlsUi/en.json";
 import zh from "../i18n/contributions/agentSessionControlsUi/zh-CN.json";
@@ -30,7 +32,7 @@ const api = vi.hoisted(() => ({
   listKeys: vi.fn<AgentsApi["listKeys"]>(), createKey: vi.fn<AgentsApi["createKey"]>(), revokeKey: vi.fn<AgentsApi["revokeKey"]>(),
   run: vi.fn<HeartbeatsApi["get"]>(), events: vi.fn<HeartbeatsApi["events"]>(),
   log: vi.fn<HeartbeatsApi["log"]>(), operations: vi.fn<HeartbeatsApi["workspaceOperations"]>(),
-  issues: vi.fn<ActivityApi["issuesForRun"]>(), access: vi.fn<AccessApi["getCurrentBoardAccess"]>(),
+  issues: vi.fn<ActivityApi["issuesForRun"]>(), access: vi.fn<AccessApi["getCurrentBoardAccess"]>(), directory: vi.fn<AccessApi["listUserDirectory"]>(),
   general: vi.fn<SettingsApi["getGeneral"]>(), experimental: vi.fn<SettingsApi["getExperimental"]>(),
   decisions: vi.fn<ToolsApi["getRunDecisionLookup"]>(), copy: vi.fn<(text: string) => Promise<void>>(),
 }));
@@ -40,7 +42,7 @@ vi.mock("../api/agents", () => ({ agentsApi: {
 } }));
 vi.mock("../api/heartbeats", () => ({ heartbeatsApi: { get: api.run, events: api.events, log: api.log, workspaceOperations: api.operations } }));
 vi.mock("../api/activity", () => ({ activityApi: { issuesForRun: api.issues } }));
-vi.mock("../api/access", () => ({ accessApi: { getCurrentBoardAccess: api.access } }));
+vi.mock("../api/access", () => ({ accessApi: { getCurrentBoardAccess: api.access, listUserDirectory: api.directory } }));
 vi.mock("../api/instanceSettings", () => ({ instanceSettingsApi: { getGeneral: api.general, getExperimental: api.experimental } }));
 vi.mock("../api/tools", () => ({ toolsApi: { getRunDecisionLookup: api.decisions } }));
 vi.mock("../lib/clipboard", () => ({ copyTextToClipboard: api.copy }));
@@ -94,6 +96,7 @@ beforeEach(async () => {
   api.access.mockResolvedValue({ user: null, userId: "operator", isInstanceAdmin: false, companyIds: ["company-original"], source: "session", keyId: null });
   api.general.mockResolvedValue(instanceGeneralSettingsSchema.parse({}));
   api.experimental.mockResolvedValue(instanceExperimentalSettingsWithManagedSchema.parse({}));
+  api.directory.mockResolvedValue({ users: [] });
   api.decisions.mockResolvedValue({ runId: "run-original", decisions: [] });
   client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
@@ -256,4 +259,69 @@ it.each(locales.flatMap(locale => [false, true].map(json => ({ locale, json })))
   expect(Array.from(container.querySelectorAll("pre")).map(pre => pre.textContent)).toEqual(bodies);
   expect(container.querySelector("tag")).toBeNull(); expect(reads()).toEqual(requestCounts);
   expect(api.login).not.toHaveBeenCalled(); expect(api.reset).not.toHaveBeenCalled();
+});
+
+const metadataCopy = {
+  en: { statuses: ["Running", "Succeeded", "Failed", "skipped"], responsible: "the responsible user" },
+  "zh-CN": { statuses: ["运行中", "成功", "失败", "已跳过"], responsible: "负责用户" },
+  es: { statuses: ["En ejecución", "Exitoso", "Fallido", "omitido"], responsible: "la persona responsable" },
+  ja: { statuses: ["実行中", "成功", "失敗", "スキップ"], responsible: "担当ユーザー" },
+};
+it.each(Object.entries(metadataCopy))("localizes real RunDetail operation badges and missing responsible user in %s", async (locale, copy) => {
+  await i18n.changeLanguage(locale);
+  const run = makeRun({ status: "succeeded", error: null, errorCode: null, responsibleUserId: "responsible-用户" });
+  const statuses = ["running", "succeeded", "failed", "skipped", "future_phase_unknown"];
+  const date = new Date("2026-01-01T00:00:00Z");
+  const operations: WorkspaceOperation[] = statuses.map((status, index) => ({
+    id: `operation-${index}`, companyId: run.companyId, heartbeatRunId: run.id, executionWorkspaceId: "workspace-原文", issueId: null,
+    phase: "worktree_prepare", command: `echo raw-command-${index} 用户`, cwd: "/tmp/raw-cwd", status: status as WorkspaceOperation["status"],
+    exitCode: null, logStore: null, logRef: null, logBytes: null, logSha256: null, logCompressed: false,
+    stdoutExcerpt: null, stderrExcerpt: null, metadata: { branchName: "branch-原文" },
+    startedAt: date, finishedAt: date, createdAt: date, updatedAt: date,
+  }));
+  const original = JSON.stringify({ run, operations });
+  api.run.mockResolvedValue(run); api.operations.mockResolvedValue(operations);
+  // The actual LogViewer only exposes workspace operations once a log event exists.
+  api.events.mockResolvedValue([{ id: 1, companyId: run.companyId, runId: run.id, agentId: run.agentId, seq: 1,
+    eventType: "status", stream: "system", level: "info", color: null, message: "Raw event 用户", payload: null, createdAt: date }]);
+  await mount(<RunDetail run={run} agentRouteId="original-route" adapterType="claude_local" adapterConfig={{}} />);
+  await waitFor(() => expect(container.textContent).toContain("raw-command-4"));
+  const badge = (index: number) => [...container.querySelectorAll("span")].find(span => span.textContent === `echo raw-command-${index} 用户`)!.closest(".rounded-md")!.querySelector<HTMLElement>('[data-slot="badge"]')!;
+  const responsible = () => container.querySelector('[data-testid="run-detail-on-behalf-of"] span');
+  const assertStatuses = (expected: typeof copy) => {
+    expect(statuses.map((_, index) => badge(index).textContent)).toEqual([...expected.statuses, "future phase_unknown"]);
+    operations.forEach(operation => { expect(container.textContent).toContain(operation.command); });
+    expect(container.textContent).toContain("/tmp/raw-cwd");
+    expect(container.textContent).toContain("branch-原文");
+    expect(container.textContent).not.toContain("agentRunMetadataUi.");
+  };
+  assertStatuses(copy);
+  expect(responsible()?.textContent).toBe(copy.responsible);
+  const colors = statuses.map((_, index) => badge(index).className);
+  ["text-blue-700", "text-green-700", "text-red-700", "text-yellow-700", "text-muted-foreground"].forEach((color, index) => expect(colors[index]).toContain(color));
+  const requests = [...reads(), api.directory.mock.calls.length];
+  const next = locale === "ja" ? "es" : "ja";
+  await switchLanguage(next);
+  assertStatuses(metadataCopy[next]);
+  expect(responsible()?.textContent).toBe(metadataCopy[next].responsible);
+  expect(statuses.map((_, index) => badge(index).className)).toEqual(colors);
+  expect([...reads(), api.directory.mock.calls.length]).toEqual(requests);
+  expect(api.directory).toHaveBeenCalledExactlyOnceWith("company-original");
+  expect(api.operations).toHaveBeenCalledExactlyOnceWith("run-original");
+  const directoryKey = queryKeys.access.companyUserDirectory(run.companyId);
+  await act(async () => { client.setQueryData(directoryKey, { users: [{ principalId: run.responsibleUserId, user: { name: "Name 用户 <original>", email: "raw@example.test" } }] }); });
+  await flush();
+  expect(responsible()?.textContent).toBe("Name 用户 <original>");
+  await switchLanguage(locale as typeof locales[number]);
+  expect(responsible()?.textContent).toBe("Name 用户 <original>");
+  assertStatuses(copy);
+  await act(async () => { client.setQueryData(directoryKey, { users: [{ principalId: run.responsibleUserId, user: { name: null, email: "raw@example.test" } }] }); });
+  await flush();
+  expect(responsible()?.textContent).toBe("raw@example.test");
+  await act(async () => { client.setQueryData(queryKeys.runDetail(run.id), { ...run, responsibleUserId: null }); });
+  await flush();
+  expect(container.querySelector('[data-testid="run-detail-on-behalf-of"]')).toBeNull();
+  expect([...reads(), api.directory.mock.calls.length]).toEqual(requests);
+  expect(api.login).not.toHaveBeenCalled(); expect(api.reset).not.toHaveBeenCalled();
+  expect(JSON.stringify({ run, operations })).toBe(original);
 });
