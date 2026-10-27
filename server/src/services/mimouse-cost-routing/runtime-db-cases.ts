@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { expect, vi } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
-import { agents, companies, companyMemberships, heartbeatRuns, heartbeatRunEvents, issues, agentWakeupRequests, type Db } from "@paperclipai/db";
+import { agents, companies, companyMemberships, principalPermissionGrants, heartbeatRuns, heartbeatRunEvents, issues, agentWakeupRequests, type Db } from "@paperclipai/db";
 import { runtimeRoutingBindings } from "@paperclipai/db/schema/runtime_cost_routing";
 import { promptApplicationService } from "../mimouse-prompt-applications/service.js";
 import { runtimeCostRoutingService } from "./service.js";
@@ -14,6 +14,11 @@ import { drainHeartbeatRunsToQuiescence } from "../../__tests__/helpers/drain-he
 export async function verifyRuntimeRoutingDispatch(db: Db, actor: PrivatePromptIdentity, heartbeat: ReturnType<typeof heartbeatService>,
   produced: Awaited<ReturnType<typeof verifyProducedRuntimeRoutingEvidence>>, ordinaryCalls: () => number) {
   const applications = promptApplicationService(db), service = runtimeCostRoutingService(db, heartbeat.wakeup), candidates = [];
+  // Private test authority is narrower than ordinary agent configuration.
+  // Supply the same explicit fixture grant as the standalone application suite;
+  // owner membership alone must not bypass the production configuration check.
+  const [configurationGrant] = await db.insert(principalPermissionGrants).values({ companyId: actor.companyId,
+    principalType: "user", principalId: actor.userId, permissionKey: "agents:configure", scope: null, grantedByUserId: actor.userId }).returning();
   for (const item of produced) {
     const head = await applications.head(actor, item.reference.agentId);
     const prepared = await applications.prepare(actor, item.reference.promptId, { requestId: randomUUID(), agentId: item.reference.agentId,
@@ -96,4 +101,5 @@ export async function verifyRuntimeRoutingDispatch(db: Db, actor: PrivatePromptI
   await expect(heartbeat.wakeup(agent.id, { source: "on_demand", requestedByActorType: "user", requestedByActorId: actor.userId,
     payload: { issueId: ordinary.id, resumeFromRunId: run.id } })).rejects.toThrow("runtime_routing_generic_wake_denied");
   expect(ordinaryCalls()).toBe(before + 1);
+  await db.delete(principalPermissionGrants).where(and(eq(principalPermissionGrants.companyId, actor.companyId), eq(principalPermissionGrants.id, configurationGrant.id)));
 }
