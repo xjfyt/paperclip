@@ -753,6 +753,7 @@
     "uncertain": "応答を確認できません。この ID を保持し、再試行前に結果を読み取ってください。代わりのリクエストは作成しないでください。",
     "recover": "リクエスト結果を読み取る",
     "retry": "復旧可能な同じリクエストを再試行",
+    "nextPending": "次の未確認リクエストを復元",
     "newRequest": "新しい観測を準備",
     "refresh": "ローカル情報と履歴を更新",
     "history": "最近の観測（最大 10 件）",
@@ -1943,6 +1944,23 @@
     "admin": "管理者",
     "operator": "オペレーター",
     "viewer": "閲覧者"
+  },
+  "issueCommentFeedbackUi": {
+    "tooLateTitle": "メッセージはすでに送信中です",
+    "tooLateBody": "破棄の確認前に継続実行が開始されたため、Paperclip はメッセージを取り消せませんでした。",
+    "loadingEarlier": "以前のコメントを読み込み中...",
+    "loadEarlier": "以前のコメントを読み込む",
+    "cancelFailed": "取り消しに失敗しました",
+    "cancelFailedBody": "キュー内のコメントを取り消せません",
+    "saveUnconfirmed": "コメントの保存を確認できません",
+    "commentFailed": "コメントの送信に失敗しました",
+    "commentFailedBody": "コメントを投稿できません",
+    "queuedCancelled": "キュー内のコメントを取り消しました",
+    "draftRestored": "キュー内のメッセージを入力欄に戻しました。",
+    "commentDeleted": "コメントを削除しました",
+    "deletedMarker": "スレッドにコメント削除済みのマーカーが表示されます。",
+    "deleteFailed": "削除に失敗しました",
+    "deleteFailedBody": "コメントを削除できません"
   },
   "issueFeedbackUi": {
     "failedRunMissing": "失敗した実行はもう利用できません。",

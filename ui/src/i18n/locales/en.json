@@ -753,6 +753,7 @@
     "uncertain": "The response is unconfirmed. Keep this request ID and read its outcome before any retry; do not create a replacement request.",
     "recover": "Read request outcome",
     "retry": "Retry this recoverable request",
+    "nextPending": "Recover the next pending request",
     "newRequest": "Prepare a new observation",
     "refresh": "Refresh local context and history",
     "history": "Recent observations (up to 10)",
@@ -1943,6 +1944,23 @@
     "admin": "Admin",
     "operator": "Operator",
     "viewer": "Viewer"
+  },
+  "issueCommentFeedbackUi": {
+    "tooLateTitle": "Message is already being sent",
+    "tooLateBody": "The continuation started before the discard was confirmed, so Paperclip could not unsend it.",
+    "loadingEarlier": "Loading earlier comments...",
+    "loadEarlier": "Load earlier comments",
+    "cancelFailed": "Cancel failed",
+    "cancelFailedBody": "Unable to cancel the queued comment",
+    "saveUnconfirmed": "Comment save unconfirmed",
+    "commentFailed": "Comment failed",
+    "commentFailedBody": "Unable to post comment",
+    "queuedCancelled": "Queued comment canceled",
+    "draftRestored": "The queued message was restored to the composer.",
+    "commentDeleted": "Comment deleted",
+    "deletedMarker": "The thread now shows a deleted-comment marker.",
+    "deleteFailed": "Delete failed",
+    "deleteFailedBody": "Unable to delete the comment"
   },
   "issueFeedbackUi": {
     "failedRunMissing": "Failed run is no longer available.",

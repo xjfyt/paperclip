@@ -2449,7 +2449,7 @@ describe("IssueDetail", () => {
     await renderFeedbackHost("en");
     const oldAdd = feedbackThread().onAdd;
     const nextSession: AuthSession = { session: { id: "session-new", userId: "user-new" }, user: { id: "user-new", name: null, email: null, image: null }, sentryDsn: null };
-    await act(async () => queryClient.setQueryData(queryKeys.auth.session, nextSession));
+    await act(async () => { queryClient.setQueryData(queryKeys.auth.session, nextSession); });
     await flushReact();
     const writeCache = vi.spyOn(queryClient, "setQueryData");
     const invalidate = vi.spyOn(queryClient, "invalidateQueries");

@@ -753,6 +753,7 @@
     "uncertain": "响应尚未确认。请保留此请求 ID，先读取结果再决定是否重试；不要另建替代请求。",
     "recover": "读取请求结果",
     "retry": "重试此可恢复请求",
+    "nextPending": "恢复下一条待确认请求",
     "newRequest": "准备新的观测",
     "refresh": "刷新本地上下文与历史",
     "history": "最近观测（最多 10 条）",
@@ -1943,6 +1944,23 @@
     "admin": "管理员",
     "operator": "操作员",
     "viewer": "只读成员"
+  },
+  "issueCommentFeedbackUi": {
+    "tooLateTitle": "消息已开始发送",
+    "tooLateBody": "撤回确认前后续运行已开始，Paperclip 无法撤回该消息。",
+    "loadingEarlier": "正在加载更早的评论...",
+    "loadEarlier": "加载更早的评论",
+    "cancelFailed": "撤回失败",
+    "cancelFailedBody": "无法撤回排队中的评论",
+    "saveUnconfirmed": "评论保存尚未确认",
+    "commentFailed": "评论发送失败",
+    "commentFailedBody": "无法发布评论",
+    "queuedCancelled": "排队评论已撤回",
+    "draftRestored": "排队中的消息已恢复到输入框。",
+    "commentDeleted": "评论已删除",
+    "deletedMarker": "对话中现在显示已删除评论标记。",
+    "deleteFailed": "删除失败",
+    "deleteFailedBody": "无法删除评论"
   },
   "issueFeedbackUi": {
     "failedRunMissing": "失败的运行已不可用。",
