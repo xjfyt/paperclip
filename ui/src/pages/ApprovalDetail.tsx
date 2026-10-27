@@ -72,7 +72,7 @@ export function ApprovalDetail() {
   useEffect(() => {
     setBreadcrumbs([
       { label: mimouseT("commonUi.approvals"), href: "/approvals" },
-      { label: approval?.id?.slice(0, 8) ?? approvalId ?? "Approval" },
+      { label: approval?.id?.slice(0, 8) ?? approvalId ?? mimouseT("approvalDetailUi.approval") },
     ]);
   }, [setBreadcrumbs, approval, approvalId, mimouseI18n.language]);
 
@@ -218,7 +218,7 @@ export function ApprovalDetail() {
             <div className="flex items-center gap-2">
               <span className="text-muted-foreground text-xs">{mimouseT("commonUi.requestedBy")}</span>
               <AgentIdentity
-                agent={agents?.find((agent) => agent.id === approval.requestedByAgentId) ?? { id: approval.requestedByAgentId, name: "Agent" }}
+                agent={agents?.find((agent) => agent.id === approval.requestedByAgentId) ?? { id: approval.requestedByAgentId, name: mimouseT("approvalDetailUi.agent") }}
                 size="sm"
               />
             </div>
@@ -304,7 +304,7 @@ export function ApprovalDetail() {
               variant="outline"
               className="text-destructive border-destructive/40"
               onClick={() => {
-                if (!window.confirm("Delete this disapproved agent? This cannot be undone.")) return;
+                if (!window.confirm(mimouseT("approvalDetailUi.deleteDisapprovedConfirm"))) return;
                 deleteAgentMutation.mutate(linkedAgentId);
               }}
               disabled={deleteAgentMutation.isPending}
@@ -322,12 +322,12 @@ export function ApprovalDetail() {
                 {comment.authorAgentId ? (
                   <Link to={`/agents/${comment.authorAgentId}`} className="hover:underline">
                     <AgentIdentity
-                      agent={agents?.find((agent) => agent.id === comment.authorAgentId) ?? { id: comment.authorAgentId, name: "Agent" }}
+                      agent={agents?.find((agent) => agent.id === comment.authorAgentId) ?? { id: comment.authorAgentId, name: mimouseT("approvalDetailUi.agent") }}
                       size="sm"
                     />
                   </Link>
                 ) : (
-                  <Identity name="Board" size="sm" />
+                  <Identity name={mimouseT("workflow.board")} size="sm" />
                 )}
                 <span className="text-xs text-muted-foreground">
                   {new Date(comment.createdAt).toLocaleString()}
