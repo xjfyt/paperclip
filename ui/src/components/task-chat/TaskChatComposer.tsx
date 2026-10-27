@@ -4,11 +4,14 @@ import { t as mimouseUiT, useTranslation as useMimouseUiTranslation } from "@/i1
 import { AgentAvatar } from "../AgentAvatar";
 import {
   useEffect,
+  useImperativeHandle,
+  useMemo,
   useRef,
   useState,
   type ChangeEvent,
   type ClipboardEvent as ReactClipboardEvent,
   type ReactNode,
+  type Ref,
 } from "react";
 import { cn } from "@/lib/utils";
 import { useComposerStop } from "@/hooks/useComposerStop";
@@ -26,6 +29,8 @@ import {
   settleDraftSubmission,
   type ComposerDraftSubmission,
 } from "@/lib/composer-draft";
+import type { IssueChatComposerHandle } from "../IssueChatThread";
+import { restoreSubmittedCommentDraft } from "@/lib/comment-submit-draft";
 import { CommentSubmissionUnknownError } from "@/lib/comment-submit-result";
 import {
   ArrowUp,
@@ -151,6 +156,7 @@ interface TaskChatComposerProps {
   mobile?: boolean;
   /** Storage key used to restore, persist, and clear this task's text draft. */
   draftKey?: string;
+  composerRef?: Ref<IssueChatComposerHandle>;
   onReviewConversation?: () => Promise<void>;
   /** When set, the main composer temporarily edits this queued message. */
   queuedEdit?: { commentId: string; body: string; stale?: boolean } | null;
@@ -388,6 +394,7 @@ export function TaskChatComposer({
   issueStatus,
   mobile = false,
   draftKey,
+  composerRef,
   onReviewConversation,
   queuedEdit = null,
   onSaveQueuedEdit,
@@ -500,6 +507,35 @@ export function TaskChatComposer({
   queuedEditRef.current = queuedEdit;
   const queuedEditBackupRef = useRef<QueuedEditBackup | null>(null);
   const previousQueuedEditIdRef = useRef<string | null>(null);
+
+  // A retained handle belongs to this mounted task, not a later task or remount.
+  const handleScope = useMemo(() => ({ active: true }), [draftKey]);
+  const currentHandleScope = useRef(handleScope);
+  currentHandleScope.current = handleScope;
+  useEffect(() => {
+    handleScope.active = true;
+    return () => { handleScope.active = false; };
+  }, [handleScope]);
+  useImperativeHandle(composerRef, () => {
+    const isCurrent = () => handleScope.active && currentHandleScope.current === handleScope;
+    return {
+      focus: () => { if (isCurrent()) editorRef.current?.focus(); },
+      restoreDraft: (submittedBody: string) => {
+        if (!isCurrent() || creation || queuedEditRef.current || queuedEditBackupRef.current ||
+            submittingRef.current || uncertainSubmission || (draftKey && loadDraftSubmission(draftKey)) ||
+            attachmentsRef.current.length > 0 || bodyRef.current.trim() || !submittedBody.trim()) return false;
+        const restored = restoreSubmittedCommentDraft({ currentBody: bodyRef.current, submittedBody });
+        changeBody(restored);
+        if (draftTimer.current) {
+          clearTimeout(draftTimer.current);
+          draftTimer.current = null;
+        }
+        if (draftKey) saveDraft(draftKey, restored);
+        editorRef.current?.focus();
+        return true;
+      },
+    };
+  });
 
   useEffect(() => {
     setTakeoverBusy(false);
@@ -1006,6 +1042,7 @@ export function TaskChatComposer({
       else clearDraft(draftKey);
     }
     setBody("");
+    submittingRef.current = true;
     setSubmitting(true);
     let attemptId: string | null = null;
     try {
@@ -1095,6 +1132,7 @@ export function TaskChatComposer({
       setBody(restoredBody);
     } finally {
       if (pendingDraftRef.current?.attemptId === attemptId) pendingDraftRef.current = null;
+      submittingRef.current = false;
       setSubmitting(false);
     }
   }

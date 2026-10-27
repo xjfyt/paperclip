@@ -1,13 +1,15 @@
 // @vitest-environment jsdom
 
 import type { ComponentProps, ReactElement } from "react";
-import { act, forwardRef, useImperativeHandle, type ForwardedRef } from "react";
+import { act, createRef, forwardRef, useImperativeHandle, type ForwardedRef } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TaskChatThread } from "./TaskChatThread";
+import type { IssueChatComposerHandle } from "./IssueChatThread";
+import { loadDraft } from "@/lib/composer-draft";
 import type {
   IssueDocument,
   IssueQueuedCommentQueue,
@@ -152,6 +154,53 @@ function render(ui: ReactElement) {
     ),
   );
 }
+
+describe("task thread composer restoration bridge", () => {
+  it.each([false, true])("restores raw canceled text through the actual composer (streamlined=%s)", (streamlined) => {
+    streamlinedState.enabled = streamlined;
+    const composerRef = createRef<IssueChatComposerHandle>();
+    const onAdd = vi.fn();
+    render(<TaskChatThread comments={[]} onAdd={onAdd} draftKey="bridge-task" composerRef={composerRef} />);
+    expect(composerRef.current).not.toBeNull();
+    const rawBody = "  Restore **原始正文**\n\n[existing file](/api/attachments/old/content)  ";
+    flushSync(() => expect(composerRef.current!.restoreDraft(rawBody)).toBe(true));
+    expect(container.querySelector('[data-testid="mock-editor"]')?.textContent).toBe(rawBody);
+    expect(loadDraft("bridge-task")).toBe(rawBody);
+    expect(localStorage.getItem("bridge-task:attachments:v1")).toBeNull();
+    expect(onAdd).not.toHaveBeenCalled();
+  });
+
+  it("preserves input entered in the same event before React commits", () => {
+    const composerRef = createRef<IssueChatComposerHandle>();
+    const onAdd = vi.fn();
+    render(<TaskChatThread comments={[]} onAdd={onAdd} draftKey="bridge-typing" composerRef={composerRef} />);
+    flushSync(() => {
+      editorCallbacks.change("New **用户 draft**");
+      expect(composerRef.current!.restoreDraft("Canceled text")).toBe(false);
+    });
+    expect(container.querySelector('[data-testid="mock-editor"]')?.textContent).toBe("New **用户 draft**");
+    expect(onAdd).not.toHaveBeenCalled();
+  });
+
+  it("rejects retained handles after task changes and after unmount", () => {
+    const composerRef = createRef<IssueChatComposerHandle>();
+    const onAdd = vi.fn();
+    const thread = (key: string) => <TaskChatThread comments={[]} onAdd={onAdd} draftKey={key} composerRef={composerRef} />;
+    render(thread("bridge-old"));
+    const oldHandle = composerRef.current!;
+    render(thread("bridge-next"));
+    flushSync(() => expect(oldHandle.restoreDraft("Wrong task")).toBe(false));
+    render(thread("bridge-old"));
+    flushSync(() => expect(oldHandle.restoreDraft("Still stale")).toBe(false));
+    const currentHandle = composerRef.current!;
+    render(<div />);
+    expect(composerRef.current).toBeNull();
+    expect(currentHandle.restoreDraft("After unmount")).toBe(false);
+    expect(loadDraft("bridge-old")).toBe("");
+    expect(loadDraft("bridge-next")).toBe("");
+    expect(onAdd).not.toHaveBeenCalled();
+  });
+});
 
 describe.each(["legacy", "native"] as const)("historical %s system status", (runtimeMode) => {
   const run = (id: string, status: string, minute: number) => ({

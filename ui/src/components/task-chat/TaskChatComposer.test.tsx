@@ -14,7 +14,7 @@ import taskComposerZh from "../../i18n/contributions/taskComposerUi/zh-CN.json";
 import taskComposerEs from "../../i18n/contributions/taskComposerUi/es.json";
 import taskComposerJa from "../../i18n/contributions/taskComposerUi/ja.json";
 import { validateLocaleMessages } from "../../i18n/locale-validation";
-import { act, StrictMode, useState, type ReactElement } from "react";
+import { act, createRef, StrictMode, useState, type ReactElement } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -23,10 +23,12 @@ import {
   buildSkillMentionHref,
 } from "@paperclipai/shared";
 import { parseRunnerGoalCommand, TaskChatComposer } from "./TaskChatComposer";
+import type { IssueChatComposerHandle } from "../IssueChatThread";
 import { ComposerAddMenu } from "./ComposerAddMenu";
 import { QuestionForm } from "./QuestionForm";
 import { DRAFT_DEBOUNCE_MS } from "../../lib/composer-draft";
 import {
+  loadDraft,
   loadDraftSubmission,
   saveDraft,
   saveDraftSubmission,
@@ -328,6 +330,94 @@ function autocompleteOption(matchText: string) {
 }
 
 describe("TaskChatComposer", () => {
+  describe("canceled draft restoration", () => {
+    it.each(["", "  \n  "])("restores into an empty draft (%j) without submitting or inventing receipts", (initial) => {
+      const composerRef = createRef<IssueChatComposerHandle>();
+      const onAdd = vi.fn();
+      render(<TaskChatComposer onAdd={onAdd} workMode="standard" draftKey="restore-text" composerRef={composerRef} />);
+      typeText(initial);
+      const rawBody = "  **Canceled 用户**\n\n[old file](/api/attachments/old/content)  ";
+      flushSync(() => expect(composerRef.current!.restoreDraft(rawBody)).toBe(true));
+      expect(editable().textContent).toBe(rawBody);
+      expect(loadDraft("restore-text")).toBe(rawBody);
+      expect(localStorage.getItem("restore-text:attachments:v1")).toBeNull();
+      expect(onAdd).not.toHaveBeenCalled();
+      flushSync(() => expect(composerRef.current!.restoreDraft("Do not replace")).toBe(false));
+      expect(editable().textContent).toBe(rawBody);
+      render(<div />);
+      render(<TaskChatComposer onAdd={onAdd} workMode="standard" draftKey="restore-text" composerRef={composerRef} />);
+      expect(editable().textContent).toBe(rawBody);
+    });
+
+    it("does not replace attachment-only drafts during upload or after receipt", async () => {
+      const composerRef = createRef<IssueChatComposerHandle>();
+      const onAdd = vi.fn();
+      let resolveUpload!: (value: unknown) => void;
+      const onAttachImage = vi.fn().mockReturnValue(new Promise(resolve => { resolveUpload = resolve; }));
+      render(<TaskChatComposer onAdd={onAdd} workMode="standard" draftKey="restore-attachment" composerRef={composerRef} onAttachImage={onAttachImage} />);
+      const file = new File(["keep"], "用户 file.txt", { type: "text/plain" });
+      pasteFiles([file]);
+      flushSync(() => expect(composerRef.current!.restoreDraft("Canceled")).toBe(false));
+      expect(container.textContent).toContain(file.name);
+      const id = "9af8228f-0be7-45ae-a104-6fbe0af6f1d3";
+      await act(async () => resolveUpload({ id, originalFilename: file.name, contentPath: `/api/attachments/${id}/content` }));
+      const receipt = localStorage.getItem("restore-attachment:attachments:v1");
+      expect(receipt).toContain(id);
+      flushSync(() => expect(composerRef.current!.restoreDraft("Canceled")).toBe(false));
+      expect(localStorage.getItem("restore-attachment:attachments:v1")).toBe(receipt);
+      expect(editable().textContent).toBe("");
+      expect(onAttachImage).toHaveBeenCalledExactlyOnceWith(file);
+      expect(onAdd).not.toHaveBeenCalled();
+    });
+
+    it.each([false, true])("preserves unknown submission markers (already mounted=%s)", (mounted) => {
+      const composerRef = createRef<IssueChatComposerHandle>();
+      const onAdd = vi.fn();
+      const key = "restore-unknown";
+      const element = <TaskChatComposer onAdd={onAdd} workMode="standard" draftKey={key} composerRef={composerRef} />;
+      if (mounted) render(element);
+      saveDraftSubmission(key, { attemptId: "9af8228f-0be7-45ae-a104-6fbe0af6f1d3", reviewed: false });
+      if (!mounted) render(element);
+      const marker = localStorage.getItem(`${key}:submission:v1`);
+      expect(marker).not.toBeNull();
+      flushSync(() => expect(composerRef.current!.restoreDraft("Canceled")).toBe(false));
+      expect(localStorage.getItem(`${key}:submission:v1`)).toBe(marker);
+      expect(editable().textContent).toBe("");
+      expect(onAdd).not.toHaveBeenCalled();
+    });
+
+    it("rejects restoration while delivery is pending without changing its request", async () => {
+      const composerRef = createRef<IssueChatComposerHandle>();
+      let resolveSend!: () => void;
+      const onAdd = vi.fn().mockReturnValue(new Promise<void>(resolve => { resolveSend = resolve; }));
+      render(<TaskChatComposer onAdd={onAdd} workMode="standard" draftKey="restore-pending" composerRef={composerRef} />);
+      typeText("Sending original");
+      await act(async () => sendButton().click());
+      const marker = loadDraftSubmission("restore-pending");
+      expect(marker).not.toBeNull();
+      flushSync(() => expect(composerRef.current!.restoreDraft("Canceled")).toBe(false));
+      expect(loadDraftSubmission("restore-pending")).toEqual(marker);
+      expect(editable().textContent).toBe("");
+      await act(async () => resolveSend());
+      expect(onAdd).toHaveBeenCalledTimes(1);
+      expect(editable().textContent).toBe("");
+    });
+
+    it("does not inject canceled text into queued editing or caller-owned creation", () => {
+      const composerRef = createRef<IssueChatComposerHandle>();
+      const onAdd = vi.fn(), onSaveQueuedEdit = vi.fn(), onChange = vi.fn(), onSubmit = vi.fn();
+      render(<TaskChatComposer onAdd={onAdd} workMode="standard" composerRef={composerRef} queuedEdit={{ commentId: "another-queued", body: "" }} onSaveQueuedEdit={onSaveQueuedEdit} />);
+      flushSync(() => expect(composerRef.current!.restoreDraft("Canceled")).toBe(false));
+      expect(editable().textContent).toBe("");
+      render(<TaskChatComposer key="creation" workMode="standard" composerRef={composerRef} creation={{ value: "", onChange, onSubmit, submitLabel: "Create", onSelectFiles: vi.fn(), runSettings: null, onRunSettingsChange: vi.fn() }} />);
+      flushSync(() => expect(composerRef.current!.restoreDraft("Canceled")).toBe(false));
+      expect(onAdd).not.toHaveBeenCalled();
+      expect(onSaveQueuedEdit).not.toHaveBeenCalled();
+      expect(onChange).not.toHaveBeenCalled();
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+  });
+
   describe("localized composer actions", () => {
     const messages = taskComposerMessages;
     const labelButton = (label: string) => [...container.querySelectorAll<HTMLButtonElement>("button")]

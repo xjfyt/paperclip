@@ -507,7 +507,8 @@ export function shouldRenderComposerHandoffPreview(
 
 export interface IssueChatComposerHandle {
   focus: () => void;
-  restoreDraft: (submittedBody: string) => void;
+  /** True only when the canceled text replaced an empty, safe draft. */
+  restoreDraft: (submittedBody: string) => boolean;
 }
 
 interface IssueChatComposerProps {
@@ -4926,22 +4927,34 @@ const IssueChatComposer = forwardRef<
     setPendingWorkMode(resolvedIssueWorkMode);
   }, [resolvedIssueWorkMode]);
 
-  useImperativeHandle(
-    forwardedRef,
-    () => ({
-      focus: focusComposer,
+  // Invalidate retained handles across task changes and unmounts.
+  const handleScope = useMemo(() => ({ active: true }), [draftKey]);
+  const currentHandleScope = useRef(handleScope);
+  currentHandleScope.current = handleScope;
+  useEffect(() => {
+    handleScope.active = true;
+    return () => { handleScope.active = false; };
+  }, [handleScope]);
+  useImperativeHandle(forwardedRef, () => {
+    const isCurrent = () => handleScope.active && currentHandleScope.current === handleScope;
+    return {
+      focus: () => { if (isCurrent()) focusComposer(); },
       restoreDraft: (submittedBody: string) => {
-        setBody((current) =>
-          restoreSubmittedCommentDraft({
-            currentBody: current,
-            submittedBody,
-          }),
-        );
+        if (!isCurrent() || submittingRef.current || uncertainSubmission ||
+            (draftKey && (loadDraftSubmission(draftKey) || retiredDraftKeyRef.current === draftKey)) ||
+            composerAttachmentsRef.current.length > 0 || bodyRef.current.trim() || !submittedBody.trim()) return false;
+        const restored = restoreSubmittedCommentDraft({ currentBody: bodyRef.current, submittedBody });
+        changeBody(restored);
+        if (draftTimer.current) {
+          clearTimeout(draftTimer.current);
+          draftTimer.current = null;
+        }
+        if (draftKey) saveDraft(draftKey, restored);
         focusComposer();
+        return true;
       },
-    }),
-    [],
-  );
+    };
+  });
 
   const showStop =
     !submitting &&
@@ -5027,6 +5040,7 @@ const IssueChatComposer = forwardRef<
 
     const workModeChanged = pendingWorkMode !== resolvedIssueWorkMode;
     if (draftKey) saveDraft(draftKey, trimmed);
+    submittingRef.current = true;
     setSubmitting(true);
     bodyRef.current = "";
     setBody("");
@@ -5086,6 +5100,7 @@ const IssueChatComposer = forwardRef<
       setBody(restoredBody);
     } finally {
       if (pendingDraftRef.current?.attemptId === attemptId) pendingDraftRef.current = null;
+      submittingRef.current = false;
       setSubmitting(false);
       queueViewportRestore(viewportSnapshot);
     }

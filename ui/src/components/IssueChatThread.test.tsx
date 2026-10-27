@@ -9,14 +9,15 @@ import {
   useState,
 } from "react";
 import { flushSync } from "react-dom";
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Agent } from "@paperclipai/shared";
 import { CommentSubmissionUnknownError } from "../lib/comment-submit-result";
-import { loadDraft, preserveDraftInTab, settleDraftSubmission } from "../lib/composer-draft";
+import { loadDraft, loadDraftSubmission, saveDraftSubmission, preserveDraftInTab, settleDraftSubmission } from "../lib/composer-draft";
 import {
+  type IssueChatComposerHandle,
   IssueAssigneePausedNotice,
   IssueChatThread,
   VIRTUALIZED_THREAD_ROW_THRESHOLD,
@@ -4479,10 +4480,7 @@ describe("IssueChatThread", () => {
 
   it("exposes a composer focus handle that forwards to the editor", () => {
     const root = createRoot(container);
-    const composerRef = createRef<{
-      focus: () => void;
-      restoreDraft: (submittedBody: string) => void;
-    }>();
+    const composerRef = createRef<IssueChatComposerHandle>();
     const scrollByMock = vi
       .spyOn(window, "scrollBy")
       .mockImplementation(() => {});
@@ -4538,10 +4536,7 @@ describe("IssueChatThread", () => {
 
   it("restores a cancelled queued draft into the composer handle", () => {
     const root = createRoot(container);
-    const composerRef = createRef<{
-      focus: () => void;
-      restoreDraft: (submittedBody: string) => void;
-    }>();
+    const composerRef = createRef<IssueChatComposerHandle>();
     const scrollByMock = vi
       .spyOn(window, "scrollBy")
       .mockImplementation(() => {});
@@ -4574,7 +4569,7 @@ describe("IssueChatThread", () => {
     expect(editor).not.toBeNull();
 
     act(() => {
-      composerRef.current?.restoreDraft("Queued message");
+      expect(composerRef.current?.restoreDraft("Queued message")).toBe(true);
     });
 
     expect(editor?.value).toBe("Queued message");
@@ -4585,6 +4580,114 @@ describe("IssueChatThread", () => {
     requestAnimationFrameMock.mockRestore();
     act(() => {
       root.unmount();
+    });
+  });
+
+  describe("canceled draft restoration", () => {
+    function setup(key: string, onAdd = vi.fn(), onAttachImage?: ComponentProps<typeof IssueChatThread>["onAttachImage"]) {
+      const root = createRoot(container);
+      const composerRef = createRef<IssueChatComposerHandle>();
+      vi.spyOn(window, "scrollBy").mockImplementation(() => {});
+      vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => { callback(0); return 1; });
+      const renderThread = (draftKey = key) => act(() => root.render(<MemoryRouter><IssueChatThread
+        comments={[]} linkedRuns={[]} timelineEvents={[]} liveRuns={[]} onAdd={onAdd}
+        draftKey={draftKey} composerRef={composerRef} onAttachImage={onAttachImage} enableLiveTranscriptPolling={false}
+      /></MemoryRouter>));
+      renderThread();
+      const editor = () => container.querySelector<HTMLTextAreaElement>('textarea[aria-label="Issue chat editor"]')!;
+      const change = (value: string) => {
+        Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")!.set!.call(editor(), value);
+        editor().dispatchEvent(new Event("input", { bubbles: true }));
+      };
+      return { root, composerRef, onAdd, editor, change, renderThread };
+    }
+
+    it("preserves same-event new input and synchronously persists only a truly restored raw body", () => {
+      const { root, composerRef, onAdd, editor, change } = setup("classic-restore-text");
+      try {
+        act(() => { change("New **用户 draft**"); expect(composerRef.current!.restoreDraft("Canceled")).toBe(false); });
+        expect(editor().value).toBe("New **用户 draft**");
+        act(() => change("  \n  "));
+        const rawBody = "  **Canceled 用户**\n\n[old file](/api/attachments/old/content)  ";
+        act(() => expect(composerRef.current!.restoreDraft(rawBody)).toBe(true));
+        expect(editor().value).toBe(rawBody);
+        expect(loadDraft("classic-restore-text")).toBe(rawBody);
+        expect(localStorage.getItem("classic-restore-text:attachments:v1")).toBeNull();
+        expect(onAdd).not.toHaveBeenCalled();
+      } finally { act(() => root.unmount()); }
+    });
+
+    it.each([false, true])("does not change unknown submission state (already mounted=%s)", (mounted) => {
+      const key = "classic-restore-unknown";
+      const marker = { attemptId: "9af8228f-0be7-45ae-a104-6fbe0af6f1d3", reviewed: false };
+      if (!mounted) saveDraftSubmission(key, marker);
+      const { root, composerRef, onAdd, editor } = setup(key);
+      try {
+        if (mounted) saveDraftSubmission(key, marker);
+        const stored = localStorage.getItem(`${key}:submission:v1`);
+        expect(stored).not.toBeNull();
+        act(() => expect(composerRef.current!.restoreDraft("Canceled")).toBe(false));
+        expect(localStorage.getItem(`${key}:submission:v1`)).toBe(stored);
+        expect(editor().value).toBe("");
+        expect(onAdd).not.toHaveBeenCalled();
+      } finally { act(() => root.unmount()); }
+    });
+
+    it("preserves attachment-only drafts while uploading and after the receipt", async () => {
+      let resolveUpload!: (value: unknown) => void;
+      const onAttachImage = vi.fn().mockReturnValue(new Promise(resolve => { resolveUpload = resolve; }));
+      const { root, composerRef, onAdd, editor } = setup("classic-restore-attachment", vi.fn(), onAttachImage);
+      try {
+        const file = new File(["keep"], "用户 file.txt", { type: "text/plain" });
+        act(() => container.querySelector('[data-testid="issue-chat-composer"]')!.dispatchEvent(createFileDragEvent("drop", [file])));
+        act(() => expect(composerRef.current!.restoreDraft("Canceled")).toBe(false));
+        expect(container.textContent).toContain(file.name);
+        const id = "9af8228f-0be7-45ae-a104-6fbe0af6f1d3";
+        await act(async () => resolveUpload({ id, originalFilename: file.name, contentPath: `/api/attachments/${id}/content` }));
+        const receipt = localStorage.getItem("classic-restore-attachment:attachments:v1");
+        expect(receipt).toContain(id);
+        act(() => expect(composerRef.current!.restoreDraft("Canceled")).toBe(false));
+        expect(localStorage.getItem("classic-restore-attachment:attachments:v1")).toBe(receipt);
+        expect(editor().value).toBe("");
+        expect(onAttachImage).toHaveBeenCalledExactlyOnceWith(file);
+        expect(onAdd).not.toHaveBeenCalled();
+      } finally { act(() => root.unmount()); }
+    });
+
+    it("preserves an in-flight request without restoring or automatically sending again", async () => {
+      let resolveSend!: () => void;
+      const onAdd = vi.fn().mockReturnValue(new Promise<void>(resolve => { resolveSend = resolve; }));
+      const { root, composerRef, editor, change } = setup("classic-restore-pending", onAdd);
+      try {
+        act(() => change("Sending original"));
+        const send = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Send")!;
+        await act(async () => send.click());
+        const marker = loadDraftSubmission("classic-restore-pending");
+        expect(marker).not.toBeNull();
+        act(() => expect(composerRef.current!.restoreDraft("Canceled")).toBe(false));
+        expect(loadDraftSubmission("classic-restore-pending")).toEqual(marker);
+        expect(editor().value).toBe("");
+        await act(async () => resolveSend());
+        expect(onAdd).toHaveBeenCalledTimes(1);
+        expect(editor().value).toBe("");
+      } finally { act(() => root.unmount()); }
+    });
+
+    it("rejects retained handles after task changes and unmount", () => {
+      const { root, composerRef, onAdd, renderThread, editor } = setup("classic-old");
+      const oldHandle = composerRef.current!;
+      renderThread("classic-next");
+      act(() => expect(oldHandle.restoreDraft("Wrong task")).toBe(false));
+      renderThread("classic-old");
+      act(() => expect(oldHandle.restoreDraft("Still stale")).toBe(false));
+      expect(editor().value).toBe("");
+      const currentHandle = composerRef.current!;
+      act(() => root.unmount());
+      expect(composerRef.current).toBeNull();
+      expect(currentHandle.restoreDraft("After unmount")).toBe(false);
+      expect(loadDraft("classic-old")).toBe("");
+      expect(loadDraft("classic-next")).toBe("");
+      expect(onAdd).not.toHaveBeenCalled();
     });
   });
 
