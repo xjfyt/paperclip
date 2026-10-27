@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "@/i18n";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { Button } from "./ui/button";
@@ -16,6 +17,7 @@ interface Connection {
 export function DotRunnerConnection({ companyId, agentId, bindingId, onBinding }: {
   companyId?: string; agentId?: string; bindingId?: string; onBinding: (id: string) => void;
 }) {
+  const { t } = useTranslation();
   const client = useQueryClient();
   const [pairing, setPairing] = useState<{ pairingCode: string; expiresAt: string } | null>(null);
   const path = `/companies/${companyId}/agents/${agentId}/dot-binding`;
@@ -61,10 +63,10 @@ export function DotRunnerConnection({ companyId, agentId, bindingId, onBinding }
     {pairing && setupPrompt && b?.status === "pairing" && <div className="space-y-2">
       <AgentSetupPrompt
         prompt={setupPrompt}
-        label="Set up with Dot"
+        label={t("agentSetupHandoffUi.dotLabel")}
         agent={{ name: "Dot", src: "/brands/adapters/openai-dot.svg" }}
-        title="Connect your Dot"
-        description="Paste into your Dot to connect this agent."
+        title={t("agentSetupHandoffUi.dotTitle")}
+        description={t("agentSetupHandoffUi.dotDescription")}
         side="bottom"
       />
       <p className="text-xs text-muted-foreground">Setup prompt expires {new Date(pairing.expiresAt).toLocaleTimeString()}.</p>

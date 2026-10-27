@@ -1,0 +1,19 @@
+{
+  "assistantLabel": "招待をコピー",
+  "assistantTitle": "アシスタントを招待",
+  "assistantDescription": "この招待をアシスタントに貼り付けてください。アシスタントが接続の設定をサポートし、Paperclip でアクセスを承認するよう求めます。",
+  "dotLabel": "Dot で設定",
+  "dotTitle": "Dot を接続",
+  "dotDescription": "Dot に貼り付けて、このエージェントを接続してください。",
+  "continuationLabel": "エージェントで続行",
+  "continuationTitle": "タスクの引き継ぎ",
+  "continuationDescription": "エージェントに貼り付けて、この引き継ぎから作業を続行してください。",
+  "externalDotLabel": "設定プロンプトをコピー",
+  "externalAgentLabel": "招待プロンプトをコピー",
+  "externalAgentTitle": "エージェントを招待",
+  "externalDotDescription": "このプロンプト全体を ChatGPT の Dot に送信してください。",
+  "externalAgentDescription": "このプロンプト全体をエージェントに送信してください。",
+  "mcpLabel": "エージェントで設定を作成",
+  "mcpTitle": "MCP 設定",
+  "mcpDescription": "エージェントに貼り付けて MCP 設定を作成し、返された JSON を Paperclip に貼り付けてください。"
+}

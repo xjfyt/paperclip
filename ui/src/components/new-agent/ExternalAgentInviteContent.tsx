@@ -1,4 +1,5 @@
 import { Link } from "@/lib/router";
+import { useTranslation } from "@/i18n";
 import { ArrowLeft, Check, Circle, CircleAlert, Loader2 } from "lucide-react";
 import { AdapterMark } from "../AdapterMark";
 import { AgentSetupPrompt } from "../AgentSetupPrompt";
@@ -97,6 +98,7 @@ export function ExternalAgentInviteContent({
   onRetry: () => void;
   onNewPrompt: () => void;
 }) {
+  const { t } = useTranslation();
   const provider = presets.find(item => item.id === preset);
   const dot = preset === "dot";
   const ready = dot && connection.phase === "ready" && !connection.problem;
@@ -151,9 +153,9 @@ export function ExternalAgentInviteContent({
         : <AgentSetupPrompt
           key={preset}
           prompt={prompt}
-          label={dot ? "Copy setup prompt" : "Copy invitation prompt"}
-          title={dot ? "Connect your Dot" : "Invite your agent"}
-          description={dot ? "Send this whole prompt to your Dot in ChatGPT." : "Send this whole prompt to your agent."}
+          label={t(dot ? "agentSetupHandoffUi.externalDotLabel" : "agentSetupHandoffUi.externalAgentLabel")}
+          title={t(dot ? "agentSetupHandoffUi.dotTitle" : "agentSetupHandoffUi.externalAgentTitle")}
+          description={t(dot ? "agentSetupHandoffUi.externalDotDescription" : "agentSetupHandoffUi.externalAgentDescription")}
           agent={dot ? { name: "Dot", src: "/brands/adapters/openai-dot.svg" } : undefined}
           align="end"
           className="min-w-0 shrink"

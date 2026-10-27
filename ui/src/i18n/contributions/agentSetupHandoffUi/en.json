@@ -1,0 +1,19 @@
+{
+  "assistantLabel": "Copy invitation",
+  "assistantTitle": "Invite your assistant",
+  "assistantDescription": "Paste this invitation into your assistant. It will help set up the connection and ask you to approve access in Paperclip.",
+  "dotLabel": "Set up with Dot",
+  "dotTitle": "Connect your Dot",
+  "dotDescription": "Paste into your Dot to connect this agent.",
+  "continuationLabel": "Continue with an agent",
+  "continuationTitle": "Task handoff",
+  "continuationDescription": "Paste this into your agent to continue from this handoff.",
+  "externalDotLabel": "Copy setup prompt",
+  "externalAgentLabel": "Copy invitation prompt",
+  "externalAgentTitle": "Invite your agent",
+  "externalDotDescription": "Send this whole prompt to your Dot in ChatGPT.",
+  "externalAgentDescription": "Send this whole prompt to your agent.",
+  "mcpLabel": "Get a config with an agent",
+  "mcpTitle": "MCP configuration",
+  "mcpDescription": "Paste this into your agent to create an MCP config, then paste its JSON reply back into Paperclip."
+}

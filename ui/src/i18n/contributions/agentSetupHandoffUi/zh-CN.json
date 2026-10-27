@@ -1,0 +1,19 @@
+{
+  "assistantLabel": "复制邀请",
+  "assistantTitle": "邀请你的助手",
+  "assistantDescription": "将此邀请粘贴给你的助手。它会帮助设置连接，并请你在 Paperclip 中批准访问权限。",
+  "dotLabel": "通过 Dot 设置",
+  "dotTitle": "连接你的 Dot",
+  "dotDescription": "粘贴给你的 Dot，以连接此智能体。",
+  "continuationLabel": "让智能体继续处理",
+  "continuationTitle": "任务交接",
+  "continuationDescription": "将此内容粘贴给你的智能体，以从此交接点继续处理。",
+  "externalDotLabel": "复制设置提示词",
+  "externalAgentLabel": "复制邀请提示词",
+  "externalAgentTitle": "邀请你的智能体",
+  "externalDotDescription": "将完整提示词发送给 ChatGPT 中的 Dot。",
+  "externalAgentDescription": "将完整提示词发送给你的智能体。",
+  "mcpLabel": "让智能体生成配置",
+  "mcpTitle": "MCP 配置",
+  "mcpDescription": "将此内容粘贴给你的智能体来生成 MCP 配置，再将其回复的 JSON 粘贴回 Paperclip。"
+}

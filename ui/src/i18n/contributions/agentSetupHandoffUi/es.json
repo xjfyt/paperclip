@@ -1,0 +1,19 @@
+{
+  "assistantLabel": "Copiar invitación",
+  "assistantTitle": "Invita a tu asistente",
+  "assistantDescription": "Pega esta invitación en tu asistente. Te ayudará a configurar la conexión y te pedirá que apruebes el acceso en Paperclip.",
+  "dotLabel": "Configurar con Dot",
+  "dotTitle": "Conecta tu Dot",
+  "dotDescription": "Pega esto en tu Dot para conectar este agente.",
+  "continuationLabel": "Continuar con un agente",
+  "continuationTitle": "Traspaso de tarea",
+  "continuationDescription": "Pega esto en tu agente para continuar a partir de este traspaso.",
+  "externalDotLabel": "Copiar instrucciones de configuración",
+  "externalAgentLabel": "Copiar instrucciones de invitación",
+  "externalAgentTitle": "Invita a tu agente",
+  "externalDotDescription": "Envía estas instrucciones completas a tu Dot en ChatGPT.",
+  "externalAgentDescription": "Envía estas instrucciones completas a tu agente.",
+  "mcpLabel": "Obtener una configuración con un agente",
+  "mcpTitle": "Configuración MCP",
+  "mcpDescription": "Pega esto en tu agente para crear una configuración MCP y luego pega su respuesta JSON en Paperclip."
+}

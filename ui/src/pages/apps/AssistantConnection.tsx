@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "@/i18n";
 import { assistantClientNames, mcpAuthorizationHandoffInstructions, mcpInvitation, mcpSetupSteps, type AssistantClient, type McpConnection } from "@paperclipai/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Copy, ExternalLink, Globe, Paperclip, Plug, Terminal } from "lucide-react";
@@ -86,6 +87,7 @@ function setupError(error: Error): string {
 }
 
 export function AssistantConnection({ initialAssistant = "codex" }: { initialAssistant?: Assistant } = {}) {
+  const { t } = useTranslation();
   const { selectedCompany, selectedCompanyId } = useCompany();
   const { setBreadcrumbs } = useBreadcrumbs();
   const client = useQueryClient();
@@ -122,7 +124,7 @@ export function AssistantConnection({ initialAssistant = "codex" }: { initialAss
       <section className="space-y-4" aria-label="Invite your assistant">
         <p className="text-sm text-muted-foreground">Paste this invitation into your assistant. It will help set up the connection and ask you to approve access in Paperclip.</p>
         <div className="flex justify-end">
-          <AgentSetupPrompt prompt={invitation} label="Copy invitation" title="Invite your assistant" description="Paste this invitation into your assistant. It will help set up the connection and ask you to approve access in Paperclip." side="bottom" align="end" />
+          <AgentSetupPrompt prompt={invitation} label={t("agentSetupHandoffUi.assistantLabel")} title={t("agentSetupHandoffUi.assistantTitle")} description={t("agentSetupHandoffUi.assistantDescription")} side="bottom" align="end" />
         </div>
       </section>
       <details className="space-y-4 text-sm">
