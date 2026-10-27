@@ -69,13 +69,13 @@ import {
 const concurrencyPolicies = ["coalesce_if_active", "always_enqueue", "skip_if_active"];
 const catchUpPolicies = ["skip_missed", "enqueue_missed_with_cap"];
 const concurrencyPolicyDescriptions: Record<string, string> = {
-  coalesce_if_active: "If a run is already active, keep just one follow-up run queued.",
-  always_enqueue: "Queue every trigger occurrence, even if the routine is already running.",
-  skip_if_active: "Drop new trigger occurrences while a run is still active.",
+  coalesce_if_active: "routineOps.coalesce",
+  always_enqueue: "routineOps.enqueue",
+  skip_if_active: "routineOps.skipActive",
 };
 const catchUpPolicyDescriptions: Record<string, string> = {
-  skip_missed: "Ignore windows that were missed while the scheduler or routine was paused.",
-  enqueue_missed_with_cap: "Catch up missed schedule windows after recovery; sub-hourly schedules are combined into one catch-up run, slower schedules replay each missed window up to a cap.",
+  skip_missed: "routineOps.skipMissed",
+  enqueue_missed_with_cap: "routineOps.catchUp",
 };
 
 function autoResizeTextarea(element: HTMLTextAreaElement | null) {
@@ -184,8 +184,8 @@ export function buildRoutineGroups(
         const positionCompare = leftPosition - rightPosition;
         if (positionCompare !== 0) return positionCompare;
 
-        const labelCompare = (leftFolder?.name ?? "Unknown folder").localeCompare(
-          rightFolder?.name ?? "Unknown folder",
+        const labelCompare = (leftFolder?.name ?? mimouseT("routineOps.unknownFolder")).localeCompare(
+          rightFolder?.name ?? mimouseT("routineOps.unknownFolder"),
           undefined,
           { sensitivity: "base" },
         );
@@ -193,7 +193,7 @@ export function buildRoutineGroups(
       })
       .map((key) => ({
         key,
-        label: key === "__unfiled" ? mimouseT("commonUi.unfiled") : (folderById.get(key)?.name ?? "Unknown folder"),
+        label: key === "__unfiled" ? mimouseT("commonUi.unfiled") : (folderById.get(key)?.name ?? mimouseT("routineOps.unknownFolder")),
         items: groups[key]!,
       }));
   }
@@ -202,13 +202,13 @@ export function buildRoutineGroups(
     const groups = groupBy(routines, (routine) => routine.projectId ?? "__no_project");
     return Object.keys(groups)
       .sort((left, right) => {
-        const leftLabel = left === "__no_project" ? mimouseT("commonUi.noProject") : (projectById.get(left)?.name ?? "Unknown project");
-        const rightLabel = right === "__no_project" ? mimouseT("commonUi.noProject") : (projectById.get(right)?.name ?? "Unknown project");
+        const leftLabel = left === "__no_project" ? mimouseT("commonUi.noProject") : (projectById.get(left)?.name ?? mimouseT("routineOps.unknownProject"));
+        const rightLabel = right === "__no_project" ? mimouseT("commonUi.noProject") : (projectById.get(right)?.name ?? mimouseT("routineOps.unknownProject"));
         return leftLabel.localeCompare(rightLabel);
       })
       .map((key) => ({
         key,
-        label: key === "__no_project" ? mimouseT("commonUi.noProject") : (projectById.get(key)?.name ?? "Unknown project"),
+        label: key === "__no_project" ? mimouseT("commonUi.noProject") : (projectById.get(key)?.name ?? mimouseT("routineOps.unknownProject")),
         items: groups[key]!,
       }));
   }
@@ -216,13 +216,13 @@ export function buildRoutineGroups(
   const groups = groupBy(routines, (routine) => routine.assigneeAgentId ?? "__unassigned");
   return Object.keys(groups)
     .sort((left, right) => {
-      const leftLabel = left === "__unassigned" ? mimouseT("commonUi.unassigned") : (agentById.get(left)?.name ?? "Unknown agent");
-      const rightLabel = right === "__unassigned" ? mimouseT("commonUi.unassigned") : (agentById.get(right)?.name ?? "Unknown agent");
+      const leftLabel = left === "__unassigned" ? mimouseT("commonUi.unassigned") : (agentById.get(left)?.name ?? mimouseT("routineOps.unknownAgent"));
+      const rightLabel = right === "__unassigned" ? mimouseT("commonUi.unassigned") : (agentById.get(right)?.name ?? mimouseT("routineOps.unknownAgent"));
       return leftLabel.localeCompare(rightLabel);
     })
     .map((key) => ({
       key,
-      label: key === "__unassigned" ? mimouseT("commonUi.unassigned") : (agentById.get(key)?.name ?? "Unknown agent"),
+      label: key === "__unassigned" ? mimouseT("commonUi.unassigned") : (agentById.get(key)?.name ?? mimouseT("routineOps.unknownAgent")),
       items: groups[key]!,
     }));
 }
@@ -244,7 +244,7 @@ export function buildRoutineSections(
     .filter((group) => group.items.length > 0)
     .map((group) => (
       builtInRoutines.length > 0 && groupByValue === "none" && group.key === "__all"
-        ? { ...group, label: "Custom routines" }
+        ? { ...group, label: mimouseT("routineOps.custom") }
         : group
     ));
 
@@ -254,7 +254,7 @@ export function buildRoutineSections(
     ...customGroups,
     {
       key: builtInRoutineGroupKey,
-      label: "Built-in routines",
+      label: mimouseT("routineOps.builtIn"),
       items: builtInRoutines,
     },
   ];
@@ -456,10 +456,10 @@ export function Routines() {
       setAdvancedOpen(false);
       await queryClient.invalidateQueries({ queryKey: queryKeys.routines.list(selectedCompanyId!) });
       pushToast({
-        title: "Routine created",
+        title: mimouseT("routineOps.created"),
         body: routine.assigneeAgentId
-          ? "Add the first trigger to turn it into a live workflow."
-          : "Draft saved. Add a default agent before enabling automation.",
+          ? mimouseT("routineOps.addTrigger")
+          : mimouseT("routineOps.draftSaved"),
         tone: "success",
       });
       navigate(`/routines/${routine.id}?tab=triggers`);
@@ -485,8 +485,8 @@ export function Routines() {
           ]);
         } catch (moveError) {
           pushToast({
-            title: "Folder created, move failed",
-            body: moveError instanceof Error ? moveError.message : "Paperclip could not move the selected routines.",
+            title: mimouseT("routineOps.folderMoveFailed"),
+            body: moveError instanceof Error ? moveError.message : mimouseT("routineOps.cannotMoveMany"),
             tone: "error",
           });
           return;
@@ -494,12 +494,12 @@ export function Routines() {
       } else {
         setFolderSelection(folder.id);
       }
-      pushToast({ title: "Folder created", body: folder.name, tone: "success" });
+      pushToast({ title: mimouseT("routineOps.folderCreated"), body: folder.name, tone: "success" });
     },
     onError: (mutationError) => {
       pushToast({
-        title: "Failed to save folder",
-        body: mutationError instanceof Error ? mutationError.message : "Paperclip could not save the folder.",
+        title: mimouseT("routineOps.saveFolderFailed"),
+        body: mutationError instanceof Error ? mutationError.message : mimouseT("routineOps.cannotSaveFolder"),
         tone: "error",
       });
     },
@@ -514,8 +514,8 @@ export function Routines() {
     },
     onError: (mutationError) => {
       pushToast({
-        title: "Folder save failed",
-        body: mutationError instanceof Error ? mutationError.message : "Paperclip could not update the folder.",
+        title: mimouseT("routineOps.folderSaveFailed"),
+        body: mutationError instanceof Error ? mutationError.message : mimouseT("routineOps.cannotUpdateFolder"),
         tone: "error",
       });
     },
@@ -529,12 +529,12 @@ export function Routines() {
         queryClient.invalidateQueries({ queryKey: queryKeys.routines.list(selectedCompanyId!) }),
         queryClient.invalidateQueries({ queryKey: queryKeys.folders.list(selectedCompanyId!, "routine") }),
       ]);
-      pushToast({ title: "Folder deleted", body: "Items moved to Unfiled.", tone: "success" });
+      pushToast({ title: mimouseT("routineOps.folderDeleted"), body: mimouseT("routineOps.movedUnfiled"), tone: "success" });
     },
     onError: (mutationError) => {
       pushToast({
-        title: "Folder delete failed",
-        body: mutationError instanceof Error ? mutationError.message : "Paperclip could not delete the folder.",
+        title: mimouseT("routineOps.folderDeleteFailed"),
+        body: mutationError instanceof Error ? mutationError.message : mimouseT("routineOps.cannotDeleteFolder"),
         tone: "error",
       });
     },
@@ -550,8 +550,8 @@ export function Routines() {
     },
     onError: (mutationError) => {
       pushToast({
-        title: "Move failed",
-        body: mutationError instanceof Error ? mutationError.message : "Paperclip could not move the routine.",
+        title: mimouseT("routineOps.moveFailed"),
+        body: mutationError instanceof Error ? mutationError.message : mimouseT("routineOps.cannotMove"),
         tone: "error",
       });
     },
@@ -580,8 +580,8 @@ export function Routines() {
     },
     onError: (mutationError) => {
       pushToast({
-        title: "Failed to update routine",
-        body: mutationError instanceof Error ? mutationError.message : "Paperclip could not update the routine.",
+        title: mimouseT("routineOps.updateFailed"),
+        body: mutationError instanceof Error ? mutationError.message : mimouseT("routineOps.cannotUpdate"),
         tone: "error",
       });
     },
@@ -615,8 +615,8 @@ export function Routines() {
     },
     onError: (mutationError) => {
       pushToast({
-        title: "Routine run failed",
-        body: mutationError instanceof Error ? mutationError.message : "Paperclip could not start the routine run.",
+        title: mimouseT("routineOps.runFailed"),
+        body: mutationError instanceof Error ? mutationError.message : mimouseT("routineOps.cannotRun"),
         tone: "error",
       });
     },
@@ -699,11 +699,11 @@ export function Routines() {
   const recentRunsIssueLinkState = useMemo(
     () =>
       createIssueDetailLocationState(
-        "Recent Runs",
+        mimouseT("commonUi.recentRuns"),
         buildRoutinesTabHref("runs"),
         "issues",
       ),
-    [],
+    [mimouseI18n.language],
   );
   const currentAssignee = draft.assigneeAgentId ? agentById.get(draft.assigneeAgentId) ?? null : null;
   const currentProject = draft.projectId ? projectById.get(draft.projectId) ?? null : null;
@@ -761,11 +761,11 @@ export function Routines() {
         queryClient.invalidateQueries({ queryKey: queryKeys.routines.list(selectedCompanyId!) }),
         queryClient.invalidateQueries({ queryKey: queryKeys.folders.list(selectedCompanyId!, "routine") }),
       ]);
-      pushToast({ title: "Routines moved", body: `${ids.length} routine${ids.length === 1 ? "" : "s"} filed.`, tone: "success" });
+      pushToast({ title: mimouseT("routineOps.moved"), body: mimouseT("routineOps.filed", { count: ids.length }), tone: "success" });
     } catch (moveError) {
       pushToast({
-        title: "Failed to move routines",
-        body: moveError instanceof Error ? moveError.message : "Paperclip could not move the selected routines.",
+        title: mimouseT("routineOps.moveManyFailed"),
+        body: moveError instanceof Error ? moveError.message : mimouseT("routineOps.cannotMoveMany"),
         tone: "error",
       });
     }
@@ -778,8 +778,8 @@ export function Routines() {
   function handleToggleEnabled(routine: RoutineListItem, enabled: boolean) {
     if (!enabled && !routine.assigneeAgentId) {
       pushToast({
-        title: "Default agent required",
-        body: "Set a default agent before enabling routine automation.",
+        title: mimouseT("routineOps.agentRequired"),
+        body: mimouseT("routineOps.setAgent"),
         tone: "warn",
       });
       return;
@@ -798,7 +798,7 @@ export function Routines() {
   }
 
   if (!selectedCompanyId) {
-    return <EmptyState icon={Repeat} message="Select a company to view routines." />;
+    return <EmptyState icon={Repeat} message={mimouseT("routineOps.selectOrg")} />;
   }
 
   if (isLoading) {
@@ -829,7 +829,7 @@ export function Routines() {
         <TabsContent value="routines" className="space-y-4">
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm text-muted-foreground">
-              {visibleRoutines.length} routine{visibleRoutines.length === 1 ? "" : "s"}
+              {mimouseT("routineOps.count", { count: visibleRoutines.length })}
             </p>
             <div className="flex items-center gap-1">
               <Popover>
@@ -842,10 +842,10 @@ export function Routines() {
                 <PopoverContent align="end" className="w-44 p-0">
                   <div className="p-2 space-y-0.5">
                     {([
-                      ["updated", "Updated"],
-                      ["created", "Created"],
-                      ["lastRun", "Last run"],
-                      ["title", "Title"],
+                      ["updated", mimouseT("routineOps.updated")],
+                      ["created", mimouseT("routineOps.createdSort")],
+                      ["lastRun", mimouseT("routineOps.lastRun")],
+                      ["title", mimouseT("routineOps.title")],
                     ] as const).map(([field, label]) => (
                       <button
                         key={field}
@@ -865,7 +865,7 @@ export function Routines() {
                         <span>{label}</span>
                         {routineViewState.sortField === field ? (
                           <span className="text-xs text-muted-foreground">
-                            {routineViewState.sortDir === "asc" ? "Asc" : "Desc"}
+                            {routineViewState.sortDir === "asc" ? mimouseT("routineOps.asc") : mimouseT("routineOps.desc")}
                           </span>
                         ) : null}
                       </button>
@@ -883,10 +883,10 @@ export function Routines() {
                 <PopoverContent align="end" className="w-44 p-0">
                   <div className="p-2 space-y-0.5">
                     {([
-                      ["folder", "Folder"],
-                      ["project", "Project"],
-                      ["assignee", "Agent"],
-                      ["none", "None"],
+                      ["folder", mimouseT("routineOps.folder")],
+                      ["project", mimouseT("routineOps.project")],
+                      ["assignee", mimouseT("routineOps.agent")],
+                      ["none", mimouseT("routineOps.none")],
                     ] as const).map(([value, label]) => (
                       <button
                         key={value}
@@ -910,7 +910,7 @@ export function Routines() {
               ) : null}
               {showFolderRail ? (
                 <Button variant="ghost" size="sm" className="text-xs" onClick={() => setSelectMode((current) => !current)}>
-                  {selectMode ? "Done" : "Select"}
+                  {selectMode ? mimouseT("routineOps.done") : mimouseT("routineOps.select")}
                 </Button>
               ) : null}
             </div>
@@ -920,7 +920,7 @@ export function Routines() {
               <FolderChip
                 result={railFolderResult}
                 selection={folderSelection}
-                allLabel="All routines"
+                allLabel={mimouseT("routineOps.all")}
                 onClick={() => setMobileFoldersOpen(true)}
               />
             </div>
@@ -1007,15 +1007,15 @@ export function Routines() {
             <div className="px-5 pb-3">
               <div className="overflow-x-auto overscroll-x-contain">
                 <div className="inline-flex min-w-full flex-wrap items-center gap-2 text-sm text-muted-foreground sm:min-w-max sm:flex-nowrap">
-                  <span>For</span>
+                  <span>{mimouseT("routineOps.for")}</span>
                   <InlineEntitySelector
                     ref={assigneeSelectorRef}
                     value={draft.assigneeAgentId}
                     options={assigneeOptions}
                     recentOptionIds={recentAssigneeIds}
                     placeholder={mimouseT("commonUi.responsible")}
-                    noneLabel="No responsible"
-                    searchPlaceholder="Search responsible..."
+                    noneLabel={mimouseT("routineOps.noResponsible")}
+                    searchPlaceholder={mimouseT("routineOps.searchResponsible")}
                     emptyMessage={mimouseT("workflow.noResponsibleFound")}
                     onChange={(assigneeAgentId) => {
                       if (assigneeAgentId) trackRecentAssignee(assigneeAgentId);
@@ -1060,8 +1060,8 @@ export function Routines() {
                     options={projectOptions}
                     recentOptionIds={recentProjectIds}
                     placeholder={mimouseT("commonUi.project")}
-                    noneLabel="No project"
-                    searchPlaceholder="Search projects..."
+                    noneLabel={mimouseT("routineOps.noProject")}
+                    searchPlaceholder={mimouseT("routineOps.searchProjects")}
                     emptyMessage={mimouseT("workflow.noProjects")}
                     onChange={(projectId) => {
                       if (projectId) trackRecentProject(projectId);
@@ -1158,11 +1158,11 @@ export function Routines() {
                         </SelectTrigger>
                         <SelectContent>
                           {concurrencyPolicies.map((value) => (
-                            <SelectItem key={value} value={value}>{value.replaceAll("_", " ")}</SelectItem>
+                            <SelectItem key={value} value={value}>{mimouseT(`routineOps.policy_${value}`)}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
-                      <p className="text-xs text-muted-foreground">{concurrencyPolicyDescriptions[draft.concurrencyPolicy]}</p>
+                      <p className="text-xs text-muted-foreground">{mimouseT(concurrencyPolicyDescriptions[draft.concurrencyPolicy])}</p>
                     </div>
                     <div className="space-y-2">
                       <p className="text-xs font-medium uppercase tracking-(--tracking-caps) text-muted-foreground">{mimouseT("workflow.catchUp")}</p>
@@ -1175,11 +1175,11 @@ export function Routines() {
                         </SelectTrigger>
                         <SelectContent>
                           {catchUpPolicies.map((value) => (
-                            <SelectItem key={value} value={value}>{value.replaceAll("_", " ")}</SelectItem>
+                            <SelectItem key={value} value={value}>{mimouseT(`routineOps.policy_${value}`)}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
-                      <p className="text-xs text-muted-foreground">{catchUpPolicyDescriptions[draft.catchUpPolicy]}</p>
+                      <p className="text-xs text-muted-foreground">{mimouseT(catchUpPolicyDescriptions[draft.catchUpPolicy])}</p>
                     </div>
                   </div>
                 </CollapsibleContent>
@@ -1198,11 +1198,11 @@ export function Routines() {
                 }
               >
                 <Plus className="mr-2 h-4 w-4" />
-                {createRoutine.isPending ? "Creating..." : "Create routine"}
+                {createRoutine.isPending ? mimouseT("routineOps.creating") : mimouseT("routineOps.create")}
               </Button>
               {createRoutine.isError ? (
                 <p className="text-sm text-destructive">
-                  {createRoutine.error instanceof Error ? createRoutine.error.message : "Failed to create routine"}
+                  {createRoutine.error instanceof Error ? createRoutine.error.message : mimouseT("routineOps.createFailed")}
                 </p>
               ) : null}
             </div>
@@ -1213,7 +1213,7 @@ export function Routines() {
       {error ? (
         <Card>
           <CardContent className="pt-6 text-sm text-destructive">
-            {error instanceof Error ? error.message : "Failed to load routines"}
+            {error instanceof Error ? error.message : mimouseT("routineOps.loadFailed")}
           </CardContent>
         </Card>
       ) : null}
@@ -1224,8 +1224,8 @@ export function Routines() {
             <FolderRail
               result={railFolderResult}
               selection={folderSelection}
-              allLabel="All routines"
-              itemLabelPlural="routines"
+              allLabel={mimouseT("routineOps.all")}
+              itemLabelPlural={mimouseT("commonUi.routines")}
               loading={foldersLoading}
               onSelect={setFolderSelection}
               onCreate={() => openCreateFolder()}
@@ -1243,8 +1243,8 @@ export function Routines() {
               {folderSelection === "all" ? <FolderIconHeader label={mimouseT("workflow.allRoutines")} count={sortedRoutines.length} /> : (
                 <div className="flex min-w-0 items-center gap-2 text-sm">
                   <FolderSwatch color={activeFolder?.color} />
-                  <span className="truncate font-medium">{folderSelection === "unfiled" ? mimouseT("commonUi.unfiled") : activeFolder?.name ?? "Folder"}</span>
-                  <span className="text-muted-foreground">{sortedRoutines.length} routine{sortedRoutines.length === 1 ? "" : "s"}</span>
+                  <span className="truncate font-medium">{folderSelection === "unfiled" ? mimouseT("commonUi.unfiled") : activeFolder?.name ?? mimouseT("routineOps.folder")}</span>
+                  <span className="text-muted-foreground">{mimouseT("routineOps.count", { count: sortedRoutines.length })}</span>
                 </div>
               )}
             </div>
@@ -1252,7 +1252,7 @@ export function Routines() {
           {routineViewState.groupBy === "folder" && !hasRoutineFolders && !foldersLoading && visibleRoutines.length > 0 ? (
             <AllUnfiledBanner
               storageKey={`paperclip:routines-folder-nudge:${selectedCompanyId ?? "none"}`}
-              itemLabelPlural="routines"
+              itemLabelPlural={mimouseT("commonUi.routines")}
               onCreateFolder={() => openCreateFolder()}
             />
           ) : null}
@@ -1273,14 +1273,14 @@ export function Routines() {
             <div className="py-12">
               <EmptyState
                 icon={Repeat}
-                message="No active routines. Use Create routine to define the first recurring workflow."
+                message={mimouseT("routineOps.noActive")}
               />
             </div>
           ) : sortedRoutines.length === 0 ? (
             <div className="py-12">
               <EmptyState
                 icon={Repeat}
-                message={folderSelection === "all" ? "No routines match this view." : "This folder is empty."}
+                message={folderSelection === "all" ? mimouseT("routineOps.noMatch") : mimouseT("routineOps.emptyFolder")}
               />
               {folderSelection !== "all" ? (
                 <div className="mt-3 flex justify-center">
@@ -1344,13 +1344,13 @@ export function Routines() {
                                 const previousFolderId = routine.folderId ?? null;
                                 moveRoutineToFolder.mutate({ itemId: routine.id, folderId });
                                 pushToast({
-                                  title: "Routine moved",
+                                  title: mimouseT("routineOps.movedOne"),
                                   body: folderId
-                                    ? `Moved "${routine.title}" to ${routineFolders?.folders.find((folder) => folder.id === folderId)?.name ?? "folder"}.`
-                                    : `Moved "${routine.title}" to Unfiled.`,
+                                    ? mimouseT("routineOps.movedTo", { title: routine.title, folder: routineFolders?.folders.find((folder) => folder.id === folderId)?.name ?? mimouseT("routineOps.folder") })
+                                    : mimouseT("routineOps.movedTo", { title: routine.title, folder: mimouseT("commonUi.unfiled") }),
                                   tone: "success",
                                   action: {
-                                    label: "Undo",
+                                    label: mimouseT("routineOps.undo"),
                                     onClick: () => moveRoutineToFolder.mutate({ itemId: routine.id, folderId: previousFolderId }),
                                   },
                                 });
@@ -1384,7 +1384,7 @@ export function Routines() {
       <DeleteFolderDialog
         open={deleteFolderTarget !== null}
         folder={deleteFolderTarget}
-        itemLabelPlural="routines"
+        itemLabelPlural={mimouseT("commonUi.routines")}
         pending={deleteFolder.isPending}
         onOpenChange={(open) => {
           if (!open) setDeleteFolderTarget(null);
@@ -1398,8 +1398,8 @@ export function Routines() {
         onOpenChange={setMobileFoldersOpen}
         result={railFolderResult}
         selection={folderSelection}
-        allLabel="All routines"
-        itemLabelPlural="Routines"
+        allLabel={mimouseT("routineOps.all")}
+        itemLabelPlural={mimouseT("commonUi.routines")}
         onSelect={setFolderSelection}
         onCreate={() => openCreateFolder()}
       />
@@ -1431,7 +1431,7 @@ function FolderIconHeader({ label, count }: { label: string; count: number }) {
     <div className="flex min-w-0 items-center gap-2 text-sm">
       <Repeat className="h-3.5 w-3.5 text-muted-foreground" />
       <span className="truncate font-medium">{label}</span>
-      <span className="text-muted-foreground">{count} routine{count === 1 ? "" : "s"}</span>
+      <span className="text-muted-foreground">{mimouseT("routineOps.count", { count })}</span>
     </div>
   );
 }
