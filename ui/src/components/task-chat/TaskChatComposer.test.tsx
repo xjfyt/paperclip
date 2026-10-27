@@ -329,7 +329,30 @@ describe("TaskChatComposer", () => {
       ]);
       const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
       const onAdd = vi.fn().mockResolvedValue(undefined), onPendingAssigneeChange = vi.fn();
-      const agent = { id: "a1", name: "用户 Clippy", adapterType: "codex_local", adapterConfig: { model: "gpt-6-sol" } } as Agent;
+      const agent: Agent = {
+        id: "a1",
+        companyId: "company-1",
+        name: "用户 Clippy",
+        urlKey: "clippy",
+        role: "engineer",
+        title: "Engineering Lead",
+        icon: null,
+        status: "idle",
+        reportsTo: null,
+        capabilities: null,
+        adapterType: "codex_local",
+        adapterConfig: { model: "gpt-6-sol" },
+        runtimeConfig: {},
+        budgetMonthlyCents: 0,
+        spentMonthlyCents: 0,
+        pauseReason: null,
+        pausedAt: null,
+        permissions: { canCreateAgents: false },
+        lastHeartbeatAt: null,
+        metadata: null,
+        createdAt: new Date("2026-10-27T00:00:00Z"),
+        updatedAt: new Date("2026-10-27T00:00:00Z"),
+      };
       const draftKey = `model-picker-draft:${locale}:${mobile}`;
       const draft = "Keep **用户 draft** unchanged.";
       localStorage.setItem(draftKey, draft);

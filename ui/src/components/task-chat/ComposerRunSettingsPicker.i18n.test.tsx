@@ -14,7 +14,30 @@ import { ComposerRunSettingsPicker } from "./ComposerRunSettingsPicker";
 import type { ComposerRunSettings } from "./composer-run-settings";
 
 type Props = ComponentProps<typeof ComposerRunSettingsPicker>;
-const agent = { id: "a1", name: "用户 Clippy", role: "Engineering Lead", adapterType: "codex_local", adapterConfig: { model: "gpt-6-sol" } } as Agent;
+const agent: Agent = {
+  id: "a1",
+  companyId: "company-1",
+  name: "用户 Clippy",
+  urlKey: "clippy",
+  role: "engineer",
+  title: "Engineering Lead",
+  icon: null,
+  status: "idle",
+  reportsTo: null,
+  capabilities: null,
+  adapterType: "codex_local",
+  adapterConfig: { model: "gpt-6-sol" },
+  runtimeConfig: {},
+  budgetMonthlyCents: 0,
+  spentMonthlyCents: 0,
+  pauseReason: null,
+  pausedAt: null,
+  permissions: { canCreateAgents: false },
+  lastHeartbeatAt: null,
+  metadata: null,
+  createdAt: new Date("2026-10-27T00:00:00Z"),
+  updatedAt: new Date("2026-10-27T00:00:00Z"),
+};
 const models = [{ id: "gpt-6-sol", label: "Private 用户model" }, { id: "gpt-6-astra", label: "GPT-6 Astra" }];
 const cases = Object.entries(composerModelMessages).flatMap(([locale, messages]) => [false, true].map(mobile => ({ locale, messages, mobile })));
 let root: Root;
@@ -175,21 +198,21 @@ describe("composer model localization and IME", () => {
 
   it.each(Object.entries(composerModelMessages))("localizes provider validation, thinking and unavailable adapters in %s", async (locale, m) => {
     await i18n.changeLanguage(locale);
-    const pi = { ...agent, adapterType: "pi_local", adapterConfig: { model: "provider/model" } } as Agent;
+    const pi: Agent = { ...agent, adapterType: "pi_local", adapterConfig: { model: "provider/model" } };
     render({ agents: new Map([[pi.id, pi]]), initialOpen: true, settings: { model: "provider/model", effort: "off", fast: false }, modelOptionsOverride: [{ id: "provider/model", label: "Private model" }] });
     await settle();
     expect(input(m.thinking).getAttribute("aria-valuetext")).toBe(m.effort.off);
     await click(m.chooseExactModel);
     change(input(m.search), "missing-provider");
     expect(document.body.textContent).toContain(m.invalidProviderId);
-    const router = { ...agent, adapterType: "opencode_local", adapterConfig: { model: "openrouter/provider/model" } } as Agent;
+    const router: Agent = { ...agent, adapterType: "opencode_local", adapterConfig: { model: "openrouter/provider/model" } };
     render({ agents: new Map([[router.id, router]]), initialOpen: true, initialView: "models", initialModelSearch: "provider/model" });
     await settle();
     expect(document.body.textContent).toContain("OpenCode · OpenRouter");
     expect(document.body.textContent).toContain(m.invalidOpenRouterId);
     expect(document.body.textContent).toContain(m.customOpenRouterHint);
     for (const [adapterType, expected] of [["process", m.commandUnavailable], ["http", m.httpUnavailable], ["openclaw_gateway", m.gatewayUnavailable]]) {
-      render({ agents: new Map([[agent.id, { ...agent, adapterType } as Agent]]), initialOpen: true });
+      render({ agents: new Map([[agent.id, { ...agent, adapterType }]]), initialOpen: true });
       await settle();
       expect(document.querySelector('[data-testid="model-unavailable"]')?.textContent).toBe(expected);
     }
