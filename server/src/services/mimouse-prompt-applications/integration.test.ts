@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 import { createServer } from "node:net";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, readFile, writeFile, appendFile, rm, mkdir } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile, appendFile, rm, mkdir, access } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
@@ -34,6 +34,7 @@ import { drainHeartbeatRunsToQuiescence } from "../../__tests__/helpers/drain-he
 import { getServerAdapter } from "../../adapters/registry.js";
 import { legacyControllerClaim } from "../legacy-controller-lease.js";
 import type { HeartbeatRuntimeExecutionInput } from "../heartbeat/runtime-execution.js";
+let pgPid = 0;
 let home: string, db: Db, pg: { initialise(): Promise<void>; start(): Promise<void>; stop(): Promise<void> };
 let actor: { companyId: string; userId: string; sessionId: string }, target: typeof agents.$inferSelect, environmentId: string;
 let service: ReturnType<typeof promptApplicationService>, heartbeat: ReturnType<typeof heartbeatService>;
@@ -49,11 +50,16 @@ beforeAll(async () => {
   vi.stubGlobal("fetch", vi.fn(async () => { throw Error("Network forbidden in controlled prompt fixture"); }));
   const port = await new Promise<number>((accept, reject) => { const socket = createServer(); socket.once("error", reject); socket.listen(0, "127.0.0.1", () => {
     const address = socket.address(); if (!address || typeof address === "string") return reject(Error("Missing loopback port")); socket.close(error => error ? reject(error) : accept(address.port)); }); });
+  const dataDir = join(home, "db");
+  if (!resolve(home).startsWith(join(tmpdir(), "paperclip-prompt-application-")) || await readFile(join(home, ".owned-test"), "utf8") !== "controlled-prompt-disposable-v1") throw Error("Missing owned fixture boundary");
+  for (const name of ["PG_VERSION", "postmaster.pid"]) if (await access(join(dataDir, name)).then(() => true, () => false)) throw Error("Refusing pre-existing PostgreSQL state");
   const require = createRequire(new URL("../../../../packages/db/package.json", import.meta.url));
   const { default: EmbeddedPostgres } = await import(require.resolve("embedded-postgres"));
   pg = new EmbeddedPostgres({ databaseDir: join(home, "db"), user: "paperclip", password: "paperclip", port, persistent: true,
     initdbFlags: ["--encoding=UTF8", "--locale=C", "--lc-messages=C"], onLog: () => {}, onError: () => {} });
   await pg.initialise(); await appendFile(join(home, "db", "postgresql.conf"), "\nunix_socket_directories = ''\nlisten_addresses = '127.0.0.1'\n"); await pg.start();
+  pgPid = Number((await readFile(join(home, "db", "postmaster.pid"), "utf8")).split("\n")[0]);
+  if (!Number.isSafeInteger(pgPid) || pgPid <= 1) throw Error("Owned PostgreSQL PID unavailable");
   await ensurePostgresDatabase(`postgres://paperclip:paperclip@127.0.0.1:${port}/postgres`, "paperclip");
   const url = `postgres://paperclip:paperclip@127.0.0.1:${port}/paperclip`; await applyPendingMigrations(url); db = createDb(url);
   expect(resolve(String((await db.execute(sql`show data_directory`))[0].data_directory))).toBe(resolve(join(home, "db")));
@@ -86,7 +92,13 @@ beforeAll(async () => {
 }, 90000);
 afterAll(async () => { boundary.beforeSpawn = null; boundary.settle = null;
   await heartbeat?.drainActiveRunExecutions(); await (db as any)?.$client?.end(); await pg?.stop();
-  if (home && await readFile(join(home, ".owned-test"), "utf8") === "controlled-prompt-disposable-v1") await rm(home, { recursive: true, force: true }); vi.unstubAllGlobals(); vi.unstubAllEnvs(); }, 30000);
+  if (home && await readFile(join(home, ".owned-test"), "utf8") === "controlled-prompt-disposable-v1") {
+    if (await access(join(home, "db", "postmaster.pid")).then(() => true, () => false)) throw Error("Preserving fixture: postmaster PID file remains");
+    if (pgPid) { let stopped = false; try { process.kill(pgPid, 0); } catch (error) { stopped = (error as NodeJS.ErrnoException).code === "ESRCH"; }
+      if (!stopped) throw Error("Preserving fixture: owned PostgreSQL process is not confirmed stopped"); }
+    await rm(home, { recursive: true, force: true });
+  }
+  vi.unstubAllGlobals(); vi.unstubAllEnvs(); }, 30000);
 const approval = (item: any, requestId = randomUUID()) => ({ requestId, expectedGeneration: item.expectedGeneration, approvalDigest: item.approvalDigest,
   confirmOrdinaryVisibility: true as const, confirmBareComparisonNotToolQuality: true as const, confirmNewTasksOnly: true as const, confirmNoAutomaticRun: true as const });
 async function proposal() { const head = await service.head(actor, target.id); return service.prepare(actor, e.promptId, { requestId: randomUUID(), agentId: target.id,
