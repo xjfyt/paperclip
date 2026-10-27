@@ -1,0 +1,17 @@
+{
+  "tooLateTitle": "Message is already being sent",
+  "tooLateBody": "The continuation started before the discard was confirmed, so Paperclip could not unsend it.",
+  "loadingEarlier": "Loading earlier comments...",
+  "loadEarlier": "Load earlier comments",
+  "cancelFailed": "Cancel failed",
+  "cancelFailedBody": "Unable to cancel the queued comment",
+  "saveUnconfirmed": "Comment save unconfirmed",
+  "commentFailed": "Comment failed",
+  "commentFailedBody": "Unable to post comment",
+  "queuedCancelled": "Queued comment canceled",
+  "draftRestored": "The queued message was restored to the composer.",
+  "commentDeleted": "Comment deleted",
+  "deletedMarker": "The thread now shows a deleted-comment marker.",
+  "deleteFailed": "Delete failed",
+  "deleteFailedBody": "Unable to delete the comment"
+}

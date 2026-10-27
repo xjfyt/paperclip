@@ -1,3 +1,8 @@
+import { restoreSubmittedCommentDraft } from "../lib/comment-submit-draft";
+import { issueCommentFeedbackMessages } from "../i18n/issue-comment-feedback-test-resources";
+import { CommentSubmissionUnknownError } from "../lib/comment-submit-result";
+import type { LiveRunForIssue } from "../api/heartbeats";
+import { useImperativeHandle } from "react";
 import { issueInteractionFeedbackMessages } from "../i18n/issue-interaction-feedback-test-resources";
 import { issueFeedbackMessages } from "../i18n/issue-feedback-test-resources";
 import { issueRecoveryMessages } from "../i18n/issue-recovery-test-resources";
@@ -15,7 +20,7 @@ import { TaskChatPausedTakeover, type TaskComposerPause } from "../components/ta
 
 import { DispositionRecoveryNotice, type DispositionRecoverySnapshot } from "../components/DispositionRecoveryNotice";
 import { RichWorkProductCard } from "../components/task-chat/RichWorkProductCard";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, type InfiniteData } from "@tanstack/react-query";
 import type {
   Agent,
   ExecutionWorkspace,
@@ -99,7 +104,8 @@ const mockIssuesApi = vi.hoisted(() => ({
   archiveFromInbox: vi.fn(),
   unarchiveFromInbox: vi.fn(),
   addComment: vi.fn(),
-  cancelComment: vi.fn(),
+  cancelComment: vi.fn<typeof issuesApi.cancelComment>(),
+  deleteComment: vi.fn<typeof issuesApi.deleteComment>(),
   upsertFeedbackVote: vi.fn(),
   uploadAttachment: vi.fn(),
   deleteAttachment: vi.fn(),
@@ -161,10 +167,13 @@ type FeedbackThreadProps = Pick<TaskChatThreadProps,
   "onReconcileForwardRecoveryAction" | "onBreakGlassOverrideRecoveryAction" |
   "onQuarantineRestoreRecoveryAction" | "reconcileRecoveryActionPending" | "quarantineRestoreRecoveryActionPending" |
   "onAcceptInteraction" | "onRejectInteraction" | "onSubmitInteractionAnswers" |
-  "onSubmitInteractionVerdicts" | "onCancelInteraction" | "onSkipInteraction"
+  "onSubmitInteractionVerdicts" | "onCancelInteraction" | "onSkipInteraction" |
+  "onAdd" | "onDeleteComment" | "onCancelQueued" | "onDiscardQueuedComment" | "queuedCommentQueue" | "comments" | "composerRef"
 >;
 const mockFeedbackThreadRender = vi.hoisted(() => vi.fn<(props: FeedbackThreadProps) => void>());
 const mockFeedbackToast = vi.hoisted(() => vi.fn<(toast: ToastInput) => void>());
+const mockRestoreCommentDraft = vi.hoisted(() => vi.fn<(body: string) => void>());
+const mockFocusCommentComposer = vi.hoisted(() => vi.fn<() => void>());
 
 const mockNavigate = vi.hoisted(() => vi.fn());
 const mockLocation = vi.hoisted(() => ({
@@ -473,6 +482,7 @@ vi.mock("../components/TaskChatThread", () => ({
   }) => {
     mockIssueChatThreadRender(props);
     mockFeedbackThreadRender(props);
+    useImperativeHandle(props.composerRef, () => ({ focus: mockFocusCommentComposer, restoreDraft: mockRestoreCommentDraft }), []);
     return (
       <div data-testid="task-chat-thread">
         {props.threadHeader}
@@ -1484,6 +1494,10 @@ describe("IssueDetail", () => {
     mockIssuesApi.submitInteractionVerdicts.mockReset();
     mockIssuesApi.cancelInteraction.mockReset();
     mockIssuesApi.skipInteraction.mockReset();
+    mockIssuesApi.cancelComment.mockReset();
+    mockIssuesApi.deleteComment.mockReset();
+    mockRestoreCommentDraft.mockReset();
+    mockFocusCommentComposer.mockClear();
     mockLocation.pathname = "/issues/PAP-1";
     mockLocation.search = "";
     mockLocation.hash = "";
@@ -1932,6 +1946,234 @@ describe("IssueDetail", () => {
     await act(async () => { await expect(feedbackThread().onSkipInteraction?.(questions)).rejects.toEqual({ privatePayload: "do not render" }); });
     expect(mockFeedbackToast).toHaveBeenLastCalledWith({ title: issueInteractionFeedbackMessages.es.skipFailed, body: issueInteractionFeedbackMessages.es.skipFailedBody, tone: "error" });
     expect(olderToast.title).toBe(issueInteractionFeedbackMessages.ja.answersSubmitted);
+  });
+
+  function commentFeedbackRun(): LiveRunForIssue {
+    return {
+      id: "run-original", runtimeMode: "native", status: "running", invocationSource: "issue", triggerDetail: null,
+      contextCommentId: null, contextWakeCommentId: null, startedAt: "2026-04-21T00:00:00Z", finishedAt: null,
+      createdAt: "2026-04-21T00:00:00Z", agentId: "agent-1", agentName: "Agent 原名", adapterType: "paperclip_runner", issueId: "issue-1",
+    };
+  }
+
+  it.each(Object.entries(issueCommentFeedbackMessages))("localizes both comment submission failure paths without retrying unknown writes in %s", async (locale, messages) => {
+    await renderFeedbackHost(locale);
+    for (const reassign of [false, true]) {
+      for (const error of [new Error("Comment failed 原文 {{keep}}"), new CommentSubmissionUnknownError(), { privatePayload: "do not render" }]) {
+        mockIssuesApi.addComment.mockReset();
+        mockIssuesApi.update.mockReset();
+        const api = reassign ? mockIssuesApi.update : mockIssuesApi.addComment;
+        api.mockRejectedValueOnce(error);
+        mockFeedbackToast.mockClear();
+        const body = "  User body 原文 {{keep}}\nsecond line  ";
+        const reassignment = reassign ? { assigneeAgentId: "agent-2", assigneeUserId: null } : undefined;
+        await act(async () => { await expect(feedbackThread().onAdd(body, true, reassignment, ["attachment-original"], "request-original")).rejects.toBe(error); });
+        expect(api).toHaveBeenCalledTimes(1);
+        if (reassign) {
+          expect(mockIssuesApi.addComment).not.toHaveBeenCalled();
+          expect(mockIssuesApi.update).toHaveBeenCalledWith("PAP-1", { comment: body, commentClientRequestId: "request-original", attachmentIds: ["attachment-original"], assigneeAgentId: "agent-2", assigneeUserId: null, assigneeAdapterOverrides: null, status: "todo" });
+        } else {
+          expect(mockIssuesApi.update).not.toHaveBeenCalled();
+          expect(mockIssuesApi.addComment).toHaveBeenCalledWith("PAP-1", body, true, undefined, ["attachment-original"], "request-original");
+        }
+        expect(mockFeedbackToast).toHaveBeenCalledExactlyOnceWith({ title: error instanceof CommentSubmissionUnknownError ? messages.saveUnconfirmed : messages.commentFailed, body: error instanceof Error ? error.message : messages.commentFailedBody, tone: "error" });
+        expect(mockRestoreCommentDraft).not.toHaveBeenCalled();
+      }
+    }
+  });
+
+  it.each(Object.entries(issueCommentFeedbackMessages))("localizes persisted queued-comment withdrawal and restores the exact draft in %s", async (locale, messages) => {
+    const comment = createIssueComment({ id: "queued-original", body: "  Draft 原文 {{keep}}\nline 2  " });
+    mockIssuesApi.listComments.mockResolvedValue([comment]);
+    await renderFeedbackHost(locale);
+    const pending = createDeferred<IssueComment>();
+    mockIssuesApi.cancelComment.mockReturnValueOnce(pending.promise);
+    await act(async () => feedbackThread().onCancelQueued?.(comment.id));
+    await waitForAssertion(() => expect(mockIssuesApi.cancelComment).toHaveBeenCalledExactlyOnceWith("PAP-1", comment.id));
+    expect(mockRestoreCommentDraft).not.toHaveBeenCalled();
+    expect(mockFeedbackToast).not.toHaveBeenCalled();
+    await act(async () => { mockIssuesApi.listComments.mockResolvedValue([]); pending.resolve(comment); });
+    await waitForAssertion(() => expect(mockFeedbackToast).toHaveBeenCalledExactlyOnceWith({ title: messages.queuedCancelled, body: messages.draftRestored, tone: "success" }));
+    expect(mockRestoreCommentDraft).toHaveBeenCalledExactlyOnceWith(comment.body);
+    for (const error of [new Error("Raw cancel error 原文 {{keep}}"), { privatePayload: "do not render" }]) {
+      mockIssuesApi.cancelComment.mockRejectedValueOnce(error);
+      mockFeedbackToast.mockClear();
+      mockRestoreCommentDraft.mockClear();
+      await act(async () => feedbackThread().onCancelQueued?.(comment.id));
+      await waitForAssertion(() => expect(mockFeedbackToast).toHaveBeenCalledExactlyOnceWith({ title: messages.cancelFailed, body: error instanceof Error ? error.message : messages.cancelFailedBody, tone: "error" }));
+      expect(mockRestoreCommentDraft).not.toHaveBeenCalled();
+    }
+    expect(mockIssuesApi.cancelComment).toHaveBeenCalledTimes(3);
+  });
+
+  it.each(Object.entries(issueCommentFeedbackMessages))("localizes optimistic withdrawal feedback on both receipt paths in %s", async (locale, messages) => {
+    const run = commentFeedbackRun();
+    mockHeartbeatsApi.liveRunsForIssue.mockResolvedValue([run]);
+    mockHeartbeatsApi.activeRunForIssue.mockResolvedValue(run);
+    mockAgentsApi.list.mockResolvedValue([createAgent({ adapterType: "paperclip_runner" })]);
+    mockIssuesApi.getQueuedComments.mockResolvedValue(createQueuedCommentQueue({ queueId: null, entries: [], targetRunId: run.id }));
+    await renderFeedbackHost(locale, createIssue({ status: "in_progress", assigneeAgentId: "agent-1", executionRunId: run.id }));
+    for (const reassign of [false, true]) {
+      for (const rawError of [true, false]) {
+        const body = `  Original draft ${reassign}-${rawError} 原文\n{{keep}}  `;
+        const comment = createIssueComment({ id: `saved-${reassign}-${rawError}`, body, clientRequestId: "original-client-request" });
+        const saved = createDeferred<IssueComment>();
+        const updated = createDeferred<Issue & { comment: IssueComment }>();
+        mockIssuesApi.addComment.mockReset().mockReturnValue(saved.promise);
+        mockIssuesApi.update.mockReset().mockReturnValue(updated.promise);
+        mockIssuesApi.cancelComment.mockReset().mockRejectedValueOnce(rawError ? new Error("Cancel after receipt 原文") : { privatePayload: "do not render" });
+        mockFeedbackToast.mockClear();
+        mockRestoreCommentDraft.mockClear();
+        let posting: Promise<unknown> | void;
+        await act(async () => { posting = feedbackThread().onAdd(body, undefined, reassign ? { assigneeAgentId: "agent-2", assigneeUserId: null } : undefined, [], "original-client-request"); });
+        let optimisticId = "";
+        await waitForAssertion(() => {
+          const optimistic = feedbackThread().comments.find((entry) => entry.body === body);
+          expect(optimistic).toMatchObject({ clientStatus: "queued", queueTargetRunId: run.id });
+          optimisticId = optimistic!.id;
+          expect(optimisticId).toMatch(/^optimistic-/);
+        });
+        const cancelFromRenderedMessage = feedbackThread().onCancelQueued!;
+        await act(async () => { cancelFromRenderedMessage(optimisticId); cancelFromRenderedMessage(optimisticId); });
+        await waitForAssertion(() => expect(mockRestoreCommentDraft).toHaveBeenCalledExactlyOnceWith(body));
+        expect(mockFeedbackToast).toHaveBeenCalledExactlyOnceWith({ title: messages.queuedCancelled, body: messages.draftRestored, tone: "success" });
+        expect(mockIssuesApi.cancelComment).not.toHaveBeenCalled();
+        await act(async () => {
+          if (reassign) updated.resolve({ ...createIssue(), comment });
+          else saved.resolve(comment);
+          await posting;
+        });
+        expect(mockIssuesApi.cancelComment).toHaveBeenCalledExactlyOnceWith(reassign ? "PAP-1" : "issue-1", comment.id);
+        expect(mockFeedbackToast).toHaveBeenLastCalledWith({ title: messages.cancelFailed, body: rawError ? "Cancel after receipt 原文" : messages.cancelFailedBody, tone: "error" });
+        await act(async () => cancelFromRenderedMessage(optimisticId));
+        expect(mockIssuesApi.cancelComment).toHaveBeenCalledTimes(1);
+        expect(mockFeedbackToast).toHaveBeenCalledTimes(2);
+        expect(mockRestoreCommentDraft).toHaveBeenCalledTimes(1);
+        expect(reassign ? mockIssuesApi.update : mockIssuesApi.addComment).toHaveBeenCalledTimes(1);
+        expect(reassign ? mockIssuesApi.addComment : mockIssuesApi.update).not.toHaveBeenCalled();
+        if (reassign) expect(mockIssuesApi.update).toHaveBeenCalledWith("PAP-1", { comment: body, commentClientRequestId: "original-client-request", assigneeAgentId: "agent-2", assigneeUserId: null, assigneeAdapterOverrides: null });
+        else expect(mockIssuesApi.addComment).toHaveBeenCalledWith("PAP-1", body, undefined, undefined, [], "original-client-request");
+      }
+    }
+  });
+
+  it.each(Object.entries(issueCommentFeedbackMessages))("localizes deletion completion and failure feedback on the actual host in %s", async (locale, messages) => {
+    const comment = createIssueComment({ id: "delete-original", body: "User original body", deletedAt: new Date("2026-04-22T00:00:00Z"), deletedByType: "user", deletedByUserId: "user-1" });
+    const deletion = createDeferred<IssueComment>();
+    mockIssuesApi.deleteComment.mockReturnValueOnce(deletion.promise);
+    await renderFeedbackHost("en");
+    let deleting: Promise<void> | void;
+    await act(async () => { deleting = feedbackThread().onDeleteComment?.(comment.id); });
+    expect(mockFeedbackToast).not.toHaveBeenCalled();
+    await act(async () => { await i18n.changeLanguage(locale); mockIssuesApi.listComments.mockResolvedValue([comment]); deletion.resolve(comment); await deleting; });
+    expect(mockIssuesApi.deleteComment).toHaveBeenCalledExactlyOnceWith("PAP-1", comment.id);
+    expect(mockFeedbackToast).toHaveBeenCalledExactlyOnceWith({ title: messages.commentDeleted, body: messages.deletedMarker, tone: "success" });
+    const existingToast = mockFeedbackToast.mock.calls[0][0];
+    for (const error of [new Error("Comment deleted"), { privatePayload: "do not render" }]) {
+      mockIssuesApi.deleteComment.mockRejectedValueOnce(error);
+      mockFeedbackToast.mockClear();
+      await act(async () => { await expect(feedbackThread().onDeleteComment?.(comment.id)).rejects.toBe(error); });
+      expect(mockFeedbackToast).toHaveBeenCalledExactlyOnceWith({ title: messages.deleteFailed, body: error instanceof Error ? error.message : messages.deleteFailedBody, tone: "error" });
+    }
+    await act(async () => { await i18n.changeLanguage("en"); });
+    expect(existingToast.title).toBe(messages.commentDeleted);
+    expect(mockIssuesApi.deleteComment).toHaveBeenCalledTimes(3);
+  });
+
+  it.each(Object.entries(issueCommentFeedbackMessages))("localizes too-late discard without changing queue identity or the thrown server error in %s", async (locale, messages) => {
+    const queue = createQueuedCommentQueue();
+    const error = new ApiError("Raw dispatch error 原文 {{keep}}", 409, { details: { code: "queued_comment_already_dispatching" } });
+    mockAgentsApi.list.mockResolvedValue([createAgent({ adapterType: "paperclip_runner" })]);
+    mockIssuesApi.getQueuedComments.mockResolvedValue(queue);
+    mockIssuesApi.discardQueuedComment.mockReset().mockRejectedValueOnce(error);
+    await renderFeedbackHost(locale, createIssue({ status: "in_progress", assigneeAgentId: "agent-1", executionRunId: "run-active-1" }));
+    await waitForAssertion(() => expect(feedbackThread().queuedCommentQueue?.queueId).toBe(queue.queueId));
+    await act(async () => { await expect(feedbackThread().onDiscardQueuedComment?.("queued-comment-1", queue.revision)).rejects.toBe(error); });
+    expect(mockIssuesApi.discardQueuedComment).toHaveBeenCalledExactlyOnceWith("issue-1", "queued-comment-1", { queueId: queue.queueId, revision: queue.revision });
+    expect(mockFeedbackToast).toHaveBeenCalledExactlyOnceWith({ title: messages.tooLateTitle, body: messages.tooLateBody, tone: "error", ttlMs: 15_000, dedupeKey: "queued-comment-already-dispatching:issue-1:queued-comment-1" });
+    expect(mockRestoreCommentDraft).not.toHaveBeenCalled();
+  });
+
+  it.each(Object.entries(issueCommentFeedbackMessages))("localizes load-earlier state and keeps pagination identity while pending in %s", async (locale, messages) => {
+    const pages = Array.from({ length: 3 }, (_, page) => Array.from({ length: 50 }, (_, index) => createIssueComment({ id: `comment-${page * 50 + index}`, body: `Original comment ${page * 50 + index}` })));
+    const commentsKey = queryKeys.issues.comments("PAP-1");
+    queryClient.setQueryDefaults(commentsKey, { staleTime: Infinity });
+    queryClient.setQueryData<InfiniteData<IssueComment[], string | null>>(commentsKey, { pages, pageParams: [null, "comment-49", "comment-99"] });
+    const older = createDeferred<IssueComment[]>();
+    mockIssuesApi.listComments.mockReset().mockReturnValue(older.promise);
+    await renderFeedbackHost(locale);
+    const button = () => Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((entry) => entry.textContent === messages.loadEarlier || entry.textContent === messages.loadingEarlier);
+    await waitForAssertion(() => expect(button()?.textContent).toBe(messages.loadEarlier));
+    expect(mockIssuesApi.listComments).not.toHaveBeenCalled();
+    await act(async () => button()!.click());
+    await waitForAssertion(() => expect(button()?.textContent).toBe(messages.loadingEarlier));
+    expect(button()?.disabled).toBe(true);
+    await act(async () => button()!.click());
+    expect(mockIssuesApi.listComments).toHaveBeenCalledExactlyOnceWith("PAP-1", { order: "desc", limit: 50, after: "comment-149" });
+    await act(async () => older.resolve([]));
+    await waitForAssertion(() => expect(button()).toBeUndefined());
+    expect(queryClient.getQueryData<InfiniteData<IssueComment[], string | null>>(commentsKey)?.pages.flat().map((entry) => entry.body)).toEqual(pages.flat().map((entry) => entry.body));
+  });
+
+  it.each([false, true])("does not restore a stale optimistic draft after list updates or navigation (navigate=%s)", async (navigateAway) => {
+    const run = commentFeedbackRun();
+    const first = createDeferred<IssueComment>();
+    const second = createDeferred<IssueComment>();
+    const firstComment = createIssueComment({ id: "saved-first", body: "First draft 原文", clientRequestId: "request-first" });
+    const secondComment = createIssueComment({ id: "saved-second", body: "Second draft 原文", clientRequestId: "request-second" });
+    mockHeartbeatsApi.liveRunsForIssue.mockResolvedValue([run]);
+    mockHeartbeatsApi.activeRunForIssue.mockResolvedValue(run);
+    mockIssuesApi.getQueuedComments.mockResolvedValue(createQueuedCommentQueue({ queueId: null, entries: [], targetRunId: run.id }));
+    mockAgentsApi.list.mockResolvedValue([createAgent({ adapterType: "paperclip_runner" })]);
+    mockIssuesApi.addComment.mockReset().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    mockIssuesApi.cancelComment.mockResolvedValue(firstComment);
+    await renderFeedbackHost("en", createIssue({ status: "in_progress", assigneeAgentId: "agent-1", executionRunId: run.id }));
+    let firstPost: Promise<unknown> | void;
+    let secondPost: Promise<unknown> | void;
+    await act(async () => { firstPost = feedbackThread().onAdd(firstComment.body, undefined, undefined, [], "request-first"); });
+    let firstId = "";
+    await waitForAssertion(() => { firstId = feedbackThread().comments.find((entry) => entry.body === firstComment.body)?.id ?? ""; expect(firstId).toMatch(/^optimistic-/); });
+    const staleCancel = feedbackThread().onCancelQueued!;
+    await act(async () => { secondPost = feedbackThread().onAdd(secondComment.body, undefined, undefined, [], "request-second"); });
+    let secondId = "";
+    await waitForAssertion(() => { secondId = feedbackThread().comments.find((entry) => entry.body === secondComment.body)?.id ?? ""; expect(secondId).toMatch(/^optimistic-/); });
+    // The classic composer's existing restore contract preserves newer typing.
+    let currentDraft = "Newer composer draft 原文";
+    mockRestoreCommentDraft.mockImplementation((submittedBody) => {
+      currentDraft = restoreSubmittedCommentDraft({ currentBody: currentDraft, submittedBody });
+    });
+    // Navigate only after both writes are in flight, not during onMutate setup.
+    await waitForAssertion(() => expect(mockIssuesApi.addComment).toHaveBeenCalledTimes(2));
+    if (navigateAway) {
+      const nextIssue = createIssue({ id: "issue-2", identifier: "PAP-2", title: "Next task" });
+      mockIssuesApi.get.mockResolvedValue(nextIssue);
+      queryClient.setQueryData(queryKeys.issues.detail("PAP-2"), nextIssue);
+      mockRouteParams.issueId = "PAP-2";
+      mockLocation.pathname = "/issues/PAP-2";
+      await act(async () => root.render(<QueryClientProvider client={queryClient}><IssueDetail /></QueryClientProvider>));
+      await waitForAssertion(() => expect(container.textContent).toContain("Next task"));
+    }
+    await act(async () => { staleCancel(firstId); staleCancel(firstId); feedbackThread().onCancelQueued?.("optimistic-missing"); });
+    if (navigateAway) {
+      await act(async () => feedbackThread().onCancelQueued?.(secondId));
+      expect(mockRestoreCommentDraft).not.toHaveBeenCalled();
+      expect(mockFeedbackToast).not.toHaveBeenCalled();
+    } else {
+      await waitForAssertion(() => expect(mockRestoreCommentDraft).toHaveBeenCalledExactlyOnceWith(firstComment.body));
+      expect(mockFeedbackToast).toHaveBeenCalledTimes(1);
+      expect(feedbackThread().comments.some((entry) => entry.id === firstId)).toBe(false);
+      expect(feedbackThread().comments.find((entry) => entry.id === secondId)?.body).toBe(secondComment.body);
+    }
+    expect(mockIssuesApi.cancelComment).not.toHaveBeenCalled();
+    await act(async () => { first.resolve(firstComment); second.resolve(secondComment); await firstPost; await secondPost; });
+    await act(async () => staleCancel(firstId));
+    expect(mockRestoreCommentDraft).toHaveBeenCalledTimes(navigateAway ? 0 : 1);
+    expect(mockIssuesApi.cancelComment).toHaveBeenCalledTimes(navigateAway ? 0 : 1);
+    if (!navigateAway) expect(mockIssuesApi.cancelComment).toHaveBeenCalledWith("issue-1", firstComment.id);
+    expect(currentDraft).toBe("Newer composer draft 原文");
+    expect(mockIssuesApi.addComment).toHaveBeenCalledTimes(2);
+    expect(mockIssuesApi.addComment).toHaveBeenNthCalledWith(1, "PAP-1", firstComment.body, undefined, undefined, [], "request-first");
+    expect(mockIssuesApi.addComment).toHaveBeenNthCalledWith(2, "PAP-1", secondComment.body, undefined, undefined, [], "request-second");
   });
 
   it.each(Object.entries(issueRetryMessages))("localizes the actual activity-tab scheduled retry host and keeps its request identity in %s", async (locale, messages) => {

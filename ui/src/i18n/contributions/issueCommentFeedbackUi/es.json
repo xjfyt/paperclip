@@ -1,0 +1,17 @@
+{
+  "tooLateTitle": "El mensaje ya se está enviando",
+  "tooLateBody": "La continuación comenzó antes de confirmar el descarte, por lo que Paperclip no pudo retirar el mensaje.",
+  "loadingEarlier": "Cargando comentarios anteriores...",
+  "loadEarlier": "Cargar comentarios anteriores",
+  "cancelFailed": "Error al cancelar",
+  "cancelFailedBody": "No se pudo cancelar el comentario en cola",
+  "saveUnconfirmed": "Guardado del comentario sin confirmar",
+  "commentFailed": "Error al enviar el comentario",
+  "commentFailedBody": "No se pudo publicar el comentario",
+  "queuedCancelled": "Comentario en cola cancelado",
+  "draftRestored": "El mensaje en cola se restauró en el editor.",
+  "commentDeleted": "Comentario eliminado",
+  "deletedMarker": "El hilo ahora muestra un marcador de comentario eliminado.",
+  "deleteFailed": "Error al eliminar",
+  "deleteFailedBody": "No se pudo eliminar el comentario"
+}

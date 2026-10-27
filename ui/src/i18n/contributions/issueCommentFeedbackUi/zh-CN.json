@@ -1,0 +1,17 @@
+{
+  "tooLateTitle": "消息已开始发送",
+  "tooLateBody": "撤回确认前后续运行已开始，Paperclip 无法撤回该消息。",
+  "loadingEarlier": "正在加载更早的评论...",
+  "loadEarlier": "加载更早的评论",
+  "cancelFailed": "撤回失败",
+  "cancelFailedBody": "无法撤回排队中的评论",
+  "saveUnconfirmed": "评论保存尚未确认",
+  "commentFailed": "评论发送失败",
+  "commentFailedBody": "无法发布评论",
+  "queuedCancelled": "排队评论已撤回",
+  "draftRestored": "排队中的消息已恢复到输入框。",
+  "commentDeleted": "评论已删除",
+  "deletedMarker": "对话中现在显示已删除评论标记。",
+  "deleteFailed": "删除失败",
+  "deleteFailedBody": "无法删除评论"
+}

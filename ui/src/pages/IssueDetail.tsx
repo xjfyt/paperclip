@@ -2355,8 +2355,8 @@ const IssueDetailChatTab = memo(function IssueDetailChatTab({
               : null;
         if (code === "queued_comment_already_dispatching") {
           pushToast({
-            title: "Message is already being sent",
-            body: "The continuation started before the discard was confirmed, so Paperclip could not unsend it.",
+            title: mimouseT("issueCommentFeedbackUi.tooLateTitle"),
+            body: mimouseT("issueCommentFeedbackUi.tooLateBody"),
             tone: "error",
             ttlMs: 15_000,
             dedupeKey: `queued-comment-already-dispatching:${issueId}:${commentId}`,
@@ -2394,8 +2394,8 @@ const IssueDetailChatTab = memo(function IssueDetailChatTab({
         onClick={onLoadOlderComments}
       >
         {commentsLoadingOlder
-          ? "Loading earlier comments..."
-          : "Load earlier comments"}
+          ? mimouseT("issueCommentFeedbackUi.loadingEarlier")
+          : mimouseT("issueCommentFeedbackUi.loadEarlier")}
       </Button>
     </div>
   ) : null;
@@ -3065,6 +3065,10 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
   const lastScrollIssueIdRef = useRef<string | undefined>(undefined);
   const commentComposerRef = useRef<IssueChatComposerHandle | null>(null);
   const cancelledQueuedOptimisticCommentIdsRef = useRef(new Set<string>());
+  const optimisticCommentsSnapshotRef = useRef<{
+    issueId: string | null;
+    comments: OptimisticIssueComment[];
+  }>({ issueId: null, comments: [] });
   const commentRenderKeys = useRef(new Map<string, string>());
   const resolvedIssueDetailState = useMemo(
     () =>
@@ -3117,6 +3121,14 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
     if (issueId) void prefetchIssueThread(queryClient, issueId);
   }, [issueId, queryClient]);
   const issue = queriedIssue ?? conversation?.issue ?? draftIssue;
+  useLayoutEffect(() => {
+    // Match the committed thread: stale event callbacks must not restore a
+    // different task or an optimistic message that has already disappeared.
+    optimisticCommentsSnapshotRef.current = {
+      issueId: issue?.id ?? null,
+      comments: optimisticComments,
+    };
+  }, [issue?.id, optimisticComments]);
   const resolveWritableIssueId = async () => {
     if (!conversation) return issueId!;
     const resolved = await conversation.ensureIssue();
@@ -4743,11 +4755,11 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
           return;
         } catch (err) {
           pushToast({
-            title: "Cancel failed",
+            title: mimouseT("issueCommentFeedbackUi.cancelFailed"),
             body:
               err instanceof Error
                 ? err.message
-                : "Unable to cancel the queued comment",
+                : mimouseT("issueCommentFeedbackUi.cancelFailedBody"),
             tone: "error",
           });
         }
@@ -4810,9 +4822,9 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       pushToast({
         title:
           err instanceof CommentSubmissionUnknownError
-            ? "Comment save unconfirmed"
-            : "Comment failed",
-        body: err instanceof Error ? err.message : "Unable to post comment",
+            ? mimouseT("issueCommentFeedbackUi.saveUnconfirmed")
+            : mimouseT("issueCommentFeedbackUi.commentFailed"),
+        body: err instanceof Error ? err.message : mimouseT("issueCommentFeedbackUi.commentFailedBody"),
         tone: "error",
       });
     },
@@ -5157,11 +5169,11 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
           return;
         } catch (err) {
           pushToast({
-            title: "Cancel failed",
+            title: mimouseT("issueCommentFeedbackUi.cancelFailed"),
             body:
               err instanceof Error
                 ? err.message
-                : "Unable to cancel the queued comment",
+                : mimouseT("issueCommentFeedbackUi.cancelFailedBody"),
             tone: "error",
           });
         }
@@ -5221,9 +5233,9 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       pushToast({
         title:
           err instanceof CommentSubmissionUnknownError
-            ? "Comment save unconfirmed"
-            : "Comment failed",
-        body: err instanceof Error ? err.message : "Unable to post comment",
+            ? mimouseT("issueCommentFeedbackUi.saveUnconfirmed")
+            : mimouseT("issueCommentFeedbackUi.commentFailed"),
+        body: err instanceof Error ? err.message : mimouseT("issueCommentFeedbackUi.commentFailedBody"),
         tone: "error",
       });
     },
@@ -5272,18 +5284,18 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       invalidateIssueThreadLazily();
       invalidateIssueCollections();
       pushToast({
-        title: "Queued comment canceled",
-        body: "The queued message was restored to the composer.",
+        title: mimouseT("issueCommentFeedbackUi.queuedCancelled"),
+        body: mimouseT("issueCommentFeedbackUi.draftRestored"),
         tone: "success",
       });
     },
     onError: (err) => {
       pushToast({
-        title: "Cancel failed",
+        title: mimouseT("issueCommentFeedbackUi.cancelFailed"),
         body:
           err instanceof Error
             ? err.message
-            : "Unable to cancel the queued comment",
+            : mimouseT("issueCommentFeedbackUi.cancelFailedBody"),
         tone: "error",
       });
     },
@@ -5300,16 +5312,16 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       invalidateIssueCollections();
       invalidateIssueDocumentAnnotationState();
       pushToast({
-        title: "Comment deleted",
-        body: "The thread now shows a deleted-comment marker.",
+        title: mimouseT("issueCommentFeedbackUi.commentDeleted"),
+        body: mimouseT("issueCommentFeedbackUi.deletedMarker"),
         tone: "success",
       });
     },
     onError: (err) => {
       pushToast({
-        title: "Delete failed",
+        title: mimouseT("issueCommentFeedbackUi.deleteFailed"),
         body:
-          err instanceof Error ? err.message : "Unable to delete the comment",
+          err instanceof Error ? err.message : mimouseT("issueCommentFeedbackUi.deleteFailedBody"),
         tone: "error",
       });
     },
@@ -5318,27 +5330,35 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
   const handleCancelQueuedComment = useCallback(
     (commentId: string) => {
       if (commentId.startsWith("optimistic-")) {
+        const snapshot = optimisticCommentsSnapshotRef.current;
+        const next = takeOptimisticIssueComment(snapshot.comments, commentId);
+        if (
+          !next.comment ||
+          snapshot.issueId !== issue?.id ||
+          next.comment.issueId !== snapshot.issueId ||
+          cancelledQueuedOptimisticCommentIdsRef.current.has(commentId)
+        ) return;
         cancelledQueuedOptimisticCommentIdsRef.current.add(commentId);
-        let cancelledCommentBody: string | null = null;
-        setOptimisticComments((current) => {
-          const next = takeOptimisticIssueComment(current, commentId);
-          cancelledCommentBody = next.comment?.body ?? null;
-          return next.comments;
-        });
+        // Consume synchronously for repeated clicks, outside React's updater.
+        optimisticCommentsSnapshotRef.current = { ...snapshot, comments: next.comments };
+        const cancelledCommentBody = next.comment.body;
+        setOptimisticComments((current) =>
+          takeOptimisticIssueComment(current, commentId).comments,
+        );
         if (cancelledCommentBody) {
           restoreQueuedCommentDraft(cancelledCommentBody);
           pushToast({
-            title: "Queued comment canceled",
-            body: "The queued message was restored to the composer.",
+            title: mimouseT("issueCommentFeedbackUi.queuedCancelled"),
+            body: mimouseT("issueCommentFeedbackUi.draftRestored"),
             tone: "success",
           });
         }
         return;
       }
 
-      void cancelQueuedComment.mutateAsync({ commentId });
+      cancelQueuedComment.mutate({ commentId });
     },
-    [cancelQueuedComment, restoreQueuedCommentDraft, pushToast],
+    [cancelQueuedComment, restoreQueuedCommentDraft, pushToast, issue?.id],
   );
 
   const feedbackVoteMutation = useMutation({
