@@ -1,0 +1,15 @@
+{
+  "sort_workflow": "工作流",
+  "sort_status": "状态",
+  "sort_priority": "优先级",
+  "sort_title": "标题",
+  "sort_created": "创建时间",
+  "sort_updated": "更新时间",
+  "group_status": "状态",
+  "group_priority": "优先级",
+  "group_assignee": "负责人",
+  "group_project": "项目",
+  "group_workspace": "工作区",
+  "group_parent": "父任务",
+  "group_none": "无"
+}

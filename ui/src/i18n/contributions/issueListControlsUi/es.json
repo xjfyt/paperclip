@@ -1,0 +1,15 @@
+{
+  "sort_workflow": "Flujo de trabajo",
+  "sort_status": "Estado",
+  "sort_priority": "Prioridad",
+  "sort_title": "Título",
+  "sort_created": "Creación",
+  "sort_updated": "Actualización",
+  "group_status": "Estado",
+  "group_priority": "Prioridad",
+  "group_assignee": "Responsable",
+  "group_project": "Proyecto",
+  "group_workspace": "Espacio de trabajo",
+  "group_parent": "Tarea principal",
+  "group_none": "Ninguno"
+}

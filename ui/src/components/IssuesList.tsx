@@ -1935,16 +1935,9 @@ function StreamlinedIssuesList({
               <PopoverContent align="end" className="w-48 p-0">
                 <div className="p-2 space-y-0.5">
                   {/* PAP-411: "priority" sort option hidden behind SHOW_TASK_PRIORITY_UI (comparator stays dormant). */}
-                  {([
-                    ["workflow", "Workflow"],
-                    ["status", "Status"],
-                    ["priority", "Priority"],
-                    ["title", "Title"],
-                    ["created", "Created"],
-                    ["updated", "Updated"],
-                  ] as const)
-                    .filter(([field]) => SHOW_TASK_PRIORITY_UI || field !== "priority")
-                    .map(([field, label]) => (
+                  {(["workflow", "status", "priority", "title", "created", "updated"] as const)
+                    .filter((field) => SHOW_TASK_PRIORITY_UI || field !== "priority")
+                    .map((field) => (
                     <button
                       key={field}
                       className={`flex items-center justify-between w-full px-2 py-1.5 text-sm rounded-sm ${
@@ -1958,7 +1951,7 @@ function StreamlinedIssuesList({
                         }
                       }}
                     >
-                      <span>{label}</span>
+                      <span>{mimouseT(`issueListControlsUi.sort_${field}`)}</span>
                       {viewState.sortField === field && (
                         <span className="text-xs text-muted-foreground">
                           {viewState.sortDir === "asc" ? "\u2191" : "\u2193"}
@@ -1982,17 +1975,9 @@ function StreamlinedIssuesList({
               <PopoverContent align="end" className="w-44 p-0">
                 <div className="p-2 space-y-0.5">
                   {/* PAP-411: "priority" group-by option hidden behind SHOW_TASK_PRIORITY_UI (group logic stays dormant). */}
-                  {([
-                    ["status", "Status"],
-                    ["priority", "Priority"],
-                    ["assignee", "Responsible"],
-                    ["project", "Project"],
-                    ["workspace", "Workspace"],
-                    ["parent", "Parent Task"],
-                    ["none", "None"],
-                  ] as const)
-                    .filter(([value]) => SHOW_TASK_PRIORITY_UI || value !== "priority")
-                    .map(([value, label]) => (
+                  {(["status", "priority", "assignee", "project", "workspace", "parent", "none"] as const)
+                    .filter((value) => SHOW_TASK_PRIORITY_UI || value !== "priority")
+                    .map((value) => (
                     <button
                       key={value}
                       className={`flex items-center justify-between w-full px-2 py-1.5 text-sm rounded-sm ${
@@ -2000,7 +1985,7 @@ function StreamlinedIssuesList({
                       }`}
                       onClick={() => updateView({ groupBy: value })}
                     >
-                      <span>{label}</span>
+                      <span>{mimouseT(`issueListControlsUi.group_${value}`)}</span>
                       {viewState.groupBy === value && <Check className="h-3.5 w-3.5" />}
                     </button>
                   ))}

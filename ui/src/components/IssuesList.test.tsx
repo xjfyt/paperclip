@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { changeLocale } from "../i18n";
+import { issueListControlsMessages } from "../i18n/issue-list-controls-test-resources";
 import { i18n, issueListProgressMessages } from "../i18n/issue-list-progress-test-resources";
 import { validateLocaleMessages } from "../i18n/locale-validation";
 import { createRoot } from "react-dom/client";
@@ -1085,6 +1086,104 @@ describe("IssuesList", () => {
     act(() => {
       root.unmount();
     });
+  });
+
+  it.each([
+    ["en", ["Workflow", "Status", "Title", "Created", "Updated"], ["Status", "Responsible", "Project", "Workspace", "Parent Task", "None"]],
+    ["zh-CN", ["工作流", "状态", "标题", "创建时间", "更新时间"], ["状态", "负责人", "项目", "工作区", "父任务", "无"]],
+    ["ja", ["ワークフロー", "ステータス", "タイトル", "作成日時", "更新日時"], ["ステータス", "担当者", "プロジェクト", "ワークスペース", "親タスク", "なし"]],
+    ["es", ["Flujo de trabajo", "Estado", "Título", "Creación", "Actualización"], ["Estado", "Responsable", "Proyecto", "Espacio de trabajo", "Tarea principal", "Ninguno"]],
+  ] as const)("localizes open sort/group controls in %s without translating stored selections or task names", async (locale, sortLabels, groupLabels) => {
+    const viewStateKey = "paperclip:test-sort-group-locales";
+    const legacyKey = `${viewStateKey}:company-1`;
+    const storedKey = taskCollectionPreferencesStorageKey({ companyId: "company-1", collectionKey: viewStateKey });
+    const project: Project = {
+      id: "project-original", companyId: "company-1", urlKey: "project-original", goalId: null, goalIds: [], goals: [],
+      name: "Project", description: null, status: "in_progress", leadAgentId: null, targetDate: null, color: null,
+      icon: null, env: null, pauseReason: null, pausedAt: null, executionWorkspacePolicy: null,
+      codebase: { workspaceId: null, repoUrl: null, repoRef: null, defaultRef: null, repoName: null, localFolder: null,
+        managedFolder: "", effectiveLocalFolder: "", origin: "local_folder" },
+      workspaces: [], primaryWorkspace: null, archivedAt: null,
+      createdAt: new Date("2026-04-07T00:00:00.000Z"), updatedAt: new Date("2026-04-07T00:00:00.000Z"),
+    };
+    const issues = [
+      createIssue({ id: "issue-zulu", identifier: "PAP-2", title: "Zulu original", projectId: project.id }),
+      createIssue({ id: "issue-alpha", identifier: "PAP-1", title: "Alpha original", projectId: project.id }),
+    ];
+    const onUpdateIssue = vi.fn<NonNullable<Parameters<typeof IssuesList>[0]["onUpdateIssue"]>>();
+    const { root, queryClient } = renderWithQueryClient(<IssuesList issues={issues} agents={[]} projects={[project]}
+      viewStateKey={viewStateKey} rowPresentation="task" toolbarPresentation="collection" onUpdateIssue={onUpdateIssue} />, container);
+    const optionButtons = () => Array.from(document.body.querySelectorAll<HTMLButtonElement>('[data-slot="popover-content"] button'));
+    const optionLabels = () => optionButtons().map(button => button.querySelector("span")?.textContent);
+    const selectOption = async (label: string) => {
+      const button = optionButtons().find(candidate => candidate.querySelector("span")?.textContent === label);
+      expect(button).toBeDefined();
+      await act(async () => { button?.click(); });
+    };
+    const expectPreferences = (patch: Record<string, string>) => {
+      expect(JSON.parse(localStorage.getItem(legacyKey) ?? "null")).toMatchObject(patch);
+      expect(JSON.parse(localStorage.getItem(storedKey) ?? "null")).toMatchObject({
+        companyId: "company-1", collectionKey: viewStateKey, viewState: patch,
+      });
+    };
+    try {
+      await waitForAssertion(() => expect(container.querySelectorAll('[data-testid="issue-row"]')).toHaveLength(2));
+      const sortTrigger = container.querySelector<HTMLButtonElement>('button[title="Sort"]');
+      const groupTrigger = container.querySelector<HTMLButtonElement>('button[title="Group"]');
+      expect(sortTrigger).not.toBeNull(); expect(groupTrigger).not.toBeNull();
+      await act(async () => { sortTrigger?.click(); });
+      await act(async () => { await changeLocale(locale); });
+      await waitForAssertion(() => expect(optionLabels()).toEqual(sortLabels));
+      for (const [index, field] of ["workflow", "status", "title", "created", "updated"].entries()) {
+        await selectOption(sortLabels[index]);
+        expectPreferences({ sortField: field, sortDir: "asc" });
+      }
+      await selectOption(sortLabels[2]);
+      expectPreferences({ sortField: "title", sortDir: "asc" });
+      await waitForAssertion(() => expect(Array.from(container.querySelectorAll('[data-testid="issue-row"] > span:first-child')).map(row => row.textContent))
+        .toEqual(["Alpha original", "Zulu original"]));
+      await selectOption(sortLabels[2]);
+      expectPreferences({ sortField: "title", sortDir: "desc" });
+      await waitForAssertion(() => expect(Array.from(container.querySelectorAll('[data-testid="issue-row"] > span:first-child')).map(row => row.textContent))
+        .toEqual(["Zulu original", "Alpha original"]));
+      const storedBeforeLocale = localStorage.getItem(storedKey);
+      await act(async () => { await changeLocale(locale === "en" ? "ja" : "en"); });
+      expect(localStorage.getItem(storedKey)).toBe(storedBeforeLocale);
+      await act(async () => { await changeLocale(locale); });
+      expect(optionLabels()).toEqual(sortLabels);
+      await act(async () => {
+        document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      });
+      await waitForAssertion(() => expect(document.body.querySelector('[data-slot="popover-content"]')).toBeNull());
+      await waitForAssertion(() => expect(document.activeElement).toBe(sortTrigger));
+      await act(async () => { groupTrigger?.click(); });
+      await waitForAssertion(() => expect(optionLabels()).toEqual(groupLabels));
+      for (const [index, value] of ["status", "assignee", "project", "workspace", "parent", "none"].entries()) {
+        await selectOption(groupLabels[index]);
+        expectPreferences({ groupBy: value, sortField: "title", sortDir: "desc" });
+        expect(container.textContent).toContain("Alpha original");
+        expect(container.textContent).toContain("Zulu original");
+        if (value === "project") expect(container.textContent).toContain(project.name);
+      }
+      const groupedBeforeLocale = localStorage.getItem(storedKey);
+      await act(async () => { await changeLocale(locale === "en" ? "ja" : "en"); });
+      await act(async () => { await changeLocale(locale); });
+      expect(optionLabels()).toEqual(groupLabels);
+      expect(localStorage.getItem(storedKey)).toBe(groupedBeforeLocale);
+      expect(onUpdateIssue).not.toHaveBeenCalled();
+      expect(mockNavigate).not.toHaveBeenCalled();
+      expect(dialogState.openNewIssue).not.toHaveBeenCalled();
+      expect(mockIssuesApi.list).not.toHaveBeenCalled();
+      expect(mockIssuesApi.getCostSummary).not.toHaveBeenCalled();
+    } finally {
+      await act(async () => { root.unmount(); }); queryClient.clear();
+      await act(async () => { await changeLocale("en"); });
+    }
+  });
+
+  it.each(Object.entries(issueListControlsMessages))("validates all sort/group display keys for %s including the guarded priority labels", (_locale, messages) => {
+    expect(validateLocaleMessages(messages, issueListControlsMessages.en)).toEqual([]);
+    expect(Object.keys(messages)).toHaveLength(13);
   });
 
   it("hides the Priority option from the Sort and Group menus while priority UI is off (PAP-411)", async () => {

@@ -1,0 +1,15 @@
+{
+  "sort_workflow": "Workflow",
+  "sort_status": "Status",
+  "sort_priority": "Priority",
+  "sort_title": "Title",
+  "sort_created": "Created",
+  "sort_updated": "Updated",
+  "group_status": "Status",
+  "group_priority": "Priority",
+  "group_assignee": "Responsible",
+  "group_project": "Project",
+  "group_workspace": "Workspace",
+  "group_parent": "Parent Task",
+  "group_none": "None"
+}

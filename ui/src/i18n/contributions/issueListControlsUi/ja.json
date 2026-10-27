@@ -1,0 +1,15 @@
+{
+  "sort_workflow": "ワークフロー",
+  "sort_status": "ステータス",
+  "sort_priority": "優先度",
+  "sort_title": "タイトル",
+  "sort_created": "作成日時",
+  "sort_updated": "更新日時",
+  "group_status": "ステータス",
+  "group_priority": "優先度",
+  "group_assignee": "担当者",
+  "group_project": "プロジェクト",
+  "group_workspace": "ワークスペース",
+  "group_parent": "親タスク",
+  "group_none": "なし"
+}
