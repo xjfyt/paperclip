@@ -2,6 +2,17 @@
 
 记录起始日期：2026-10-25 UTC。基线为 v2026.1023.0 / 1b4c803816e82b0265c8422e1a804327a7ed8c54。开发分支 mimouse。此记录是可审查候选版的本地证据，不是全部需求完成或生产上线证明。
 
+## 4198键、例行界面与编码目标最终集成（2026-10-27 05:06 UTC）
+
+- UI冻结源 `5ff8b0dc27985500cf8ea9382102233932368615`。补两套路由、触发器/活动/列表、共享文件夹/环境变量/关闭标签四语，及九项仅计划编码目标；保留原始用户数据、未知诊断、秘密/URL/命令和既有执行门禁。目标用既有版本化任务文档，无数据库迁移；当前成员/私有祖先权限、修订CAS与审计事务已有实际PG/HTTP验证。
+- **完整UI：826文件、83批、10160项全部通过，零失败/跳过/todo，全部输入未变。** 两条串行测试通道并行，9个完整native-v2 manifest严格聚合，逐项核验文件/断言库存、精确排除、日志/报告哈希及唯一覆盖，不是一次不间断大进程。汇总 `/tmp/paperclip-4198-ui-parallel-aggregate-b18ab85a.log`；证据 `test-results/mimouse-ui/aggregate-2026-10-27T04-56-01-824Z-7k61sP/aggregate.json`。UI source SHA-256 `e4d6f4eef3461cdcd8423cf3a235b1d4c6b3110521c30524815661ffb771dc82`；runtime输入 SHA-256 `253cdcfb55f1f0dd873c587a528bce31e7cfd4221605b298136559cf7490b4ec`。
+- 完整UI类型及生产构建通过（`/tmp/paperclip-4198-ui-types.log`、`/tmp/paperclip-4198-ui-build.log`）。先前新活动/环境草稿fixture有不完整DTO及字面量推宽，分别补完整字段和精确返回类型；没有扩大产品类型或跳过检查。资源4198键四语、1306文件token门禁、palette/cliplab同步、no-git-push及37项Node脚本测试通过。
+- shared/DB构建及完整标准server构建通过，实际server印章 **b2380f074b06bb65f7b4e8accea2817c932f755e**。最后短词修复仅UI/审计/文档：git diff确认server、shared、DB、adapter/adapter-utils、external-adapters、CLI源码与该已验构建完全一致（`/tmp/paperclip-4198-backend-unchanged.log`），未伪造最新Git印章。后端完整API **163项通过（1.1分钟）**：`/tmp/paperclip-4197-compiled-api.log`，其中新增目标模板真实PG/HTTP事务用例；另35项目标shared/service测试通过。编译入口仍有workspace TS依赖及源码fixtures，不是独立all-dist安装。
+- 首轮4197完整UI曾826文件10152项通过；随后真实浏览器发现两字母`in`漏译。新增回归先6失败/2通过，再修复，最终4198整套重新执行，**没有复用4197的分片充当新输入通过**。审计扩为70个明确文件、21个精确路由相关路径；501字面量候选/1664动态位置是人工审查清单，不是未译总数或覆盖率；共享dialog/sheet和非TSX诊断映射另有人工复核。
+- IME/pending测试先红后绿：文件夹组合键误提交/保存中回车，以及环境变量组合键/同批重复创建被复现并修复。portaled创建按钮的翻译影响草稿flush也有红绿证明。RoutineSaveBar两语义标记则是契约加固：原默认submit路径在四语基线16项已经通过，未将被反证的“丢草稿”疑点写成修复成果。真实操作系统IME仍待手测。
+- 浏览器实际四语目标草稿、一次保存、刷新/服务重启同版本读取、例行界面打开/取消及最终短词复核通过，范围和0执行回执见[浏览器记录](checklists/ROUTINES-GOAL-BROWSER-20261027.md)。不把该受控环境当真实Casdoor、模型/通知/Runner、全站或全平台验收。
+- 后端编译初次因内存被杀，逐阶段日志保留；可恢复生成缓存/公共registry元数据/Node头文件先归档逐字节验证后释放tmpfs，再完成全部标准构建阶段。未删旧PG锁/数据或MiWork恢复文件。Rust/Vite既有警告保留，非通过失败检查改绿。
+
 ## 自动重试截止与令牌缓存复验（2026-10-27 03:04 UTC）
 
 - 应用/server构建印章 `c6ba2b4ea82b749771de1bc278745977b37215ca`。支持初始专用运行和逐边核验的 bounded/missing-comment 自动重试共享原截止时间；持久精确停止目标，准入与完成/到期对账互斥。人工/异公司/合流/伪造后继不取得停止权限；未支持的自动恢复通道保守拒绝。仍不声称严格墙钟、全部进程后代或远端供应商已停止。
