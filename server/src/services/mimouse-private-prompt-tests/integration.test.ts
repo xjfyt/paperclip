@@ -54,12 +54,14 @@ vi.mock("@paperclipai/adapter-utils/execution-target", async original => {
         Object.keys(options.env).some(key => !["HOME", "CLAUDE_CONFIG_DIR", "ANTHROPIC_API_KEY"].includes(key)) ||
         options.env.ANTHROPIC_API_KEY !== "fixture-not-a-real-key") throw Error("Unexpected process boundary; real CLI forbidden");
     processBoundary.calls++; processBoundary.inputs.push(options.stdin);
+    const model = args[args.indexOf("--model") + 1];
+    const costUsd = model === "claude-haiku-4-5" ? 0.00125 : 0.0025;
     const { runChildProcess } = await import("@paperclipai/adapter-utils/server-utils");
     // The only provider-boundary process is this no-network Node fixture. It
     // echoes stdin to test leak protection, but never launches any CLI/account.
     return runChildProcess(runId, process.execPath, ["-e", `
       let body='';process.stdin.setEncoding('utf8');process.stdin.on('data',chunk=>body+=chunk);
-      process.stdin.on('end',()=>{const finish=()=>{process.stderr.write(body);process.stdout.write(JSON.stringify({type:'result',subtype:'success',result:body,is_error:false,usage:{input_tokens:1,output_tokens:1}})+'\\n');};if(${processBoundary.hold}){const release=${JSON.stringify(processBoundary.releasePath)};const timer=setInterval(()=>{if(release&&require('node:fs').existsSync(release)){clearInterval(timer);finish();}},20);return;}finish();});
+      process.stdin.on('end',()=>{const finish=()=>{process.stderr.write(body);process.stdout.write(JSON.stringify({type:'result',subtype:'success',result:body,is_error:false,total_cost_usd:${costUsd},modelUsage:{[${JSON.stringify(model)}]:{inputTokens:1,cacheReadInputTokens:0,cacheCreationInputTokens:0,outputTokens:1,costUSD:${costUsd}}},usage:{input_tokens:1,output_tokens:1}})+'\\n');};if(${processBoundary.hold}){const release=${JSON.stringify(processBoundary.releasePath)};const timer=setInterval(()=>{if(release&&require('node:fs').existsSync(release)){clearInterval(timer);finish();}},20);return;}finish();});
     `], { ...options, timeoutSec: 10, graceSec: 1, onSpawn: async (meta: unknown) => { await options.onSpawn(meta); processBoundary.notifySpawn?.(); } });
   } };
 });
@@ -713,6 +715,12 @@ it("private historical comparison is scoped, sealed and read only", async () => 
   await verifyPrivateHistoricalComparison(db);
   expect(processBoundary.calls).toBe(before);
 });
+it("produces own-agent routing proof through private execution and central accounting, never manual cost rows", async () => {
+  const before = processBoundary.calls;
+  const { verifyProducedRuntimeRoutingEvidence } = await import("../mimouse-cost-routing/evidence-db-cases.js");
+  await verifyProducedRuntimeRoutingEvidence(db, actor, heartbeat, input.agentId, input.skillVersionId);
+  expect(processBoundary.calls).toBe(before + 4);
+}, 90000);
 it("denies another active administrator and a revoked original administrator", async () => {
   const before = processBoundary.calls;
   const userId = randomUUID(), sessionId = randomUUID(), now = new Date();
