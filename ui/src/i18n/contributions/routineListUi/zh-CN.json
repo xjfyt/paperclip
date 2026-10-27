@@ -1,0 +1,10 @@
+{
+  "never": "从未运行",
+  "noDefaultAgent": "无默认智能体",
+  "on": "开启",
+  "off": "关闭",
+  "enable": "启用",
+  "select": "选择 {{title}}",
+  "disableNamed": "停用 {{title}}",
+  "enableNamed": "启用 {{title}}"
+}

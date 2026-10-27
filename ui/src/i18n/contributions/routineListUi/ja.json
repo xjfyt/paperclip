@@ -1,0 +1,10 @@
+{
+  "never": "未実行",
+  "noDefaultAgent": "デフォルトのエージェントなし",
+  "on": "オン",
+  "off": "オフ",
+  "enable": "有効にする",
+  "select": "{{title}} を選択",
+  "disableNamed": "{{title}} を無効にする",
+  "enableNamed": "{{title}} を有効にする"
+}

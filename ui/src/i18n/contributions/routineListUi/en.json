@@ -1,0 +1,10 @@
+{
+  "never": "Never",
+  "noDefaultAgent": "No default agent",
+  "on": "On",
+  "off": "Off",
+  "enable": "Enable",
+  "select": "Select {{title}}",
+  "disableNamed": "Disable {{title}}",
+  "enableNamed": "Enable {{title}}"
+}
