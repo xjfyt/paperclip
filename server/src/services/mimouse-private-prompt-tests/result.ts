@@ -60,6 +60,16 @@ export function privatePromptPublicResult(result: AdapterExecutionResult, sealed
     ...(number(result.usage?.cachedInputTokens) !== undefined ? { cachedInputTokens: number(result.usage?.cachedInputTokens) } : {}),
     ...(number(result.usage?.cacheWriteTokens) !== undefined ? { cacheWriteTokens: number(result.usage?.cacheWriteTokens) } : {}),
   } : undefined;
-  return { ...sealed.publicResult, provider: "anthropic", biller: "anthropic", billingType: "api", model,
-    costUsd: number(result.costUsd), usage, usageComplete: usage !== undefined && result.usageComplete === true };
+  const byModel = result.resultJson?.modelUsage;
+  const models = byModel && typeof byModel === "object" && !Array.isArray(byModel) ? Object.keys(byModel) : [];
+  // Only the terminal CLI accounting map can attest the approved exact model.
+  // Preserve unknown/mixed spend, but never turn configured fallback into proof
+  // or copy arbitrary model names/provenance/output through the public boundary.
+  const reportedModel = models.length > 1 ? "mixed" : models.length === 1 && models[0] === model && result.model === model ? model : "unknown";
+  const costUsd = number(result.costUsd);
+  return { ...sealed.publicResult, provider: "anthropic", biller: "anthropic", billingType: "api", model: reportedModel,
+    costUsd, usage, usageBasis: result.usageBasis === "per_run" ? "per_run" : undefined,
+    costStatus: costUsd !== undefined ? "reported" : "unpriced",
+    pricingProvenance: { source: costUsd !== undefined ? "provider_reported" : "unknown", version: "claude-cli/private-prompt/v1" },
+    usageComplete: usage !== undefined && result.usageComplete === true };
 }

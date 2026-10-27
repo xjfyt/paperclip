@@ -51,10 +51,16 @@ export async function executePrivatePromptTest(ctx: AdapterExecutionContext): Pr
       },
     });
     const parsed = parseClaudeStreamJson(proc.stdout);
+    const modelUsage = parsed.resultJson?.modelUsage;
+    const models = modelUsage && typeof modelUsage === "object" && !Array.isArray(modelUsage) ? Object.keys(modelUsage) : [];
+    // Configuration/init events are requests, not proof of the model billed.
+    // Never publish arbitrary provider text as a model; an unexpected identity
+    // remains unknown while its reported total still reaches accounting.
+    const reportedModel = models.length > 1 ? "mixed" : models.length === 1 && models[0] === ctx.config.model ? ctx.config.model : "unknown";
     return {
       exitCode: proc.exitCode, signal: proc.signal, timedOut: proc.timedOut,
       resultJson: parsed.resultJson, summary: parsed.summary,
-      provider: "anthropic", biller: "anthropic", billingType: "api", model: ctx.config.model,
+      provider: "anthropic", biller: "anthropic", billingType: "api", model: reportedModel, usageBasis: "per_run",
       usage: parsed.usage ?? undefined, costUsd: parsed.costUsd, usageComplete: parsed.resultJson !== null,
       clearSession: true,
       ...(spawnUnconfirmed ? { errorCode: "private_prompt_spawn_unconfirmed" } : {}),

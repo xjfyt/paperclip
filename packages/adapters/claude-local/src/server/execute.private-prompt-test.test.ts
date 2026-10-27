@@ -114,6 +114,18 @@ describe("private literal prompt execution", () => {
     expect(ctx.onMeta).not.toHaveBeenCalled();
     expect(executeClaudeAcp).not.toHaveBeenCalled();
   });
+  it.each(["reported", "init_only", "mixed", "different"])("preserves spend and distinguishes %s model provenance", async kind => {
+    const ctx = privateContext(), model = ctx.config.model;
+    const modelUsage = kind === "init_only" ? undefined : kind === "mixed" ? { [model]: {}, "claude-other": {} }
+      : { [kind === "different" ? "claude-other" : model]: {} };
+    runAdapterExecutionTargetProcess.mockResolvedValueOnce({ exitCode: 0, signal: null, timedOut: false, pid: 123,
+      startedAt: new Date().toISOString(), stderr: "", stdout: [JSON.stringify({ type: "system", subtype: "init", model }),
+        JSON.stringify({ type: "result", subtype: "success", result: "ok", modelUsage, total_cost_usd: 0.0125,
+          usage: { input_tokens: 1, output_tokens: 1 } })].join("\n") });
+    const result = await execute(ctx as never);
+    expect(result.model).toBe(kind === "reported" ? model : kind === "mixed" ? "mixed" : "unknown");
+    expect(result.costUsd).toBe(0.0125); expect(result.usageBasis).toBe("per_run");
+  });
   it("does not dispatch if preparation persistence fails", async () => {
     const ctx = privateContext();
     ctx.privatePromptTest.prepare.mockRejectedValueOnce(new Error("private_test_prepare_failed"));
