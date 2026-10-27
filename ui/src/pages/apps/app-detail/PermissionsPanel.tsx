@@ -1,3 +1,4 @@
+import { useTranslation } from "@/i18n";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Ban, Check, FlaskConical, Loader2, RefreshCw, Search, ShieldQuestion } from "lucide-react";
@@ -114,6 +115,7 @@ function AgentAccessSection({
   disabled: boolean;
   onSave: (next: AccessDraft) => void;
 }) {
+  const { t } = useTranslation();
   const liveAgents = agents.filter((agent) => agent.status !== "terminated");
   const canManage = capabilities?.canConfigure ?? false;
   const editableAgentIds = capabilities?.editableAgentIds;
@@ -167,11 +169,11 @@ function AgentAccessSection({
               selectedAgentIds={access.agentIds}
               disabled={disabled}
               triggerLabel={access.agentIds.size === 0
-                ? "Choose agents"
-                : `${access.agentIds.size} ${access.agentIds.size === 1 ? "agent" : "agents"} selected`}
-              emptyMessage="You cannot edit any agents yet."
+                ? t("selectorHostUi.chooseAgents")
+                : t("selectorHostUi.selectedAgents", { count: access.agentIds.size })}
+              emptyMessage={t("selectorHostUi.cannotEditAgents")}
               isAgentDisabled={(agent) => requiredAgentIds.has(agent.id)}
-              getDescription={(agent) => requiredAgentIds.has(agent.id) ? "Required by this connection's install setting" : agent.title}
+              getDescription={(agent) => requiredAgentIds.has(agent.id) ? t("selectorHostUi.requiredByInstall") : agent.title}
               onChange={(agentIds) => onSave({
                 mode: "specific",
                 agentIds: new Set([...agentIds, ...requiredAgentIds]),

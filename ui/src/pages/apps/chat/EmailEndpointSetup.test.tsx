@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { i18n, selectorHostMessages } from "@/i18n/selector-host-test-resources";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -18,7 +19,9 @@ vi.mock("@/api/email", () => ({ emailApi: { credentials: mocks.credentials, cont
 let container: HTMLDivElement;
 let root: Root;
 let client: QueryClient;
-beforeEach(() => {
+beforeEach(async () => {
+  await i18n.changeLanguage("en");
+  (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   vi.resetAllMocks();
   vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
   mocks.companyId = "company";
@@ -42,6 +45,7 @@ afterEach(async () => {
   container.remove();
   vi.unstubAllGlobals();
   vi.useRealTimers();
+  await i18n.changeLanguage("en");
 });
 function Location() { const location = useLocation(); return <output data-testid="location" data-search={location.search}>{location.pathname}</output>; }
 async function mount(saved = true, waitForCompany = true, agentId = "ralph", search = "") {
@@ -600,5 +604,34 @@ describe("AgentMail two-step setup", () => {
     expect(container.textContent).toContain("needs a work boundary");
     expect(button("Continue").disabled).toBe(true);
     expect(mocks.setup).not.toHaveBeenCalled();
+  });
+});
+
+
+describe.each(Object.entries(selectorHostMessages))("actual email selector overrides (%s)", (locale, messages) => {
+  it("keeps an open empty selector and draft while switching prompts without setup calls or refetch", async () => {
+    mocks.listAgents.mockResolvedValue([]);
+    await mount(false, false, "");
+    await vi.waitFor(() => expect(container.textContent).toContain("Choose an agent"));
+    await vi.waitFor(() => expect(button("Choose an agent").disabled).toBe(false));
+    await click("Choose an agent");
+    const popover = document.body.querySelector<HTMLElement>('[data-slot="popover-content"]');
+    expect(popover?.textContent).toContain("No agents found.");
+    const input = popover?.querySelector<HTMLInputElement>("input");
+    expect(input).not.toBeNull();
+    await fill('[data-slot="popover-content"] input', "原文 日本語");
+    input?.focus(); input?.setSelectionRange(1, 3);
+    const reads = [mocks.listAgents, mocks.credentials, mocks.listInboxes, mocks.listConnections, mocks.inspect, mocks.inspectNew];
+    const counts = reads.map(read => read.mock.calls.length);
+    const draft = sessionStorage.getItem("paperclip.agentmail-setup:company:new:choose");
+    await act(async () => { await i18n.changeLanguage(locale); });
+    expect(document.body.querySelector('[data-slot="popover-content"]')).toBe(popover);
+    expect(popover?.querySelector("input")).toBe(input); expect(input?.value).toBe("原文 日本語");
+    expect(document.activeElement).toBe(input); expect([input?.selectionStart, input?.selectionEnd]).toEqual([1, 3]);
+    expect(container.textContent).toContain(messages.chooseAgent);
+    expect(popover?.textContent).toContain(messages.noAgentsFound);
+    expect(reads.map(read => read.mock.calls.length)).toEqual(counts);
+    expect(sessionStorage.getItem("paperclip.agentmail-setup:company:new:choose")).toBe(draft);
+    for (const mutate of [mocks.connect, mocks.setup, mocks.control, mocks.putInstalls]) expect(mutate).not.toHaveBeenCalled();
   });
 });

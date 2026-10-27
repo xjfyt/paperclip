@@ -1,3 +1,4 @@
+import { useTranslation } from "@/i18n";
 import { isUuidLike } from "@paperclipai/shared";
 import { ApiError } from "@/api/client";
 import { AgentMailCredentialField } from "@/features/connections/AgentMailCredentialField";
@@ -90,6 +91,7 @@ export function EmailEndpointSetup() {
 }
 
 function EmailEndpointSetupForm({ companyId }: { companyId: string }) {
+  const { t } = useTranslation();
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const cache = useQueryClient();
@@ -339,7 +341,7 @@ function EmailEndpointSetupForm({ companyId }: { companyId: string }) {
       <div className="space-y-2">
         <Label htmlFor="email-agent">Agent</Label>
         <AgentSelect id="email-agent" value={agentId} disabled={busy || agents.isPending || !inboxes.isSuccess || !!pendingEndpoint}
-          placeholder="Choose an agent" emptyMessage="No agents found." triggerClassName="h-10"
+          placeholder={t("selectorHostUi.chooseAgent")} emptyMessage={t("selectorHostUi.noAgentsFound")} triggerClassName="h-10"
           agents={(agents.data ?? []).filter(a => !["terminated", "pending_approval"].includes(a.status))}
           onChange={id => { setAgentId(id); setUsername((agents.data?.find(a => a.id === id)?.name ?? "").toLowerCase().replace(/[^a-z0-9._-]+/g, "-").slice(0, 64)); }} />
       </div>

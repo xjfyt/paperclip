@@ -1,3 +1,4 @@
+import { useTranslation } from "@/i18n";
 import { buildSlackAppManifest, defaultSlackAppConfiguration } from "@paperclipai/shared";
 import { SlackAppDetails, SlackSetupAdvanced } from "./SlackAppDetails";
 import { SlackAutomaticSetup } from "./SlackAutomaticSetup";
@@ -171,6 +172,7 @@ export function ChatEndpointSetup() {
 }
 
 function ChatSdkEndpointSetup() {
+  const { t } = useTranslation();
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -537,8 +539,8 @@ function ChatSdkEndpointSetup() {
               agents={activeAgents}
               value={agentId}
               onChange={setAgentId}
-              placeholder="Choose an active agent"
-              emptyMessage="No active agents are available."
+              placeholder={t("selectorHostUi.chooseActiveAgent")}
+              emptyMessage={t("selectorHostUi.noActiveAgents")}
             />}
             {isSlack && (selectedAgent || endpoint) && <SlackSetupAdvanced>
               <SlackAppDetails value={slackDetails} readOnly={!slackDetailsEditable || createEndpoint.isPending}

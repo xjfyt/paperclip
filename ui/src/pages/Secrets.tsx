@@ -1,3 +1,4 @@
+import { useTranslation } from "@/i18n";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -4383,6 +4384,7 @@ function AgentAccessSection({
   companyId: string;
   reference: AgentAccessReference;
 }) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { pushToast } = useToastActions();
   const [selectedAgentId, setSelectedAgentId] = useState("");
@@ -4575,7 +4577,7 @@ function AgentAccessSection({
                 value={selectedAgentId}
                 onChange={setSelectedAgentId}
                 triggerClassName="h-8 text-xs"
-                emptyMessage="No agents available."
+                emptyMessage={t("selectorHostUi.noAgentsAvailable")}
               />
             </div>
             <div className="min-w-0 flex-1">

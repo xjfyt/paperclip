@@ -1,3 +1,4 @@
+import { useTranslation } from "@/i18n";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, Loader2 } from "lucide-react";
@@ -582,6 +583,7 @@ export function StepAssign({
   companyDefault: boolean;
   onCompanyDefault: (v: boolean) => void;
 }) {
+  const { t } = useTranslation();
   const [moreOpen, setMoreOpen] = useState(false);
   // Per-agent overlap context from already-loaded bindings — no extra fetch.
   const contextByAgent = useMemo(() => {
@@ -631,8 +633,8 @@ export function StepAssign({
           getDescription={(agent) => {
             const context = contextByAgent.get(agent.id) ?? [];
             const bits = [...context];
-            if (defaultProfileName) bits.push("organization default");
-            return bits.length > 0 ? `already has: ${bits.join(" · ")}` : "no profiles yet";
+            if (defaultProfileName) bits.push(t("selectorHostUi.organizationDefault"));
+            return bits.length > 0 ? t("selectorHostUi.alreadyHasProfiles", { profiles: bits.join(" · ") }) : t("selectorHostUi.noProfiles");
           }}
         />
         <p className="text-xs text-muted-foreground">

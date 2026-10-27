@@ -1337,7 +1337,7 @@ export function DiscoveryGrid({
               <FolderChip
                 result={folderResult}
                 selection={folderSelection}
-                allLabel="All skills"
+                allLabel={t("selectorHostUi.allSkills")}
                 onClick={onOpenMobileFolders ?? (() => undefined)}
               />
             </div>
@@ -2082,6 +2082,7 @@ export function InstallPreviewDialog({
   error: string | null;
   onConfirm: (input: { slug: string | null; force: boolean; agentIds: string[] }) => void;
 }) {
+  const { t } = useTranslation();
   const [slug, setSlug] = useState<string>("");
   const [force, setForce] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -2210,14 +2211,16 @@ export function InstallPreviewDialog({
                   setSelectedAgentIds(next);
                 }}
                 showSelectionPreview={false}
-                emptyMessage="No agents in this organization support skills yet."
+                emptyMessage={t("selectorHostUi.noSkillAgentsOrganization")}
                 isAgentDisabled={(agent) => {
                   const option = agent as AttachAgentOption;
                   return option.required || !option.supportsSkills;
                 }}
                 getDescription={(agent) => {
                   const option = agent as AttachAgentOption;
-                  return `${option.adapterType}${option.required ? " · required" : ""}${!option.supportsSkills ? " · skills not supported" : ""}`;
+                  return option.required
+                    ? t(option.supportsSkills ? "selectorHostUi.requiredAdapter" : "selectorHostUi.requiredUnsupportedAdapter", { adapter: option.adapterType })
+                    : !option.supportsSkills ? t("selectorHostUi.unsupportedAdapter", { adapter: option.adapterType }) : option.adapterType;
                 }}
               />
             </div>
@@ -2301,6 +2304,7 @@ function AttachAgentsPopover({
   onSubmit: (nextIds: string[], versionId: string | null) => void;
   fullWidth?: boolean;
 }) {
+  const { t } = useTranslation();
   const [draftVersionId, setDraftVersionId] = useState<string | null>(selectedVersionId);
   const attachedIds = useMemo(() => new Set(attachedAgentIds), [attachedAgentIds]);
   const eligible = agents.filter((agent) => agent.supportsSkills);
@@ -2312,7 +2316,7 @@ function AttachAgentsPopover({
       selectedAgentIds={attachedIds}
       onSave={(nextIds) => onSubmit(Array.from(nextIds), draftVersionId)}
       pending={pending}
-      triggerLabel="Add to agent"
+      triggerLabel={t("selectorHostUi.addToAgent")}
       triggerIcon={<Plus className="mr-1.5 h-3.5 w-3.5" />}
       triggerVariant="default"
       triggerSize="sm"
@@ -2325,13 +2329,13 @@ function AttachAgentsPopover({
       }}
       headerContent={sortedVersions.length > 0 ? (
         <div className="mt-2 flex items-center gap-2 text-xs">
-          <span className="shrink-0 text-muted-foreground">Version</span>
+          <span className="shrink-0 text-muted-foreground">{t("selectorHostUi.version")}</span>
           <select
             value={draftVersionId ?? "__latest__"}
             onChange={(event) => setDraftVersionId(event.target.value === "__latest__" ? null : event.target.value)}
             className="h-8 min-w-0 flex-1 rounded-md border border-border bg-background px-2 text-xs text-foreground"
           >
-            <option value="__latest__">Latest</option>
+            <option value="__latest__">{t("selectorHostUi.latest")}</option>
             {sortedVersions.map((version) => (
               <option key={version.id} value={version.id}>
                 v{version.revisionNumber}{version.label ? ` · ${version.label}` : ""}
@@ -2340,19 +2344,21 @@ function AttachAgentsPopover({
           </select>
         </div>
       ) : null}
-      emptyMessage={eligible.length === 0 ? "No agents in this organization support skills yet." : "No agents yet."}
+      emptyMessage={eligible.length === 0 ? t("selectorHostUi.noSkillAgentsOrganization") : t("agentSelect.empty")}
       isAgentDisabled={(agent) => {
         const option = agent as AttachAgentOption;
         return option.required || !option.supportsSkills;
       }}
       getDescription={(agent) => {
         const option = agent as AttachAgentOption;
-        return `${option.adapterType}${option.required ? " · required" : ""}${!option.supportsSkills ? " · skills not supported" : ""}`;
+        return option.required
+          ? t(option.supportsSkills ? "selectorHostUi.requiredAdapter" : "selectorHostUi.requiredUnsupportedAdapter", { adapter: option.adapterType })
+          : !option.supportsSkills ? t("selectorHostUi.unsupportedAdapter", { adapter: option.adapterType }) : option.adapterType;
       }}
       renderNameSuffix={(agent) => (agent as AttachAgentOption).paused ? (
         <Badge variant="outline" className="[&>svg]:size-2.5 border-amber-500/30 bg-amber-500/10 px-1.5 text-(length:--text-nano) uppercase tracking-wide text-amber-500">
           <Pause className="h-2.5 w-2.5" aria-hidden="true" />
-          Paused
+          {t("selectorHostUi.paused")}
         </Badge>
       ) : null}
     />
@@ -5424,7 +5430,7 @@ export function CompanySkills() {
         onOpenChange={setMobileFoldersOpen}
         result={railSkillFolderResult}
         selection={folderSelection}
-        allLabel="All skills"
+        allLabel={t("selectorHostUi.allSkills")}
         itemLabelPlural={t("workflow.skills")}
         onSelect={setFolderSelection}
         onCreate={() => openCreateFolder()}
