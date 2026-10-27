@@ -1,6 +1,6 @@
 import {
   prepareRuntimeRoutingPolicySchema, approveRuntimeRoutingPolicySchema, disableRuntimeRoutingPolicySchema,
-  createRuntimeRoutingTaskSchema, runRuntimeRoutingTaskSchema, runtimeRoutingRequestQuerySchema,
+  closeExpiredRuntimeRoutingPolicySchema, createRuntimeRoutingTaskSchema, runRuntimeRoutingTaskSchema, runtimeRoutingRequestQuerySchema,
   type PrepareRuntimeRoutingPolicy, type ApproveRuntimeRoutingPolicy, type DisableRuntimeRoutingPolicy,
   type CreateRuntimeRoutingTask, type RunRuntimeRoutingTask, type RuntimeRoutingRequestQuery,
 } from "@paperclipai/shared/runtime-cost-routing";
@@ -32,13 +32,19 @@ export function runtimeCostRoutingApi(companyId: string, userId: string, signal:
   }
   return {
     async current() { const value = runtimeCurrentSchema.parse(await send("")); if (value.policy) {
-      policy(value.policy); if (value.policyId !== value.policy.id || value.generation !== value.policy.expectedGeneration + 1 || !value.configuredAt) fail();
+      policy(value.policy); if (value.policyId !== value.policy.id || value.generation !== value.policy.expectedGeneration + 1 || !value.configuredAt || value.policy.approvalClosedAt !== null) fail();
     } return value; },
     async policy(policyId: string) { const result = runtimePolicyReadSchema.parse(await send(`/policies/${uuid.parse(policyId)}`)); if (policy(result.item).id !== uuid.parse(policyId)) fail(); return result; },
     async prepare(body: PrepareRuntimeRoutingPolicy) {
       const input = prepareRuntimeRoutingPolicySchema.parse(body);
       const result = runtimePrepareResultSchema.parse(await send("/prepare", input)), item = policy(result.item, true);
       if (item.requestId !== input.requestId || item.expectedGeneration !== input.expectedGeneration || JSON.stringify(item.policy) !== JSON.stringify(input.policy)) fail(); return result;
+    },
+    async closeExpired(policyId: string, body: { expectedGeneration: number }) {
+      const input = closeExpiredRuntimeRoutingPolicySchema.parse(body), id = uuid.parse(policyId);
+      const result = runtimePrepareResultSchema.parse(await send(`/policies/${id}/close-expired`, input)), item = policy(result.item, true);
+      if (item.id !== id || item.expectedGeneration !== input.expectedGeneration || item.approvalClosedAt === null) fail();
+      return result;
     },
     approve: (policyId: string, body: ApproveRuntimeRoutingPolicy) => change("approve", policyId, body),
     disable: (body: DisableRuntimeRoutingPolicy) => change("disable", null, body),
@@ -60,6 +66,12 @@ export function runtimeCostRoutingApi(companyId: string, userId: string, signal:
       if (result.binding) { const row = binding(result.binding); if (input.action === "create_task" ? row.requestId !== id || row.generation !== input.expectedGeneration : input.action !== "run" || row.id !== input.bindingId || row.dispatchRequestId !== id || row.state === "bound") fail(); }
       if (result.closure) { const row = result.closure; if (row.requestId !== id || row.action !== input.action
         || (row.reason === "generation_advanced" ? input.action === "run" || row.currentGeneration <= input.expectedGeneration! : row.reason === "approval_expired" ? input.action !== "approve" : input.action !== "run")) fail(); }
+      if (result.closure?.reason === "approval_expired") {
+        // A clock-only expiry is reversible. Require the durable proposal marker
+        // through another current-authorized read before allowing journal closure.
+        const fresh = runtimePolicyReadSchema.parse(await send(`/policies/${uuid.parse(input.policyId)}`)), item = policy(fresh.item, true);
+        if (item.id !== input.policyId || item.expectedGeneration !== input.expectedGeneration || item.approvalClosedAt === null) fail();
+      }
       return result;
     },
   };

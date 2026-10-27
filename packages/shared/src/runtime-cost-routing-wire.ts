@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { runtimeRoutingPolicySchema, runtimeRoutingCandidateSchema, runtimeRoutingCandidateEvidenceSchema,
-  prepareRuntimeRoutingPolicySchema, runtimeRoutingRequestQuerySchema, runtimeRoutingBindingStates } from "./runtime-cost-routing.js";
+  prepareRuntimeRoutingPolicySchema, runtimeRoutingRequestQuerySchema, runtimeRoutingRequestClosureReasons, runtimeRoutingBindingStates } from "./runtime-cost-routing.js";
 /** Exact wire allowlists: reject unrecognized raw content before a UI can cache or render it. */
 export const runtimeRoutingUuidSchema = z.string().uuid().transform(value => value.toLowerCase());
 const uuid = runtimeRoutingUuidSchema;
@@ -13,9 +13,11 @@ const target = z.object({ schemaVersion: z.literal(1), adapterType: z.literal("c
   completeContextCaptured: z.literal(false), ordinaryToolsQualityProven: z.literal(false), }).strict();
 export const runtimePolicyRecordSchema = z.object({ id: uuid, requestId: uuid, companyId: uuid, actorUserId: z.string().min(1), expectedGeneration: generation,
   policy: runtimeRoutingPolicySchema, candidates: z.array(z.object({ candidate: runtimeRoutingCandidateSchema, evidence: runtimeRoutingCandidateEvidenceSchema, target }).strict()).min(1).max(20),
-  approvalDigest: hash, approvalExpiresAt: date, createdAt: date, executionStarted: z.literal(false),
+  approvalDigest: hash, approvalExpiresAt: date, approvalClosedAt: date.nullable(), createdAt: date, executionStarted: z.literal(false),
 }).strict().superRefine((row, ctx) => {
-  if (row.candidates.length !== row.policy.candidates.length || new Set(row.candidates.map(item => item.candidate.agentId)).size !== row.candidates.length || row.candidates.some(item => {
+  if (Date.parse(row.approvalExpiresAt) <= Date.parse(row.createdAt)
+    || (row.approvalClosedAt !== null && Date.parse(row.approvalClosedAt) < Date.parse(row.approvalExpiresAt))
+    || row.candidates.length !== row.policy.candidates.length || new Set(row.candidates.map(item => item.candidate.agentId)).size !== row.candidates.length || row.candidates.some(item => {
     const { candidate, evidence, target: snapshot } = item;
     return JSON.stringify(candidate) !== JSON.stringify(row.policy.candidates.find(value => value.agentId === candidate.agentId)) || evidence.companyId !== row.companyId || evidence.actorUserId !== row.actorUserId
       || evidence.agentId !== candidate.agentId || evidence.promptId !== candidate.promptId || evidence.revisionId !== candidate.comparison.candidateRevisionId
@@ -29,7 +31,7 @@ export const runtimeBindingSchema = z.object({ id: uuid, requestId: uuid, compan
   createdAt: date, wakeRequestedAt: date.nullable(), startRequestedAt: date.nullable(), providerConsumed: z.literal(false), futureCostQuoted: z.literal(false), }).strict();
 export const runtimeCurrentSchema = z.object({ enabled: z.boolean(), companyPaused: z.boolean(), generation, policyId: uuid.nullable(), configuredAt: date.nullable(), policy: runtimePolicyRecordSchema.nullable() }).strict();
 const closureSchema = z.object({ outcome: z.literal("not_applied_closed"), requestId: uuid, action: runtimeRoutingRequestQuerySchema.shape.action,
-  reason: z.enum(["generation_advanced", "approval_expired", "binding_already_claimed"]), currentGeneration: generation }).strict();
+  reason: z.enum(runtimeRoutingRequestClosureReasons), currentGeneration: generation }).strict();
 export const runtimeRequestResultSchema = z.object({ enabled: z.boolean(), companyPaused: z.boolean(), policy: runtimePolicyRecordSchema.nullable(), receipt: runtimeReceiptSchema.nullable(), binding: runtimeBindingSchema.nullable(), closure: closureSchema.nullable() }).strict();
 export const runtimePrepareResultSchema = z.object({ item: runtimePolicyRecordSchema, duplicate: z.boolean() }).strict();
 export const runtimeReceiptResultSchema = z.object({ receipt: runtimeReceiptSchema, duplicate: z.boolean() }).strict();

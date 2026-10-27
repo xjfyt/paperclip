@@ -77,5 +77,8 @@
   "bindingState": "Binding state",
   "boundPolicyInactive": "The bound policy is inactive or has changed. This task cannot switch to another candidate.",
   "bindingUnavailable": "The previous task binding could not be read. Current policy access was checked again; you can still disable future routing.",
-  "previousSessionPending": "A request from your earlier sign-in is still unresolved. Readback only: its confirmations and execution intent were not transferred."
+  "previousSessionPending": "A request from your earlier sign-in is still unresolved. Readback only: its confirmations and execution intent were not transferred.",
+  "closeExpired": "Verify and close the expired, unapplied proposal",
+  "confirmCloseExpired": "I authorize only permanently closing this expired, never-applied proposal. This does not approve a policy, cancel a run, or reverse charges.",
+  "closeExpiredBoundary": "First read back the pending approval. The server checks expiry and refuses to close an active or previously approved proposal. The original request stays pending until an authorized readback proves its outcome."
 }

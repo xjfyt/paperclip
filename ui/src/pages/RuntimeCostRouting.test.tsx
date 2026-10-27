@@ -11,7 +11,7 @@ import en from "@/i18n/contributions/runtimeCostRoutingUi/en.json";
 import zh from "@/i18n/contributions/runtimeCostRoutingUi/zh-CN.json";
 import es from "@/i18n/contributions/runtimeCostRoutingUi/es.json";
 import ja from "@/i18n/contributions/runtimeCostRoutingUi/ja.json";
-const calls = { current: vi.fn(), prepare: vi.fn(), approve: vi.fn(), disable: vi.fn(), createTask: vi.fn(), run: vi.fn(), request: vi.fn(), policy: vi.fn(), binding: vi.fn() };
+const calls = { current: vi.fn(), closeExpired: vi.fn(), prepare: vi.fn(), approve: vi.fn(), disable: vi.fn(), createTask: vi.fn(), run: vi.fn(), request: vi.fn(), policy: vi.fn(), binding: vi.fn() };
 const props = { companyId: id(1), userId: "owner", sessionId: "session-1", authEpoch: 1 };
 let host: HTMLDivElement, root: Root;
 const label = (key: string) => i18n.t(`runtimeCostRoutingUi.${key}`);
@@ -31,6 +31,7 @@ function response(value: unknown, status = 200) { return { ok: status < 400, sta
 beforeEach(async () => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }); vi.stubGlobal("crypto", webcrypto); sessionStorage.clear();
   for (const fn of Object.values(calls)) fn.mockReset();
+  calls.closeExpired.mockResolvedValue({ item: record({ approvalClosedAt: new Date().toISOString() }), duplicate: false });
   calls.current.mockResolvedValue(head()); calls.prepare.mockImplementation(async body => ({ item: record({ requestId: body.requestId }), duplicate: false }));
   calls.approve.mockImplementation(async body => ({ receipt: { id: id(300), requestId: body.requestId, policyId: id(3), action: "approve", generation: body.expectedGeneration + 1, createdAt: new Date().toISOString(), executionStarted: false }, duplicate: false }));
   calls.disable.mockImplementation(async body => ({ receipt: { id: id(301), requestId: body.requestId, policyId: id(3), action: "disable", generation: body.expectedGeneration + 1, createdAt: new Date().toISOString(), executionStarted: false }, duplicate: false }));
@@ -40,7 +41,7 @@ beforeEach(async () => {
   calls.policy.mockResolvedValue({ item: record(), enabled: true, companyPaused: false }); calls.binding.mockResolvedValue({ binding: binding() });
   vi.stubGlobal("fetch", vi.fn(async (path: string, init: RequestInit) => {
     const route = path.replace(/^.*\/runtime-cost-routing/, ""), body = init.body ? JSON.parse(String(init.body)) : undefined;
-    const fn = route === "" ? calls.current : route === "/prepare" ? calls.prepare : route.endsWith("/approve") ? calls.approve : route === "/disable" ? calls.disable : route === "/tasks" ? calls.createTask : route.endsWith("/run") ? calls.run : route.startsWith("/requests/") ? calls.request : route.startsWith("/policies/") ? calls.policy : calls.binding;
+    const fn = route === "" ? calls.current : route === "/prepare" ? calls.prepare : route.endsWith("/close-expired") ? calls.closeExpired : route.endsWith("/approve") ? calls.approve : route === "/disable" ? calls.disable : route === "/tasks" ? calls.createTask : route.endsWith("/run") ? calls.run : route.startsWith("/requests/") ? calls.request : route.startsWith("/policies/") ? calls.policy : calls.binding;
     const value = await fn(body, path, init); return value && "ok" in value ? value : response(value);
   }));
   for (const [locale, data] of Object.entries({ en, "zh-CN": zh, es, ja })) i18n.addResourceBundle(locale, "translation", { runtimeCostRoutingUi: data }, true, true);
@@ -50,7 +51,7 @@ afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi
 it("renders real components in four languages without writes on mount or locale change", async () => {
   await mount(); for (const locale of ["en", "zh-CN", "es", "ja"]) { await act(async () => { await i18n.changeLanguage(locale); });
     for (const key of ["boundary", "profile", "historyCost", "privacy", "unsupported", "disableBoundary", "taskVisibility", "runBoundary"]) expect(host.textContent).toContain(label(key)); }
-  for (const key of ["prepare", "approve", "disable", "createTask", "run"] as const) expect(calls[key]).not.toHaveBeenCalled();
+  for (const key of ["prepare", "approve", "disable", "createTask", "run", "closeExpired"] as const) expect(calls[key]).not.toHaveBeenCalled();
   for (const messages of [zh, es, ja]) expect(Object.keys(messages).sort()).toEqual(Object.keys(en).sort());
 });
 it("default off blocks preparation and task creation", async () => {
@@ -172,4 +173,62 @@ it("a confirmed old-session task can receive a new explicit run without replayin
   expect(calls.run).not.toHaveBeenCalled(); calls.request.mockResolvedValueOnce({ enabled: true, companyPaused: false, policy: null, receipt: null, binding: binding({ requestId: creationId }), closure: null });
   await click("recover"); expect(readRoutingJournal(props)).toBeNull(); expect(button("run").matches(":disabled")).toBe(true);
   await check("confirmRun"); await click("run"); expect(calls.run).toHaveBeenCalledTimes(1); expect(calls.run.mock.calls[0][0].requestId).not.toBe(creationId); expect(calls.createTask).toHaveBeenCalledTimes(1);
+});
+async function unknownApproval() {
+  calls.approve.mockRejectedValueOnce(Error("approval response lost")); await prepare(); await approvalChecks(); await click("approve");
+  calls.policy.mockResolvedValue({ item: record({ approvalExpiresAt: new Date(Date.now() - 60_000).toISOString() }), enabled: true, companyPaused: false });
+}
+function expiredReadback(requestId: string) {
+  return { enabled: true, companyPaused: false, policy: null, receipt: null, binding: null,
+    closure: { outcome: "not_applied_closed", requestId, action: "approve", reason: "approval_expired", currentGeneration: 0 } };
+}
+function closeDurably(lostResponse = false) {
+  calls.closeExpired.mockImplementationOnce(async () => {
+    const pending = readRoutingJournal(props)!;
+    calls.policy.mockResolvedValue({ item: record({ approvalClosedAt: new Date().toISOString() }), enabled: false, companyPaused: true });
+    calls.request.mockResolvedValue(expiredReadback(pending.requestId));
+    if (lostResponse) throw Error("close response lost");
+    return { item: record({ approvalClosedAt: new Date().toISOString() }), duplicate: false };
+  });
+}
+it.each([false, true])("gen0 approval recovery requires explicit durable closure; lost close response=%s", async lost => {
+  await unknownApproval(); const original = readRoutingJournal(props)!;
+  expect(button("closeExpired").matches(":disabled")).toBe(true); await click("recover");
+  expect(readRoutingJournal(props)).toEqual(original); expect(calls.closeExpired).not.toHaveBeenCalled(); expect(button("prepare").matches(":disabled")).toBe(true);
+  for (const locale of ["zh-CN", "es", "ja", "en"]) { await act(async () => { await i18n.changeLanguage(locale); }); expect(host.textContent).toContain(label("closeExpiredBoundary")); expect(calls.closeExpired).not.toHaveBeenCalled(); }
+  closeDurably(lost); await check("confirmCloseExpired"); await click("closeExpired");
+  expect(calls.closeExpired).toHaveBeenCalledTimes(1); expect(calls.closeExpired.mock.calls[0][0]).toEqual({ expectedGeneration: 0 });
+  expect(readRoutingJournal(props)).toBeNull(); expect(host.textContent).toContain(label("closed")); expect(calls.approve).toHaveBeenCalledTimes(1); expect(calls.run).not.toHaveBeenCalled();
+});
+it("successful close POST alone does not release the original approval journal", async () => {
+  await unknownApproval(); await click("recover"); const original = readRoutingJournal(props)!; await check("confirmCloseExpired"); await click("closeExpired");
+  expect(readRoutingJournal(props)).toEqual(original); expect(host.textContent).toContain(label("unknown")); expect(button("prepare").matches(":disabled")).toBe(true);
+});
+it("a nonexpired server rejection preserves unknown approval without a replacement", async () => {
+  await unknownApproval(); await click("recover"); const original = readRoutingJournal(props)!;
+  calls.closeExpired.mockResolvedValueOnce(response({ error: "not expired" }, 409)); await check("confirmCloseExpired"); await click("closeExpired");
+  expect(readRoutingJournal(props)).toEqual(original); expect(calls.approve).toHaveBeenCalledTimes(1); expect(host.querySelectorAll('input[type="checkbox"]:checked')).toHaveLength(0);
+});
+it("a new session can explicitly close an old pending proposal while paused and flag-off, without replaying approval", async () => {
+  await unknownApproval(); const original = readRoutingJournal(props)!; await mount({ authPending: true });
+  calls.current.mockResolvedValue(head(false, { enabled: false, companyPaused: true }));
+  calls.policy.mockResolvedValue({ item: record({ approvalExpiresAt: new Date(Date.now() - 60_000).toISOString() }), enabled: false, companyPaused: true });
+  await mount({ sessionId: "new-login", authEpoch: 2 }); await click("recover");
+  expect(button("retry")).toBeUndefined(); expect(calls.closeExpired).not.toHaveBeenCalled(); expect(readRoutingJournal(props)).toEqual(original);
+  closeDurably(); await check("confirmCloseExpired"); await click("closeExpired"); expect(readRoutingJournal(props)).toBeNull();
+  expect(calls.approve).toHaveBeenCalledTimes(1); expect(calls.closeExpired).toHaveBeenCalledTimes(1); expect(calls.run).not.toHaveBeenCalled();
+});
+it.each(["companyId", "userId", "sessionId", "authEpoch"])("pending close guards double clicks and ignores late %s results", async key => {
+  await unknownApproval(); await click("recover"); let finish!: (value: unknown) => void;
+  calls.closeExpired.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; })); await check("confirmCloseExpired");
+  await act(async () => { button("closeExpired").click(); button("closeExpired").click(); }); await flush(); expect(calls.closeExpired).toHaveBeenCalledTimes(1);
+  const reads = calls.request.mock.calls.length; await mount({ [key]: key === "authEpoch" ? 2 : key === "companyId" ? id(999) : "new-identity" });
+  await act(async () => finish({ item: record({ approvalClosedAt: new Date().toISOString() }), duplicate: false })); await flush();
+  expect(calls.request).toHaveBeenCalledTimes(reads); expect(host.textContent).not.toContain(label("closed")); expect(readRoutingJournal(props)).not.toBeNull();
+});
+it("an approval that became active before close is read back instead of being closed", async () => {
+  await unknownApproval(); await click("recover"); const original = readRoutingJournal(props)!;
+  calls.current.mockResolvedValue(head(true)); calls.request.mockResolvedValue({ enabled: true, companyPaused: false, policy: null, binding: null, closure: null,
+    receipt: { id: id(300), requestId: original.requestId, policyId: id(3), action: "approve", generation: 1, createdAt: new Date().toISOString(), executionStarted: false } });
+  await check("confirmCloseExpired"); await click("closeExpired"); expect(calls.closeExpired).not.toHaveBeenCalled(); expect(readRoutingJournal(props)).toBeNull(); expect(host.textContent).toContain(label("approved"));
 });

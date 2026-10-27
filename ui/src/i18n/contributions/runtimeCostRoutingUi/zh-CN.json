@@ -77,5 +77,8 @@
   "bindingState": "绑定状态",
   "boundPolicyInactive": "绑定策略已停用或发生变化。此任务不能切换到其他候选。",
   "bindingUnavailable": "无法读取之前的任务绑定，已重新检查当前策略权限；仍可停用未来路由。",
-  "previousSessionPending": "你之前登录会话的请求尚未确定结果。仅允许回读，不会转移其确认或执行意图。"
+  "previousSessionPending": "你之前登录会话的请求尚未确定结果。仅允许回读，不会转移其确认或执行意图。",
+  "closeExpired": "核实并关闭已过期未生效提案",
+  "confirmCloseExpired": "我仅授权永久关闭此已过期且从未生效的提案；这不会批准策略、取消运行或退回费用。",
+  "closeExpiredBoundary": "请先回读待确认的批准请求。服务端会检查过期状态，拒绝关闭当前生效或曾经获批的提案。原请求仍保持待确认，直到获授权的回读证实其结果。"
 }

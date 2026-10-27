@@ -31,3 +31,22 @@ it("readback rejects another actor's prepared proposal and never replays a write
   const fetch = vi.fn().mockResolvedValue(response({ enabled: true, companyPaused: false, policy: record(), receipt: null, binding: null, closure: null })); vi.stubGlobal("fetch", fetch);
   await expect(client(undefined, "other-owner").request(id(4), { action: "prepare", expectedGeneration: 0 })).rejects.toThrow(); expect(fetch).toHaveBeenCalledTimes(1); expect(fetch.mock.calls[0]![1].method).toBe("GET");
 });
+it.each([false, true])("expiry closure requires a durable proposal marker, marker=%s", async marked => {
+  const fetch = vi.fn().mockResolvedValueOnce(response({ enabled: true, companyPaused: false, policy: null, receipt: null, binding: null,
+    closure: { outcome: "not_applied_closed", requestId: id(9), action: "approve", reason: "approval_expired", currentGeneration: 0 } }))
+    .mockResolvedValueOnce(response({ item: record({ approvalExpiresAt: new Date(Date.now() - 60_000).toISOString(), approvalClosedAt: marked ? new Date().toISOString() : null }), enabled: true, companyPaused: false }));
+  vi.stubGlobal("fetch", fetch); const result = client().request(id(9), { action: "approve", policyId: id(3), expectedGeneration: 0 });
+  if (marked) await expect(result).resolves.toMatchObject({ closure: { reason: "approval_expired" } }); else await expect(result).rejects.toThrow();
+  expect(fetch).toHaveBeenCalledTimes(2); expect(fetch.mock.calls.every(call => call[1].method === "GET")).toBe(true);
+});
+it("close validates the fixed policy/generation target and requires a persisted marker", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response({ item: record(), duplicate: false })));
+  await expect(client().closeExpired(id(3), { expectedGeneration: 0 })).rejects.toThrow();
+});
+it.each(["closed_before_expiry", "expiry_before_creation"])("rejects impossible durable lifecycle chronology: %s", async kind => {
+  const item = record({ approvalClosedAt: new Date().toISOString() });
+  if (kind === "closed_before_expiry") item.approvalClosedAt = new Date(Date.parse(item.approvalExpiresAt) - 1).toISOString();
+  else item.createdAt = item.approvalExpiresAt;
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response({ item, duplicate: false })));
+  await expect(client().closeExpired(id(3), { expectedGeneration: 0 })).rejects.toThrow();
+});

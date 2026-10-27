@@ -9,6 +9,8 @@ export function routingPolicy(): RuntimeRoutingPolicy {
 }
 export function routingRecord(patch: Partial<RuntimeRoutingPolicyRecord> = {}): RuntimeRoutingPolicyRecord {
   const policy = routingPolicy();
+  const expiresAt = patch.approvalExpiresAt ?? new Date(patch.approvalClosedAt ? Date.parse(patch.approvalClosedAt) - 60_000 : Date.now() + 3600_000).toISOString();
+  const createdAt = new Date(Math.min(Date.now(), Date.parse(expiresAt) - 60_000)).toISOString();
   return { id: routingId(3), requestId: routingId(4), companyId: routingId(1), actorUserId: "owner", expectedGeneration: 0, policy,
     candidates: policy.candidates.map((candidate, index) => ({ candidate, evidence: {
       schemaVersion: 2, companyId: routingId(1), actorUserId: "owner", agentId: candidate.agentId, promptId: candidate.promptId,
@@ -21,7 +23,7 @@ export function routingRecord(patch: Partial<RuntimeRoutingPolicyRecord> = {}): 
     }, target: { schemaVersion: 1, adapterType: "claude_local", engine: "cli", slot: "claude_cli_literal_supplement_v1", model: `claude-model-${index}`,
       environmentId: routingId(140 + index), targetDigest: hash("a"), implementationDigest: hash("b"), credentials: [{ secretId: routingId(150 + index), version: 1 }],
       workspacePolicy: "configured_cwd_with_managed_agent_home_v1", scope: "new_projectless_tasks_first_fresh_dispatch", completeContextCaptured: false, ordinaryToolsQualityProven: false,
-    } })), approvalDigest: hash("f"), approvalExpiresAt: new Date(Date.now() + 3600_000).toISOString(), createdAt: now(), executionStarted: false, ...patch };
+    } })), approvalDigest: hash("f"), approvalClosedAt: null, approvalExpiresAt: expiresAt, createdAt, executionStarted: false, ...patch };
 }
 export function routingHead(active = false, patch: Partial<RuntimeRoutingCurrent> = {}): RuntimeRoutingCurrent {
   return { enabled: true, companyPaused: false, generation: active ? 1 : 0, policyId: active ? routingId(3) : null, configuredAt: active ? now() : null, policy: active ? routingRecord() : null, ...patch };

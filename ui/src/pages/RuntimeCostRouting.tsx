@@ -22,13 +22,14 @@ function RoutingSession(scope: Props) {
   const [title, setTitle] = useState(""), [description, setDescription] = useState("");
   const [checks, setChecks] = useState(approvalChecks.map(() => false)), [taskChecked, setTaskChecked] = useState(false);
   const [runChecked, setRunChecked] = useState(false), [disableChecked, setDisableChecked] = useState(false), [retryChecked, setRetryChecked] = useState(false);
+  const [closeChecked, setCloseChecked] = useState(false);
   const [journal, setJournal] = useState<RoutingJournal | null>(null), [reviewed, setReviewed] = useState(false);
   const [busy, setBusy] = useState(false), [notice, setNotice] = useState("");
   const [denied, setDenied] = useState(false), [storageFailed, setStorageFailed] = useState(false);
   const live = useRef(true), epoch = useRef(0), controller = useRef<AbortController | null>(null), lock = useRef(false);
   const pending = useRef<RoutingJournal | null>(null), storageBroken = useRef(false), taskPayload = useRef<CreateRuntimeRoutingTask | null>(null);
   function adopt(value: RoutingJournal | null) { pending.current = value; setJournal(value); }
-  function clearChecks() { setChecks(approvalChecks.map(() => false)); setTaskChecked(false); setRunChecked(false); setDisableChecked(false); setRetryChecked(false); }
+  function clearChecks() { setChecks(approvalChecks.map(() => false)); setTaskChecked(false); setRunChecked(false); setDisableChecked(false); setRetryChecked(false); setCloseChecked(false); }
   function clearPrivate() { setHead(null); setProposal(null); setBinding(null); setDraft(""); setTitle(""); setDescription(""); taskPayload.current = null; clearChecks(); setReviewed(false); }
   function storageError() { storageBroken.current = true; setStorageFailed(true); clearPrivate(); setNotice("storageFailed"); }
   function reject(error: unknown) {
@@ -102,8 +103,34 @@ function RoutingSession(scope: Props) {
     } catch (error) { if (current()) reject(error); }
     finally { if (current()) setBusy(false); }
   }
+  const canCloseExpired = Boolean(journal?.action === "approve" && reviewed && proposal?.id === journal.policyId
+    && proposal.actorUserId === scope.userId && proposal.approvalClosedAt === null && head?.policyId !== proposal.id
+    && head?.generation === journal.payload.expectedGeneration);
+  async function closeExpired() {
+    const value = pending.current;
+    if (!value || value.action !== "approve" || !canCloseExpired || !closeChecked || lock.current || busy || denied || storageBroken.current) return;
+    lock.current = true; const { api, current } = begin(); clearChecks(); setReviewed(false); setProposal(null); setNotice("");
+    try {
+      // This is a new, idempotent close intent (policy ID + generation), never an
+      // old-session approval replay. Preserve that approval's journal verbatim.
+      if (JSON.stringify(readRoutingJournal(value)) !== JSON.stringify(value)) throw Error("routing_journal_changed");
+      const latest = await api.current(); if (!current()) return; setHead(latest);
+      if (latest.policyId !== value.policyId && latest.generation === value.payload.expectedGeneration) {
+        try { await api.closeExpired(value.policyId, { expectedGeneration: value.payload.expectedGeneration }); }
+        catch (error) { if (!current()) return; if (error instanceof ApiError && [401, 403].includes(error.status)) { reject(error); return; } }
+      }
+      if (!current()) return;
+      // Even a lost/rejected POST is followed only by readback. POST success alone
+      // never releases the pending approval or claims to have cancelled a run.
+      const result = await api.request(value.requestId, queryFor(value)); if (!current()) return;
+      if (result.closure) { clearRoutingJournal(value); adopt(null); setNotice("closed"); }
+      else if (result.receipt) { resolved(value, result); const fresh = await api.current(); if (current()) setHead(fresh); }
+      else setNotice("unknown");
+    } catch (error) { if (current()) reject(error); }
+    finally { lock.current = false; if (current()) setBusy(false); }
+  }
   const allowed = Boolean(head?.enabled && !head.companyPaused);
-  const canApprove = Boolean(allowed && proposal && proposal.actorUserId === scope.userId && head?.generation === proposal.expectedGeneration && Date.parse(proposal.approvalExpiresAt) > Date.now());
+  const canApprove = Boolean(allowed && proposal && proposal.actorUserId === scope.userId && proposal.approvalClosedAt === null && head?.generation === proposal.expectedGeneration && Date.parse(proposal.approvalExpiresAt) > Date.now());
   const canCreate = Boolean(allowed && head?.policy?.actorUserId === scope.userId);
   const canRun = Boolean(canCreate && binding?.state === "bound" && binding.policyId === head?.policyId && binding.generation === head.generation);
   function intent(action: RoutingJournal["action"]) {
@@ -203,6 +230,10 @@ function RoutingSession(scope: Props) {
         </fieldset></div>}
       {journal && <div className="space-y-2"><p>{label("unknown")}</p><p className="font-mono break-all">{label("requestId")}: {journal.requestId}</p>
         <Button variant="outline" disabled={busy} onClick={() => void recover()}>{label("recover")}</Button>
+        {journal.action === "approve" && <div className="space-y-2"><p>{label("closeExpiredBoundary")}</p>
+          <fieldset disabled={busy || !canCloseExpired} className="space-y-2">{check("confirmCloseExpired", closeChecked, setCloseChecked)}
+            <Button variant="outline" disabled={!closeChecked} onClick={() => void closeExpired()}>{label("closeExpired")}</Button>
+          </fieldset></div>}
         {journal.sessionId !== scope.sessionId && <p>{label("previousSessionPending")}</p>}
         {journal.action === "create_task" && !taskPayload.current && <p>{label("retryUnavailable")}</p>}
         {reviewed && journal.sessionId === scope.sessionId && <fieldset disabled={busy || (journal.action !== "disable" && !allowed)} className="space-y-2">
