@@ -1,5 +1,5 @@
 import { t, useTranslation } from "@/i18n";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   ChevronLeft,
@@ -305,6 +305,10 @@ function QuestionFormForRequest({
   const [working, setWorking] = useState<"submit" | "cancel" | null>(null);
   const [inputUploading, setInputUploading] = useState(false);
   const [error, setError] = useState<FormError | null>(null);
+  // Layout cleanup invalidates completions before another form can own this key.
+  // A ref also fences multiple events before React commits the busy state.
+  const attempt = useRef<object | null>(null);
+  useLayoutEffect(() => () => { attempt.current = null; }, []);
   const promptRef = useRef<HTMLParagraphElement>(null);
   const previousPage = useRef(page);
 
@@ -405,7 +409,7 @@ function QuestionFormForRequest({
   }
 
   async function submit(responseAnswers: Record<string, Answer> = answers) {
-    if (disabled || working || inputUploading) return;
+    if (disabled || working || inputUploading || attempt.current) return;
     const invalidIndex = questionSet.questions.findIndex(
       (candidate) =>
         answerError(candidate, responseAnswers[candidate.id]) != null,
@@ -421,6 +425,8 @@ function QuestionFormForRequest({
       });
       return;
     }
+    const token = {};
+    attempt.current = token;
     setWorking("submit");
     setError(null);
     try {
@@ -428,29 +434,39 @@ function QuestionFormForRequest({
         schema: "paperclip.question_response.v1",
         answers: structuredClone(responseAnswers),
       });
-      if (draftKey) clearDraft(draftKey);
+      if (attempt.current === token && draftKey) clearDraft(draftKey);
     } catch (cause) {
+      if (attempt.current !== token) return;
       setError(cause instanceof Error
         ? { kind: "raw", message: cause.message }
         : localMessage("submitFailed"));
     } finally {
-      setWorking(null);
+      if (attempt.current === token) {
+        attempt.current = null;
+        setWorking(null);
+      }
     }
   }
 
   async function cancel() {
-    if (!onCancel || disabled || working || inputUploading) return;
+    if (!onCancel || disabled || working || inputUploading || attempt.current) return;
+    const token = {};
+    attempt.current = token;
     setWorking("cancel");
     setError(null);
     try {
       await onCancel();
-      if (draftKey) clearDraft(draftKey);
+      if (attempt.current === token && draftKey) clearDraft(draftKey);
     } catch (cause) {
+      if (attempt.current !== token) return;
       setError(cause instanceof Error
         ? { kind: "raw", message: cause.message }
         : localMessage("cancelFailed"));
     } finally {
-      setWorking(null);
+      if (attempt.current === token) {
+        attempt.current = null;
+        setWorking(null);
+      }
     }
   }
 

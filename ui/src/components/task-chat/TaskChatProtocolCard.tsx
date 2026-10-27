@@ -1,6 +1,6 @@
 import { t as chromeT, useTranslation as useChromeTranslation } from "@/i18n";
 import { localProviderChrome } from "../transcript/local-provider-chrome";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Bot,
@@ -716,21 +716,25 @@ function RuntimeRequestCard({
     item.fields.length > 0
       ? item.fields
       : [{ name: "answer", label: t("taskProtocolRuntimeUi.response"), placeholder: null }];
+  const structured = item.requestType === "input" && Boolean(item.questionSet);
   const [values, setValues] = useState<Record<string, string>>(() =>
-    draftKey ? loadStructuredDraft(draftKey, {}) : {},
+    draftKey && !structured ? loadStructuredDraft(draftKey, {}) : {},
   );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<
     { kind: "raw"; message: string } | { kind: "local"; key: "resolveFailed" } | null
   >(null);
-  useEffect(() => {
-    if (!draftKey) setValues({});
+  const attempt = useRef<object | null>(null);
+  useLayoutEffect(() => {
+    attempt.current = null;
     setSubmitting(false);
     setError(null);
-  }, [draftKey, item.requestId, item.status]);
+    return () => { attempt.current = null; };
+  }, [item.status]);
   useEffect(() => {
-    if (draftKey) saveStructuredDraft(draftKey, values);
-  }, [draftKey, values]);
+    // QuestionForm owns the structured schema; legacy fields must never rewrite it.
+    if (draftKey && !structured) saveStructuredDraft(draftKey, values);
+  }, [draftKey, structured, values]);
 
   if (
     presentation === "timeline" &&
@@ -741,15 +745,24 @@ function RuntimeRequestCard({
     return <RuntimeQuestionReceipt item={item} />;
   }
 
-  const submit = async (decision: TaskChatRuntimeRequestDecision) => {
-    if (!onDecision || item.status !== "pending" || submitting) return;
+  const submit = async (decision: TaskChatRuntimeRequestDecision, propagateToForm = false) => {
+    if (!onDecision || item.status !== "pending" || attempt.current) return;
+    const token = {};
+    attempt.current = token;
     setSubmitting(true);
     setError(null);
     try {
       await onDecision(item, decision);
-      if (draftKey) clearDraft(draftKey);
+      if (attempt.current === token && draftKey && !structured) clearDraft(draftKey);
     } catch (cause) {
-      setSubmitting(false);
+      const current = attempt.current === token;
+      if (current) {
+        attempt.current = null;
+        setSubmitting(false);
+      }
+      // The form must receive the original rejection to retain its draft/error.
+      if (propagateToForm) throw cause;
+      if (!current) return;
       setError(
         cause instanceof Error
           ? { kind: "raw", message: cause.message }
@@ -775,7 +788,7 @@ function RuntimeRequestCard({
         disabled={!onDecision || submitting}
         imageUploadHandler={imageUploadHandler}
         mentions={mentions}
-        onSubmit={(response) => submit({ action: "submit", response })}
+        onSubmit={(response) => submit({ action: "submit", response }, true)}
       />
     );
   }
@@ -800,10 +813,10 @@ function RuntimeRequestCard({
           disabled={!onDecision || submitting}
           imageUploadHandler={imageUploadHandler}
           mentions={mentions}
-          onSubmit={(response) => submit({ action: "submit", response })}
+          onSubmit={(response) => submit({ action: "submit", response }, true)}
           onCancel={
             presentation === "timeline"
-              ? () => submit({ action: "cancel" })
+              ? () => submit({ action: "cancel" }, true)
               : undefined
           }
         />
@@ -1080,6 +1093,7 @@ export function TaskChatProtocolCard({
     case "runtime_request":
       return (
         <RuntimeRequestCard
+          key={JSON.stringify([item.id, item.runId, item.requestId, item.turnId, draftKey])}
           item={item}
           onDecision={onRuntimeRequestDecision}
           presentation={presentation}

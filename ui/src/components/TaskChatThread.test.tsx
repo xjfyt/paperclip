@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import "@/i18n/question-form-test-resources";
 import { i18n, taskProtocolRuntimeMessages } from "@/i18n/task-protocol-runtime-test-resources";
 import { taskThreadResourceMessages } from "@/i18n/task-thread-resource-test-resources";
 import type { IssueAttachment, IssueDocumentSummary } from "@paperclipai/shared";
@@ -14,7 +15,7 @@ import { ThemeProvider } from "@/context/ThemeContext";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TaskChatThread } from "./TaskChatThread";
 import type { IssueChatComposerHandle } from "./IssueChatThread";
-import { loadDraft } from "@/lib/composer-draft";
+import { loadDraft, saveStructuredDraft } from "@/lib/composer-draft";
 import type {
   IssueDocument,
   IssueQueuedCommentQueue,
@@ -23,7 +24,7 @@ import type {
 } from "@paperclipai/shared";
 import { heartbeatsApi } from "@/api/heartbeats";
 import { nativeRunEventsToTranscript } from "./transcript/native-run-events";
-import { pendingConnectionIntentInteraction } from "@/fixtures/issueThreadInteractionFixtures";
+import { pendingConnectionIntentInteraction, pendingAskUserQuestionsInteraction } from "@/fixtures/issueThreadInteractionFixtures";
 import type { HeartbeatRunEvent } from "@paperclipai/shared";
 
 const transcriptState = vi.hoisted(() => ({
@@ -109,7 +110,7 @@ vi.mock("@/components/MarkdownEditor", () => ({
       focus: () => {},
     }));
     editorCallbacks.change = onChange;
-    return <div data-testid="mock-editor">{value}</div>;
+    return <div data-testid="mock-editor" onInput={event => onChange(event.currentTarget.textContent ?? "")}>{value}</div>;
   }),
 }));
 
@@ -4842,5 +4843,51 @@ describe("owned thread resource and pending labels", () => {
     const nextLabel = requestType === "input" ? taskProtocolRuntimeMessages[nextLocale].runtimeInput : taskProtocolRuntimeMessages[nextLocale].runtimePermission;
     expect(container.querySelector(`button[aria-label="${i18n.t("taskComposerUi.dismissInput", { label: nextLabel })}"]`)).not.toBeNull();
     expect(resolve).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("runtime to durable question draft handoff", () => {
+  it.each(["success", "failure"] as const)("keeps the new durable draft after the old runtime finishes with %s", async outcome => {
+    const entry: Extract<TranscriptEntry, { kind: "runtime_request" }> = {
+      kind: "runtime_request", ts: "2026-10-27T00:00:01Z", requestId: "original-request", requestKind: "runtime", turnId: "original-turn", requestType: "input", status: "pending",
+      prompt: "Original runtime prompt", choices: [], fields: [], questionSet: { schema: "paperclip.question_set.v1", submitLabel: "Send original", questions: [
+        { id: "shared", prompt: "Original question", answerMode: "text", required: true, initialText: "Original default" },
+      ] },
+    };
+    nativeTranscriptState.transcriptByRun.set("original-run", [entry]);
+    const draftKey = "paperclip:task-input:original-issue:runtime:original-run:original-request";
+    saveStructuredDraft(draftKey, { page: 0, answers: { shared: { text: "Original runtime answer" } }, customActive: {} });
+    type Result = Awaited<ReturnType<typeof heartbeatsApi.resolveRuntimeRequest>>;
+    let complete!: (result: Result) => void; let fail!: (cause: unknown) => void;
+    const resolve = vi.spyOn(heartbeatsApi, "resolveRuntimeRequest").mockReturnValue(new Promise<Result>((accept, reject) => { complete = accept; fail = reject; }));
+    const onSubmitInteractionAnswers = vi.fn<NonNullable<ComponentProps<typeof TaskChatThread>["onSubmitInteractionAnswers"]>>().mockResolvedValue(undefined);
+    const props: ComponentProps<typeof TaskChatThread> = { comments: [], onAdd: async () => {}, issueId: "original-issue", issueStatus: "in_progress", onSubmitInteractionAnswers, activeRun: {
+      id: "original-run", runtimeMode: "native", status: "running", invocationSource: "issue", triggerDetail: null, startedAt: "2026-10-27T00:00:00Z", finishedAt: null,
+      createdAt: "2026-10-27T00:00:00Z", agentId: "original-agent", agentName: "Original agent", adapterType: "paperclip_runner",
+    } };
+    render(<TaskChatThread {...props} />);
+    const send = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.trim() === "Send original")!;
+    expect(send).toBeDefined();
+    await act(async () => { send.click(); });
+    expect(resolve).toHaveBeenCalledExactlyOnceWith({ runId: "original-run", requestId: entry.requestId, turnId: entry.turnId, requestKind: entry.requestKind,
+      resolution: { action: "submit", response: { schema: "paperclip.question_response.v1", answers: { shared: { text: "Original runtime answer" } } } } });
+    const durable: typeof pendingAskUserQuestionsInteraction = { ...pendingAskUserQuestionsInteraction, id: "original-durable", issueId: "original-issue", sourceRunId: "original-run",
+      createdAt: new Date("2026-10-27T00:00:02Z"), updatedAt: new Date("2026-10-27T00:00:02Z"), payload: { version: 1, runtimeRequestId: entry.requestId,
+        questions: [{ id: "shared", prompt: "Durable question", selectionMode: "single", required: true, options: [{ id: "free-text", label: "Write an answer", freeText: true }] }], questionSet: { schema: "paperclip.question_set.v1", submitLabel: "Send durable", questions: [
+          { id: "shared", prompt: "Durable question", answerMode: "text", required: true },
+        ] } } };
+    render(<TaskChatThread {...props} interactions={[durable]} />);
+    expect(container.querySelector('[data-testid="task-chat-runtime-request"]')).toBeNull();
+    expect(container.textContent).toContain("Durable question");
+    await act(async () => {
+      const editor = container.querySelector('[data-testid="task-chat-composer-takeover"] [data-testid="mock-editor"]')!;
+      editor.textContent = "New durable answer Ω"; editor.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const latestDraft = loadDraft(draftKey); expect(latestDraft).toContain("New durable answer Ω");
+    await act(async () => { if (outcome === "success") complete({ accepted: true, commandId: "original-command" }); else fail(new Error("Old runtime diagnostic")); });
+    expect(loadDraft(draftKey)).toBe(latestDraft);
+    expect(container.textContent).toContain("New durable answer Ω"); expect(container.textContent).not.toContain("Old runtime diagnostic");
+    expect(resolve).toHaveBeenCalledTimes(1); expect(onSubmitInteractionAnswers).not.toHaveBeenCalled();
   });
 });
