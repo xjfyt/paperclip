@@ -21,10 +21,21 @@ export function isRuntimeRoutingAutomaticDispositionRepair(action: Pick<typeof i
 /** Stop automatic repair before creation/scheduling; retire only an old matching
  * automatic action. Human/board recovery decisions and all execution stay intact. */
 export async function suppressRuntimeRoutingAutomaticRecovery(db: Db, companyId: string, issueId: string) {
+  // Ordinary recovery owns its own issue-lock/revalidation protocol. Do not wait
+  // on that lock here and then let its previously captured snapshot run stale.
+  // V2 creates the issue and binding atomically; it never adopts existing tasks,
+  // so a negative nonlocking read cannot race an ordinary-to-controlled adoption.
+  const [candidateIssue] = await db.select({ origin: issues.originKind }).from(issues)
+    .where(and(eq(issues.companyId, companyId), eq(issues.id, issueId))).limit(1);
+  const [candidateBinding] = await db.select({ id: bindings.id }).from(bindings)
+    .where(and(eq(bindings.companyId, companyId), eq(bindings.issueId, issueId))).limit(1);
+  if (!candidateBinding && candidateIssue?.origin !== "runtime_cost_routing") return false;
   return db.transaction(async tx => {
     const [issue] = await tx.select({ origin: issues.originKind }).from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, issueId))).for("share");
     const [binding] = await tx.select({ id: bindings.id, selectedAgentId: bindings.selectedAgentId }).from(bindings).where(and(eq(bindings.companyId, companyId), eq(bindings.issueId, issueId))).for("share");
-    if (!binding && issue?.origin !== "runtime_cost_routing") return false;
+    // Once controlled identity was observed, cleanup/deletion must not turn the
+    // stale caller into a generic recovery fallback. Locks attest cancellation only.
+    if (!binding && issue?.origin !== "runtime_cost_routing") return true;
     if (!binding) return true; // Missing binding still suppresses, but cannot attest an old repair owner.
     const automaticScope = and(eq(issueRecoveryActions.companyId, companyId),
       eq(issueRecoveryActions.sourceIssueId, issueId), inArray(issueRecoveryActions.status, ["active", "escalated"]),
