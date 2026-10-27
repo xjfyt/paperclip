@@ -3759,7 +3759,13 @@
     "previousSessionPending": "Una solicitud de su sesión anterior sigue sin resolverse. Solo puede consultarla; no se transfirieron confirmaciones ni intención de ejecución.",
     "closeExpired": "Verificar y cerrar la propuesta caducada sin aplicar",
     "confirmCloseExpired": "Autorizo únicamente el cierre permanente de esta propuesta caducada y nunca aplicada. No se aprueba una política, cancela una ejecución ni devuelven cargos.",
-    "closeExpiredBoundary": "Primero consulte la aprobación pendiente. El servidor verifica la caducidad y rechaza el cierre de propuestas activas o aprobadas anteriormente. La solicitud original sigue pendiente hasta que una consulta autorizada confirme su resultado."
+    "closeExpiredBoundary": "Primero consulte la aprobación pendiente. El servidor verifica la caducidad y rechaza el cierre de propuestas activas o aprobadas anteriormente. La solicitud original sigue pendiente hasta que una consulta autorizada confirme su resultado.",
+    "bindingBound": "Tarea vinculada",
+    "bindingWakePending": "Solicitud de ejecución registrada",
+    "bindingRunClaimed": "Vinculación de ejecución registrada",
+    "bindingStartRequested": "Solicitud de inicio registrada",
+    "bindingWitnessBoundary": "Estos registros de enrutamiento no indican el estado actual de ejecución de la tarea. No demuestran que el modelo haya consumido la entrada ni completado el trabajo correctamente. Abra la tarea para consultar el progreso, los errores y los resultados.",
+    "openTask": "Abrir tarea y detalles de ejecución"
   },
   "settingsUi": {
     "settings": "Ajustes",
