@@ -5,6 +5,7 @@ import { agents, companies, companyMemberships, principalPermissionGrants, heart
 import { runtimeRoutingBindings } from "@paperclipai/db/schema/runtime_cost_routing";
 import { promptApplicationService } from "../mimouse-prompt-applications/service.js";
 import { issueService } from "../issues.js";
+import { budgetService } from "../budgets.js";
 import { runtimeCostRoutingService } from "./service.js";
 import type { verifyProducedRuntimeRoutingEvidence } from "./evidence-db-cases.js";
 import type { PrivatePromptIdentity } from "../mimouse-private-prompt-tests/service.js";
@@ -79,14 +80,25 @@ export async function verifyRuntimeRoutingDispatch(db: Db, actor: PrivatePromptI
   await expect(service.run(actor, configDrift.binding.id, { ...runRequest, requestId: randomUUID() })).rejects.toThrow();
   await db.update(agents).set({ adapterConfig: agent.adapterConfig }).where(eq(agents.id, agent.id));
   const budget = await service.createTask(actor, { ...task, requestId: randomUUID() }), budgetRequest = { ...runRequest, requestId: randomUUID() };
-  await db.update(agents).set({ budgetMonthlyCents: 1, spentMonthlyCents: 1, spendMonthUtc: new Date().toISOString().slice(0, 7) }).where(eq(agents.id, agent.id));
-  try { await service.run(actor, budget.binding.id, budgetRequest); } catch { /* Core can reject or record a skipped budget admission. */ }
+  // Admission uses budgetPolicies + the actual ledger, not agent dashboard
+  // counters. The selected agent's two real private runs cost 0.25 cents; a
+  // one-cent reservation cannot fit inside a one-cent lifetime limit.
+  const budgets = budgetService(db), budgetScope = { scopeType: "agent" as const, scopeId: agent.id, windowKind: "lifetime" as const };
+  const budgetPolicy = await budgets.upsertPolicy(actor.companyId, { ...budgetScope, amount: 1, reservationCents: 1,
+    hardStopEnabled: true, notifyEnabled: false, unpricedUsagePolicy: "block" }, actor.userId);
+  expect(budgetPolicy).toMatchObject({ observedAmountExact: "0.2500000", isActive: true, paused: false, status: "ok", pendingRunCount: 0, unpricedEventCount: 0 });
+  await service.run(actor, budget.binding.id, budgetRequest);
   await drainHeartbeatRunsToQuiescence(db, heartbeat); expect(ordinaryCalls()).toBe(before + 1);
-  await db.update(agents).set({ budgetMonthlyCents: agent.budgetMonthlyCents, spentMonthlyCents: agent.spentMonthlyCents,
-    spendMonthUtc: agent.spendMonthUtc, status: "idle" }).where(eq(agents.id, agent.id));
-  // A failed/skipped receipt never authorizes an unbound second provider turn.
+  const budgetBound = (await service.binding(actor, budget.binding.id)).binding;
+  expect(budgetBound.runId).not.toBeNull(); expect(budgetBound.state).toBe("run_claimed"); expect(budgetBound.startRequestedAt).toBeNull();
+  const [budgetRun] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, budgetBound.runId!));
+  expect(budgetRun).toMatchObject({ status: "failed", error: "Available budget is reserved by unfinished runs" });
+  await budgets.upsertPolicy(actor.companyId, { ...budgetScope, amount: 0, reservationCents: 0, isActive: false }, actor.userId);
+  // Removing the policy does not turn the fixed failed run into fresh authority.
   const budgetWake = await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.idempotencyKey, `runtime-cost-routing:${budget.binding.id}`));
-  if (budgetWake.length) { try { await service.run(actor, budget.binding.id, budgetRequest); } catch {} await drainHeartbeatRunsToQuiescence(db, heartbeat); expect(ordinaryCalls()).toBe(before + 1); }
+  expect(budgetWake).toHaveLength(1);
+  expect((await service.run(actor, budget.binding.id, budgetRequest)).binding.runId).toBe(budgetBound.runId);
+  await drainHeartbeatRunsToQuiescence(db, heartbeat); expect(ordinaryCalls()).toBe(before + 1);
   await db.update(companies).set({ status: "paused" }).where(eq(companies.id, actor.companyId));
   expect((await service.current(actor)).companyPaused).toBe(true);
   await expect(service.prepare(actor, { ...preparation, requestId: randomUUID(), expectedGeneration: approved.receipt.generation })).rejects.toThrow("private_prompt_active_company_required");
