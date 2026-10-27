@@ -9,6 +9,10 @@ import recoveryEn from "../../i18n/contributions/commentSubmitRecoveryUi/en.json
 import recoveryZh from "../../i18n/contributions/commentSubmitRecoveryUi/zh-CN.json";
 import recoveryEs from "../../i18n/contributions/commentSubmitRecoveryUi/es.json";
 import recoveryJa from "../../i18n/contributions/commentSubmitRecoveryUi/ja.json";
+import taskComposerEn from "../../i18n/contributions/taskComposerUi/en.json";
+import taskComposerZh from "../../i18n/contributions/taskComposerUi/zh-CN.json";
+import taskComposerEs from "../../i18n/contributions/taskComposerUi/es.json";
+import taskComposerJa from "../../i18n/contributions/taskComposerUi/ja.json";
 import { validateLocaleMessages } from "../../i18n/locale-validation";
 import { act, StrictMode, useState, type ReactElement } from "react";
 import { flushSync } from "react-dom";
@@ -35,6 +39,11 @@ import { CommentSubmissionUnknownError } from "../../lib/comment-submit-result";
 const commentSubmitRecoveryMessages = { en: recoveryEn, "zh-CN": recoveryZh, es: recoveryEs, ja: recoveryJa };
 for (const [locale, commentSubmitRecoveryUi] of Object.entries(commentSubmitRecoveryMessages)) {
   i18n.addResourceBundle(locale, "translation", { commentSubmitRecoveryUi }, true, true);
+}
+
+const taskComposerMessages = { en: taskComposerEn, "zh-CN": taskComposerZh, es: taskComposerEs, ja: taskComposerJa };
+for (const [locale, taskComposerUi] of Object.entries(taskComposerMessages)) {
+  i18n.addResourceBundle(locale, "translation", { taskComposerUi }, true, true);
 }
 
 /**
@@ -319,6 +328,209 @@ function autocompleteOption(matchText: string) {
 }
 
 describe("TaskChatComposer", () => {
+  describe("localized composer actions", () => {
+    const messages = taskComposerMessages;
+    const labelButton = (label: string) => [...container.querySelectorAll<HTMLButtonElement>("button")]
+      .find(button => button.textContent?.trim() === label || button.getAttribute("aria-label") === label)!;
+    const nextLanguage = (locale: string) => locale === "ja" ? "es" : "ja";
+
+    it.each(Object.entries(messages))("keeps takeover actions, raw labels, and fallback errors reactive in %s", async (locale, copy) => {
+      expect(validateLocaleMessages(copy, taskComposerEn)).toEqual([]);
+      expect(copy.resumeWithNew).toContain("/new");
+      await i18n.changeLanguage(locale);
+      const onAdd = vi.fn(), onDismiss = vi.fn(), onShowNext = vi.fn();
+      const onSkip = vi.fn().mockRejectedValueOnce({ code: "skip-unavailable" }).mockRejectedValueOnce(new Error("Raw skip error 用户"));
+      const label = "Pending input 用户 label";
+      const takeover = { id: "raw-request-id", label, pendingCount: 2, content: <p>用户 question content</p>, onDismiss, onSkip, onShowNext };
+      render(<TaskChatComposer onAdd={onAdd} workMode="standard" draftKey="localized-takeover" takeover={takeover} />);
+      typeText("Keep **用户 draft** unchanged.");
+      expect(container.textContent).toContain(label);
+      expect(container.textContent).toContain("用户 question content");
+      await act(async () => labelButton(i18n.t("taskComposerUi.pendingCount", { count: 2 })).click());
+      expect(onShowNext).toHaveBeenCalledExactlyOnceWith(expect.anything());
+      await act(async () => labelButton(i18n.t("taskComposerUi.dismissInput", { label })).click());
+      expect(onDismiss).toHaveBeenCalledTimes(1);
+      expect(onSkip).not.toHaveBeenCalled();
+      await act(async () => labelButton(copy.skip).click());
+      await flushAsync();
+      expect(container.querySelector('[role="alert"]')?.textContent).toBe(copy.skipFailed);
+      const next = nextLanguage(locale);
+      await act(async () => { await i18n.changeLanguage(next); });
+      expect(container.querySelector('[role="alert"]')?.textContent).toBe(messages[next].skipFailed);
+      expect(labelButton(i18n.t("taskComposerUi.dismissInput", { label }))).toBeDefined();
+      expect(editable().textContent).toBe("Keep **用户 draft** unchanged.");
+      await act(async () => labelButton(messages[next].skip).click());
+      await flushAsync();
+      expect(container.querySelector('[role="alert"]')?.textContent).toBe("Raw skip error 用户");
+      expect(onSkip).toHaveBeenCalledTimes(2);
+      expect(onAdd).not.toHaveBeenCalled();
+    });
+
+    it.each(Object.entries(messages))("localizes pending/disabled and /new display without changing the command in %s", async (locale, copy) => {
+      await i18n.changeLanguage(locale);
+      const onOpen = vi.fn(), onAdd = vi.fn().mockResolvedValue(undefined);
+      render(<TaskChatComposer onAdd={onAdd} workMode="standard" disabled pendingTakeover={{ count: 1, onOpen }} />);
+      expect(editable().dataset.placeholder).toBe(copy.disabled);
+      const indicator = container.querySelector<HTMLButtonElement>('[data-testid="task-chat-pending-input-indicator"]')!;
+      expect(indicator.textContent).toContain(copy.pendingInput);
+      expect(indicator.textContent).toContain(i18n.t("taskComposerUi.pendingCount", { count: 1 }));
+      await act(async () => indicator.click());
+      expect(onOpen).toHaveBeenCalledTimes(1);
+      render(<TaskChatComposer onAdd={onAdd} workMode="standard" disabled disabledReason="Raw disabled reason 用户" />);
+      expect(editable().dataset.placeholder).toBe("Raw disabled reason 用户");
+      render(<TaskChatComposer key="conversation" onAdd={onAdd} workMode="standard" conversationMode />);
+      typeText("/n"); await placeCaretAtEnd();
+      const newOption = autocompleteOption("/new");
+      expect(newOption.textContent).toContain(copy.newSessionDescription);
+      expect(newOption.textContent).toContain("/new");
+      expect(onAdd).not.toHaveBeenCalled();
+      render(<TaskChatComposer key="paused-conversation" onAdd={onAdd} workMode="standard" conversationMode pause={{ scope: "leaf" }} />);
+      expect(container.textContent).toContain(copy.resumeWithNew);
+      typeText("Ordinary draft 用户");
+      expect(sendButton().disabled).toBe(true);
+      typeText("/new");
+      flushSync(() => editable().dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", metaKey: true, isComposing: true, bubbles: true, cancelable: true })));
+      expect(onAdd).not.toHaveBeenCalled();
+      expect(sendButton().disabled).toBe(false);
+      await act(async () => sendButton().click());
+      expect(onAdd).toHaveBeenCalledExactlyOnceWith("/new", undefined, undefined, undefined, expect.any(String));
+    });
+
+    it.each(Object.entries(messages).flatMap(([locale, copy]) => [false, true].map(mobile => ({ locale, copy, mobile }))))(
+      "retains upload receipts and filenames across language changes ($locale, mobile=$mobile)", async ({ locale, copy, mobile }) => {
+        await i18n.changeLanguage(locale);
+        const onAdd = vi.fn().mockResolvedValue(undefined);
+        let resolveUpload!: (receipt: { id: string; contentPath: string; originalFilename: string }) => void;
+        const onAttachImage = vi.fn().mockReturnValue(new Promise(resolve => { resolveUpload = resolve; }));
+        const draftKey = `localized-receipt:${locale}:${mobile}`;
+        const receiptId = "9af8228f-0be7-45ae-a104-6fbe0af6f1d3";
+        const receiptPath = `/api/attachments/${receiptId}/content`;
+        render(<TaskChatComposer onAdd={onAdd} workMode="standard" mobile={mobile} draftKey={draftKey} onAttachImage={onAttachImage} />);
+        const draft = "Keep **用户 body**.";
+        typeText(draft);
+        const file = new File(["plain"], "用户 draft.txt", { type: "text/plain" });
+        pasteFiles([file]); await flushAsync();
+        expect(container.textContent).toContain(copy.uploading);
+        expect(labelButton(i18n.t("taskComposerUi.removeAttachment", { name: file.name }))).toBeDefined();
+        expect(sendButton().title).toBe(copy.waitForUpload);
+        expect(sendButton().disabled).toBe(true);
+        const next = nextLanguage(locale);
+        await act(async () => { await i18n.changeLanguage(next); });
+        expect(container.textContent).toContain(messages[next].uploading);
+        expect(sendButton().title).toBe(messages[next].waitForUpload);
+        expect(onAttachImage).toHaveBeenCalledExactlyOnceWith(file);
+        expect(onAdd).not.toHaveBeenCalled();
+        await act(async () => resolveUpload({ id: receiptId, originalFilename: "用户 renamed.txt", contentPath: receiptPath }));
+        await flushAsync();
+        expect(container.textContent).toContain("用户 renamed.txt");
+        expect(labelButton(i18n.t("taskComposerUi.removeAttachment", { name: "用户 renamed.txt" }))).toBeDefined();
+        const savedReceipt = localStorage.getItem(`${draftKey}:attachments:v1`);
+        expect(savedReceipt).toContain(receiptId);
+        await act(async () => { await i18n.changeLanguage(locale); });
+        expect(localStorage.getItem(`${draftKey}:attachments:v1`)).toBe(savedReceipt);
+        expect(editable().textContent).toBe(draft);
+        await act(async () => sendButton().click());
+        expect(onAdd).toHaveBeenCalledExactlyOnceWith(`${draft}\n\n[用户 renamed.txt](${receiptPath})`, undefined, undefined, [receiptId], expect.any(String));
+      },
+    );
+
+    it.each(Object.entries(messages))("localizes failed-upload fallbacks but keeps raw errors and remove semantics in %s", async (locale, copy) => {
+      for (const raw of [false, true]) {
+        await i18n.changeLanguage(locale);
+        const onAdd = vi.fn().mockResolvedValue(undefined);
+        const onAttachImage = vi.fn().mockRejectedValue(raw ? new Error("Raw file error 用户") : { code: "unknown" });
+        render(<TaskChatComposer key={String(raw)} onAdd={onAdd} workMode="standard" onAttachImage={onAttachImage} />);
+        typeText("原始正文");
+        pasteFiles([new File(["plain"], "原始文件.txt", { type: "text/plain" })]); await flushAsync();
+        expect(container.textContent).toContain(raw ? "Raw file error 用户" : copy.uploadFailed);
+        expect(sendButton().disabled).toBe(true);
+        expect(sendButton().title).toBe(copy.removeFailedAttachment);
+        const next = nextLanguage(locale);
+        await act(async () => { await i18n.changeLanguage(next); });
+        expect(container.textContent).toContain(raw ? "Raw file error 用户" : messages[next].uploadFailed);
+        expect(sendButton().title).toBe(messages[next].removeFailedAttachment);
+        expect(onAdd).not.toHaveBeenCalled();
+        await act(async () => labelButton(i18n.t("taskComposerUi.removeAttachment", { name: "原始文件.txt" })).click());
+        expect(sendButton().disabled).toBe(false);
+        await act(async () => sendButton().click());
+        expect(onAdd).toHaveBeenCalledExactlyOnceWith("原始正文", undefined, undefined, undefined, expect.any(String));
+      }
+    });
+
+    it.each(Object.entries(messages))("localizes the unsupported-file fallback without uploading in %s", async (locale, copy) => {
+      await i18n.changeLanguage(locale);
+      const onImageUpload = vi.fn(), onAdd = vi.fn();
+      render(<TaskChatComposer onAdd={onAdd} workMode="standard" onImageUpload={onImageUpload} />);
+      pasteFiles([new File(["plain"], "用户 unsupported.txt", { type: "text/plain" })]); await flushAsync();
+      expect(container.textContent).toContain(copy.unsupportedFileType);
+      expect(container.textContent).toContain("用户 unsupported.txt");
+      const next = nextLanguage(locale);
+      await act(async () => { await i18n.changeLanguage(next); });
+      expect(container.textContent).toContain(messages[next].unsupportedFileType);
+      expect(onImageUpload).not.toHaveBeenCalled();
+      expect(onAdd).not.toHaveBeenCalled();
+      expect(sendButton().disabled).toBe(true);
+    });
+
+    it.each(Object.entries(messages))("preserves NewIssueDialog-style creation values and selected files in %s", async locale => {
+      await i18n.changeLanguage(locale);
+      const onSubmit = vi.fn().mockResolvedValue(undefined), onSelectFiles = vi.fn(), onChange = vi.fn();
+      const value = "Create **用户 task**";
+      render(<TaskChatComposer workMode="standard" creation={{ value, onChange, onSubmit, submitLabel: "Create 用户",
+        onSelectFiles, runSettings: null, onRunSettingsChange: vi.fn() }} />);
+      const file = new File(["plain"], "用户 新任务.txt", { type: "text/plain" });
+      pasteFiles([file]); await flushAsync();
+      expect(onSelectFiles).toHaveBeenCalledExactlyOnceWith([file]);
+      expect(onChange).not.toHaveBeenCalled();
+      await act(async () => { await i18n.changeLanguage(nextLanguage(locale)); });
+      expect(editable().textContent).toBe(value);
+      expect(sendButton().getAttribute("aria-label")).toBe("Create 用户");
+      expect(onSubmit).not.toHaveBeenCalled();
+      await act(async () => sendButton().click());
+      expect(onSubmit).toHaveBeenCalledExactlyOnceWith(value, "standard", null);
+    });
+
+    it.each(Object.entries(messages).flatMap(([locale, copy]) => [false, true].map(stale => ({ locale, copy, stale }))))(
+      "keeps queued-edit targets and cancel drafts stable ($locale, stale=$stale)", async ({ locale, copy, stale }) => {
+        await i18n.changeLanguage(locale);
+        const draftKey = `localized-queue:${locale}:${stale}`;
+        localStorage.setItem(draftKey, "Unsent **normal draft** 用户");
+        const onAdd = vi.fn(), onSave = vi.fn().mockResolvedValue(undefined);
+        function Harness() {
+          const [editing, setEditing] = useState(true);
+          return <TaskChatComposer onAdd={onAdd} workMode="standard" draftKey={draftKey}
+            queuedEdit={editing ? { commentId: "raw-queued-id", body: "  queued **Markdown** 用户  ", stale } : null}
+            onSaveQueuedEdit={onSave} onCancelQueuedEdit={() => setEditing(false)} />;
+        }
+        render(<Harness />); await flushAsync();
+        expect(editable().dataset.placeholder).toBe(copy.editQueuedPlaceholder);
+        expect(container.textContent).toContain(stale ? copy.queuedChanged : copy.editingQueued);
+        const label = stale ? copy.queueAsNew : copy.saveQueued;
+        expect(sendButton().title).toBe(label); expect(sendButton().getAttribute("aria-label")).toBe(label);
+        typeText("  replacement **Markdown** 用户  ");
+        flushSync(() => editable().dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", ctrlKey: true, isComposing: true, bubbles: true, cancelable: true })));
+        expect(onSave).not.toHaveBeenCalled();
+        const next = nextLanguage(locale);
+        await act(async () => { await i18n.changeLanguage(next); });
+        expect(editable().textContent).toBe("  replacement **Markdown** 用户  ");
+        expect(editable().dataset.placeholder).toBe(messages[next].editQueuedPlaceholder);
+        expect(sendButton().getAttribute("aria-label")).toBe(stale ? messages[next].queueAsNew : messages[next].saveQueued);
+        expect(localStorage.getItem(draftKey)).toBe("Unsent **normal draft** 用户");
+        await act(async () => labelButton(messages[next].cancelQueuedEdit).click());
+        expect(editable().textContent).toBe("Unsent **normal draft** 用户");
+        expect(localStorage.getItem(draftKey)).toBe("Unsent **normal draft** 用户");
+        expect(onSave).not.toHaveBeenCalled();
+        render(<Harness key="save-again" />); await flushAsync();
+        typeText("  replacement **Markdown** 用户  ");
+        await act(async () => sendButton().click());
+        expect(onSave).toHaveBeenCalledExactlyOnceWith("raw-queued-id", "  replacement **Markdown** 用户  ");
+        expect(onAdd).not.toHaveBeenCalled();
+        expect(editable().textContent).toBe("Unsent **normal draft** 用户");
+        expect(localStorage.getItem(draftKey)).toBe("Unsent **normal draft** 用户");
+      },
+    );
+  });
+
   it.each(Object.entries(composerModelMessages).flatMap(([locale, messages]) => [false, true].map(mobile => ({ locale, messages, mobile }))))(
     "preserves the real composer draft through model picker IME and locale changes ($locale, mobile=$mobile)",
     async ({ locale, messages: m, mobile }) => {

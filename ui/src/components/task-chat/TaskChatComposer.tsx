@@ -308,6 +308,7 @@ type ComposerAttachment = {
   size?: number;
   status: "uploading" | "attached" | "error";
   error?: string;
+  errorKey?: "unsupportedFileType";
   /** Set once uploaded; the submit path appends `[name](contentPath)` lines. */
   contentPath?: string;
 };
@@ -418,7 +419,7 @@ export function TaskChatComposer({
     };
   }, [draftKey]);
   const [takeoverBusy, setTakeoverBusy] = useState(false);
-  const [takeoverError, setTakeoverError] = useState<string | null>(null);
+  const [takeoverError, setTakeoverError] = useState<string | { fallback: true } | null>(null);
   const [takeoverHeaderClaimed, setTakeoverHeaderClaimed] = useState(false);
   const [takeoverHeaderSlot, setTakeoverHeaderSlot] =
     useState<HTMLElement | null>(null);
@@ -631,7 +632,7 @@ export function TaskChatComposer({
   const assigneeName =
     assigneeValue ? reassignOptions?.find((o) => o.id === assigneeValue)?.label ?? null : null;
   const effectivePlaceholder = queuedEdit
-    ? "Edit queued message…"
+    ? mimouseUiT("taskComposerUi.editQueuedPlaceholder")
     : (placeholder ?? composerModePlaceholder(pendingMode, assigneeName, mobile));
   const goalUnavailable = runnerGoalCapability?.availability !== "available";
   const goalCommandOption: ActionCommandOption = {
@@ -706,7 +707,7 @@ export function TaskChatComposer({
             ? {
                 ...item,
                 status: "error",
-                error: err instanceof Error ? err.message : "Upload failed",
+                error: err instanceof Error ? err.message : undefined,
               }
             : item,
         ),
@@ -730,7 +731,7 @@ export function TaskChatComposer({
               ? {
                   ...item,
                   status: "error",
-                  error: "This file type cannot be attached here",
+                  errorKey: "unsupportedFileType",
                 }
               : item,
           ),
@@ -761,7 +762,7 @@ export function TaskChatComposer({
             ? {
                 ...item,
                 status: "error",
-                error: err instanceof Error ? err.message : "Upload failed",
+                error: err instanceof Error ? err.message : undefined,
               }
             : item,
         ),
@@ -1149,7 +1150,7 @@ export function TaskChatComposer({
       setTakeoverError(
         cause instanceof Error
           ? cause.message
-          : "This request could not be skipped.",
+          : { fallback: true },
       );
     });
   }
@@ -1165,7 +1166,7 @@ export function TaskChatComposer({
       {takeoverBusy ? (
         <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
       ) : null}
-      Skip
+      {mimouseUiT("taskComposerUi.skip")}
     </Button>
   ) : null;
 
@@ -1208,12 +1209,12 @@ export function TaskChatComposer({
             <div className="ml-auto flex shrink-0 items-center gap-1">
               {takeover.pendingCount > 1 ? (
                 <Button type="button" size="sm" variant="ghost" className="h-7 px-2" onClick={takeover.onShowNext}>
-                  {takeover.pendingCount} pending
+                  {mimouseUiT("taskComposerUi.pendingCount", { count: takeover.pendingCount })}
                 </Button>
               ) : null}
               <div ref={setTakeoverControlsSlot} className="flex shrink-0 items-center" data-testid="task-chat-composer-takeover-controls-slot" />
               <Button type="button" size="icon-xs" variant="ghost" className="text-muted-foreground hover:text-foreground"
-                aria-label={`Dismiss ${takeover.label}`} disabled={takeoverBusy} onClick={takeover.onDismiss}>
+                aria-label={mimouseUiT("taskComposerUi.dismissInput", { label: takeover.label })} disabled={takeoverBusy} onClick={takeover.onDismiss}>
                 <X aria-hidden />
               </Button>
             </div>
@@ -1232,7 +1233,7 @@ export function TaskChatComposer({
               {takeover.content}
             </TaskChatComposerTakeoverActionsContext.Provider>
           </div>
-          {takeoverError ? <p className="mt-2 text-sm text-destructive" role="alert">{takeoverError}</p> : null}
+          {takeoverError ? <p className="mt-2 text-sm text-destructive" role="alert">{typeof takeoverError === "string" ? takeoverError : mimouseUiT("taskComposerUi.skipFailed")}</p> : null}
           {!takeover.inlineSkip && !takeover.hideSkip ? (
             <div className="mt-3 flex items-center justify-end gap-2">{takeoverSkipButton}</div>
           ) : null}
@@ -1319,17 +1320,17 @@ export function TaskChatComposer({
         >
           <CircleHelp className="h-4 w-4 shrink-0" aria-hidden />
           <span className="min-w-0 flex-1 truncate">
-            {pendingTakeover?.label ?? takeover?.label ?? "Pending input"}
+            {pendingTakeover?.label ?? takeover?.label ?? mimouseUiT("taskComposerUi.pendingInput")}
           </span>
           <span className="shrink-0 font-medium">
-            {pendingTakeover?.count ?? takeover?.pendingCount ?? 1} pending
+            {mimouseUiT("taskComposerUi.pendingCount", { count: pendingTakeover?.count ?? takeover?.pendingCount ?? 1 })}
           </span>
         </button>
       ) : null}
           {pause && conversationMode ? (
             <div className="space-y-2">
               <TaskChatPausedTakeover {...pause} hasDraft={Boolean(body.trim() || attachments.length)} />
-              <p className="text-xs text-muted-foreground">Send /new to start a fresh session and resume this conversation.</p>
+              <p className="text-xs text-muted-foreground">{mimouseUiT("taskComposerUi.resumeWithNew")}</p>
             </div>
           ) : null}
           <div data-testid="task-chat-composer-input">
@@ -1339,14 +1340,14 @@ export function TaskChatComposer({
               onChange={changeBody}
               placeholder={
                 disabled
-                  ? (disabledReason ?? "Composer disabled")
+                  ? (disabledReason ?? mimouseUiT("taskComposerUi.disabled"))
                   : effectivePlaceholder
               }
               readOnly={disabled || !!uncertainSubmission || Boolean(creation && submitting)}
               mentions={mentions}
               actionCommands={creation ? [] : conversationMode ? [{
-                id: "action:new", kind: "action", command: "new", name: "New session",
-                description: "Start fresh context here, preserving conversation history.", aliases: ["new"],
+                id: "action:new", kind: "action", command: "new", name: mimouseUiT("taskComposerUi.newSessionName"),
+                description: mimouseUiT("taskComposerUi.newSessionDescription"), aliases: ["new"],
                 disabled,
               }] : [goalCommandOption]}
               onSubmit={() => void submit()}
@@ -1408,9 +1409,9 @@ export function TaskChatComposer({
                       </AttachmentTitle>
                       <AttachmentDescription className="max-w-48">
                         {attachment.status === "uploading"
-                          ? "Uploading…"
+                          ? mimouseUiT("taskComposerUi.uploading")
                           : attachment.status === "error"
-                            ? (attachment.error ?? "Upload failed")
+                            ? (attachment.error ?? mimouseUiT(attachment.errorKey === "unsupportedFileType" ? "taskComposerUi.unsupportedFileType" : "taskComposerUi.uploadFailed"))
                             : [kind.label, sizeLabel]
                                 .filter(Boolean)
                                 .join(" · ")}
@@ -1418,7 +1419,7 @@ export function TaskChatComposer({
                     </AttachmentContent>
                     <AttachmentActions>
                       <AttachmentAction
-                        aria-label={`Remove ${attachment.name}`}
+                        aria-label={mimouseUiT("taskComposerUi.removeAttachment", { name: attachment.name })}
                         disabled={!!uncertainSubmission}
                         onClick={() =>
                           setAttachments((prev) =>
@@ -1462,8 +1463,8 @@ export function TaskChatComposer({
             {queuedEdit ? (
               <span className="px-1 text-xs font-medium text-muted-foreground">
                 {queuedEdit.stale
-                  ? "Queued message changed"
-                  : "Editing queued message"}
+                  ? mimouseUiT("taskComposerUi.queuedChanged")
+                  : mimouseUiT("taskComposerUi.editingQueued")}
               </span>
             ) : (
               <ComposerModeChip mode={pendingMode} onRemove={onWorkModeChange ? () => changeMode("standard") : undefined}
@@ -1552,7 +1553,7 @@ export function TaskChatComposer({
                 disabled={submitting}
                 className="h-8 shrink-0 rounded-md px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
               >
-                Cancel
+                {mimouseUiT("taskComposerUi.cancelQueuedEdit")}
               </button>
             ) : null}
             <button
@@ -1577,12 +1578,12 @@ export function TaskChatComposer({
                     : systemLabel("Stop response")
                   : queuedEdit
                     ? queuedEdit.stale
-                      ? "Queue as new message"
-                      : "Save queued message"
+                      ? mimouseUiT("taskComposerUi.queueAsNew")
+                      : mimouseUiT("taskComposerUi.saveQueued")
                     : uploadPending
-                      ? "Waiting for upload to finish"
+                      ? mimouseUiT("taskComposerUi.waitForUpload")
                       : uploadFailed
-                        ? "Remove the failed attachment to send"
+                        ? mimouseUiT("taskComposerUi.removeFailedAttachment")
                         : creation ? `${creation.submitLabel} (⌘+Enter)` : systemLabel("Send (⌘+Enter)")
               }
               aria-label={
@@ -1592,8 +1593,8 @@ export function TaskChatComposer({
                     : systemLabel("Stop")
                   : queuedEdit
                     ? queuedEdit.stale
-                      ? "Queue as new message"
-                      : "Save queued message"
+                      ? mimouseUiT("taskComposerUi.queueAsNew")
+                      : mimouseUiT("taskComposerUi.saveQueued")
                     : creation?.submitLabel ?? systemLabel("Send")
               }
               aria-busy={submitting}
