@@ -36,10 +36,11 @@ export function parseApplicationReceipt(raw: unknown): PromptApplicationReceipt 
   return { id: uuid(r.id), requestId: uuid(r.requestId), applicationId: uuid(r.applicationId), agentId: uuid(r.agentId), action: r.action as PromptApplicationReceipt["action"], generation: integer(r.generation, 1), createdAt: date(r.createdAt), executionStarted: literal(r.executionStarted, false) };
 }
 function dispatch(raw: unknown): PromptApplicationDispatchReceipt {
-  const r = applicationKeys(raw, ["id", "applicationId", "agentId", "runId", "issueId", "generation", "state", "configuredAt", "preparedAt", "dispatchedAt", "promptHash", "effectiveContextHash", "providerConsumed"]);
+  const r = applicationKeys(raw, ["id", "applicationId", "agentId", "runId", "issueId", "generation", "state", "configuredAt", "preparedAt", "dispatchedAt", "promptHash", "effectiveContextHash", "providerConsumed", "inputDisposition"]);
   if (r.state !== "prepared" && r.state !== "dispatched") fail();
-  const row: PromptApplicationDispatchReceipt = { id: uuid(r.id), applicationId: uuid(r.applicationId), agentId: uuid(r.agentId), runId: uuid(r.runId), issueId: uuid(r.issueId), generation: integer(r.generation, 1), state: r.state as PromptApplicationDispatchReceipt["state"], configuredAt: date(r.configuredAt), preparedAt: date(r.preparedAt), dispatchedAt: nullable(r.dispatchedAt, date), promptHash: nullable(r.promptHash, privateHash), effectiveContextHash: privateHash(r.effectiveContextHash), providerConsumed: literal(r.providerConsumed, false) };
-  if (row.state === "dispatched" && (!row.dispatchedAt || !row.promptHash)) fail();
+  if (r.inputDisposition !== "unconfirmed" && r.inputDisposition !== "not_applied_before_input") fail();
+  const row: PromptApplicationDispatchReceipt = { id: uuid(r.id), applicationId: uuid(r.applicationId), agentId: uuid(r.agentId), runId: uuid(r.runId), issueId: uuid(r.issueId), generation: integer(r.generation, 1), state: r.state as PromptApplicationDispatchReceipt["state"], configuredAt: date(r.configuredAt), preparedAt: date(r.preparedAt), dispatchedAt: nullable(r.dispatchedAt, date), promptHash: nullable(r.promptHash, privateHash), effectiveContextHash: privateHash(r.effectiveContextHash), providerConsumed: literal(r.providerConsumed, false), inputDisposition: r.inputDisposition };
+  if (row.state === "dispatched" && (!row.dispatchedAt || !row.promptHash || row.inputDisposition === "not_applied_before_input")) fail();
   return row;
 }
 export type PromptApplicationRecoveryTarget = { action: "approve" | "rollback"; applicationId: string; agentId: string; expectedGeneration: number };

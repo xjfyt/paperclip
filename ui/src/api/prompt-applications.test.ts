@@ -73,3 +73,12 @@ it("queries an uncertain mutation with the frozen target and only accepts a matc
   reply({ enabled: true, application: null, receipt: receipt(), closure }); await expect(make().request(id(7), id(25), expected)).rejects.toThrow();
   reply({ enabled: true, application: null, receipt: null, closure: { ...closure, currentGeneration: 0, reason: "approval_expired" } }); expect((await make().request(id(7), id(25), expected)).closure?.reason).toBe("approval_expired");
 });
+it("requires a recognized input disposition and rejects no-input proof on a dispatched receipt", async () => {
+  const prepared = dispatch({ state: "prepared", dispatchedAt: null, promptHash: null, inputDisposition: "not_applied_before_input" });
+  reply({ items: [prepared], nextBeforeId: null }); expect((await make().dispatches(id(7), id(20))).items[0].inputDisposition).toBe("not_applied_before_input");
+  const missing = { ...prepared } as Record<string, unknown>; delete missing.inputDisposition;
+  for (const row of [missing, { ...prepared, inputDisposition: "stopped" }, { ...prepared, inputDisposition: null }, dispatch({ inputDisposition: "not_applied_before_input" })]) {
+    reply({ items: [row], nextBeforeId: null }); await expect(make().dispatches(id(7), id(20))).rejects.toThrow();
+  }
+  reply({ items: [dispatch()], nextBeforeId: null }); expect((await make().dispatches(id(7), id(20))).items[0].inputDisposition).toBe("unconfirmed");
+});

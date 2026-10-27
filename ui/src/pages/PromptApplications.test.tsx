@@ -145,3 +145,14 @@ it("only a matching server closure releases an uncertain approval; an ordinary r
   calls.request.mockResolvedValueOnce({ enabled: true, application: null, receipt: null, closure: { ...closure, agentId: id(99) } }); await click("recover"); expect(readApplicationJournal(id(1), "user")).not.toBeNull();
   calls.request.mockResolvedValueOnce({ enabled: true, application: null, receipt: null, closure }); await click("recover"); expect(readApplicationJournal(id(1), "user")).toBeNull(); expect(host.textContent).toContain(label("notAppliedClosed")); expect(calls.approve).toHaveBeenCalledTimes(2);
 });
+it("shows the separate stdin disposition in four languages without claiming logs are private or runs stopped", async () => {
+  calls.list.mockResolvedValue({ enabled: true, items: [record()], nextBeforeId: null });
+  calls.dispatches.mockResolvedValue({ items: [dispatch(), dispatch({ id: id(29), state: "prepared", dispatchedAt: null, promptHash: null, inputDisposition: "not_applied_before_input" })], nextBeforeId: null });
+  await mount(); await selectHistory(); await click("dispatches");
+  for (const locale of ["en", "zh-CN", "es", "ja"]) {
+    await act(async () => { await i18n.changeLanguage(locale); });
+    for (const key of ["inputDisposition", "inputUnconfirmed", "inputNotApplied", "inputDispositionBoundary"]) expect(host.textContent).toContain(label(key));
+    expect(host.textContent).not.toContain("promptApplicationsUi.");
+  }
+  expect(calls.dispatches).toHaveBeenCalledTimes(1); expect(calls.rollback).not.toHaveBeenCalled();
+});

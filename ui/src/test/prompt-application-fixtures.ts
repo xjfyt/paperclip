@@ -11,5 +11,5 @@ export function applicationReceipt(patch: Partial<PromptApplicationReceipt> = {}
   return { id: id(24), requestId: id(25), applicationId: id(20), agentId: id(9), action: "configure", generation: 1, createdAt: "2026-10-26T12:01:00.000Z", executionStarted: false, ...patch };
 }
 export function applicationDispatch(patch: Partial<PromptApplicationDispatchReceipt> = {}): PromptApplicationDispatchReceipt {
-  return { id: id(26), applicationId: id(20), agentId: id(9), runId: id(27), issueId: id(28), generation: 1, state: "dispatched", configuredAt: "2026-10-26T12:01:00.000Z", preparedAt: "2026-10-26T12:02:00.000Z", dispatchedAt: "2026-10-26T12:03:00.000Z", promptHash: "c".repeat(64), effectiveContextHash: "d".repeat(64), providerConsumed: false, ...patch };
+  return { id: id(26), applicationId: id(20), agentId: id(9), runId: id(27), issueId: id(28), generation: 1, state: "dispatched", configuredAt: "2026-10-26T12:01:00.000Z", preparedAt: "2026-10-26T12:02:00.000Z", dispatchedAt: "2026-10-26T12:03:00.000Z", promptHash: "c".repeat(64), effectiveContextHash: "d".repeat(64), providerConsumed: false, inputDisposition: "unconfirmed", ...patch };
 }

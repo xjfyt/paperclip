@@ -212,8 +212,8 @@ function ApplicationSession(props: Props) {
         <Button variant="outline" disabled={locked} onClick={() => void readDispatches()}>{label("dispatches")}</Button>
       </div>}
       {receipt && <p className="break-all">{label(receipt.action === "configure" ? "configuredReceipt" : "rollbackReceipt")}: <span className="font-mono">{receipt.id} · {formatNumber(receipt.generation)}</span></p>}
-      <p className="text-sm text-muted-foreground">{label("dispatchBoundary")}</p>
-      <ul>{dispatches.map(value => <li key={value.id} className="font-mono break-all">{label(value.state === "prepared" ? "dispatchPrepared" : "dispatched")}: {value.runId} · {value.issueId}<br />{label("effectiveContextHash")}: {value.effectiveContextHash}<br />{label("promptHash")}: {value.promptHash ?? "—"}</li>)}</ul>
+      <p className="text-sm text-muted-foreground">{label("dispatchBoundary")}</p><p className="text-sm text-muted-foreground">{label("inputDispositionBoundary")}</p>
+      <ul>{dispatches.map(value => <li key={value.id} className="font-mono break-all">{label(value.state === "prepared" ? "dispatchPrepared" : "dispatched")}: {value.runId} · {value.issueId}<br />{label("effectiveContextHash")}: {value.effectiveContextHash}<br />{label("promptHash")}: {value.promptHash ?? "—"}<br />{label("inputDisposition")}: {label(value.inputDisposition === "not_applied_before_input" ? "inputNotApplied" : "inputUnconfirmed")}</li>)}</ul>
       {dispatchNext && <Button variant="outline" disabled={locked} onClick={() => void readDispatches(true)}>{label("moreDispatches")}</Button>}
       {journal && <div className="space-y-2"><p>{label("unknown")}</p><p className="font-mono break-all">{journal.requestId} · {journal.agentId} · {formatNumber(journal.expectedGeneration)}</p><Button variant="outline" disabled={busy || storageFailed} onClick={() => void recover()}>{label("recover")}</Button>
         {journal.applicationId && !retryReviewed && <Button variant="outline" disabled={busy || storageFailed} onClick={() => void inspectRetry()}>{label("reviewRetry")}</Button>}
