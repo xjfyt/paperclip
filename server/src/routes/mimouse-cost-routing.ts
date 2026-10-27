@@ -26,6 +26,7 @@ export function mimouseCostRoutingRoutes(db: Db) {
     res.json(await safe(() => service.request(actor, requestId, query))); });
   router.post(`${root}/prepare`, async (req, res) => { const actor = human(req); const result = await safe(() => service.prepare(actor, req.body)); res.status(result.duplicate ? 200 : 201).json(result); });
   router.post(`${root}/policies/:id/approve`, async (req, res) => { const actor = human(req), id = uuid.parse(req.params.id); res.json(await safe(() => service.approve(actor, id, req.body))); });
+  router.post(`${root}/policies/:id/close-expired`, async (req, res) => { const actor = human(req), id = uuid.parse(req.params.id); res.json(await safe(() => service.closeExpired(actor, id, req.body))); });
   router.post(`${root}/disable`, async (req, res) => { const actor = human(req); res.json(await safe(() => service.disable(actor, req.body))); });
   router.post(`${root}/tasks`, async (req, res) => { const actor = human(req); const result = await safe(() => service.createTask(actor, req.body)); res.status(result.duplicate ? 200 : 201).json(result); });
   router.post(`${root}/bindings/:id/run`, async (req, res) => { const actor = human(req), id = uuid.parse(req.params.id); res.json(await safe(() => service.run(actor, id, req.body))); });

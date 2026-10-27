@@ -27,10 +27,13 @@ export async function verifyRuntimeRoutingDispatch(db: Db, actor: PrivatePromptI
     datasetHash: produced[0].evidence.datasetHash, minimumPassRate: 1, maxEvidenceAgeHours: 24, candidates }, approvalValidForMinutes: 60 };
   const proposal = await service.prepare(actor, preparation);
   expect((await service.prepare(actor, preparation)).item.id).toBe(proposal.item.id);
+  const { verifyRuntimeRoutingExpiredClosure } = await import("./closure-db-cases.js");
+  await verifyRuntimeRoutingExpiredClosure(db, actor, proposal.item.id);
   const approval = { requestId: randomUUID(), expectedGeneration: 0, approvalDigest: proposal.item.approvalDigest,
     confirmBareTextProxy: true, confirmHistoricalCostNotQuote: true, confirmNewTasksOnly: true, confirmNoAutomaticRun: true };
   const approved = await service.approve(actor, proposal.item.id, approval);
   expect((await service.approve(actor, proposal.item.id, approval)).receipt.id).toBe(approved.receipt.id);
+  await expect(service.closeExpired(actor, proposal.item.id, { expectedGeneration: 0 })).rejects.toThrow("runtime_routing_approved_policy_cannot_close");
   expect(ordinaryCalls()).toBe(before); expect(await db.select().from(agentWakeupRequests)).toEqual(wakeBefore);
   expect(await db.execute(sql`select count(*) as n from cost_events`)).toEqual(costsBefore);
   const task = { requestId: randomUUID(), expectedGeneration: approved.receipt.generation, title: "Bound routing inert task", description: "Return the controlled prompt as inert text.", confirmOrdinaryTaskVisibility: true };
@@ -82,6 +85,7 @@ export async function verifyRuntimeRoutingDispatch(db: Db, actor: PrivatePromptI
   await expect(service.prepare(actor, { ...preparation, requestId: randomUUID(), expectedGeneration: approved.receipt.generation })).rejects.toThrow("private_prompt_active_company_required");
   const disabled = await service.disable(actor, { requestId: randomUUID(), expectedGeneration: approved.receipt.generation });
   expect(disabled.receipt.action).toBe("disable"); await db.update(companies).set({ status: "active" }).where(eq(companies.id, actor.companyId));
+  await expect(service.closeExpired(actor, proposal.item.id, { expectedGeneration: 0 })).rejects.toThrow("runtime_routing_approved_policy_cannot_close");
   await expect(service.run(actor, revoked.binding.id, { ...runRequest, requestId: randomUUID() })).rejects.toThrow("runtime_routing_binding_or_task_changed");
   expect(ordinaryCalls()).toBe(before + 1);
   expect((await db.select().from(runtimeRoutingBindings).where(eq(runtimeRoutingBindings.id, bound.id)))[0].runId).toBe(run.id);

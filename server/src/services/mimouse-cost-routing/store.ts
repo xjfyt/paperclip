@@ -15,7 +15,7 @@ export async function routingMetadata(tx: PrivatePromptTx, actor: PrivatePromptI
 }
 export const policyRecord = (row: RuntimeRoutingPolicyRow): RuntimeRoutingPolicyRecord => ({ id: row.id, requestId: row.requestId,
   companyId: row.companyId, actorUserId: row.actorUserId, expectedGeneration: row.expectedGeneration, policy: row.policy,
-  candidates: row.candidates, approvalDigest: row.approvalDigest, approvalExpiresAt: row.approvalExpiresAt.toISOString(),
+  candidates: row.candidates, approvalDigest: row.approvalDigest, approvalExpiresAt: row.approvalExpiresAt.toISOString(), approvalClosedAt: row.approvalClosedAt?.toISOString() ?? null,
   createdAt: row.createdAt.toISOString(), executionStarted: false });
 export const bindingRecord = (row: RuntimeRoutingBindingRow): RuntimeRoutingBinding => ({ id: row.id, requestId: row.requestId,
   companyId: row.companyId, issueId: row.issueId, policyId: row.policyId, generation: row.generation, selectedAgentId: row.selectedAgentId,
@@ -45,8 +45,9 @@ export function assertRequestAvailable(prior: Awaited<ReturnType<typeof routingR
 export function assertRequestDigest(row: { requestDigest: string; actorUserId: string }, actor: PrivatePromptIdentity, digest: string) {
   if (row.requestDigest !== digest || row.actorUserId !== actor.userId) throw conflict("runtime_routing_request_conflict");
 }
-export async function getRuntimeRoutingPolicy(tx: PrivatePromptTx, actor: PrivatePromptIdentity, id: string) {
-  const [row] = await tx.select().from(policies).where(and(eq(policies.companyId, actor.companyId), eq(policies.id, id), eq(policies.actorUserId, actor.userId)));
+export async function getRuntimeRoutingPolicy(tx: PrivatePromptTx, actor: PrivatePromptIdentity, id: string, lock = false) {
+  const query = tx.select().from(policies).where(and(eq(policies.companyId, actor.companyId), eq(policies.id, id), eq(policies.actorUserId, actor.userId)));
+  const [row] = await (lock ? query.for("update") : query);
   if (!row) throw notFound("runtime_routing_policy_not_found"); return row;
 }
 export async function assertRuntimeRoutingBindingRead(tx: PrivatePromptTx, actor: PrivatePromptIdentity, row: RuntimeRoutingBindingRow) {

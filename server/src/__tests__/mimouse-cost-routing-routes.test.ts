@@ -4,7 +4,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import type { Db } from "@paperclipai/db";
 import { mimouseCostRoutingRoutes } from "../routes/mimouse-cost-routing.js";
 import { HttpError } from "../errors.js";
-const calls = vi.hoisted(() => ({ current: vi.fn(), prepare: vi.fn(), approve: vi.fn(), disable: vi.fn(), createTask: vi.fn(), run: vi.fn(), request: vi.fn(), binding: vi.fn(), detail: vi.fn(), wake: vi.fn() }));
+const calls = vi.hoisted(() => ({ current: vi.fn(), prepare: vi.fn(), approve: vi.fn(), closeExpired: vi.fn(), disable: vi.fn(), createTask: vi.fn(), run: vi.fn(), request: vi.fn(), binding: vi.fn(), detail: vi.fn(), wake: vi.fn() }));
 vi.mock("../services/mimouse-cost-routing/service.js", () => ({ runtimeCostRoutingService: () => calls }));
 vi.mock("../services/heartbeat.js", () => ({ heartbeatService: () => ({ wakeup: calls.wake }) }));
 const companyId = "22222222-2222-4222-8222-222222222222", id = "33333333-3333-4333-8333-333333333333";
@@ -29,8 +29,15 @@ it("propagates current session into every request and sets no-store", async () =
 });
 it("metadata prepare/approve/disable/create routes never call wake directly", async () => {
   calls.prepare.mockResolvedValue({ duplicate: false, item: { id } }); calls.createTask.mockResolvedValue({ duplicate: false, binding: { id } });
-  for (const path of ["prepare", `policies/${id}/approve`, "disable", "tasks"]) expect((await request(app(owner)).post(`${root}/${path}`).send({ requestId: id })).status).toBeLessThan(300);
+  for (const path of ["prepare", `policies/${id}/approve`, `policies/${id}/close-expired`, "disable", "tasks"]) expect((await request(app(owner)).post(`${root}/${path}`).send({ requestId: id })).status).toBeLessThan(300);
   expect(calls.wake).not.toHaveBeenCalled(); expect(calls.run).not.toHaveBeenCalled();
+});
+it("explicit expired closure carries only fresh session identity and proposal generation", async () => {
+  calls.closeExpired.mockResolvedValue({ item: { id, approvalClosedAt: "2026-10-27T00:00:00Z" }, duplicate: false });
+  const response = await request(app(owner)).post(`${root}/policies/${id}/close-expired`).send({ expectedGeneration: 0 });
+  expect(response.status).toBe(200); expect(response.headers["cache-control"]).toBe("no-store");
+  expect(calls.closeExpired).toHaveBeenCalledWith({ companyId, userId: "owner", sessionId: "session" }, id, { expectedGeneration: 0 });
+  expect(calls.wake).not.toHaveBeenCalled(); expect(calls.approve).not.toHaveBeenCalled();
 });
 it("only the explicit binding run route asks the service to execute", async () => {
   await request(app(owner)).post(`${root}/bindings/${id}/run`).send({ requestId: id, confirmExecution: true, confirmPossibleCharges: true });

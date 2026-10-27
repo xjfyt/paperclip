@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { companies, type Db } from "@paperclipai/db";
 import { runtimeRoutingBindings as bindings, runtimeRoutingHeads as heads, runtimeRoutingPolicies as policies, runtimeRoutingReceipts as receipts } from "@paperclipai/db/schema/runtime_cost_routing";
-import { approveRuntimeRoutingPolicySchema, prepareRuntimeRoutingPolicySchema, disableRuntimeRoutingPolicySchema,
+import { approveRuntimeRoutingPolicySchema, prepareRuntimeRoutingPolicySchema, disableRuntimeRoutingPolicySchema, closeExpiredRuntimeRoutingPolicySchema,
   createRuntimeRoutingTaskSchema, runRuntimeRoutingTaskSchema, type RuntimeRoutingRequestQuery, type RuntimeRoutingRequestResult } from "@paperclipai/shared/runtime-cost-routing";
 import { conflict, forbidden } from "../../errors.js";
 import { applicationDigest } from "../mimouse-prompt-applications/target.js";
@@ -55,8 +55,12 @@ export function runtimeCostRoutingService(db: Db, wake?: (agentId: string, optio
           const bound = await getRuntimeRoutingBinding(tx, actor, query.bindingId!);
           if (bound.dispatchRequestId) reason = "binding_already_claimed";
         } else if (generation > query.expectedGeneration!) reason = "generation_advanced";
-        // Expiry alone is not a durable request tombstone. Until a persisted
-        // closure exists, an absent receipt remains UNKNOWN (never replayed).
+        else if (query.action === "approve") {
+          const policy = await getRuntimeRoutingPolicy(tx, actor, query.policyId!);
+          if (policy.expectedGeneration === query.expectedGeneration && policy.approvalClosedAt) reason = "approval_expired";
+        }
+        // Wall-clock expiry alone remains UNKNOWN. Only the monotone marker
+        // written by explicit closeExpired proves this approval can never apply.
         if (reason) result.closure = { outcome: "not_applied_closed", requestId, action: query.action, reason, currentGeneration: generation };
         return result;
       });
@@ -88,8 +92,8 @@ export function runtimeCostRoutingService(db: Db, wake?: (agentId: string, optio
         await authorizePrivatePrompt(tx, actor); await lockRuntimeRoutingRequest(tx, actor.companyId, input.requestId);
         const prior = await routingRequest(tx, actor, input.requestId);
         if (prior.receipt) { assertRequestDigest(prior.receipt, actor, digest); return { receipt: receiptRecord(prior.receipt), duplicate: true }; }
-        assertRequestAvailable(prior); requireRuntimeCostRoutingEnabled(); const head = await lockRuntimeRoutingHead(tx, actor.companyId), row = await getRuntimeRoutingPolicy(tx, actor, id);
-        if (head.generation !== input.expectedGeneration || row.expectedGeneration !== input.expectedGeneration || row.approvalDigest !== input.approvalDigest || row.approvalExpiresAt <= await runtimeRoutingClock(tx)) throw conflict("runtime_routing_approval_changed_or_expired");
+        assertRequestAvailable(prior); requireRuntimeCostRoutingEnabled(); const head = await lockRuntimeRoutingHead(tx, actor.companyId), row = await getRuntimeRoutingPolicy(tx, actor, id, true);
+        if (head.generation !== input.expectedGeneration || row.expectedGeneration !== input.expectedGeneration || row.approvalDigest !== input.approvalDigest || row.approvalClosedAt || row.approvalExpiresAt <= await runtimeRoutingClock(tx)) throw conflict("runtime_routing_approval_changed_or_expired");
         assertRuntimeRoutingSnapshots(row.candidates, await snapshotRuntimeRoutingPool(tx, actor, row.policy));
         await assertRuntimeRoutingSession(tx, actor);
         const createdAt = await runtimeRoutingClock(tx);
@@ -99,6 +103,28 @@ export function runtimeCostRoutingService(db: Db, wake?: (agentId: string, optio
         await tx.update(heads).set({ policyId: row.id, generation: receipt.generation, configuredAt: createdAt }).where(eq(heads.companyId, actor.companyId));
         await routingAudit(tx, actor, "approved", row.id, { generation: receipt.generation, executionStarted: false, ordinaryToolsQualityProven: false, futureCostQuoted: false });
         return { receipt: receiptRecord(receipt), duplicate: false };
+      });
+    },
+    async closeExpired(actor: PrivatePromptIdentity, id: string, raw: unknown) {
+      const input = closeExpiredRuntimeRoutingPolicySchema.parse(raw);
+      return db.transaction(async tx => {
+        // Like disable, cleanup is available while paused or feature-OFF. It
+        // grants no run authority, changes no head, and requires fresh live auth.
+        await routingMetadata(tx, actor);
+        const head = await lockRuntimeRoutingHead(tx, actor.companyId), row = await getRuntimeRoutingPolicy(tx, actor, id, true);
+        if (row.expectedGeneration !== input.expectedGeneration) throw conflict("runtime_routing_generation_changed");
+        await assertRuntimeRoutingSession(tx, actor);
+        if (row.approvalClosedAt) return { item: policyRecord(row), duplicate: true };
+        const [approved] = await tx.select({ id: receipts.id }).from(receipts).where(and(eq(receipts.companyId, actor.companyId), eq(receipts.policyId, row.id), eq(receipts.action, "approve")));
+        if (approved || head.policyId === row.id) throw conflict("runtime_routing_approved_policy_cannot_close");
+        if (head.generation !== input.expectedGeneration) throw conflict("runtime_routing_generation_changed");
+        await assertRuntimeRoutingSession(tx, actor);
+        const approvalClosedAt = await runtimeRoutingClock(tx);
+        if (row.approvalExpiresAt > approvalClosedAt) throw conflict("runtime_routing_approval_not_expired");
+        const [closed] = await tx.update(policies).set({ approvalClosedAt }).where(eq(policies.id, row.id)).returning();
+        await routingAudit(tx, actor, "approval_closed_expired", row.id, { expectedGeneration: row.expectedGeneration,
+          approvalClosedAt: approvalClosedAt.toISOString(), executionStarted: false, pastEffectsReverted: false, providerStopConfirmed: false });
+        return { item: policyRecord(closed), duplicate: false };
       });
     },
     async disable(actor: PrivatePromptIdentity, raw: unknown) {
