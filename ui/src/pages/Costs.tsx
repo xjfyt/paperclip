@@ -12,6 +12,7 @@ import { AgentIdentity } from "@/components/AgentIdentity";
 import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
+  BillingType,
   BudgetPolicySummary,
   CostByAgentModel,
   CostByBiller,
@@ -38,15 +39,38 @@ import { ProviderQuotaCard } from "../components/ProviderQuotaCard";
 import { StatusBadge } from "../components/StatusBadge";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
 import { useCompany } from "../context/CompanyContext";
-import { useDateRange, PRESET_KEYS, PRESET_LABELS } from "../hooks/useDateRange";
+import { useDateRange, PRESET_KEYS, type DatePreset } from "../hooks/useDateRange";
 import { retainQuotaWindows } from "../lib/quota-refresh";
 import { queryKeys } from "../lib/queryKeys";
-import { billingTypeDisplayName, cn, formatCents, formatTokens, providerDisplayName } from "../lib/utils";
+import { cn, formatCents, formatTokens, providerDisplayName } from "../lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const NO_COMPANY = "__none__";
+const PRESET_LABEL_KEYS = {
+  mtd: "costDateRangeUi.monthToDate",
+  "7d": "costDateRangeUi.sevenDays",
+  "30d": "costDateRangeUi.thirtyDays",
+  ytd: "costDateRangeUi.yearToDate",
+  all: "costDateRangeUi.allTime",
+  custom: "costDateRangeUi.custom",
+} satisfies Record<DatePreset, string>;
+
+const BILLING_TYPE_KEYS = {
+  metered_api: "providerQuotaUi.billingMetered",
+  subscription_included: "providerQuotaUi.subscription",
+  subscription_overage: "providerQuotaUi.billingOverage",
+  credits: "providerQuotaUi.billingCredits",
+  fixed: "providerQuotaUi.billingFixed",
+  unknown: "subscriptionOps.unknown",
+} satisfies Record<BillingType, string>;
+
+function billingTypeLabel(billingType: BillingType): string {
+  return Object.hasOwn(BILLING_TYPE_KEYS, billingType)
+    ? mimouseT(BILLING_TYPE_KEYS[billingType])
+    : billingType;
+}
 export type CostsMainTab = "overview" | "budgets" | "providers" | "billers" | "finance" | "decisions" | "fast-responses";
 
 export interface CostsProps {
@@ -619,7 +643,7 @@ export function Costs({
                   onClick={() => setPreset(key)}
                   aria-pressed={preset === key}
                 >
-                  {PRESET_LABELS[key]}
+                  {mimouseT(PRESET_LABEL_KEYS[key])}
                 </Button>
               ))}
             </div>
@@ -804,7 +828,7 @@ export function Costs({
                                             <span className="font-mono">{modelRow.model}</span>
                                           </div>
                                           <div className="truncate text-muted-foreground">
-                                            {providerDisplayName(modelRow.biller)} · {billingTypeDisplayName(modelRow.billingType)}
+                                            {providerDisplayName(modelRow.biller)} · {billingTypeLabel(modelRow.billingType)}
                                           </div>
                                         </div>
                                         <div className="text-right tabular-nums">

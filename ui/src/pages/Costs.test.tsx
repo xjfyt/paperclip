@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import "../i18n/provider-quota-test-resources";
+import "../i18n/cost-date-range-test-resources";
 
 import { i18n } from "../i18n/management-test-resources";
 import { agentTaskQuotaMessages } from "../i18n/agent-task-quota-test-resources";
@@ -95,8 +95,111 @@ describe("Shared Costs surfaces", () => {
     act(() => root?.unmount());
     container.remove();
     vi.clearAllMocks();
+    vi.useRealTimers();
     await i18n.changeLanguage("en");
   });
+
+  const dateAndBillingCopy = {
+    en: {
+      presets: ["Month to Date", "7 Days", "30 Days", "Year to Date", "All Time", "Custom"],
+      billing: ["Metered API", "Subscription", "Subscription overage", "Credits", "Fixed", "Unknown"],
+    },
+    "zh-CN": {
+      presets: ["本月至今", "最近 7 天", "最近 30 天", "今年至今", "全部时间", "自定义"],
+      billing: ["按量计费 API", "订阅", "订阅超额用量", "额度", "固定费用", "未知"],
+    },
+    es: {
+      presets: ["Mes hasta la fecha", "7 días", "30 días", "Año hasta la fecha", "Todo el período", "Personalizado"],
+      billing: ["API de pago por uso", "Suscripción", "Exceso de suscripción", "Créditos", "Fijo", "Desconocido"],
+    },
+    ja: {
+      presets: ["今月の累計", "過去 7 日間", "過去 30 日間", "今年の累計", "全期間", "カスタム"],
+      billing: ["従量課金 API", "サブスクリプション", "サブスクリプション超過分", "クレジット", "固定料金", "不明"],
+    },
+  };
+
+  it.each(surfaces.flatMap(([surface, props]) => Object.entries(dateAndBillingCopy).map(([locale, copy]) => ({ surface, props, locale, copy }))))(
+    "localizes date presets and each expanded billing type on $surface in $locale without changing report scope", async ({ props, locale, copy }) => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date("2026-10-27T12:34:00.000Z"));
+      await i18n.changeLanguage(locale);
+      for (const mock of Object.values(costsApiMocks)) mock.mockResolvedValue([]);
+      costsApiMocks.byUser.mockResolvedValue({ activeUserCount: 1, rows: [] });
+      costsApiMocks.summary.mockResolvedValue({ spendCents: 800, budgetCents: 0, pricingComplete: true });
+      costsApiMocks.financeSummary.mockResolvedValue({ netCents: 0, debitCents: 0, creditCents: 0, estimatedDebitCents: 0, eventCount: 0 });
+      const usage = { costCents: 100, inputTokens: 1234, cachedInputTokens: 56, outputTokens: 10, apiRunCount: 1, subscriptionRunCount: 0, eventCount: 1, estimatedEventCount: 0 };
+      const billingTypes = ["metered_api", "subscription_included", "subscription_overage", "credits", "fixed", "unknown", "future-billing 用户", "constructor"];
+      const models = billingTypes.map((billingType, index) => ({ ...usage, agentId: "raw-agent", provider: "raw-provider", biller: "Vendor 用户", billingType, model: `raw-model-${index}` }));
+      const snapshot = JSON.stringify(models);
+      costsApiMocks.byAgent.mockResolvedValue([{ ...usage, costCents: 800, agentId: "raw-agent", agentName: "用户 Cost Agent" }]);
+      costsApiMocks.byAgentModel.mockResolvedValue(models);
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      root = createRoot(container);
+      await act(async () => root.render(<MemoryRouter><QueryClientProvider client={client}><Costs {...props} /></QueryClientProvider></MemoryRouter>));
+      const card = () => container.querySelector<HTMLElement>(`[aria-label="${i18n.t("costOps.agentCosts", { name: "用户 Cost Agent" })}"]`)!;
+      await act(async () => { await vi.waitFor(() => expect(card()).not.toBeNull()); });
+      await act(async () => card().querySelector<HTMLElement>(".cursor-pointer")!.click());
+      const presetButtons = () => [...container.querySelectorAll<HTMLButtonElement>("button[aria-pressed]")];
+      const assertCopy = (expected: typeof copy) => {
+        expect(presetButtons().map(button => button.textContent)).toEqual(expected.presets);
+        const rows = [...card().querySelectorAll<HTMLElement>(".border-l > div")];
+        expect(rows).toHaveLength(8);
+        rows.forEach((row, index) => {
+          expect(row.querySelector(".min-w-0 > div:last-child")?.textContent).toBe(`Vendor 用户 · ${expected.billing[index] ?? billingTypes[index]}`);
+          expect(row.textContent).toContain(`raw-provider/raw-model-${index}`);
+          expect(row.textContent).toContain(formatCents(100));
+          expect(row.textContent).toContain("13%");
+          expect(row.textContent).toContain(formatTokens(1300));
+        });
+        expect(container.textContent).not.toMatch(/costDateRangeUi\.|providerQuotaUi\./);
+      };
+      assertCopy(copy);
+      expect(costsApiMocks.byAgentModel).toHaveBeenLastCalledWith("company-1", "2026-10-01T00:00:00.000Z", "2026-10-27T12:34:00.000Z");
+      // waitFor advances Vitest's fake Date; reset the instant before changing range.
+      vi.setSystemTime(new Date("2026-10-27T12:34:00.000Z"));
+      await act(async () => presetButtons()[1].click());
+      const sevenDaysFrom = new Date(2026, 9, 20, 0, 0, 0, 0).toISOString();
+      await act(async () => { await vi.waitFor(() => expect(costsApiMocks.byAgentModel).toHaveBeenLastCalledWith("company-1", sevenDaysFrom, "2026-10-27T12:34:00.000Z")); });
+      await act(async () => { await vi.waitFor(() => expect(card()).not.toBeNull()); });
+      // Range changes intentionally collapse model details; language changes must not.
+      expect(card().querySelector(".border-l")).toBeNull();
+      await act(async () => card().querySelector<HTMLElement>(".cursor-pointer")!.click());
+      const requests = () => Object.fromEntries(Object.entries(costsApiMocks).map(([name, mock]) => [name, mock.mock.calls.map(args => [...args])]));
+      const beforeLanguageChange = requests();
+      const next = locale === "ja" ? "es" : "ja";
+      await act(async () => { await i18n.changeLanguage(next); });
+      assertCopy(dateAndBillingCopy[next]);
+      expect(presetButtons()[1].getAttribute("aria-pressed")).toBe("true");
+      expect(requests()).toEqual(beforeLanguageChange);
+      await act(async () => presetButtons()[4].click());
+      await act(async () => { await vi.waitFor(() => expect(costsApiMocks.byAgentModel).toHaveBeenLastCalledWith("company-1", undefined, undefined)); });
+      await act(async () => presetButtons()[5].click());
+      const beforeCustomReady = requests();
+      const inputs = [...container.querySelectorAll<HTMLInputElement>('input[type="date"]')];
+      const setDate = async (input: HTMLInputElement, value: string) => {
+        await act(async () => {
+          Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+      };
+      await setDate(inputs[0], "2026-09-02");
+      expect(requests()).toEqual(beforeCustomReady);
+      await setDate(inputs[1], "2026-09-05");
+      await act(async () => { await vi.waitFor(() => expect(costsApiMocks.byAgentModel).toHaveBeenLastCalledWith("company-1", new Date("2026-09-02T00:00:00").toISOString(), new Date("2026-09-05T23:59:59.999").toISOString())); });
+      await act(async () => { await vi.waitFor(() => expect(card()).not.toBeNull()); });
+      expect(card().querySelector(".border-l")).toBeNull();
+      await act(async () => card().querySelector<HTMLElement>(".cursor-pointer")!.click());
+      const customRequests = requests();
+      await act(async () => { await i18n.changeLanguage(locale); });
+      expect([...container.querySelectorAll<HTMLInputElement>('input[type="date"]')].map(input => input.value)).toEqual(["2026-09-02", "2026-09-05"]);
+      expect(presetButtons()[5].getAttribute("aria-pressed")).toBe("true");
+      assertCopy(copy);
+      expect(requests()).toEqual(customRequests);
+      expect(JSON.stringify(models)).toBe(snapshot);
+      expect(subscriptionsMocks.refresh).not.toHaveBeenCalled();
+      client.clear();
+    },
+  );
 
   it.each(Object.entries(agentTaskQuotaMessages))("localizes the actual account quota path in %s while keeping account identity, refresh behavior, and diagnostics private", async (locale, copy) => {
     await i18n.changeLanguage(locale);
