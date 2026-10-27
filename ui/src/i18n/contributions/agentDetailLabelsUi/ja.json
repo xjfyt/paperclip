@@ -1,0 +1,13 @@
+{
+  "workspaceCreated": "この実行で作成",
+  "workspaceReused": "既存のワークスペースを再利用",
+  "invalidReportingChain": "{{name}} は報告系統が修復されるまで、タスクを受け付けたり実行を開始したりできません。",
+  "avatar": "{{name}} のアバター",
+  "pauseWarning": "{{feature}} はこのエージェントに依存しています。一時停止中は {{featureLower}} の生成がスキップされ、{{feature}} ページに警告が表示されます。",
+  "builtInWarning": "Paperclip に同梱され、<0>{{feature}}</0> を支えます。他のエージェントと同様に、モデル、指示、予算を設定できます。一時停止はできますが、削除はできません。一時停止すると {{feature}} も停止します。",
+  "revisionChanged": "変更：{{changes}}",
+  "revisionUnchanged": "変更：記録された変更はありません",
+  "tokenCount": "{{tokens}} トークン",
+  "noResponsiblePerson": "担当者なし",
+  "signal": "（シグナル：{{signal}}）"
+}

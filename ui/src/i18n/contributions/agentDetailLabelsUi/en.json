@@ -1,0 +1,13 @@
+{
+  "workspaceCreated": "Created by this run",
+  "workspaceReused": "Reused existing workspace",
+  "invalidReportingChain": "{{name}} cannot accept tasks or start runs until its reporting chain is repaired.",
+  "avatar": "{{name}} avatar",
+  "pauseWarning": "{{feature}} depends on this agent. While paused, {{featureLower}} generation is skipped and the {{feature}} page shows a warning.",
+  "builtInWarning": "Ships with Paperclip and powers <0>{{feature}}</0>. Configure it like any agent — model, instructions, budget. It can be paused but not deleted; pausing it pauses {{feature}}.",
+  "revisionChanged": "Changed: {{changes}}",
+  "revisionUnchanged": "Changed: no tracked changes",
+  "tokenCount": "{{tokens}} tok",
+  "noResponsiblePerson": "No responsible person",
+  "signal": "(signal: {{signal}})"
+}

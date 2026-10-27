@@ -1,0 +1,13 @@
+{
+  "workspaceCreated": "由本次运行创建",
+  "workspaceReused": "复用现有工作区",
+  "invalidReportingChain": "{{name}} 的汇报链修复前，无法接收任务或启动运行。",
+  "avatar": "{{name}} 的头像",
+  "pauseWarning": "{{feature}} 依赖此 Agent。暂停期间，将跳过 {{featureLower}} 生成，且 {{feature}} 页面会显示警告。",
+  "builtInWarning": "随 Paperclip 提供，为 <0>{{feature}}</0> 提供支持。可像其他 Agent 一样配置模型、指令和预算。此 Agent 可以暂停，但不能删除；暂停它也会暂停 {{feature}}。",
+  "revisionChanged": "变更：{{changes}}",
+  "revisionUnchanged": "变更：没有已记录的变更",
+  "tokenCount": "{{tokens}} 词元",
+  "noResponsiblePerson": "无负责人",
+  "signal": "（信号：{{signal}}）"
+}

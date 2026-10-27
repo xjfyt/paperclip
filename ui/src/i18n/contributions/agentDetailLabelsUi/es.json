@@ -1,0 +1,13 @@
+{
+  "workspaceCreated": "Creado por esta ejecución",
+  "workspaceReused": "Se reutilizó el espacio de trabajo existente",
+  "invalidReportingChain": "{{name}} no puede aceptar tareas ni iniciar ejecuciones hasta que se repare su cadena jerárquica.",
+  "avatar": "Avatar de {{name}}",
+  "pauseWarning": "{{feature}} depende de este agente. Mientras esté pausado, se omite la generación de {{featureLower}} y la página de {{feature}} muestra una advertencia.",
+  "builtInWarning": "Se incluye con Paperclip y permite el funcionamiento de <0>{{feature}}</0>. Configúralo como cualquier agente: modelo, instrucciones y presupuesto. Se puede pausar, pero no eliminar; al pausarlo también se pausa {{feature}}.",
+  "revisionChanged": "Cambios: {{changes}}",
+  "revisionUnchanged": "Cambios: no hay cambios registrados",
+  "tokenCount": "{{tokens}} tokens",
+  "noResponsiblePerson": "Sin responsable",
+  "signal": "(señal: {{signal}})"
+}

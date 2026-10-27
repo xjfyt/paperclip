@@ -1,3 +1,4 @@
+import { Trans } from "react-i18next";
 import { describeManagementError, managementErrorText, ManagementUiError, renderManagementError, type ManagementErrorDescriptor } from "@/i18n/management-errors";
 import { CapabilityEvidenceLedger } from "@/components/CapabilityEvidenceLedger";
 import { MimouseAdapterCapabilities } from "@/components/MimouseAdapterCapabilities";
@@ -733,12 +734,12 @@ function WorkspaceOperationsSection({
               )}
               {typeof metadata?.created === "boolean" && (
                 <div className="text-xs text-muted-foreground">
-                  {metadata.created ? "Created by this run" : "Reused existing workspace"}
+                  {metadata.created ? mimouseT("agentDetailLabelsUi.workspaceCreated") : mimouseT("agentDetailLabelsUi.workspaceReused")}
                 </div>
               )}
               {operation.stderrExcerpt && operation.stderrExcerpt.trim() && (
                 <div>
-                  <div className="mb-1 text-xs text-red-700 dark:text-red-300">stderr excerpt</div>
+                  <div className="mb-1 text-xs text-red-700 dark:text-red-300">{mimouseT("agentSessionControlsUi.stderrExcerpt")}</div>
                   <pre className="rounded-md bg-red-50 p-2 text-xs whitespace-pre-wrap break-all text-red-800 dark:bg-neutral-950 dark:text-red-100">
                     {redactPathText(operation.stderrExcerpt, censorUsernameInLogs)}
                   </pre>
@@ -746,7 +747,7 @@ function WorkspaceOperationsSection({
               )}
               {operation.stdoutExcerpt && operation.stdoutExcerpt.trim() && (
                 <div>
-                  <div className="mb-1 text-xs text-muted-foreground">stdout excerpt</div>
+                  <div className="mb-1 text-xs text-muted-foreground">{mimouseT("agentSessionControlsUi.stdoutExcerpt")}</div>
                   <pre className="rounded-md bg-neutral-100 p-2 text-xs whitespace-pre-wrap break-all dark:bg-neutral-950">
                     {redactPathText(operation.stdoutExcerpt, censorUsernameInLogs)}
                   </pre>
@@ -1239,7 +1240,7 @@ export function AgentDetail() {
           <div className="min-w-0 space-y-1">
             <p className="font-medium">{mimouseT("workflow.invalidReportingChain")}</p>
             <p className="text-amber-900/90 dark:text-amber-100/90">
-              {agent.name} cannot accept tasks or start runs until its reporting chain is repaired.
+              {mimouseT("agentDetailLabelsUi.invalidReportingChain", { name: agent.name })}
             </p>
             <p className="break-words font-mono text-xs text-amber-900/80 dark:text-amber-100/80">
               {formatOrgChainHealthPath(agent)}
@@ -1255,7 +1256,7 @@ export function AgentDetail() {
       {/* Header */}
       <header className="flex flex-wrap items-center justify-between gap-5 border-b border-border pb-6">
         <div className="flex min-w-0 items-center gap-4">
-          <div role="img" aria-label={`${agent.name} avatar`} className="shrink-0">
+          <div role="img" aria-label={mimouseT("agentDetailLabelsUi.avatar", { name: agent.name })} className="shrink-0">
             <AgentCharacter agent={agent} state={characterStateForAgent(currentAgent.status)} size={96} trackingScope="page" />
           </div>
           <div className="min-w-0 space-y-1">
@@ -1302,13 +1303,10 @@ export function AgentDetail() {
               builtInState
                 ? {
                     title: `Pause the ${builtInState.definition.displayName}?`,
-                    description: (
-                      <>
-                        {builtInFeatureLabel} depends on this agent. While paused,{" "}
-                        {builtInFeatureLabel.toLowerCase()} generation is skipped and the{" "}
-                        {builtInFeatureLabel} page shows a warning.
-                      </>
-                    ),
+                    description: mimouseT("agentDetailLabelsUi.pauseWarning", {
+                      feature: builtInFeatureLabel,
+                      featureLower: builtInFeatureLabel.toLowerCase(),
+                    }),
                   }
                 : undefined
             }
@@ -1344,9 +1342,11 @@ export function AgentDetail() {
             </Button>
           }
         >
-          Ships with Paperclip and powers <strong>{builtInFeatureLabel}</strong>. Configure it like
-          any agent — model, instructions, budget. It can be paused but not deleted; pausing it
-          pauses {builtInFeatureLabel}.
+          <Trans
+            i18nKey="agentDetailLabelsUi.builtInWarning"
+            values={{ feature: builtInFeatureLabel }}
+            components={[<strong />]}
+          />
         </InlineBanner>
       )}
 
@@ -1938,7 +1938,7 @@ export function AgentRevisionsTab({
     <div className="max-w-3xl space-y-3">
       <div className="flex items-baseline justify-between gap-3">
         <h3 className="text-sm font-medium">{mimouseT("workflow.configRevisions")}</h3>
-        <span className="text-xs text-muted-foreground">{configRevisions?.length ?? 0} total</span>
+        <span className="text-xs text-muted-foreground">{mimouseT("routineHistoryUi.total", { count: configRevisions?.length ?? 0 })}</span>
       </div>
       {(configRevisions ?? []).length === 0 ? (
         <p className="text-sm text-muted-foreground">{mimouseT("workflow.noRevisions")}</p>
@@ -1961,7 +1961,9 @@ export function AgentRevisionsTab({
                   disabled={rollbackConfig.isPending}
                 >{mimouseT("commonUi.restore")}</Button>
               </div>
-              <p className="text-xs text-muted-foreground">{mimouseT("workflow.changed")}{revision.changedKeys.length > 0 ? revision.changedKeys.join(", ") : "no tracked changes"}
+              <p className="text-xs text-muted-foreground">{revision.changedKeys.length > 0
+                ? mimouseT("agentDetailLabelsUi.revisionChanged", { changes: revision.changedKeys.join(", ") })
+                : mimouseT("agentDetailLabelsUi.revisionUnchanged")}
               </p>
             </div>
           ))}
@@ -3224,6 +3226,7 @@ function PromptEditorSkeleton() {
 /* ---- Runs Tab ---- */
 
 function RunListItem({ run, isSelected, agentId }: { run: HeartbeatRun; isSelected: boolean; agentId: string }) {
+  useMimouseTranslation();
   const statusInfo = runStatusIcons[run.status] ?? { icon: Clock, color: "text-neutral-400" };
   const StatusIcon = statusInfo.icon;
   const metrics = runMetrics(run);
@@ -3266,7 +3269,7 @@ function RunListItem({ run, isSelected, agentId }: { run: HeartbeatRun; isSelect
       )}
       {(metrics.totalTokens > 0 || metrics.cost > 0) && (
         <div className="flex items-center gap-2 pl-5.5 text-(length:--text-micro) text-muted-foreground tabular-nums">
-          {metrics.totalTokens > 0 && <span>{formatTokens(metrics.totalTokens)} tok</span>}
+          {metrics.totalTokens > 0 && <span>{mimouseT("agentDetailLabelsUi.tokenCount", { tokens: formatTokens(metrics.totalTokens) })}</span>}
           {metrics.cost > 0 && <span>${metrics.cost.toFixed(3)}</span>}
         </div>
       )}
@@ -3695,7 +3698,7 @@ export function RunDetail({ run: initialRun, agentRouteId, adapterType, adapterC
                     const person = userDirectory?.users.find((entry) => entry.principalId === identity.responsibleUserId);
                     return (
                       <li key={identity.id}>
-                        <span className="text-foreground">{person?.user?.name ?? person?.user?.email ?? identity.responsibleUserId ?? "No responsible person"}</span>
+                        <span className="text-foreground">{person?.user?.name ?? person?.user?.email ?? identity.responsibleUserId ?? mimouseT("agentDetailLabelsUi.noResponsiblePerson")}</span>
                         {" · "}{identity.cause}{" · "}{identity.status}
                         {identity.github ? (
                           <span className="block">
@@ -3797,7 +3800,7 @@ export function RunDetail({ run: initialRun, agentRouteId, adapterType, adapterC
             )}
             {hasNonZeroExit && (
               <div className="text-xs text-red-600 dark:text-red-400">{mimouseT("workflow.exitCode")}{run.exitCode}
-                {run.signal && <span className="text-muted-foreground ml-1">(signal: {run.signal})</span>}
+                {run.signal && <span className="text-muted-foreground ml-1">{mimouseT("agentDetailLabelsUi.signal", { signal: run.signal })}</span>}
               </div>
             )}
             <RunRetryDetails run={run} agentRouteId={agentRouteId} />
