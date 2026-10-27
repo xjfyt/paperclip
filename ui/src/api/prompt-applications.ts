@@ -4,7 +4,7 @@ import { privateObject, privateString, privateUuid, privateHash } from "./privat
 import { requestResponse } from "./client";
 import { readApiJson } from "./response";
 const uuid = (raw: unknown) => privateUuid(raw).toLowerCase();
-const fail = () => { throw Error("prompt_application_response_invalid"); };
+function fail(): never { throw Error("prompt_application_response_invalid"); }
 const literal = <T,>(raw: unknown, value: T): T => raw === value ? value : fail();
 const bool = (raw: unknown) => typeof raw === "boolean" ? raw : fail();
 const integer = (raw: unknown, min = 0) => typeof raw === "number" && Number.isSafeInteger(raw) && raw >= min ? raw : fail();
