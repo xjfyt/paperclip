@@ -1,0 +1,16 @@
+{
+  "planSteps": "計画の手順",
+  "delegatedAgents": "委任されたエージェント",
+  "researchSources": "調査の情報源",
+  "details": "詳細",
+  "outputTruncated": "出力は 8 KiB に切り詰められました。",
+  "preview": "プレビュー",
+  "previewUnavailable": "プレビューを利用できません。検証済みのワークスペース参照は上に引き続き表示されています。",
+  "previewTruncated": "プレビューはランナーによって切り詰められました。",
+  "runResult": "実行結果",
+  "blockedReason": "ブロック中: {{reason}}",
+  "verificationResults": "検証結果",
+  "blocksCompletion": " · 完了を妨げています",
+  "runEnded": "実行が終了しました",
+  "permissionDecision": "権限 {{decision}}"
+}

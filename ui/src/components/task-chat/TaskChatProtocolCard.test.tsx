@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import "@/i18n/task-protocol-inspector-test-resources";
 import "@/i18n/question-form-test-resources";
 import "@/i18n/task-protocol-runtime-test-resources";
 import "@/i18n/task-protocol-workspace-test-resources";

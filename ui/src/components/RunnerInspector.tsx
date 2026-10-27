@@ -601,7 +601,7 @@ function typedPrpFields(event: HeartbeatRunEvent) {
   ].filter(([, value]) => Boolean(value));
 }
 
-function ProductionSurfacePreview({ event, runId }: { event: HeartbeatRunEvent; runId: string }) {
+export function ProductionSurfacePreview({ event, runId }: { event: HeartbeatRunEvent; runId: string }) {
   const prp = eventPrp(event);
   const ts = new Date(event.createdAt).toISOString();
   const entries = parsePaperclipRunnerStdoutLine(

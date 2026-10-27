@@ -235,9 +235,10 @@ function CardShell({
 }
 
 function PlanSteps({ steps }: { steps: TaskChatProtocolStep[] }) {
+  useChromeTranslation();
   if (steps.length === 0) return null;
   return (
-    <ol className="flex flex-col gap-1.5" aria-label="Plan steps">
+    <ol className="flex flex-col gap-1.5" aria-label={chromeT("taskProtocolInspectorUi.planSteps")}>
       {steps.map((step) => (
         <li key={step.id} className="flex items-start gap-2 text-sm">
           <StatusIcon status={step.status} className="mt-0.5 shrink-0" />
@@ -279,7 +280,7 @@ function ProviderActivityCard({
     >
       {item.steps.length > 0 ? <PlanSteps steps={item.steps} /> : null}
       {item.children.length > 0 ? (
-        <ul className="flex flex-col gap-2" aria-label="Delegated agents">
+        <ul className="flex flex-col gap-2" aria-label={chromeT("taskProtocolInspectorUi.delegatedAgents")}>
           {item.children.map((child) => (
             <li
               key={child.id}
@@ -312,7 +313,7 @@ function ProviderActivityCard({
         </ul>
       ) : null}
       {item.links.length > 0 ? (
-        <ul className="flex flex-col gap-2" aria-label="Research sources">
+        <ul className="flex flex-col gap-2" aria-label={chromeT("taskProtocolInspectorUi.researchSources")}>
           {item.links.map((link) => (
             <li key={link.href}>
               <a
@@ -343,7 +344,7 @@ function ProviderActivityCard({
           )}
         >
           <summary className="flex cursor-pointer list-none items-center gap-1 text-xs font-medium text-muted-foreground">
-            <ChevronDown aria-hidden className="h-3.5 w-3.5" /> Details
+            <ChevronDown aria-hidden className="h-3.5 w-3.5" /> {chromeT("taskProtocolInspectorUi.details")}
           </summary>
           {item.details.length > 0 ? (
             <dl className="mt-2 flex min-w-0 flex-col gap-1.5 text-xs">
@@ -372,7 +373,7 @@ function ProviderActivityCard({
           ) : null}
           {item.outputTruncated ? (
             <p className="mt-1 text-xs text-muted-foreground">
-              Output truncated to 8 KiB.
+              {chromeT("taskProtocolInspectorUi.outputTruncated")}
             </p>
           ) : null}
         </details>
@@ -515,6 +516,7 @@ function WorkspaceChangeCard({ item }: { item: TaskChatWorkspaceChangeItem }) {
 }
 
 function WorkspaceFileCard({ item }: { item: TaskChatWorkspaceFileItem }) {
+  useChromeTranslation();
   const [open, setOpen] = useState(false);
   const extension = item.displayName.includes(".")
     ? item.displayName.split(".").at(-1)?.toUpperCase()
@@ -554,7 +556,7 @@ function WorkspaceFileCard({ item }: { item: TaskChatWorkspaceFileItem }) {
             variant="outline"
             onClick={() => setOpen(true)}
           >
-            Preview
+            {chromeT("taskProtocolInspectorUi.preview")}
           </Button>
         </div>
       </CardShell>
@@ -566,8 +568,7 @@ function WorkspaceFileCard({ item }: { item: TaskChatWorkspaceFileItem }) {
           <p className="font-mono text-xs text-muted-foreground">{item.path}</p>
           {item.preview == null ? (
             <p className="rounded-sm bg-muted/50 p-3 text-sm text-muted-foreground">
-              Preview unavailable. The verified workspace reference is still
-              available above.
+              {chromeT("taskProtocolInspectorUi.previewUnavailable")}
             </p>
           ) : item.presentation === "document" ? (
             <div className="max-h-(--sz-70vh) overflow-auto rounded-sm bg-muted/30 p-3">
@@ -588,7 +589,7 @@ function WorkspaceFileCard({ item }: { item: TaskChatWorkspaceFileItem }) {
           )}
           {item.previewTruncated ? (
             <p className="text-xs text-muted-foreground">
-              Preview truncated by the runner.
+              {chromeT("taskProtocolInspectorUi.previewTruncated")}
             </p>
           ) : null}
         </DialogContent>
@@ -943,6 +944,7 @@ function ResultCard({
 }: {
   item: Extract<TaskChatProtocolItem, { surface: "run_result" }>;
 }) {
+  useChromeTranslation();
   const hasDetails =
     item.verification.length > 0 ||
     item.remainingWork.length > 0 ||
@@ -951,7 +953,7 @@ function ResultCard({
   return (
     <CardShell
       icon={PackageCheck}
-      title="Run result"
+      title={chromeT("taskProtocolInspectorUi.runResult")}
       status={item.disposition}
       summary={item.summary}
       testId="task-chat-run-result"
@@ -960,7 +962,7 @@ function ResultCard({
         <div className="flex flex-col gap-3 text-sm">
           {item.blocker ? (
             <div className="rounded-sm bg-muted/50 p-2">
-              <strong>Blocked: {item.blocker.reasonCode}</strong>
+              <strong>{chromeT("taskProtocolInspectorUi.blockedReason", { reason: item.blocker.reasonCode })}</strong>
               <p className="mt-1 text-muted-foreground">
                 {item.blocker.unblockAction}
               </p>
@@ -969,7 +971,7 @@ function ResultCard({
           {item.verification.length > 0 ? (
             <ul
               className="flex flex-col gap-1"
-              aria-label="Verification results"
+              aria-label={chromeT("taskProtocolInspectorUi.verificationResults")}
             >
               {item.verification.map((check, index) => (
                 <li
@@ -999,7 +1001,7 @@ function ResultCard({
               {item.remainingWork.map((work, index) => (
                 <li key={`${work.description}:${index}`}>
                   {work.description}
-                  {work.blocksCompletion ? " · blocks completion" : ""}
+                  {work.blocksCompletion ? chromeT("taskProtocolInspectorUi.blocksCompletion") : ""}
                 </li>
               ))}
             </ul>
@@ -1027,10 +1029,11 @@ function TerminalCard({
 }: {
   item: Extract<TaskChatProtocolItem, { surface: "run_terminal" }>;
 }) {
+  useChromeTranslation();
   return (
     <CardShell
       icon={TerminalSquare}
-      title="Run ended"
+      title={chromeT("taskProtocolInspectorUi.runEnded")}
       status={item.runState}
       summary={[item.disposition.replaceAll("_", " "), item.stopReason]
         .filter(Boolean)

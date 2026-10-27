@@ -1,0 +1,16 @@
+{
+  "planSteps": "Plan steps",
+  "delegatedAgents": "Delegated agents",
+  "researchSources": "Research sources",
+  "details": "Details",
+  "outputTruncated": "Output truncated to 8 KiB.",
+  "preview": "Preview",
+  "previewUnavailable": "Preview unavailable. The verified workspace reference is still available above.",
+  "previewTruncated": "Preview truncated by the runner.",
+  "runResult": "Run result",
+  "blockedReason": "Blocked: {{reason}}",
+  "verificationResults": "Verification results",
+  "blocksCompletion": " · blocks completion",
+  "runEnded": "Run ended",
+  "permissionDecision": "Permission {{decision}}"
+}

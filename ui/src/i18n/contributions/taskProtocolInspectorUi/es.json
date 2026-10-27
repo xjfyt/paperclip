@@ -1,0 +1,16 @@
+{
+  "planSteps": "Pasos del plan",
+  "delegatedAgents": "Agentes delegados",
+  "researchSources": "Fuentes de investigación",
+  "details": "Detalles",
+  "outputTruncated": "La salida se truncó a 8 KiB.",
+  "preview": "Vista previa",
+  "previewUnavailable": "La vista previa no está disponible. La referencia verificada del espacio de trabajo sigue disponible arriba.",
+  "previewTruncated": "El ejecutor truncó la vista previa.",
+  "runResult": "Resultado de la ejecución",
+  "blockedReason": "Bloqueado: {{reason}}",
+  "verificationResults": "Resultados de verificación",
+  "blocksCompletion": " · impide completar",
+  "runEnded": "La ejecución finalizó",
+  "permissionDecision": "Permiso {{decision}}"
+}

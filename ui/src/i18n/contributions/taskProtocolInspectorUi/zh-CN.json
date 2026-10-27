@@ -1,0 +1,16 @@
+{
+  "planSteps": "计划步骤",
+  "delegatedAgents": "委派的代理",
+  "researchSources": "研究来源",
+  "details": "详情",
+  "outputTruncated": "输出已截断至 8 KiB。",
+  "preview": "预览",
+  "previewUnavailable": "无法预览。上方仍可访问已验证的工作区引用。",
+  "previewTruncated": "预览已由运行器截断。",
+  "runResult": "运行结果",
+  "blockedReason": "受阻：{{reason}}",
+  "verificationResults": "验证结果",
+  "blocksCompletion": " · 阻止完成",
+  "runEnded": "运行已结束",
+  "permissionDecision": "权限 {{decision}}"
+}

@@ -209,6 +209,7 @@ function RollingActivity({
 }
 
 function ActivityDetails({ item }: { item: Activity }) {
+  const { t } = useTranslation();
   if (item.kind === "thinking")
     return <MarkdownBody softBreaks>{item.lines.join("\n")}</MarkdownBody>;
   if (item.kind === "usage") return <TaskChatUsageReadout item={item} />;
@@ -230,7 +231,7 @@ function ActivityDetails({ item }: { item: Activity }) {
           {item.detail}
         </pre>
       ) : null}
-      {item.decision ? <p>Permission {item.decision}</p> : null}
+      {item.decision ? <p>{t("taskProtocolInspectorUi.permissionDecision", { decision: item.decision })}</p> : null}
       {item.diff ? (
         <p className="break-all font-mono">
           {item.diff.path} · +{item.diff.added} −{item.diff.removed}
