@@ -1,3 +1,9 @@
+-- Back up and drain application/worker writes before this transactional DDL.
+-- Timeout rolls back the whole migration; resolve contention before manual retry.
+SET LOCAL lock_timeout = '5s';
+--> statement-breakpoint
+SET LOCAL statement_timeout = '30s';
+--> statement-breakpoint
 -- No data rewrite. Existing immutable UPDATE behavior and triggers stay intact.
 -- This is internal transaction context, not authorization or protection from a
 -- database owner. The API must still authorize explicit permanent deletion.

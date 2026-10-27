@@ -7,6 +7,12 @@
 - 没有实际删除用户公司，没有调用模型、提供商或真实外部网络。夹具只创建隔离 PostgreSQL 与两个合成公司。
 - 0360 不改；0361 由正常 Drizzle `generate --custom` 生成 SQL 占位、journal 与新快照，再补入自定义触发器 SQL。没有改旧快照或 Drizzle 表定义。
 
+## 迁移运维
+
+- 安装前备份数据库并确认备份可恢复；在停写维护窗口停止应用/worker 写入并等待在途事务结束，再通过正常 migrator 应用 0361。
+- 0361 在自身文件事务内设置 `SET LOCAL lock_timeout = '5s'` 与 `SET LOCAL statement_timeout = '30s'`，正常 statement breakpoints 分隔。30 秒是每条语句上限，不是全文件执行上限；不依赖 0360 或 session 遗留设置。
+- 遇锁等待或语句超时，整份 0361 事务回滚，不能认定触发器已部分安装成功。保留错误、排查竞争和备份状态，再由操作人通过正常迁移入口重试；不得自动循环重试、取消其他会话、放宽 timeout 或扩大 migration safety baseline 豁免。
+
 ## 防护边界
 
 `deleteCompany` 在原有公司 `FOR NO KEY UPDATE` 锁和存在性检查之后，以事务 local 设置锁查询返回的规范 company ID 与当前 xid；helper 还用 `uuid::text` 规范化直接调用的 UUID 大小写。它不是身份授权；API 原有权限检查仍是必需前提。
@@ -35,11 +41,12 @@
 ## 验证记录
 
 - 正常 custom migration 生成成功；journal 仅追加 0361，新快照与 0360 schema 深比较相同，仅 ID/prevId 与序列化键顺序变化；迁移编号、安全门禁与 `git diff --check` 通过（安全门禁保留历史 baseline，不新增豁免）。
-- 独立静态 review 的唯一 UUID 规范化意见已修复；最终代码使用候选源码 aliases、独占临时目录、Node 1024 MiB、单 worker 顺序重跑：routing 单测 10/10（1.74 秒）；真实 PG 集成 7/7（5.09 秒）。完整正常迁移应用 0361，测试首先断言候选 table identity 和 0361 函数存在。
+- 独立静态 review 的唯一 UUID 规范化意见已修复；使用候选源码 aliases、独占临时目录、Node 1024 MiB、单 worker 顺序重跑：routing 单测 10/10（1.74 秒）；真实 PG 集成 7/7（5.09 秒）。完整正常迁移应用 0361，测试首先断言候选 table identity 和 0361 函数存在。
+- 0361 增补自身 5 秒锁等待/30 秒语句上限及维护流程后，最终相同配置完整重跑 17/17：routing 10/10（2.28 秒）、真实 PG 7/7（5.58 秒）。正常迁移成功；编号、安全门禁和 diff-check 再次通过。未额外模拟生产 DDL 锁竞争；超时回滚依据现有每文件事务，不冒充真实生产故障演练。
 - 已过：八表普通 UPDATE/DELETE 拒绝；删除上下文内 UPDATE 仍拒绝；错公司/陈旧 xid 拒绝；只删 receipt 或整个 participant 而不删 company 在提交时失败；提前 SET CONSTRAINTS 失败；成功/失败后的 context 不泄漏。
 - 已过：大写 UUID 调用真实完整删除及 partial-delete 两条路径；完整合成依赖图清理、0360 级联、runtime v2、私有结果、secret versions、自引用 receipt/evidence；第二公司的逐表完整快照和实例全局行不变；最终 lifecycle purge 注入失败后的全部数据库行/可变指针恢复。
 - 首轮 PG 因 sandbox 禁止 `/tmp` Unix socket 启动失败，七项未进入；保留失败日志后使用已有 `PAPERCLIP_TEST_POSTGRES_TCP_ONLY=1` loopback 路径重跑通过。没有绕过权限、复用旧 PID 或改变依赖；成功实例已停止清理，失败初始化目录无 postmaster.pid。
-- 本轮日志：`/tmp/company-delete-validation-pDsXos/{routing,pg-attempt-1,pg-attempt-2,final-routing,final-pg}.log`。尚未执行 full server types/build；不把本片测试说成全量发布检查。
+- 本轮日志：`/tmp/company-delete-validation-pDsXos/{routing,pg-attempt-1,pg-attempt-2,final-routing,final-pg,maintenance-routing,maintenance-pg}.log`。尚未执行 full server types/build；不把本片测试说成全量发布检查。
 - 既有 routing 单测仍只证明调用顺序、公司作用域和生命周期失败传播，不冒充 PostgreSQL 证明。
 
 ## 尚未证明
