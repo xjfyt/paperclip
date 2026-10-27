@@ -1,3 +1,4 @@
+import { useTranslation } from "@/i18n";
 import {
   ISSUE_DETAIL_CONTENT_PAINT_MARK,
   ISSUE_DETAIL_CONTENT_MEASURE,
@@ -487,6 +488,7 @@ function durableInputLabel(
  * folded row. flag-OFF remains byte-for-byte IssueChatThread.
  */
 export function TaskChatThread(props: TaskChatThreadProps) {
+  const { t } = useTranslation();
   const { enabled: streamlinedUiEnabled } = useStreamlinedUiEnabled();
   const {
     initialHistoryPending = false,
@@ -1289,7 +1291,7 @@ export function TaskChatThread(props: TaskChatThreadProps) {
           surface: "resource",
           resourceKind: "document",
           title: documentDisplayTitle(document),
-          subtitle: `Document · rev ${document.latestRevisionNumber}`,
+          subtitle: t("taskThreadResourceUi.documentRevision", { revision: document.latestRevisionNumber }),
           href: buildDocumentAnnotationHash({
             documentKey: document.key,
             threadId: null,
@@ -1340,7 +1342,7 @@ export function TaskChatThread(props: TaskChatThreadProps) {
           kind: "protocol",
           surface: "resource",
           resourceKind: "attachment",
-          title: attachment.originalFilename ?? "Agent attachment",
+          title: attachment.originalFilename ?? t("taskThreadResourceUi.agentAttachment"),
           subtitle: `${attachment.contentType} · ${formatResourceBytes(attachment.byteSize)}`,
           href: safeResourceHref(attachment.openPath ?? attachment.contentPath),
           timestamp: new Date(attachment.createdAt).toISOString(),
@@ -1412,6 +1414,7 @@ export function TaskChatThread(props: TaskChatThreadProps) {
     heldPaperclipRunnerStartedAtMs,
     heldPaperclipRunnerFinalText,
     queuedCommentIds,
+    t,
   ]);
 
   const legacyTimelineAnchorsByRun = useMemo(() => {
@@ -2483,8 +2486,8 @@ export function TaskChatThread(props: TaskChatThreadProps) {
         label:
           pendingRuntimeRequest.questionSet?.title ??
           (pendingRuntimeRequest.requestType === "permission"
-            ? "Runtime permission"
-            : "Runtime input"),
+            ? t("taskProtocolRuntimeUi.runtimePermission")
+            : t("taskProtocolRuntimeUi.runtimeInput")),
       });
     }
     const durable = (interactions ?? [])
@@ -2512,7 +2515,7 @@ export function TaskChatThread(props: TaskChatThreadProps) {
       });
     }
     return result;
-  }, [interactions, pendingRuntimeRequest]);
+  }, [interactions, pendingRuntimeRequest, t]);
   // Questions already have an answerable history card, including
   // when the user dismisses a fresh form without sending another message.
   const pendingReminderInputs = useMemo(() => pendingComposerInputs.filter(input =>

@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 import { i18n, taskProtocolRuntimeMessages } from "@/i18n/task-protocol-runtime-test-resources";
+import { taskThreadResourceMessages } from "@/i18n/task-thread-resource-test-resources";
+import type { IssueAttachment, IssueDocumentSummary } from "@paperclipai/shared";
 import type { TranscriptEntry } from "@/adapters";
 import "@/i18n/task-protocol-workspace-test-resources";
 
@@ -4775,5 +4777,70 @@ describe("localized runtime takeover through the actual thread", () => {
     expect(Array.from(card.querySelectorAll("button")).every(button => button.disabled)).toBe(true);
     expect(JSON.stringify(entry)).toBe(original);
     for (const [payload] of resolve.mock.calls) expect(payload).toEqual(expected);
+  });
+});
+
+
+describe("owned thread resource and pending labels", () => {
+  afterEach(async () => { await act(async () => { await i18n.changeLanguage("en"); }); });
+  it.each(Object.entries(taskThreadResourceMessages))("keeps original document and attachment values while fallback copy changes in %s", async (locale, messages) => {
+    await act(async () => { await i18n.changeLanguage(locale); });
+    const document: IssueDocumentSummary = { id: "original-document", companyId: "original-company", issueId: "original-issue", key: "original-key",
+      title: "Document · rev 7", format: "markdown", latestRevisionId: "original-revision", latestRevisionNumber: 37,
+      createdByAgentId: "original-agent", createdByUserId: null, updatedByAgentId: "original-agent", updatedByUserId: null,
+      lockedAt: null, lockedByAgentId: null, lockedByUserId: null, createdAt: new Date("2026-10-27T00:00:00Z"), updatedAt: new Date("2026-10-27T00:00:01Z") };
+    const attachment: IssueAttachment = { id: "original-attachment", companyId: "original-company", issueId: "original-issue", issueCommentId: null,
+      assetId: "original-asset", provider: "local", objectKey: "original-object", contentType: "text/plain", byteSize: 123, sha256: "original-hash",
+      originalFilename: null, createdByAgentId: "original-agent", createdByUserId: null, createdAt: document.createdAt, updatedAt: document.updatedAt,
+      contentPath: "/api/attachments/original-attachment/content" };
+    const named = { ...attachment, id: "named-attachment", originalFilename: "Agent attachment", contentPath: "/api/attachments/named-attachment/content" };
+    const original = JSON.stringify([document, attachment, named]);
+    const onAdd = vi.fn();
+    render(<TaskChatThread comments={[]} onAdd={onAdd} documents={[document]} attachments={[attachment, named]} />);
+    const docCard = container.querySelector('[data-testid="task-chat-resource-document"]')!;
+    const cards = Array.from(container.querySelectorAll('[data-testid="task-chat-resource-attachment"]'));
+    expect(docCard.textContent).toContain(document.title);
+    expect(docCard.textContent).toContain(messages.documentRevision.replace("{{revision}}", "37"));
+    expect(cards.map(card => card.querySelector("strong")?.textContent)).toEqual(["Agent attachment", messages.agentAttachment]);
+    expect(cards.every(card => card.textContent?.includes("text/plain · 123 B"))).toBe(true);
+    const hrefs = [docCard, ...cards].map(card => card.closest("a")?.getAttribute("href"));
+    expect(hrefs).toEqual(["#document-original-key", named.contentPath, attachment.contentPath]);
+    const nextLocale = locale === "ja" ? "es" : "ja";
+    await act(async () => { await i18n.changeLanguage(nextLocale); });
+    expect(container.querySelector('[data-testid="task-chat-resource-document"]')?.textContent).toContain(taskThreadResourceMessages[nextLocale].documentRevision.replace("{{revision}}", "37"));
+    expect(Array.from(container.querySelectorAll('[data-testid="task-chat-resource-attachment"]')).map(card => card.querySelector("strong")?.textContent)).toEqual(["Agent attachment", taskThreadResourceMessages[nextLocale].agentAttachment]);
+    expect(JSON.stringify([document, attachment, named])).toBe(original); expect(onAdd).not.toHaveBeenCalled();
+  });
+
+  it.each(Object.entries(taskProtocolRuntimeMessages).flatMap(([locale, messages]) =>
+    (["input", "permission"] as const).map(requestType => ({ locale, messages, requestType })),
+  ))("keeps a dismissed $requestType request dismissed when switching from $locale", async ({ locale, messages, requestType }) => {
+    await act(async () => { await i18n.changeLanguage(locale); });
+    const entry: Extract<TranscriptEntry, { kind: "runtime_request" }> = {
+      kind: "runtime_request", ts: "2026-10-27T00:00:01Z", requestId: "original-pending", requestKind: requestType === "input" ? "user_input" : "permission_approval",
+      turnId: "original-turn", requestType, status: "pending", prompt: "Original provider prompt", choices: [{ key: "decline", label: "Deny" }], fields: [],
+    };
+    nativeTranscriptState.transcriptByRun.set("original-run", [entry]);
+    const resolve = vi.spyOn(heartbeatsApi, "resolveRuntimeRequest").mockResolvedValue({ accepted: true, commandId: "original-command" });
+    render(<TaskChatThread comments={[]} onAdd={async () => {}} issueStatus="in_progress" issueId="original-issue" activeRun={{
+      id: "original-run", runtimeMode: "native", status: "running", invocationSource: "issue", triggerDetail: null, startedAt: "2026-10-27T00:00:00Z",
+      finishedAt: null, createdAt: "2026-10-27T00:00:00Z", agentId: "original-agent", agentName: "Original agent", adapterType: "paperclip_runner",
+    }} />);
+    const label = requestType === "input" ? messages.runtimeInput : messages.runtimePermission;
+    const dismiss = container.querySelector<HTMLButtonElement>(`button[aria-label="${i18n.t("taskComposerUi.dismissInput", { label })}"]`)!;
+    expect(dismiss).not.toBeNull();
+    await act(async () => { dismiss.click(); });
+    expect(container.querySelector('[data-testid="task-chat-runtime-request"]')).toBeNull();
+    const reminder = () => container.querySelector<HTMLButtonElement>('[data-testid="task-chat-pending-input-indicator"]');
+    expect(reminder()?.disabled).toBe(false);
+    const nextLocale = locale === "ja" ? "es" : "ja";
+    await act(async () => { await i18n.changeLanguage(nextLocale); });
+    expect(container.querySelector('[data-testid="task-chat-runtime-request"]')).toBeNull();
+    expect(reminder()?.disabled).toBe(false);
+    await act(async () => { reminder()!.click(); });
+    expect(container.querySelector('[data-testid="task-chat-runtime-request"]')?.textContent).toContain(entry.prompt);
+    const nextLabel = requestType === "input" ? taskProtocolRuntimeMessages[nextLocale].runtimeInput : taskProtocolRuntimeMessages[nextLocale].runtimePermission;
+    expect(container.querySelector(`button[aria-label="${i18n.t("taskComposerUi.dismissInput", { label: nextLabel })}"]`)).not.toBeNull();
+    expect(resolve).not.toHaveBeenCalled();
   });
 });
