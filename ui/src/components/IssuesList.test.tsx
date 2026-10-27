@@ -1030,7 +1030,7 @@ describe("IssuesList", () => {
       expect(container.querySelector('[role="progressbar"]')).not.toBeNull();
       expect(container.textContent).not.toContain("0 tokens");
       expect(container.textContent).not.toContain("0s runtime");
-      expect(Array.from(container.querySelectorAll("span[title]")).some(span => span.title.includes("runs across"))).toBe(false);
+      expect(Array.from(container.querySelectorAll<HTMLSpanElement>("span[title]")).some(span => span.title.includes("runs across"))).toBe(false);
     } finally { act(() => root.unmount()); queryClient.clear(); }
   });
 
