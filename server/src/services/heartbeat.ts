@@ -4301,7 +4301,9 @@ export function heartbeatService(
         const onAdapterEvent = async (event: AdapterRuntimeEvent) => {
           event = identityRedactor.redact(event);
           const eventType = event.eventType.trim();
-          if (!eventType) return;
+          // Adapter telemetry is not authority for prompt admission/stop fences.
+          // Only the server's dedicated capability may write this namespace.
+          if (!eventType || eventType.startsWith("prompt_application.")) return;
           await appendRunEvent(currentRun, {
             eventType: eventType.slice(0, 120),
             stream: event.stream,
