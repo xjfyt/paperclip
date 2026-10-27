@@ -44,3 +44,15 @@
 ## 尚需用户环境验证
 
 真实 Casdoor 会话、真实 CLI/模型/计费、全平台进程行为、真实浏览器布局与输入法、供应商送达/发布不由本清单或本地 C2 夹具证明。实际验证时记录版本、账号类型、环境、操作、结果与证据，不能仅凭安装或配置成功判定完成。
+
+## 本地无费用链路回归入口
+
+在仓库根目录、已安装项目依赖的 Node 24.11+ 环境运行：
+
+```sh
+pnpm exec vitest run --config tests/mimouse/private-prompt-vitest.config.ts \
+  server/src/services/mimouse-private-prompt-tests/integration.test.ts \
+  --maxWorkers=1 --no-file-parallelism
+```
+
+该夹具自行新建带所有权标记的临时 PostgreSQL 集群，执行历史检查点到当前迁移、私有固定集生产与中央费用结算、人工批准后的受控运行和负向检查。模型边界替换为无网络 Node 子进程，不使用真实 CLI 或账号；绝不把现有数据库目录传入夹具。结束时应看到 `shutdown verified pidFile=false processAlive=false`。具体测试数与通过状态以本次输出及 VERIFICATION 中冻结提交为准，不以本命令存在判定成功。
