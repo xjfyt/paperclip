@@ -1,3 +1,4 @@
+import { localizedUiErrorMessage, type LocalizedUiMessage } from "../lib/localized-ui-error";
 import { t as mimouseT, useTranslation as useMimouseTranslation, i18n as mimouseI18n } from "@/i18n";
 import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "@/lib/router";
@@ -26,7 +27,7 @@ export function Approvals() {
   const location = useLocation();
   const pathSegment = location.pathname.split("/").pop() ?? "pending";
   const statusFilter: StatusFilter = pathSegment === "all" ? "all" : "pending";
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<LocalizedUiMessage | null>(null);
 
   useEffect(() => {
     setBreadcrumbs([{ label: mimouseT("commonUi.approvals") }]);
@@ -52,7 +53,7 @@ export function Approvals() {
       navigate(`/approvals/${id}?resolved=approved`);
     },
     onError: (err) => {
-      setActionError(err instanceof Error ? err.message : "Failed to approve");
+      setActionError(localizedUiErrorMessage(err, "managementUi.approveFailed"));
     },
   });
 
@@ -63,7 +64,7 @@ export function Approvals() {
       queryClient.invalidateQueries({ queryKey: queryKeys.approvals.list(selectedCompanyId!) });
     },
     onError: (err) => {
-      setActionError(err instanceof Error ? err.message : "Failed to reject");
+      setActionError(localizedUiErrorMessage(err, "managementUi.rejectFailed"));
     },
   });
 
@@ -104,7 +105,7 @@ export function Approvals() {
       </div>
 
       {error && <p className="text-sm text-destructive">{error.message}</p>}
-      {actionError && <p className="text-sm text-destructive">{actionError}</p>}
+      {actionError && <p className="text-sm text-destructive">{typeof actionError === "string" ? actionError : mimouseT(actionError.key)}</p>}
 
       {filtered.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 text-center">
