@@ -5,7 +5,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 import type { QuotaWindow } from "@paperclipai/shared";
 import { ProviderQuotaCard } from "./ProviderQuotaCard";
-import { agentTaskQuotaMessages, i18n } from "../i18n/agent-task-quota-test-resources";
+import { agentTaskQuotaMessages, i18n } from "../i18n/provider-quota-test-resources";
 import { validateLocaleMessages } from "../i18n/locale-validation";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

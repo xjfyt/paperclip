@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 
+import "../i18n/provider-quota-test-resources";
+
 import { i18n } from "../i18n/management-test-resources";
 import { agentTaskQuotaMessages } from "../i18n/agent-task-quota-test-resources";
 import { queryKeys } from "../lib/queryKeys";
@@ -129,6 +131,9 @@ describe("Shared Costs surfaces", () => {
       expect(container.textContent).not.toContain("private auth diagnostic");
       expect(container.textContent).not.toContain("private API diagnostic");
       expect(container.textContent).not.toContain(messages.codexSubscriptionHelp);
+      const quotaHeadings: Record<string, string> = { en: "Subscription quota", "zh-CN": "订阅额度", es: "Cuota de suscripción", ja: "サブスクリプションの利用枠" };
+      expect(container.textContent).toContain(quotaHeadings[i18n.language]);
+      expect(container.textContent).not.toContain("providerQuotaUi.");
     };
     assertCopy(copy);
     const bar = () => container.querySelector<HTMLElement>('[role="progressbar"][aria-label="Raw Sonnet weekly: 73%"]')!;
