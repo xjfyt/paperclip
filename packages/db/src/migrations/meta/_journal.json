@@ -2500,6 +2500,13 @@
       "when": 1793057895157,
       "tag": "0358_chunky_shockwave",
       "breakpoints": true
+    },
+    {
+      "idx": 359,
+      "version": "7",
+      "when": 1793082370087,
+      "tag": "0359_confused_kid_colt",
+      "breakpoints": true
     }
   ]
 }
