@@ -38,6 +38,10 @@ import {
   routineTriggers,
   routineRevisions,
   routines,
+  runtimeRoutingBindings,
+  runtimeRoutingHeads,
+  runtimeRoutingReceipts,
+  runtimeRoutingPolicies,
 } from "@paperclipai/db";
 
 export async function deleteCompany(db: Db, id: string) {
@@ -54,6 +58,12 @@ export async function deleteCompany(db: Db, id: string) {
         const [existing] = await tx.select({ id: companies.id }).from(companies)
           .where(eq(companies.id, id)).for("no key update");
         if (!existing) return null;
+        // Routing bindings restrict deletion of their runs, issues and agents.
+        // Heads and bindings also retain receipts, which retain policies.
+        await tx.delete(runtimeRoutingBindings).where(eq(runtimeRoutingBindings.companyId, id));
+        await tx.delete(runtimeRoutingHeads).where(eq(runtimeRoutingHeads.companyId, id));
+        await tx.delete(runtimeRoutingReceipts).where(eq(runtimeRoutingReceipts.companyId, id));
+        await tx.delete(runtimeRoutingPolicies).where(eq(runtimeRoutingPolicies.companyId, id));
         // Finance can reference costs and both can reference runs. Incidents
         // reference policies and approvals; delete these dependents first.
         await tx.delete(financeEvents).where(eq(financeEvents.companyId, id));
