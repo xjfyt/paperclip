@@ -1,6 +1,7 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
+import { mock } from "node:test";
 import { companySecrets, mimouseNotificationTokens as tokens, mimouseNotificationEndpoints as endpoints, mimouseNotificationSubscriptions as subscriptions, mimouseNotificationDeliveries as deliveries } from "../../packages/db/src/index.js";
 import { createFixtureDb } from "./fixture-db.js";
 import { secretService } from "../../server/src/services/secrets.js";
@@ -66,6 +67,30 @@ test("cache scope enforces company and immutable secret version, while rotation 
     await f.db.update(companySecrets).set({ status: "deleted", deletedAt: new Date() }).where(eq(companySecrets.id, f.secret.id));
     await expect(cache.resolve(f.scope, f.credentials)).rejects.toMatchObject({ code: "token_secret_inactive_or_wrong_company" }); expect(calls).toBe(2);
   } finally { await f.cleanup(); }
+});
+
+test("fresh and rotated cache entries are immediately eligible without resetting an existing cooldown", async ({ request }) => {
+  const f = await fixture(request);
+  try {
+    // Keep the application clock behind the real database default, without
+    // sleeping, altering the table default, or weakening the refresh lease.
+    const now = Date.now() - 5000;
+    mock.timers.enable({ apis: ["Date"], now });
+    let calls = 0;
+    const cache = notificationTokenCache(f.db, { exchange: async () => ({ token: `clock-token-${++calls}`, expiresAt: future() }) });
+    expect(await cache.resolve(f.scope, f.credentials)).toEqual({ accessToken: "clock-token-1" });
+    const changed = { ...f.credentials, appSecret: "clock-rotated-fixture" };
+    await f.service.rotate(f.secret.id, { value: JSON.stringify(changed), expectedLatestVersion: 1 });
+    expect(await cache.resolve({ ...f.scope, secretVersion: 2 }, changed)).toEqual({ accessToken: "clock-token-2" });
+
+    const nextRefreshAt = new Date(now + 60000);
+    await f.db.update(tokens).set({ tokenMaterial: null, expiresAt: null, nextRefreshAt }).where(eq(tokens.companyId, f.company.id));
+    await expect(cache.resolve(f.scope, f.credentials)).rejects.toMatchObject({ code: "token_refresh_cooldown", busy: true, retryAfterMs: 60000 });
+    const saved = await f.db.select().from(tokens).where(eq(tokens.companyId, f.company.id));
+    expect(saved).toHaveLength(2);
+    expect(saved.every(row => row.nextRefreshAt.getTime() === nextRefreshAt.getTime())).toBe(true);
+    expect(calls).toBe(2);
+  } finally { mock.timers.reset(); await f.cleanup(); }
 });
 
 test("a secret revoked during refresh never yields a sendable token", async ({ request }) => {

@@ -33,7 +33,10 @@ export function notificationTokenCache(db: Db, deps: { exchange?: typeof exchang
       if (!Number.isSafeInteger(scope.secretVersion) || scope.secretVersion < 1) throw new NotificationTokenError("token_secret_version_invalid");
       await secretActive(scope);
       const where = and(eq(tokens.companyId, scope.companyId), eq(tokens.secretRef, scope.secretRef), eq(tokens.secretVersion, scope.secretVersion), eq(tokens.kind, scope.kind));
-      await db.insert(tokens).values({ ...scope, identity: credential.identity }).onConflictDoNothing();
+      // A new row has no cooldown. PostgreSQL's default now() retains
+      // microseconds, which can exceed the same-tick JavaScript claim cutoff.
+      // Conflicts must leave an existing cooldown (and lease) untouched.
+      await db.insert(tokens).values({ ...scope, identity: credential.identity, nextRefreshAt: new Date(0) }).onConflictDoNothing();
       const [cached] = await db.select().from(tokens).where(where);
       if (!cached || cached.identity !== credential.identity) throw new NotificationTokenError("token_immutable_credential_changed");
       const now = Date.now();
