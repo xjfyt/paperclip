@@ -1,0 +1,20 @@
+{
+  "managedPathFallback": "（托管）",
+  "entryBadge": "入口",
+  "deprecatedVirtualFile": "已弃用的虚拟文件",
+  "languageFile": "{{language}} 文件",
+  "newFile": "此指令包中的新文件",
+  "preservedRegionLabel": "为 {{path}} 保留的修改",
+  "preservedReadOnly": "只读：{{originalPath}}。如需将其中的修改保留到 {{currentPath}}，请复制内容并明确编辑当前入口文件。",
+  "copyPreservedLabel": "复制为 {{path}} 保留的修改",
+  "editorPlaceholder": "# Agent 指令",
+  "editsNotRetrieved": "尚未获取这些指令修改。",
+  "copyInstructionsLabel": "将指令文件复制为 Markdown",
+  "copied": "已复制",
+  "confirmDelete": "删除 {{path}}？",
+  "view": {
+    "read": "阅读",
+    "edit": "编辑",
+    "raw": "源码"
+  }
+}

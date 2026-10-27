@@ -2338,7 +2338,7 @@ export function PromptsTab({
   const preservedCandidates = candidates.data?.filter((candidate) => candidate.contract !== "agent_files") ?? [];
   const loadCandidate = useMutation({
     mutationFn: async (candidate: AgentInstructionCandidate) => {
-      if (candidate.content === null) throw new Error("These instruction edits have not been retrieved yet.");
+      if (candidate.content === null) throw new ManagementUiError("agentInstructionEditorUi.editsNotRetrieved");
       const file = await agentsApi.instructionsFile(agent.id, candidate.entryFile, companyId).catch((error) => {
         if (error instanceof ApiError && error.status === 404 && candidate.baseRevisionId === null) return null;
         throw error;
@@ -2655,6 +2655,8 @@ export function PromptsTab({
     document.body.style.userSelect = "none";
   }, [filePanelWidth]);
 
+  const preservedEditsError = candidates.error ?? loadCandidate.error ?? resolveCandidate.error ?? refreshCandidateBase.error;
+
   const instructionsSideBySide =
     !isMobile && instructionPaneWidth !== null && instructionPaneWidth >= filePanelWidth + 520;
 
@@ -2746,7 +2748,7 @@ export function PromptsTab({
                 </span>
                 {currentMode === "managed" ? (
                   <div className="flex items-center gap-1.5 font-mono text-xs text-muted-foreground pt-1.5">
-                    <span className="min-w-0 truncate" title={currentRootPath || undefined}>{currentRootPath || "(managed)"}</span>
+                    <span className="min-w-0 truncate" title={currentRootPath || undefined}>{currentRootPath || mimouseT("agentInstructionEditorUi.managedPathFallback")}</span>
                     {currentRootPath && (
                       <CopyText text={currentRootPath} className="shrink-0">
                         <Copy className="h-3.5 w-3.5" />
@@ -2940,7 +2942,7 @@ export function PromptsTab({
               }
               return (
                 <span className="ml-3 shrink-0 rounded border border-border text-muted-foreground px-1.5 py-0.5 text-(length:--text-nano) uppercase tracking-wide">
-                  {file.isEntryFile ? "entry" : `${file.size}b`}
+                  {file.isEntryFile ? mimouseT("agentInstructionEditorUi.entryBadge") : `${file.size}b`}
                 </span>
               );
             }}
@@ -2974,9 +2976,9 @@ export function PromptsTab({
                 <p className="text-xs text-muted-foreground">
                   {selectedFileExists
                     ? selectedFileSummary?.deprecated
-                      ? "Deprecated virtual file"
-                      : `${selectedFileDetail?.language ?? "text"} file`
-                    : "New file in this bundle"}
+                      ? mimouseT("agentInstructionEditorUi.deprecatedVirtualFile")
+                      : mimouseT("agentInstructionEditorUi.languageFile", { language: selectedFileDetail?.language ?? "text" })
+                    : mimouseT("agentInstructionEditorUi.newFile")}
                 </p>
               </div>
             </div>
@@ -2992,16 +2994,16 @@ export function PromptsTab({
                     aria-pressed={instructionMode === mode}
                     onClick={() => setInstructionMode(mode)}
                   >
-                    {systemLabel(mode)}
+                    {mimouseT(`agentInstructionEditorUi.view.${mode}`)}
                   </Button>
                 ))}
               </div>
               {!fileLoading && (
                 <CopyText
                   text={displayValue}
-                  ariaLabel="Copy instructions file as markdown"
+                  ariaLabel={mimouseT("agentInstructionEditorUi.copyInstructionsLabel")}
                   title={mimouseT("workflow.copyMarkdown")}
-                  copiedLabel="Copied"
+                  copiedLabel={mimouseT("agentInstructionEditorUi.copied")}
                   className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-accent hover:text-foreground"
                 >
                   <Copy className="h-3.5 w-3.5" />
@@ -3013,7 +3015,7 @@ export function PromptsTab({
                   size="sm"
                   variant="outline"
                   onClick={() => {
-                    if (confirm(`Delete ${selectedOrEntryFile}?`)) {
+                    if (confirm(mimouseT("agentInstructionEditorUi.confirmDelete", { path: selectedOrEntryFile }))) {
                       deleteFile.mutate(selectedOrEntryFile, {
                         onSuccess: () => {
                           setSelectedFile(currentEntryFile);
@@ -3049,9 +3051,9 @@ export function PromptsTab({
                   {candidate.errorMessage && <p className="text-sm text-muted-foreground">{candidate.errorMessage}</p>}
                   {candidate.entryFile !== currentEntryFile && <p className="text-sm text-muted-foreground">{mimouseT("workflowHelp.entryChanged")}</p>}
                   {candidate.entryFile !== currentEntryFile && candidate.content !== null && readOnlyCandidateRunId === candidate.runId && (
-                    <div role="region" aria-label={`Preserved edits for ${candidate.entryFile}`} className="w-full space-y-3">
-                      <p className="text-sm text-muted-foreground">{mimouseT("workflowHelp.readOnly")} {candidate.entryFile}. To keep any of these edits in {currentEntryFile}, copy them and edit the current entry explicitly.</p>
-                      <CopyText text={candidate.content} ariaLabel={`Copy preserved edits for ${candidate.entryFile}`}
+                    <div role="region" aria-label={mimouseT("agentInstructionEditorUi.preservedRegionLabel", { path: candidate.entryFile })} className="w-full space-y-3">
+                      <p className="text-sm text-muted-foreground">{mimouseT("agentInstructionEditorUi.preservedReadOnly", { originalPath: candidate.entryFile, currentPath: currentEntryFile })}</p>
+                      <CopyText text={candidate.content} ariaLabel={mimouseT("agentInstructionEditorUi.copyPreservedLabel", { path: candidate.entryFile })} copiedLabel={mimouseT("agentInstructionEditorUi.copied")}
                         className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground">
                         <Copy className="h-3.5 w-3.5" />{mimouseT("workflowHelp.copyPreserved")}</CopyText>
                       <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-md border border-border bg-muted p-3 font-mono text-sm">{candidate.content}</pre>
@@ -3069,7 +3071,7 @@ export function PromptsTab({
             {draftBaseRevisionRef.current !== (selectedFileDetail?.revision?.id ?? null) && <p className="text-sm text-destructive">{mimouseT("workflowHelp.instructionsChanged")}</p>}
             {(resolveCandidate.error || draftBaseRevisionRef.current !== (selectedFileDetail?.revision?.id ?? null)) && <Button type="button" variant="outline" size="sm" disabled={isSaving} onClick={() => refreshCandidateBase.mutate()}>{mimouseT("workflowHelp.refreshRevision")}</Button>}
           </div>}
-          {(candidates.error || loadCandidate.error || resolveCandidate.error || refreshCandidateBase.error) && <p role="alert" className="text-sm text-destructive">{(candidates.error ?? loadCandidate.error ?? resolveCandidate.error ?? refreshCandidateBase.error)?.message} {mimouseT("workflowHelp.preservedAvailable")}</p>}
+          {preservedEditsError && <p role="alert" className="text-sm text-destructive">{preservedEditsError instanceof ManagementUiError ? mimouseT(preservedEditsError.translationKey) : preservedEditsError.message} {mimouseT("workflowHelp.preservedAvailable")}</p>}
           {(saveFile.error || fileError || updateBundle.error) && <p role="alert" className="text-sm text-destructive">{(saveFile.error ?? fileError ?? updateBundle.error)?.message} {mimouseT("workflowHelp.unsavedRetained")}</p>}
           {selectedFileDetail?.receipt?.materialization === "pending" && <p role="status" className="text-sm text-muted-foreground">{mimouseT("workflowHelp.revisionRebuild")}</p>}
           {selectedFileDetail?.revision && currentMode === "managed" && bundle?.persistence !== "agent_files" && <InstructionHistory
@@ -3129,7 +3131,7 @@ export function PromptsTab({
                   if (draftBaseHashRef.current === undefined) draftBaseHashRef.current = selectedFileDetail?.contentHash ?? null;
                   setDraft(value ?? "");
                 }}
-                placeholder="# Agent instructions"
+                placeholder={mimouseT("agentInstructionEditorUi.editorPlaceholder")}
                 className="min-w-0 overflow-hidden"
                 contentClassName="min-h-(--sz-420px) max-w-full break-words text-sm leading-7"
                 imageUploadHandler={async (file) => {

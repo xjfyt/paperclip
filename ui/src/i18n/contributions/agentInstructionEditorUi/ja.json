@@ -1,0 +1,20 @@
+{
+  "managedPathFallback": "（管理対象）",
+  "entryBadge": "エントリ",
+  "deprecatedVirtualFile": "非推奨の仮想ファイル",
+  "languageFile": "{{language}} ファイル",
+  "newFile": "このバンドル内の新しいファイル",
+  "preservedRegionLabel": "{{path}} の保持された編集内容",
+  "preservedReadOnly": "読み取り専用：{{originalPath}}。これらの編集内容を {{currentPath}} に残すには、内容をコピーし、現在のエントリファイルを明示的に編集してください。",
+  "copyPreservedLabel": "{{path}} の保持された編集内容をコピー",
+  "editorPlaceholder": "# Agent の指示",
+  "editsNotRetrieved": "これらの指示の編集内容はまだ取得されていません。",
+  "copyInstructionsLabel": "指示ファイルを Markdown としてコピー",
+  "copied": "コピーしました",
+  "confirmDelete": "{{path}} を削除しますか？",
+  "view": {
+    "read": "閲覧",
+    "edit": "編集",
+    "raw": "ソース"
+  }
+}

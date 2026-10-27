@@ -1,0 +1,20 @@
+{
+  "managedPathFallback": "(managed)",
+  "entryBadge": "entry",
+  "deprecatedVirtualFile": "Deprecated virtual file",
+  "languageFile": "{{language}} file",
+  "newFile": "New file in this bundle",
+  "preservedRegionLabel": "Preserved edits for {{path}}",
+  "preservedReadOnly": "Read only: {{originalPath}}. To keep any of these edits in {{currentPath}}, copy them and edit the current entry explicitly.",
+  "copyPreservedLabel": "Copy preserved edits for {{path}}",
+  "editorPlaceholder": "# Agent instructions",
+  "editsNotRetrieved": "These instruction edits have not been retrieved yet.",
+  "copyInstructionsLabel": "Copy instructions file as markdown",
+  "copied": "Copied",
+  "confirmDelete": "Delete {{path}}?",
+  "view": {
+    "read": "read",
+    "edit": "edit",
+    "raw": "raw"
+  }
+}

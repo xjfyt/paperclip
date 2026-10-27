@@ -1,0 +1,20 @@
+{
+  "managedPathFallback": "(gestionado)",
+  "entryBadge": "entrada",
+  "deprecatedVirtualFile": "Archivo virtual obsoleto",
+  "languageFile": "Archivo {{language}}",
+  "newFile": "Archivo nuevo en este paquete",
+  "preservedRegionLabel": "Cambios conservados para {{path}}",
+  "preservedReadOnly": "Solo lectura: {{originalPath}}. Para conservar cualquiera de estos cambios en {{currentPath}}, cópialos y edita explícitamente el archivo de entrada actual.",
+  "copyPreservedLabel": "Copiar cambios conservados para {{path}}",
+  "editorPlaceholder": "# Instrucciones del Agent",
+  "editsNotRetrieved": "Estos cambios de instrucciones aún no se han recuperado.",
+  "copyInstructionsLabel": "Copiar archivo de instrucciones como Markdown",
+  "copied": "Copiado",
+  "confirmDelete": "¿Eliminar {{path}}?",
+  "view": {
+    "read": "leer",
+    "edit": "editar",
+    "raw": "fuente"
+  }
+}
