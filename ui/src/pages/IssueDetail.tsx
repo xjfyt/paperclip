@@ -479,13 +479,13 @@ const JUMP_TO_LATEST_MAX_COMMENT_PAGES = 10;
 function treeControlPreviewErrorCopy(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.status === 403)
-      return "Only board users can preview subtree controls.";
+      return mimouseT("issueTreeFeedbackUi.previewForbidden");
     if (error.status === 409)
-      return "Preview is stale because subtree hold state changed. Retry to refresh.";
+      return mimouseT("issueTreeFeedbackUi.previewStale");
     if (error.status === 422)
-      return "This subtree action is currently invalid for the selected tasks.";
+      return mimouseT("issueTreeFeedbackUi.previewInvalid");
   }
-  return error instanceof Error ? error.message : "Unable to load preview.";
+  return error instanceof Error ? error.message : mimouseT("issueTreeFeedbackUi.previewFailed");
 }
 
 export function canBoardResolveRecoveryAction(
@@ -3063,9 +3063,10 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [galleryIndex, setGalleryIndex] = useState(0);
   const [treeControlOpen, setTreeControlOpen] = useState(false);
-  const [treeControlWakeWarning, setTreeControlWakeWarning] = useState<
-    string | null
-  >(null);
+  const [treeControlWakeWarning, setTreeControlWakeWarning] = useState<{
+    count: number;
+    message: string;
+  } | null>(null);
   const [treeControlMode, setTreeControlMode] =
     useState<Exclude<IssueTreeControlMode, "pause">>("resume");
   const [treeControlWakeAgentsOnResume, setTreeControlWakeAgentsOnResume] =
@@ -4398,9 +4399,10 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
     },
     onSuccess: (result) => {
       if (result.kind === "release" && result.hold.wakeFailures?.length) {
-        setTreeControlWakeWarning(
-          `Pause released, but ${result.hold.wakeFailures.length} ${result.hold.wakeFailures.length === 1 ? "task" : "tasks"} could not start. ${result.hold.wakeFailures[0].message} Check the affected agents and try starting them again.`,
-        );
+        setTreeControlWakeWarning({
+          count: result.hold.wakeFailures.length,
+          message: result.hold.wakeFailures[0].message,
+        });
       }
       setTreeControlOpen(false);
       setTreeControlWakeAgentsOnResume(false);
@@ -7831,7 +7833,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
               role="alert"
               className={cn("text-sm text-muted-foreground", shellSectionClass)}
             >
-              {treeControlWakeWarning}
+              {mimouseT("issueTreeFeedbackUi.wakeFailed", treeControlWakeWarning)}
             </p>
           ) : null}
           {executeTreeControl.error &&

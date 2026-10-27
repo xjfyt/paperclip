@@ -1,0 +1,8 @@
+{
+  "previewForbidden": "Only board users can preview subtree controls.",
+  "previewStale": "Preview is stale because subtree hold state changed. Retry to refresh.",
+  "previewInvalid": "This subtree action is currently invalid for the selected tasks.",
+  "previewFailed": "Unable to load preview.",
+  "wakeFailed_one": "Pause released, but {{count}} task could not start. {{message}} Check the affected agents and try starting them again.",
+  "wakeFailed_other": "Pause released, but {{count}} tasks could not start. {{message}} Check the affected agents and try starting them again."
+}

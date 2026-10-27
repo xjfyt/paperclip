@@ -1,3 +1,4 @@
+import { issueTreeFeedbackMessages } from "../i18n/issue-tree-feedback-test-resources";
 import { issueDetailMessages } from "../i18n/issue-detail-test-resources";
 import { IssueChatFeedbackButtons } from "../components/AgentBubbleActionRow";
 import type { ApprovalCard } from "../components/ApprovalCard";
@@ -110,11 +111,11 @@ const mockIssuesApi = vi.hoisted(() => ({
   markRead: vi.fn(),
   update: vi.fn(),
   resolveRecoveryAction: vi.fn(),
-  previewTreeControl: vi.fn(),
+  previewTreeControl: vi.fn<typeof issuesApi.previewTreeControl>(),
   getTreeControlState: vi.fn(),
   listTreeHolds: vi.fn(),
   createTreeHold: vi.fn(),
-  releaseTreeHold: vi.fn(),
+  releaseTreeHold: vi.fn<typeof issuesApi.releaseTreeHold>(),
   archiveFromInbox: vi.fn(),
   unarchiveFromInbox: vi.fn(),
   addComment: vi.fn(),
@@ -6107,6 +6108,139 @@ describe("IssueDetail", () => {
         ?.textContent,
     ).toBe("blocked");
   });
+
+  async function openPausedTreeFeedbackHost() {
+    const children = [1, 2, 3].map(number => createIssue({
+      id: `child-${number}`, parentId: "issue-1", identifier: `PAP-${number + 1}`,
+      issueNumber: number + 1, title: `Child title 原文 ${number}`,
+    }));
+    const hold = createPauseHold();
+    const state: Awaited<ReturnType<typeof issuesApi.getTreeControlState>> = {
+      activePauseHold: { holdId: hold.id, rootIssueId: "issue-1", issueId: "issue-1", isRoot: true,
+        mode: "pause", reason: null, releasePolicy: { strategy: "manual", note: "full_pause" } },
+    };
+    const session: AuthSession = { session: { id: "session-1", userId: "user-1" },
+      user: { id: "user-1", name: null, email: null, image: null }, sentryDsn: null };
+    mockIssuesApi.get.mockResolvedValue(createIssue());
+    mockIssuesApi.list.mockImplementation((_companyId: string, filters?: { descendantOf?: string }) =>
+      Promise.resolve(filters?.descendantOf === "issue-1" ? children : []));
+    mockIssuesApi.getTreeControlState.mockImplementation(() => Promise.resolve(state));
+    mockIssuesApi.listTreeHolds.mockResolvedValue([hold]);
+    mockAgentsApi.list.mockResolvedValue([createAgent()]);
+    mockAuthApi.getSession.mockResolvedValue(session);
+    mockIssuesApi.createTreeHold.mockClear();
+    mockIssuesApi.releaseTreeHold.mockReset();
+    await act(async () => {
+      await i18n.changeLanguage("en");
+      root.render(<QueryClientProvider client={queryClient}><IssueDetail /></QueryClientProvider>);
+    });
+    let resume: HTMLButtonElement | undefined;
+    await waitForAssertion(() => {
+      resume = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.trim() === "Resume subtree");
+      expect(resume).toBeDefined();
+    });
+    await act(async () => { resume?.click(); });
+    await waitForAssertion(() => expect(container.querySelector('[data-slot="dialog-content"]')).not.toBeNull());
+    return { children, hold, state };
+  }
+
+  it.each(Object.entries(issueTreeFeedbackMessages).flatMap(([locale, messages]) =>
+    [0, 1, 3].map(count => ({ locale, messages, count }))))(
+    "localizes pause wake warning count=$count in $locale at display time while keeping the original release", async ({ locale, messages, count }) => {
+      const preview = createResumePreview();
+      mockIssuesApi.previewTreeControl.mockReset().mockResolvedValue(preview);
+      const { children, hold, state } = await openPausedTreeFeedbackHost();
+      const release = createDeferred<Awaited<ReturnType<typeof issuesApi.releaseTreeHold>>>();
+      const diagnostic = "Agent unavailable: Child title 原文 1 <tag> {{count}}";
+      const result: Awaited<ReturnType<typeof issuesApi.releaseTreeHold>> = {
+        ...hold, status: "released", releasedAt: new Date("2026-04-21T00:01:00Z"),
+        wakeFailures: children.slice(0, count).map((child, index) => ({
+          issueId: child.id, message: index === 0 ? diagnostic : "Other raw diagnosis not newly dumped",
+        })),
+      };
+      mockIssuesApi.releaseTreeHold.mockReturnValue(release.promise);
+      const dialog = container.querySelector('[data-slot="dialog-content"]');
+      let apply: HTMLButtonElement | undefined;
+      await waitForAssertion(() => {
+        apply = Array.from(dialog?.querySelectorAll<HTMLButtonElement>("button") ?? []).find(button => button.textContent === "Resume subtree");
+        expect(apply?.disabled).toBe(false);
+      });
+      await act(async () => { apply?.click(); });
+      await waitForAssertion(() => expect(mockIssuesApi.releaseTreeHold).toHaveBeenCalledTimes(1));
+      expect(mockIssuesApi.releaseTreeHold).toHaveBeenCalledWith("PAP-1", "hold-1", { reason: null, metadata: { wakeAgents: true } });
+      expect(container.querySelector('[role="alert"]')).toBeNull();
+      expect(mockIssuesApi.previewTreeControl).toHaveBeenCalledTimes(1);
+      expect(apply?.disabled).toBe(true);
+      await act(async () => { apply?.click(); await i18n.changeLanguage(locale); });
+      expect(mockIssuesApi.releaseTreeHold).toHaveBeenCalledTimes(1);
+      expect(container.querySelector('[role="alert"]')).toBeNull();
+      await act(async () => { state.activePauseHold = null; release.resolve(result); });
+      await waitForAssertion(() => expect(container.querySelector('[data-slot="dialog-content"]')).toBeNull());
+      const expectedWarning = (texts: typeof messages, language: string) => {
+        const suffix = count === 1 && ["en", "es"].includes(language) ? "one" : "other";
+        return texts[`wakeFailed_${suffix}`].replace("{{count}}", String(count)).replace("{{message}}", diagnostic);
+      };
+      await waitForAssertion(() => expect(container.querySelector('[role="alert"]')?.textContent ?? null)
+        .toBe(count ? expectedWarning(messages, locale) : null));
+      const previousCalls = mockIssuesApi.getTreeControlState.mock.calls.length;
+      await act(async () => { await i18n.changeLanguage(locale === "en" ? "ja" : "en"); });
+      expect(container.querySelector('[role="alert"]')?.textContent ?? null).toBe(count
+        ? expectedWarning(locale === "en" ? issueTreeFeedbackMessages.ja : issueTreeFeedbackMessages.en, locale === "en" ? "ja" : "en") : null);
+      expect(mockIssuesApi.getTreeControlState).toHaveBeenCalledTimes(previousCalls);
+      expect(mockIssuesApi.releaseTreeHold).toHaveBeenCalledTimes(1);
+      // The existing settlement invalidation refreshes this preview once.
+      expect(mockIssuesApi.previewTreeControl.mock.calls).toEqual([
+        ["PAP-1", { mode: "resume", releasePolicy: { strategy: "manual" } }],
+        ["PAP-1", { mode: "resume", releasePolicy: { strategy: "manual" } }],
+      ]);
+      expect(mockIssuesApi.createTreeHold).not.toHaveBeenCalled();
+      expect(container.textContent).not.toContain("Other raw diagnosis not newly dumped");
+      expect(container.querySelector("tag")).toBeNull();
+      expect(queryClient.getQueryData<Issue[]>(queryKeys.issues.listByDescendantRoot("company-1", "issue-1")))
+        .toEqual(children);
+    },
+  );
+
+  it.each(Object.entries(issueTreeFeedbackMessages))(
+    "localizes status-specific preview errors in %s without changing errors or sending apply requests", async (locale, messages) => {
+      const cases: Array<{ error: unknown; expected: string; english: string }> = [
+        { error: new ApiError("server diagnostic 403", 403, { privatePayload: "not rendered" }), expected: messages.previewForbidden, english: issueTreeFeedbackMessages.en.previewForbidden },
+        { error: new ApiError("server diagnostic 409", 409, { privatePayload: "not rendered" }), expected: messages.previewStale, english: issueTreeFeedbackMessages.en.previewStale },
+        { error: new ApiError("server diagnostic 422", 422, { privatePayload: "not rendered" }), expected: messages.previewInvalid, english: issueTreeFeedbackMessages.en.previewInvalid },
+        { error: { privatePayload: "not rendered" }, expected: messages.previewFailed, english: issueTreeFeedbackMessages.en.previewFailed },
+        { error: new Error("Unable to load preview."), expected: "Unable to load preview.", english: "Unable to load preview." },
+        { error: new ApiError("Original diagnostic 原文 <tag> {{count}}", 500, { privatePayload: "not rendered" }), expected: "Original diagnostic 原文 <tag> {{count}}", english: "Original diagnostic 原文 <tag> {{count}}" },
+      ];
+      mockIssuesApi.previewTreeControl.mockReset();
+      for (const [index, test] of cases.entries()) {
+        let reject!: (error: unknown) => void;
+        const pending = new Promise<IssueTreeControlPreview>((_resolve, rejectPromise) => { reject = rejectPromise; });
+        mockIssuesApi.previewTreeControl.mockReturnValueOnce(pending);
+        if (index === 0) await openPausedTreeFeedbackHost();
+        else {
+          const retry = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent === "Retry preview");
+          expect(retry).toBeDefined();
+          await act(async () => { retry?.click(); });
+        }
+        await waitForAssertion(() => expect(mockIssuesApi.previewTreeControl).toHaveBeenCalledTimes(index + 1));
+        const dialog = container.querySelector('[data-slot="dialog-content"]');
+        const apply = Array.from(dialog?.querySelectorAll<HTMLButtonElement>("button") ?? []).find(button => button.textContent === "Resume subtree");
+        expect(apply?.disabled).toBe(true);
+        await act(async () => { await i18n.changeLanguage(locale); reject(test.error); });
+        await waitForAssertion(() => expect(dialog?.querySelector('[role="alert"]')?.textContent).toBe(test.expected));
+        expect(queryClient.getQueryState(["issues", "tree-control-preview", "PAP-1", "resume"])?.error).toBe(test.error);
+        expect(dialog?.textContent).not.toContain("not rendered");
+        expect(dialog?.querySelector("tag")).toBeNull();
+        expect(apply?.disabled).toBe(true);
+        await act(async () => { apply?.click(); await i18n.changeLanguage("en"); });
+        expect(dialog?.querySelector('[role="alert"]')?.textContent).toBe(test.english);
+        expect(mockIssuesApi.previewTreeControl).toHaveBeenCalledTimes(index + 1);
+        expect(mockIssuesApi.previewTreeControl).toHaveBeenLastCalledWith("PAP-1", { mode: "resume", releasePolicy: { strategy: "manual" } });
+        expect(mockIssuesApi.releaseTreeHold).not.toHaveBeenCalled();
+        expect(mockIssuesApi.createTreeHold).not.toHaveBeenCalled();
+      }
+    },
+  );
 
   it.each([false, true])(
     "refreshes a released pause and shows partial wake failure=%s inline",

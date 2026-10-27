@@ -1,0 +1,8 @@
+{
+  "previewForbidden": "Solo los usuarios del panel pueden previsualizar los controles del subárbol.",
+  "previewStale": "La vista previa está desactualizada porque cambió el estado de retención del subárbol. Vuelve a intentarlo para actualizarla.",
+  "previewInvalid": "Esta acción del subárbol no es válida actualmente para las tareas seleccionadas.",
+  "previewFailed": "No se puede cargar la vista previa.",
+  "wakeFailed_one": "Se ha desactivado la pausa, pero no se pudo iniciar {{count}} tarea. {{message}} Revisa los agentes afectados e intenta iniciarlos de nuevo.",
+  "wakeFailed_other": "Se ha desactivado la pausa, pero no se pudieron iniciar {{count}} tareas. {{message}} Revisa los agentes afectados e intenta iniciarlos de nuevo."
+}

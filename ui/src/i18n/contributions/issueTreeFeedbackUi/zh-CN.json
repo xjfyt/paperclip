@@ -1,0 +1,8 @@
+{
+  "previewForbidden": "只有看板用户可以预览子任务树控制操作。",
+  "previewStale": "子任务树的控制状态已更改，预览已过期。请重试以刷新。",
+  "previewInvalid": "当前无法对所选任务执行此子任务树操作。",
+  "previewFailed": "无法加载预览。",
+  "wakeFailed_one": "已解除暂停，但有 {{count}} 个任务无法启动。{{message}} 请检查受影响的智能体，然后尝试重新启动它们。",
+  "wakeFailed_other": "已解除暂停，但有 {{count}} 个任务无法启动。{{message}} 请检查受影响的智能体，然后尝试重新启动它们。"
+}
