@@ -56,3 +56,13 @@ pnpm exec vitest run --config tests/mimouse/private-prompt-vitest.config.ts \
 ```
 
 该夹具自行新建带所有权标记的临时 PostgreSQL 集群，执行历史检查点到当前迁移、私有固定集生产与中央费用结算、人工批准后的受控运行和负向检查。模型边界替换为无网络 Node 子进程，不使用真实 CLI 或账号；绝不把现有数据库目录传入夹具。结束时应看到 `shutdown verified pidFile=false processAlive=false`。具体测试数与通过状态以本次输出及 VERIFICATION 中冻结提交为准，不以本命令存在判定成功。
+
+## 额外兼容性回归：本机 Git 工作区限制
+
+2026-10-27 的相邻核心回归中，`heartbeat-process-recovery.test.ts` 的 `keeps an explicit local-path/worktree conflict blocked with a board action and no Sentry event` 在本沙箱仍失败：运行已被阻断、适配器未启动，但 `workspaceValidation.configurationReason` 不满足该用例对干净非 Git 目录的预期。
+
+本机 `/tmp` 祖先有只读 `.git` 标记；Git 还返回文件系统边界形式的错误，而非该保守分类器识别的标准“无 Git 仓库”格式。相关工作区分类实现及原测试相对上一发布版本未修改。没有删除 Git 标记、放宽安全判断或修改断言来让它通过；这项不得计为已验收。
+
+在正常开发机的独立无 Git 元数据祖先目录重新验证：为测试任务选择 `local_path`，同时请求 `isolated_workspace / git_worktree`。预期启动前阻断、无模型执行、保留 board 工作区修复动作；确认为明确配置冲突时，应有 `local_path_requires_git_checkout` 原因且不产生 Sentry 运行故障事件。不要删除真实仓库的 `.git` 来构造环境。
+
+这项额外回归与受控成本路由自身的无费用 PostgreSQL C2 分开记录。定向筛选后的跳过数量不是新增通过数，较早全套运行与后续定向结果不能拼接成一次完整全绿。
