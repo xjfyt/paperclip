@@ -10,8 +10,13 @@ import policyEn from "../i18n/contributions/notificationPolicy/en.json";
 import policyZh from "../i18n/contributions/notificationPolicy/zh-CN.json";
 import policyEs from "../i18n/contributions/notificationPolicy/es.json";
 import policyJa from "../i18n/contributions/notificationPolicy/ja.json";
+import windowEn from "../i18n/contributions/notificationWindow/en.json";
+import windowZh from "../i18n/contributions/notificationWindow/zh-CN.json";
+import windowEs from "../i18n/contributions/notificationWindow/es.json";
+import windowJa from "../i18n/contributions/notificationWindow/ja.json";
 // Domain contributions are the source; final locale synthesis is the integrator's step.
 for (const [locale, notificationPolicy] of Object.entries({ en: policyEn, "zh-CN": policyZh, es: policyEs, ja: policyJa })) i18n.addResourceBundle(locale, "translation", { notificationPolicy }, true, true);
+for (const [locale, notificationWindow] of Object.entries({ en: windowEn, "zh-CN": windowZh, es: windowEs, ja: windowJa })) i18n.addResourceBundle(locale, "translation", { notificationWindow }, true, true);
 const company = vi.hoisted(() => ({ selectedCompanyId: "company-a" }));
 const api = vi.hoisted(() => Object.fromEntries(["policy", "get", "create", "revise", "history", "review", "reviews", "toggle", "subscribe", "toggleSubscription", "preview", "retry", "test"].map(key => [key, vi.fn()])));
 vi.mock("@/context/CompanyContext", () => ({ useCompany: () => company }));
@@ -112,6 +117,18 @@ it("clears the selected observation when switching company", async () => {
   company.selectedCompanyId = "company-b"; client.setQueryData(["mimouse-notifications", "company-b"], data()); await mount(); expect(host.querySelector("#delivery-review-evidence")).toBeNull(); expect(api.review).not.toHaveBeenCalled();
 });
 
+function codingPolicyFixture() {
+  const current = data();
+  const coding = { ...current, subscriptions: [{ ...current.subscriptions[0], eventType: "coding.artifact_ready" }] };
+  client.setQueryData(["mimouse-notifications", "company-a"], coding); api.get.mockResolvedValue(coding);
+}
+async function fillSeverity(value: string) {
+  await act(async () => {
+    const select = host.querySelector('select[aria-label="Minimum severity"]')!;
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(select, value);
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
 async function fillPolicy(value: string) {
   await act(async () => {
     const input = host.querySelector('input[aria-label="Merge window (seconds, 0–300)"]')!;
@@ -120,12 +137,14 @@ async function fillPolicy(value: string) {
   });
 }
 it("saves policy alone without enabling, testing or retrying and rejects out-of-range windows", async () => {
+  codingPolicyFixture();
   await mount(); await fillPolicy("301"); expect((button("Save notification policy") as HTMLButtonElement).disabled).toBe(true);
   await fillPolicy("30"); await click(button("Save notification policy"));
   expect(api.policy).toHaveBeenCalledWith("company-a", "subscription-1", { minimumSeverity: "info", mergeWindowSeconds: 30, expectedVersion: 1 });
   expect(api.toggle).not.toHaveBeenCalled(); expect(api.subscribe).not.toHaveBeenCalled(); expect(api.test).not.toHaveBeenCalled(); expect(api.retry).not.toHaveBeenCalled();
 });
 it("keeps a policy draft on failure for explicit retry and resets it on company switch", async () => {
+  codingPolicyFixture();
   api.policy.mockRejectedValueOnce(Error("policy unavailable")); await mount(); await fillPolicy("40"); await click(button("Save notification policy"));
   expect(host.querySelector('[role="alert"]')).not.toBeNull();
   expect((host.querySelector('input[aria-label="Merge window (seconds, 0–300)"]') as HTMLInputElement).value).toBe("40");
@@ -145,13 +164,14 @@ it("shows delayed, merged and filtered ledger rows without retry controls", asyn
   expect(button("Review before retrying")).toBeNull(); expect(api.retry).not.toHaveBeenCalled();
 });
 it.each([["en", "Notification policy", "always bypass"], ["zh-CN", "通知策略", "始终绕过"], ["es", "Política de notificaciones", "nunca se filtran"], ["ja", "通知ポリシー", "常にフィルター"]])("localizes severity policy and critical guard in %s", async (locale, title, guard) => {
-  await i18n.changeLanguage(locale); await mount(); expect(host.textContent).toContain(title); expect(host.textContent).toContain(guard); expect(host.textContent).not.toContain("notificationPolicy.");
+  await i18n.changeLanguage(locale); await mount(); expect(host.textContent).toContain(title); expect(host.textContent).toContain(guard); expect(host.textContent).not.toContain("notificationPolicy."); expect(host.textContent).not.toContain("notificationWindow.");
 });
 
 it("preserves the conflicting policy draft through polls and requires explicit reload before another write", async () => {
+  codingPolicyFixture();
   api.policy.mockRejectedValueOnce(Object.assign(Error("conflict"), { status: 409 })); await mount(); await fillPolicy("40"); await click(button("Save notification policy"));
   expect(host.textContent).toContain("Your draft is preserved"); expect((button("Save notification policy") as HTMLButtonElement).disabled).toBe(true);
-  const fresh = { ...data(), subscriptions: [{ ...data().subscriptions[0], policyVersion: 2, policy: { minimumSeverity: "warning", mergeWindowSeconds: 20 } }] };
+  const fresh = { ...data(), subscriptions: [{ ...data().subscriptions[0], eventType: "coding.artifact_ready", policyVersion: 2, policy: { minimumSeverity: "warning", mergeWindowSeconds: 20 } }] };
   await act(async () => { client.setQueryData(["mimouse-notifications", "company-a"], fresh); });
   expect((host.querySelector('input[aria-label="Merge window (seconds, 0–300)"]') as HTMLInputElement).value).toBe("40");
   expect(api.policy).toHaveBeenCalledTimes(1); api.get.mockResolvedValue(fresh);
@@ -176,8 +196,34 @@ it("keeps failed-run digest unavailable and reports digest children without indi
   expect(host.textContent).toContain("Included in digest (not individually sent)"); expect(host.textContent).toContain("Failed runs remain individual"); expect(button("Review before retrying")).toBeNull();
 });
 it("ignores a late policy-save response after switching companies", async () => {
+  codingPolicyFixture();
   let finish!: () => void; api.policy.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
   await mount(); await fillPolicy("30"); await click(button("Save notification policy"));
   company.selectedCompanyId = "company-b"; client.setQueryData(["mimouse-notifications", "company-b"], data()); await mount();
   await act(async () => { finish(); }); await flush(); expect((host.querySelector('input[aria-label="Merge window (seconds, 0–300)"]') as HTMLInputElement).value).toBe("0");
+});
+
+
+it("keeps failed-run windows disabled while allowing severity changes at zero", async () => {
+  await mount();
+  expect((host.querySelector('input[aria-label="Merge window (seconds, 0–300)"]') as HTMLInputElement).disabled).toBe(true);
+  expect((host.querySelector('select[aria-label="Merge mode"]') as HTMLSelectElement).disabled).toBe(true);
+  expect(host.textContent).toContain("do not support a merge window");
+  await fillSeverity("warning"); await click(button("Save notification policy"));
+  expect(api.policy).toHaveBeenCalledWith("company-a", "subscription-1", { minimumSeverity: "warning", mergeWindowSeconds: 0, expectedVersion: 1 });
+  expect(api.test).not.toHaveBeenCalled(); expect(api.retry).not.toHaveBeenCalled();
+});
+it("requires an explicit legacy-window correction and preserves the severity draft until saving", async () => {
+  const current = data(); const legacy = { ...current, subscriptions: [{ ...current.subscriptions[0], policyVersion: 7, policy: { minimumSeverity: "warning", mergeWindowSeconds: 40 } }] };
+  client.setQueryData(["mimouse-notifications", "company-a"], legacy); api.get.mockResolvedValue(legacy);
+  await mount(); const input = host.querySelector('input[aria-label="Merge window (seconds, 0–300)"]') as HTMLInputElement;
+  expect(input.value).toBe("40"); expect(input.disabled).toBe(true); expect(api.policy).not.toHaveBeenCalled();
+  expect(host.textContent).toContain("previously saved positive value has no effect");
+  await fillSeverity("critical"); expect((button("Save notification policy") as HTMLButtonElement).disabled).toBe(true);
+  await click(button("Use individual delivery (0 seconds)")); expect(input.value).toBe("0"); expect(api.policy).not.toHaveBeenCalled();
+  expect((host.querySelector('select[aria-label="Minimum severity"]') as HTMLSelectElement).value).toBe("critical");
+  await click([...input.closest("details")!.querySelectorAll("button")].find(item => item.textContent === "Cancel") ?? null); expect(input.value).toBe("40"); expect(api.policy).not.toHaveBeenCalled();
+  await fillSeverity("critical"); await click(button("Use individual delivery (0 seconds)")); await click(button("Save notification policy"));
+  expect(api.policy).toHaveBeenCalledWith("company-a", "subscription-1", { minimumSeverity: "critical", mergeWindowSeconds: 0, expectedVersion: 7 });
+  expect(api.toggle).not.toHaveBeenCalled(); expect(api.subscribe).not.toHaveBeenCalled(); expect(api.test).not.toHaveBeenCalled(); expect(api.retry).not.toHaveBeenCalled();
 });

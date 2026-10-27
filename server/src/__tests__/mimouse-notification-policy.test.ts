@@ -59,25 +59,26 @@ describe("frozen notification policies", () => {
 
 describe("policy compare-and-swap transaction contract (mock transaction, not DB evidence)", () => {
   const input = { minimumSeverity: "warning" as const, mergeWindowSeconds: 30, expectedVersion: 1 };
+  const scope = [{ event_type: "coding.artifact_ready", kind: "wecom_webhook" }];
   it("requires an explicit positive expected version", () => {
     expect(notificationPolicyUpdateSchema.safeParse({ minimumSeverity: "info", mergeWindowSeconds: 0 }).success).toBe(false);
     expect(notificationPolicyUpdateSchema.safeParse({ ...input, expectedVersion: 0 }).success).toBe(false);
   });
   it("updates within the audit transaction and scopes the CAS to company, id and version", async () => {
     const row = { id: "subscription", policyVersion: 2, policy: { minimumSeverity: "warning", mergeWindowSeconds: 30 } };
-    const tx = { execute: vi.fn().mockResolvedValue([row]) }; const audit = vi.fn().mockResolvedValue(undefined);
+    const tx = { execute: vi.fn().mockResolvedValueOnce(scope).mockResolvedValueOnce([row]) }; const audit = vi.fn().mockResolvedValue(undefined);
     const transaction = vi.fn(async callback => callback(tx));
     expect(await updateNotificationPolicy({ transaction } as never, "company", "subscription", input, audit)).toEqual(row);
     expect(audit).toHaveBeenCalledWith(tx, 2);
-    const query = new PgDialect().sqlToQuery(tx.execute.mock.calls[0][0]);
+    const query = new PgDialect().sqlToQuery(tx.execute.mock.calls[1][0]);
     expect(query.sql).toContain("policy_version=policy_version+1"); expect(query.sql).toContain("company_id="); expect(query.sql).toContain("AND id="); expect(query.sql).toContain("AND policy_version=");
     expect(query.params).toEqual([JSON.stringify(row.policy), "company", "subscription", 1]);
   });
   it("rejects a stale version with current version and never audits or overwrites", async () => {
-    const execute = vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([{ policyVersion: 2 }]); const audit = vi.fn();
+    const execute = vi.fn().mockResolvedValueOnce(scope).mockResolvedValueOnce([]).mockResolvedValueOnce([{ policyVersion: 2 }]); const audit = vi.fn();
     const db = { transaction: async (callback: (tx: unknown) => Promise<unknown>) => callback({ execute }) };
     await expect(updateNotificationPolicy(db as never, "company", "subscription", input, audit)).rejects.toMatchObject({ status: 409, details: { currentVersion: 2 } });
-    expect(audit).not.toHaveBeenCalled(); expect(execute).toHaveBeenCalledTimes(2);
+    expect(audit).not.toHaveBeenCalled(); expect(execute).toHaveBeenCalledTimes(3);
   });
   it("rejects foreign/missing subscriptions without exposing another company version", async () => {
     const execute = vi.fn().mockResolvedValue([]); const audit = vi.fn();
@@ -85,12 +86,32 @@ describe("policy compare-and-swap transaction contract (mock transaction, not DB
     await expect(updateNotificationPolicy(db as never, "other-company", "subscription", input, audit)).rejects.toMatchObject({ status: 404 }); expect(audit).not.toHaveBeenCalled();
   });
   it("propagates failed audit before transaction commit (rollback boundary fixture)", async () => {
-    const tx = { execute: vi.fn().mockResolvedValue([{ id: "subscription", policyVersion: 2, policy: input }]) };
+    const tx = { execute: vi.fn().mockResolvedValueOnce(scope).mockResolvedValueOnce([{ id: "subscription", policyVersion: 2, policy: input }]) };
     let committed = false; let rolledBack = false;
     const db = { transaction: async (callback: (tx: unknown) => Promise<unknown>) => {
       try { const row = await callback(tx); committed = true; return row; } catch (error) { rolledBack = true; throw error; }
     } };
     await expect(updateNotificationPolicy(db as never, "company", "subscription", input, async () => { throw Error("audit failed"); })).rejects.toThrow("audit failed");
     expect(committed).toBe(false); expect(rolledBack).toBe(true);
+  });
+});
+
+
+describe("failed-run window contract", () => {
+  it.each([undefined, "exact", "digest"] as const)("rejects positive windows in %s mode before mutation/audit", async mergeMode => {
+    const execute = vi.fn().mockResolvedValue([{ event_type: "run.failed", kind: "wecom_webhook" }]); const audit = vi.fn();
+    const db = { transaction: async (callback: (tx: unknown) => unknown) => callback({ execute }) };
+    await expect(updateNotificationPolicy(db as never, "company", "subscription", { minimumSeverity: "warning", mergeWindowSeconds: 30, mergeMode, expectedVersion: 1 }, audit)).rejects.toMatchObject({ status: 422, message: expect.stringContaining("must be 0") });
+    expect(execute).toHaveBeenCalledTimes(1); expect(audit).not.toHaveBeenCalled();
+    const query = new PgDialect().sqlToQuery(execute.mock.calls[0][0]);
+    expect(query.sql).toContain("FOR UPDATE OF s, e"); expect(query.params).toEqual(["company", "subscription"]);
+  });
+  it("allows an explicit zero correction with unchanged severity and normal CAS audit", async () => {
+    const row = { id: "subscription", policyVersion: 8, policy: { minimumSeverity: "critical", mergeWindowSeconds: 0 } };
+    const execute = vi.fn().mockResolvedValue([row]); const audit = vi.fn();
+    const db = { transaction: async (callback: (tx: unknown) => unknown) => callback({ execute }) };
+    expect(await updateNotificationPolicy(db as never, "company", "subscription", { minimumSeverity: "critical", mergeWindowSeconds: 0, expectedVersion: 7 }, audit)).toEqual(row);
+    expect(new PgDialect().sqlToQuery(execute.mock.calls[0][0]).params).toEqual([JSON.stringify(row.policy), "company", "subscription", 7]);
+    expect(audit).toHaveBeenCalledWith(expect.anything(), 8);
   });
 });

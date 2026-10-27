@@ -157,13 +157,13 @@ test("actual audit INSERT failure rolls back the HTTP policy update and version"
 test("failed-run trigger freezes policy/version, filters warnings and preserves transaction rollback", async ({ request }) => {
   const f = await fixture(request, "run.failed");
   try {
-    await request.patch(f.policyPath, { data: { minimumSeverity: "critical", mergeWindowSeconds: 300, expectedVersion: 1 } });
+    await request.patch(f.policyPath, { data: { minimumSeverity: "critical", mergeWindowSeconds: 0, expectedVersion: 1 } });
     const [agent] = await f.db.insert(agents).values({ companyId: f.company.id, name: "policy fixture", role: "engineer", status: "active", adapterType: "process" }).returning();
     await expect(f.db.transaction(async tx => { await tx.insert(heartbeatRuns).values({ companyId: f.company.id, agentId: agent.id, status: "failed" }); throw Error("run rollback fixture"); })).rejects.toThrow("run rollback fixture"); expect(await f.rows()).toHaveLength(0);
     const [run] = await f.db.insert(heartbeatRuns).values({ companyId: f.company.id, agentId: agent.id, status: "failed" }).returning();
     await f.db.update(heartbeatRuns).set({ status: "failed" }).where(eq(heartbeatRuns.id, run.id));
-    const [filtered] = await f.rows(); expect(filtered).toMatchObject({ state: "filtered", mergeKey: null }); expect(filtered.snapshot).toMatchObject({ severity: "warning", policyVersion: 2, policy: { minimumSeverity: "critical", mergeWindowSeconds: 300 } });
-    await request.patch(f.policyPath, { data: { minimumSeverity: "warning", mergeWindowSeconds: 300, expectedVersion: 2 } });
+    const [filtered] = await f.rows(); expect(filtered).toMatchObject({ state: "filtered", mergeKey: null }); expect(filtered.snapshot).toMatchObject({ severity: "warning", policyVersion: 2, policy: { minimumSeverity: "critical", mergeWindowSeconds: 0 } });
+    await request.patch(f.policyPath, { data: { minimumSeverity: "warning", mergeWindowSeconds: 0, expectedVersion: 2 } });
     await f.db.insert(heartbeatRuns).values({ companyId: f.company.id, agentId: agent.id, status: "timed_out" });
     const rows = await f.rows(); expect(rows).toHaveLength(2); expect(rows.find(row => row.id !== filtered.id)).toMatchObject({ state: "pending", mergeKey: null, mergedInto: null }); expect(rows.find(row => row.id === filtered.id)).toEqual(filtered);
   } finally { await f.cleanup(); }
@@ -276,5 +276,35 @@ test("digest retryable transport keeps its envelope and does not collect newer e
     await notificationOutbox(f.db, deps).tick(); expect(sent).toHaveLength(2); expect(sent[1]).toEqual(sent[0]);
     const rows = await f.rows(); expect(rows.find(row => row.id === leader.id)?.state).toBe("accepted");
     expect(rows.filter(row => row.mergedInto === leader.id)).toHaveLength(1); expect(rows.filter(row => row.state === "pending")).toHaveLength(1);
+  } finally { await f.cleanup(); }
+});
+
+
+test("failed-run positive windows are rejected and legacy correction is explicit, audited and forward-only", async ({ request }) => {
+  const f = await fixture(request, "run.failed");
+  try {
+    const [agent] = await f.db.insert(agents).values({ companyId: f.company.id, name: "legacy policy fixture", role: "engineer", status: "active", adapterType: "process" }).returning();
+    const [run] = await f.db.insert(heartbeatRuns).values({ companyId: f.company.id, agentId: agent.id, status: "failed" }).returning();
+    const [legacyDelivery] = await f.rows();
+    expect(legacyDelivery).toMatchObject({ state: "pending", mergeUntil: null, mergeKey: null, mergedInto: null });
+    expect(legacyDelivery.snapshot).toMatchObject({ policy: defaultPolicy, policyVersion: 1, secretVersion: 1, verificationEpoch: f.endpoint.verificationEpoch });
+    const read = await request.get(f.base); expect(read.status()).toBe(200);
+    expect((await read.json()).subscriptions.find((row: { id: string }) => row.id === f.subscription.id).policy).toEqual(defaultPolicy);
+    for (const mergeMode of [undefined, "exact", "digest"]) {
+      const response = await request.patch(f.policyPath, { data: { minimumSeverity: "critical", mergeWindowSeconds: 30, mergeMode, expectedVersion: 1 } });
+      expect(response.status()).toBe(422); expect(await response.text()).toContain("must be 0");
+    }
+    const [unchanged] = await f.db.select().from(subscriptions).where(eq(subscriptions.id, f.subscription.id)); expect(unchanged).toEqual(f.subscription);
+    const auditRows = () => f.db.select().from(activityLog).where(and(eq(activityLog.companyId, f.company.id), eq(activityLog.action, "notification.subscription.policy_updated")));
+    expect(await auditRows()).toHaveLength(0); expect(await f.rows()).toEqual([legacyDelivery]);
+    const corrected = await request.patch(f.policyPath, { data: { minimumSeverity: "warning", mergeWindowSeconds: 0, expectedVersion: 1 } });
+    expect(corrected.status()).toBe(200); expect(await corrected.json()).toMatchObject({ policy: { minimumSeverity: "warning", mergeWindowSeconds: 0 }, policyVersion: 2 });
+    expect(await auditRows()).toHaveLength(1); expect(await f.rows()).toEqual([legacyDelivery]);
+    await f.db.update(heartbeatRuns).set({ status: "timed_out" }).where(eq(heartbeatRuns.id, run.id)); expect(await f.rows()).toEqual([legacyDelivery]);
+    await f.db.insert(heartbeatRuns).values({ companyId: f.company.id, agentId: agent.id, status: "timed_out" });
+    const rows = await f.rows(); expect(rows).toHaveLength(2);
+    expect(rows.find(row => row.id !== legacyDelivery.id)).toMatchObject({ state: "pending", mergeUntil: null, mergedInto: null, snapshot: { policy: { minimumSeverity: "warning", mergeWindowSeconds: 0 }, policyVersion: 2 } });
+    expect((await request.patch(f.policyPath, { data: { minimumSeverity: "critical", mergeWindowSeconds: 0, expectedVersion: 1 } })).status()).toBe(409);
+    expect(await auditRows()).toHaveLength(1);
   } finally { await f.cleanup(); }
 });

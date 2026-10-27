@@ -61,13 +61,17 @@ export async function updateNotificationPolicy(db: Pick<Db, "transaction">, comp
   // Keep the legacy two-field shape for the strict failed-run database trigger.
   const policy = { ...legacyPolicy, ...(mergeMode === "digest" ? { mergeMode } : {}) };
   return db.transaction(async tx => {
-    if (mergeMode === "digest") {
+    if (mergeMode === "digest" || policy.mergeWindowSeconds > 0) {
       const scope = await tx.execute(sql`SELECT s.event_type, e.kind FROM mimouse_notification_subscriptions s
         JOIN mimouse_notification_endpoints e ON e.company_id=s.company_id AND e.id=s.endpoint_id
         WHERE s.company_id=${companyId} AND s.id=${id} FOR UPDATE OF s, e`);
       if (!scope.length) throw notFound("Notification subscription not found");
       const target = scope[0] as unknown as { event_type: string; kind: string };
-      if (!supportsNotificationDigest(target.event_type, target.kind)) throw unprocessable("Digest is supported only for coding events on text channels");
+      // Failed runs are enqueued individually by the database trigger. Never
+      // accept a delay that this producer cannot honor; legacy values require
+      // an explicit, audited correction rather than a read-time rewrite.
+      if (target.event_type === "run.failed" && policy.mergeWindowSeconds > 0) throw unprocessable("Failed-run notifications are individual; mergeWindowSeconds must be 0");
+      if (mergeMode === "digest" && !supportsNotificationDigest(target.event_type, target.kind)) throw unprocessable("Digest is supported only for coding events on text channels");
     }
     const rows = await tx.execute(sql`UPDATE mimouse_notification_subscriptions
       SET policy=${JSON.stringify(policy)}::jsonb, policy_version=policy_version+1

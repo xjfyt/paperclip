@@ -74,7 +74,7 @@ describe("bounded notification digests (no provider/network)", () => {
     await expect(updateNotificationPolicy(db as never, "company", "subscription", { ...snapshot.policy, minimumSeverity: "info", mergeMode: "digest", expectedVersion: 1 }, audit)).rejects.toMatchObject({ status: 422 }); expect(execute).toHaveBeenCalledTimes(1); expect(audit).not.toHaveBeenCalled();
   });
   it("normalizes exact back to trigger-compatible policy JSON", async () => {
-    const execute = vi.fn().mockResolvedValue([{ id: "subscription", policyVersion: 2, policy: {} }]); const db = { transaction: async (callback: (tx: unknown) => unknown) => callback({ execute }) };
-    await updateNotificationPolicy(db as never, "company", "subscription", { minimumSeverity: "warning", mergeWindowSeconds: 30, mergeMode: "exact", expectedVersion: 1 }, vi.fn()); expect(JSON.parse(query(execute.mock.calls[0][0]).params[0] as string)).toEqual({ minimumSeverity: "warning", mergeWindowSeconds: 30 });
+    const execute = vi.fn().mockResolvedValueOnce([{ event_type: "coding.artifact_ready", kind: "wecom_webhook" }]).mockResolvedValueOnce([{ id: "subscription", policyVersion: 2, policy: {} }]); const db = { transaction: async (callback: (tx: unknown) => unknown) => callback({ execute }) };
+    await updateNotificationPolicy(db as never, "company", "subscription", { minimumSeverity: "warning", mergeWindowSeconds: 30, mergeMode: "exact", expectedVersion: 1 }, vi.fn()); expect(JSON.parse(query(execute.mock.calls[1][0]).params[0] as string)).toEqual({ minimumSeverity: "warning", mergeWindowSeconds: 30 });
   });
 });
