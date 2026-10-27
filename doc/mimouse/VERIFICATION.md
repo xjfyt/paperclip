@@ -1,5 +1,15 @@
 # 本地集成验证记录
 
+## 5142键动态来源补全（2026-10-27，已本地验证）
+
+- 本批冻结 `91492969b2abfab58386851c861f636c7630f98e`。从前批1862个动态位置追踪实际宿主与本地来源，补齐权限/来源、审核策略、列表排序/分组/依赖、日期/账单、活动完整句、聊天本地错误/附件类别、引导与selector上游、类型化暂时不可用、角色/环境、责任人opt-in和实际时间线。逐片证据、已撤回误报及源契约/真实host差别见[动态文案清单](checklists/I18N-DYNAMIC-CLOSURE-20261027.md)。
+- 同schema 3的[5142键审计](checklists/I18N-AUDIT-20261027-5142.json)仍是78文件，278 literal/1849 dynamic，source SHA-256 `6ca65c8c073890bead39965c1bf1603ff77a65a8b2df5e453f5845b3ad7e28bc`；缺失路径检查均为空。动态位置数量不是缺陷数量，递归caller跟踪也不代表全站已译；用户/供应商原文和技术值有意保留。
+- UI完整类型复验通过（`/tmp/paperclip-5142-ui-types-final.log`）；首轮发现测试Object.entries扩宽语言类型及unknown错误未显式收窄，已用确定四语元组和真实instanceof分支修复，未修改生产或降低断言，首轮日志保留。34文件1493项中央定向通过（`/tmp/paperclip-5142-central-ui.log`）；52项Node脚本与compose/token/palette/cliplab/no-git-push门禁通过（`/tmp/paperclip-5142-scripts.log`）。这些不相加冒充全UI。
+- 生产UI构建串行重跑通过4.15秒（`/tmp/paperclip-5142-ui-build-final.log`）。首次与34文件测试并行时在rendering chunks阶段被系统终止137（`/tmp/paperclip-5142-ui-build.log`），故等待测试退出后按原命令完整重跑；未跳过步骤或放宽检查。保留大于500KB chunk、无效dynamic import及既有CSS highlight处理提示。
+- 新完整UI使用新inventory/9分片/2并行，**859文件、86批、11588项严格聚合通过**，零失败/跳过/todo，全部sourceUnchanged=true；不是沿用4762版本的11160项。server/packages/cli对0500d928无差异（`/tmp/paperclip-5142-backend-unchanged.log`为0），164项编译API和48c9c1d0构建是未变后端历史证据，不是本批重新执行。
+- 完整UI证据：`test-results/mimouse-ui/aggregate-2026-10-27T17-27-12-372Z-XZ45Ps/aggregate.json`，聚合日志`/tmp/paperclip-dynamic-ui-parallel-aggregate-3210369e.log`，分片清单`/tmp/paperclip-dynamic-ui-parallel-manifests.txt`，监督日志`/tmp/paperclip-dynamic-ui-parallel-supervisor.log`。UI源码SHA-256 `6cb4a66c5e67e1879a20c449797540ebd14fdf4c4ce91dd8e33b64b903ff7d25`，runtime-trees-v2输入SHA-256 `ce8678974c70cfa6d124feed3aa5f17e6f7401f85de0484830af2ba09c441d88`。此为同输入严格覆盖聚合，不伪称一次不中断运行。
+- 本轮未跑真实模型/CLI/供应商通知、全站浏览器/IME、独立all-dist安装包或跨平台Runner。任务聊天的本地标题来源只在明确投影边界继承；真实时间线另有三host Group测试，不能只用direct Card证明。tool taxonomy、活动聚合摘要、其它协议字段/称谓消费路径继续列为未扩改，原85需求统计不因词条数增加而改变。发布以远端mimouse完整SHA核对为准。
+
 ## 4762键四语界面补全（2026-10-27，已本地验证候选）
 
 - 本轮补齐组织目录/通用设置、production导航、账户/项目壳、正常账号额度与旧订阅回退、Agent/Issue详情。旧有限372候选按源路径分类的98个UI缺口已抽取；另有45已有包装器、19保留标识、210不可达/测试候选（含经典Plan分支1个），不称全站全覆盖。
