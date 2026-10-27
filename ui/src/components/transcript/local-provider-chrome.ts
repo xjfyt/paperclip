@@ -10,10 +10,17 @@ const titleKeys = {
 // UI projection provenance only. Never trust a title string or a flag supplied in
 // provider payloads. Weak keys neither alter raw entries nor retain old runs.
 // A copied/serialized entry loses provenance and safely keeps its original text.
-const localChrome = new WeakMap<ProviderEntry, { titleKey: string; summaryKey?: string }>();
+const localChrome = new WeakMap<object, { titleKey: string; summaryKey?: string }>();
 export function markLocalProviderChrome<T extends ProviderEntry>(entry: T, localSummary = false): T {
   const titleKey = titleKeys[entry.family];
   localChrome.set(entry, { titleKey, ...(localSummary ? { summaryKey: titleKey } : {}) });
   return entry;
 }
-export function localProviderChrome(entry: ProviderEntry) { return localChrome.get(entry); }
+export function localProviderChrome(entry: object) { return localChrome.get(entry); }
+
+/** Carry provenance across known UI-only projections, never from provider fields. */
+export function inheritLocalProviderChrome<T extends object>(source: object, projection: T): T {
+  const chrome = localChrome.get(source);
+  if (chrome) localChrome.set(projection, chrome);
+  return projection;
+}

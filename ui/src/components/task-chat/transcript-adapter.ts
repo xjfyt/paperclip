@@ -1,3 +1,4 @@
+import { inheritLocalProviderChrome } from "../transcript/local-provider-chrome";
 /**
  * Live adapter: map a run's streaming TranscriptEntry[] (from
  * useLiveRunTranscripts — the same source the current thread consumes) into the
@@ -467,7 +468,7 @@ function providerActivityItem(
         stringValue(entry.payload.message) ??
         stringValue(entry.payload.summary));
 
-  return {
+  return inheritLocalProviderChrome<TaskChatProviderActivityItem>(entry, {
     id: `${runId}:provider:${providerActivityKey(entry)}:${index}`,
     kind: "protocol",
     surface: "provider_activity",
@@ -483,7 +484,7 @@ function providerActivityItem(
     output: rawOutput ? rawOutput.slice(0, PROTOCOL_OUTPUT_MAX) : undefined,
     outputTruncated,
     transcriptIndex: index,
-  };
+  });
 }
 
 function providerItemDetail(
@@ -512,7 +513,7 @@ function mergeProviderActivityItem(
     previous.family !== "tool_execution" ||
     incoming.family !== "tool_execution"
   ) {
-    return { ...incoming, id: previous.id };
+    return inheritLocalProviderChrome<TaskChatProviderActivityItem>(incoming, { ...incoming, id: previous.id });
   }
   const details = new Map(
     previous.details.map((detail) => [detail.label, detail]),
@@ -543,14 +544,14 @@ function mergeProviderActivityItem(
     }
     details.set(detail.label, detail);
   }
-  return {
+  return inheritLocalProviderChrome<TaskChatProviderActivityItem>(incoming, {
     ...incoming,
     id: previous.id,
     summary: meaningfulProviderToolSummary(incoming.summary)
       ? incoming.summary
       : previous.summary,
     details: [...details.values()],
-  };
+  });
 }
 
 /** Result content → the expandable mono detail block (clipped, trimmed). */

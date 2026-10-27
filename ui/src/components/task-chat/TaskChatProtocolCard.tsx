@@ -1,3 +1,5 @@
+import { t as chromeT, useTranslation as useChromeTranslation } from "@/i18n";
+import { localProviderChrome } from "../transcript/local-provider-chrome";
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
@@ -257,6 +259,8 @@ function ProviderActivityCard({
 }: {
   item: TaskChatProviderActivityItem;
 }) {
+  useChromeTranslation();
+  const chrome = localProviderChrome(item);
   const Icon = FAMILY_ICON[item.family];
   const hasDetails =
     item.details.length > 0 ||
@@ -266,9 +270,9 @@ function ProviderActivityCard({
   return (
     <CardShell
       icon={Icon}
-      title={item.title}
+      title={chrome ? chromeT(chrome.titleKey) : item.title}
       status={item.status}
-      summary={item.summary}
+      summary={chrome?.summaryKey ? chromeT(chrome.summaryKey) : item.summary}
       testId={`task-chat-provider-${item.family}`}
     >
       {item.steps.length > 0 ? <PlanSteps steps={item.steps} /> : null}
