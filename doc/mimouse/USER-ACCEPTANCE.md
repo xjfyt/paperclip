@@ -1,6 +1,6 @@
 # MiMouse 用户拉取与手工验收指南
 
-> 当前原计划逐项结论与统一手测见 [PLAN-TRACEABILITY](PLAN-TRACEABILITY.md)。最新审计基点 6bee5bc；已核实远端0d43ebb。2354键冻结UI已完成770文件8665项回归、sourceUnchanged=true（摘要见矩阵）；后续漏译/IME/退出提示修复另验。6bee5bc server完整类型已过，构建/API复验待记录。以下旧SHA及各自通过数是历史证据，不顺延。
+> 当前原计划逐项结论与统一手测见 [PLAN-TRACEABILITY](PLAN-TRACEABILITY.md)。2026-10-27 01:59 UTC待发布 HEAD 为 `2a85e074`，业务代码冻结于 `491a6b2c`（3815键）；最后已核实远端为 `5c11913a`，候选尚未推送。server标准构建、UI完整类型/生产构建、提示词专项153项及编译入口158项已通过；814文件/82批完整UI聚合通过，不能宣称全量通过。详细日志及完整SHA见 [VERIFICATION](VERIFICATION.md)。以下旧SHA及各自通过数是历史证据，不顺延。
 
 本指南供你拉取代码后，在**独立、可丢弃测试环境**中自行验证。它是测试步骤，不是通过报告；下列手工用例默认均为「未执行」，实际结果请另行记录。
 
@@ -52,7 +52,7 @@ VERIFICATION 最新记录时间/对应源码或 build stamp：
 
 **后续增量适用性**：第 4.12 节企微接收以及第 4.13 节提示词 UI 用例，仅适用于你实际拉取且已包含对应迁移/路由/worker/界面的版本。旧142快照只有提示词注册表API；f19971d已包含提示词UI、企微API/worker及0355迁移，但尚无企微管理面板。入口缺失时记录「未提供/阻塞」，不要凭本文启用不存在的能力。新版本以该 SHA 的验证记录为准。
 
-最新2341键快照完整UI已经结束：766文件、77批、8637项全过，零失败/跳过/todo，源码未变，对应远端16be872。初始化流程的新优化不包含在该快照中，具体应用SHA及摘要见 VERIFICATION.md 11:22 UTC记录。
+历史2341键快照完整UI已经结束：766文件、77批、8637项全过，零失败/跳过/todo，源码未变，对应远端16be872。初始化流程的新优化不包含在该快照中，具体应用SHA及摘要见 VERIFICATION.md 11:22 UTC记录。
 
 ### 证据如何解读
 
@@ -99,6 +99,8 @@ export PAPERCLIP_OIDC_ENABLED=false PAPERCLIP_WORKBUDDY_ENABLED=false
 export PAPERCLIP_NOTIFICATIONS_ENABLED=false PAPERCLIP_NOTIFICATIONS_WORKER_ENABLED=false
 export PAPERCLIP_GITLAB_PUBLISH_ENABLED=false PAPERCLIP_GITLAB_POLL_ENABLED=false
 export PAPERCLIP_CODING_REPAIR_ENABLED=false
+export PAPERCLIP_PROMPT_APPLICATIONS_ENABLED=false PAPERCLIP_PRIVATE_PROMPT_TESTS_ENABLED=false
+export HEARTBEAT_SCHEDULER_ENABLED=false
 export MIMOUSE_WECOM_WORKER_ENABLED=false
 export PAPERCLIP_TELEMETRY_DISABLED=1 DO_NOT_TRACK=1
 cp pnpm-lock.yaml "$TEST_HOME/evidence/pnpm-lock.before.yaml"
@@ -166,7 +168,7 @@ API 入口会核查专用标记及真实 data_directory，拒绝混用现有配�
 
 退出提示已补齐，按 [CASDOOR-LOGOUT](checklists/CASDOOR-LOGOUT-20261026.md) 测本地成功/全局未确认、暖缓存和IdP不可达后回访；浏览器自己的错误页不是本站页面。产物清单已有明确确认表单，按 [AM1–AM10](../plans/2026-10-26-coding-artifact-manifest-ui.md) 测真实本地文件、固定SHA、未知结果和通知副作用；这不是构建/签名/上传入口。
 
-当前2875键仅宣称对应类型/构建/定向回归通过，最新完整UI结果以VERIFICATION为准。高级权限摘要及其它残余仍需逐路径核对。
+历史2875键切片仅宣称其对应类型/构建/定向回归通过；当前3815键完整UI聚合通过，最终结果以VERIFICATION为准。高级权限摘要及其它残余仍需逐路径核对。
 
 ## 3. 统一测试方式与权限矩阵
 
@@ -227,7 +229,7 @@ API 入口会核查专用标记及真实 data_directory，拒绝混用现有配�
 
 1. **NOTIFY-01**：在通知页创建企业微信、飞书、钉钉应用/兼容 webhook、公众号的测试配置草稿；缺必填项再保存。预期缺项明确拒绝，成功创建默认停用、无发送；秘密只通过受控引用与固定版本，不出现在页面/历史/日志。
 2. **NOTIFY-02**：两个窗口编辑同一配置，先保存窗口一，再提交窗口二旧版本。预期旧版本409；修订留下非秘密历史并暂停。已有投递预览仍绑定旧目标/旧凭据版本，不转投新目标。
-3. **NOTIFY-03**：配置订阅严重程度、精确重复窗口及策略版本；在 fixture 内生成相同/不同严重程度事件并重复。预期过滤和有界精确去重，CAS 冲突可见；不是摘要聚合，不能把不相同事件误合并。
+3. **NOTIFY-03**：配置订阅严重程度、精确重复窗口及策略版本；在 fixture 内生成相同/不同严重程度事件并重复。预期默认exact模式过滤和有界精确去重，CAS 冲突可见，不把不相同事件误合并；另在支持的三类coding事件/文本渠道显式选择digest，按[有界摘要合同](notifications.md#显式有界摘要窗口无物理-schema-迁移)检查最多10项、冻结成员/目标和未知不重派。run.failed、关键审批预算与公众号不支持此摘要模式。
 4. **NOTIFY-04**：查看待投递预览及未知投递的人工核对，填 accepted/not_accepted/unknown 证据后刷新。预期人工记录有操作者/状态快照，原传输 state/receipt 不变；不是独立供应商 C3。
 5. **NOTIFY-05**：在 fixture 中模拟超时、429、token 过期、重启与轮换。预期租约/缓存隔离，未知结果不自动重发；人工重试要求明确核对及接受重复风险，并沿原目标版本、同 requestId 去重。
 6. **NOTIFY-06（可选实送）**：仅当你已确定测试收件人、渠道资格、模板/OpenID并授权这一条发送后，开启所需发送开关，预览并单独确认。核对供应商回执和收件端实际消息，分别记录受理/送达/已读；关回测试开关。公众号资格和钉钉租户能力不可用则 blocked。
@@ -251,7 +253,7 @@ API 入口会核查专用标记及真实 data_directory，拒绝混用现有配�
 3. **FEEDBACK-03**：人类 owner/admin 填复现、预期、建议、验收标准并确认转待办；连点/刷新/重试。预期一个 private/backlog 任务、无 Agent 指派/派发；quarantined 不因晋级变可信；另一用户看不到他人的私有回执。
 4. **LF-01**：Langfuse 面板创建只读任务，使用测试项目的受控密钥引用、固定版本、明确不超过24小时窗口；先检查缺项/非法 origin 被拒绝。没有实连授权仅运行 fixture，不向实际账号请求。
 5. **LF-02（可选实连）**：明确点击拉取一页，核对来源 URL、project/trace/observation、微秒时间与 `provider_fetch`；继续页、重启服务后继续、显式 replay。预期游标持久化、同事件不重复、初始脱敏快照不覆盖；人工 sourceKind=langfuse 仍标 manual_import。
-6. **LF-03**：受控 fixture 测试401/429、未知schema、404/405/410、取消、页面并发与审计失败。预期失败关闭、重试时间可见、页和游标同事务；响应丢失先刷新状态，不宣称完整抓取。只读 GET、不拉完整 trace/io/客户日志、不发模型/客户回复。当前企微接收与管理界面见 4.12；可验证复现/测试关联仍缺，语义模型聚类/自动复现是可选增强。
+6. **LF-03**：受控 fixture 测试401/429、未知schema、404/405/410、取消、页面并发与审计失败。预期失败关闭、重试时间可见、页和游标同事务；响应丢失先刷新状态，不宣称完整抓取。只读 GET、不拉完整 trace/io/客户日志、不发模型/客户回复。当前企微接收与管理界面见 4.12；固定回归集来源关联及固定提交失败/通过检查的人审历史回执已实现，仍须真实复现/修复效果验收，operator_supplied/human_attested不等于自动执行或独立验证；语义模型聚类/自动复现是可选增强。
 
 ### 4.8 调研与例行任务（候选/人工晋级/报告身份接线已实现）
 
@@ -295,7 +297,7 @@ API 入口会核查专用标记及真实 data_directory，拒绝混用现有配�
 2. **CAP-02**：当前面板支持查看、分页与撤销，不提供完整新增表单。由公司管理员在已认证测试会话通过 `POST /api/companies/:companyId/capability-evidence` 录入纯测试人工凭据，字段以 `packages/shared/src/capability-evidence.ts` 的追加契约为准（供应商/版本/账号范围/环境/时间/证据引用及申报等级）；不熟悉 API 时运行对应隔离夹具并将手工新增记未执行。重复同一幂等键与并发旧版本请求。预期只增不改、持久幂等与CAS冲突、审计可追溯，明确标注人工声明；保存不触发供应商请求或模型。
 3. **CAP-03**：更换版本/账号/环境或让记录失效，再撤销/替代证据。预期不匹配证据不能继续显示有效验证；历史不覆盖；能力台账不解锁原有权限、取消或费用能力。跨公司/Agent写入负例沿 AUTHZ 执行。
 
-### 4.12 企业微信接收入站（未发布增量；默认关闭，非真实 C3）
+### 4.12 企业微信接收入站（按实际SHA确认范围；默认关闭，非真实 C3）
 
 先确认实际 SHA 已包含该增量。当前管理入口是 `GET/POST /api/companies/:companyId/feedback-wecom/connections`、`PATCH .../:id` 和 `POST .../:id/enabled`，不是通知 webhook；当前已提供反馈页企微管理面板；旧快照缺入口需先升级，不以手写凭据绕过选择器。配置字段以 `server/src/services/mimouse-wecom/protocol.ts` 为准。先用仓库隔离 fixture 和虚构秘密；worker 保持 `MIMOUSE_WECOM_WORKER_ENABLED=false`，不得把真实企业群/生产 bot 当故障注入对象。
 
@@ -311,7 +313,7 @@ API 入口会核查专用标记及真实 data_directory，拒绝混用现有配�
 8. **WECOM-08 回执与低信任**：fixture 发送一条允许的文本，重复同 msgid，再用同 msgid 改正文；附带媒体 URL、response_url、aeskey 或指令文本。预期 `provider_push`、首份脱敏快照保留、重复不新增、quarantined 不升级可信；不下载附件、不执行消息指令、不自动创建/指派任务或调用模型。状态如有 gap 必须保留，`replaySupported:false` 不能当完整补抓；人工晋级沿 FEEDBACK-03 单独确认。
 9. **WECOM-09 可选实连**：仅在明确测试授权下接收一个虚构最小文本，保存 bot/范围/版本的脱敏对应证据、供应商消息 ID 映射、接收与停止回执。缺真实供应商回执仍是 C2/blocked；10 项本地 DB/API 或纯协议通过都不能代替这项 C3。
 
-### 4.13 提示词注册表（API 和四语 UI 已实现，不应用运行态）
+### 4.13 提示词注册表（API 和四语 UI 已实现；注册表选择不应用运行态）
 
 142 快照仅有 API；当前基点已含 UI，按实际拉取 SHA 执行页面步骤。入口为公司 `prompt-registry` 页面及 `GET /api/companies/:companyId/prompt-registry`、`POST .../revisions`、`POST .../:promptId/selections`。参阅 [提示词注册表](../plans/2026-10-26-p5-prompt-registry.md)。必须是真人 owner/admin 的有效 session，不使用 Board key、Agent key 或 local_implicit 替代。
 
@@ -331,6 +333,23 @@ API 入口会核查专用标记及真实 data_directory，拒绝混用现有配�
 2. **COST-02**：fixture 覆盖未知币种/费用、部分账本、过期窗口、错公司/适配器/运行来源和重复请求。预期硬阻断，不用零费用或推测的未来上下文补齐。请求和审计幂等，无模型/任务派发。
 3. **COST-03**：挂起旧身份策略/账本读取，再切换公司/用户/session并访问同路径。预期新身份独立请求，旧响应不能填入新页面；刷新不自动选择或执行。暂停公司下的调研只读边界另按 RESEARCH-06 测，不能借成本面板绕过写入限制。
 
+### 4.15 首期受控提示词应用（默认关闭，真实模型另行授权）
+
+入口为提示词注册表内的「受控应用」区域；普通 selection 与运行绑定仍是两套状态。当前只支持 builtin Claude CLI、本地、固定公司 API-key 版本、无项目的新任务首次 fresh，使用已批准的配置 cwd；不支持其它 adapter、订阅切换、native/ACP/remote、项目覆写或未固定的安全 wrapper，不要为通过测试删除既有安全限制。
+
+详细协议与手测见 [应用界面验收](../plans/2026-10-26-p5-application-ui-acceptance.md)、[运行边界](../plans/2026-10-26-p5-runtime-application-boundaries.md)、[0358维护窗口迁移](../plans/2026-10-26-feedback-prompt-application-migration.md)。本轮无网络 Node 替身验证不能当真实 CLI、工具或账单验收；已执行的四语只读浏览器范围见[验收记录](checklists/APPLICATION-READONLY-BROWSER-20261027.md)，不包含批准、回退或模型执行。
+
+1. 默认不开启 PAPERCLIP_PROMPT_APPLICATIONS_ENABLED：能读已授权历史，但不能批准新绑定；打开/切语言/刷新均不创建或执行模型任务。
+2. 在专用测试公司先确认当前 CLI/版本、允许目录、固定 secret 版本、费用额度与实际目标，再由操作者显式开启功能。不要把此文档或开发委托当真实调用授权。
+3. 固定集历史比较选定后，显式准备单个 Agent 提案：元数据对有权管理员可见，正文/私有用例/输出不写到元数据账本。仅准备不会启动任务；改变目标配置、secret、实现或报告后，旧批准必须被拒绝。
+4. 四项确认均重新勾选后批准，回执是 configured，不是模型执行成功。实际运行仍走原任务授权/工具/预算门禁；dispatched 只证明进程启动见证，不证明 provider 已消费或任务成功。
+5. 在明确授权的一次新、无项目任务上检查原文追加与普通模板并存；{{...}} 保持 literal。已有/排队/旧 session、retry/recovery 不应静默获得新绑定；旧 session 或文件可能保留历史内容，回退不清除它们。
+6. 在 fixture 中模拟回执异常/同步 throw/超时、配置或认领身份漂移：失败不送入 stdin，不自动 retry 为无绑定普通任务，重启 controller 不能抹掉失败候选。真实供应商不要反复故障注入或制造收费重试。
+7. 暂停公司后仍可查看应用元数据和撤回未来绑定，不需要先恢复公司；新 prepare/approve/dispatch 继续拒绝。撤回必须重新校验 session、成员、配置权限与 expected generation，不能撤销过期代次或他人的后续配置。
+8. 分别测试回退先赢与 spawn witness 先赢：回退只影响未来绑定，不释放旧 run/lease、不取消当前模型或撤销外部副作用；未向 stdin 交付也不等于正文未进入普通日志或 CLI 没有启动。
+9. 丢失响应后刷新/切身份，确认不自动重放；仅同 requestId、固定 payload 且显式重新确认可重试。普通404/409/422不证明未应用，只有服务端锁后确定的 not_applied_closed 才能结束该未知操作。
+10. 记录完整 SHA、OS、CLI/供应商版本、真实输出与账单、回执及限制。拒绝的 profile 记 unsupported/blocked，不尝试靠手填成功、移除安全设置或伪造费用让结果变绿。
+
 ## 5. 安装包与升级最后一关
 
 源码启动成功后，仍不能省略独立安装包验收：
@@ -347,4 +366,4 @@ API 入口会核查专用标记及真实 data_directory，拒绝混用现有配�
 
 建议先完成：版本核对 → 安装/health → 四语与基本任务 → AUTHZ → 反馈/运营/调研人工路径 → 评估/恢复 → fixture 自动复验 → 有授权条件的供应商实连 → 独立安装包/备份恢复。没有外部条件的项目记 blocked，未点击的项目记未执行，不因其它模块通过而勾选。
 
-验收结论分别填写「源码可用」「构建通过」「安装包通过」「手工路径通过」「供应商 C3」「业务 C4」，只对实际测试 SHA 和环境有效。本文不会把尚未实现的业务写入、上传、可信六目标 Runner、复现/回归集关联或真实供应商验证写成已完成。语义模型聚类与自动复现属于可选增强，不是原计划额外必交项。
+验收结论分别填写「源码可用」「构建通过」「安装包通过」「手工路径通过」「供应商 C3」「业务 C4」，只对实际测试 SHA 和环境有效。本文不会把尚未实现的业务写入、上传、可信六目标 Runner，或尚未实测的真实复现/修复效果与供应商验证写成已完成；已实现的回归集来源关联与人工历史回执不替代这些实测。语义模型聚类与自动复现属于可选增强，不是原计划额外必交项。

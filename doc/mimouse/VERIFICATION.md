@@ -1,6 +1,16 @@
 # 本地集成验证记录
 
-核验日期：2026-10-25 UTC。基线为 v2026.1023.0 / 1b4c803816e82b0265c8422e1a804327a7ed8c54。开发分支 mimouse。此记录是可审查候选版的本地证据，不是全部需求完成或生产上线证明。
+记录起始日期：2026-10-25 UTC。基线为 v2026.1023.0 / 1b4c803816e82b0265c8422e1a804327a7ed8c54。开发分支 mimouse。此记录是可审查候选版的本地证据，不是全部需求完成或生产上线证明。
+
+## 3815键待发布候选复验（2026-10-27 01:59 UTC，完整UI聚合通过）
+
+- 当前HEAD为 `2a85e074b10dc19e83a5dd84f33cb22f4b9b1075`；业务代码及server构建印章冻结于 `491a6b2c36cd373bed179c8cf64ef2b99e96d01b`。后续提交修复UI分批runner的精确文件选择与排除证据核验，不改变应用代码。最后已核实远端为 `5c11913a78635f4683034627b8d026bc2943c2eb`；本候选尚未推送，不称远端CI已通过。
+- server标准构建（包含类型检查、runner/eval vendor校验与资源复制）、UI完整类型及3815键生产构建通过，日志分别为 `/tmp/paperclip-3815-server-build-final.log`、`/tmp/paperclip-3815-ui-types-final.log`、`/tmp/paperclip-3815-ui-build-final.log`。Rust既有7项警告、Vite大chunk/动态导入提示保留；不是根命令一次全工作区通过或本版本all-dist安装验收。
+- 提示词专项10文件153项通过（`/tmp/paperclip-final-prompt-suite-paused.log`），包括公司暂停后的应用元数据读取/未来绑定撤回与运行拒绝；受控运行使用无网络Node替身，不证明真实Claude CLI、工具效果或账单。编译server入口完整API158项通过（44.9秒，`/tmp/paperclip-3815-compiled-final.log`）；仍有workspace TS依赖及源码fixtures，不是独立npm全dist验收。此前23:42的source API158项保留为其历史快照，不直接迁移为此业务SHA的完整源码API结果。
+- **完整UI严格聚合通过：814文件、82批、9848项，零失败/跳过/todo，sourceUnchanged=true。** 初次runner因Vitest子串选择多跑同名前缀文件而被严格库存拒绝，修复选集后重跑；环境恢复中断的21–30整片全部重跑，未完成分片及旧runner结果不计入聚合。9个完整manifest覆盖恰好一次，验证报告/日志哈希与全部输入不变。汇总 `/tmp/paperclip-3815-exact-ui-aggregate.log`；证据 `test-results/mimouse-ui/aggregate-2026-10-27T01-58-53-021Z-WjPCGC/aggregate.json`；UI source SHA-256 `2e9ccd85a409667215ed568946a5356f0d442b13808ce861c8a89b2be0c2791f`，verificationInputs SHA-256 `52f9abe5a0f3ff94d0304bcd451a2fe11842e0f579d2e63b3924d90a24a1de06`。这不是全站浏览器或真实供应商通过。
+- 3815键真实Chrome只读检查验证受控应用四语说明、禁用准备及刷新、既有未分配任务监控属性的打开/取消；11类业务表前后规范快照一致，应用提案/head/审批/派发均0。仅对应[只读浏览器记录](checklists/APPLICATION-READONLY-BROWSER-20261027.md)，不覆盖批准/回退、真实输入法、移动端或供应商。已核实的本次API进程SIGTERM后HTTP关闭、调度器与embedded PostgreSQL停止，postmaster.pid消失；不外推为任意SIGINT进程组隔离已解决。
+
+下文均为各自时间点的历史结果；“未实现/待集成”等描述只代表当时状态，当前实现范围以本节、[追踪矩阵](PLAN-TRACEABILITY.md)和[剩余项](REMAINING.md)为准，不改写历史通过/失败证据。
 
 ## 3488键任务恢复界面窄补齐（2026-10-26 21:24 UTC）
 
