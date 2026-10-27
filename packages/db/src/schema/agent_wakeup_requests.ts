@@ -46,6 +46,9 @@ export const agentWakeupRequests = pgTable(
       .defaultNow(),
   },
   (table) => ({
+    runtimeCostRoutingIdempotencyUq: uniqueIndex("agent_wakeup_requests_runtime_cost_routing_uq")
+      .on(table.companyId, table.idempotencyKey)
+      .where(sql`${table.idempotencyKey} LIKE 'runtime-cost-routing:%'`),
     privatePromptTestIdempotencyUq: uniqueIndex("agent_wakeup_requests_private_prompt_test_uq")
       .on(table.companyId, table.idempotencyKey)
       .where(sql`${table.idempotencyKey} LIKE 'private-prompt-test:%'`),
