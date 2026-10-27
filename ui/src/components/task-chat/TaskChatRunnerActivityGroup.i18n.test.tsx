@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import "@/i18n/tool-activity-test-resources";
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it } from "vitest";
@@ -112,7 +113,8 @@ it.each(Object.keys(messages))("preserves unknown tool names, provider text and 
   const before = JSON.stringify(item);
   const english = providerActivityPresentation(item);
   await act(async () => { await i18n.changeLanguage(locale); });
-  // Tool taxonomy and unknown provider values are outside this bounded family-label change.
-  expect(providerActivityPresentation(item)).toEqual(english);
+  // The tool label is now localized separately; provider details remain raw.
+  expect(providerActivityPresentation(item).detail).toBe(english.detail);
+  expect(providerActivityPresentation(item).icon).toBe(english.icon);
   expect(JSON.stringify(item)).toBe(before);
 });

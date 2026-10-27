@@ -142,6 +142,12 @@ type Action =
   | "delete" | "move" | "run" | "request" | "post" | "start" | "stop"
   | "wait" | "finish" | "block" | "think" | "switch" | "other";
 
+export type ToolActivityCopyDescriptor =
+  | { kind: "exact"; key: string }
+  | { kind: "action"; action: Action; object?: string }
+  | { kind: "named"; name: string }
+  | { kind: "unnamed" };
+
 interface ExactAction {
   action: Action;
   running?: string;
@@ -360,7 +366,7 @@ function paperclipSummaryGroup(action: Action): ToolSummaryGroup {
  * exact aliases, canonical ACP operation/kind, normalized verb, then a named
  * fallback. MCP remains visible as the source icon without losing semantics.
  */
-export function toolActivityPresentation(input: ToolActivityPresentationInput): ToolActivityPresentation {
+function resolveToolActivity(input: ToolActivityPresentationInput): { presentation: ToolActivityPresentation; copyDescriptor: ToolActivityCopyDescriptor } {
   const rawName = (input.name ?? "").trim();
   const parsedMcp = mcpToolIdentity(rawName);
   const namespace = (input.namespace ?? parsedMcp?.namespace ?? "").trim();
@@ -394,6 +400,15 @@ export function toolActivityPresentation(input: ToolActivityPresentationInput): 
         ? { running: "Running an unnamed tool", completed: "Ran an unnamed tool" }
         : { running: `Running ${displayName}`, completed: `Ran ${displayName}` }
       : actionCopy(action, exact ? undefined : object);
+  // Display metadata shares the canonical classification decision; it never
+  // changes the English copy used for identity comparisons and aggregation.
+  const copyDescriptor: ToolActivityCopyDescriptor = exact?.running && exact.completed
+    ? { kind: "exact", key }
+    : action === "other"
+      ? isGenericToolName(semanticName)
+        ? { kind: "unnamed" }
+        : { kind: "named", name: displayName }
+      : { kind: "action", action, object: exact ? undefined : object };
   const semanticFamily = exact?.family ?? actionFamily(action);
   const family = transport === "mcp" ? "mcp" : semanticFamily;
   const sourceLabel = namespace
@@ -405,7 +420,7 @@ export function toolActivityPresentation(input: ToolActivityPresentationInput): 
     ? paperclipSummaryGroup(action)
     : exact?.group ?? defaultSummaryGroup(action);
 
-  return {
+  return { copyDescriptor, presentation: {
     icon: FAMILY_ICONS[family],
     family,
     runningLabel: copy.running,
@@ -417,7 +432,17 @@ export function toolActivityPresentation(input: ToolActivityPresentationInput): 
     technicalName: rawName || undefined,
     confidence,
     summaryGroup,
-  };
+  } };
+}
+
+/** Canonical English contract: do not localize these algorithm inputs. */
+export function toolActivityPresentation(input: ToolActivityPresentationInput): ToolActivityPresentation {
+  return resolveToolActivity(input).presentation;
+}
+
+/** UI-only copy metadata; no locale state enters the classifier. */
+export function toolActivityCopyDescriptor(input: ToolActivityPresentationInput): ToolActivityCopyDescriptor {
+  return resolveToolActivity(input).copyDescriptor;
 }
 
 /** Compact compatibility mapping used by legacy tool rows and live pills. */

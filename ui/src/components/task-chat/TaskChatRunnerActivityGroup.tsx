@@ -23,28 +23,28 @@ import {
   hasTaskChatProtocolActivityDetails,
 } from "./TaskChatProtocolActivityRow";
 import { TaskChatUsageReadout } from "./TaskChatUsageReadout";
+import { toolActivityDisplayLabels } from "./tool-activity-display";
 import { toolActivityPresentation } from "./tool-taxonomy";
 
 type Activity = TaskChatActivityPhaseItem["items"][number];
 
 function presentation(item: Activity, active: boolean) {
   if (item.kind === "tool") {
-    const tool = toolActivityPresentation({
-      name: item.rawName ?? item.name,
-      target: item.target,
-    });
+    const input = { name: item.rawName ?? item.name, target: item.target };
+    const tool = toolActivityPresentation(input);
+    const labels = toolActivityDisplayLabels(input);
     const running =
       active && (item.status === "pending" || item.status === "in_progress");
     return {
       icon: tool.icon,
       label:
         item.status === "failed"
-          ? tool.failedLabel
+          ? labels.failedLabel
           : item.status === "interrupted"
-            ? tool.interruptedLabel
+            ? labels.interruptedLabel
             : running
-              ? tool.runningLabel
-              : tool.completedLabel,
+              ? labels.runningLabel
+              : labels.completedLabel,
       target: item.target,
       mono: true,
       running,

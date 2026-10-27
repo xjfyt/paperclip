@@ -1,4 +1,5 @@
 import { t } from "@/i18n";
+import { toolActivityDisplayLabels } from "./tool-activity-display";
 import {
   AlertTriangle,
   BookOpen,
@@ -75,21 +76,22 @@ export function providerActivityPresentation(item: TaskChatProviderActivityItem)
       const name = providerDetail(item, "Name");
       const target = providerDetail(item, "Target");
       const progress = providerDetail(item, "Progress");
-      const tool = toolActivityPresentation({
+      const input = {
         name,
         transport: providerDetail(item, "Transport"),
         namespace: providerDetail(item, "Namespace"),
         operation: providerDetail(item, "Operation"),
         target,
         progress,
-      });
+      };
+      const tool = toolActivityPresentation(input);
       const boundedActivity = meaningfulToolDetail(item.summary)
         ?? meaningfulToolDetail(progress)
         ?? meaningfulToolDetail(target);
       const activityIsIdentity = Boolean(
         boundedActivity && name && humanizeToolName(boundedActivity) === humanizeToolName(name),
       );
-      const technicalName = name ? mcpToolIdentity(name)?.name ?? name : tool.displayName;
+      const technicalName = name ? mcpToolIdentity(name)?.name ?? name : t("toolActivityUi.unnamedName");
       const source = tool.sourceLabel
         ? `${tool.sourceLabel} · ${technicalName}`
         : name && !isGenericToolName(name) && humanizeToolName(name) !== tool.runningLabel.replace(/^Running /, "")
@@ -97,10 +99,7 @@ export function providerActivityPresentation(item: TaskChatProviderActivityItem)
           : undefined;
       return {
         icon: tool.icon,
-        runningLabel: tool.runningLabel,
-        completedLabel: tool.completedLabel,
-        failedLabel: tool.failedLabel,
-        interruptedLabel: tool.interruptedLabel,
+        ...toolActivityDisplayLabels(input),
         detail: [activityIsIdentity ? undefined : boundedActivity, source].filter(Boolean).join(" · ") || undefined,
       };
     }

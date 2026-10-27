@@ -1,3 +1,4 @@
+import { useTranslation } from "@/i18n";
 import { useId, useState, type ReactNode } from "react";
 import {
   Check,
@@ -276,6 +277,7 @@ function itemStatus(item: TaskChatProtocolItem): "running" | "completed" | "fail
 }
 
 export function TaskChatProtocolActivityRow({ item }: { item: TaskChatProtocolItem }) {
+  useTranslation();
   const [open, setOpen] = useState(false);
   const detailId = `task-chat-protocol-activity-${useId().replaceAll(":", "")}`;
   const presentation = protocolActivityPresentation(item);
