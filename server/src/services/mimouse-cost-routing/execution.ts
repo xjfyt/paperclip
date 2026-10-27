@@ -134,5 +134,14 @@ export async function assertRuntimeRoutingCheckout(db: Db, issueId: string, agen
   const [row] = await db.select().from(bindings).where(eq(bindings.issueId, issueId));
   const [issue] = await db.select({ origin: issues.originKind }).from(issues).where(eq(issues.id, issueId));
   if (!row && issue?.origin === "runtime_cost_routing") throw blocked("runtime_routing_binding_missing");
-  if (row && (!runId || row.runId !== runId || row.selectedAgentId !== agentId || row.state !== "start_requested")) throw blocked("runtime_routing_checkout_denied");
+  // Core auto-checkout precedes the adapter beforeStart hook. The already
+  // committed exact run may claim its task now; this is not a launch witness.
+  if (row && (!runId || row.runId !== runId || row.selectedAgentId !== agentId || !row.dispatchRequestId ||
+    !row.dispatchActorUserId || !row.dispatchActorSessionId || !["run_claimed", "start_requested"].includes(row.state))) throw blocked("runtime_routing_checkout_denied");
+  if (row && runId) {
+    const [run] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, row.companyId), eq(heartbeatRuns.id, runId)));
+    if (!run || run.id !== runId || run.companyId !== row.companyId || run.agentId !== agentId || run.issueId !== issueId || run.status !== "running" ||
+      run.runtimeMode !== "legacy" || run.retryOfRunId || run.scheduledRetryReason || run.nativeSessionId || run.nativeIssueId ||
+      run.contextSnapshot?.aiRouterSelection || run.contextSnapshot?.aiConnection || run.contextSnapshot?.routineId) throw blocked("runtime_routing_checkout_denied");
+  }
 }
