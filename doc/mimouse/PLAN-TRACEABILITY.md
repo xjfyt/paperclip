@@ -26,6 +26,8 @@ C1=实现/本地检查，C2=受控协议及故障夹具，C3=真实租户/版本
 
 2026-10-27 01:59 UTC：当前待发布 HEAD 为 `2a85e074b10dc19e83a5dd84f33cb22f4b9b1075`，业务代码冻结于 `491a6b2c36cd373bed179c8cf64ef2b99e96d01b`，3815键。server标准构建、UI完整类型/生产构建、提示词专项10文件153项及编译server入口158项通过；814文件/82批9848项完整UI严格聚合通过，零失败/跳过/todo，sourceUnchanged=true。受控应用四语只读浏览器范围见[验收记录](checklists/APPLICATION-READONLY-BROWSER-20261027.md)，不证明真实CLI执行或收费。最后已核实远端为 `5c11913a78635f4683034627b8d026bc2943c2eb`，上述候选尚未推送；完整日志与快照边界见 [VERIFICATION](VERIFICATION.md)。
 
+2026-10-27 03:04 UTC：最新应用基点 `c6ba2b4ea82b749771de1bc278745977b37215ca` 已完成标准server构建、8文件151项相关服务/真实数据库测试及编译入口完整API162项。自动重试截止与通知令牌精度修复已纳入；本轮未改UI，9848项完整UI属于前一冻结快照，不能迁移为新运行树的全量证据。真实供应商、全平台及全部原计划仍未完成；详见 [VERIFICATION](VERIFICATION.md)。
+
 ## 原始条目矩阵
 
 源码路径相对仓库根；目录表示同域服务/协议/测试的复用点。手测编号见后文；“—”不要求外部账号。
@@ -74,7 +76,7 @@ C1=实现/本地检查，C2=受控协议及故障夹具，C3=真实租户/版本
 | V2-CODE-02 | §8.2 workspace/显式发布 | 实现完成 | gitlab.ts、readonly-git.ts；固定项目/SHA、干净工作树、显式 push、未知结果不重试 | T07 / fixture |
 | V2-CODE-03 | §8.3 GitLab版本与MiWork | 部分 | 版本能力探测和固定项目隔离已实现；实际 CE 版本、MiWork Rust 项目/Runner 未验 | T07 / CE 网络/项目/权限 |
 | V2-CODE-04 | §8.4 CI轮询/有限修复 | 实现完成 | poller.ts、repair-worker.ts；新派发默认关闭、有限轮数/预算、版本与工作区绑定；此前授权项的安全对账不随派发开关关闭 | T07 / 隔离 fixture |
-| V2-CODE-05 | §8.4 总时限约束 | 部分 | repair-deadline.ts 已覆盖初始专用 wake/run 及经逐边核验的 bounded/missing-comment 自动重试，持久目标集合、准入与终态锁互斥、重启同身份收敛；其他自动通道保守拒绝，不是严格墙钟/全后代/远端截止 | T07 / 新增定向夹具；真实DB/API与供应商另验 |
+| V2-CODE-05 | §8.4 总时限约束 | 部分 | repair-deadline.ts 已覆盖初始专用 wake/run 及经逐边核验的 bounded/missing-comment 自动重试，持久目标集合、准入与终态锁互斥、重启同身份收敛；其他自动通道保守拒绝，不是严格墙钟/全后代/远端截止 | T07 / 真实DB/API重试链与锁竞争已过；供应商/严格终止另验 |
 | V2-CODE-06 | §8.4 固定SHA审查/旧证据失效 | 实现完成 | diff-review.ts；真实本地差异/摘要/审阅人绑定，变更使旧审阅失效 | T07 / 固定提交 |
 | V2-CODE-07 | §8.5 六目标可信构建/签名 | 部分 | build-matrix.ts 与 UI 已有六格缺口，全部 blocked；缺真实 Runner 回执采集/验证代码和机器 | T07 仅验拒绝；Runner/签名条件另供 |
 | V2-CODE-08 | §8.5 产物manifest | 实现完成 | artifacts.ts及确认UI；项目/SHA/字节/hash，拒绝符号链接；未知POST不自动重发，声明不等于目标平台证明 | T07 / 临时产物 |
