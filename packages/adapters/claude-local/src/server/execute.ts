@@ -976,7 +976,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
       });
     }
 
-    if (ctx.controlledPromptApplication) await ctx.controlledPromptApplication.prepare(prompt, effectiveEnv);
+    if (ctx.controlledPromptApplication) await ctx.controlledPromptApplication.prepare(prompt, effectiveEnv, effectiveExecutionCwd);
     const consumeAccounting = createClaudeStreamParser();
     const accountingLog = createUsageCheckpointLog(onLog, ctx.onUsage, stdout => {
       const parsed = consumeAccounting(stdout);

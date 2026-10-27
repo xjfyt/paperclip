@@ -24,6 +24,7 @@ vi.mock("@paperclipai/adapter-utils/execution-target", async original => {
     boundary.inputs.push(options.stdin); await boundary.settle?.(); return result;
   } };
 });
+import * as targetModule from "./target.js";
 import { promptApplicationService } from "./service.js";
 import { findPromptApplicationCandidate, preparePromptApplicationExecution } from "./execution.js";
 import { applicationAttemptStopped } from "./recovery.js";
@@ -32,6 +33,7 @@ import { secretService } from "../secrets.js";
 import { heartbeatService } from "../heartbeat.js";
 import { drainHeartbeatRunsToQuiescence } from "../../__tests__/helpers/drain-heartbeat-runs.js";
 import { getServerAdapter } from "../../adapters/registry.js";
+import { resolveDefaultAgentWorkspaceDir } from "../../home-paths.js";
 import { legacyControllerClaim } from "../legacy-controller-lease.js";
 import type { HeartbeatRuntimeExecutionInput } from "../heartbeat/runtime-execution.js";
 let pgPid = 0;
@@ -88,6 +90,7 @@ beforeAll(async () => {
     adapterConfig: { engine: "cli", model: "claude-fixture", cwd: home, promptTemplate: "Ordinary template for {{agent.name}}.", dangerouslySkipPermissions: false,
       env: { ANTHROPIC_API_KEY: { type: "secret_ref", secretId: secret.id, version: 1 } } } }).returning();
   await secretService(db).createBinding({ companyId: actor.companyId, secretId: secret.id, targetType: "agent", targetId: target.id, configPath: "env.ANTHROPIC_API_KEY", versionSelector: 1 });
+  await mkdir(resolveDefaultAgentWorkspaceDir(target.id), { recursive: true });
   service = promptApplicationService(db); heartbeat = heartbeatService(db);
 }, 90000);
 afterAll(async () => { boundary.beforeSpawn = null; boundary.settle = null;
@@ -112,7 +115,7 @@ async function issueRun(createdAt = new Date()) {
 function execution(run: typeof heartbeatRuns.$inferSelect, issueId: string, candidate: { id: string; generation: number }): HeartbeatRuntimeExecutionInput {
   return { run, agent: target, task: { issueId, context: { issueId, forceFreshSession: true }, executionContinuation: null },
     runtime: { adapter: getServerAdapter("claude_local"), nativeRuntimeResolution: { kind: "legacy" }, runtimeForAdapter: { sessionId: null, sessionParams: null, sessionDisplayId: null, taskKey: issueId } },
-    workspace: { executionTarget: { kind: "local", environmentId }, executionWorkspace: { cwd: home }, remoteExecution: null },
+    workspace: { executionTarget: { kind: "local", environmentId }, executionWorkspace: { cwd: resolveDefaultAgentWorkspaceDir(target.id), baseCwd: resolveDefaultAgentWorkspaceDir(target.id), source: "agent_home", strategy: "project_primary", projectId: null, workspaceId: null, repoUrl: null, repoRef: null, branchName: null, worktreePath: null, created: false, branchCreatedByRuntime: false, warnings: [] }, remoteExecution: null },
     config: { runtimeConfig: { ...target.adapterConfig, env: { ANTHROPIC_API_KEY: keyValue } }, resolvedConfig: { ...target.adapterConfig, env: { ANTHROPIC_API_KEY: keyValue } }, configuredTaskEnvironment: { ANTHROPIC_API_KEY: keyValue } },
     session: { sessionConfigMetadata: { fingerprint: "fixture", version: 1 } }, control: { promptApplicationCandidate: candidate, executionControl: { controller: new AbortController() } } } as unknown as HeartbeatRuntimeExecutionInput;
 }
@@ -138,6 +141,33 @@ it("CAS admits only one simultaneous approval and closes stale request recovery 
   expect(proof.closure).toMatchObject({ outcome: "not_applied_closed", reason: "generation_advanced", requestId: lostInput.requestId });
   await service.rollback(actor, e.promptId, win.item.id, { requestId: randomUUID(), expectedGeneration: (await service.head(actor, target.id)).generation });
 });
+it("an expired immutable proposal closes same-request uncertainty without applying", async () => {
+  const p = await proposal(), original = (await db.select().from(mimousePromptApplications).where(eq(mimousePromptApplications.id, p.item.id)))[0];
+  const expiredAt = new Date(Date.now() - 60000), id = randomUUID();
+  const digest = targetModule.applicationDigest({ id, companyId: original.companyId, actorUserId: original.actorUserId, promptId: original.promptId,
+    revisionId: original.revisionId, revisionHash: original.revisionHash, reportHash: original.reportHash, snapshot: original.snapshot,
+    expectedGeneration: original.expectedGeneration, approvalExpiresAt: expiredAt.toISOString() });
+  await db.insert(mimousePromptApplications).values({ ...original, id, requestId: randomUUID(), approvalDigest: digest,
+    createdAt: new Date(Date.now() - 120000), approvalExpiresAt: expiredAt });
+  const input = { ...approval(p.item), approvalDigest: digest };
+  await expect(service.approve(actor, e.promptId, id, input)).rejects.toThrow("prompt_application_approval_expired");
+  expect((await service.request(actor, e.promptId, input.requestId, { action: "approve", applicationId: id, expectedGeneration: input.expectedGeneration })).closure)
+    .toMatchObject({ outcome: "not_applied_closed", reason: "approval_expired", requestId: input.requestId });
+});
+it("tasks created during approval validation are before the database cutover", async () => {
+  const p = await proposal(), original = targetModule.resolvePromptApplicationTarget; let during: typeof issues.$inferSelect | undefined;
+  const hook = vi.spyOn(targetModule, "resolvePromptApplicationTarget").mockImplementationOnce(async (...args) => {
+    const snapshot = await original(...args);
+    [during] = await db.insert(issues).values({ companyId: actor.companyId, title: "Created while approval validates", status: "todo", responsibleUserId: actor.userId }).returning();
+    return snapshot;
+  });
+  let approved: Awaited<ReturnType<typeof service.approve>>;
+  try { approved = await service.approve(actor, e.promptId, p.item.id, approval(p.item)); } finally { hook.mockRestore(); }
+  await db.update(issues).set({ assigneeAgentId: target.id }).where(eq(issues.id, during!.id));
+  const [run] = await db.insert(heartbeatRuns).values({ companyId: actor.companyId, agentId: target.id, issueId: during!.id, scopeKind: "issue", status: "running", runtimeMode: "legacy", ...legacyControllerClaim("legacy") }).returning();
+  expect(await findPromptApplicationCandidate(db, run, during!.id)).toBeNull(); await finish(run.id);
+  await service.rollback(actor, e.promptId, p.item.id, { requestId: randomUUID(), expectedGeneration: approved.receipt.generation });
+});
 it("old tasks and queued runs are excluded, new overlays fail closed", async () => {
   const p = await proposal(), approved = await service.approve(actor, e.promptId, p.item.id, approval(p.item));
   const old = await issueRun(fixed); expect(await findPromptApplicationCandidate(db, old.run, old.issue.id)).toBeNull(); await finish(old.run.id);
@@ -150,7 +180,7 @@ it("withdrawal before the required spawn witness blocks late literal input witho
   const p = await proposal(), approved = await service.approve(actor, e.promptId, p.item.id, approval(p.item)), fresh = await issueRun();
   const input = execution(fresh.run, fresh.issue.id, { id: p.item.id, generation: approved.receipt.generation });
   const capability = (await preparePromptApplicationExecution(db, input))!;
-  await capability.prepare("ordinary prompt plus approved literal", { ANTHROPIC_API_KEY: keyValue }); await capability.beforeStart();
+  await capability.prepare("ordinary prompt plus approved literal", { ANTHROPIC_API_KEY: keyValue }, home); await capability.beforeStart();
   await service.rollback(actor, e.promptId, p.item.id, { requestId: randomUUID(), expectedGeneration: approved.receipt.generation });
   await expect(capability.dispatched()).rejects.toThrow("prompt_application_dispatch_generation_changed");
   const [receipt] = await db.select().from(mimousePromptApplicationDispatches).where(eq(mimousePromptApplicationDispatches.runId, fresh.run.id)); expect(receipt.state).toBe("prepared");
@@ -162,7 +192,7 @@ it("withdrawal before the required spawn witness blocks late literal input witho
 it("a dispatched witness that wins before withdrawal remains historical and does not get relabeled un-applied", async () => {
   const p = await proposal(), approved = await service.approve(actor, e.promptId, p.item.id, approval(p.item)), fresh = await issueRun();
   const capability = (await preparePromptApplicationExecution(db, execution(fresh.run, fresh.issue.id, { id: p.item.id, generation: approved.receipt.generation })))!;
-  await capability.prepare("fixed final prompt", { ANTHROPIC_API_KEY: keyValue }); await capability.beforeStart(); await capability.dispatched();
+  await capability.prepare("fixed final prompt", { ANTHROPIC_API_KEY: keyValue }, home); await capability.beforeStart(); await capability.dispatched();
   await service.rollback(actor, e.promptId, p.item.id, { requestId: randomUUID(), expectedGeneration: approved.receipt.generation });
   expect((await db.select().from(mimousePromptApplicationDispatches).where(eq(mimousePromptApplicationDispatches.runId, fresh.run.id)))[0].state).toBe("dispatched");
   await capability.stopped(); await finish(fresh.run.id);
@@ -182,7 +212,28 @@ it("real heartbeat and ordinary Claude prompt assembly reach only the inert Node
   expect(receipt.state).toBe("dispatched"); expect(receipt.promptHash).toMatch(/^[a-f0-9]{64}$/);
   await service.rollback(actor, e.promptId, p.item.id, { requestId: randomUUID(), expectedGeneration: approved.receipt.generation });
 }, 90000);
+it("a rejected controlled candidate cannot auto-retry or become unbound after head withdrawal and controller recreation", async () => {
+  const p = await proposal(), approved = await service.approve(actor, e.promptId, p.item.id, approval(p.item));
+  const [issue] = await db.insert(issues).values({ companyId: actor.companyId, title: "Unsupported controlled override", assigneeAgentId: target.id,
+    responsibleUserId: actor.userId, status: "todo", assigneeAdapterOverrides: { model: "not-the-approved-model" } }).returning();
+  const before = boundary.inputs.length;
+  const wake = { source: "on_demand" as const, triggerDetail: "manual", reason: "issue_assigned", contextSnapshot: { issueId: issue.id }, requestedByActorType: "user" as const, requestedByActorId: actor.userId };
+  await heartbeat.wakeup(target.id, wake); await drainHeartbeatRunsToQuiescence(db, heartbeat);
+  let runs = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.issueId, issue.id));
+  expect(runs).toHaveLength(1); expect(runs[0]).toMatchObject({ status: "failed", errorCode: "prompt_application_blocked", scheduledRetryReason: null });
+  expect((await db.select().from(heartbeatRunEvents).where(and(eq(heartbeatRunEvents.runId, runs[0].id), eq(heartbeatRunEvents.eventType, "prompt_application.candidate"))))).toHaveLength(1);
+  await service.rollback(actor, e.promptId, p.item.id, { requestId: randomUUID(), expectedGeneration: approved.receipt.generation });
+  await db.update(issues).set({ assigneeAdapterOverrides: {} }).where(eq(issues.id, issue.id));
+  // Fresh service/controller has no candidate memory; the database marker alone must block it.
+  const recreated = heartbeatService(db); await recreated.wakeup(target.id, wake); await drainHeartbeatRunsToQuiescence(db, recreated);
+  runs = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.issueId, issue.id));
+  expect(runs).toHaveLength(2); expect(runs.every(r => r.status === "failed" && r.errorCode === "prompt_application_blocked")).toBe(true);
+  expect(runs.some(r => r.error?.includes("prompt_application_failed_attempt_requires_new_task"))).toBe(true);
+  expect(boundary.inputs).toHaveLength(before);
+}, 90000);
 it("revoked configuration permission blocks prepare, while prior metadata stays readable", async () => {
+  // Isolate the permission assertion from any preceding runtime failure.
+  await db.update(agents).set({ status: "idle" }).where(eq(agents.id, target.id));
   await db.delete(principalPermissionGrants).where(and(eq(principalPermissionGrants.companyId, actor.companyId), eq(principalPermissionGrants.principalId, actor.userId), eq(principalPermissionGrants.permissionKey, "agents:configure")));
   await expect(proposal()).rejects.toThrow("prompt_application_agent_configuration_denied"); expect((await service.list(actor, e.promptId)).items.length).toBeGreaterThan(0);
   expect(JSON.stringify(await db.select().from(activityLog))).not.toMatch(/PRIVATE_INPUT_SENTINEL|PRIVATE_SKILL_SENTINEL|fixture-not-a-real-provider-key/);

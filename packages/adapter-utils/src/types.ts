@@ -295,7 +295,7 @@ export interface AdapterExecutionContext {
     applicationId: string;
     generation: number;
     literalRevision: string;
-    prepare: (finalPrompt: string, effectiveEnv: Record<string, string>) => Promise<void>;
+    prepare: (finalPrompt: string, effectiveEnv: Record<string, string>, effectiveCwd: string) => Promise<void>;
     beforeStart: () => Promise<void>;
     dispatched: () => Promise<void>;
     stopped: () => Promise<void>;

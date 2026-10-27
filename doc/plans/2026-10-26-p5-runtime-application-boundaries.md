@@ -2,9 +2,13 @@
 
 日期：2026-10-26
 
-状态：**普通运行时应用未实现；2026-10-26 23:22 UTC 用户委托按通用方案决定开发设计，不构成实际运行授权。** 本文说明持续改进闭环中尚未完成的发布环节，不启用模型、任务或自动发布。现有 UI 冻结边界不变。
+状态：**2026-10-27 已接通首期受控应用代码与无网络进程边界；专属真实数据库/完整运行验收仍在进行。2026-10-26 23:22 UTC 用户委托决定开发设计，不构成实际运行授权。** 本文说明持续改进闭环中尚未完成的发布环节，不启用模型、任务或自动发布。现有 UI 冻结边界不变。
 
-## 已有能力与未完成项
+## 2026-10-26 实现前基线与设计分析（历史）
+
+以下至“方案依据与非通用部分”为实现前基线与原验收要求，不代表当前完成状态；当前路径及限制见末节。
+
+### 已有能力与未完成项
 
 现有能力包括不可变提示词 revision、人工 selection 及其回退、受限私有试验，以及固定数据集上的历史双 revision 比较。Selection 的 `runtimeApplied:false` 表示仅改变登记选择，不表示普通 Agent 已采用该正文。私有试验使用受限的 Claude bare/API-key、本地、fresh、无工具执行方式；它不是普通工具运行时的替代验证。
 
@@ -50,7 +54,7 @@ Registry selection 已有幂等请求、head 行锁、expected-head CAS 和当�
 
 ## 本轮采用的最小开发合同
 
-用户已委托选择技术方案，本轮采用以下保守合同，**尚未实现；具体目标与真实应用仍由产品内人审确认**：
+用户已委托选择技术方案，本轮按以下保守合同实现，**具体目标与真实应用仍由产品内人审确认，默认关闭**：
 
 1. **单公司、单个明确指定 Agent。** 首期限定受支持的普通 Claude 本地运行组合，不做全局激活，不自动扩大到其他 adapter、远端或 native runtime。
 2. **新建独立的原文追加位置。** 不覆盖现有 `promptTemplate`、bootstrap 或指令文件；revision 作为 literal supplemental section 拼接在普通 run prompt 的明确位置，保留正文内部字节，不解析其中的 `{{...}}`。这是新增 adapter 合同，不是现有模板位的别名，也不改变工具、访问控制、预算或审批权限。
@@ -93,3 +97,23 @@ Registry selection 已有幂等请求、head 行锁、expected-head CAS 和当�
 [Claude Code CLI参考](https://code.claude.com/docs/en/cli-reference)区分恢复会话及提示词追加/替换选项。已有Paperclip适配器的模板、指令文件与resume路径不能被简单视为同一个追加位置；最终应以本仓适配器合同及实际版本测试为准，不只根据CLI帮助宣称已正确接线。选用独立literal追加位是为避免覆盖原模板、提升权限或改变正文中的占位字符，不表示它等价于系统提示词。
 
 上线顺序：固定版本与目标提案 → 显式普通可见性和范围确认 → 原子绑定与回退 → 受支持的新任务派发回执。任何阶段证据不完整必须明确阻断，不把private bare比较视作普通带工具运行的完整验证。
+
+
+## 首期已实现路径与精确回执语义（2026-10-27）
+
+- 开关为 `PAPERCLIP_PROMPT_APPLICATIONS_ENABLED=true`；默认关闭。准备、审批、回退和查询都不发起 wake、不替换凭据、不改变已有工具或预算权限。适用范围是已配置 `claude_local` + 显式 `engine:cli` + 绝对 cwd + pinned company/local API-key 的单个 Agent；不是订阅账号自动转 API 计费入口。
+- 支持新建、无 project、无覆写的普通任务首次 fresh 派发。拒绝 native、ACP、remote、conversation、managed router、非固定 secret、外部命令和认证路由冲突；旧 issue、旧排队 run、retry 和已有 session 不追加新正文。若有指令目录，只接受现有受控 managed root，并通过原指令读取授权、路径安全及总大小/深度边界读取摘要。
+- 首期不支持本地 filesystem/network 安全包装器（包括有效 policy 新增的 wrapper），因为其实际可执行文件身份尚未纳入该合同；发现此配置只明确拒绝，绝不删除既有限制，也不建议关闭安全设置来获得支持。
+- 工作目录策略为 `configured_cwd_with_managed_agent_home_v1`：控制平面只接受实例受控根下按 Agent 身份解析的 `agent_home` 元数据；Claude 既有规则在该场景优先使用已批准的固定配置 cwd。二者不是同一个目录；服务端绑定实例根和配置目录身份、验证真实路径无符号链接，adapter 最后报告实际 cwd 再校验并将其纳入 `effectiveContextHash`。不改既有 resolver 或隔离设置，不宣称逐任务目录隔离；不同任务可能共享固定 cwd 的文件状态，回退不清理历史文件或会话。
+- 首次识别合格新任务时先持久化 server-owned candidate 事件，再进行可能拒绝的 overlay 校验；失败标记不可被回退 head 或 controller 重启抹去。受控失败不安排自动 retry，同 issue 的失败后继明确阻断，不能静默改成不带正文的普通运行；需另建符合条件的新任务。已成功旧任务后续不追加新正文。
+- 提案绑定不可变 revision/hash、服务端重算的历史比较、target/部署实现摘要、expected generation；`approvalExpiresAt` 只限制待审批，不使已批准绑定定时失效。每次派发仍复核当前配置、凭据、环境、权限、任务/运行/controller 所有权。
+- 普通 visibility 审批明确允许 revision 正文进入普通日志、输出、已授权工具和产物。私有 dataset/case/结果正文不会因应用被拼接；bare 比较仍 `completeContextCaptured:false` 且不是普通工具质量证明。最终原文独立追加，不经过 `renderTemplate`，不覆盖既有模板/文件。
+- 配置 cutover 使用所有校验之后的数据库 `clock_timestamp()`，不用事务起始 `now()`；目标/代次和当前权限在接纳事务中锁定。锁先获得的撤权/配置变化会阻断；接纳已提交后发生的撤权不能被宣传为撤销已经在途的 provider 输入。
+- `prepared` 只表示预检接纳；`start_requested` 是启动前持久栅栏；`dispatched` 只表示进程启动及严格持久回执，**不是 stdin 已写、provider 已消费或任务成功证明**。严格回执失败/同步异常/15 秒超时会关闭 stdin、终止本次本地进程并等待 close；默认普通与私有试验的历史非严格行为不改变。CLI 在等待 stdin 时仍可能有启动/hooks 副作用，不能称零副作用。
+- 回退可随时 CAS 撤回当前未来绑定，只影响后续新任务，不改其它 Agent 配置，不取消旧 run/lease，不终止已接纳运行，也不撤销外部效果。若回退先于成功 spawn witness，持久记录 `prompt_application.binding_withdrawn_before_input` 事件（`stdinWritten:false`、`providerStopped:false`），查询派生 `inputDisposition:not_applied_before_input`，迟到 witness 因 head 代次不匹配被拒绝；这个证明不代表正文未进入普通日志、CLI 未启动或旧进程已停止。若 dispatched 先赢，历史状态保留、旧运行仍可继续。
+- 未知启动的旧 issue 仍需要真实 provider-stop 证据才能恢复。不能因撤回绑定、缺 PID、换 controller 或迁移主机就声称停止；只在本 controller 的已记录 local 进程身份确实不存在时补充停止证据，否则保持明确阻断。
+- 请求恢复使用同 requestId，元数据查询不重放。操作者可重新确认后显式重试同固定 payload；所有写入仍 CAS/摘要幂等。仅在同请求/目标锁后确认代次已永久前移或待审批已过期，返回 `not_applied_closed`；普通空查询、403/404/409/422 都不是未执行证明。
+
+代码：`server/src/services/mimouse-prompt-applications/`、`server/src/routes/mimouse-prompt-applications.ts`、heartbeat 的预算后异步 preflight/同步最终所有权 gate，以及 Claude `controlled-prompt.ts` 和严格 spawn receipt。API 主路径为公司 `prompt-registry/:promptId/applications`，另有 per-Agent head、requestId 查询、审批、回退和派发回执查询。
+
+验证状态：无网络 Node 边界和现有适配器/私有比较轻量回归已通过；真实 PostgreSQL fixture 将运行正式迁移、权限/CAS/回退以及 heartbeat→普通 Claude prompt→仅 Node 的受控替身。尚未对真实 Claude CLI、真实工具质量或模型计费作成功声明。

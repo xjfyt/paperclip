@@ -1,3 +1,5 @@
+import { PromptApplicationExecutionBlocked } from "../mimouse-prompt-applications/contract.js";
+import { isPromptApplicationRun } from "../mimouse-prompt-applications/recovery.js";
 import { NON_RETRYABLE_PREFLIGHT_FAILURE_CODES, isHeartbeatRunTerminalStatus } from "./run-lifecycle.js";
 import { ChatControlRecoveryUnresolvedError } from "./queue.js";
 import { readTransientRecoveryContractFromRun, readHeartbeatRunErrorFamily, isTransientWorkspaceGitScanCode } from "./retries.js";
@@ -137,6 +139,7 @@ export interface FailHeartbeatRunSetupInput {
 }
 
 function nonRetryablePreflightFailureCode(error: unknown): string | null {
+  if (error instanceof PromptApplicationExecutionBlocked) return "prompt_application_blocked";
   if (error instanceof ChatControlRecoveryUnresolvedError)
     return CHAT_CONTROL_RECOVERY_UNRESOLVED_CODE;
   if (
@@ -427,8 +430,9 @@ export function createHeartbeatRunCompletion(db: Db, dependencies: HeartbeatRunC
             );
     const recordedResponsibleUserDenialCode =
       normalizeResponsibleUserDenialCode(latestRun?.errorCode);
+    const controlledPromptFailure = outcome !== "succeeded" && await isPromptApplicationRun(db, run.companyId, run.id);
     const runErrorCode =
-      outcome === "timed_out"
+      controlledPromptFailure ? "prompt_application_blocked" : outcome === "timed_out"
         ? "timeout"
         : outcome === "cancelled"
           ? (latestRun?.errorCode ?? "cancelled")
@@ -691,6 +695,7 @@ export function createHeartbeatRunCompletion(db: Db, dependencies: HeartbeatRunC
       }
       const livenessRun = finalizedRun;
       const privatePromptAttempt = await isPrivatePromptRun(livenessRun.id);
+      const suppressPromptRetry = privatePromptAttempt || controlledPromptFailure;
       await refreshContinuationSummaryForRun(livenessRun, agent);
       const skipRunIssueComment =
         parseObject(livenessRun.contextSnapshot).skipIssueComment === true;
@@ -833,7 +838,7 @@ export function createHeartbeatRunCompletion(db: Db, dependencies: HeartbeatRunC
           `[paperclip] Failed to resolve run presentation: ${err instanceof Error ? err.message : String(err)}\n`,
         );
       }
-      if (!privatePromptAttempt && outcome === "failed" && isMaxTurnExhaustionRun(livenessRun)) {
+      if (!suppressPromptRetry && outcome === "failed" && isMaxTurnExhaustionRun(livenessRun)) {
         const policy = parseMaxTurnContinuationPolicy(agent);
         if (policy.enabled && policy.maxAttempts > 0) {
           await scheduleBoundedRetryForRun(livenessRun, agent, {
@@ -856,12 +861,12 @@ export function createHeartbeatRunCompletion(db: Db, dependencies: HeartbeatRunC
           });
         }
       } else if (
-        !privatePromptAttempt && outcome === "failed" &&
+        !suppressPromptRetry && outcome === "failed" &&
         readTransientRecoveryContractFromRun(livenessRun)
       ) {
         await scheduleBoundedRetryForRun(livenessRun, agent);
       } else if (
-        !privatePromptAttempt && outcome === "failed" &&
+        !suppressPromptRetry && outcome === "failed" &&
         !(await legacyExecutionNeedsReconciliationWithEvidence(db, livenessRun))
       ) {
         await scheduleInteractionContinuationInfrastructureRetryIfEligible(
@@ -876,15 +881,15 @@ export function createHeartbeatRunCompletion(db: Db, dependencies: HeartbeatRunC
       );
       const conversationSettled = await settleConversationTurn(db, livenessRun);
       await releaseIssueExecutionAndPromote(livenessRun, {
-        suppressImmediateRecovery: privatePromptAttempt || conversationSettled ||
+        suppressImmediateRecovery: suppressPromptRetry || conversationSettled ||
           readNonEmptyString(
             parseObject(livenessRun.contextSnapshot).goalControlRequestId,
           ) !== null ||
           parseObject(livenessRun.contextSnapshot)
             .resumeSessionGoalHeartbeat === true,
       });
-      if (!privatePromptAttempt && !conversationSettled) {
-        if (!privatePromptAttempt) await handleIssueReviewPathDisposition(livenessRun);
+      if (!suppressPromptRetry && !conversationSettled) {
+        if (!suppressPromptRetry) await handleIssueReviewPathDisposition(livenessRun);
         if (livenessRun.runtimeMode !== "native") {
           await recovery.reconcileLegacyContinuation(livenessRun.id);
         } else {
@@ -1055,7 +1060,9 @@ export function createHeartbeatRunCompletion(db: Db, dependencies: HeartbeatRunC
           : null;
       })
       .catch(() => null);
+    const controlledPromptFailure = await isPromptApplicationRun(db, run.companyId, run.id);
     const failureErrorCode =
+      (controlledPromptFailure ? "prompt_application_blocked" : null) ??
       workspaceValidationFailure?.code ??
       configurationIncompleteFailure?.code ??
       nonRetryablePreflightFailureCode(err) ??
@@ -1155,6 +1162,7 @@ export function createHeartbeatRunCompletion(db: Db, dependencies: HeartbeatRunC
       const livenessRun =
         (await classifyAndPersistRunLiveness(failedRun)) ?? failedRun;
       const privatePromptAttempt = await isPrivatePromptRun(livenessRun.id);
+      const suppressPromptRetry = privatePromptAttempt || controlledPromptFailure || err instanceof PromptApplicationExecutionBlocked;
       try {
         await completeSkillTestRunForHeartbeatOutcome({
           run: livenessRun,
@@ -1176,7 +1184,7 @@ export function createHeartbeatRunCompletion(db: Db, dependencies: HeartbeatRunC
       ) {
         await finalizeIssueCommentPolicy(livenessRun, agent);
       }
-      if (!privatePromptAttempt) await scheduleInteractionContinuationInfrastructureRetryIfEligible(
+      if (!suppressPromptRetry) await scheduleInteractionContinuationInfrastructureRetryIfEligible(
         livenessRun,
         agent,
       );
@@ -1185,9 +1193,9 @@ export function createHeartbeatRunCompletion(db: Db, dependencies: HeartbeatRunC
         // exhaustion. Once its durable coordinator has classified a
         // terminal failure, generic issue recovery must not create a
         // replacement retryOfRunId chain for the same provider work.
-        suppressImmediateRecovery: privatePromptAttempt || nativeTerminalFailureCode !== null,
+        suppressImmediateRecovery: suppressPromptRetry || nativeTerminalFailureCode !== null,
       });
-      if (!privatePromptAttempt) await handleIssueReviewPathDisposition(livenessRun);
+      if (!suppressPromptRetry) await handleIssueReviewPathDisposition(livenessRun);
 
       await updateRuntimeState(
         agent,
@@ -1234,7 +1242,7 @@ export function createHeartbeatRunCompletion(db: Db, dependencies: HeartbeatRunC
     await finalizeAgentStatus(agent.id, "failed", message, {
       wasFirstHeartbeat: timerClaimWasFirstHeartbeat(run),
       keepIdleOnFailure:
-        Boolean(nonRetryablePreflightFailureCode(err)) ||
+        controlledPromptFailure || Boolean(nonRetryablePreflightFailureCode(err)) ||
         isWorkspaceSyncConflictFailure(message),
     });
   }
@@ -1278,7 +1286,9 @@ export function createHeartbeatRunCompletion(db: Db, dependencies: HeartbeatRunC
     const nonRetryablePreflightCode =
       nonRetryablePreflightFailureCode(outerErr);
     const workspaceGitScanFailure = isWorkspaceGitScanError(outerErr) ? outerErr : null;
+    const controlledPromptFailure = await isPromptApplicationRun(db, run.companyId, run.id);
     const setupFailureErrorCode =
+      (controlledPromptFailure ? "prompt_application_blocked" : null) ??
       workspaceGitScanFailure?.code ??
       workspaceValidationSetupFailure?.code ??
       configurationIncompleteSetupFailure?.code ??
@@ -1394,6 +1404,7 @@ export function createHeartbeatRunCompletion(db: Db, dependencies: HeartbeatRunC
         });
       }
       const privatePromptAttempt = await isPrivatePromptRun(livenessRun.id);
+      const suppressPromptRetry = privatePromptAttempt || controlledPromptFailure || outerErr instanceof PromptApplicationExecutionBlocked;
       const failedAgent =
         setupFailureAgent ??
         (await getAgent(run.agentId).catch(() => null));
@@ -1413,7 +1424,7 @@ export function createHeartbeatRunCompletion(db: Db, dependencies: HeartbeatRunC
         // No provider work began. Retry temporary host scan failures with
         // the existing durable failure budget, before releasing execution.
         // Generic recovery must not grant a second budget on exhaustion.
-        if (!privatePromptAttempt) await (isTransientWorkspaceGitScanCode(livenessRun.errorCode)
+        if (!suppressPromptRetry) await (isTransientWorkspaceGitScanCode(livenessRun.errorCode)
           ? scheduleBoundedRetryForRun(livenessRun, failedAgent)
           : scheduleInteractionContinuationInfrastructureRetryIfEligible(livenessRun, failedAgent)
         ).catch((retryError) => {
@@ -1424,7 +1435,7 @@ export function createHeartbeatRunCompletion(db: Db, dependencies: HeartbeatRunC
         });
       }
       await releaseIssueExecutionAndPromote(livenessRun, {
-        suppressImmediateRecovery: privatePromptAttempt ||
+        suppressImmediateRecovery: suppressPromptRetry ||
           readNonEmptyString(
             parseObject(livenessRun.contextSnapshot).goalControlRequestId,
           ) !== null ||
@@ -1436,7 +1447,7 @@ export function createHeartbeatRunCompletion(db: Db, dependencies: HeartbeatRunC
           "failed to release issue execution after heartbeat setup failure",
         );
       });
-      if (!privatePromptAttempt) await handleIssueReviewPathDisposition(livenessRun).catch(
+      if (!suppressPromptRetry) await handleIssueReviewPathDisposition(livenessRun).catch(
         (reviewPathError) => {
           logger.error(
             { err: reviewPathError, runId },
@@ -1456,7 +1467,7 @@ export function createHeartbeatRunCompletion(db: Db, dependencies: HeartbeatRunC
         // Keep the failed run and its safe provider refusal authoritative,
         // but return the agent to idle so clients do not also announce a
         // misleading agent-wide error for the same rejected chat turn.
-        keepIdleOnFailure: Boolean(nonRetryablePreflightCode),
+        keepIdleOnFailure: controlledPromptFailure || Boolean(nonRetryablePreflightCode),
       }).catch(() => undefined);
     }
   }

@@ -1,3 +1,5 @@
+import { promptApplicationWorkspaceIdentity } from "./workspace.js";
+import { assertApplicationProfile } from "./contract.js";
 import { createReadStream } from "node:fs";
 import { createHash } from "node:crypto";
 import { lstat, readdir, realpath } from "node:fs/promises";
@@ -36,27 +38,7 @@ export async function assertApplicationConfigurationAuthority(tx: PrivatePromptT
     action: "agent_config:update", resource: { type: "agent", companyId, agentId } });
   if (!decision.allowed) throw forbidden("prompt_application_agent_configuration_denied");
 }
-export function assertApplicationProfile(adapterType: string, config: Record<string, unknown>, runtime: Record<string, unknown>) {
-  const env = object(config.env), key = object(env.ANTHROPIC_API_KEY);
-  assertApplicationAuthEnvironment({ ...process.env, ...env });
-  if (adapterType !== "claude_local" || config.engine !== "cli" || typeof config.model !== "string" || !config.model.trim() ||
-    typeof config.cwd !== "string" || !path.isAbsolute(config.cwd) ||
-    key.type !== "secret_ref" || typeof key.secretId !== "string" || !Number.isSafeInteger(key.version) || Number(key.version) < 1 ||
-    (config.command != null && config.command !== "claude") ||
-    Object.keys(env).some(k => ["PATH", "HOME", "NODE_OPTIONS", "BASH_ENV", "ENV"].includes(k)) ||
-    Object.keys(runtime).some(k => k !== "heartbeat") ||
-    ["extraArgs", "args", "agentCommand", "remoteExecution", "aiConnection", "aiRouter", "aiBinding"].some(k => config[k] != null) ||
-    Object.keys(env).some(k => /^(ANTHROPIC_AUTH_TOKEN|CLAUDE_CODE_USE_|AWS_|GOOGLE_|VERTEX_)/.test(k))) {
-    throw unprocessable("prompt_application_profile_requires_local_cli_pinned_api_key_and_cwd");
-  }
-  return { env, cwd: config.cwd, model: config.model };
-}
-export function assertApplicationAuthEnvironment(env: Record<string, unknown>) {
-  if (Object.entries(env).some(([key, value]) => value != null && value !== "" &&
-    /^(ANTHROPIC_AUTH_TOKEN$|ANTHROPIC_BASE_URL$|ANTHROPIC_BEDROCK_BASE_URL$|CLAUDE_CODE_USE_|CLAUDE_CODE_OAUTH_TOKEN$)/.test(key))) {
-    throw unprocessable("prompt_application_ambient_auth_or_provider_route_unsupported");
-  }
-}
+export { assertApplicationProfile, assertApplicationAuthEnvironment } from "./contract.js";
 async function fileHash(filename: string) {
   const stat = await lstat(filename);
   if (!stat.isFile() || stat.size > 256 * 1024 * 1024) throw unprocessable("prompt_application_file_unverifiable");
@@ -88,7 +70,7 @@ export async function promptApplicationImplementationDigest() {
   }
   // Changes to the server contract invalidate approval as well as adapter code.
   const extension = path.extname(fileURLToPath(import.meta.url));
-  for (const contract of ["target", "service", "execution", "recovery", "../heartbeat", "../heartbeat/runtime-execution", "../../adapters/registry", "../../routes/mimouse-prompt-applications"]) {
+  for (const contract of ["target", "service", "execution", "recovery", "contract", "workspace", "../heartbeat/run-completion", "../heartbeat/run-lifecycle", "../heartbeat/workspaces", "../recovery/service", "../heartbeat", "../heartbeat/runtime-execution", "../../adapters/registry", "../../routes/mimouse-prompt-applications"]) {
     entries.push([`server/${contract}`, await fileHash(fileURLToPath(new URL(`${contract}${extension}`, import.meta.url)))]);
   }
   return applicationDigest(entries);
@@ -150,11 +132,12 @@ export async function resolvePromptApplicationTarget(tx: PrivatePromptTx, compan
   const implementationDigest = await promptApplicationImplementationDigest();
   const targetDigest = applicationDigest({ agentId, adapterType: agent.adapterType, adapterConfig: agent.adapterConfig,
     runtimeConfig: agent.runtimeConfig, permissions: agent.permissions, defaultEnvironmentId: agent.defaultEnvironmentId,
+    workspaceIdentity: await promptApplicationWorkspaceIdentity(agent.id, profile.cwd),
     environment, executionPolicy, general: settings?.general, experimental: settings?.experimental,
     secretDigests, hostEnvironment: process.env, commandHash: await fileHash(await realpath(command)),
     instructionsHash: await instructionsDigest(tx, agent, actorUserId), implementationDigest });
   return { schemaVersion: 1, adapterType: "claude_local", engine: "cli", slot: PROMPT_APPLICATION_SLOT, model: profile.model,
-    environmentId: environment.id, targetDigest, implementationDigest, credentials,
+    environmentId: environment.id, targetDigest, implementationDigest, credentials, workspacePolicy: "configured_cwd_with_managed_agent_home_v1",
     scope: "new_projectless_tasks_first_fresh_dispatch", completeContextCaptured: false, ordinaryToolsQualityProven: false };
 }
 export function assertApplicationTarget(expected: PromptApplicationSnapshot, actual: PromptApplicationSnapshot) {

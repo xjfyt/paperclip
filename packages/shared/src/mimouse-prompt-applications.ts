@@ -22,6 +22,7 @@ export interface PromptApplicationSnapshot {
   schemaVersion: 1; adapterType: "claude_local"; engine: "cli"; slot: typeof PROMPT_APPLICATION_SLOT;
   model: string; environmentId: string; targetDigest: string; implementationDigest: string;
   credentials: Array<{ secretId: string; version: number }>;
+  workspacePolicy: "configured_cwd_with_managed_agent_home_v1";
   scope: "new_projectless_tasks_first_fresh_dispatch";
   completeContextCaptured: false; ordinaryToolsQualityProven: false;
 }

@@ -13,6 +13,7 @@ it("only a server-owned capability enables the slot", () => {
   expect(() => assertControlledPromptContext(ctx)).not.toThrow();
 });
 for (const [name, mutate] of Object.entries({
+  wrapper: (ctx: AdapterExecutionContext) => { ctx.config.filesystemSandboxCommand = "/wrapper"; },
   acp: (ctx: AdapterExecutionContext) => { ctx.config.engine = "acp"; },
   resume: (ctx: AdapterExecutionContext) => { ctx.runtime.sessionId = "old"; },
   params: (ctx: AdapterExecutionContext) => { ctx.runtime.sessionParams = {}; },

@@ -55,6 +55,8 @@ export function promptApplicationService(db: Db) {
     return row;
   }
   async function priorReceipt(tx: PrivatePromptTx, actor: PrivatePromptIdentity, applicationId: string, requestId: string, requestDigest: string) {
+    const [proposalRequest] = await tx.select({ id: applications.id }).from(applications).where(and(eq(applications.companyId, actor.companyId), eq(applications.requestId, requestId)));
+    if (proposalRequest) throw conflict("prompt_application_request_conflict");
     const [prior] = await tx.select().from(receipts).where(and(eq(receipts.companyId, actor.companyId), eq(receipts.requestId, requestId)));
     if (!prior) return null;
     if (prior.applicationId !== applicationId || prior.actorUserId !== actor.userId || prior.requestDigest !== requestDigest) throw conflict("prompt_application_request_conflict");
@@ -137,6 +139,8 @@ export function promptApplicationService(db: Db) {
       return db.transaction(async tx => {
         await authorizePrivatePrompt(tx, actor); await lockRequest(tx, actor.companyId, input.requestId); await lockAgent(tx, actor.companyId, input.agentId);
         const head = await lockApplicationHead(tx, actor.companyId, input.agentId);
+        const [receiptRequest] = await tx.select({ id: receipts.id }).from(receipts).where(and(eq(receipts.companyId, actor.companyId), eq(receipts.requestId, input.requestId)));
+        if (receiptRequest) throw conflict("prompt_application_request_conflict");
         const [prior] = await tx.select().from(applications).where(and(eq(applications.companyId, actor.companyId), eq(applications.requestId, input.requestId)));
         if (prior) {
           if (prior.actorUserId !== actor.userId || prior.requestDigest !== digest) throw conflict("prompt_application_request_conflict");
@@ -157,6 +161,7 @@ export function promptApplicationService(db: Db) {
     async approve(actor: PrivatePromptIdentity, promptId: string, id: string, raw: ApprovePromptApplication) {
       const input = approvePromptApplicationSchema.parse(raw), digest = applicationDigest({ action: "configure", promptId, id, ...input });
       const initial = await db.transaction(async tx => { await authorizePrivatePrompt(tx, actor); const row = await get(tx, actor, promptId, id);
+        await assertApplicationConfigurationAuthority(tx, actor.companyId, row.agentId, actor.userId);
         return { row, prior: await priorReceipt(tx, actor, id, input.requestId, digest) }; });
       if (initial.prior) return initial.prior;
       enabled();

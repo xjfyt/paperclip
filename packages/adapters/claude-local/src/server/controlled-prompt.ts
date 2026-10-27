@@ -3,7 +3,8 @@ import type { AdapterExecutionContext } from "@paperclipai/adapter-utils";
 export function assertControlledPromptContext(ctx: AdapterExecutionContext) {
   if (!ctx.controlledPromptApplication) return;
   if (ctx.privatePromptTest || ctx.config.engine !== "cli" || ctx.executionTarget?.kind !== "local" || ctx.executionTransport?.remoteExecution ||
-    ctx.runtime.sessionId || ctx.runtime.sessionParams || ctx.runtime.sessionDisplayId || ctx.context.conversationMode || ctx.executionContinuation?.resumeDelta) {
+    ctx.runtime.sessionId || ctx.runtime.sessionParams || ctx.runtime.sessionDisplayId || ctx.context.conversationMode || ctx.executionContinuation?.resumeDelta ||
+    ["filesystemScope", "networkScope", "filesystemSandboxCommand", "filesystemExtraPaths", "networkAllowlist"].some(k => ctx.config[k] != null)) {
     throw new Error("prompt_application_adapter_context_unsupported");
   }
 }

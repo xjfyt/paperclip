@@ -33,3 +33,9 @@ export async function assertApplicationAttemptsStopped(tx: PrivatePromptTx, comp
     if (!withdrawn && !await applicationAttemptStopped(tx, companyId, row.runId, true)) throw conflict("prompt_application_previous_attempt_unresolved");
   }
 }
+
+/** Server-owned evidence, independent of mutable wake/context payloads. */
+export async function isPromptApplicationRun(tx: Db | PrivatePromptTx, companyId: string, runId: string) {
+  return (await tx.select({ id: heartbeatRunEvents.id }).from(heartbeatRunEvents).where(and(eq(heartbeatRunEvents.companyId, companyId),
+    eq(heartbeatRunEvents.runId, runId), eq(heartbeatRunEvents.eventType, "prompt_application.candidate"), isNull(heartbeatRunEvents.sourceEventId))).limit(1)).length > 0;
+}
