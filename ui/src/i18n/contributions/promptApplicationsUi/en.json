@@ -75,5 +75,7 @@
   "baselineRevisionId": "Baseline revision UUID",
   "testCount": "Fixed historical test count",
   "credentialVersions": "Pinned company credential IDs / versions (not secret values)",
-  "proposalVisibility": "Preparing a proposal stores deployment metadata visible to this company’s authorized owners and administrators, including revision, dataset and test IDs and the cost cap. Private case text, results and prompt contents are not included in this metadata."
+  "proposalVisibility": "Preparing a proposal stores deployment metadata visible to this company’s authorized owners and administrators, including revision, dataset and test IDs and the cost cap. Private case text, results and prompt contents are not included in this metadata.",
+  "workspacePolicy": "Approved workspace policy",
+  "workspacePolicyBoundary": "When a new projectless task resolves to managed agent_home metadata, built-in Claude follows its existing rule and runs in the approved fixed configuration cwd. The actual process directory must match that approved cwd and be bound into the effective context hash; the managed workspace metadata is checked separately for ownership. Different tasks may share files in this directory: there is no per-task directory isolation. Rollback does not clear historical files or sessions."
 }

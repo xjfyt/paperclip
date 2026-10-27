@@ -190,6 +190,7 @@ function ApplicationSession(props: Props) {
     <h2 className="text-lg font-semibold">{label("title")}</h2>
     <p>{label("boundary")}</p><p>{label("proposalVisibility")}</p><p className="text-sm text-muted-foreground">{label("profile")}</p><p>{label("scope")}</p><p>{label("visibility")}</p>
     {notice && <p role="status">{label(notice)}</p>}{!enabled && <p>{label("disabled")}</p>}
+    <p className="text-sm text-muted-foreground">{label("workspacePolicyBoundary")}</p>
     {!denied && <>
       <fieldset disabled={locked || !enabled || !props.promptId} className="space-y-2">
         <p>{evidence ? label("evidenceReady") : label("evidenceNeeded")}</p>
@@ -203,7 +204,7 @@ function ApplicationSession(props: Props) {
       {nextPage && <Button variant="outline" disabled={locked} onClick={() => void refresh(true)}>{label("more")}</Button>}
       {row && <div className="space-y-2">
         <h3 className="font-medium">{label("review")}</h3>
-        <dl className="font-mono break-all">{[["applicationId", row.id], ["agentId", row.agentId], ["revisionId", row.revisionId], ["revisionHash", row.revisionHash], ["reportHash", row.reportHash], ["retryDataset", row.comparison.datasetId], ["baselineRevisionId", row.comparison.baselineRevisionId], ["testCount", formatNumber(row.comparison.testIds.length)], ["approvalDigest", row.approvalDigest], ["targetDigest", row.snapshot.targetDigest], ["implementationDigest", row.snapshot.implementationDigest], ["environmentId", row.snapshot.environmentId], ["slot", row.snapshot.slot], ["model", row.snapshot.model], ["approvalExpiresAt", row.approvalExpiresAt], ["generation", formatNumber(row.expectedGeneration)]].map(([key, value]) => <div key={key}><dt>{label(key!)}</dt><dd>{value}</dd></div>)}</dl>
+        <dl className="font-mono break-all">{[["applicationId", row.id], ["agentId", row.agentId], ["revisionId", row.revisionId], ["revisionHash", row.revisionHash], ["reportHash", row.reportHash], ["retryDataset", row.comparison.datasetId], ["baselineRevisionId", row.comparison.baselineRevisionId], ["testCount", formatNumber(row.comparison.testIds.length)], ["approvalDigest", row.approvalDigest], ["targetDigest", row.snapshot.targetDigest], ["implementationDigest", row.snapshot.implementationDigest], ["environmentId", row.snapshot.environmentId], ["workspacePolicy", row.snapshot.workspacePolicy], ["slot", row.snapshot.slot], ["model", row.snapshot.model], ["approvalExpiresAt", row.approvalExpiresAt], ["generation", formatNumber(row.expectedGeneration)]].map(([key, value]) => <div key={key}><dt>{label(key!)}</dt><dd>{value}</dd></div>)}</dl>
         <dl className="font-mono break-all"><dt>{label("credentialVersions")}</dt>{row.snapshot.credentials.map(credential => <dd key={`${credential.secretId}:${credential.version}`}>{credential.secretId} / {formatNumber(credential.version)}</dd>)}</dl>
         <p>{label("expiryBoundary")}</p><p>{label("contextBoundary")}</p>
         {!head && <Button variant="outline" disabled={locked} onClick={() => void inspectTarget(row.agentId, row)}>{label("inspectTarget")}</Button>}

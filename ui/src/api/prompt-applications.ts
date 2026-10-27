@@ -17,12 +17,12 @@ export function applicationKeys(raw: unknown, keys: string[]) {
   return row;
 }
 function snapshot(raw: unknown): PromptApplicationSnapshot {
-  const r = applicationKeys(raw, ["schemaVersion", "adapterType", "engine", "slot", "model", "environmentId", "targetDigest", "implementationDigest", "credentials", "scope", "completeContextCaptured", "ordinaryToolsQualityProven"]);
+  const r = applicationKeys(raw, ["schemaVersion", "adapterType", "engine", "slot", "model", "environmentId", "targetDigest", "implementationDigest", "credentials", "scope", "workspacePolicy", "completeContextCaptured", "ordinaryToolsQualityProven"]);
   return { schemaVersion: literal(r.schemaVersion, 1), adapterType: literal(r.adapterType, "claude_local"), engine: literal(r.engine, "cli"),
     slot: literal(r.slot, "claude_cli_literal_supplement_v1"), model: privateString(r.model), environmentId: uuid(r.environmentId),
     targetDigest: privateHash(r.targetDigest), implementationDigest: privateHash(r.implementationDigest),
     credentials: array(r.credentials, value => { const c = applicationKeys(value, ["secretId", "version"]); return { secretId: uuid(c.secretId), version: integer(c.version, 1) }; }),
-    scope: literal(r.scope, "new_projectless_tasks_first_fresh_dispatch"), completeContextCaptured: literal(r.completeContextCaptured, false), ordinaryToolsQualityProven: literal(r.ordinaryToolsQualityProven, false) };
+    scope: literal(r.scope, "new_projectless_tasks_first_fresh_dispatch"), workspacePolicy: literal(r.workspacePolicy, "configured_cwd_with_managed_agent_home_v1"), completeContextCaptured: literal(r.completeContextCaptured, false), ordinaryToolsQualityProven: literal(r.ordinaryToolsQualityProven, false) };
 }
 export function parsePromptApplication(raw: unknown): PromptApplicationRecord {
   const r = applicationKeys(raw, ["id", "companyId", "promptId", "requestId", "revisionId", "revisionHash", "agentId", "actorUserId", "expectedGeneration", "approvalDigest", "comparison", "reportHash", "snapshot", "approvalExpiresAt", "createdAt", "currentGeneration", "configured", "configuredAt", "dispatchedCount", "executionStarted"]);

@@ -75,5 +75,7 @@
   "baselineRevisionId": "UUID de revisión base",
   "testCount": "Cantidad fija de pruebas históricas",
   "credentialVersions": "IDs / versiones de credenciales de empresa fijadas (sin secretos)",
-  "proposalVisibility": "Preparar una propuesta guarda metadatos de despliegue visibles para los propietarios y administradores autorizados de esta empresa, incluidos los identificadores de versión, conjunto de datos y pruebas, y el límite de coste. Estos metadatos no incluyen casos privados, resultados ni el contenido del prompt."
+  "proposalVisibility": "Preparar una propuesta guarda metadatos de despliegue visibles para los propietarios y administradores autorizados de esta empresa, incluidos los identificadores de versión, conjunto de datos y pruebas, y el límite de coste. Estos metadatos no incluyen casos privados, resultados ni el contenido del prompt.",
+  "workspacePolicy": "Política de espacio de trabajo aprobada",
+  "workspacePolicyBoundary": "Cuando una tarea nueva sin proyecto se resuelve a metadatos agent_home administrados, Claude integrado sigue su regla existente y ejecuta en el cwd fijo de la configuración aprobada. El directorio real del proceso debe coincidir con ese cwd y quedar vinculado al hash del contexto efectivo; la titularidad de los metadatos del espacio administrado se verifica por separado. Distintas tareas pueden compartir archivos en este directorio: no hay aislamiento de directorio por tarea. La reversión no borra archivos ni sesiones anteriores."
 }

@@ -156,3 +156,12 @@ it("shows the separate stdin disposition in four languages without claiming logs
   }
   expect(calls.dispatches).toHaveBeenCalledTimes(1); expect(calls.rollback).not.toHaveBeenCalled();
 });
+it("discloses the approved configured cwd and shared-file policy in four languages before any mutation", async () => {
+  await mount();
+  for (const locale of ["en", "zh-CN", "es", "ja"]) {
+    await act(async () => { await i18n.changeLanguage(locale); }); expect(host.textContent).toContain(label("workspacePolicyBoundary"));
+  }
+  expect(calls.prepare).not.toHaveBeenCalled(); expect(calls.approve).not.toHaveBeenCalled();
+  calls.list.mockResolvedValue({ enabled: true, items: [record()], nextBeforeId: null }); await click("refresh"); await selectHistory();
+  expect(host.textContent).toContain(label("workspacePolicy")); expect(host.textContent).toContain("configured_cwd_with_managed_agent_home_v1");
+});

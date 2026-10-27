@@ -82,3 +82,9 @@ it("requires a recognized input disposition and rejects no-input proof on a disp
   }
   reply({ items: [dispatch()], nextBeforeId: null }); expect((await make().dispatches(id(7), id(20))).items[0].inputDisposition).toBe("unconfirmed");
 });
+it("requires the exact configured-cwd/managed-metadata policy, never per-task or agent-home-only isolation", () => {
+  const value = record(); expect(parsePromptApplication(value).snapshot.workspacePolicy).toBe("configured_cwd_with_managed_agent_home_v1");
+  const missing = { ...value.snapshot } as Record<string, unknown>; delete missing.workspacePolicy;
+  expect(() => parsePromptApplication({ ...value, snapshot: missing })).toThrow();
+  for (const workspacePolicy of ["managed_agent_home_v1", "per_task_directory", "", null]) expect(() => parsePromptApplication({ ...value, snapshot: { ...value.snapshot, workspacePolicy } })).toThrow();
+});
