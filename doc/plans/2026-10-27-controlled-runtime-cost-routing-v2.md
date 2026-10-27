@@ -1,7 +1,7 @@
 # Controlled runtime cost routing v2
 
-Date: 2026-10-27. Status: restricted-profile local C2 qualified at `752d4813`;
-final integrated build/API/full-UI regression remains pending.
+Date: 2026-10-27. Status: restricted-profile local C2 and scoped regression qualified.
+Final frozen implementation/server build stamp: `ba5b36a9`; vendor acceptance remains separate.
 
 ## Version and scope
 
@@ -165,7 +165,7 @@ The direct Node contract suite is `scripts/test-runtime-cost-routing-contracts.m
 strict input boundaries, decimal precision, evidence identity/coverage, scoped
 recovery and schema fences without opening a database or executing a CLI.
 
-### Qualified local C2, not a vendor or complete-regression pass
+### Qualified local C2 and scoped regression, not vendor acceptance
 
 The real PostgreSQL/private-heartbeat integration fixture passed **26/26** at
 `752d4813` (local execution log: `/tmp/paperclip-routing-real-pg-fifth.log`). Its
@@ -185,17 +185,25 @@ live exact-run identity while rejecting terminal replay, and replaced the budget
 mock with the real policy/reservation path. The final pass does not erase those
 failures or expand the supported profile.
 
-Supporting focused checks reported for this integration are 193 related unit
-tests across 10 files, 12 shared contract checks, and 59 focused UI tests. The
-4280-key UI has passed full UI type checking and production build; key counts are
-not coverage, and focused UI tests are **not** a full UI regression result.
+The first local pass above was followed by a real automatic-recovery loop fix
+and an ordinary recovery lock-race fix. The final related backend suite passed
+**374 tests across 21 files**, including the real database/private-heartbeat
+scenarios. The complete standard server build passed with stamp `ba5b36a9`, and
+the compiled API entry passed all **163** tests in the configured MiMouse API
+suite. Workspace package TS exports remain in use; this is not an all-dist test.
 
-At this documentation pass, the standard server build is being rerun after four
-reported TypeScript errors were fixed. Two prior standalone build SIGKILLs and
-the first standard-build failure remain recorded. A final successful complete
-build, compiled API regression and full UI test aggregation are not yet claimed.
-The final integration owner must record those results against the final input;
-older full-suite snapshots cannot substitute for them.
+The final **4286-key** UI passed complete type checking and production build.
+Fresh strict aggregation covered **829 files / 83 batches / 10225 tests**, using
+nine complete manifests with unchanged inputs, no failed/skipped/todo results.
+See [VERIFICATION](../mimouse/VERIFICATION.md) for hashes, logs and prior failures;
+key counts are not translation coverage and these checks do not prove C3/C4.
+
+An additional broad core-neighbor run had 762 passes and four failures. Three
+selected cases now pass, including the repaired ordinary lock race; one legacy
+local-path classification assertion remains limited by this sandbox's Git
+ancestor metadata/error format. It is explicitly not counted as passed, and
+separate runs are not combined into a fictional 766-test green result. No Git
+safety checks were weakened to satisfy the environment.
 
 This local C2 qualification uses inert Node/mock execution without a real model,
 Claude CLI/vendor, paid service or notification recipient. It does not prove
