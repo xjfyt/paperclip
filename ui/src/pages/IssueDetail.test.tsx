@@ -178,7 +178,7 @@ type FeedbackThreadProps = Pick<TaskChatThreadProps,
 >;
 const mockFeedbackThreadRender = vi.hoisted(() => vi.fn<(props: FeedbackThreadProps) => void>());
 const mockFeedbackToast = vi.hoisted(() => vi.fn<(toast: ToastInput) => void>());
-const mockRestoreCommentDraft = vi.hoisted(() => vi.fn<(body: string) => void>());
+const mockRestoreCommentDraft = vi.hoisted(() => vi.fn<(body: string) => boolean>());
 const mockFocusCommentComposer = vi.hoisted(() => vi.fn<() => void>());
 
 const mockNavigate = vi.hoisted(() => vi.fn());
@@ -1504,7 +1504,7 @@ describe("IssueDetail", () => {
     mockIssuesApi.skipInteraction.mockReset();
     mockIssuesApi.cancelComment.mockReset();
     mockIssuesApi.deleteComment.mockReset();
-    mockRestoreCommentDraft.mockReset();
+    mockRestoreCommentDraft.mockReset().mockReturnValue(true);
     mockFocusCommentComposer.mockClear();
     mockLocation.pathname = "/issues/PAP-1";
     mockLocation.search = "";
@@ -2152,7 +2152,9 @@ describe("IssueDetail", () => {
     // The classic composer's existing restore contract preserves newer typing.
     let currentDraft = "Newer composer draft 原文";
     mockRestoreCommentDraft.mockImplementation((submittedBody) => {
+      const previous = currentDraft;
       currentDraft = restoreSubmittedCommentDraft({ currentBody: currentDraft, submittedBody });
+      return currentDraft !== previous;
     });
     // Navigate only after both writes are in flight, not during onMutate setup.
     await waitForAssertion(() => expect(mockIssuesApi.addComment).toHaveBeenCalledTimes(2));
@@ -2288,6 +2290,108 @@ describe("IssueDetail", () => {
     expect(api).toHaveBeenCalledTimes(2);
     expect(api.mock.calls[1]).toEqual(api.mock.calls[0]);
     await waitForAssertion(() => expect(feedbackThread().comments.filter((entry) => entry.id === comment.id)).toHaveLength(1));
+  });
+
+  const actorCompletionCases = [false, true].flatMap((reassign) =>
+    (["user", "session"] as const).flatMap((change) =>
+      (["before-dispatch", "success", "error", "unknown", "cancel-before-actor", "cancel-during-await"] as const).map((outcome) => ({ reassign, change, outcome })),
+    ),
+  );
+  it.each(actorCompletionCases)("fences every comment completion after actor change ($reassign, $change, $outcome)", async ({ reassign, change, outcome }) => {
+    const originalSession: AuthSession = { session: { id: "session-1", userId: "user-1" }, user: { id: "user-1", name: null, email: null, image: null }, sentryDsn: null };
+    const comment = createIssueComment({ id: "old-actor-receipt", body: "Old private content", clientRequestId: "old-request" });
+    const commentReceipt = createDeferred<IssueComment>();
+    const updateReceipt = createDeferred<Issue & { comment: IssueComment }>();
+    const cancelReceipt = createDeferred<IssueComment>();
+    const gate = createDeferred<void>();
+    mockAuthApi.getSession.mockResolvedValue(originalSession);
+    mockIssuesApi.addComment.mockReset().mockReturnValue(commentReceipt.promise);
+    mockIssuesApi.update.mockReset().mockReturnValue(updateReceipt.promise);
+    mockIssuesApi.cancelComment.mockReturnValue(cancelReceipt.promise);
+    await renderFeedbackHost("en");
+    vi.spyOn(queryClient, "cancelQueries").mockReturnValue(gate.promise);
+    let posting: Promise<unknown> | undefined;
+    await act(async () => { posting = Promise.resolve(feedbackThread().onAdd(comment.body, true, reassign ? { assigneeAgentId: "agent-2", assigneeUserId: null } : undefined, ["private-attachment"], "old-request")).catch((error: unknown) => error); });
+    let optimisticId = "";
+    await waitForAssertion(() => { optimisticId = feedbackThread().comments.find((entry) => entry.body === comment.body)?.id ?? ""; expect(optimisticId).toMatch(/^optimistic-/); });
+    if (outcome.startsWith("cancel-")) await act(async () => feedbackThread().onCancelQueued?.(optimisticId));
+    const api = reassign ? mockIssuesApi.update : mockIssuesApi.addComment;
+    if (outcome !== "before-dispatch") {
+      await act(async () => gate.resolve());
+      await waitForAssertion(() => expect(api).toHaveBeenCalledTimes(1));
+    }
+    const resolveComment = () => {
+      if (reassign) updateReceipt.resolve({ ...createIssue(), comment });
+      else commentReceipt.resolve(comment);
+    };
+    if (outcome === "cancel-during-await") {
+      await act(async () => resolveComment());
+      await waitForAssertion(() => expect(mockIssuesApi.cancelComment).toHaveBeenCalledTimes(1));
+    }
+    // Logout clears shared query data; a late callback must not restore it.
+    await act(async () => root.render(null));
+    queryClient.clear();
+    const userId = change === "user" ? "user-2" : "user-1";
+    queryClient.setQueryData<AuthSession>(queryKeys.auth.session, { ...originalSession, session: { id: "session-2", userId }, user: { ...originalSession.user, id: userId } });
+    const writeCache = vi.spyOn(queryClient, "setQueryData");
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+    mockFeedbackToast.mockClear();
+    mockRestoreCommentDraft.mockClear();
+    const failure = outcome === "unknown" ? new CommentSubmissionUnknownError() : new Error("Original response failed 原文");
+    let result: unknown;
+    await act(async () => {
+      if (outcome === "before-dispatch") gate.resolve();
+      else if (outcome === "error" || outcome === "unknown") {
+        if (reassign) updateReceipt.reject(failure); else commentReceipt.reject(failure);
+      } else if (outcome === "cancel-during-await") cancelReceipt.resolve(comment);
+      else { if (outcome === "cancel-before-actor") cancelReceipt.resolve(comment); resolveComment(); }
+      result = await posting;
+    });
+    if (outcome === "before-dispatch") expect(result).toBeInstanceOf(Error);
+    if (outcome === "error" || outcome === "unknown") expect(result).toBe(failure);
+    expect(api).toHaveBeenCalledTimes(outcome === "before-dispatch" ? 0 : 1);
+    expect(mockIssuesApi.cancelComment).toHaveBeenCalledTimes(outcome === "cancel-during-await" ? 1 : 0);
+    expect(writeCache).not.toHaveBeenCalled();
+    expect(invalidate).not.toHaveBeenCalled();
+    expect(mockFeedbackToast).not.toHaveBeenCalled();
+    expect(mockRestoreCommentDraft).not.toHaveBeenCalled();
+    expect(queryClient.getQueryData(queryKeys.issues.detail("PAP-1"))).toBeUndefined();
+    expect(queryClient.getQueryData(queryKeys.issues.comments("PAP-1"))).toBeUndefined();
+  });
+
+  it.each([false, true])("rejects an old submit callback before optimistic cache writes (reassign=%s)", async (reassign) => {
+    mockIssuesApi.addComment.mockReset();
+    mockIssuesApi.update.mockReset();
+    await renderFeedbackHost("en");
+    const oldAdd = feedbackThread().onAdd;
+    const nextSession: AuthSession = { session: { id: "session-new", userId: "user-new" }, user: { id: "user-new", name: null, email: null, image: null }, sentryDsn: null };
+    await act(async () => queryClient.setQueryData(queryKeys.auth.session, nextSession));
+    await flushReact();
+    const writeCache = vi.spyOn(queryClient, "setQueryData");
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+    await act(async () => { await expect(oldAdd("Old private callback body", true, reassign ? { assigneeAgentId: "agent-2", assigneeUserId: null } : undefined, [], "old-callback-request")).rejects.toBeInstanceOf(Error); });
+    expect(writeCache).not.toHaveBeenCalled();
+    expect(invalidate).not.toHaveBeenCalled();
+    expect(mockIssuesApi.addComment).not.toHaveBeenCalled();
+    expect(mockIssuesApi.update).not.toHaveBeenCalled();
+    expect(feedbackThread().comments.some((comment) => comment.body === "Old private callback body")).toBe(false);
+  });
+
+  it.each([false, true])("does not dispatch a local-session comment after its auth cache is cleared (reassign=%s)", async (reassign) => {
+    mockAuthApi.getSession.mockResolvedValue(null);
+    mockIssuesApi.addComment.mockReset();
+    mockIssuesApi.update.mockReset();
+    await renderFeedbackHost("en");
+    const gate = createDeferred<void>();
+    vi.spyOn(queryClient, "cancelQueries").mockReturnValue(gate.promise);
+    let posting: Promise<unknown> | undefined;
+    await act(async () => { posting = Promise.resolve(feedbackThread().onAdd("Old local comment", undefined, reassign ? { assigneeAgentId: "agent-2", assigneeUserId: null } : undefined, [], "local-request")).catch((error: unknown) => error); });
+    await act(async () => root.render(null));
+    queryClient.clear();
+    await act(async () => { gate.resolve(); expect(await posting).toBeInstanceOf(Error); });
+    expect(mockIssuesApi.addComment).not.toHaveBeenCalled();
+    expect(mockIssuesApi.update).not.toHaveBeenCalled();
+    expect(queryClient.getQueryData(queryKeys.issues.detail("PAP-1"))).toBeUndefined();
   });
 
   it.each([false, true].flatMap((reassign) => (["user", "session"] as const).map((change) => ({ reassign, change }))))("rejects a stale actor before comment dispatch ($reassign, $change)", async ({ reassign, change }) => {

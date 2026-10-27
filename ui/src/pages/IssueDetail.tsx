@@ -4718,10 +4718,18 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
     },
   });
 
-  const assertCommentTargetActor = (target: CommentMutationTarget) => {
+  const isCommentTargetActor = (target: CommentMutationTarget) => {
     const current = queryClient.getQueryData<Awaited<ReturnType<typeof authApi.getSession>>>(queryKeys.auth.session);
-    if ((current?.user?.id ?? current?.session?.userId ?? null) !== target.userId ||
-      (current?.session?.id ?? null) !== target.sessionId) throw new Error(mimouseT("issueRecoveryUi.taskNotLoaded"));
+    return current !== undefined && (current?.user?.id ?? current?.session?.userId ?? null) === target.userId &&
+      (current?.session?.id ?? null) === target.sessionId;
+  };
+  const assertCommentTargetActor = (target: CommentMutationTarget) => {
+    if (!isCommentTargetActor(target)) throw new Error(mimouseT("issueRecoveryUi.taskNotLoaded"));
+  };
+  const clearCommentMutationOptimisticState = (optimisticId: string | null | undefined) => {
+    if (!optimisticId) return;
+    setOptimisticComments((current) => current.filter((entry) => entry.clientId !== optimisticId));
+    cancelledQueuedOptimisticCommentIdsRef.current.delete(optimisticId);
   };
   const isCurrentCommentTarget = (target: CommentMutationTarget) => {
     const current = currentCommentScopeRef.current;
@@ -4775,6 +4783,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       return issuesApi.addComment(ref, body, reopen, interrupt, attachmentIds, clientRequestId);
     },
     onMutate: async ({ target, body, reopen, interrupt }) => {
+      assertCommentTargetActor(target);
       // Start cache cancellation immediately but do not put it in front of the
       // optimistic echo. The new-runner startup placeholder must paint in the
       // same frame as send, even when an in-flight comments query is slow to
@@ -4823,6 +4832,10 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       };
     },
     onSuccess: async (comment, { target }, context) => {
+      if (!isCommentTargetActor(target)) {
+        clearCommentMutationOptimisticState(context?.optimisticCommentId);
+        return;
+      }
       if (
         context?.optimisticCommentId &&
         cancelledQueuedOptimisticCommentIdsRef.current.has(
@@ -4839,11 +4852,13 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
         );
         try {
           await issuesApi.cancelComment(comment.issueId, comment.id);
+          if (!isCommentTargetActor(target)) return;
           invalidateCommentTarget(target, "detail");
           invalidateCommentTarget(target, "thread");
           invalidateCommentTarget(target, "collections");
           return;
         } catch (err) {
+          if (!isCommentTargetActor(target)) return;
           if (isCurrentCommentTarget(target)) pushToast({
             title: mimouseT("issueCommentFeedbackUi.cancelFailed"),
             body:
@@ -4896,6 +4911,10 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       }
     },
     onError: (err, { target }, context) => {
+      if (!isCommentTargetActor(target)) {
+        clearCommentMutationOptimisticState(context?.optimisticCommentId);
+        return;
+      }
       if (context?.optimisticCommentId) {
         setOptimisticComments((current) =>
           current.filter(
@@ -4920,6 +4939,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
     },
     onSettled: (result, _error, variables) => {
       const { target } = variables;
+      if (!isCommentTargetActor(target)) return;
       if (result && !target.issueRef) void queryClient.invalidateQueries({ queryKey: queryKeys.issues.comments(result.issueId) });
       if (_error) invalidateCommentTarget(target, "treeControl");
       invalidateCommentTarget(target, "thread");
@@ -5166,6 +5186,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       });
     },
     onMutate: async ({ target, body, reopen, reassignment, interrupt }) => {
+      assertCommentTargetActor(target);
       // Cache cancellation can wait on an active request for several seconds.
       // Start it now, but paint the optimistic echo before awaiting it so a
       // reassignment never clears the composer into an empty thread.
@@ -5216,6 +5237,10 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       };
     },
     onSuccess: async (result, { target }, context) => {
+      if (!isCommentTargetActor(target)) {
+        clearCommentMutationOptimisticState(context?.optimisticCommentId);
+        return;
+      }
       const { comment, ...nextIssue } = result;
       queryClient.setQueryData(queryKeys.issues.detail(commentTargetKey(target)), nextIssue);
       if (
@@ -5235,11 +5260,13 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
         );
         try {
           await issuesApi.cancelComment(commentTargetKey(target), comment.id);
+          if (!isCommentTargetActor(target)) return;
           invalidateCommentTarget(target, "detail");
           invalidateCommentTarget(target, "thread");
           invalidateCommentTarget(target, "collections");
           return;
         } catch (err) {
+          if (!isCommentTargetActor(target)) return;
           if (isCurrentCommentTarget(target)) pushToast({
             title: mimouseT("issueCommentFeedbackUi.cancelFailed"),
             body:
@@ -5289,6 +5316,10 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       }
     },
     onError: (err, { target }, context) => {
+      if (!isCommentTargetActor(target)) {
+        clearCommentMutationOptimisticState(context?.optimisticCommentId);
+        return;
+      }
       if (context?.optimisticCommentId) {
         setOptimisticComments((current) =>
           current.filter(
@@ -5313,6 +5344,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
     },
     onSettled: (_result, _error, variables) => {
       const { target } = variables;
+      if (!isCommentTargetActor(target)) return;
       if (_error) invalidateCommentTarget(target, "treeControl");
       invalidateCommentTarget(target, "thread");
       if (variables.attachmentIds?.length) {

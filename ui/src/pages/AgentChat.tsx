@@ -54,7 +54,7 @@ export function AgentChat() {
     if (!agent || !selectedCompanyId) throw new Error("Agent not found");
     const assertActor = () => {
       const current = client.getQueryData<Awaited<ReturnType<typeof authApi.getSession>>>(queryKeys.auth.session);
-      if ((current?.user?.id ?? current?.session?.userId ?? null) !== userId ||
+      if (current === undefined || (current?.user?.id ?? current?.session?.userId ?? null) !== userId ||
         (current?.session?.id ?? null) !== sessionId) throw new Error(t("issueRecoveryUi.taskNotLoaded"));
     };
     const assertTarget = (issue: Issue) => {

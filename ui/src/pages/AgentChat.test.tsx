@@ -132,6 +132,14 @@ describe("AgentChat creation identity", () => {
     expect(client.getQueryData(queryKeys.agentChats.detail(a.companyId, "user-1", a.id))).toBeNull();
   });
 
+  it("does not treat a cleared auth cache as the prior local session", async () => {
+    auth.getSession.mockResolvedValue(null);
+    const ensure = await render(a);
+    client.removeQueries({ queryKey: queryKeys.auth.session });
+    await expect(ensure()).rejects.toBeInstanceOf(Error);
+    expect(chats.ensure).not.toHaveBeenCalled();
+  });
+
   it.each(["company", "agent", "user"] as const)("rejects a mismatched %s receipt without polluting cache", async (field) => {
     const result = { ...issue(a), ...(field === "company" ? { companyId: b.companyId } : field === "agent" ? { conversationAgentId: b.id } : { conversationUserId: "user-2" }) };
     chats.ensure.mockResolvedValue(result);
