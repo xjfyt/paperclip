@@ -1,0 +1,22 @@
+{
+  "anthropicSubscription": "Anthropic subscription",
+  "claudeSubscriptionHelp": "Quota from the Claude subscription connected to this server.",
+  "codexSubscription": "Codex subscription",
+  "codexSubscriptionHelp": "Quota from the Codex subscription connected to this server.",
+  "accountWindows": "Account windows",
+  "modelWindows": "Model windows",
+  "usedPercent": "{{percent}}% used",
+  "selectOrganizationAgents": "Select an organization to view agents.",
+  "selectCompanyAgents": "Select a company to view agents.",
+  "firstAgent": "Create your first agent to get started.",
+  "selectOrganizationTasks": "Select an organization to view tasks.",
+  "selectCompanyTasks": "Select a company to view tasks.",
+  "tokenAmount": "{{tokens}} tok",
+  "resetsAt": "Resets {{time}}",
+  "lastQuota": "Showing the last available quota. Updates will resume automatically.",
+  "unavailableQuota": "Subscription quota is currently unavailable. Check usage with your provider.",
+  "subscriptionAccount": "Subscription account",
+  "reconnectQuota": "Connect or reconnect a subscription in AI connections to view its quota.",
+  "usageNotReported": "Usage not reported",
+  "lastChecked": "Last checked {{time}}"
+}

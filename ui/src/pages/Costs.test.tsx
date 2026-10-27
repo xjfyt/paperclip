@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
 
 import { i18n } from "../i18n/management-test-resources";
+import { agentTaskQuotaMessages } from "../i18n/agent-task-quota-test-resources";
+import { queryKeys } from "../lib/queryKeys";
+import { formatDateTime, formatTokens } from "../lib/utils";
 import { formatCents } from "../lib/utils";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
@@ -92,6 +95,94 @@ describe("Shared Costs surfaces", () => {
     vi.clearAllMocks();
     await i18n.changeLanguage("en");
   });
+
+  it.each(Object.entries(agentTaskQuotaMessages))("localizes the actual account quota path in %s while keeping account identity, refresh behavior, and diagnostics private", async (locale, copy) => {
+    await i18n.changeLanguage(locale);
+    for (const mock of Object.values(costsApiMocks)) mock.mockResolvedValue([]);
+    costsApiMocks.byUser.mockResolvedValue({ activeUserCount: 1, rows: [] });
+    costsApiMocks.summary.mockResolvedValue({ spendCents: 0, budgetCents: 0, pricingComplete: true });
+    const usage = { costCents: 0, model: "raw-model-id", billingType: "subscription_included", inputTokens: 0, cachedInputTokens: 0, outputTokens: 0,
+      apiRunCount: 0, subscriptionRunCount: 1, subscriptionInputTokens: 0, subscriptionCachedInputTokens: 0, subscriptionOutputTokens: 0 };
+    costsApiMocks.byProvider.mockResolvedValue([ { ...usage, provider: "anthropic", biller: "anthropic" }, { ...usage, provider: "openai", biller: "openai" } ]);
+    const reset = "2026-10-28T14:05:00Z", checked = "2026-10-27T12:30:00Z";
+    const accounts = [
+      { provider: "anthropic", accountKey: "account-raw-1", accountLabel: "用户 Anthropic account", ok: true, capturedAt: checked, windows: [
+        { label: "Raw Sonnet weekly", usedPercent: 72.5, resetsAt: reset, valueLabel: null },
+        { label: "Raw credits", usedPercent: null, resetsAt: reset, valueLabel: null },
+        { label: "Raw provider value", usedPercent: 20, resetsAt: null, valueLabel: "$8.75 remaining" },
+      ] },
+      { provider: "openai", accountKey: "account-raw-2", ok: false, errorFamily: "credentials_unavailable", error: "private auth diagnostic", windows: [] },
+      { provider: "openai", accountKey: "account-raw-3", accountLabel: "Other 用户 account", ok: false, errorFamily: "timeout", error: "private API diagnostic", windows: [] },
+    ];
+    const snapshot = JSON.stringify(accounts);
+    costsApiMocks.quotaWindows.mockResolvedValue(accounts);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    root = createRoot(container);
+    await act(async () => root.render(<MemoryRouter><QueryClientProvider client={client}><Costs initialTab="providers" /></QueryClientProvider></MemoryRouter>));
+    await act(async () => { await vi.waitFor(() => expect(container.textContent).toContain("用户 Anthropic account")); });
+    const assertCopy = (messages: typeof copy) => {
+      for (const text of [messages.subscriptionAccount, messages.reconnectQuota, messages.unavailableQuota, messages.usageNotReported]) expect(container.textContent).toContain(text);
+      expect(container.textContent).toContain(i18n.t("agentTaskQuotaUi.usedPercent", { percent: 72.5 }));
+      expect(container.textContent).toContain(i18n.t("agentTaskQuotaUi.resetsAt", { time: formatDateTime(reset) }));
+      expect(container.textContent).toContain(i18n.t("agentTaskQuotaUi.lastChecked", { time: formatDateTime(checked) }));
+      for (const raw of ["用户 Anthropic account", "Other 用户 account", "Raw Sonnet weekly", "Raw credits", "$8.75 remaining", "raw-model-id"]) expect(container.textContent).toContain(raw);
+      expect(container.textContent).not.toContain("private auth diagnostic");
+      expect(container.textContent).not.toContain("private API diagnostic");
+      expect(container.textContent).not.toContain(messages.codexSubscriptionHelp);
+    };
+    assertCopy(copy);
+    const bar = () => container.querySelector<HTMLElement>('[role="progressbar"][aria-label="Raw Sonnet weekly: 73%"]')!;
+    expect(bar().style.width).toBe("72.5%");
+    expect(costsApiMocks.quotaWindows).toHaveBeenCalledExactlyOnceWith("company-1");
+    const next = locale === "ja" ? "es" : "ja";
+    await act(async () => { await i18n.changeLanguage(next); });
+    assertCopy(agentTaskQuotaMessages[next]);
+    expect(bar().style.width).toBe("72.5%");
+    expect(costsApiMocks.quotaWindows).toHaveBeenCalledTimes(1);
+    costsApiMocks.quotaWindows.mockRejectedValue(new Error("private fetch diagnostic"));
+    await act(async () => { await client.invalidateQueries({ queryKey: queryKeys.usageQuotaWindows("company-1") }); });
+    await act(async () => { await vi.waitFor(() => expect(container.textContent).toContain(agentTaskQuotaMessages[next].lastQuota)); });
+    assertCopy(agentTaskQuotaMessages[next]);
+    expect(container.textContent).not.toContain("private fetch diagnostic");
+    expect(subscriptionsMocks.refresh).not.toHaveBeenCalled();
+    expect(JSON.stringify(accounts)).toBe(snapshot);
+    client.clear();
+  });
+
+  it.each(surfaces.flatMap(([surface, props]) => Object.keys(agentTaskQuotaMessages).map(locale => ({ surface, props, locale }))))(
+    "localizes expanded model token units on $surface in $locale without changing amounts or API arguments", async ({ props, locale }) => {
+      await i18n.changeLanguage(locale);
+      for (const mock of Object.values(costsApiMocks)) mock.mockResolvedValue([]);
+      costsApiMocks.byUser.mockResolvedValue({ activeUserCount: 1, rows: [] });
+      costsApiMocks.summary.mockResolvedValue({ spendCents: 275, budgetCents: 0, pricingComplete: true });
+      costsApiMocks.financeSummary.mockResolvedValue({ netCents: 0, debitCents: 0, creditCents: 0, estimatedDebitCents: 0, eventCount: 0 });
+      const usage = { costCents: 275, inputTokens: 1234, cachedInputTokens: 56, outputTokens: 10, apiRunCount: 1, subscriptionRunCount: 0, eventCount: 1, estimatedEventCount: 0 };
+      costsApiMocks.byAgent.mockResolvedValue([{ ...usage, agentId: "raw-agent", agentName: "用户 Cost Agent" }]);
+      costsApiMocks.byAgentModel.mockResolvedValue([{ ...usage, agentId: "raw-agent", provider: "openai", biller: "openai", billingType: "metered_api", model: "gpt-6-raw-model" }]);
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      root = createRoot(container);
+      await act(async () => root.render(<MemoryRouter><QueryClientProvider client={client}><Costs {...props} /></QueryClientProvider></MemoryRouter>));
+      const card = () => container.querySelector<HTMLElement>(`[aria-label="${i18n.t("costOps.agentCosts", { name: "用户 Cost Agent" })}"]`)!;
+      await act(async () => { await vi.waitFor(() => expect(card()).not.toBeNull()); });
+      await act(async () => card().querySelector<HTMLElement>(".cursor-pointer")!.click());
+      const text = () => card().querySelector(".border-l")!.textContent!;
+      expect(text()).toContain(i18n.t("agentTaskQuotaUi.tokenAmount", { tokens: formatTokens(1300) }));
+      expect(text()).toContain("gpt-6-raw-model");
+      expect(text()).toContain("OpenAI");
+      expect(text()).toContain(formatCents(275));
+      expect(text()).toContain("100%");
+      const calls = costsApiMocks.byAgentModel.mock.calls.map(args => [...args]);
+      const next = locale === "ja" ? "es" : "ja";
+      await act(async () => { await i18n.changeLanguage(next); });
+      expect(text()).toContain(i18n.t("agentTaskQuotaUi.tokenAmount", { tokens: formatTokens(1300) }));
+      expect(text()).toContain("gpt-6-raw-model");
+      expect(text()).toContain(formatCents(275));
+      expect(text()).toContain("100%");
+      expect(costsApiMocks.byAgentModel.mock.calls).toEqual(calls);
+      expect(calls[0]?.[0]).toBe("company-1");
+      client.clear();
+    },
+  );
 
   it.each([0, 125])("shows $%s of known user spend while retaining an unpriced warning", async (costCents) => {
     root = createRoot(container);

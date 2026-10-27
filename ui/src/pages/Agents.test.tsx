@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 
+import { i18n, agentTaskQuotaMessages } from "../i18n/agent-task-quota-test-resources";
+import { queryKeys } from "../lib/queryKeys";
 import type { ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -46,6 +48,7 @@ const mockResourceMembershipsApi = vi.hoisted(() => ({
   updateAgent: vi.fn(),
 }));
 
+const mockCompanyState = vi.hoisted(() => ({ selectedCompanyId: "company-1" as string | null }));
 const mockOpenNewAgent = vi.hoisted(() => vi.fn());
 const mockSetBreadcrumbs = vi.hoisted(() => vi.fn());
 const mockSidebarState = vi.hoisted(() => ({ isMobile: false }));
@@ -59,7 +62,7 @@ vi.mock("@/lib/router", () => ({
 }));
 
 vi.mock("../context/CompanyContext", () => ({
-  useCompany: () => ({ selectedCompanyId: "company-1" }),
+  useCompany: () => mockCompanyState,
 }));
 
 vi.mock("../context/DialogContext", () => ({
@@ -299,6 +302,7 @@ describe("Agents", () => {
   let queryClient: QueryClient;
 
   beforeEach(() => {
+    mockCompanyState.selectedCompanyId = "company-1";
     mockRouterState.pathname = "/agents/all";
     mockRouterState.navigate.mockClear();
     container = document.createElement("div");
@@ -356,6 +360,64 @@ describe("Agents", () => {
     container.remove();
     document.body.innerHTML = "";
     vi.clearAllMocks();
+    await i18n.changeLanguage("en");
+  });
+
+  describe.each([["streamlined", Agents], ["production", ProductionAgents]] as const)("localized %s agent directory", (mode, AgentList) => {
+    it.each(Object.entries(agentTaskQuotaMessages))("shows the correct no-company scope in %s without creating anything", async (locale, copy) => {
+      await i18n.changeLanguage(locale);
+      mockCompanyState.selectedCompanyId = null;
+      root = createRoot(container);
+      await act(async () => root!.render(<QueryClientProvider client={queryClient}><ToastProvider><AgentList /></ToastProvider></QueryClientProvider>));
+      expect(container.textContent).toContain(mode === "streamlined" ? copy.selectOrganizationAgents : copy.selectCompanyAgents);
+      expect(mockAgentsApi.list).not.toHaveBeenCalled();
+      expect(mockAgentsApi.org).not.toHaveBeenCalled();
+      expect(mockOpenNewAgent).not.toHaveBeenCalled();
+      expect(mockRouterState.navigate).not.toHaveBeenCalled();
+    });
+
+    it.each(Object.entries(agentTaskQuotaMessages))("keeps zero-agent setup explicitly optional through language changes in %s", async (locale, copy) => {
+      await i18n.changeLanguage(locale);
+      mockAgentsApi.list.mockResolvedValue([]);
+      mockAgentsApi.org.mockResolvedValue([]);
+      root = createRoot(container);
+      await act(async () => root!.render(<QueryClientProvider client={queryClient}><ToastProvider><AgentList /></ToastProvider></QueryClientProvider>));
+      await flushReact();
+      await vi.waitFor(() => expect(container.textContent).toContain(copy.firstAgent));
+      const buttons = () => [...container.querySelectorAll("button")].filter(button => button.textContent === i18n.t("commonUi.newAgent"));
+      expect(buttons()).toHaveLength(2);
+      expect(mockOpenNewAgent).not.toHaveBeenCalled();
+      const next = locale === "ja" ? "es" : "ja";
+      await act(async () => { await i18n.changeLanguage(next); });
+      expect(container.textContent).toContain(agentTaskQuotaMessages[next].firstAgent);
+      expect(buttons()).toHaveLength(2);
+      expect(mockOpenNewAgent).not.toHaveBeenCalled();
+      await act(async () => buttons()[0]!.click());
+      await act(async () => buttons()[1]!.click());
+      expect(mockOpenNewAgent).toHaveBeenCalledTimes(2);
+      expect(mockRouterState.navigate).not.toHaveBeenCalled();
+      expect(mockBuiltInAgentsApi.provision).not.toHaveBeenCalled();
+    });
+
+    it.each(Object.keys(agentTaskQuotaMessages))("translates singular/plural counts without changing names or links in %s", async (locale) => {
+      await i18n.changeLanguage(locale);
+      root = createRoot(container);
+      await act(async () => root!.render(<QueryClientProvider client={queryClient}><ToastProvider><AgentList /></ToastProvider></QueryClientProvider>));
+      await flushReact();
+      await vi.waitFor(() => expect(container.textContent).toContain(i18n.t("companiesDirectoryUi.agentCount", { count: 1 })));
+      const listButton = container.querySelector<HTMLButtonElement>(`[aria-label="${i18n.t("workflow.listView")}"]`);
+      if (listButton) await act(async () => listButton.click());
+      const originalHref = findAgentRow(container, "Alpha")?.getAttribute("href");
+      expect(originalHref).toContain("alpha");
+      await act(async () => { queryClient.setQueryData(queryKeys.agents.list("company-1"), [makeAgent({}), makeAgent({ id: "agent-2", name: "用户 Beta", urlKey: "beta" })]); });
+      await flushReact();
+      await vi.waitFor(() => expect(container.textContent).toContain(i18n.t("companiesDirectoryUi.agentCount", { count: 2 })));
+      expect(container.textContent).not.toContain("companiesDirectoryUi.");
+      expect(container.textContent).toContain("用户 Beta");
+      expect(findAgentRow(container, "Alpha")?.getAttribute("href")).toBe(originalHref);
+      expect(mockOpenNewAgent).not.toHaveBeenCalled();
+      expect(mockResourceMembershipsApi.updateAgent).not.toHaveBeenCalled();
+    });
   });
 
   it.each([

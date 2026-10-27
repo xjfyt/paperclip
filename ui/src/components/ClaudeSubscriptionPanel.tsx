@@ -1,4 +1,4 @@
-import { quotaUnavailableMessage } from "@/lib/quota-refresh";
+import { t, useTranslation } from "@/i18n";
 import type { QuotaWindow } from "@paperclipai/shared";
 import { cn, quotaSourceDisplayName } from "@/lib/utils";
 
@@ -32,7 +32,7 @@ function detailText(window: QuotaWindow): string | null {
       minute: "2-digit",
       timeZoneName: "short",
     });
-    return `Resets ${formatted}`;
+    return t("agentTaskQuotaUi.resetsAt", { time: formatted });
   }
   return null;
 }
@@ -57,6 +57,7 @@ export function ClaudeSubscriptionPanel({
   source = null,
   error = null,
 }: ClaudeSubscriptionPanelProps) {
+  useTranslation();
   const ordered = orderedWindows(windows);
 
   return (
@@ -64,10 +65,10 @@ export function ClaudeSubscriptionPanel({
       <div className="flex items-start justify-between gap-3 border-b border-border pb-3">
         <div className="min-w-0">
           <div className="text-(length:--text-micro) font-semibold uppercase tracking-(--tracking-caps) text-muted-foreground">
-            Anthropic subscription
+            {t("agentTaskQuotaUi.anthropicSubscription")}
           </div>
           <div className="mt-1 text-sm text-muted-foreground">
-            Quota from the Claude subscription connected to this server.
+            {t("agentTaskQuotaUi.claudeSubscriptionHelp")}
           </div>
         </div>
         {source ? (
@@ -79,7 +80,7 @@ export function ClaudeSubscriptionPanel({
 
       {error ? (
         <div role="status" className="mt-4 text-sm text-muted-foreground">
-          {quotaUnavailableMessage(windows.length > 0)}
+          {t(windows.length > 0 ? "agentTaskQuotaUi.lastQuota" : "agentTaskQuotaUi.unavailableQuota")}
         </div>
       ) : null}
 
@@ -121,7 +122,7 @@ export function ClaudeSubscriptionPanel({
                 </div>
                 {window.usedPercent != null ? (
                   <div className="shrink-0 text-sm font-semibold tabular-nums text-foreground">
-                    {window.usedPercent}% used
+                    {t("agentTaskQuotaUi.usedPercent", { percent: window.usedPercent })}
                   </div>
                 ) : null}
               </div>

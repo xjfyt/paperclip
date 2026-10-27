@@ -1,0 +1,22 @@
+{
+  "anthropicSubscription": "Suscripción de Anthropic",
+  "claudeSubscriptionHelp": "Cuota de la suscripción de Claude conectada a este servidor.",
+  "codexSubscription": "Suscripción de Codex",
+  "codexSubscriptionHelp": "Cuota de la suscripción de Codex conectada a este servidor.",
+  "accountWindows": "Períodos de cuota de la cuenta",
+  "modelWindows": "Períodos de cuota del modelo",
+  "usedPercent": "{{percent}}% utilizado",
+  "selectOrganizationAgents": "Selecciona una organización para ver los agentes.",
+  "selectCompanyAgents": "Selecciona una empresa para ver los agentes.",
+  "firstAgent": "Crea tu primer agente para comenzar.",
+  "selectOrganizationTasks": "Selecciona una organización para ver las tareas.",
+  "selectCompanyTasks": "Selecciona una empresa para ver las tareas.",
+  "tokenAmount": "{{tokens}} tokens",
+  "resetsAt": "Se restablece el {{time}}",
+  "lastQuota": "Se muestra la última cuota disponible. Las actualizaciones se reanudarán automáticamente.",
+  "unavailableQuota": "La cuota de la suscripción no está disponible actualmente. Consulta el uso con tu proveedor.",
+  "subscriptionAccount": "Cuenta de suscripción",
+  "reconnectQuota": "Conecta o vuelve a conectar una suscripción en Conexiones de IA para ver su cuota.",
+  "usageNotReported": "Uso no informado",
+  "lastChecked": "Última comprobación: {{time}}"
+}

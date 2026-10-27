@@ -1,0 +1,22 @@
+{
+  "anthropicSubscription": "Anthropic 订阅",
+  "claudeSubscriptionHelp": "来自连接到此服务器的 Claude 订阅的额度。",
+  "codexSubscription": "Codex 订阅",
+  "codexSubscriptionHelp": "来自连接到此服务器的 Codex 订阅的额度。",
+  "accountWindows": "账号额度周期",
+  "modelWindows": "模型额度周期",
+  "usedPercent": "已使用 {{percent}}%",
+  "selectOrganizationAgents": "选择一个组织以查看智能体。",
+  "selectCompanyAgents": "选择一家公司以查看智能体。",
+  "firstAgent": "创建你的第一个智能体，即可开始使用。",
+  "selectOrganizationTasks": "选择一个组织以查看任务。",
+  "selectCompanyTasks": "选择一家公司以查看任务。",
+  "tokenAmount": "{{tokens}} 词元",
+  "resetsAt": "重置时间：{{time}}",
+  "lastQuota": "正在显示最近可用的额度，更新将自动恢复。",
+  "unavailableQuota": "订阅额度暂不可用，请前往服务商处查看用量。",
+  "subscriptionAccount": "订阅账号",
+  "reconnectQuota": "在 AI 连接中连接或重新连接订阅，以查看其额度。",
+  "usageNotReported": "未报告用量",
+  "lastChecked": "上次检查：{{time}}"
+}

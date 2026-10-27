@@ -1,0 +1,22 @@
+{
+  "anthropicSubscription": "Anthropic サブスクリプション",
+  "claudeSubscriptionHelp": "このサーバーに接続された Claude サブスクリプションの利用枠です。",
+  "codexSubscription": "Codex サブスクリプション",
+  "codexSubscriptionHelp": "このサーバーに接続された Codex サブスクリプションの利用枠です。",
+  "accountWindows": "アカウントの利用枠期間",
+  "modelWindows": "モデルの利用枠期間",
+  "usedPercent": "{{percent}}% 使用済み",
+  "selectOrganizationAgents": "エージェントを表示する組織を選択してください。",
+  "selectCompanyAgents": "エージェントを表示する会社を選択してください。",
+  "firstAgent": "最初のエージェントを作成して始めましょう。",
+  "selectOrganizationTasks": "タスクを表示する組織を選択してください。",
+  "selectCompanyTasks": "タスクを表示する会社を選択してください。",
+  "tokenAmount": "{{tokens}} トークン",
+  "resetsAt": "リセット日時：{{time}}",
+  "lastQuota": "直近の取得済み利用枠を表示しています。更新は自動的に再開されます。",
+  "unavailableQuota": "現在、サブスクリプションの利用枠を確認できません。プロバイダーで使用状況を確認してください。",
+  "subscriptionAccount": "サブスクリプションアカウント",
+  "reconnectQuota": "利用枠を確認するには、AI 接続でサブスクリプションを接続または再接続してください。",
+  "usageNotReported": "使用状況は未報告です",
+  "lastChecked": "最終確認：{{time}}"
+}
