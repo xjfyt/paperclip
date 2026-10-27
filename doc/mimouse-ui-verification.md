@@ -26,6 +26,35 @@ node scripts/test-mimouse-ui.mjs --aggregate \
 输入摘要前后值、日志及 JSON 报告 SHA-256、实际文件/断言计数。整个范围完成且
 所有批次通过后，manifest 才标记 `passed`；失败立即停止，未执行批次不算通过。
 
+## 精确文件选择
+
+Vitest 位置参数是**不区分大小写的子串过滤器**，不能把传入完整相对文件名当作
+精确选择。例如某批末尾的 `AttentionInteractionResolver.test.ts` 会同时命中下一批
+的 `AttentionInteractionResolver.test.tsx`。历史上两文件恰在同批而通过，并不能证明
+跨批选择正确。
+
+runner 按完整库存重算每批的误命中文件，只对不属于该批的碰撞文件传入额外
+`--exclude=<精确转义的相对路径 glob>`；不生成替代配置，不覆盖原
+`ui/vitest.config.ts` 的 setup、aliases、插件或已有 exclusions。
+glob 元字符按字面转义，排除只作用于该次子进程；文件到自己的批次仍须执行。
+若未来 Vitest 选择行为改变或出现库存外的误命中，严格报告库存校验仍会拒绝通过。
+
+`runner.selection` 记录策略版本和所有批次的排除列表；
+每批 `selection` 记录策略、实际 filters 和 exclude globs。聚合器从当前库存重算，
+拒绝缺失、额外或被篡改的选择证据，不仅相信 manifest 自报内容。
+修复前的 v2 runner 身份/命令和输入摘要不同，**不能与新证据混合聚合或手工升级**；
+应冻结最终代码后重新建立全量证据。
+
+在 2026-10-27 的库存中，可用以下命令分别复验第 7 批（只排除上述 tsx）
+和第 8 批（tsx 必须正常执行）；先 `--list` 确认当前批次边界未变化：
+
+```sh
+node scripts/test-mimouse-ui.mjs --batches 7:7
+node scripts/test-mimouse-ui.mjs --batches 8:8
+```
+
+## 中断与聚合
+
 会话中断留下的 `running`/不完整 manifest **不能参加聚合**，即使其中前几个批次
 成功。先确认自己启动的旧测试已不再运行，再重新运行该短范围，使用新的证据目录。
 保留旧日志用于故障分析，不编辑状态或拼接历史日志来声称成功。
@@ -62,6 +91,7 @@ JSON 报告与日志属于本地可审查证据，不是防恶意篡改的签名
 
 本工具记录 Node 版本/平台/架构、Vitest 包版本和 CLI 入口文件摘要，运行实际命令为
 `node node_modules/vitest/vitest.mjs run --maxWorkers=1 --pool=forks --reporter=json --outputFile=... <files>`，
+其中 files 前还会插入该批的 `--exclude=<glob>` 参数（没有碰撞则不插入）。
 不再通过旧版 `pnpm exec vitest` 包装层。每批 300 秒超时只向本工具直接创建的
 Vitest 子进程发送 SIGKILL，不扫描/杀任意 PID 或进程组；不保证清理其全部后代。
 超时/信号均失败，不能推断测试已完成。
@@ -85,6 +115,9 @@ node scripts/test-mimouse-ui.mjs --batches 1:1
 ```
 
 Node 内建测试在临时目录运行受控假 Vitest CLI，不安装依赖、不改共享安装目录。
+假 CLI 从文件系统发现测试并模拟 Vitest 子串过滤，不把位置参数直接回显为选集；
+覆盖跨批 ts/tsx 碰撞及后批正常执行、大小写和 glob 转义、忽略排除时仍失败、
+批次与 runner 选择证据篡改拒绝。
 覆盖默认/list/合法范围与错误参数、精确选批、正常全跑及分片聚合、唯一目录、
 缺批/重复/顺序/文件库存、v1/未完成/失败、非零退出、缺报告、skip/todo/空断言、
 源码/配置/shared/adapter/runner/lock/patch/实际资源漂移、日志报告篡改及输入 symlink。

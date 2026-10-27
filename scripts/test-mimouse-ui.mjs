@@ -11,6 +11,8 @@ const inputTrees = ["ui", "packages", "external-adapters", "server", "cli", "scr
 const json = value => JSON.stringify(value);
 const equal = (a, b) => json(a) === json(b);
 const sha = bytes => createHash("sha256").update(bytes).digest("hex");
+const selectionPolicy = "case-insensitive-substring-with-literal-exclusions-v1";
+const portable = file => file.split(path.sep).join("/");
 function requireThat(condition, message) { if (!condition) throw new Error(message); }
 function filesIn(directory) {
   if (!fs.existsSync(directory)) return [];
@@ -63,12 +65,26 @@ export function parseArgs(args, count) {
   requireThat(Number.isSafeInteger(first) && first >= 1 && last >= first && last <= count, `Batch range must be within 1:${count}`);
   return { mode: "run", first, last };
 }
-function runnerIdentity(root) {
+export function batchSelection(inventory, batch) {
+  // Vitest positional filters are case-insensitive substrings, not exact paths.
+  // Keep the original config/setup and exclude only out-of-batch collisions.
+  const filters = batch.map(portable);
+  const selected = new Set(batch);
+  const lower = filters.map(file => file.toLocaleLowerCase());
+  const exclude = inventory.batches.flat().filter(file => {
+    const candidate = portable(file).toLocaleLowerCase();
+    return !selected.has(file) && lower.some(filter => candidate.includes(filter));
+  })
+    .map(file => portable(file).replace(/[\\*?{}[\]()!+@|]/g, "\\$&"));
+  return { policy: selectionPolicy, filters, exclude };
+}
+function runnerIdentity(root, inventory) {
   const cli = path.join(root, "node_modules/vitest/vitest.mjs");
   return { kind: "direct-vitest", node: process.version, platform: process.platform, arch: process.arch,
     version: JSON.parse(fs.readFileSync(path.join(root, "node_modules/vitest/package.json"))).version,
     cliSha256: sha(fs.readFileSync(cli)),
-    command: ["node", "node_modules/vitest/vitest.mjs", "run", "--maxWorkers=1", "--pool=forks", "--reporter=json", "--outputFile=<batch-report>", "<batch-files>"],
+    command: ["node", "node_modules/vitest/vitest.mjs", "run", "--maxWorkers=1", "--pool=forks", "--reporter=json", "--outputFile=<batch-report>", "<batch-exclude-args>", "<batch-files>"],
+    selection: { policy: selectionPolicy, batchExclusions: inventory.batches.map(batch => batchSelection(inventory, batch).exclude) },
     timeoutMs: 300000 };
 }
 function atomicSave(file, value) {
@@ -98,7 +114,7 @@ export function validateReport(report, batch, ui) {
 export function runRange(root, inventory, options) {
   const output = evidenceDir(root, "run");
   const file = path.join(output, "manifest.json");
-  const runner = runnerIdentity(root);
+  const runner = runnerIdentity(root, inventory);
   const manifest = { schemaVersion: 2, status: "running", startedAt: new Date().toISOString(),
     ...inventory, runner, range: { first: options.first, last: options.last }, results: [], sourceUnchanged: null };
   atomicSave(file, manifest);
@@ -106,7 +122,8 @@ export function runRange(root, inventory, options) {
   for (let index = options.first; index <= options.last; index++) {
     const batch = inventory.batches[index - 1];
     const before = snapshot(root).verificationInputs.sha256;
-    const record = { index, files: batch, status: "running", startedAt: new Date().toISOString(), beforeSha256: before,
+    const selection = batchSelection(inventory, batch);
+    const record = { index, files: batch, selection, status: "running", startedAt: new Date().toISOString(), beforeSha256: before,
       log: `${String(index).padStart(3, "0")}.log`, report: `${String(index).padStart(3, "0")}.json` };
     manifest.results.push(record); atomicSave(file, manifest);
     if (before !== inventory.verificationInputs.sha256) { record.error = "Verification inputs changed before batch"; record.status = "failed"; atomicSave(file, manifest); break; }
@@ -114,7 +131,7 @@ export function runRange(root, inventory, options) {
     const fd = fs.openSync(path.join(output, record.log), "wx");
     let result;
     try {
-      result = spawnSync(process.execPath, [path.join(root, "node_modules/vitest/vitest.mjs"), "run", "--maxWorkers=1", "--pool=forks", "--reporter=json", `--outputFile=${reportPath}`, ...batch],
+      result = spawnSync(process.execPath, [path.join(root, "node_modules/vitest/vitest.mjs"), "run", "--maxWorkers=1", "--pool=forks", "--reporter=json", `--outputFile=${reportPath}`, ...selection.exclude.map(glob => `--exclude=${glob}`), ...selection.filters],
         { cwd: path.join(root, "ui"), stdio: ["ignore", fd, fd], timeout: runner.timeoutMs, killSignal: "SIGKILL" });
     } finally { fs.closeSync(fd); }
     record.exitCode = result.status;
@@ -127,7 +144,7 @@ export function runRange(root, inventory, options) {
     try {
       requireThat(result.status === 0 && !result.signal && !result.error, "Test process did not exit successfully");
       requireThat(record.afterSha256 === before, "Verification inputs changed during batch");
-      requireThat(equal(runnerIdentity(root), runner), "Runner changed during batch");
+      requireThat(equal(runnerIdentity(root, inventory), runner), "Runner changed during batch");
       record.runnerUnchanged = true;
       const bytes = fs.readFileSync(reportPath);
       record.reportSha256 = sha(bytes);
@@ -140,12 +157,12 @@ export function runRange(root, inventory, options) {
   }
   manifest.sourceUnchanged = snapshot(root).verificationInputs.sha256 === inventory.verificationInputs.sha256;
   manifest.finishedAt = new Date().toISOString();
-  manifest.status = manifest.sourceUnchanged && equal(runnerIdentity(root), runner) && manifest.results.length === options.last - options.first + 1 && manifest.results.every(result => result.status === "passed") ? "passed" : "failed";
+  manifest.status = manifest.sourceUnchanged && equal(runnerIdentity(root, inventory), runner) && manifest.results.length === options.last - options.first + 1 && manifest.results.every(result => result.status === "passed") ? "passed" : "failed";
   atomicSave(file, manifest);
   return { manifest, file };
 }
 export function aggregate(root, inventory, paths) {
-  const runner = runnerIdentity(root);
+  const runner = runnerIdentity(root, inventory);
   const seen = new Set(); let tests = 0;
   const evidence = [];
   for (const filename of paths) {
@@ -163,6 +180,7 @@ export function aggregate(root, inventory, paths) {
       const index = first + offset;
       requireThat(result.index === index && !seen.has(index), "Duplicate or out-of-order batch");
       requireThat(equal(result.files, inventory.batches[index - 1]), "Batch file inventory mismatch");
+      requireThat(equal(result.selection, batchSelection(inventory, inventory.batches[index - 1])), "Batch selection policy/exclusions differ");
       requireThat(result.status === "passed" && result.exitCode === 0 && result.signal === null && result.processError === null && result.finishedAt, "Incomplete or failed batch");
       requireThat(result.runnerUnchanged === true && result.beforeSha256 === inventory.verificationInputs.sha256 && result.afterSha256 === inventory.verificationInputs.sha256, "Batch source drift");
       for (const field of ["report", "log"]) {
@@ -176,7 +194,7 @@ export function aggregate(root, inventory, paths) {
     evidence.push({ manifest: absolute, sha256: sha(bytes) });
   }
   requireThat(seen.size === inventory.batchCount, `Missing coverage: ${seen.size}/${inventory.batchCount} batches`);
-  requireThat(equal(snapshot(root).verificationInputs, inventory.verificationInputs) && equal(runnerIdentity(root), runner), "Inputs changed during aggregation");
+  requireThat(equal(snapshot(root).verificationInputs, inventory.verificationInputs) && equal(runnerIdentity(root, inventory), runner), "Inputs changed during aggregation");
   const output = evidenceDir(root, "aggregate");
   const result = { schemaVersion: 2, status: "passed", kind: "aggregate-coverage-not-uninterrupted-run", finishedAt: new Date().toISOString(),
     verificationInputs: inventory.verificationInputs, runner, fileCount: inventory.fileCount, batchCount: seen.size, tests, evidence };

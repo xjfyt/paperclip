@@ -3,16 +3,18 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { snapshot, parseArgs, runRange, aggregate, validateReport } from "./test-mimouse-ui.mjs";
+import { snapshot, parseArgs, runRange, aggregate, validateReport, batchSelection } from "./test-mimouse-ui.mjs";
 
-function fixture(t, mode = "pass") {
+const defaultFiles = Array.from({ length: 11 }, (_, i) => "src/" + String(i).padStart(2, "0") + ".test.ts");
+const collisionFiles = [...defaultFiles.slice(0, 9), "src/AttentionInteractionResolver.test.ts", "src/AttentionInteractionResolver.test.tsx"];
+function fixture(t, mode = "pass", testFiles = defaultFiles) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "mimouse-ui-test-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const write = (file, contents) => {
     fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
     fs.writeFileSync(path.join(root, file), contents);
   };
-  for (let i = 0; i < 11; i++) write(`ui/src/${String(i).padStart(2, "0")}.test.ts`, "// controlled test fixture\n");
+  for (const file of testFiles) write(`ui/${file}`, "// controlled test fixture\n");
   write("ui/vitest.config.ts", "// config\n");
   write("packages/shared/src/index.ts", "export const shared = 1;\n");
   write("packages/adapters/example/src/index.ts", "export const adapter = 1;\n");
@@ -26,7 +28,17 @@ function fixture(t, mode = "pass") {
 import fs from 'node:fs'; import path from 'node:path';
 const mode = ${JSON.stringify(mode)};
 const args = process.argv.slice(2); const output = args.find(arg => arg.startsWith('--outputFile=')).slice(13);
-const files = args.filter(arg => arg.endsWith('.test.ts'));
+const filters = args.slice(1).filter(arg => !arg.startsWith('--'));
+// Model Vitest's filesystem discovery + case-insensitive substring filtering,
+// rather than echoing positional arguments as if they were exact file names.
+const walk = directory => fs.readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+  const file = path.join(directory, entry.name);
+  return entry.isDirectory() ? walk(file) : [file];
+});
+const excluded = args.filter(arg => arg.startsWith('--exclude=')).map(arg => arg.slice(10).replace(/\\\\(.)/gs, '$1'));
+const files = walk('src').filter(file => /\\.(?:test|spec)\\.[cm]?[jt]sx?$/.test(file))
+  .filter(file => filters.some(filter => file.toLocaleLowerCase().includes(filter.toLocaleLowerCase())))
+  .filter(file => mode === 'ignore-excludes' || !excluded.includes(file));
 if (mode === 'exit') process.exit(3);
 if (mode === 'drift') fs.appendFileSync('src/00.test.ts', '// drift');
 const testResults = files.map(file => ({ name: path.resolve(file), status: 'passed', assertionResults: [{ status: mode === 'skip' ? 'pending' : 'passed' }] }));
@@ -65,6 +77,53 @@ test("default full run remains valid full coverage", t => {
   const { root, inventory } = fixture(t);
   const run = runRange(root, inventory, parseArgs([], inventory.batchCount));
   assert.equal(aggregate(root, inventory, [run.file]).result.tests, 11);
+});
+test("cross-batch ts/tsx substring collision is excluded only from the earlier batch", t => {
+  const { root, inventory } = fixture(t, "pass", collisionFiles);
+  const runs = ranges(root);
+  const [earlier, later] = runs.map(run => run.manifest.results[0]);
+  assert.deepEqual(earlier.selection.exclude, ["src/AttentionInteractionResolver.test.tsx"]);
+  assert.deepEqual(later.selection.exclude, []);
+  assert.deepEqual(runs[0].manifest.runner.selection.batchExclusions, [earlier.selection.exclude, []]);
+  for (const run of runs) {
+    assert.equal(run.manifest.status, "passed");
+    const record = run.manifest.results[0];
+    const report = JSON.parse(fs.readFileSync(path.join(path.dirname(run.file), record.report)));
+    assert.deepEqual(report.testResults.map(result => path.relative(path.join(root, "ui"), result.name)).sort(), [...record.files].sort());
+  }
+  assert.equal(aggregate(root, inventory, runs.map(run => run.file)).result.tests, 11);
+});
+test("a CLI ignoring exclusions still fails the unchanged strict inventory check", t => {
+  const { root, inventory } = fixture(t, "ignore-excludes", collisionFiles);
+  const run = runRange(root, inventory, { first: 1, last: 1 });
+  assert.equal(run.manifest.status, "failed");
+  assert.equal(run.manifest.results[0].error, "Vitest report file inventory mismatch");
+});
+test("selection detects case-insensitive collisions and escapes literal glob metacharacters", () => {
+  const first = "src/A[1]*(x)?{y}!+@|.test.ts";
+  const second = "src/a[1]*(x)?{y}!+@|.test.tsx";
+  const inventory = { batches: [[first], [second]] };
+  const selection = batchSelection(inventory, [first]);
+  assert.deepEqual(selection.filters, [first]);
+  assert.deepEqual(selection.exclude, ["src/a\\[1\\]\\*\\(x\\)\\?\\{y\\}\\!\\+\\@\\|.test.tsx"]);
+  assert.deepEqual(batchSelection(inventory, [second]).exclude, []);
+  assert.deepEqual(batchSelection({ batches: [[first, second]] }, [first, second]).exclude, []);
+});
+test("aggregation recomputes and rejects missing or altered selection/exclusion evidence", t => {
+  const { root, inventory } = fixture(t, "pass", collisionFiles);
+  const runs = ranges(root); const original = fs.readFileSync(runs[0].file);
+  for (const change of [
+    m => { delete m.results[0].selection; },
+    m => { m.results[0].selection.policy = "exact-positional"; },
+    m => { m.results[0].selection.filters.reverse(); },
+    m => { m.results[0].selection.exclude = []; },
+    m => { m.results[0].selection.exclude.push("src/00.test.ts"); },
+    m => { m.runner.selection.batchExclusions[0] = []; m.results[0].selection.exclude = []; },
+    m => { delete m.runner.selection; },
+  ]) {
+    fs.writeFileSync(runs[0].file, original); rewrite(runs[0].file, change);
+    assert.throws(() => aggregate(root, inventory, runs.map(run => run.file)), /selection|Runner identity/);
+  }
 });
 for (const mode of ["exit", "drift", "skip", "omit", "missing"]) {
   test(`reject ${mode} without calling it passed`, t => {
