@@ -721,6 +721,49 @@
     "artifact_missing": "Sin artefacto para este destino",
     "runner_evidence_missing": "Falta el comprobante verificado del Runner"
   },
+  "buildObservations": {
+    "title": "Observaciones de compilación por trabajo exacto",
+    "boundary": "Observar no equivale a autorizar. La plataforma, las pruebas, las firmas de código y el flujo de trabajo completo siguen sin evaluarse; la recopilación del controlador de confianza y C3 siguen bloqueadas. La matriz de compilación no cambia.",
+    "loginRequired": "Inicia sesión como administrador de la empresa para ver o solicitar observaciones.",
+    "readError": "No se pudieron leer las observaciones. Las pruebas mostradas antes están ocultas.",
+    "disabled": "El operador no ha habilitado la observación de compilaciones.",
+    "unavailable": "Ningún perfil del operador coincide con la entrega, la canalización, el manifiesto y la credencial actuales.",
+    "profile": "Perfil del operador y artefacto",
+    "pipeline": "ID de canalización vinculada",
+    "jobId": "ID exacto del trabajo de GitLab",
+    "observe": "Observar este trabajo",
+    "requestId": "ID de solicitud",
+    "pending": "Solicitud en curso. No crees otra para sustituirla.",
+    "uncertain": "La respuesta no está confirmada. Conserva este ID y consulta el resultado antes de reintentar; no crees otra solicitud para sustituirla.",
+    "recover": "Consultar resultado de la solicitud",
+    "retry": "Reintentar esta solicitud recuperable",
+    "newRequest": "Preparar otra observación",
+    "refresh": "Actualizar contexto local e historial",
+    "history": "Observaciones recientes (hasta 10)",
+    "empty": "Todavía no hay registros de observación.",
+    "recordedAt": "Fecha de registro",
+    "observedAt": "Fecha original de observación",
+    "historical": "Solo son pruebas históricas. La coincidencia local no es una nueva comprobación remota ni autoriza una publicación.",
+    "buildTimes": "Inicio y fin de compilación declarados en la firma",
+    "verifiedAt": "Fecha original de verificación de firma",
+    "state": {
+      "running": "La solicitud sigue en curso en el servidor. Consulta el resultado manualmente.",
+      "retryable": "El servidor permite reintentar explícitamente esta misma solicitud.",
+      "terminal": "Esta solicitud terminó y no puede reintentarse.",
+      "interrupted": "Esta solicitud se interrumpió y ya no admite reintentos."
+    },
+    "currentness": {
+      "local_current": "La vinculación local coincide; la autorización sigue bloqueada.",
+      "stale": "La vinculación local o la vigencia de verificación han caducado.",
+      "unknown": "No se pudo determinar la validez local actual."
+    },
+    "provenance": {
+      "not_checked": "No se comprobó la procedencia.",
+      "disabled": "La verificación criptográfica de procedencia estaba deshabilitada.",
+      "rejected": "La procedencia no cumplió la política de verificación.",
+      "verified_claim": "Afirmación criptográfica verificada según la política; no se ha demostrado de forma independiente el flujo de trabajo completo."
+    }
+  },
   "capabilityEvidence": {
     "title": "Registro de verificación manual",
     "disclaimer": "Solo declaraciones del operador, no verificación automática independiente. Las pruebas C2 permanecen separadas. Entorno de ejecución, versión, entorno, cuenta y commit deben coincidir exactamente. Las pruebas ausentes, caducadas o revocadas nunca habilitan la ejecución. Registre y sustituya mediante la API de administración; use solo alias no sensibles.",

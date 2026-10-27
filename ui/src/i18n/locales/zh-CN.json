@@ -721,6 +721,49 @@
     "artifact_missing": "该目标没有产物",
     "runner_evidence_missing": "缺少已验证的 Runner 回执"
   },
+  "buildObservations": {
+    "title": "精确作业构建观测",
+    "boundary": "观测不等于准入。平台、测试、代码签名与有效工作流闭包仍未评估；可信控制器采集及 C3 仍受阻。现有构建矩阵不变。",
+    "loginRequired": "请使用公司管理员会话登录后查看或请求观测。",
+    "readError": "无法读取观测，先前展示的证据已隐藏。",
+    "disabled": "运维尚未启用构建观测。",
+    "unavailable": "没有运维配置同时匹配当前交付、流水线、产物清单及凭据。",
+    "profile": "运维配置与产物",
+    "pipeline": "绑定的流水线 ID",
+    "jobId": "精确 GitLab 作业 ID",
+    "observe": "观测此作业",
+    "requestId": "请求 ID",
+    "pending": "请求正在执行，请勿另建替代请求。",
+    "uncertain": "响应尚未确认。请保留此请求 ID，先读取结果再决定是否重试；不要另建替代请求。",
+    "recover": "读取请求结果",
+    "retry": "重试此可恢复请求",
+    "newRequest": "准备新的观测",
+    "refresh": "刷新本地上下文与历史",
+    "history": "最近观测（最多 10 条）",
+    "empty": "尚无观测回执。",
+    "recordedAt": "回执记录时间",
+    "observedAt": "原始观测时间",
+    "historical": "仅为历史证据。本地仍匹配不代表重新检查过远端，也不授予发布权限。",
+    "buildTimes": "签名声明的构建起止时间",
+    "verifiedAt": "原始签名验证时间",
+    "state": {
+      "running": "服务器请求仍在执行，请手动读取结果。",
+      "retryable": "服务器允许显式重试同一请求。",
+      "terminal": "此请求已结束，不可重试。",
+      "interrupted": "此请求已中断且不再允许重试。"
+    },
+    "currentness": {
+      "local_current": "本地绑定仍匹配；准入仍受阻。",
+      "stale": "本地绑定或验证时效已失效。",
+      "unknown": "无法确认当前本地有效性。"
+    },
+    "provenance": {
+      "not_checked": "未检查构建溯源。",
+      "disabled": "未启用构建溯源密码学验证。",
+      "rejected": "构建溯源未满足验证策略。",
+      "verified_claim": "密码学声明已按策略验证；有效工作流闭包并未独立证明。"
+    }
+  },
   "capabilityEvidence": {
     "title": "人工验证台账",
     "disclaimer": "仅为操作员声明，并非独立机器验证；C2 测试证据保持独立。运行时、版本、环境、账号及提交必须精确匹配。缺失、过期或撤销的凭据不构成执行资格。通过管理员 API 登记或替代，仅填写非敏感别名。",

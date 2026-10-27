@@ -1,6 +1,7 @@
 import { MimouseCodingGoal } from "@/components/MimouseCodingGoal";
 import { MimouseCodingDiffReview } from "@/components/MimouseCodingDiffReview";
 import { MimouseCodingArtifacts } from "@/components/MimouseCodingArtifacts";
+import { MimouseBuildObservations } from "@/components/MimouseBuildObservations";
 import type { MimouseBuildMatrix as BuildMatrix } from "@paperclipai/shared";
 import { MimouseBuildMatrix } from "@/components/MimouseBuildMatrix";
 import { useEffect as usePageEffect } from "react";
@@ -61,6 +62,7 @@ function CodingCompany({ companyId, userId, sessionId, authEpoch }: { companyId:
         await client.invalidateQueries({ queryKey: ["coding-diff", companyId, userId, sessionId, authEpoch, row.id, row.headSha] });
       }} />
       <MimouseBuildMatrix matrix={row.buildMatrix} companyId={companyId} deliveryId={row.id} commitSha={row.headSha} />
+      <MimouseBuildObservations companyId={companyId} userId={userId} sessionId={sessionId} authEpoch={authEpoch} deliveryId={row.id} headSha={row.headSha} />
       <p className="text-xs text-muted-foreground">{t("buildMatrixUi.codeGate")}</p>
       <p>{row.gate.readyForReleaseCandidate ? t("coding.candidate") : t("coding.notReady")}</p>
       {row.gate.blockers.map(blocker => <p key={blocker} className="text-sm">{t(`coding.${blocker}`, { defaultValue: blocker })}</p>)}
