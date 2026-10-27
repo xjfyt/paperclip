@@ -1,3 +1,4 @@
+import { issueInteractionFeedbackMessages } from "../i18n/issue-interaction-feedback-test-resources";
 import { issueFeedbackMessages } from "../i18n/issue-feedback-test-resources";
 import { issueRecoveryMessages } from "../i18n/issue-recovery-test-resources";
 import type { TaskChatThreadProps } from "../components/TaskChatThread";
@@ -24,6 +25,14 @@ import type {
   IssueComment,
   IssueQueuedCommentQueue,
   RequestConfirmationInteraction,
+  RequestCheckboxConfirmationInteraction,
+  SuggestTasksInteraction,
+  AskUserQuestionsInteraction,
+  AskUserQuestionsAnswer,
+  RequestItemVerdictsInteraction,
+  RequestItemVerdictValue,
+  IssueThreadInteractionBase,
+  IssueThreadInteraction,
   IssueTreeControlPreview,
   IssueTreeHold,
   IssueWorkProduct,
@@ -96,7 +105,12 @@ const mockIssuesApi = vi.hoisted(() => ({
   deleteAttachment: vi.fn(),
   upsertDocument: vi.fn(),
   getDocument: vi.fn(),
-  rejectInteraction: vi.fn(),
+  acceptInteraction: vi.fn<typeof issuesApi.acceptInteraction>(),
+  rejectInteraction: vi.fn<typeof issuesApi.rejectInteraction>(),
+  respondToInteraction: vi.fn<typeof issuesApi.respondToInteraction>(),
+  submitInteractionVerdicts: vi.fn<typeof issuesApi.submitInteractionVerdicts>(),
+  cancelInteraction: vi.fn<typeof issuesApi.cancelInteraction>(),
+  skipInteraction: vi.fn<typeof issuesApi.skipInteraction>(),
 }));
 
 const mockActivityApi = vi.hoisted(() => ({
@@ -145,7 +159,9 @@ type FeedbackThreadProps = Pick<TaskChatThreadProps,
   "onRetryFailedRun" | "retryFailedRunId" | "issueBrief" | "runFinalizationActions" |
   "onResolveRecoveryAction" | "onReissueIsolatedRecoveryAction" | "reissueIsolatedRecoveryActionPending" |
   "onReconcileForwardRecoveryAction" | "onBreakGlassOverrideRecoveryAction" |
-  "onQuarantineRestoreRecoveryAction" | "reconcileRecoveryActionPending" | "quarantineRestoreRecoveryActionPending"
+  "onQuarantineRestoreRecoveryAction" | "reconcileRecoveryActionPending" | "quarantineRestoreRecoveryActionPending" |
+  "onAcceptInteraction" | "onRejectInteraction" | "onSubmitInteractionAnswers" |
+  "onSubmitInteractionVerdicts" | "onCancelInteraction" | "onSkipInteraction"
 >;
 const mockFeedbackThreadRender = vi.hoisted(() => vi.fn<(props: FeedbackThreadProps) => void>());
 const mockFeedbackToast = vi.hoisted(() => vi.fn<(toast: ToastInput) => void>());
@@ -1462,6 +1478,12 @@ describe("IssueDetail", () => {
     mockAgentsApi.retryFailedRun.mockReset();
     mockIssuesApi.create.mockReset();
     mockExecutionWorkspacesApi.reconcile.mockReset();
+    mockIssuesApi.acceptInteraction.mockReset();
+    mockIssuesApi.rejectInteraction.mockReset();
+    mockIssuesApi.respondToInteraction.mockReset();
+    mockIssuesApi.submitInteractionVerdicts.mockReset();
+    mockIssuesApi.cancelInteraction.mockReset();
+    mockIssuesApi.skipInteraction.mockReset();
     mockLocation.pathname = "/issues/PAP-1";
     mockLocation.search = "";
     mockLocation.hash = "";
@@ -1723,6 +1745,193 @@ describe("IssueDetail", () => {
     await act(async () => feedbackThread().onQuarantineRestoreRecoveryAction?.());
     expect(mockFeedbackToast).toHaveBeenLastCalledWith({ title: messages.repairFailed, body: messages.noRepairWorkspace, tone: "error" });
     expect(mockExecutionWorkspacesApi.reconcile).not.toHaveBeenCalled();
+  });
+
+  function interactionFeedbackFixtures() {
+    const base: Omit<IssueThreadInteractionBase, "kind"> = {
+      id: "interaction-confirmation", companyId: "company-1", issueId: "issue-1", status: "pending",
+      idempotencyKey: "original-nonce", sourceCommentId: "original-comment", sourceRunId: "original-run",
+      title: "User title 原题", summary: "User summary 原文", continuationPolicy: "wake_assignee",
+      resolverPolicy: "human_only", requestedResolverPolicy: "human_only", effectiveResolverPolicy: "human_only",
+      resolverPolicyProvenance: "explicit", effectiveResolverPolicySource: "requested",
+      legacyResolverPolicyAliases: { requested: "board_only", effective: "board_only" },
+      createdByAgentId: "agent-1", createdByUserId: null, resolvedByAgentId: null, resolvedByUserId: null,
+      createdAt: new Date("2026-04-21T00:00:00Z"), updatedAt: new Date("2026-04-21T00:00:00Z"), resolvedAt: null,
+    };
+    const confirmation: RequestConfirmationInteraction = {
+      ...base, kind: "request_confirmation",
+      payload: { version: 1, prompt: "Confirm 原文?", rejectLabel: "  Continue 原文 <tag> {{label}}  " }, result: null,
+    };
+    const checkbox: RequestCheckboxConfirmationInteraction = {
+      ...base, id: "interaction-checkbox", kind: "request_checkbox_confirmation",
+      payload: { version: 1, prompt: "Select 原文", options: [{ id: "option-a", label: "First 原文" }, { id: "option-b", label: "Second 原文" }] }, result: null,
+    };
+    const suggestions: SuggestTasksInteraction = {
+      ...base, id: "interaction-suggestions", kind: "suggest_tasks",
+      payload: { version: 1, tasks: Array.from({ length: 3 }, (_, index) => ({ clientKey: `draft-${index}`, title: `Draft ${index} 原题` })) }, result: null,
+    };
+    const questions: AskUserQuestionsInteraction = {
+      ...base, id: "interaction-questions", kind: "ask_user_questions",
+      payload: { version: 1, runtimeRequestId: "original-runtime-request", questions: [{ id: "question-a", prompt: "Question 原文?", selectionMode: "multi", allowOther: true, options: [{ id: "answer-a", label: "Answer 原文" }, { id: "answer-b", label: "Another 原文" }] }] }, result: null,
+    };
+    const itemVerdicts: RequestItemVerdictsInteraction = {
+      ...base, id: "interaction-verdicts", kind: "request_item_verdicts",
+      payload: { version: 1, prompt: "Review 原文", items: [{ id: "item-a", label: "A 原文" }, { id: "item-b", label: "B 原文" }], verdicts: ["approve", "reject", "defer"] }, result: null,
+    };
+    const answers: AskUserQuestionsAnswer[] = [{ questionId: "question-a", optionIds: ["answer-b", "answer-a"], otherText: "  User answer 原文 {{keep}}\nline 2  " }];
+    const verdicts: { id: string; verdict: RequestItemVerdictValue; reason?: string }[] = [
+      { id: "item-b", verdict: "reject", reason: "  Reason 原文 {{keep}}\nline 2  " },
+      { id: "item-a", verdict: "approve" },
+    ];
+    return { confirmation, checkbox, suggestions, questions, itemVerdicts, answers, verdicts };
+  }
+
+  it.each(Object.entries(issueInteractionFeedbackMessages))("localizes interaction acceptance with zero/single/plural draft counts in %s", async (locale, messages) => {
+    const { confirmation, checkbox, suggestions } = interactionFeedbackFixtures();
+    await renderFeedbackHost(locale);
+    mockIssuesApi.acceptInteraction.mockResolvedValueOnce({ ...confirmation, status: "accepted", result: { version: 1, outcome: "accepted" } });
+    await act(async () => { await feedbackThread().onAcceptInteraction?.(confirmation, undefined, undefined, true); });
+    expect(mockIssuesApi.acceptInteraction).toHaveBeenLastCalledWith("PAP-1", confirmation.id, { selectedClientKeys: undefined, selectedOptionIds: undefined, rememberAction: true });
+    expect(mockFeedbackToast).toHaveBeenLastCalledWith({ title: messages.requestConfirmed, tone: "success" });
+    const optionIds = ["option-b", "option-a"];
+    mockIssuesApi.acceptInteraction.mockResolvedValueOnce({ ...checkbox, status: "accepted", result: { version: 1, outcome: "accepted", selectedOptionIds: optionIds } });
+    await act(async () => { await feedbackThread().onAcceptInteraction?.(checkbox, undefined, optionIds, false); });
+    expect(mockIssuesApi.acceptInteraction).toHaveBeenLastCalledWith("PAP-1", checkbox.id, { selectedClientKeys: undefined, selectedOptionIds: optionIds, rememberAction: false });
+    expect(mockFeedbackToast).toHaveBeenLastCalledWith({ title: messages.selectionConfirmed, tone: "success" });
+    for (const count of [0, 1, 2]) {
+      for (const skipped of [0, 1, 2]) {
+        const clientKeys = suggestions.payload.tasks.slice(0, count).map((draft) => draft.clientKey);
+        mockIssuesApi.acceptInteraction.mockResolvedValueOnce({
+          ...suggestions, status: "accepted", result: { version: 1,
+            createdTasks: clientKeys.map((clientKey) => ({ clientKey, issueId: `created-${clientKey}` })),
+            skippedClientKeys: Array.from({ length: skipped }, (_, index) => `skipped-${index}`),
+          },
+        });
+        await act(async () => { await feedbackThread().onAcceptInteraction?.(suggestions, clientKeys); });
+        expect(mockIssuesApi.acceptInteraction).toHaveBeenLastCalledWith("PAP-1", suggestions.id, { selectedClientKeys: clientKeys, selectedOptionIds: undefined, rememberAction: undefined });
+        const counted = count === 1 && (locale === "en" || locale === "es") ? messages.acceptedSkipped_one : messages.acceptedSkipped_other;
+        expect(mockFeedbackToast).toHaveBeenLastCalledWith({ title: skipped ? counted.replace("{{count}}", String(count)).replace("{{skipped}}", String(skipped)) : messages.suggestedAccepted, tone: "success" });
+      }
+    }
+  });
+
+  it.each(Object.entries(issueInteractionFeedbackMessages))("localizes rejection wrappers while preserving authored action labels and reasons in %s", async (locale, messages) => {
+    const { confirmation, checkbox, suggestions } = interactionFeedbackFixtures();
+    const reason = "  Reason 原文 <tag> {{label}}\nline 2  ";
+    await renderFeedbackHost(locale);
+    for (const label of ["  Continue 原文 <tag> {{label}}  ", "Request confirmed", "  ", null]) {
+      const request: RequestConfirmationInteraction = { ...confirmation, payload: { ...confirmation.payload, rejectLabel: label } };
+      mockIssuesApi.rejectInteraction.mockResolvedValueOnce({ ...request, status: "rejected", result: { version: 1, outcome: "rejected", reason } });
+      await act(async () => { await feedbackThread().onRejectInteraction?.(request, reason); });
+      expect(mockIssuesApi.rejectInteraction).toHaveBeenLastCalledWith("PAP-1", request.id, reason);
+      expect(mockFeedbackToast).toHaveBeenLastCalledWith({ title: label?.trim() ? messages.rejectedSelected.replace("{{label}}", label.trim()) : messages.rejectedRequest, tone: "success" });
+    }
+    for (const request of [checkbox, suggestions]) {
+      mockIssuesApi.rejectInteraction.mockResolvedValueOnce({ ...request, status: "rejected" });
+      await act(async () => { await feedbackThread().onRejectInteraction?.(request, reason); });
+      expect(mockFeedbackToast).toHaveBeenLastCalledWith({ title: messages.suggestionRejected, tone: "success" });
+    }
+  });
+
+  it.each(Object.entries(issueInteractionFeedbackMessages))("localizes complete and partial verdict feedback for zero/single/plural decisions in %s", async (locale, messages) => {
+    const { itemVerdicts, verdicts } = interactionFeedbackFixtures();
+    await renderFeedbackHost(locale);
+    for (const complete of [false, true]) {
+      for (const count of [0, 1, 2]) {
+        const submitted = verdicts.slice(0, count);
+        mockIssuesApi.submitInteractionVerdicts.mockResolvedValueOnce({ ...itemVerdicts, status: complete ? "answered" : "pending", result: { version: 1, outcome: "resolved", complete, items: [] } });
+        await act(async () => { await feedbackThread().onSubmitInteractionVerdicts?.(itemVerdicts, submitted); });
+        expect(mockIssuesApi.submitInteractionVerdicts).toHaveBeenLastCalledWith("PAP-1", itemVerdicts.id, submitted);
+        const counted = count === 1 && (locale === "en" || locale === "es") ? messages.decisionsApplied_one : messages.decisionsApplied_other;
+        expect(mockFeedbackToast).toHaveBeenLastCalledWith({ title: complete ? messages.verdictsApplied : counted.replace("{{count}}", String(count)), tone: "success" });
+      }
+    }
+  });
+
+  it.each(Object.entries(issueInteractionFeedbackMessages))("keeps all actual interaction callbacks pending and preserves request/error payloads in %s", async (locale, messages) => {
+    const { confirmation, questions, itemVerdicts, answers, verdicts } = interactionFeedbackFixtures();
+    const reason = "  Original reason 原文 {{keep}}\nline 2  ";
+    const operations = [
+      { api: mockIssuesApi.acceptInteraction, pending: confirmation,
+        invoke: () => feedbackThread().onAcceptInteraction?.(confirmation, undefined, undefined, true),
+        args: ["PAP-1", confirmation.id, { selectedClientKeys: undefined, selectedOptionIds: undefined, rememberAction: true }],
+        response: { ...confirmation, status: "accepted", result: { version: 1, outcome: "accepted" } } satisfies RequestConfirmationInteraction,
+        success: messages.requestConfirmed, failure: messages.acceptFailed, fallback: messages.acceptFailedBody },
+      { api: mockIssuesApi.rejectInteraction, pending: confirmation,
+        invoke: () => feedbackThread().onRejectInteraction?.(confirmation, reason), args: ["PAP-1", confirmation.id, reason],
+        response: { ...confirmation, status: "rejected", result: { version: 1, outcome: "rejected", reason } } satisfies RequestConfirmationInteraction,
+        success: messages.rejectedSelected.replace("{{label}}", confirmation.payload.rejectLabel!.trim()), failure: messages.rejectFailed, fallback: messages.rejectFailedBody },
+      { api: mockIssuesApi.respondToInteraction, pending: questions,
+        invoke: () => feedbackThread().onSubmitInteractionAnswers?.(questions, answers), args: ["PAP-1", questions.id, { answers }],
+        response: { ...questions, status: "answered", result: { version: 1, answers } } satisfies AskUserQuestionsInteraction,
+        success: messages.answersSubmitted, failure: messages.submitFailed, fallback: messages.submitFailedBody },
+      { api: mockIssuesApi.submitInteractionVerdicts, pending: itemVerdicts,
+        invoke: () => feedbackThread().onSubmitInteractionVerdicts?.(itemVerdicts, verdicts), args: ["PAP-1", itemVerdicts.id, verdicts],
+        response: { ...itemVerdicts, status: "answered", result: { version: 1, outcome: "resolved", complete: true, items: [] } } satisfies RequestItemVerdictsInteraction,
+        success: messages.verdictsApplied, failure: messages.applyFailed, fallback: messages.applyFailedBody },
+      { api: mockIssuesApi.cancelInteraction, pending: questions,
+        invoke: () => feedbackThread().onCancelInteraction?.(questions), args: ["PAP-1", questions.id],
+        response: { ...questions, status: "cancelled", result: { version: 1, answers: [], cancelled: true } } satisfies AskUserQuestionsInteraction,
+        success: messages.questionCancelled, failure: messages.cancelFailed, fallback: messages.cancelFailedBody },
+      { api: mockIssuesApi.skipInteraction, pending: questions,
+        invoke: () => feedbackThread().onSkipInteraction?.(questions), args: ["PAP-1", questions.id],
+        response: { ...questions, status: "cancelled", result: { version: 1, answers: [], outcome: "skipped" } } satisfies AskUserQuestionsInteraction,
+        success: null, failure: messages.skipFailed, fallback: messages.skipFailedBody },
+    ];
+    await renderFeedbackHost(locale);
+    const interactionsKey = queryKeys.issues.interactions("PAP-1");
+    for (const operation of operations) {
+      const deferred = createDeferred<IssueThreadInteraction>();
+      operation.api.mockReturnValueOnce(deferred.promise);
+      mockIssuesApi.listInteractions.mockResolvedValue([operation.pending]);
+      queryClient.setQueryData<IssueThreadInteraction[]>(interactionsKey, [operation.pending]);
+      mockFeedbackToast.mockClear();
+      let result: Promise<void> | void;
+      let settled = false;
+      await act(async () => { result = operation.invoke(); void Promise.resolve(result).then(() => { settled = true; }); });
+      await waitForAssertion(() => expect(queryClient.isMutating()).toBe(1));
+      expect(settled).toBe(false);
+      expect(mockFeedbackToast).not.toHaveBeenCalled();
+      expect(operation.api).toHaveBeenLastCalledWith(...operation.args);
+      expect(queryClient.getQueryData<IssueThreadInteraction[]>(interactionsKey)).toEqual([operation.pending]);
+      await act(async () => {
+        mockIssuesApi.listInteractions.mockResolvedValue([operation.response]);
+        deferred.resolve(operation.response);
+        await result;
+      });
+      await waitForAssertion(() => expect(queryClient.isMutating()).toBe(0));
+      expect(settled).toBe(true);
+      expect(queryClient.getQueryData<IssueThreadInteraction[]>(interactionsKey)).toEqual([operation.response]);
+      expect(operation.response.idempotencyKey).toBe("original-nonce");
+      if (operation.success) expect(mockFeedbackToast).toHaveBeenCalledExactlyOnceWith({ title: operation.success, tone: "success" });
+      else expect(mockFeedbackToast).not.toHaveBeenCalled();
+      for (const error of [new Error("Submit failed"), new Error("Raw 原始错误 <tag> {{keep}}"), { privatePayload: "do not render" }]) {
+        operation.api.mockRejectedValueOnce(error);
+        mockFeedbackToast.mockClear();
+        await act(async () => { await expect(operation.invoke()).rejects.toBe(error); });
+        expect(operation.api).toHaveBeenLastCalledWith(...operation.args);
+        expect(mockFeedbackToast).toHaveBeenCalledExactlyOnceWith({ title: operation.failure, body: error instanceof Error ? error.message : operation.fallback, tone: "error" });
+        expect(queryClient.getQueryData<IssueThreadInteraction[]>(interactionsKey)).toEqual([operation.response]);
+      }
+    }
+  });
+
+  it("uses the completion locale for interaction toasts without rewriting older feedback", async () => {
+    const { questions, answers } = interactionFeedbackFixtures();
+    const response = createDeferred<IssueThreadInteraction>();
+    mockIssuesApi.respondToInteraction.mockReturnValueOnce(response.promise);
+    await renderFeedbackHost("en");
+    let pending: Promise<void> | void;
+    await act(async () => { pending = feedbackThread().onSubmitInteractionAnswers?.(questions, answers); });
+    expect(mockFeedbackToast).not.toHaveBeenCalled();
+    await act(async () => { await i18n.changeLanguage("ja"); response.resolve({ ...questions, status: "answered", result: { version: 1, answers } }); await pending; });
+    expect(mockFeedbackToast).toHaveBeenCalledExactlyOnceWith({ title: issueInteractionFeedbackMessages.ja.answersSubmitted, tone: "success" });
+    const olderToast = mockFeedbackToast.mock.calls[0][0];
+    await act(async () => { await i18n.changeLanguage("es"); });
+    mockIssuesApi.skipInteraction.mockRejectedValueOnce({ privatePayload: "do not render" });
+    await act(async () => { await expect(feedbackThread().onSkipInteraction?.(questions)).rejects.toEqual({ privatePayload: "do not render" }); });
+    expect(mockFeedbackToast).toHaveBeenLastCalledWith({ title: issueInteractionFeedbackMessages.es.skipFailed, body: issueInteractionFeedbackMessages.es.skipFailedBody, tone: "error" });
+    expect(olderToast.title).toBe(issueInteractionFeedbackMessages.ja.answersSubmitted);
   });
 
   it.each(Object.entries(issueRetryMessages))("localizes the actual activity-tab scheduled retry host and keeps its request identity in %s", async (locale, messages) => {

@@ -308,7 +308,6 @@ import { openSkillPanelState, shouldSuppressTaskPanelUntilPlan } from "../lib/ta
 import {
   interactionReadinessRefetchInterval,
   buildAnsweredQuestionsDeliveryText,
-  buildIssueThreadInteractionSummary,
 } from "../lib/issue-thread-interactions";
 import { resolveIssueDocumentDeepLink, sameIssueDocumentHash } from "../lib/issue-document-deep-link";
 import {
@@ -4879,22 +4878,25 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       pushToast({
         title:
           interaction.kind === "request_confirmation"
-            ? "Request confirmed"
+            ? mimouseT("issueInteractionFeedbackUi.requestConfirmed")
             : interaction.kind === "request_checkbox_confirmation"
-              ? "Selection confirmed"
+              ? mimouseT("issueInteractionFeedbackUi.selectionConfirmed")
               : skippedCount > 0
-                ? `Accepted ${createdCount} draft${createdCount === 1 ? "" : "s"} and skipped ${skippedCount}`
-                : "Suggested tasks accepted",
+                ? mimouseT("issueInteractionFeedbackUi.acceptedSkipped", {
+                    count: createdCount,
+                    skipped: skippedCount,
+                  })
+                : mimouseT("issueInteractionFeedbackUi.suggestedAccepted"),
         tone: "success",
       });
     },
     onError: (err) => {
       pushToast({
-        title: "Accept failed",
+        title: mimouseT("issueInteractionFeedbackUi.acceptFailed"),
         body:
           err instanceof Error
             ? err.message
-            : "Unable to accept the suggested tasks",
+            : mimouseT("issueInteractionFeedbackUi.acceptFailedBody"),
         tone: "error",
       });
     },
@@ -4914,18 +4916,20 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       pushToast({
         title:
           interaction.kind === "request_confirmation"
-            ? buildIssueThreadInteractionSummary(interaction)
-            : "Suggestion rejected",
+            ? interaction.payload.rejectLabel?.trim()
+              ? mimouseT("issueInteractionFeedbackUi.rejectedSelected", { label: interaction.payload.rejectLabel.trim() })
+              : mimouseT("issueInteractionFeedbackUi.rejectedRequest")
+            : mimouseT("issueInteractionFeedbackUi.suggestionRejected"),
         tone: "success",
       });
     },
     onError: (err) => {
       pushToast({
-        title: "Reject failed",
+        title: mimouseT("issueInteractionFeedbackUi.rejectFailed"),
         body:
           err instanceof Error
             ? err.message
-            : "Unable to reject the suggested tasks",
+            : mimouseT("issueInteractionFeedbackUi.rejectFailedBody"),
         tone: "error",
       });
     },
@@ -4943,14 +4947,14 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       invalidateIssueDetail();
       invalidateIssueCollections();
       pushToast({
-        title: "Answers submitted",
+        title: mimouseT("issueInteractionFeedbackUi.answersSubmitted"),
         tone: "success",
       });
     },
     onError: (err) => {
       pushToast({
-        title: "Submit failed",
-        body: err instanceof Error ? err.message : "Unable to submit answers",
+        title: mimouseT("issueInteractionFeedbackUi.submitFailed"),
+        body: err instanceof Error ? err.message : mimouseT("issueInteractionFeedbackUi.submitFailedBody"),
         tone: "error",
       });
     },
@@ -4980,16 +4984,16 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
           : false;
       pushToast({
         title: complete
-          ? "All verdicts applied"
-          : `Applied ${applied} decision${applied === 1 ? "" : "s"}`,
+          ? mimouseT("issueInteractionFeedbackUi.verdictsApplied")
+          : mimouseT("issueInteractionFeedbackUi.decisionsApplied", { count: applied }),
         tone: "success",
       });
     },
     onError: (err) => {
       pushToast({
-        title: "Apply failed",
+        title: mimouseT("issueInteractionFeedbackUi.applyFailed"),
         body:
-          err instanceof Error ? err.message : "Unable to apply the verdicts",
+          err instanceof Error ? err.message : mimouseT("issueInteractionFeedbackUi.applyFailedBody"),
         tone: "error",
       });
     },
@@ -5006,15 +5010,15 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       invalidateIssueDetail();
       invalidateIssueCollections();
       pushToast({
-        title: "Question cancelled",
+        title: mimouseT("issueInteractionFeedbackUi.questionCancelled"),
         tone: "success",
       });
     },
     onError: (err) => {
       pushToast({
-        title: "Cancel failed",
+        title: mimouseT("issueInteractionFeedbackUi.cancelFailed"),
         body:
-          err instanceof Error ? err.message : "Unable to cancel the question",
+          err instanceof Error ? err.message : mimouseT("issueInteractionFeedbackUi.cancelFailedBody"),
         tone: "error",
       });
     },
@@ -5030,9 +5034,9 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
     },
     onError: (err) => {
       pushToast({
-        title: "Skip failed",
+        title: mimouseT("issueInteractionFeedbackUi.skipFailed"),
         body:
-          err instanceof Error ? err.message : "Unable to skip this request",
+          err instanceof Error ? err.message : mimouseT("issueInteractionFeedbackUi.skipFailedBody"),
         tone: "error",
       });
     },
