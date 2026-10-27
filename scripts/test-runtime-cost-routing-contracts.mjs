@@ -2,7 +2,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
 import * as contract from "../packages/shared/src/runtime-cost-routing.ts";
 import { routingPolicySchema } from "../packages/shared/src/cost-routing-preview.ts";
 import { runtimeRoutingPolicies, runtimeRoutingHeads, runtimeRoutingReceipts, runtimeRoutingBindings } from "../packages/db/src/schema/runtime_cost_routing.ts";
