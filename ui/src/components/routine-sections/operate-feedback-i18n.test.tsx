@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act } from "react";
+import type { ActivityEvent } from "@paperclipai/shared";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -14,6 +15,10 @@ vi.mock("../RoutineHistoryTab", () => ({ RoutineHistoryTab: () => null }));
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 let host: HTMLDivElement, root: Root, client: QueryClient, context: RoutineDetailContextValue;
 const date = new Date("2026-10-25T14:05:00Z");
+function activityEvent(id: string, action: string, details: Record<string, unknown>): ActivityEvent {
+  return { id, action, details, createdAt: date, companyId: "company-1", actorType: "system", actorId: "fixture",
+    entityType: "routine", entityId: "routine-1", agentId: null, runId: null };
+}
 async function render(children = <ActivitySection />) {
   await act(async () => { root.render(<QueryClientProvider client={client}><RoutineDetailContext.Provider value={context}>{children}</RoutineDetailContext.Provider></QueryClientProvider>); });
 }
@@ -30,12 +35,13 @@ it.each(["en", "zh-CN", "es", "ja"])("localizes activity and keeps expanded diag
     "routine.webhook_test_received": "testPassed", "routine.webhook_test_rejected": "testRejected", "routine.webhook_received": "webhookReceived", "routine.webhook_rejected": "webhookRejected",
     "routine.updated": "routineUpdated", "routine.trigger_created": "triggerAdded", "routine.trigger_updated": "triggerUpdated", "routine.trigger_deleted": "triggerRemoved", "routine.trigger_removed": "triggerRemoved", "routine.trigger_restored": "triggerRestored", "routine.trigger_setup_finished": "setupFinished", "routine.trigger_secret_rotated": "keyReplaced", "routine.run_created": "runCreated",
   };
-  context.activity = Object.keys(actionKeys).map((action, index) => ({ id: `event-${index}`, action, createdAt: date, details: { rawKey: "RAW_abc<value>", webhookUrl: "https://example.invalid/raw?A_B" } })) as typeof context.activity;
-  context.activity!.push(...[
-    { id: "run", action: "routine.run_triggered", createdAt: date, details: { source: "schedule", status: "issue_created" } },
-    { id: "changed", action: "routine.updated", createdAt: date, details: { changeSummary: "Customer-authored changeSummary" } },
-    { id: "unknown", action: "routine.unknown_diagnostic", createdAt: date, details: { diagnosticCode: "UNKNOWN_401", count: 2 } },
-  ] as typeof context.activity & []);
+  context.activity = Object.keys(actionKeys).map((action, index) => activityEvent(`event-${index}`, action,
+    { rawKey: "RAW_abc<value>", webhookUrl: "https://example.invalid/raw?A_B" }));
+  context.activity.push(
+    activityEvent("run", "routine.run_triggered", { source: "schedule", status: "issue_created" }),
+    activityEvent("changed", "routine.updated", { changeSummary: "Customer-authored changeSummary" }),
+    activityEvent("unknown", "routine.unknown_diagnostic", { diagnosticCode: "UNKNOWN_401", count: 2 }),
+  );
   await render();
   for (const [action, key] of Object.entries(actionKeys)) expect(host.querySelector(`[title="${action}"]`)?.textContent).toBe(i18n.t(`routineDetailUi.${key}`));
   for (const key of ["testPassedHelp", "testRejectedHelp", "authenticated", "rejectedHelp", "sourceSchedule", "taskCreated"]) expect(host.textContent).toContain(i18n.t(`routineDetailUi.${key}`));
