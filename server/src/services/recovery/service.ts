@@ -1,4 +1,5 @@
 import { isAgentAwaitingSetup } from "../../modules/agent-lifecycle/index.js";
+import { suppressRuntimeRoutingAutomaticRecovery } from "../mimouse-cost-routing/recovery.js";
 import { isAiAuthenticationBlocked } from "../ai-auth-failure.js";
 import { hasCommittedNativePlanWait } from "../native-runtime/native-plan-wait.js";
 import { isNativeWorkspaceExportRepairCause } from "@paperclipai/shared";
@@ -3429,6 +3430,7 @@ export function recoveryService(
       issueIds: [] as string[],
     };
     for (const { action, issue } of rows) {
+      if (await suppressRuntimeRoutingAutomaticRecovery(db, issue.companyId, issue.id)) { result.skipped += 1; continue; }
       const wakePolicy = parseObject(action.wakePolicy);
       const wakePolicyType = readNonEmptyString(wakePolicy.type);
       if (
@@ -3795,6 +3797,7 @@ export function recoveryService(
       )
       .limit(1)
       .then((rows) => rows[0] ?? null);
+    if (current && await suppressRuntimeRoutingAutomaticRecovery(db, current.companyId, current.id)) return "skipped";
     if (!current || current.status === "done" || current.status === "cancelled")
       return "skipped";
 
@@ -4424,6 +4427,7 @@ export function recoveryService(
     }
 
     for (const issue of candidates) {
+      if (await suppressRuntimeRoutingAutomaticRecovery(db, issue.companyId, issue.id)) { result.skipped += 1; continue; }
       if (issue.originKind === "chat_channel") {
         await settleSlackConversation(db, issue.companyId, issue.id);
         const [current] = await db.select({ externalConversationState: externalConversationStateSql() })

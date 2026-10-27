@@ -58,6 +58,8 @@ export async function verifyRuntimeRoutingDispatch(db: Db, actor: PrivatePromptI
   const bound = (await service.binding(actor, created.binding.id)).binding;
   const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, bound.runId!));
   expect(run.status, JSON.stringify({ error: run.error, code: run.errorCode })).toBe("succeeded"); expect(ordinaryCalls()).toBe(before + 1);
+  const { verifyRuntimeRoutingRecoverySuppression } = await import("./recovery-db-cases.js");
+  await verifyRuntimeRoutingRecoverySuppression(db, issue, run); expect(ordinaryCalls()).toBe(before + 1);
   await expect(issueService(db).checkout(bound.issueId, bound.selectedAgentId, ["backlog", "todo", "in_progress"], run.id)).rejects.toThrow("runtime_routing_checkout_denied");
   expect(bound.state).toBe("start_requested"); expect(bound.providerConsumed).toBe(false);
   expect(await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.idempotencyKey, `runtime-cost-routing:${bound.id}`))).toHaveLength(1);

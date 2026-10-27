@@ -1,5 +1,6 @@
 import { PromptApplicationExecutionBlocked } from "../mimouse-prompt-applications/contract.js";
 import { isPromptApplicationRun } from "../mimouse-prompt-applications/recovery.js";
+import { isRuntimeRoutingRun } from "../mimouse-cost-routing/recovery.js";
 import { NON_RETRYABLE_PREFLIGHT_FAILURE_CODES, isHeartbeatRunTerminalStatus } from "./run-lifecycle.js";
 import { ChatControlRecoveryUnresolvedError } from "./queue.js";
 import { readTransientRecoveryContractFromRun, readHeartbeatRunErrorFamily, isTransientWorkspaceGitScanCode } from "./retries.js";
@@ -695,7 +696,7 @@ export function createHeartbeatRunCompletion(db: Db, dependencies: HeartbeatRunC
       }
       const livenessRun = finalizedRun;
       const privatePromptAttempt = await isPrivatePromptRun(livenessRun.id);
-      const suppressPromptRetry = privatePromptAttempt || controlledPromptFailure;
+      const suppressPromptRetry = privatePromptAttempt || controlledPromptFailure || await isRuntimeRoutingRun(db, livenessRun);
       await refreshContinuationSummaryForRun(livenessRun, agent);
       const skipRunIssueComment =
         parseObject(livenessRun.contextSnapshot).skipIssueComment === true;
@@ -1162,7 +1163,7 @@ export function createHeartbeatRunCompletion(db: Db, dependencies: HeartbeatRunC
       const livenessRun =
         (await classifyAndPersistRunLiveness(failedRun)) ?? failedRun;
       const privatePromptAttempt = await isPrivatePromptRun(livenessRun.id);
-      const suppressPromptRetry = privatePromptAttempt || controlledPromptFailure || err instanceof PromptApplicationExecutionBlocked;
+      const suppressPromptRetry = privatePromptAttempt || controlledPromptFailure || err instanceof PromptApplicationExecutionBlocked || await isRuntimeRoutingRun(db, livenessRun);
       try {
         await completeSkillTestRunForHeartbeatOutcome({
           run: livenessRun,
@@ -1404,7 +1405,7 @@ export function createHeartbeatRunCompletion(db: Db, dependencies: HeartbeatRunC
         });
       }
       const privatePromptAttempt = await isPrivatePromptRun(livenessRun.id);
-      const suppressPromptRetry = privatePromptAttempt || controlledPromptFailure || outerErr instanceof PromptApplicationExecutionBlocked;
+      const suppressPromptRetry = privatePromptAttempt || controlledPromptFailure || outerErr instanceof PromptApplicationExecutionBlocked || await isRuntimeRoutingRun(db, livenessRun);
       const failedAgent =
         setupFailureAgent ??
         (await getAgent(run.agentId).catch(() => null));
