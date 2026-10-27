@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import {
   AlertTriangle,
   BookOpen,
@@ -63,12 +64,12 @@ export function providerActivityPresentation(item: TaskChatProviderActivityItem)
     case "research": {
       const action = providerDetail(item, "Action")?.toLowerCase();
       if (action === "open_page") {
-        return { icon: Search, runningLabel: "Opening a web page", completedLabel: "Opened a web page", failedLabel: "Couldn’t open the web page", interruptedLabel: "Stopped opening the web page", detail };
+        return { icon: Search, runningLabel: t("runnerProviderActivityUi.researchOpenRunning"), completedLabel: t("runnerProviderActivityUi.researchOpenCompleted"), failedLabel: t("runnerProviderActivityUi.researchOpenFailed"), interruptedLabel: t("runnerProviderActivityUi.researchOpenInterrupted"), detail };
       }
       if (action === "find_in_page") {
-        return { icon: Search, runningLabel: "Searching the page", completedLabel: "Searched the page", failedLabel: "Page search failed", interruptedLabel: "Page search stopped", detail };
+        return { icon: Search, runningLabel: t("runnerProviderActivityUi.researchFindRunning"), completedLabel: t("runnerProviderActivityUi.researchFindCompleted"), failedLabel: t("runnerProviderActivityUi.researchFindFailed"), interruptedLabel: t("runnerProviderActivityUi.researchFindInterrupted"), detail };
       }
-      return { icon: Search, runningLabel: "Searching the web", completedLabel: "Searched the web", failedLabel: "Web search failed", interruptedLabel: "Web search stopped", detail };
+      return { icon: Search, runningLabel: t("runnerProviderActivityUi.researchWebRunning"), completedLabel: t("runnerProviderActivityUi.researchWebCompleted"), failedLabel: t("runnerProviderActivityUi.researchWebFailed"), interruptedLabel: t("runnerProviderActivityUi.researchWebInterrupted"), detail };
     }
     case "tool_execution": {
       const name = providerDetail(item, "Name");
@@ -104,45 +105,45 @@ export function providerActivityPresentation(item: TaskChatProviderActivityItem)
       };
     }
     case "plan":
-      return { icon: ListChecks, runningLabel: "Updating the plan", completedLabel: "Updated the plan", failedLabel: "Plan update failed", interruptedLabel: "Plan update stopped", detail };
+      return { icon: ListChecks, runningLabel: t("runnerProviderActivityUi.planRunning"), completedLabel: t("runnerProviderActivityUi.planCompleted"), failedLabel: t("runnerProviderActivityUi.planFailed"), interruptedLabel: t("runnerProviderActivityUi.planInterrupted"), detail };
     case "delegation": {
       const action = providerDetail(item, "Action")?.toLowerCase();
-      if (action === "message") return { icon: Users, runningLabel: "Messaging a subagent", completedLabel: "Messaged a subagent", failedLabel: "Subagent message failed", interruptedLabel: "Subagent message stopped", detail };
-      if (action === "resume") return { icon: Users, runningLabel: "Resuming a subagent", completedLabel: "Resumed a subagent", failedLabel: "Couldn’t resume the subagent", interruptedLabel: "Subagent resume stopped", detail };
-      if (action === "close") return { icon: Users, runningLabel: "Closing a subagent", completedLabel: "Closed a subagent", failedLabel: "Couldn’t close the subagent", interruptedLabel: "Subagent close stopped", detail };
-      if (action === "wait") return { icon: Users, runningLabel: "Waiting for subagents", completedLabel: "Finished waiting for subagents", failedLabel: "Subagent wait failed", interruptedLabel: "Stopped waiting for subagents", detail };
-      return { icon: Users, runningLabel: "Starting a subagent", completedLabel: "Started a subagent", failedLabel: "Subagent start failed", interruptedLabel: "Subagent start stopped", detail };
+      if (action === "message") return { icon: Users, runningLabel: t("runnerProviderActivityUi.delegationMessageRunning"), completedLabel: t("runnerProviderActivityUi.delegationMessageCompleted"), failedLabel: t("runnerProviderActivityUi.delegationMessageFailed"), interruptedLabel: t("runnerProviderActivityUi.delegationMessageInterrupted"), detail };
+      if (action === "resume") return { icon: Users, runningLabel: t("runnerProviderActivityUi.delegationResumeRunning"), completedLabel: t("runnerProviderActivityUi.delegationResumeCompleted"), failedLabel: t("runnerProviderActivityUi.delegationResumeFailed"), interruptedLabel: t("runnerProviderActivityUi.delegationResumeInterrupted"), detail };
+      if (action === "close") return { icon: Users, runningLabel: t("runnerProviderActivityUi.delegationCloseRunning"), completedLabel: t("runnerProviderActivityUi.delegationCloseCompleted"), failedLabel: t("runnerProviderActivityUi.delegationCloseFailed"), interruptedLabel: t("runnerProviderActivityUi.delegationCloseInterrupted"), detail };
+      if (action === "wait") return { icon: Users, runningLabel: t("runnerProviderActivityUi.delegationWaitRunning"), completedLabel: t("runnerProviderActivityUi.delegationWaitCompleted"), failedLabel: t("runnerProviderActivityUi.delegationWaitFailed"), interruptedLabel: t("runnerProviderActivityUi.delegationWaitInterrupted"), detail };
+      return { icon: Users, runningLabel: t("runnerProviderActivityUi.delegationStartRunning"), completedLabel: t("runnerProviderActivityUi.delegationStartCompleted"), failedLabel: t("runnerProviderActivityUi.delegationStartFailed"), interruptedLabel: t("runnerProviderActivityUi.delegationStartInterrupted"), detail };
     }
     case "model_identity":
       return item.eventType === "model.route.changed"
-        ? { icon: Bot, runningLabel: "Switching models", completedLabel: "Switched models", failedLabel: "Model switch failed", interruptedLabel: "Model switch stopped", detail }
-        : { icon: Bot, runningLabel: "Verifying the model", completedLabel: "Verified the model", failedLabel: "Model verification failed", interruptedLabel: "Model verification stopped", detail };
+        ? { icon: Bot, runningLabel: t("runnerProviderActivityUi.modelSwitchRunning"), completedLabel: t("runnerProviderActivityUi.modelSwitchCompleted"), failedLabel: t("runnerProviderActivityUi.modelSwitchFailed"), interruptedLabel: t("runnerProviderActivityUi.modelSwitchInterrupted"), detail }
+        : { icon: Bot, runningLabel: t("runnerProviderActivityUi.modelVerifyRunning"), completedLabel: t("runnerProviderActivityUi.modelVerifyCompleted"), failedLabel: t("runnerProviderActivityUi.modelVerifyFailed"), interruptedLabel: t("runnerProviderActivityUi.modelVerifyInterrupted"), detail };
     case "context":
-      return { icon: Database, runningLabel: "Compacting context", completedLabel: "Compacted context", failedLabel: "Context compaction failed", interruptedLabel: "Context compaction stopped", detail };
+      return { icon: Database, runningLabel: t("runnerProviderActivityUi.contextRunning"), completedLabel: t("runnerProviderActivityUi.contextCompleted"), failedLabel: t("runnerProviderActivityUi.contextFailed"), interruptedLabel: t("runnerProviderActivityUi.contextInterrupted"), detail };
     case "artifact": {
       const viewed = item.eventType === "artifact.viewed";
       return viewed
-        ? { icon: Box, runningLabel: "Viewing an artifact", completedLabel: "Viewed an artifact", failedLabel: "Couldn’t view the artifact", interruptedLabel: "Artifact view stopped", detail }
-        : { icon: Box, runningLabel: "Generating an artifact", completedLabel: "Generated an artifact", failedLabel: "Artifact generation failed", interruptedLabel: "Artifact generation stopped", detail };
+        ? { icon: Box, runningLabel: t("runnerProviderActivityUi.artifactViewRunning"), completedLabel: t("runnerProviderActivityUi.artifactViewCompleted"), failedLabel: t("runnerProviderActivityUi.artifactViewFailed"), interruptedLabel: t("runnerProviderActivityUi.artifactViewInterrupted"), detail }
+        : { icon: Box, runningLabel: t("runnerProviderActivityUi.artifactGenerateRunning"), completedLabel: t("runnerProviderActivityUi.artifactGenerateCompleted"), failedLabel: t("runnerProviderActivityUi.artifactGenerateFailed"), interruptedLabel: t("runnerProviderActivityUi.artifactGenerateInterrupted"), detail };
     }
     case "review": {
       const state = providerDetail(item, "State")?.toLowerCase();
       return state === "exited"
-        ? { icon: FileCheck2, runningLabel: "Leaving review mode", completedLabel: "Left review mode", failedLabel: "Couldn’t leave review mode", interruptedLabel: "Review-mode change stopped", detail }
-        : { icon: FileCheck2, runningLabel: "Entering review mode", completedLabel: "Entered review mode", failedLabel: "Couldn’t enter review mode", interruptedLabel: "Review-mode change stopped", detail };
+        ? { icon: FileCheck2, runningLabel: t("runnerProviderActivityUi.reviewExitRunning"), completedLabel: t("runnerProviderActivityUi.reviewExitCompleted"), failedLabel: t("runnerProviderActivityUi.reviewExitFailed"), interruptedLabel: t("runnerProviderActivityUi.reviewExitInterrupted"), detail }
+        : { icon: FileCheck2, runningLabel: t("runnerProviderActivityUi.reviewEnterRunning"), completedLabel: t("runnerProviderActivityUi.reviewEnterCompleted"), failedLabel: t("runnerProviderActivityUi.reviewEnterFailed"), interruptedLabel: t("runnerProviderActivityUi.reviewEnterInterrupted"), detail };
     }
     case "hook":
-      return { icon: GitBranch, runningLabel: "Running a hook", completedLabel: "Ran a hook", failedLabel: "Hook failed", interruptedLabel: "Hook stopped", detail };
+      return { icon: GitBranch, runningLabel: t("runnerProviderActivityUi.hookRunning"), completedLabel: t("runnerProviderActivityUi.hookCompleted"), failedLabel: t("runnerProviderActivityUi.hookFailed"), interruptedLabel: t("runnerProviderActivityUi.hookInterrupted"), detail };
     case "memory":
-      return { icon: BookOpen, runningLabel: "Checking memory", completedLabel: "Referenced memory", failedLabel: "Memory lookup failed", interruptedLabel: "Memory lookup stopped", detail };
+      return { icon: BookOpen, runningLabel: t("runnerProviderActivityUi.memoryRunning"), completedLabel: t("runnerProviderActivityUi.memoryCompleted"), failedLabel: t("runnerProviderActivityUi.memoryFailed"), interruptedLabel: t("runnerProviderActivityUi.memoryInterrupted"), detail };
     case "safety":
-      return { icon: ShieldCheck, runningLabel: "Reviewing safety", completedLabel: "Reviewed safety", failedLabel: "Safety review failed", interruptedLabel: "Safety review stopped", detail };
+      return { icon: ShieldCheck, runningLabel: t("runnerProviderActivityUi.safetyRunning"), completedLabel: t("runnerProviderActivityUi.safetyCompleted"), failedLabel: t("runnerProviderActivityUi.safetyFailed"), interruptedLabel: t("runnerProviderActivityUi.safetyInterrupted"), detail };
     case "terminal":
-      return { icon: TerminalSquare, runningLabel: "Sending terminal input", completedLabel: "Sent terminal input", failedLabel: "Terminal input failed", interruptedLabel: "Terminal input stopped", detail };
+      return { icon: TerminalSquare, runningLabel: t("runnerProviderActivityUi.terminalRunning"), completedLabel: t("runnerProviderActivityUi.terminalCompleted"), failedLabel: t("runnerProviderActivityUi.terminalFailed"), interruptedLabel: t("runnerProviderActivityUi.terminalInterrupted"), detail };
     case "wait":
-      return { icon: Clock3, runningLabel: "Waiting", completedLabel: "Finished waiting", failedLabel: "Wait failed", interruptedLabel: "Wait stopped", detail };
+      return { icon: Clock3, runningLabel: t("runnerProviderActivityUi.waitRunning"), completedLabel: t("runnerProviderActivityUi.waitCompleted"), failedLabel: t("runnerProviderActivityUi.waitFailed"), interruptedLabel: t("runnerProviderActivityUi.waitInterrupted"), detail };
     case "provider_notice":
-      return { icon: providerNoticeSeverity(item) === "info" ? Info : AlertTriangle, runningLabel: "Provider notice", completedLabel: "Provider notice", failedLabel: "Provider error", interruptedLabel: "Provider notice", detail };
+      return { icon: providerNoticeSeverity(item) === "info" ? Info : AlertTriangle, runningLabel: t("runnerProviderActivityUi.notice"), completedLabel: t("runnerProviderActivityUi.notice"), failedLabel: t("runnerProviderActivityUi.noticeError"), interruptedLabel: t("runnerProviderActivityUi.notice"), detail };
   }
 }
 
