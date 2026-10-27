@@ -12,14 +12,14 @@ export function assertApplicationProfile(adapterType: string, config: Record<str
     Object.keys(env).some(k => ["PATH", "HOME", "NODE_OPTIONS", "NODE_PATH", "BASH_ENV", "ENV"].includes(k.toUpperCase())) ||
     Object.keys(runtime).some(k => k !== "heartbeat") ||
     ["extraArgs", "args", "agentCommand", "remoteExecution", "aiConnection", "aiRouter", "aiBinding", "filesystemScope", "networkScope", "filesystemSandboxCommand", "filesystemExtraPaths", "networkAllowlist"].some(k => config[k] != null) ||
-    Object.keys(env).some(k => /^(ANTHROPIC_AUTH_TOKEN|CLAUDE_CODE_USE_|AWS_|GOOGLE_|VERTEX_)/.test(k))) {
+    Object.keys(env).some(k => /^(ANTHROPIC_AUTH_TOKEN|CLAUDE_CODE_USE_|AWS_|GOOGLE_|VERTEX_)/i.test(k))) {
     throw unprocessable("prompt_application_profile_requires_local_cli_pinned_api_key_and_cwd");
   }
   return { env, cwd: config.cwd, model: config.model };
 }
 export function assertApplicationAuthEnvironment(env: Record<string, unknown>) {
   if (Object.entries(env).some(([key, value]) => value != null && value !== "" &&
-    /^(ANTHROPIC_AUTH_TOKEN$|ANTHROPIC_BASE_URL$|ANTHROPIC_BEDROCK_BASE_URL$|CLAUDE_CODE_USE_|CLAUDE_CODE_OAUTH_TOKEN$)/.test(key))) {
+    /^(ANTHROPIC_AUTH_TOKEN$|ANTHROPIC_BASE_URL$|ANTHROPIC_BEDROCK_BASE_URL$|CLAUDE_CODE_USE_|CLAUDE_CODE_OAUTH_TOKEN$)/i.test(key))) {
     throw unprocessable("prompt_application_ambient_auth_or_provider_route_unsupported");
   }
 }

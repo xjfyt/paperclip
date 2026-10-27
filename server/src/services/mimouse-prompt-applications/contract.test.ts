@@ -8,7 +8,7 @@ it("accepts the supported profile without changing permissions or source config"
   for (const k of ["ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "ANTHROPIC_BEDROCK_BASE_URL", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY", ...Object.keys(process.env).filter(k => /^(LD_|DYLD_|NODE_OPTIONS$|NODE_PATH$|BASH_ENV$|ENV$)/i.test(k))]) vi.stubEnv(k, "");
   const input = config(), before = structuredClone(input); expect(assertApplicationProfile("claude_local", input, {})).toMatchObject({ cwd: "/fixed" }); expect(input).toEqual(before);
 });
-for (const name of ["ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "ANTHROPIC_BEDROCK_BASE_URL", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX"]) {
+for (const name of ["ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "ANTHROPIC_BEDROCK_BASE_URL", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "anthropic_auth_token", "claude_code_oauth_token", "claude_code_use_vertex"]) {
   it(`rejects conflicting ambient ${name} instead of silently choosing billing identity`, () => expect(() => assertApplicationAuthEnvironment({ [name]: "present" })).toThrow("prompt_application_ambient_auth_or_provider_route_unsupported"));
 }
 for (const patch of [{ engine: "acp" }, { filesystemScope: "workspace" }, { filesystemSandboxCommand: "/wrapper" }, { networkScope: "none" }, { cwd: "relative" }, { command: "/arbitrary/file" }, { args: ["--resume", "old"] }, { env: { ANTHROPIC_API_KEY: { type: "secret_ref", secretId: id, version: "latest" } } }]) {
@@ -31,7 +31,7 @@ it("request recovery needs a complete fixed action/target/generation tuple", () 
   expect(promptApplicationRequestQuerySchema.safeParse({ applicationId: id, action: "force", expectedGeneration: 2 }).success).toBe(false);
 });
 
-for (const key of ["LD_PRELOAD", "LD_LIBRARY_PATH", "LD_AUDIT", "DYLD_INSERT_LIBRARIES", "DYLD_LIBRARY_PATH", "NODE_OPTIONS", "NODE_PATH", "BASH_ENV", "ENV"]) {
+for (const key of ["LD_PRELOAD", "LD_LIBRARY_PATH", "LD_AUDIT", "DYLD_INSERT_LIBRARIES", "DYLD_LIBRARY_PATH", "NODE_OPTIONS", "NODE_PATH", "BASH_ENV", "ENV", "node_options", "ld_preload"]) {
   it(`rejects nonempty execution loader ${key} without clearing it`, () => {
     const env = { [key]: "external-code" }; expect(() => assertApplicationExecutionEnvironment(env)).toThrow("prompt_application_loader_environment_unsupported");
     expect(env[key]).toBe("external-code"); expect(() => assertApplicationExecutionEnvironment({ [key]: "" })).not.toThrow();
