@@ -34,6 +34,7 @@ type EmbeddedPostgresCtor = new (opts: {
   port: number;
   persistent: boolean;
   initdbFlags?: string[];
+  postgresFlags?: string[];
   onLog?: (message: unknown) => void;
   onError?: (message: unknown) => void;
 }) => EmbeddedPostgresInstance;
@@ -121,9 +122,20 @@ const EMBEDDED_POSTGRES_USER = "paperclip";
 const EMBEDDED_POSTGRES_PASSWORD = "paperclip";
 const EMBEDDED_POSTGRES_INITDB_FLAGS = ["--encoding=UTF8", "--locale=C", "--lc-messages=C"];
 
+function isTcpOnlyTestMode(): boolean {
+  return process.env.PAPERCLIP_TEST_POSTGRES_TCP_ONLY === "1";
+}
+
 async function createEmbeddedPostgresTestInstance(tempDirPrefix: string) {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), tempDirPrefix));
-  return await createEmbeddedPostgresTestInstanceAt(dataDir);
+  try {
+    return await createEmbeddedPostgresTestInstanceAt(dataDir);
+  } catch (error) {
+    // No cluster has been initialized or started yet. Reclaim only the fresh
+    // directory allocated by this call if port allocation or construction fails.
+    cleanupEmbeddedPostgresTestDirs(dataDir);
+    throw error;
+  }
 }
 
 // Wraps an embedded-postgres instance around `dataDir`. The caller decides
@@ -144,6 +156,12 @@ async function createEmbeddedPostgresTestInstanceAt(dataDir: string) {
     port,
     persistent: true,
     initdbFlags: EMBEDDED_POSTGRES_INITDB_FLAGS,
+    // Some test sandboxes allow loopback TCP but not Unix sockets. Use the
+    // dependency's supported startup flags, never edit a cluster's config or
+    // authentication. The default remains unchanged unless explicitly enabled.
+    ...(isTcpOnlyTestMode()
+      ? { postgresFlags: ["-c", "listen_addresses=127.0.0.1", "-c", "unix_socket_directories="] }
+      : {}),
     onLog: (message) => logBuffer.append(message),
     onError: (message) => logBuffer.append(message),
   });
@@ -315,7 +333,9 @@ const TEMPLATE_BUILD_STOP_TIMEOUT_MS = 30_000;
 export type EmbeddedPostgresStartMode = "template" | "fresh";
 
 function isTemplateCacheDisabled(): boolean {
-  return process.env.PAPERCLIP_TEST_POSTGRES_TEMPLATE === "0";
+  // TCP-only mode always owns a fresh cluster. Do not inspect, reuse, modify,
+  // or prune templates created with the normal socket configuration.
+  return isTcpOnlyTestMode() || process.env.PAPERCLIP_TEST_POSTGRES_TEMPLATE === "0";
 }
 
 function migrationsDirectory(): string {

@@ -2,7 +2,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import postgres from "postgres";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import * as client from "./client.js";
 import { inspectMigrations } from "./client.js";
 import {
   __embeddedPostgresStartMaxAttemptsForTests as MAX_ATTEMPTS,
@@ -30,6 +31,7 @@ type FakeOptions = {
   port: number;
   persistent: boolean;
   initdbFlags?: string[];
+  postgresFlags?: string[];
   onLog?: (message: unknown) => void;
   onError?: (message: unknown) => void;
 };
@@ -229,11 +231,6 @@ describe("isUsableTemplate", () => {
   });
 });
 
-// Real-cluster coverage of the template path. Skipped on hosts that cannot run
-// embedded Postgres, like every other suite that uses the fixture.
-const support = await getEmbeddedPostgresTestSupport();
-const describeWithPostgres = support.supported ? describe : describe.skip;
-
 // Points `os.tmpdir()` at a private scratch directory so a test can drive the
 // cache root from an empty state. `os.tmpdir()` reads the environment on every
 // call: TMPDIR on POSIX, TEMP and then TMP on Windows, so all three are set.
@@ -258,8 +255,20 @@ function useScratchTmpdir(prefix: string): { scratch: string; restore(): void } 
   };
 }
 
-describeWithPostgres("startEmbeddedPostgresTestDatabase template path", () => {
+// Probe lazily so a name-filtered unit test does not start a real cluster.
+// TCP-only mode deliberately disables this cache; it must not turn it back on
+// just to test the template path on a host without Unix socket support.
+describe.skipIf(process.env.PAPERCLIP_TEST_POSTGRES_TCP_ONLY === "1")("startEmbeddedPostgresTestDatabase template path", () => {
   const originalTemplateSetting = process.env.PAPERCLIP_TEST_POSTGRES_TEMPLATE;
+  let support: Awaited<ReturnType<typeof getEmbeddedPostgresTestSupport>>;
+
+  beforeAll(async () => {
+    support = await getEmbeddedPostgresTestSupport();
+  }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
+
+  beforeEach((context) => {
+    if (!support.supported) context.skip(support.reason);
+  });
 
   afterEach(() => {
     if (originalTemplateSetting === undefined) delete process.env.PAPERCLIP_TEST_POSTGRES_TEMPLATE;
@@ -454,7 +463,11 @@ describe("support probe when the template cannot be built", () => {
 
   it("falls through to the fresh probe instead of reporting the host as unsupported", { timeout: EMBEDDED_POSTGRES_TEST_TIMEOUT_MS }, async () => {
     const originalTemplateSetting = process.env.PAPERCLIP_TEST_POSTGRES_TEMPLATE;
+    const originalTcpOnlySetting = process.env.PAPERCLIP_TEST_POSTGRES_TCP_ONLY;
     delete process.env.PAPERCLIP_TEST_POSTGRES_TEMPLATE;
+    delete process.env.PAPERCLIP_TEST_POSTGRES_TCP_ONLY;
+    const ensureDatabase = vi.spyOn(client, "ensurePostgresDatabase").mockResolvedValue("created");
+    const migrate = vi.spyOn(client, "applyPendingMigrations").mockRejectedValue(new Error("migration failed"));
     const scratch = useScratchTmpdir("paperclip-template-build-fail-");
     const warnings: string[] = [];
     const warn = console.warn;
@@ -465,10 +478,10 @@ describe("support probe when the template cannot be built", () => {
       // This test runs on every platform, so check the redirect took effect
       // before asserting on paths under it.
       expect(os.tmpdir()).toBe(scratch.scratch);
-      // The fake cluster "starts" without listening, so the template build
-      // fails after the start, at the migration step, the way a broken
-      // migration would. A real broken migration then fails the suite on
-      // the fresh path instead of being hidden by `describe.skip`.
+      // The fake cluster "starts" without listening. Fail the migration
+      // explicitly so this unit test needs no database connection. A real
+      // broken migration then fails the suite on the fresh path instead of
+      // being hidden by `describe.skip`.
       const { ctor, constructed } = makeFakeCtor(0);
       __setEmbeddedPostgresCtorProviderForTests(async () => ctor);
       resetTemplateState();
@@ -484,10 +497,103 @@ describe("support probe when the template cannot be built", () => {
       const rootDir = templateRootDir();
       expect(fs.existsSync(rootDir) ? fs.readdirSync(rootDir) : []).toEqual([]);
     } finally {
+      ensureDatabase.mockRestore();
+      migrate.mockRestore();
       console.warn = warn;
       scratch.restore();
       if (originalTemplateSetting === undefined) delete process.env.PAPERCLIP_TEST_POSTGRES_TEMPLATE;
       else process.env.PAPERCLIP_TEST_POSTGRES_TEMPLATE = originalTemplateSetting;
+      if (originalTcpOnlySetting === undefined) delete process.env.PAPERCLIP_TEST_POSTGRES_TCP_ONLY;
+      else process.env.PAPERCLIP_TEST_POSTGRES_TCP_ONLY = originalTcpOnlySetting;
+    }
+  });
+});
+
+describe("TCP-only test fixture configuration", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+    __setEmbeddedPostgresCtorProviderForTests(null);
+    resetTemplateState();
+  });
+
+  it.each([undefined, "0", "true"])("keeps default startup flags unchanged for %s", async (setting) => {
+    vi.stubEnv("PAPERCLIP_TEST_POSTGRES_TCP_ONLY", setting);
+    const { ctor, constructed } = makeFakeCtor(0);
+    __setEmbeddedPostgresCtorProviderForTests(async () => ctor);
+    const started = await startWithRetry("paperclip-tcp-default-");
+    try {
+      expect(constructed).toHaveLength(1);
+      expect(constructed[0]).not.toHaveProperty("postgresFlags");
+    } finally {
+      await started.instance.stop();
+      fs.rmSync(started.dataDir, { recursive: true, force: true });
+    }
+  });
+
+  it("uses fresh loopback-only clusters for both the probe and suite without touching a template", async () => {
+    vi.stubEnv("PAPERCLIP_TEST_POSTGRES_TCP_ONLY", "1");
+    vi.stubEnv("PAPERCLIP_TEST_POSTGRES_TEMPLATE", "1");
+    const scratch = useScratchTmpdir("paperclip-tcp-isolation-");
+    const { ctor, constructed } = makeFakeCtor(0);
+    __setEmbeddedPostgresCtorProviderForTests(async () => ctor);
+    const ensureDatabase = vi.spyOn(client, "ensurePostgresDatabase").mockResolvedValue("created");
+    const migrate = vi.spyOn(client, "applyPendingMigrations").mockResolvedValue(undefined);
+    const closeClients = vi.spyOn(client, "closeRegisteredClients").mockResolvedValue(undefined);
+    try {
+      const root = templateRootDir();
+      const template = path.join(root, computeEmbeddedPostgresTemplateKey());
+      fs.mkdirSync(template, { recursive: true, mode: 0o700 });
+      fs.writeFileSync(path.join(template, "PG_VERSION"), "18\n");
+      const old = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000);
+      fs.utimesSync(template, old, old);
+      const originalStat = fs.statSync(template);
+      resetTemplateState();
+
+      expect(await getEmbeddedPostgresTestSupport()).toEqual({ supported: true });
+      expect(constructed).toHaveLength(1);
+      expect(fs.existsSync(constructed[0].databaseDir)).toBe(false);
+      expect(ensureDatabase).not.toHaveBeenCalled();
+
+      const database = await startEmbeddedPostgresTestDatabase("paperclip-tcp-suite-");
+      try {
+        expect(lastStartMode()).toBe("fresh");
+        expect(constructed).toHaveLength(2);
+        expect(constructed[0].databaseDir).not.toBe(constructed[1].databaseDir);
+        expect(database.connectionString).toContain("@127.0.0.1:");
+        expect(migrate).toHaveBeenCalledWith(database.connectionString);
+        for (const options of constructed) {
+          expect(options.postgresFlags).toEqual(["-c", "listen_addresses=127.0.0.1", "-c", "unix_socket_directories="]);
+          expect(options).toMatchObject({ user: "paperclip", password: "paperclip", persistent: true,
+            initdbFlags: ["--encoding=UTF8", "--locale=C", "--lc-messages=C"] });
+          expect(options).not.toHaveProperty("authMethod");
+        }
+      } finally {
+        await database.cleanup();
+      }
+      expect(closeClients).toHaveBeenCalledWith(database.connectionString);
+      for (const options of constructed) expect(fs.existsSync(options.databaseDir)).toBe(false);
+      expect(fs.readdirSync(root)).toEqual([path.basename(template)]);
+      expect(fs.readdirSync(template)).toEqual(["PG_VERSION"]);
+      expect(fs.statSync(template).mtimeMs).toBe(originalStat.mtimeMs);
+      expect(fs.statSync(template).mode).toBe(originalStat.mode);
+    } finally {
+      scratch.restore();
+    }
+  });
+
+  it("reclaims only the new directory if construction fails before startup", async () => {
+    vi.stubEnv("PAPERCLIP_TEST_POSTGRES_TCP_ONLY", "1");
+    const scratch = useScratchTmpdir("paperclip-tcp-constructor-");
+    try {
+      fs.writeFileSync(path.join(scratch.scratch, "keep"), "unrelated fixture");
+      __setEmbeddedPostgresCtorProviderForTests(async () => {
+        throw new Error("constructor unavailable");
+      });
+      await expect(startWithRetry("paperclip-tcp-failed-")).rejects.toThrow("constructor unavailable");
+      expect(fs.readdirSync(scratch.scratch)).toEqual(["keep"]);
+    } finally {
+      scratch.restore();
     }
   });
 });

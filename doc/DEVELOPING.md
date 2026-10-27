@@ -560,6 +560,16 @@ falls back to the fresh path automatically, so the cache can make a suite
 slower but never fail it or skip it: a migration that cannot apply still fails
 the suite on the fresh path.
 
+For test sandboxes that permit loopback TCP but cannot create Unix sockets,
+set `PAPERCLIP_TEST_POSTGRES_TCP_ONLY=1` for the test command. This test-helper
+option binds only `127.0.0.1`, disables Unix sockets through PostgreSQL startup
+flags, and bypasses the template cache for both support probes and suites.
+Each cluster is freshly initialized; existing templates and database files are
+not reused or modified. Authentication, ownership checks, and production
+database configuration are unchanged. Unset the variable to retain the default
+behavior. The template-cache integration tests are intentionally skipped in
+this mode because the cache is disabled.
+
 ### Task search evaluation
 
 The task search relevance rubric and regression corpus are documented in
