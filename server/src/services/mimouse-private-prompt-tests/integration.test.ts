@@ -2,9 +2,10 @@ import { appendFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { createServer } from "node:net";
 import { createHash, randomUUID } from "node:crypto";
-import { mkdtemp, readFile, writeFile, appendFile, rm, access } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, writeFile, appendFile, rm, access } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import { activityLog, agents, authSessions, authUsers, companies, companyMemberships, companySkills, companySkillVersions,
@@ -12,6 +13,38 @@ import { activityLog, agents, authSessions, authUsers, companies, companyMembers
   ensurePostgresDatabase, applyPendingMigrations, inspectMigrations, reconcilePendingMigrationHistory, instanceSettings, environments } from "@paperclipai/db";
 import { mimousePrivatePromptTests as tests } from "@paperclipai/db/schema/mimouse_private_prompt_tests";
 
+// Only catalog discovery is scoped to the historical checkpoint. SQL reads and
+// the production per-file executor remain real; no migration file is rewritten.
+const migrationCatalog = vi.hoisted(() => ({ checkpoint: null as null | {
+  directory: string; journalPath: string; journal: string; files: Set<string>;
+} }));
+vi.mock("node:fs/promises", async original => {
+  const fs = await original<typeof import("node:fs/promises")>();
+  const { fileURLToPath } = await import("node:url");
+  const { resolve } = await import("node:path");
+  const pathName = (path: unknown) => path instanceof URL ? resolve(fileURLToPath(path)) : typeof path === "string" ? resolve(path) : null;
+  return { ...fs,
+    readFile: (async (...args: Parameters<typeof fs.readFile>) => {
+      const checkpoint = migrationCatalog.checkpoint;
+      if (checkpoint && pathName(args[0]) === checkpoint.journalPath) {
+        if (args[1] !== "utf8") throw Error("Unexpected historical journal read options");
+        return checkpoint.journal;
+      }
+      return fs.readFile(...args);
+    }) as typeof fs.readFile,
+    readdir: (async (...args: Parameters<typeof fs.readdir>) => {
+      const checkpoint = migrationCatalog.checkpoint;
+      if (checkpoint && pathName(args[0]) === checkpoint.directory) {
+        const options = args[1] as { withFileTypes?: boolean; recursive?: boolean; encoding?: string | null } | string | null | undefined;
+        if (!options || typeof options !== "object" || options.withFileTypes !== true || options.recursive ||
+            (options.encoding !== undefined && options.encoding !== "utf8")) throw Error("Unexpected historical catalog read options");
+        const entries = await fs.readdir(checkpoint.directory, { withFileTypes: true });
+        return entries.filter(entry => !entry.isFile() || !entry.name.endsWith(".sql") || checkpoint.files.has(entry.name));
+      }
+      return fs.readdir(...args);
+    }) as typeof fs.readdir,
+  };
+});
 vi.mock("../../adapters/plugin-loader.js", () => ({ buildExternalAdapters: async () => [] }));
 const processBoundary = vi.hoisted(() => ({ inputs: [] as string[], calls: 0, hold: false, releasePath: null as string | null, notifySpawn: null as null | (() => void) }));
 vi.mock("@paperclipai/adapter-utils/execution-target", async original => {
@@ -59,18 +92,62 @@ let actor: { companyId: string; userId: string; sessionId: string };
 let input: any, promptId: string, heartbeat: ReturnType<typeof heartbeatService>;
 const marker = "PRIVATE_PROMPT_LEAK_SENTINEL_9c4d73b1";
 const literal = "  PRIVATE_PROMPT_LEAK_SENTINEL_9c4d73b1 私有原文🧪\r\n{{agent.name}}\n<script>inert</script>  ";
+const checkpointTag = "0357_deep_nehzno";
+// Resolve alongside the imported executor, including linked-worktree installs.
+const migrationsRoot = new URL("./migrations/", pathToFileURL(createRequire(import.meta.url).resolve("@paperclipai/db/client")));
+async function verifyMigrationCheckpointAndUpgrade(connectionString: string) {
+  const journalPath = fileURLToPath(new URL("meta/_journal.json", migrationsRoot));
+  const fullJournalText = await readFile(journalPath, "utf8");
+  const fullJournal = JSON.parse(fullJournalText) as { entries: Array<{ tag: string }> };
+  const checkpointIndex = fullJournal.entries.findIndex(entry => entry.tag === checkpointTag);
+  expect(checkpointIndex).toBeGreaterThanOrEqual(0);
+  expect(fullJournal.entries.filter(entry => entry.tag === checkpointTag)).toHaveLength(1);
+  const entries = fullJournal.entries.slice(0, checkpointIndex + 1);
+  const historicalFiles = entries.map(entry => `${entry.tag}.sql`).sort();
+  const allFiles = (await readdir(migrationsRoot, { withFileTypes: true }))
+    .filter(entry => entry.isFile() && entry.name.endsWith(".sql")).map(entry => entry.name).sort();
+  expect(allFiles).toEqual(fullJournal.entries.map(entry => `${entry.tag}.sql`).sort());
+  recordPg(`migration historical checkpoint: ${checkpointTag}; ${historicalFiles.length}/${allFiles.length} catalog files, not the current full chain`);
+  migrationCatalog.checkpoint = { directory: resolve(fileURLToPath(migrationsRoot)), journalPath,
+    journal: JSON.stringify({ ...fullJournal, entries }), files: new Set(historicalFiles) };
+  try {
+    await applyPendingMigrations(connectionString);
+    const historical = await inspectMigrations(connectionString);
+    expect(historical.status).toBe("upToDate");
+    expect([...historical.availableMigrations].sort()).toEqual(historicalFiles);
+    expect([...historical.appliedMigrations].sort()).toEqual(historicalFiles);
+    await verifyHistoricalMigrationAtomicity(connectionString);
+  } finally {
+    // Also restore discovery on a failed assertion, before fixture teardown.
+    migrationCatalog.checkpoint = null;
+  }
+  expect(await readFile(journalPath, "utf8")).toBe(fullJournalText);
+  const upgrade = await inspectMigrations(connectionString);
+  const laterFiles = allFiles.filter(file => !historicalFiles.includes(file));
+  expect([...upgrade.availableMigrations].sort()).toEqual(allFiles);
+  expect(upgrade.status).toBe(laterFiles.length ? "needsMigrations" : "upToDate");
+  if (upgrade.status === "needsMigrations") expect([...upgrade.pendingMigrations].sort()).toEqual(laterFiles);
+  await applyPendingMigrations(connectionString);
+  const current = await inspectMigrations(connectionString);
+  expect(current.status).toBe("upToDate");
+  expect([...current.availableMigrations].sort()).toEqual(allFiles);
+  expect([...current.appliedMigrations].sort()).toEqual(allFiles);
+  expect(current.journalEntryCount).toBe(allFiles.length);
+  recordPg(`migration full catalog restored: applied ${laterFiles.join(", ") || "no later files"}; all ${allFiles.length} migrations current before service scenarios`);
+}
 /** Only the just-created, marked, empty owned database may exercise this rollback.
  * Never accepts an arbitrary database or drops objects with CASCADE. */
-async function verifyLatestMigrationAtomicity(connectionString: string) {
-  const latestTag = "0357_deep_nehzno", fileName = `${latestTag}.sql`;
+async function verifyHistoricalMigrationAtomicity(connectionString: string) {
+  const fileName = `${checkpointTag}.sql`;
   const markerValue = await readFile(join(home, ".private-prompt-test-fixture"), "utf8");
   const directory = await db.execute(sql`show data_directory`);
   if (markerValue !== "paperclip-private-prompt-disposable-v1" || resolve(String(directory[0].data_directory)) !== resolve(dataDir)) {
     throw Error("Refusing migration rollback outside the owned fixture");
   }
-  const journal = JSON.parse(await readFile(new URL("../../../../packages/db/src/migrations/meta/_journal.json", import.meta.url), "utf8"));
-  expect(journal.entries.at(-1)?.tag).toBe(latestTag);
-  const migration = await readFile(new URL(`../../../../packages/db/src/migrations/${fileName}`, import.meta.url), "utf8");
+  expect(migrationCatalog.checkpoint).not.toBeNull();
+  const journal = JSON.parse(await readFile(new URL("meta/_journal.json", migrationsRoot), "utf8"));
+  expect(journal.entries.at(-1)?.tag).toBe(checkpointTag);
+  const migration = await readFile(new URL(fileName, migrationsRoot), "utf8");
   const hash = createHash("sha256").update(migration).digest("hex");
   expect(await db.select().from(tests)).toHaveLength(0);
   expect(await db.select().from(agentWakeupRequests)).toHaveLength(0);
@@ -153,12 +230,12 @@ beforeAll(async () => {
   const connectionString = `postgres://paperclip:paperclip@127.0.0.1:${port}/paperclip`;
   console.log(`private-prompt fixture: owned data_directory=${dataDir} pid=${pid} port=${port}`);
   await ensurePostgresDatabase(`postgres://paperclip:paperclip@127.0.0.1:${port}/postgres`, "paperclip");
-  await applyPendingMigrations(connectionString);
   db = createDb(connectionString);
   const directory = await db.execute(sql`show data_directory`);
   if (resolve(String(directory[0].data_directory)) !== resolve(dataDir)) throw Error("Owned database mismatch");
-  await verifyLatestMigrationAtomicity(connectionString);
-  // The normal migration chain (including 0357) owns schema creation.
+  await verifyMigrationCheckpointAndUpgrade(connectionString);
+  // Historical 0357 rollback was checked before any later objects existed;
+  // service scenarios now use the complete, current normal migration chain.
   // Never execute the historical SQL review proposal as fixture-only DDL.
   const userId = randomUUID(), sessionId = randomUUID(), now = new Date();
   await db.insert(authUsers).values({ id: userId, name: "Private fixture", email: `${userId}@example.invalid`, createdAt: now, updatedAt: now });

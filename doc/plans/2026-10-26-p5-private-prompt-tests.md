@@ -221,6 +221,28 @@ execute/cancel完整绑定与重复不重派。fixture actor注入不是OIDC/真
 
 该文件保持原有per-file事务，私有表与唤醒唯一索引原子提交。既有 `agent_wakeup_requests` 即使没有新前缀，也需要扫描来创建partial index；不是零锁/零成本在线升级。本文件设置事务局部 `lock_timeout=5s`、每语句 `statement_timeout=120s`，不是整个文件或迁移 advisory lock 等待的总截止。竞争锁、超时或已有重复前缀导致整个文件回滚，不删除历史、不放弃唯一性。大型库如超时，应在维护窗口检查规模/锁与失败原因，另行审核迁移策略，不能直接删除超时或安全检查。迁移安全检查中的这一项精确例外记录上述理由，不覆盖其它规则。
 
+### 0357 历史原子性 checkpoint 与当前全链
+
+真实 PostgreSQL integration fixture 不再假定 0357 永远是最新迁移。只在刚创建、
+带专有 marker 且 `data_directory` 匹配的空自有数据库内，先以生产 executor
+执行截至 `0357_deep_nehzno` 的真实迁移。测试内仅精确过滤该 executor 所在目录的
+`readdir` 与 `_journal.json` 读取；所有 SQL 字节、hash、生产 API 与事务逻辑不变，
+不复制或改写迁移文件，不执行历史 SQL proposal。
+
+这一步明确是**历史 checkpoint，不是最新全链**：仍撤回空 0357 表/索引及其精确
+journal 行，以两个自有重复 wake 验证 `23505` 时整文件/journal 回滚、原行保留、
+reconciliation 不伪记成功；只清理这两个 fixture 行和对应父记录，再成功应用 0357 一次。
+不删除任何后续对象，不用 `CASCADE`，也不 skip 该验证。随后在 `finally` 恢复完整
+catalog，断言后续迁移（当前包括 0358）均 pending，再通过生产 executor 正常升级；
+只有完整 catalog 全部 applied 且 journal 数量匹配，才进入服务场景。日志分别记录
+历史 checkpoint 和全链恢复。既有 marker、目录归属、PID/停止确认守卫保持不变。
+
+集中验证命令（会启动一次自有 PostgreSQL；本次 fixture 修复仅做轻量检查，由中央执行）：
+
+```sh
+pnpm --dir server exec vitest run src/services/mimouse-private-prompt-tests/integration.test.ts
+```
+
 ## 真实 CLI 发现前置（未由 Node 夹具证明）
 
 受限执行不继承宿主 PATH。进程帮助器的 POSIX 固定搜索路径为 `/usr/local/bin:/opt/homebrew/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin`；Windows仅系统目录（System32、Windows、Wbem）。只安装在 `~/.local/bin`、nvm或自定义npm prefix的Claude CLI可能找不到；CLI包装器依赖的Node也必须在受限路径可解析。管理员启用前须核验实际CLI及依赖目标、版本、bare参数行为，并在固定搜索路径提供经核验的安装。不能直接照抄软链接命令掩盖目标或用继承全环境回退。
