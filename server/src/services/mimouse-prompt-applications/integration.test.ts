@@ -50,6 +50,7 @@ beforeAll(async () => {
   for (const key of ["ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "ANTHROPIC_BEDROCK_BASE_URL", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY"]) vi.stubEnv(key, "");
   await mkdir(join(home, "bin")); await writeFile(join(home, "bin", "claude"), "#!/bin/sh\n# Inert hash-only fixture. Must never execute.\nexit 97\n", { mode: 0o700 });
   vi.stubEnv("PATH", `${join(home, "bin")}:${process.env.PATH}`);
+  for (const name of Object.keys(process.env).filter(k => /^(LD_|DYLD_|NODE_OPTIONS$|NODE_PATH$|BASH_ENV$|ENV$)/i.test(k))) vi.stubEnv(name, "");
   vi.stubGlobal("fetch", vi.fn(async () => { throw Error("Network forbidden in controlled prompt fixture"); }));
   const port = await new Promise<number>((accept, reject) => { const socket = createServer(); socket.once("error", reject); socket.listen(0, "127.0.0.1", () => {
     const address = socket.address(); if (!address || typeof address === "string") return reject(Error("Missing loopback port")); socket.close(error => error ? reject(error) : accept(address.port)); }); });

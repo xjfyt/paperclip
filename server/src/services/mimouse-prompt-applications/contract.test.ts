@@ -1,11 +1,11 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { applicationTaskIsNew, assertApplicationAuthEnvironment, assertApplicationProfile } from "./contract.js";
+import { applicationTaskIsNew, assertApplicationExecutionEnvironment, assertApplicationAuthEnvironment, assertApplicationProfile } from "./contract.js";
 import { approvePromptApplicationSchema, promptApplicationRequestQuerySchema } from "@paperclipai/shared/mimouse-prompt-applications";
 const id = "aaaaaaaa-1111-4111-8111-111111111111";
 const config = () => ({ engine: "cli", model: "claude-fixture", cwd: "/fixed", env: { ANTHROPIC_API_KEY: { type: "secret_ref", secretId: id, version: 1 } }, dangerouslySkipPermissions: false });
 afterEach(() => vi.unstubAllEnvs());
 it("accepts the supported profile without changing permissions or source config", () => {
-  for (const k of ["ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "ANTHROPIC_BEDROCK_BASE_URL", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY"]) vi.stubEnv(k, "");
+  for (const k of ["ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "ANTHROPIC_BEDROCK_BASE_URL", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY", ...Object.keys(process.env).filter(k => /^(LD_|DYLD_|NODE_OPTIONS$|NODE_PATH$|BASH_ENV$|ENV$)/i.test(k))]) vi.stubEnv(k, "");
   const input = config(), before = structuredClone(input); expect(assertApplicationProfile("claude_local", input, {})).toMatchObject({ cwd: "/fixed" }); expect(input).toEqual(before);
 });
 for (const name of ["ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "ANTHROPIC_BEDROCK_BASE_URL", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX"]) {
@@ -30,3 +30,11 @@ it("request recovery needs a complete fixed action/target/generation tuple", () 
   expect(promptApplicationRequestQuerySchema.safeParse({ applicationId: id, action: "approve", expectedGeneration: "2" }).success).toBe(true);
   expect(promptApplicationRequestQuerySchema.safeParse({ applicationId: id, action: "force", expectedGeneration: 2 }).success).toBe(false);
 });
+
+for (const key of ["LD_PRELOAD", "LD_LIBRARY_PATH", "LD_AUDIT", "DYLD_INSERT_LIBRARIES", "DYLD_LIBRARY_PATH", "NODE_OPTIONS", "NODE_PATH", "BASH_ENV", "ENV"]) {
+  it(`rejects nonempty execution loader ${key} without clearing it`, () => {
+    const env = { [key]: "external-code" }; expect(() => assertApplicationExecutionEnvironment(env)).toThrow("prompt_application_loader_environment_unsupported");
+    expect(env[key]).toBe("external-code"); expect(() => assertApplicationExecutionEnvironment({ [key]: "" })).not.toThrow();
+  });
+}
+it("keeps ordinary ambient PATH/HOME valid without claiming OS dependency closure", () => expect(() => assertApplicationExecutionEnvironment({ PATH: "/usr/bin", HOME: "/home/test" })).not.toThrow());

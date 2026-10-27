@@ -4,11 +4,12 @@ const object = (value: unknown): Record<string, unknown> => value && typeof valu
 export function assertApplicationProfile(adapterType: string, config: Record<string, unknown>, runtime: Record<string, unknown>) {
   const env = object(config.env), key = object(env.ANTHROPIC_API_KEY);
   assertApplicationAuthEnvironment({ ...process.env, ...env });
+  assertApplicationExecutionEnvironment({ ...process.env, ...env });
   if (adapterType !== "claude_local" || config.engine !== "cli" || typeof config.model !== "string" || !config.model.trim() ||
     typeof config.cwd !== "string" || !path.isAbsolute(config.cwd) ||
     key.type !== "secret_ref" || typeof key.secretId !== "string" || !Number.isSafeInteger(key.version) || Number(key.version) < 1 ||
     (config.command != null && config.command !== "claude") ||
-    Object.keys(env).some(k => ["PATH", "HOME", "NODE_OPTIONS", "BASH_ENV", "ENV"].includes(k)) ||
+    Object.keys(env).some(k => ["PATH", "HOME", "NODE_OPTIONS", "NODE_PATH", "BASH_ENV", "ENV"].includes(k.toUpperCase())) ||
     Object.keys(runtime).some(k => k !== "heartbeat") ||
     ["extraArgs", "args", "agentCommand", "remoteExecution", "aiConnection", "aiRouter", "aiBinding", "filesystemScope", "networkScope", "filesystemSandboxCommand", "filesystemExtraPaths", "networkAllowlist"].some(k => config[k] != null) ||
     Object.keys(env).some(k => /^(ANTHROPIC_AUTH_TOKEN|CLAUDE_CODE_USE_|AWS_|GOOGLE_|VERTEX_)/.test(k))) {
@@ -32,3 +33,11 @@ export class PromptApplicationExecutionBlocked extends HttpError {
   constructor(reason: string) { super(422, reason, { code: "prompt_application_blocked" }); }
 }
 export const applicationExecutionConflict = (reason: string) => new PromptApplicationExecutionBlocked(reason);
+
+/** Hashing the CLI does not pin code loaded from ambient preload/interpreter hooks. */
+export function assertApplicationExecutionEnvironment(env: Record<string, unknown>) {
+  if (Object.entries(env).some(([key, value]) => value != null && value !== "" &&
+    /^(LD_|DYLD_|NODE_OPTIONS$|NODE_PATH$|BASH_ENV$|ENV$)/i.test(key))) {
+    throw unprocessable("prompt_application_loader_environment_unsupported");
+  }
+}

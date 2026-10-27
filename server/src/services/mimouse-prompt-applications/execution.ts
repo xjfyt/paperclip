@@ -1,5 +1,5 @@
 import { assertPromptApplicationWorkspace } from "./workspace.js";
-import { applicationTaskIsNew, applicationExecutionConflict as conflict } from "./contract.js";
+import { applicationTaskIsNew, assertApplicationExecutionEnvironment, applicationExecutionConflict as conflict } from "./contract.js";
 import { applicationAttemptStopped } from "./recovery.js";
 import { and, eq, ne, isNull } from "drizzle-orm";
 import { agents, companySecretVersions, heartbeatRuns, heartbeatRunEvents, issues, mimousePromptRevisions, type Db } from "@paperclipai/db";
@@ -89,6 +89,7 @@ async function currentApplication(tx: PrivatePromptTx, input: HeartbeatRuntimeEx
 }
 async function assertEnvironment(tx: PrivatePromptTx, agent: typeof agents.$inferSelect, env: Record<string, unknown>) {
   assertApplicationAuthEnvironment({ ...process.env, ...env });
+  assertApplicationExecutionEnvironment({ ...process.env, ...env });
   for (const [key, value] of Object.entries((agent.adapterConfig.env ?? {}) as Record<string, unknown>)) {
     if (typeof value === "string") { if (env[key] !== value) throw conflict("prompt_application_effective_environment_drift"); continue; }
     const ref = value as { secretId: string; version: number };

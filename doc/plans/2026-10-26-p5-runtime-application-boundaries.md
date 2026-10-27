@@ -103,6 +103,7 @@ Registry selection 已有幂等请求、head 行锁、expected-head CAS 和当�
 
 - 开关为 `PAPERCLIP_PROMPT_APPLICATIONS_ENABLED=true`；默认关闭。准备、审批、回退和查询都不发起 wake、不替换凭据、不改变已有工具或预算权限。适用范围是已配置 `claude_local` + 显式 `engine:cli` + 绝对 cwd + pinned company/local API-key 的单个 Agent；不是订阅账号自动转 API 计费入口。
 - 支持新建、无 project、无覆写的普通任务首次 fresh 派发。拒绝 native、ACP、remote、conversation、managed router、非固定 secret、外部命令和认证路由冲突；旧 issue、旧排队 run、retry 和已有 session 不追加新正文。若有指令目录，只接受现有受控 managed root，并通过原指令读取授权、路径安全及总大小/深度边界读取摘要。
+- 合并的宿主/配置环境及派发最终环境若包含非空 `LD_*`、`DYLD_*`、`NODE_OPTIONS`、`NODE_PATH`、`BASH_ENV` 或 `ENV` 加载钩子则拒绝，不静默清除。CLI 和部署代码摘要并非操作系统依赖闭包，也不把 `completeContextCaptured:false` 改成已捕获完整运行环境。
 - 首期不支持本地 filesystem/network 安全包装器（包括有效 policy 新增的 wrapper），因为其实际可执行文件身份尚未纳入该合同；发现此配置只明确拒绝，绝不删除既有限制，也不建议关闭安全设置来获得支持。
 - 工作目录策略为 `configured_cwd_with_managed_agent_home_v1`：控制平面只接受实例受控根下按 Agent 身份解析的 `agent_home` 元数据；Claude 既有规则在该场景优先使用已批准的固定配置 cwd。二者不是同一个目录；服务端绑定实例根和配置目录身份、验证真实路径无符号链接，adapter 最后报告实际 cwd 再校验并将其纳入 `effectiveContextHash`。不改既有 resolver 或隔离设置，不宣称逐任务目录隔离；不同任务可能共享固定 cwd 的文件状态，回退不清理历史文件或会话。
 - 首次识别合格新任务时先持久化 server-owned candidate 事件，再进行可能拒绝的 overlay 校验；失败标记不可被回退 head 或 controller 重启抹去。受控失败不安排自动 retry，同 issue 的失败后继明确阻断，不能静默改成不带正文的普通运行；需另建符合条件的新任务。已成功旧任务后续不追加新正文。
