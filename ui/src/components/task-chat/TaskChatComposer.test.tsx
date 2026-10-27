@@ -5,6 +5,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Agent } from "@paperclipai/shared";
 import { agentsApi } from "../../api/agents";
 import { i18n, composerAssigneeMessages } from "../../i18n/composer-assignee-test-resources";
+import recoveryEn from "../../i18n/contributions/commentSubmitRecoveryUi/en.json";
+import recoveryZh from "../../i18n/contributions/commentSubmitRecoveryUi/zh-CN.json";
+import recoveryEs from "../../i18n/contributions/commentSubmitRecoveryUi/es.json";
+import recoveryJa from "../../i18n/contributions/commentSubmitRecoveryUi/ja.json";
+import { validateLocaleMessages } from "../../i18n/locale-validation";
 import { act, StrictMode, useState, type ReactElement } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
@@ -25,6 +30,12 @@ import {
 import { commentSelfAssigneeOption } from "../../lib/composer-assignee-copy";
 import { useTranslation } from "../../i18n";
 import { CommentSubmissionUnknownError } from "../../lib/comment-submit-result";
+
+// Compose only this contribution for focused tests; integration generates runtime locales.
+const commentSubmitRecoveryMessages = { en: recoveryEn, "zh-CN": recoveryZh, es: recoveryEs, ja: recoveryJa };
+for (const [locale, commentSubmitRecoveryUi] of Object.entries(commentSubmitRecoveryMessages)) {
+  i18n.addResourceBundle(locale, "translation", { commentSubmitRecoveryUi }, true, true);
+}
 
 /**
  * MDXEditor-in-jsdom weight (mirrors MarkdownEditor.test.tsx): the real editor
@@ -625,63 +636,131 @@ describe("TaskChatComposer", () => {
     },
   );
 
-  it("fences an unknown save in memory with disabled storage until a successful explicit review and local discard", async () => {
-    const storage = vi
-      .spyOn(Storage.prototype, "setItem")
-      .mockImplementation(() => {
-        throw new Error("Storage disabled");
-      });
-    const onAdd = vi
-      .fn()
-      .mockRejectedValue(new CommentSubmissionUnknownError());
-    const review = vi
-      .fn()
-      .mockRejectedValueOnce(new Error("Refresh unavailable"))
-      .mockResolvedValue(undefined);
-    try {
-      render(
-        <TaskChatComposer
-          onAdd={onAdd}
-          workMode="standard"
-          draftKey="storage-disabled"
-          onReviewConversation={review}
-        />,
-      );
-      typeText("Do not replay this unknown save");
-      pressKey("Enter", { metaKey: true });
-      await flushAsync();
-      await flushAsync();
-      expect(sendButton().disabled).toBe(true);
-      expect(container.textContent).toContain(
-        "couldn’t confirm whether this comment was saved",
-      );
-      pressKey("Enter", { metaKey: true });
-      await flushAsync();
-      expect(onAdd).toHaveBeenCalledTimes(1);
-      const reviewButton = () =>
+  it.each(Object.entries(commentSubmitRecoveryMessages))(
+    "fences an unknown save with disabled storage until explicit review and discard (%s)",
+    async (locale, messages) => {
+      expect(validateLocaleMessages(messages, recoveryEn)).toEqual([]);
+      await i18n.changeLanguage(locale);
+      const storage = vi
+        .spyOn(Storage.prototype, "setItem")
+        .mockImplementation(() => {
+          throw new Error("Storage disabled");
+        });
+      const onAdd = vi.fn().mockRejectedValue(new CommentSubmissionUnknownError());
+      const review = vi
+        .fn()
+        .mockRejectedValueOnce(new Error("Refresh unavailable"))
+        .mockResolvedValue(undefined);
+      const draft = "Do not replay this unknown save — 保留原文";
+      const recoveryButton = (label: string) =>
         Array.from(container.querySelectorAll("button")).find(
-          (button) => button.textContent === "Review conversation",
-        )!;
-      flushSync(() => reviewButton().click());
-      await flushAsync();
-      expect(container.textContent).toContain(
-        "Couldn’t refresh the conversation",
-      );
-      expect(container.textContent).not.toContain(
-        "Discard draft and start new",
-      );
-      flushSync(() => reviewButton().click());
-      await flushAsync();
-      expect(review).toHaveBeenCalledTimes(2);
-      const discard = Array.from(container.querySelectorAll("button")).find(
-        (button) => button.textContent === "Discard draft and start new",
-      )!;
-      flushSync(() => discard.click());
-      expect(editable().textContent).toBe("");
-      expect(onAdd).toHaveBeenCalledTimes(1);
-    } finally {
-      storage.mockRestore();
+          (button) => button.textContent === label,
+        );
+      try {
+        render(
+          <TaskChatComposer onAdd={onAdd} workMode="standard" draftKey="storage-disabled"
+            onReviewConversation={review} />,
+        );
+        typeText(draft);
+        pressKey("Enter", { metaKey: true });
+        await flushAsync();
+        await flushAsync();
+        expect(sendButton().disabled).toBe(true);
+        expect(editable().getAttribute("contenteditable")).toBe("false");
+        expect(editable().textContent).toBe(draft);
+        expect(container.textContent).toContain(messages.unknownSubmission);
+        expect(recoveryButton(messages.discardDraft)).toBeUndefined();
+        pressKey("Enter", { metaKey: true });
+        flushSync(() => sendButton().click());
+        await flushAsync();
+        expect(onAdd).toHaveBeenCalledTimes(1);
+        expect(review).not.toHaveBeenCalled();
+
+        flushSync(() => recoveryButton(messages.reviewConversation)!.click());
+        await flushAsync();
+        expect(container.textContent).toContain(messages.reviewFailed);
+        expect(recoveryButton(messages.discardDraft)).toBeUndefined();
+        expect(sendButton().disabled).toBe(true);
+        expect(editable().textContent).toBe(draft);
+        pressKey("Enter", { metaKey: true });
+        await flushAsync();
+        expect(onAdd).toHaveBeenCalledTimes(1);
+
+        flushSync(() => recoveryButton(messages.reviewConversation)!.click());
+        await flushAsync();
+        expect(review).toHaveBeenCalledTimes(2);
+        expect(container.textContent).not.toContain(messages.reviewFailed);
+        expect(container.textContent).toContain(messages.discardExplanation);
+        expect(editable().textContent).toBe(draft);
+        expect(sendButton().disabled).toBe(true);
+        expect(editable().getAttribute("contenteditable")).toBe("false");
+        pressKey("Enter", { metaKey: true });
+        await flushAsync();
+        expect(onAdd).toHaveBeenCalledTimes(1);
+        flushSync(() => recoveryButton(messages.discardDraft)!.click());
+        expect(editable().textContent).toBe("");
+        expect(editable().getAttribute("contenteditable")).toBe("true");
+        expect(container.textContent).not.toContain(messages.unknownSubmission);
+        expect(onAdd).toHaveBeenCalledTimes(1);
+      } finally {
+        storage.mockRestore();
+      }
+    },
+  );
+
+  it("updates recovery copy across languages without replaying or clearing the retained request", async () => {
+    const key = "localized-unknown-submission";
+    const draft = "Keep **原文** / sin traducir / そのまま\nprovider_request_id: abc-123";
+    const onAdd = vi.fn().mockRejectedValue(new CommentSubmissionUnknownError());
+    let finishReview!: () => void;
+    const review = vi.fn()
+      .mockRejectedValueOnce(new Error("Provider diagnostic: HTTP 503 / trace-id-42"))
+      .mockImplementationOnce(() => new Promise<void>((resolve) => { finishReview = resolve; }));
+    const recoveryButton = (label: string) =>
+      Array.from(container.querySelectorAll("button")).find((button) => button.textContent === label);
+    render(<TaskChatComposer onAdd={onAdd} workMode="standard" draftKey={key} onReviewConversation={review} />);
+    typeText(draft);
+    pressKey("Enter", { metaKey: true });
+    await flushAsync();
+    const attemptId = loadDraftSubmission(key)!.attemptId;
+    expect(onAdd.mock.calls[0]?.[4]).toBe(attemptId);
+
+    for (const stage of ["unreviewed", "failed", "pending", "reviewed"] as const) {
+      const reviewed = stage === "reviewed";
+      const expectedReviewCalls = stage === "unreviewed" ? 0 : stage === "failed" ? 1 : 2;
+      for (const [locale, messages] of Object.entries(commentSubmitRecoveryMessages)) {
+        await act(async () => { await i18n.changeLanguage(locale); });
+        expect(container.textContent).toContain(messages.unknownSubmission);
+        expect(recoveryButton(messages.reviewConversation)).toBeDefined();
+        expect(container.textContent!.includes(messages.reviewFailed)).toBe(stage === "failed");
+        expect(container.textContent!.includes(messages.discardExplanation)).toBe(reviewed);
+        expect(Boolean(recoveryButton(messages.discardDraft))).toBe(reviewed);
+        if (locale !== "en") expect(container.textContent).not.toContain(recoveryEn.unknownSubmission);
+        expect(editable().textContent).toBe(draft);
+        expect(editable().getAttribute("contenteditable")).toBe("false");
+        expect(localStorage.getItem(key)).toBe(draft);
+        expect(loadDraftSubmission(key)).toMatchObject({ attemptId, reviewed });
+        expect(sendButton().disabled).toBe(true);
+        pressKey("Enter", { metaKey: true });
+        flushSync(() => sendButton().click());
+        await flushAsync();
+        expect(onAdd).toHaveBeenCalledTimes(1);
+        expect(review).toHaveBeenCalledTimes(expectedReviewCalls);
+      }
+      if (stage === "unreviewed" || stage === "failed") {
+        flushSync(() => recoveryButton(recoveryJa.reviewConversation)!.click());
+        await flushAsync();
+      } else if (stage === "pending") {
+        await act(async () => { finishReview(); });
+      }
     }
+    flushSync(() => recoveryButton(recoveryJa.discardDraft)!.click());
+    expect(editable().textContent).toBe("");
+    expect(loadDraftSubmission(key)).toBeNull();
+    expect(localStorage.getItem(key)).toBeNull();
+    typeText("Explicit new draft only");
+    expect(sendButton().disabled).toBe(false);
+    expect(onAdd).toHaveBeenCalledTimes(1);
   });
 
   it("restores an in-flight submission as uncertain only for its exact task key", async () => {

@@ -1280,8 +1280,7 @@ export function TaskChatComposer({
           className="mb-3 space-y-2 rounded-md border border-border bg-muted p-3 text-sm"
         >
           <p>
-            We couldn’t confirm whether this comment was saved. It may already
-            be in the conversation. Review it before starting another draft.
+            {mimouseUiT("commentSubmitRecoveryUi.unknownSubmission")}
           </p>
           <Button
             type="button"
@@ -1289,16 +1288,15 @@ export function TaskChatComposer({
             size="sm"
             onClick={reviewUncertainSubmission}
           >
-            Review conversation
+            {mimouseUiT("commentSubmitRecoveryUi.reviewConversation")}
           </Button>
           {reviewError ? (
-            <p>Couldn’t refresh the conversation. Try reviewing it again.</p>
+            <p>{mimouseUiT("commentSubmitRecoveryUi.reviewFailed")}</p>
           ) : null}
           {uncertainSubmission.reviewed ? (
             <>
               <p>
-                Discarding this draft does not remove any saved comment or
-                uploaded file.
+                {mimouseUiT("commentSubmitRecoveryUi.discardExplanation")}
               </p>
               <Button
                 type="button"
@@ -1306,7 +1304,7 @@ export function TaskChatComposer({
                 size="sm"
                 onClick={discardUncertainDraft}
               >
-                Discard draft and start new
+                {mimouseUiT("commentSubmitRecoveryUi.discardDraft")}
               </Button>
             </>
           ) : null}
