@@ -32,7 +32,12 @@ describe("chat connector UI contract", () => {
     expect(issue).toMatch(
       /agentsApi\.retryFailedRun\(\s*failedRun\.agentId,\s*failedRun\.runId,\s*companyId/,
     );
-    expect(issue).toContain("Retry queued");
+    expect(issue).toContain('title: mimouseT("issueFeedbackUi.retryQueued")');
+    expect(issue).toContain('body: mimouseT("issueFeedbackUi.retryQueuedBody")');
+    expect(JSON.parse(source("../../../i18n/contributions/issueFeedbackUi/en.json"))).toMatchObject({
+      retryQueued: "Retry queued",
+      retryQueuedBody: "The exact request will retry when this task is ready.",
+    });
     for (const file of ["Inbox.tsx", "LegacyInbox.tsx"]) {
       const page = source(`../../${file}`);
       expect(page).toMatch(
