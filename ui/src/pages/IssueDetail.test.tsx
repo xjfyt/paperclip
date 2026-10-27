@@ -2789,7 +2789,7 @@ describe("IssueDetail", () => {
     const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
     const file = new File(["original-bytes"], "Original 原名.png", { type: "image/png" });
     Object.defineProperty(input, "files", { configurable: true, value: [file] });
-    await act(async () => input.dispatchEvent(new Event("change", { bubbles: true })));
+    await act(async () => { input.dispatchEvent(new Event("change", { bubbles: true })); });
     await waitForAssertion(() => expect(mockIssuesApi.uploadAttachment).toHaveBeenCalledExactlyOnceWith("company-1", "issue-1", file));
     await waitForAssertion(() => expect(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some((button) => button.disabled && button.textContent?.trim() === messages.uploading)).toBe(true));
     expect(mockFeedbackToast).not.toHaveBeenCalled();

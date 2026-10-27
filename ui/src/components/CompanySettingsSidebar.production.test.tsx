@@ -132,10 +132,10 @@ describe("production CompanySettingsSidebar localization", () => {
     state.sidebar.collapsed = true;
     mocks.slots.mockReturnValue({ slots: [slot, { ...slot, id: "no-route", routePath: undefined }], isLoading: false, errorMessage: null });
     mocks.plugins.mockResolvedValue([plugin("visible"), plugin("sandbox", [
-      { driverKey: "sandbox", kind: "sandbox_provider", displayName: "原始沙箱" },
+      { driverKey: "sandbox", kind: "sandbox_provider", displayName: "原始沙箱", configSchema: { type: "object" } },
     ]), plugin("mixed", [
-      { driverKey: "sandbox", kind: "sandbox_provider", displayName: "原始沙箱" },
-      { driverKey: "runner", kind: "environment_driver", displayName: "Raw runner" },
+      { driverKey: "sandbox", kind: "sandbox_provider", displayName: "原始沙箱", configSchema: { type: "object" } },
+      { driverKey: "runner", kind: "environment_driver", displayName: "Raw runner", configSchema: { type: "object" } },
     ])]);
     await render();
     const selected = link("/ORG/company/settings/members");
