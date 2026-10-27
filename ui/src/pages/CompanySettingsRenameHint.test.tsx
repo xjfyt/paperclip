@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 
+import "../i18n/company-settings-general-test-resources";
+
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
