@@ -2,6 +2,20 @@
 
 记录起始日期：2026-10-25 UTC。基线为 v2026.1023.0 / 1b4c803816e82b0265c8422e1a804327a7ed8c54。开发分支 mimouse。此记录是可审查候选版的本地证据，不是全部需求完成或生产上线证明。
 
+## 4578键：评论身份保护、实际草稿恢复与持久构建观测（2026-10-27）
+
+- 冻结实现及实际server构建印章 `0cf14b8716212920e4b6dd1b8d73b30edaad6be5`。本批接通受权精确job观测、0360请求/回执、持久pending journal及显式close-unknown；仍默认关闭，全部admission及既有六目标矩阵保持blocked。签名声明/产物字节观测不证明可信controller、工作流闭包、平台/测试/代码签名或C3。
+- 修复两条评论路径在onMutate等待期间导航后误用新任务的问题，以及AgentChat跨公司/agent复用创建Promise的问题；目标/身份/正文/附件/nonce/运行设置在调用前冻结，成功/失败/settled与撤回await后均复核actor，失配不重种旧私有缓存、refetch或用新身份取消旧评论。真实host基线红测及修复后回归保留；实际代码和手测见[评论目标与恢复清单](checklists/COMMENT-TARGET-RECOVERY-20261027.md)。
+- 接通真实TaskChatThread→TaskChatComposer恢复句柄，新旧restoreDraft统一boolean：仅安全空稿实际恢复才返回true；保留新正文、附件、忙碌/unknown/排队编辑，不自动发送或重建附件receipt。旧scope/卸载句柄拒绝；撤回反馈不再虚称已恢复。另补评论与Agent概览四语、8种运行状态及数量边界。
+- run.failed仍逐条投递；API拒绝不生效的正数合并窗口，UI禁用并如实显示遗留值，须显式归零后按原CAS保存；不自动改历史策略或已有投递。严重程度及现有coding合并合同不变，不能称全事件摘要已实现。
+- 主线完整UI类型及生产构建通过（`/tmp/paperclip-4578-ui-types-final.log`、`/tmp/paperclip-4578-ui-build.log`）。首轮类型检查发现测试act回调返回Promise<unknown>，修为显式void回调，不改变生产代码或断言。中央13文件**961项UI定向通过**（`/tmp/paperclip-4578-central-ui.log`），仅保留既有jsdom scrollTo未实现提示；这不是实际浏览器/OS输入法验收。
+- shared与DB标准构建通过（`/tmp/paperclip-wired-shared-build.log`、`/tmp/paperclip-wired-db-build.log`），其backend源码与最终冻结一致。标准server全阶段最终通过（`/tmp/paperclip-4578-server-build-final.log`）：主tsc仅串行，141.06秒，最大RSS4838380KiB；未跳过类型/vendor/资源步骤。前次137终止日志`/tmp/paperclip-wired-server-build.log`保留。已停机无PID的临时库和生成缓存完整归档校验，备份从RAM盘迁至磁盘且旧路径保留可读引用；只退役无未提交内容的旧辅助checkout，Git分支/tree与忽略缓存备份均保留，不删除失败证据或PID文件。
+- 标准server配置中央8文件**272项后端定向通过**，另独立新库/正常0360迁移的**29项观测数据库/API通过**（`/tmp/paperclip-4578-central-backend.log`、`/tmp/paperclip-4578-central-pg.log`）。覆盖真实持久session/管理员/隐私校验、精确secret版本、DB时钟租约/配额、同ID重放、旧worker fence及close先赢/活lease拒绝/过期关闭；HTTP与签名材料为fixture，没有真实供应商访问。
+- 全新标记数据库上的编译server入口完整API **164项通过（1.2分钟）**（`/tmp/paperclip-4578-compiled-api.log`）。仍使用workspace TS依赖与源码fixture，不是独立all-dist包证明。0360由正常Drizzle生成快照、DDL逐项一致且无schema drift；5秒锁/30秒语句上限、升级备份及C3条件见[持久观测清单](checklists/BUILD-OBSERVATION-RECEIPTS-20261027.md)。
+- UI pending journal在POST前保存安全selectors并回读；存储拒绝/损坏不降级发送，跨head/session/epoch重挂载优先精确GET原ID，403/404/null不解冻。只有匹配原输入的持久终态才能清理；close为显式本地关闭栅栏，不证明旧请求没发生、也不取消CI。paused可恢复下一待决，但不能新外发；外部清空存储和非跨tab原子性限制如实保留。
+- 四语4578键一致，42项脚本及设计/同步/no-git-push/diff门禁通过。73文件审计372字面量候选、1843动态位置，源码摘要 `1e94623fe753b6ae4d8c5d5cad08cecc4148841f5ad8cbca51b65d4f957cc3c7`；不是全站未译数或覆盖率。**新输入完整UI严格聚合通过：838文件、84批、10792项，零失败/跳过/todo。** 9个完整native-v2 manifest恰好覆盖一次、sourceUnchanged=true，不复用4513旧分片。汇总`/tmp/paperclip-4578-ui-parallel-aggregate-361bea64.log`，证据`test-results/mimouse-ui/aggregate-2026-10-27T13-51-27-410Z-aro2gj/aggregate.json`；UI源码SHA-256 `72b880d55cb5175ca108c5c7c3f4b2fe8146dfb2d6e2dbe366fd36373865e93c`，runtime输入SHA-256 `5202a52e807a7a383924644f4bd8822197eb3124da4febd39e954163c0637331`。
+- 既有组织永久删除仍有Mimouse旧FK/不可变历史清理债务；0360自身cascade通过不代表完整删除链已修复。该问题作为独立后续代码修复，不归咎于缺少账号，也不建议拿真实公司反复试删。原Git目录环境用例、真实浏览器/供应商、受控Runner与六平台验收继续独立保留。
+
 ## 4513键与构建来源观测基础（2026-10-27）
 
 - 当前冻结实现及实际server构建印章 `a68db2c3690a9e79ae0a94cc90b4330396547346`。承接4437键详情反馈/属性/指令，另补实际Agent登录/会话/日志/密钥显隐、任务互动反馈、opt-in列表摘要、附件及排队编辑四语。范围和真实浏览器检查见[新界面清单](checklists/SESSION-COMPOSER-INTERACTIONS-I18N-20261027.md)及[详情清单](checklists/DETAIL-FEEDBACK-INSTRUCTIONS-I18N-20261027.md)。
