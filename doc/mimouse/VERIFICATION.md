@@ -2,6 +2,15 @@
 
 记录起始日期：2026-10-25 UTC。基线为 v2026.1023.0 / 1b4c803816e82b0265c8422e1a804327a7ed8c54。开发分支 mimouse。此记录是可审查候选版的本地证据，不是全部需求完成或生产上线证明。
 
+## 4376键：实际任务输入与运行记录国际化（2026-10-27）
+
+- 冻结源 `c54a4aa9162c0418e0904af99029c5c98b32d832`。补实际模型/effort选择器、组合输入Enter保护、运行记录系统标签/空态、评论未知结果恢复提示；保留模型/品牌/用户原文、草稿、展开/流式身份和未知提交不重放语义。不是全站国际化完成。
+- 中央合并后5文件230项定向UI回归通过；完整UI类型及生产构建通过（`/tmp/paperclip-4376-ui-types-final.log`、`/tmp/paperclip-4376-ui-build.log`）。首次类型检查发现两处不完整Agent测试对象强转，已补完整合法DTO而未放宽生产类型，失败日志保留。
+- 四语4376键一致；42项Node脚本测试、设计token与diff检查通过。新增审计73文件/21例行精确路径/3实际子组件/5宿主关系，无缺失；522字面量候选、1850动态位置是人工清单，不是未译数量。报告及范围说明在[专项清单](checklists/TASK-CHAT-TRANSCRIPT-I18N-20261027.md)。
+- **完整UI：831文件、84批、10301项全部通过**，无失败/跳过/todo；9个完整native-v2 manifest严格聚合、输入未变，没有复用上一批10225项分片。汇总 `/tmp/paperclip-4376-ui-parallel-aggregate-eb758af9.log`，证据 `test-results/mimouse-ui/aggregate-2026-10-27T10-00-59-253Z-5tl5zb/aggregate.json`；UI源码SHA-256 `c8ae97d2bc190a30a0095215da62ee4b4dbe205db32b90bf2aaa04d4a9d60cc9`，runtime输入SHA-256 `0f5e2f61e06ff57c4a6aa76706bf69a690e2f9b3a516d272ea5d0fa117c788fa`。
+- 本批仅UI、审计脚本与文档；`/tmp/paperclip-4376-backend-unchanged.log`确认server/shared/DB/adapter/CLI等后端源码与已发布85c5e693完全一致。沿用其实际server印章ba5b36a9及对应374后端/163API证据，不声称在新Git SHA重新构建后端。
+- 操作系统IME、真实浏览器窄屏/长日志布局、实际断网及存储权限行为待人工验收；单元夹具通过不等于C3。上一批额外Git工作区环境限制继续保留。
+
 ## 4286键与受控成本路由 v2 集成（2026-10-27）
 
 - 冻结实现及实际 server 构建印章：`ba5b36a9e0057dd8f4b2605b27c8583b9c5d197c`。旧 v1 预览仍只读/blocked；新 v2 默认关闭，只支持当前已证明的 builtin Claude 本地、固定公司 API-key、全新无项目任务范围。不是所有 profile、普通工具质量、未来报价或真实供应商费用的证明。
