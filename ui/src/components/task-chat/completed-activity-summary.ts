@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { Brain, CirclePause, Gauge, Layers3 } from "lucide-react";
 import type { TaskChatActivityPhaseItem } from "./task-chat-model";
 import {
@@ -8,34 +9,42 @@ import {
 import { protocolActivityPresentation, providerNoticeSeverity } from "./task-chat-activity-presentation";
 
 type Activity = TaskChatActivityPhaseItem["items"][number];
-const labels: Record<ToolFamily, string> = {
-  terminal: "Ran commands",
-  grep: "Searched files",
-  search: "Searched files",
-  read: "Read files",
-  edit: "Edited files",
-  web: "Searched the web",
-  plan: "Worked on a plan",
-  question: "Requested input",
-  agent: "Worked with agents",
-  safety: "Reviewed safety",
-  image: "Worked with images",
-  wait: "Waited",
-  mcp: "Used connected tools",
-  other: "Used tools",
+type OwnedLabel = readonly [canonical: string, key: string];
+const labels: Record<ToolFamily, OwnedLabel> = {
+  terminal: ["Ran commands", "ranCommands"],
+  grep: ["Searched files", "searchedFiles"],
+  search: ["Searched files", "searchedFiles"],
+  read: ["Read files", "readFiles"],
+  edit: ["Edited files", "editedFiles"],
+  web: ["Searched the web", "searchedWeb"],
+  plan: ["Worked on a plan", "workedPlan"],
+  question: ["Requested input", "requestedInput"],
+  agent: ["Worked with agents", "workedAgents"],
+  safety: ["Reviewed safety", "reviewedSafety"],
+  image: ["Worked with images", "workedImages"],
+  wait: ["Waited", "waited"],
+  mcp: ["Used connected tools", "usedConnectedTools"],
+  other: ["Used tools", "usedTools"],
 };
 
 /** Describe observed activities, never infer success from a finished group. */
 export function completedActivitySummary(items: Activity[]) {
   const categories = new Map<
     string,
-    { label: string; icon: ToolIcon; order: number }
+    { label: string; icon: ToolIcon; order: number; key?: string }
   >();
-  const add = (label: string, icon: ToolIcon, order = 0) => {
+  // Canonical English identities keep deduplication independent of locale.
+  // A missing key means provider-authored text, even if it matches owned English.
+  const add = (label: string, icon: ToolIcon, order = 0, key?: string) => {
     const existing = categories.get(label);
+    // Raw provenance survives a collision without changing the winning icon/order.
+    const displayKey = existing && (existing.key === undefined || key === undefined) ? undefined : key;
     if (!existing || order < existing.order)
-      categories.set(label, { label, icon, order });
+      categories.set(label, { label, icon, order, key: displayKey });
+    else existing.key = displayKey;
   };
+  const addOwned = ([label, key]: OwnedLabel, icon: ToolIcon, order = 0) =>
+    add(label, icon, order, key);
   const tools: Array<{
     family: ToolFamily;
     icon: ToolIcon;
@@ -82,27 +91,27 @@ export function completedActivitySummary(items: Activity[]) {
         }
         const family =
           item.surface === "provider_activity" ? item.family : item.surface;
-        const label =
+        const label: OwnedLabel =
           (
             {
-              research: "Searched the web",
-              plan: "Worked on a plan",
-              delegation: "Worked with agents",
-              artifact: "Worked with artifacts",
-              context: "Managed context",
-              memory: "Checked memory",
-              model_identity: "Checked model settings",
-              review: "Worked in review mode",
-              hook: "Ran hooks",
-              safety: "Reviewed safety",
-              terminal: "Ran commands",
-              wait: "Waited",
-              workspace_change: "Worked on files",
-              workspace_file: "Referenced files",
-              resource: "Added resources",
-            } as Record<string, string>
-          )[family] ?? "Used tools";
-        add(label, p.icon, order);
+              research: ["Searched the web", "searchedWeb"],
+              plan: ["Worked on a plan", "workedPlan"],
+              delegation: ["Worked with agents", "workedAgents"],
+              artifact: ["Worked with artifacts", "workedArtifacts"],
+              context: ["Managed context", "managedContext"],
+              memory: ["Checked memory", "checkedMemory"],
+              model_identity: ["Checked model settings", "checkedModelSettings"],
+              review: ["Worked in review mode", "workedReview"],
+              hook: ["Ran hooks", "ranHooks"],
+              safety: ["Reviewed safety", "reviewedSafety"],
+              terminal: ["Ran commands", "ranCommands"],
+              wait: ["Waited", "waited"],
+              workspace_change: ["Worked on files", "workedFiles"],
+              workspace_file: ["Referenced files", "referencedFiles"],
+              resource: ["Added resources", "addedResources"],
+            } as Record<string, OwnedLabel>
+          )[family] ?? ["Used tools", "usedTools"];
+        addOwned(label, p.icon, order);
       }
     }
   }
@@ -110,16 +119,18 @@ export function completedActivitySummary(items: Activity[]) {
     const strongest = notices.find((notice) => notice.severity === "error")
       ?? notices.find((notice) => notice.severity === "warning")
       ?? notices[0]!;
-    const label = notices.length === 1
-      ? strongest.summary || "Received a provider update"
+    const fallback: OwnedLabel = notices.length === 1
+      ? ["Received a provider update", "providerUpdate"]
       : strongest.severity === "error"
-        ? "Provider error reported"
+        ? ["Provider error reported", "providerError"]
         : strongest.severity === "warning"
-          ? "Provider warning reported"
-          : "Received provider updates";
+          ? ["Provider warning reported", "providerWarning"]
+          : ["Received provider updates", "providerUpdates"];
     // One notice category leaves room for actual work. Keep warnings and errors
     // visible when the compact label truncates other activity categories.
-    add(label, strongest.icon, strongest.severity === "info" ? notices[0]!.order : -1);
+    const order = strongest.severity === "info" ? notices[0]!.order : -1;
+    if (notices.length === 1 && strongest.summary) add(strongest.summary, strongest.icon, order);
+    else addOwned(fallback, strongest.icon, order);
   }
   const completedFamilies = new Set(
     tools.filter((tool) => tool.completed).map((tool) => tool.family),
@@ -127,33 +138,40 @@ export function completedActivitySummary(items: Activity[]) {
   // Merge repeated families and retries. Terminal is an action, not an exit-status claim.
   for (const tool of tools) {
     const succeeded = completedFamilies.has(tool.family);
-    const label =
+    const label: OwnedLabel =
       tool.family === "read" && !succeeded
-        ? "Checked files"
+        ? ["Checked files", "checkedFiles"]
         : tool.family === "edit" && !succeeded
-          ? "Worked on files"
+          ? ["Worked on files", "workedFiles"]
           : labels[tool.family];
-    add(label, tool.icon, tool.order);
+    addOwned(label, tool.icon, tool.order);
   }
   if (!categories.size) {
     if (items.some((item) => item.kind === "thinking"))
-      add("Thought through the task", Brain);
+      addOwned(["Thought through the task", "thought"], Brain);
     else if (items.some((item) => item.kind === "marker"))
-      add("Activity stopped", CirclePause);
-    else add("Recorded usage", Gauge);
+      addOwned(["Activity stopped", "stopped"], CirclePause);
+    else addOwned(["Recorded usage", "usage"], Gauge);
   }
   const values = [...categories.values()].sort((a, b) => a.order - b.order);
-  const join = (parts: string[]) =>
-    parts
-      .map((p, i) => (i ? p.charAt(0).toLowerCase() + p.slice(1) : p))
-      .join(", ");
-  const fullLabel = join(values.map((v) => v.label));
+  const join = (parts: typeof values, continuation = false) =>
+    parts.map((part, index) => {
+      if (!part.key) return part.label;
+      const continued = continuation || index > 0;
+      return t(`completedActivityUi.${part.key}`, {
+        context: continued ? "continuation" : undefined,
+        defaultValue: continued ? part.label.charAt(0).toLowerCase() + part.label.slice(1) : part.label,
+      });
+    }).join(t("completedActivityUi.separator", { defaultValue: ", " }));
+  const fullLabel = join(values);
   return {
     label:
       values.length > 3
-        ? `${join(values.slice(0, 2).map((v) => v.label))}, and more`
+        ? t("completedActivityUi.andMore", { activities: join(values.slice(0, 2)), defaultValue: "{{activities}}, and more" })
         : fullLabel,
     fullLabel,
+    // Only owned phrases use sentence-case variants; never lowercase raw notices.
+    accessibleLabel: join(values, true),
     icon: values.length === 1 ? values[0].icon : Layers3,
   };
 }

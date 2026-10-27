@@ -313,7 +313,7 @@ export function TaskChatRunnerActivityGroup({
   item: TaskChatActivityPhaseItem;
   defaultExpanded?: boolean;
 }) {
-  useTranslation();
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useTaskChatExpansion(
     item.id,
     defaultExpanded,
@@ -325,7 +325,10 @@ export function TaskChatRunnerActivityGroup({
   const latest = activities.at(-1);
   const summary = completedActivitySummary(activities);
   const SummaryIcon = summary.icon;
-  const countLabel = `${activities.length} ${activities.length === 1 ? "activity" : "activities"}`;
+  const countLabel = t("completedActivityUi.count", {
+    count: activities.length,
+    defaultValue: activities.length === 1 ? "{{count}} activity" : "{{count}} activities",
+  });
   return (
     <section
       className="flex min-w-0 flex-col gap-2"
@@ -352,7 +355,14 @@ export function TaskChatRunnerActivityGroup({
             onClick={() => setExpanded(!expanded)}
             aria-expanded={expanded}
             aria-controls={expanded ? historyId : undefined}
-            aria-label={`${expanded ? "Collapse" : "Expand"} ${item.active ? countLabel : `${summary.fullLabel.toLowerCase()} (${countLabel})`}`}
+            aria-label={item.active
+              ? t(expanded ? "completedActivityUi.collapseActive" : "completedActivityUi.expandActive", {
+                countLabel, defaultValue: expanded ? "Collapse {{countLabel}}" : "Expand {{countLabel}}",
+              })
+              : t(expanded ? "completedActivityUi.collapseCompleted" : "completedActivityUi.expandCompleted", {
+                summary: summary.accessibleLabel, countLabel,
+                defaultValue: expanded ? "Collapse {{summary}} ({{countLabel}})" : "Expand {{summary}} ({{countLabel}})",
+              })}
           >
             {!item.active ? (
               <span
@@ -388,7 +398,7 @@ export function TaskChatRunnerActivityGroup({
             <ol
               id={historyId}
               className="flex min-w-0 flex-col gap-1"
-              aria-label="Activity history"
+              aria-label={t("completedActivityUi.history", { defaultValue: "Activity history" })}
               data-testid="task-chat-runner-activity-list"
             >
               {activities.map((activity, index) => (
