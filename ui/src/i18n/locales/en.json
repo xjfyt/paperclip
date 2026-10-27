@@ -46,6 +46,17 @@
       "raw": "raw"
     }
   },
+  "agentOverviewUi": {
+    "titleNotSet": "Not set",
+    "moreSkills_one": "+{{count}} more",
+    "moreSkills_other": "+{{count}} more",
+    "moreTasks_one": "+{{count}} more task",
+    "moreTasks_other": "+{{count}} more tasks",
+    "runStatus": {
+      "scheduled_retry": "Retry scheduled",
+      "interrupted": "Interrupted"
+    }
+  },
   "agentSelect": {
     "placeholder": "Select agent…",
     "empty": "No agents yet.",

@@ -46,6 +46,17 @@
       "raw": "fuente"
     }
   },
+  "agentOverviewUi": {
+    "titleNotSet": "Sin definir",
+    "moreSkills_one": "+{{count}} habilidad más",
+    "moreSkills_other": "+{{count}} habilidades más",
+    "moreTasks_one": "+{{count}} tarea más",
+    "moreTasks_other": "+{{count}} tareas más",
+    "runStatus": {
+      "scheduled_retry": "Reintento programado",
+      "interrupted": "Interrumpida"
+    }
+  },
   "agentSelect": {
     "placeholder": "Seleccionar Agent…",
     "empty": "Todavía no hay Agents.",

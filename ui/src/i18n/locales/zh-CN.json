@@ -46,6 +46,17 @@
       "raw": "源码"
     }
   },
+  "agentOverviewUi": {
+    "titleNotSet": "未设置",
+    "moreSkills_one": "另有 {{count}} 项技能",
+    "moreSkills_other": "另有 {{count}} 项技能",
+    "moreTasks_one": "另有 {{count}} 个任务",
+    "moreTasks_other": "另有 {{count}} 个任务",
+    "runStatus": {
+      "scheduled_retry": "已安排重试",
+      "interrupted": "已中断"
+    }
+  },
   "agentSelect": {
     "placeholder": "选择 Agent…",
     "empty": "暂无 Agent。",
