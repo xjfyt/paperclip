@@ -421,6 +421,8 @@ type CommentMutationTarget = {
   recordRecent: boolean;
 };
 
+type CommentMutationScope = Omit<CommentMutationTarget, "resolveIssueRef" | "recordRecent">;
+
 type CommentMutationInput = {
   target: CommentMutationTarget;
   body: string;
@@ -3997,18 +3999,15 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
   }, [issueId, queryClient]);
 
   const removeCommentFromCache = useCallback(
-    (commentId: string) => {
-      queryClient.setQueryData<
-        InfiniteData<IssueComment[], string | null> | undefined
-      >(queryKeys.issues.comments(issueId!), (current) => {
-        if (!current) return current;
-        return {
-          ...current,
-          pages: removeIssueCommentFromPages(current.pages, commentId),
-        };
-      });
+    (commentId: string, refs: ReadonlySet<string>) => {
+      for (const ref of refs) {
+        queryClient.setQueryData<InfiniteData<IssueComment[], string | null> | undefined>(
+          queryKeys.issues.comments(ref),
+          (current) => current ? { ...current, pages: removeIssueCommentFromPages(current.pages, commentId) } : current,
+        );
+      }
     },
-    [issueId, queryClient],
+    [queryClient],
   );
 
   const clearCommentHashIfCurrent = useCallback(
@@ -4043,7 +4042,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
   );
 
   const restoreQueuedCommentDraft = useCallback((body: string) => {
-    commentComposerRef.current?.restoreDraft(body);
+    return commentComposerRef.current?.restoreDraft(body) ?? false;
   }, []);
 
   const invalidateIssueCollections = useCallback(() => {
@@ -4718,12 +4717,12 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
     },
   });
 
-  const isCommentTargetActor = (target: CommentMutationTarget) => {
+  const isCommentTargetActor = (target: CommentMutationScope) => {
     const current = queryClient.getQueryData<Awaited<ReturnType<typeof authApi.getSession>>>(queryKeys.auth.session);
     return current !== undefined && (current?.user?.id ?? current?.session?.userId ?? null) === target.userId &&
       (current?.session?.id ?? null) === target.sessionId;
   };
-  const assertCommentTargetActor = (target: CommentMutationTarget) => {
+  const assertCommentTargetActor = (target: CommentMutationScope) => {
     if (!isCommentTargetActor(target)) throw new Error(mimouseT("issueRecoveryUi.taskNotLoaded"));
   };
   const clearCommentMutationOptimisticState = (optimisticId: string | null | undefined) => {
@@ -4731,7 +4730,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
     setOptimisticComments((current) => current.filter((entry) => entry.clientId !== optimisticId));
     cancelledQueuedOptimisticCommentIdsRef.current.delete(optimisticId);
   };
-  const isCurrentCommentTarget = (target: CommentMutationTarget) => {
+  const isCurrentCommentTarget = (target: CommentMutationScope) => {
     const current = currentCommentScopeRef.current;
     if (!current.active || current.companyId !== target.companyId || current.userId !== target.userId || current.sessionId !== target.sessionId) return false;
     if (target.conversationAgentId) {
@@ -4744,10 +4743,10 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       current.issueId === target.issue.id || current.issueRef === target.issueRef
     );
   };
-  const commentTargetKey = (target: CommentMutationTarget) =>
+  const commentTargetKey = (target: CommentMutationScope) =>
     target.issueRef ?? target.resolvedIssueRef ?? target.issue.id;
   const invalidateCommentTarget = (
-    target: CommentMutationTarget,
+    target: CommentMutationScope,
     kind: "detail" | "thread" | "runs" | "collections" | "treeControl",
   ) => {
     if (kind === "collections") {
@@ -5374,27 +5373,32 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
   });
 
   const cancelQueuedComment = useMutation({
-    mutationFn: async ({ commentId }: { commentId: string }) =>
-      issuesApi.cancelComment(issueId!, commentId),
-    onSuccess: (comment) => {
+    mutationFn: async ({ target, commentId }: { target: CommentMutationScope; commentId: string }) => {
+      assertCommentTargetActor(target);
+      return issuesApi.cancelComment(commentTargetKey(target), commentId);
+    },
+    onSuccess: (comment, { target }) => {
       setLocallyQueuedCommentRunIds((current) => {
         if (!current.has(comment.id)) return current;
         const next = new Map(current);
         next.delete(comment.id);
         return next;
       });
-      removeCommentFromCache(comment.id);
-      restoreQueuedCommentDraft(comment.body);
-      invalidateIssueDetail();
-      invalidateIssueThreadLazily();
-      invalidateIssueCollections();
+      if (!isCommentTargetActor(target)) return;
+      removeCommentFromCache(comment.id, target.cacheRefs);
+      invalidateCommentTarget(target, "detail");
+      invalidateCommentTarget(target, "thread");
+      invalidateCommentTarget(target, "collections");
+      if (!isCurrentCommentTarget(target)) return;
+      const restored = restoreQueuedCommentDraft(comment.body);
       pushToast({
         title: mimouseT("issueCommentFeedbackUi.queuedCancelled"),
-        body: mimouseT("issueCommentFeedbackUi.draftRestored"),
+        ...(restored ? { body: mimouseT("issueCommentFeedbackUi.draftRestored") } : {}),
         tone: "success",
       });
     },
-    onError: (err) => {
+    onError: (err, { target }) => {
+      if (!isCommentTargetActor(target) || !isCurrentCommentTarget(target)) return;
       pushToast({
         title: mimouseT("issueCommentFeedbackUi.cancelFailed"),
         body:
@@ -5434,6 +5438,13 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
 
   const handleCancelQueuedComment = useCallback(
     (commentId: string) => {
+      if (!issue) return;
+      const target: CommentMutationScope = {
+        issue: { ...issue }, issueRef: issueId, companyId: issue.companyId,
+        userId: currentUserId, sessionId: session?.session?.id ?? null,
+        conversationAgentId: conversation?.agent.id ?? null, cacheRefs: new Set(issueCacheRefs),
+      };
+      if (!isCommentTargetActor(target) || !isCurrentCommentTarget(target)) return;
       if (commentId.startsWith("optimistic-")) {
         const snapshot = optimisticCommentsSnapshotRef.current;
         const next = takeOptimisticIssueComment(snapshot.comments, commentId);
@@ -5451,19 +5462,20 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
           takeOptimisticIssueComment(current, commentId).comments,
         );
         if (cancelledCommentBody) {
-          restoreQueuedCommentDraft(cancelledCommentBody);
+          const restored = restoreQueuedCommentDraft(cancelledCommentBody);
           pushToast({
             title: mimouseT("issueCommentFeedbackUi.queuedCancelled"),
-            body: mimouseT("issueCommentFeedbackUi.draftRestored"),
+            ...(restored ? { body: mimouseT("issueCommentFeedbackUi.draftRestored") } : {}),
             tone: "success",
           });
         }
         return;
       }
 
-      cancelQueuedComment.mutate({ commentId });
+      cancelQueuedComment.mutate({ target, commentId });
     },
-    [cancelQueuedComment, restoreQueuedCommentDraft, pushToast, issue?.id],
+    [cancelQueuedComment, restoreQueuedCommentDraft, pushToast, issue, issueId,
+      currentUserId, session?.session?.id, conversation?.agent.id, issueCacheRefs],
   );
 
   const feedbackVoteMutation = useMutation({

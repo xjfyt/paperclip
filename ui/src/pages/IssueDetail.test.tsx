@@ -2018,6 +2018,90 @@ describe("IssueDetail", () => {
     expect(mockIssuesApi.cancelComment).toHaveBeenCalledTimes(3);
   });
 
+  it.each(Object.entries(issueCommentFeedbackMessages))("does not claim draft restoration when the composer preserves its current state in %s", async (locale, messages) => {
+    const comment = createIssueComment({ id: "queued-preserved", body: "Canceled original text" });
+    mockIssuesApi.listComments.mockResolvedValue([comment]);
+    mockIssuesApi.cancelComment.mockResolvedValue(comment);
+    mockRestoreCommentDraft.mockReturnValue(false);
+    await renderFeedbackHost(locale);
+    await act(async () => feedbackThread().onCancelQueued?.(comment.id));
+    await waitForAssertion(() => expect(mockFeedbackToast).toHaveBeenCalledExactlyOnceWith({ title: messages.queuedCancelled, tone: "success" }));
+    expect(mockRestoreCommentDraft).toHaveBeenCalledExactlyOnceWith(comment.body);
+    const receipt = createDeferred<IssueComment>();
+    mockIssuesApi.addComment.mockReset().mockReturnValue(receipt.promise);
+    mockFeedbackToast.mockClear();
+    mockRestoreCommentDraft.mockClear();
+    let posting: Promise<unknown> | void;
+    await act(async () => { posting = feedbackThread().onAdd("Pending original text", undefined, undefined, [], "request-kept"); });
+    let optimisticId = "";
+    await waitForAssertion(() => { optimisticId = feedbackThread().comments.find((entry) => entry.body === "Pending original text")?.id ?? ""; expect(optimisticId).toMatch(/^optimistic-/); });
+    const cancel = feedbackThread().onCancelQueued!;
+    await act(async () => { cancel(optimisticId); cancel(optimisticId); });
+    expect(mockRestoreCommentDraft).toHaveBeenCalledExactlyOnceWith("Pending original text");
+    expect(mockFeedbackToast).toHaveBeenCalledExactlyOnceWith({ title: messages.queuedCancelled, tone: "success" });
+    const saved = createIssueComment({ id: "saved-preserved", body: "Pending original text", clientRequestId: "request-kept" });
+    await act(async () => { receipt.resolve(saved); await posting; });
+    expect(mockIssuesApi.addComment).toHaveBeenCalledExactlyOnceWith("PAP-1", saved.body, undefined, undefined, [], "request-kept");
+    expect(mockIssuesApi.cancelComment).toHaveBeenLastCalledWith(saved.issueId, saved.id);
+  });
+
+  it.each(["success", "error"] as const)("does not restore or notify a new task when persisted withdrawal settles (%s)", async (outcome) => {
+    const source = createIssue();
+    const destination = createIssue({ id: "issue-2", identifier: "PAP-2", title: "New task", companyId: "company-2" });
+    const comment = createIssueComment({ id: "queued-old", body: "Original task draft" });
+    const destinationComment = createIssueComment({ id: comment.id, issueId: destination.id, companyId: destination.companyId, body: "New task body" });
+    const pending = createDeferred<IssueComment>();
+    mockIssuesApi.listComments.mockResolvedValue([comment]);
+    mockIssuesApi.cancelComment.mockReturnValue(pending.promise);
+    await renderFeedbackHost("en", source);
+    const oldCancel = feedbackThread().onCancelQueued!;
+    await act(async () => oldCancel(comment.id));
+    await waitForAssertion(() => expect(mockIssuesApi.cancelComment).toHaveBeenCalledExactlyOnceWith("PAP-1", comment.id));
+    mockIssuesApi.get.mockImplementation(async (ref: string) => ref === "PAP-2" ? destination : source);
+    mockIssuesApi.listComments.mockImplementation(async (ref: string) => ref === "PAP-2" ? [destinationComment] : []);
+    queryClient.setQueryData(queryKeys.issues.detail("PAP-2"), destination);
+    mockRouteParams.issueId = "PAP-2";
+    mockLocation.pathname = "/issues/PAP-2";
+    await act(async () => root.render(<QueryClientProvider client={queryClient}><IssueDetail /></QueryClientProvider>));
+    await waitForAssertion(() => expect(container.textContent).toContain(destination.title));
+    const invalidation = vi.spyOn(queryClient, "invalidateQueries");
+    await act(async () => { if (outcome === "success") pending.resolve(comment); else pending.reject(new Error("Original task withdrawal failed")); });
+    await flushReact();
+    expect(mockRestoreCommentDraft).not.toHaveBeenCalled();
+    expect(mockFeedbackToast).not.toHaveBeenCalled();
+    expect(queryClient.getQueryData<InfiniteData<IssueComment[], string | null>>(queryKeys.issues.comments("PAP-2"))?.pages.flat()).toEqual([destinationComment]);
+    expect(invalidation.mock.calls.some(([filters]) => filters?.queryKey?.some((key) => ["PAP-2", "issue-2", "company-2"].includes(String(key))))).toBe(false);
+    await act(async () => oldCancel(comment.id));
+    expect(mockIssuesApi.cancelComment).toHaveBeenCalledTimes(1);
+  });
+
+  it.each((["user", "session"] as const).flatMap((change) => (["success", "error"] as const).map((outcome) => ({ change, outcome }))))("fences persisted withdrawal after actor changes ($change, $outcome)", async ({ change, outcome }) => {
+    const originalSession: AuthSession = { session: { id: "session-1", userId: "user-1" }, user: { id: "user-1", name: null, email: null, image: null }, sentryDsn: null };
+    const comment = createIssueComment({ id: "private-queued", body: "Old actor private draft" });
+    const pending = createDeferred<IssueComment>();
+    mockAuthApi.getSession.mockResolvedValue(originalSession);
+    mockIssuesApi.listComments.mockResolvedValue([comment]);
+    mockIssuesApi.cancelComment.mockReturnValue(pending.promise);
+    await renderFeedbackHost("en");
+    const oldCancel = feedbackThread().onCancelQueued!;
+    await act(async () => oldCancel(comment.id));
+    await waitForAssertion(() => expect(mockIssuesApi.cancelComment).toHaveBeenCalledExactlyOnceWith("PAP-1", comment.id));
+    await act(async () => root.render(null));
+    queryClient.clear();
+    const userId = change === "user" ? "user-2" : "user-1";
+    queryClient.setQueryData<AuthSession>(queryKeys.auth.session, { ...originalSession, session: { id: "session-2", userId }, user: { ...originalSession.user, id: userId } });
+    const writeCache = vi.spyOn(queryClient, "setQueryData");
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+    await act(async () => { if (outcome === "success") pending.resolve(comment); else pending.reject(new Error("Old actor raw cancel error")); });
+    await flushReact();
+    expect(writeCache).not.toHaveBeenCalled();
+    expect(invalidate).not.toHaveBeenCalled();
+    expect(mockRestoreCommentDraft).not.toHaveBeenCalled();
+    expect(mockFeedbackToast).not.toHaveBeenCalled();
+    await act(async () => oldCancel(comment.id));
+    expect(mockIssuesApi.cancelComment).toHaveBeenCalledTimes(1);
+  });
+
   it.each(Object.entries(issueCommentFeedbackMessages))("localizes optimistic withdrawal feedback on both receipt paths in %s", async (locale, messages) => {
     const run = commentFeedbackRun();
     mockHeartbeatsApi.liveRunsForIssue.mockResolvedValue([run]);
