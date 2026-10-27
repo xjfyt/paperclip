@@ -1,0 +1,12 @@
+{
+  "goalExtraArguments": "{{command}} は追加の引数を受け付けません。",
+  "createFailed": "タスクを作成できませんでした。もう一度お試しください。",
+  "separateTask": "継続的な実行目標が必要な作業には、別のタスクを作成してください。",
+  "removeAttachments": "/goal を使用する前に添付ファイルを削除してください。",
+  "unsupportedGoal": "このエージェントはセッション目標に対応していません。",
+  "selectAgent": "セッション目標を開始する前にエージェントを選択してください。",
+  "goalFailed": "目標の操作を適用できませんでした。",
+  "missingFileUrl": "アップロードでファイル URL が返されませんでした",
+  "verifySupport": "セッション開始時に対応状況を確認します。",
+  "pursueAcrossTurns": "複数のターンにわたって作業を進めます。"
+}

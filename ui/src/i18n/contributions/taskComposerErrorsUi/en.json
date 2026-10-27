@@ -1,0 +1,12 @@
+{
+  "goalExtraArguments": "{{command}} does not accept extra arguments.",
+  "createFailed": "Failed to create task. Try again.",
+  "separateTask": "Create a separate task for work that needs an ongoing execution goal.",
+  "removeAttachments": "Remove attachments before using /goal.",
+  "unsupportedGoal": "Session goals are unsupported by this agent.",
+  "selectAgent": "Select an agent before starting a session goal.",
+  "goalFailed": "The goal action could not be applied.",
+  "missingFileUrl": "Upload did not return a file URL",
+  "verifySupport": "Support will be verified when the session starts.",
+  "pursueAcrossTurns": "Pursue work across turns."
+}

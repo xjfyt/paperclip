@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 
+import { taskComposerErrorMessages } from "../../i18n/task-composer-errors-test-resources";
 import { composerModelMessages } from "../../i18n/composer-model-test-resources";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { Agent } from "@paperclipai/shared";
+import type { Agent, IssueAttachment, RunnerGoalCapability } from "@paperclipai/shared";
 import { agentsApi } from "../../api/agents";
 import { i18n, composerAssigneeMessages } from "../../i18n/composer-assignee-test-resources";
 import recoveryEn from "../../i18n/contributions/commentSubmitRecoveryUi/en.json";
@@ -1973,6 +1974,183 @@ describe("TaskChatComposer", () => {
     expect(editable().textContent).toBe(`[/deploy](${SLASH_HREF}) `);
   });
 
+  describe("localized local errors and goal hints", () => {
+    const messages = taskComposerErrorMessages;
+    const capability: RunnerGoalCapability = {
+      availability: "available", verified: true, actions: ["set", "pause", "resume", "clear"],
+      autonomousUpdates: true, persistentAcrossResume: true, maxObjectiveChars: 4_000,
+      tokenBudgetControl: true, usageReporting: true,
+    };
+    const nextLanguage = (locale: string) => locale === "ja" ? "es" : "ja";
+    const alertText = () => container.querySelector('[role="alert"]')?.textContent;
+
+    it.each(Object.entries(messages))("validates complete templates and canonical parser errors in %s", async (locale, copy) => {
+      expect(validateLocaleMessages(copy, messages.en)).toEqual([]);
+      expect(copy.removeAttachments).toContain("/goal");
+      await i18n.changeLanguage(locale);
+      for (const command of ["edit", "pause", "resume", "clear"]) {
+        expect(parseRunnerGoalCommand(`/goal ${command} extra 用户`)).toEqual({
+          matched: true, error: `/goal ${command} does not accept extra arguments.`,
+          errorDescriptor: { key: "taskComposerErrorsUi.goalExtraArguments", values: { command: `/goal ${command}` } },
+        });
+      }
+    });
+
+    it.each(Object.entries(messages))("refreshes local goal guards without clearing draft or sending in %s", async (locale, copy) => {
+      for (const guard of ["conversation", "arguments", "attachments", "no-handler", "unsupported", "select-agent"] as const) {
+        await i18n.changeLanguage(locale);
+        const onAdd = vi.fn(), onRunnerGoalCommand = vi.fn(), onPendingAssigneeChange = vi.fn();
+        const onAttachImage = vi.fn<(file: File) => Promise<IssueAttachment | void>>().mockResolvedValue(undefined);
+        render(<TaskChatComposer key={guard} onAdd={onAdd} workMode="standard" draftKey={`guard:${guard}`}
+          conversationMode={guard === "conversation"} onAttachImage={onAttachImage}
+          runnerGoalCapability={{ ...capability, availability: guard === "unsupported" ? "unsupported" : "available" }}
+          onRunnerGoalCommand={guard === "no-handler" ? undefined : onRunnerGoalCommand}
+          enableReassign={guard === "select-agent"} reassignOptions={[{ id: "agent:a1", label: "用户 Agent" }]}
+          currentAssigneeValue="" onPendingAssigneeChange={onPendingAssigneeChange} />);
+        if (guard === "select-agent") {
+          flushSync(() => container.querySelector<HTMLButtonElement>('[data-testid="task-chat-composer-assignee"]')!.click());
+          await flushAsync();
+          const option = [...document.body.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent?.trim() === "用户 Agent")!;
+          flushSync(() => option.click()); await flushAsync();
+          expect(onPendingAssigneeChange).toHaveBeenCalledExactlyOnceWith("agent:a1");
+        }
+        if (guard === "attachments") {
+          pasteFiles([new File(["data"], "用户 attachment.txt", { type: "text/plain" })]); await flushAsync();
+        }
+        const body = guard === "arguments" ? "/goal pause extra 用户" : "/goal Original objective 用户";
+        typeText(body); pressKey("Enter", { metaKey: true }); await flushAsync();
+        const key = guard === "conversation" ? "separateTask" : guard === "arguments" ? "goalExtraArguments"
+          : guard === "attachments" ? "removeAttachments" : guard === "select-agent" ? "selectAgent" : "unsupportedGoal";
+        expect(alertText()).toBe(copy[key].replace("{{command}}", "/goal pause"));
+        const editor = editable();
+        const next = nextLanguage(locale);
+        await act(async () => { await i18n.changeLanguage(next); });
+        expect(alertText()).toBe(messages[next][key].replace("{{command}}", "/goal pause"));
+        expect(editable()).toBe(editor);
+        expect(editable().textContent).toBe(body);
+        expect(onAdd).not.toHaveBeenCalled();
+        expect(onRunnerGoalCommand).not.toHaveBeenCalled();
+        expect(onAttachImage).toHaveBeenCalledTimes(guard === "attachments" ? 1 : 0);
+        expect(onPendingAssigneeChange).toHaveBeenCalledTimes(guard === "select-agent" ? 1 : 0);
+        if (guard === "attachments") expect(container.textContent).toContain("用户 attachment.txt");
+      }
+    });
+
+    it.each(Object.entries(messages))("keeps raw provider reasons even when equal to the local fallback in %s", async (locale) => {
+      for (const handler of [false, true]) {
+        await i18n.changeLanguage(locale);
+        const onAdd = vi.fn(), onRunnerGoalCommand = vi.fn();
+        render(<TaskChatComposer key={String(handler)} onAdd={onAdd} workMode="standard"
+          runnerGoalCapability={{ ...capability, availability: "unsupported", reason: messages.en.unsupportedGoal }}
+          onRunnerGoalCommand={handler ? onRunnerGoalCommand : undefined} />);
+        typeText("/goal Objective 用户"); pressKey("Enter", { metaKey: true }); await flushAsync();
+        expect(alertText()).toBe(messages.en.unsupportedGoal);
+        await act(async () => { await i18n.changeLanguage(nextLanguage(locale)); });
+        expect(alertText()).toBe(messages.en.unsupportedGoal);
+        expect(editable().textContent).toBe("/goal Objective 用户");
+        expect(onAdd).not.toHaveBeenCalled(); expect(onRunnerGoalCommand).not.toHaveBeenCalled();
+      }
+    });
+
+    it.each(Object.entries(messages))("preserves goal payload and raw/local async failures across language changes in %s", async (locale, copy) => {
+      for (const raw of [false, true]) {
+        await i18n.changeLanguage(locale);
+        let rejectGoal!: (reason: unknown) => void;
+        const onAdd = vi.fn();
+        const onRunnerGoalCommand = vi.fn().mockReturnValue(new Promise<void>((_, reject) => { rejectGoal = reject; }));
+        render(<TaskChatComposer key={String(raw)} onAdd={onAdd} workMode="standard" runnerGoalCapability={capability} onRunnerGoalCommand={onRunnerGoalCommand} />);
+        typeText("/goal Original objective 用户"); pressKey("Enter", { metaKey: true }); await flushAsync();
+        expect(onRunnerGoalCommand).toHaveBeenCalledExactlyOnceWith({ action: "create", objective: "Original objective 用户" });
+        const next = nextLanguage(locale);
+        await act(async () => { await i18n.changeLanguage(next); rejectGoal(raw ? new Error(messages.en.goalFailed) : { code: "unknown" }); });
+        expect(alertText()).toBe(raw ? messages.en.goalFailed : messages[next].goalFailed);
+        await act(async () => { await i18n.changeLanguage(locale); });
+        expect(alertText()).toBe(raw ? messages.en.goalFailed : copy.goalFailed);
+        expect(editable().textContent).toBe("/goal Original objective 用户");
+        expect(onRunnerGoalCommand).toHaveBeenCalledTimes(1); expect(onAdd).not.toHaveBeenCalled();
+      }
+    });
+
+    it.each(Object.entries(messages))("retains failed creation values and raw errors in %s", async (locale, copy) => {
+      for (const raw of [false, true]) {
+        await i18n.changeLanguage(locale);
+        let rejectCreate!: (reason: unknown) => void;
+        const onSubmit = vi.fn().mockReturnValue(new Promise<void>((_, reject) => { rejectCreate = reject; }));
+        const onChange = vi.fn(), onSelectFiles = vi.fn(), onRunSettingsChange = vi.fn();
+        const value = "Original **用户 task**";
+        render(<TaskChatComposer key={String(raw)} workMode="standard" creation={{ value, onSubmit, onChange,
+          submitLabel: "Create 用户", onSelectFiles, runSettings: null, onRunSettingsChange }} />);
+        await act(async () => sendButton().click());
+        expect(onSubmit).toHaveBeenCalledExactlyOnceWith(value, "standard", null);
+        const editor = editable();
+        const next = nextLanguage(locale);
+        await act(async () => { await i18n.changeLanguage(next); });
+        expect(sendButton().disabled).toBe(true);
+        expect(onSubmit).toHaveBeenCalledTimes(1);
+        await act(async () => rejectCreate(raw ? new Error(messages.en.createFailed) : null));
+        expect(alertText()).toBe(raw ? messages.en.createFailed : messages[next].createFailed);
+        await act(async () => { await i18n.changeLanguage(locale); });
+        expect(alertText()).toBe(raw ? messages.en.createFailed : copy.createFailed);
+        expect(editable()).toBe(editor); expect(editable().textContent).toBe(value);
+        expect(onSubmit).toHaveBeenCalledTimes(1); expect(onChange).not.toHaveBeenCalled();
+        expect(onSelectFiles).not.toHaveBeenCalled(); expect(onRunSettingsChange).not.toHaveBeenCalled();
+      }
+    });
+
+    it.each(Object.entries(messages))("distinguishes missing upload URLs from identical raw errors without retrying in %s", async (locale, copy) => {
+      for (const route of ["file", "inline", "fallback"] as const) for (const raw of [false, true]) {
+        const inline = route !== "file";
+        await i18n.changeLanguage(locale);
+        const onAdd = vi.fn();
+        const onAttachImage = vi.fn<(file: File) => Promise<IssueAttachment | void>>();
+        if (raw) onAttachImage.mockRejectedValue(new Error(messages.en.missingFileUrl));
+        else onAttachImage.mockResolvedValue(undefined);
+        const onImageUpload = vi.fn<(file: File) => Promise<string>>();
+        if (raw) onImageUpload.mockRejectedValue(new Error(messages.en.missingFileUrl));
+        else onImageUpload.mockResolvedValue("");
+        render(<TaskChatComposer key={`${route}:${raw}`} onAdd={onAdd} workMode="standard"
+          onAttachImage={route === "fallback" ? undefined : onAttachImage}
+          onImageUpload={route === "fallback" ? onImageUpload : undefined} />);
+        typeText("Original draft 用户");
+        const file = new File(["bytes"], inline ? "用户 image.png" : "用户 file.txt", { type: inline ? "image/png" : "text/plain" });
+        if (inline) {
+          await act(async () => { await expect(mdxEditorMockState.imagePluginOptions!.imageUploadHandler!(file)).rejects.toThrow(messages.en.missingFileUrl); });
+        } else { pasteFiles([file]); await flushAsync(); }
+        expect(container.textContent).toContain(raw ? messages.en.missingFileUrl : copy.missingFileUrl);
+        const next = nextLanguage(locale);
+        await act(async () => { await i18n.changeLanguage(next); });
+        expect(container.textContent).toContain(raw ? messages.en.missingFileUrl : messages[next].missingFileUrl);
+        expect(container.textContent).toContain(file.name); expect(editable().textContent).toBe("Original draft 用户");
+        expect(sendButton().disabled).toBe(true);
+        expect(route === "fallback" ? onImageUpload : onAttachImage).toHaveBeenCalledExactlyOnceWith(file);
+        expect(route === "fallback" ? onAttachImage : onImageUpload).not.toHaveBeenCalled();
+        expect(onAdd).not.toHaveBeenCalled();
+        const remove = container.querySelector<HTMLButtonElement>('button[aria-label="' + i18n.t("taskComposerUi.removeAttachment", { name: file.name }) + '"]')!;
+        await act(async () => remove.click());
+        expect(sendButton().disabled).toBe(false); expect(onAdd).not.toHaveBeenCalled();
+      }
+    });
+
+    it.each(Object.entries(messages))("refreshes direct goal autocomplete hints without altering the command in %s", async (locale, copy) => {
+      for (const hint of ["verifySupport", "pursueAcrossTurns", "unsupportedGoal", "raw"] as const) {
+        await i18n.changeLanguage(locale);
+        const onAdd = vi.fn(), onRunnerGoalCommand = vi.fn();
+        render(<TaskChatComposer key={hint} onAdd={onAdd} workMode="standard" onRunnerGoalCommand={onRunnerGoalCommand}
+          runnerGoalCapability={hint === "verifySupport" ? null : { ...capability,
+            availability: hint === "pursueAcrossTurns" ? "available" : "unsupported",
+            reason: hint === "raw" ? messages.en.unsupportedGoal : null }} />);
+        typeText("/go"); await placeCaretAtEnd();
+        const option = autocompleteOption("/goal");
+        expect(option.textContent).toContain(hint === "raw" ? messages.en.unsupportedGoal : copy[hint]);
+        const next = nextLanguage(locale);
+        await act(async () => { await i18n.changeLanguage(next); });
+        expect(autocompleteOption("/goal").textContent).toContain(hint === "raw" ? messages.en.unsupportedGoal : messages[next][hint]);
+        expect(editable().textContent).toBe("/go");
+        expect(onAdd).not.toHaveBeenCalled(); expect(onRunnerGoalCommand).not.toHaveBeenCalled();
+      }
+    });
+  });
+
   describe("/goal action commands", () => {
     const capability = {
       availability: "available" as const,
@@ -2030,6 +2208,7 @@ describe("TaskChatComposer", () => {
       expect(parseRunnerGoalCommand("/goal pause extra")).toEqual({
         matched: true,
         error: "/goal pause does not accept extra arguments.",
+        errorDescriptor: { key: "taskComposerErrorsUi.goalExtraArguments", values: { command: "/goal pause" } },
       });
       expect(parseRunnerGoalCommand("[goal](/goal Ship it)")).toEqual({
         matched: false,

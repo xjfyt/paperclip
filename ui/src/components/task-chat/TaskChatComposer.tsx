@@ -186,10 +186,34 @@ export type RunnerGoalComposerCommand =
   | { action: "resume" }
   | { action: "clear" };
 
+type GoalArgumentsError = {
+  key: "taskComposerErrorsUi.goalExtraArguments";
+  values: { command: string };
+};
+
+type ComposerLocalActionError = GoalArgumentsError | {
+  key:
+    | "taskComposerErrorsUi.createFailed"
+    | "taskComposerErrorsUi.separateTask"
+    | "taskComposerErrorsUi.removeAttachments"
+    | "taskComposerErrorsUi.unsupportedGoal"
+    | "taskComposerErrorsUi.selectAgent"
+    | "taskComposerErrorsUi.goalFailed";
+  values?: never;
+};
+
+// Keep the upload rejection contract, but identify locally generated errors by
+// source rather than matching a provider's potentially identical English text.
+class MissingUploadUrlError extends Error {
+  constructor() {
+    super("Upload did not return a file URL");
+  }
+}
+
 export type ParsedRunnerGoalCommand =
   | { matched: false }
   | { matched: true; command: RunnerGoalComposerCommand }
-  | { matched: true; error: string };
+  | { matched: true; error: string; errorDescriptor: GoalArgumentsError };
 
 function normalizeRunnerGoalCommandText(value: string): string {
   const trimmed = value.trim();
@@ -231,6 +255,10 @@ export function parseRunnerGoalCommand(value: string): ParsedRunnerGoalCommand {
       return {
         matched: true,
         error: `/goal ${subcommand} does not accept extra arguments.`,
+        errorDescriptor: {
+          key: "taskComposerErrorsUi.goalExtraArguments",
+          values: { command: `/goal ${subcommand}` },
+        },
       };
     }
     return {
@@ -306,6 +334,11 @@ function AssigneeIdentityAvatar({
   return null;
 }
 
+const attachmentErrorKeys = {
+  unsupportedFileType: "taskComposerUi.unsupportedFileType",
+  missingFileUrl: "taskComposerErrorsUi.missingFileUrl",
+} as const;
+
 type ComposerAttachment = {
   id: string;
   attachmentId?: string;
@@ -314,7 +347,7 @@ type ComposerAttachment = {
   size?: number;
   status: "uploading" | "attached" | "error";
   error?: string;
-  errorKey?: "unsupportedFileType";
+  errorKey?: keyof typeof attachmentErrorKeys;
   /** Set once uploaded; the submit path appends `[name](contentPath)` lines. */
   contentPath?: string;
 };
@@ -439,7 +472,7 @@ export function TaskChatComposer({
   const runSettings = creation ? creation.runSettings : localRunSettings;
   const setRunSettings = creation ? creation.onRunSettingsChange : setLocalRunSettings;
   useEffect(() => setLocalRunSettings(null), [draftKey, currentAssigneeValue]);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | ComposerLocalActionError | null>(null);
   const [attachments, setAttachmentState] = useState<ComposerAttachment[]>(
     () =>
       draftKey
@@ -678,13 +711,13 @@ export function TaskChatComposer({
     name: "Goal",
     description:
       !runnerGoalCapability || runnerGoalCapability.verified === false
-        ? "Support will be verified when the session starts."
-        : "Pursue work across turns.",
+        ? mimouseUiT("taskComposerErrorsUi.verifySupport")
+        : mimouseUiT("taskComposerErrorsUi.pursueAcrossTurns"),
     aliases: ["goal", "pursue", "continue"],
     disabled: goalUnavailable && runnerGoalCapability !== null,
     disabledReason:
       runnerGoalCapability?.reason ??
-      "Session goals are unsupported by this agent.",
+      mimouseUiT("taskComposerErrorsUi.unsupportedGoal"),
   };
 
   function updatePendingAssignee(value: string | null) {
@@ -720,7 +753,7 @@ export function TaskChatComposer({
       const url = onAttachImage
         ? attachment?.contentPath
         : await onImageUpload?.(file);
-      if (!url) throw new Error("Upload did not return a file URL");
+      if (!url) throw new MissingUploadUrlError();
       if (!attachmentsRef.current.some((item) => item.id === id))
         throw new Error("Attachment was removed");
       setAttachments((prev) =>
@@ -743,7 +776,8 @@ export function TaskChatComposer({
             ? {
                 ...item,
                 status: "error",
-                error: err instanceof Error ? err.message : undefined,
+                error: err instanceof Error && !(err instanceof MissingUploadUrlError) ? err.message : undefined,
+                errorKey: err instanceof MissingUploadUrlError ? "missingFileUrl" : undefined,
               }
             : item,
         ),
@@ -776,7 +810,7 @@ export function TaskChatComposer({
       }
       const attachment = await onAttachImage(file);
       if (!attachment?.contentPath)
-        throw new Error("Upload did not return a file URL");
+        throw new MissingUploadUrlError();
       const name = attachment?.originalFilename ?? file.name;
       setAttachments((prev) =>
         prev.map((item) =>
@@ -798,7 +832,8 @@ export function TaskChatComposer({
             ? {
                 ...item,
                 status: "error",
-                error: err instanceof Error ? err.message : undefined,
+                error: err instanceof Error && !(err instanceof MissingUploadUrlError) ? err.message : undefined,
+                errorKey: err instanceof MissingUploadUrlError ? "missingFileUrl" : undefined,
               }
             : item,
         ),
@@ -917,7 +952,7 @@ export function TaskChatComposer({
       try {
         await creation.onSubmit(bodyRef.current, pendingMode, runSettings);
       } catch (error) {
-        setActionError(error instanceof Error ? error.message : "Failed to create task. Try again.");
+        setActionError(error instanceof Error ? error.message : { key: "taskComposerErrorsUi.createFailed" });
       } finally {
         submittingRef.current = false;
         setSubmitting(false);
@@ -939,22 +974,22 @@ export function TaskChatComposer({
       ? ({ matched: false } as const)
       : parseRunnerGoalCommand(submittedBody);
     if (goalCommand.matched && conversationMode) {
-      setActionError("Create a separate task for work that needs an ongoing execution goal.");
+      setActionError({ key: "taskComposerErrorsUi.separateTask" });
       return;
     }
     if (goalCommand.matched) {
       if ("error" in goalCommand) {
-        setActionError(goalCommand.error);
+        setActionError(goalCommand.errorDescriptor);
         return;
       }
       if (attachmentsRef.current.length > 0) {
-        setActionError("Remove attachments before using /goal.");
+        setActionError({ key: "taskComposerErrorsUi.removeAttachments" });
         return;
       }
       if (!onRunnerGoalCommand) {
         setActionError(
           runnerGoalCapability?.reason ??
-            "Session goals are unsupported by this agent.",
+            { key: "taskComposerErrorsUi.unsupportedGoal" },
         );
         return;
       }
@@ -964,7 +999,7 @@ export function TaskChatComposer({
       ) {
         setActionError(
           runnerGoalCapability.reason ??
-            "Session goals are unsupported by this agent.",
+            { key: "taskComposerErrorsUi.unsupportedGoal" },
         );
         return;
       }
@@ -974,7 +1009,7 @@ export function TaskChatComposer({
         if (hasReassignment && goalCommand.command.action !== "focus") {
           const reassignment = parseAssigneeValue(assigneeValue);
           if (!reassignment?.assigneeAgentId || !onRunnerGoalReassign) {
-            setActionError("Select an agent before starting a session goal.");
+            setActionError({ key: "taskComposerErrorsUi.selectAgent" });
             return;
           }
           await onRunnerGoalReassign(reassignment);
@@ -992,7 +1027,7 @@ export function TaskChatComposer({
         setActionError(
           error instanceof Error
             ? error.message
-            : "The goal action could not be applied.",
+            : { key: "taskComposerErrorsUi.goalFailed" },
         );
       }
       return;
@@ -1409,7 +1444,7 @@ export function TaskChatComposer({
               role="alert"
               data-testid={creation ? "task-chat-create-error" : "task-chat-goal-error"}
             >
-              {actionError}
+              {typeof actionError === "string" ? actionError : mimouseUiT(actionError.key, actionError.values)}
             </p>
           ) : null}
 
@@ -1449,7 +1484,7 @@ export function TaskChatComposer({
                         {attachment.status === "uploading"
                           ? mimouseUiT("taskComposerUi.uploading")
                           : attachment.status === "error"
-                            ? (attachment.error ?? mimouseUiT(attachment.errorKey === "unsupportedFileType" ? "taskComposerUi.unsupportedFileType" : "taskComposerUi.uploadFailed"))
+                            ? (attachment.error ?? mimouseUiT(attachment.errorKey ? attachmentErrorKeys[attachment.errorKey] : "taskComposerUi.uploadFailed"))
                             : [kind.label, sizeLabel]
                                 .filter(Boolean)
                                 .join(" · ")}

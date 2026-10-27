@@ -1,0 +1,12 @@
+{
+  "goalExtraArguments": "{{command}} 不接受额外参数。",
+  "createFailed": "创建任务失败，请重试。",
+  "separateTask": "对于需要持续执行目标的工作，请创建单独的任务。",
+  "removeAttachments": "使用 /goal 前请移除附件。",
+  "unsupportedGoal": "此智能体不支持会话目标。",
+  "selectAgent": "启动会话目标前请选择智能体。",
+  "goalFailed": "无法应用目标操作。",
+  "missingFileUrl": "上传未返回文件 URL",
+  "verifySupport": "会话开始时将验证是否支持。",
+  "pursueAcrossTurns": "跨轮次持续推进工作。"
+}

@@ -1,0 +1,12 @@
+{
+  "goalExtraArguments": "{{command}} no acepta argumentos adicionales.",
+  "createFailed": "No se pudo crear la tarea. Inténtalo de nuevo.",
+  "separateTask": "Crea una tarea independiente para el trabajo que necesite un objetivo de ejecución continuo.",
+  "removeAttachments": "Elimina los archivos adjuntos antes de usar /goal.",
+  "unsupportedGoal": "Este agente no admite objetivos de sesión.",
+  "selectAgent": "Selecciona un agente antes de iniciar un objetivo de sesión.",
+  "goalFailed": "No se pudo aplicar la acción del objetivo.",
+  "missingFileUrl": "La carga no devolvió una URL de archivo",
+  "verifySupport": "La compatibilidad se verificará al iniciar la sesión.",
+  "pursueAcrossTurns": "Continúa el trabajo a lo largo de varios turnos."
+}
