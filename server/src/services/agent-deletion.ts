@@ -1,7 +1,7 @@
 import { and, eq, or, sql } from "drizzle-orm";
 import { agents, agentApiKeys, agentRuntimeState, agentTaskSessions, agentWakeupRequests, activityLog,
   budgetReservations, heartbeatRunEvents, heartbeatRuns, issueExecutionDecisions, issues, issueComments,
-  principalPermissionGrants, type Db } from "@paperclipai/db";
+  principalPermissionGrants, runtimeRoutingBindings, type Db } from "@paperclipai/db";
 import { conflict } from "../errors.js";
 import { issueThreadInteractionService } from "./issue-thread-interactions.js";
 
@@ -12,6 +12,14 @@ export async function deleteAgentDependencies(tx: Db, companyId: string, id: str
   )).limit(1);
   if (decisionHold) throw conflict("Wait for active decisions or resolve their unknown charges in Costs before deleting this agent", {
     code: "agent_decision_accounting_pending",
+  });
+  // Lifecycle purge holds the agent FOR UPDATE until this transaction ends.
+  // Retain every binding state, including selections without a run yet.
+  const [routingBinding] = await tx.select({ id: runtimeRoutingBindings.id }).from(runtimeRoutingBindings).where(and(
+    eq(runtimeRoutingBindings.companyId, companyId), eq(runtimeRoutingBindings.selectedAgentId, id),
+  )).limit(1);
+  if (routingBinding) throw conflict("Agent cannot be deleted because runtime routing evidence still references it", {
+    code: "agent_runtime_routing_evidence_retained",
   });
   await issueThreadInteractionService(tx).cancelPendingForDeletedAddressee(companyId, id);
   await tx.update(agents).set({ reportsTo: null }).where(eq(agents.reportsTo, id));
