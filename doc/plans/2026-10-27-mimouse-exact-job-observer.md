@@ -73,3 +73,5 @@ read-only review identified identity-number rounding ambiguity; the scanner
 fix and regression tests are included. All HTTP responses are injected fixtures
 and signing keys are ephemeral in-memory tests. No full server/workspace
 typecheck/build or real GitLab/controller/C3 checks were run.
+
+Subsequent central integration: standard server/shared builds and the 128-test standard server suite passed, plus 163 compiled-entry API tests. See [VERIFICATION](../mimouse/VERIFICATION.md) for the exact build stamp and limitations; this does not qualify real GitLab/controller/C3 or wire the library into production.

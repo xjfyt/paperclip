@@ -2,6 +2,26 @@
 
 记录起始日期：2026-10-25 UTC。基线为 v2026.1023.0 / 1b4c803816e82b0265c8422e1a804327a7ed8c54。开发分支 mimouse。此记录是可审查候选版的本地证据，不是全部需求完成或生产上线证明。
 
+## 4513键与构建来源观测基础（2026-10-27）
+
+- 当前冻结实现及实际server构建印章 `a68db2c3690a9e79ae0a94cc90b4330396547346`。承接4437键详情反馈/属性/指令，另补实际Agent登录/会话/日志/密钥显隐、任务互动反馈、opt-in列表摘要、附件及排队编辑四语。范围和真实浏览器检查见[新界面清单](checklists/SESSION-COMPOSER-INTERACTIONS-I18N-20261027.md)及[详情清单](checklists/DETAIL-FEEDBACK-INSTRUCTIONS-I18N-20261027.md)。
+- 完整UI类型检查及生产构建通过（`/tmp/paperclip-4513-ui-types-final.log`、`/tmp/paperclip-4513-ui-build-final.log`）；首轮类型检查发现测试Element.title类型不精确，改为HTMLSpanElement泛型，未修改生产类型。中央10文件784项定向通过（`/tmp/paperclip-4513-focused-ui.log`）。4437旧源码契约失败保留并修复，不沿用旧全量结果。
+- 四语4513键一致；42项Node脚本、设计token、palette/cliplab、no-git-push与diff检查通过。73文件审计399字面量候选/1841动态位置，无缺失；这些不是剩余译文数或全站覆盖率。审计源码摘要 `7f92e5d36772954d5cd9938decf417cde0608113e53973c7e29277fb79b285da`。
+- 标准server构建全部阶段通过（`/tmp/paperclip-4513-server-build-cleaned.log`），主TypeScript仅串行，133.36秒、最大RSS4832836KiB；未跳过类型、vendor或资源步骤。shared完整构建通过（`/tmp/paperclip-4513-shared-build.log`）。首次辅助调用缺本地tsc PATH以127退出，补同等本地bin后重跑；第二轮137终止。仅对10个官方pg_controldata确认shut down且无PID的旧probe做完整归档/逐文件校验后释放约335MiB，未删除任何PID/失败证据，最终整链重跑通过。失败日志均保留，不将137武断归因某个源码错误。
+- 新独立标记数据库上的编译server入口完整API **163项通过（46.8秒）**（`/tmp/paperclip-4513-compiled-api.log`）。仍使用workspace TS依赖及源码fixture，不是all-dist安装证明，也未连接真实模型/通知/供应商。
+- 新构建来源库按DSSE PAE/Ed25519验证in-toto Statement v1/SLSA v1原始字节及当前运维策略；精确GitLab job观测器固定六GET、实际产物哈希/大小、有界流/总期限、前后身份核验。首次独立审查发现JSON数字舍入可能模糊job ID，已在原始词法阶段拒绝并补回归。中央4文件128项通过，标准server配置同组128项也通过（`/tmp/paperclip-4513-build-provenance.log`、`/tmp/paperclip-4513-standard-provenance.log`）。
+- 两模块均默认关闭且未接生产路由/DB/台账，测试HTTP与密钥均为隔离fixture。所有观测admission保持blocked；签名声明/字节观测不等于可信controller隔离、工作流闭包、平台/测试或产物代码签名。现有六目标矩阵全部blocked，真实GitLab/C3、当前凭据/运维信任根及持久接线仍未完成；见[构建来源清单](checklists/BUILD-PROVENANCE-OBSERVER-20261027.md)。
+- **完整UI新输入严格聚合通过：834文件、84批、10570项，零失败/跳过/todo。** 9个完整native-v2 manifest恰好覆盖一次、sourceUnchanged=true；不复用4437失败轮或4376旧manifest。汇总`/tmp/paperclip-4513-ui-parallel-aggregate-f3d8ae75.log`，证据`test-results/mimouse-ui/aggregate-2026-10-27T12-04-30-516Z-xkKamo/aggregate.json`；UI源码SHA-256 `85304bf26f7db2a6c0b0500b7687c00d4192fd0d37e40d5177ffb09b70500f52`，runtime输入SHA-256 `c26b9b6130e7de89d19dcd525397679bd9054a1a15699dad47c7eac78e6877e9`。真实浏览器IME/剪贴板/窄屏与上一批额外Git目录环境限制仍独立保留。
+
+## 4437键：任务详情反馈、属性状态与指令编辑器（2026-10-27，未单独发布）
+
+- 冻结源 `fb68632df65b07458d6e46219d36e887c7eeb48f`。三片改动位于实际 IssueDetail、IssueProperties 和 AgentDetail PromptsTab；保留属性 canonical 标识、用户正文、路径、revision/hash 与原始服务端错误。恢复事件处理由未消费的 mutateAsync 改为 mutate，继续走既有 onError，不改恢复请求身份或重试政策。
+- 完整UI类型检查和生产构建通过（`/tmp/paperclip-4437-ui-types.log`、`/tmp/paperclip-4437-ui-build.log`），保留正常bundle警告。中央5文件467项定向回归通过，未出现未处理拒绝（`/tmp/paperclip-4437-focused-ui-final.log`）。首次中央命令在错误cwd寻找vitest.setup.ts导致5套件零测试失败；改为UI目录使用原配置重跑通过，未改源码或放宽断言。
+- 四语4437键一致；42项Node脚本、设计token、palette/cliplab同步、no-git-push与diff门禁通过。73文件审计为467字面量候选、1841动态位置，无缺失实际路径；候选不是未译数量，也不是全站覆盖率。
+- 完整UI首轮未通过：74批已有完整通过manifest，第71–80分片在第79批遇到1项旧源码契约失败（该批54通过/1失败，第80批未执行）。`chat-ui-contract`仍要求IssueDetail源码硬编码英文Retry queued；修复7222d8f6同时核验实际翻译调用及原英文资源，保留重试身份断言。2文件186项定向复验通过。失败日志与manifest保留在`run-2026-10-27T11-27-52-945Z-raCu54`；该轮不声称完整通过，也不复用其分片到4513新输入。
+- 本批后端源码与4377912b一致（`/tmp/paperclip-4437-backend-unchanged.log`为0字节）。沿用此前后端构建印章ba5b36a9与限定范围374后端/163API证据，不声称本Git SHA重新构建后端。并行的构建来源基础库未合入本批。
+- [专项手测清单](checklists/DETAIL-FEEDBACK-INSTRUCTIONS-I18N-20261027.md)列出真实中/日IME、富文本选区、系统剪贴板、窄屏与响应丢失步骤；MDX textarea及剪贴板mock不证明真实浏览器通过。此前Git目录环境限制继续保留。
+
 ## 4376键：实际任务输入与运行记录国际化（2026-10-27）
 
 - 冻结源 `c54a4aa9162c0418e0904af99029c5c98b32d832`。补实际模型/effort选择器、组合输入Enter保护、运行记录系统标签/空态、评论未知结果恢复提示；保留模型/品牌/用户原文、草稿、展开/流式身份和未知提交不重放语义。不是全站国际化完成。

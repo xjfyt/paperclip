@@ -117,3 +117,5 @@ typecheck results are recorded in the implementation handoff; C3 is not implied.
 The focused provenance/matrix/GitLab run passed 71 tests. Isolated strict
 `noEmit` checking of the new shared, server and typed test sources passed.
 Full server/workspace typecheck/build and real CI/controller checks were not run.
+
+Subsequent central integration: standard server/shared builds and the 128-test standard server suite passed, plus 163 compiled-entry API tests. See [VERIFICATION](../mimouse/VERIFICATION.md) for the exact build stamp and limitations; this does not qualify real GitLab/controller/C3 or wire the library into production.
