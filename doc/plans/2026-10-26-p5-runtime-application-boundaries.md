@@ -2,13 +2,13 @@
 
 日期：2026-10-26
 
-状态：**2026-10-27 已接通首期受控应用代码与无网络进程边界；专属真实数据库/完整运行验收仍在进行。2026-10-26 23:22 UTC 用户委托决定开发设计，不构成实际运行授权。** 本文说明持续改进闭环中尚未完成的发布环节，不启用模型、任务或自动发布。现有 UI 冻结边界不变。
+状态：**首期有界普通运行时应用已实现并通过受控C2验证，默认关闭；真实CLI/工具/计费待实测。** 用户委托决定开发方案不构成真实模型执行授权。下文“实施前缺口/未来验收”保留初始设计记录，当前实现以文末“首期已实现路径”与最终验证记录为准。
 
 ## 2026-10-26 实现前基线与设计分析（历史）
 
 以下至“方案依据与非通用部分”为实现前基线与原验收要求，不代表当前完成状态；当前路径及限制见末节。
 
-### 已有能力与未完成项
+### 实施前的能力与缺口（历史设计背景）
 
 现有能力包括不可变提示词 revision、人工 selection 及其回退、受限私有试验，以及固定数据集上的历史双 revision 比较。Selection 的 `runtimeApplied:false` 表示仅改变登记选择，不表示普通 Agent 已采用该正文。私有试验使用受限的 Claude bare/API-key、本地、fresh、无工具执行方式；它不是普通工具运行时的替代验证。
 
@@ -117,4 +117,4 @@ Registry selection 已有幂等请求、head 行锁、expected-head CAS 和当�
 
 代码：`server/src/services/mimouse-prompt-applications/`、`server/src/routes/mimouse-prompt-applications.ts`、heartbeat 的预算后异步 preflight/同步最终所有权 gate，以及 Claude `controlled-prompt.ts` 和严格 spawn receipt。API 主路径为公司 `prompt-registry/:promptId/applications`，另有 per-Agent head、requestId 查询、审批、回退和派发回执查询。
 
-验证状态：无网络 Node 边界和现有适配器/私有比较轻量回归已通过；真实 PostgreSQL fixture 将运行正式迁移、权限/CAS/回退以及 heartbeat→普通 Claude prompt→仅 Node 的受控替身。尚未对真实 Claude CLI、真实工具质量或模型计费作成功声明。
+验证状态：中央冻结前联合10文件152项通过，包括11项真实PostgreSQL应用场景、80项私有试运行/比较回归及无网络Node spawn/合同/目录验证。实际heartbeat→普通Claude prompt→仅Node受控替身、权限/CAS/回退、失败后继栅栏均覆盖。尚未对真实Claude CLI、真实工具质量或模型计费作成功声明；最终类型/构建/UI全量结果另记。

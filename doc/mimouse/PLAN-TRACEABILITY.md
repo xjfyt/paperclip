@@ -93,8 +93,8 @@ C1=实现/本地检查，C2=受控协议及故障夹具，C3=真实租户/版本
 | V2-P4-04 | §13.1 业务写入/持久对账 | 未实现 | 无 apply API/持久执行器；纯 reconciliation helper 不是业务写入能力 | 先提供业务接口/幂等/授权合同 |
 | V2-P5-01 | §13.2 技能版本/固定评估 | 实现完成 | mimouse-evaluation 基于真实技能运行、固定集/双版本精确文本评分、已记费用/未知分离 | T11 / 固定集/真实运行 |
 | V2-P5-02 | §13.2 受控提升/回退 | 实现完成 | restore-service/files；仅暂停公司、未挂接Agent的 managed-local 整树恢复及持久日志；不是热发布 | T11 / 一次性目录/备份 |
-| V2-P5-03 | §13.2 提示词版本 | 部分 | mimouse-prompt-registry 与 UI 已有不可变版本/人工选择回退；未应用运行态 | T11 / 管理员 |
-| V2-P5-04 | §13.2 提示词运行比较/应用 | 部分 | 已补独立私有文本试运行：固定revision/skill/case，先准备后显式收费确认、唯一派发、私有结果；注册表仍不影响普通运行。已补完整固定集双版本私有历史只读精确比较，费用未知阻断；报告绑定的人审运行态应用/回退闭环仍未完成；目标/可见范围边界见[设计说明](../plans/2026-10-26-p5-runtime-application-boundaries.md) | T11 / 受限builtin Claude API-key profile；真实CLI待验 |
+| V2-P5-03 | §13.2 提示词版本 | 部分 | mimouse-prompt-registry 与 UI 已有不可变版本/人工选择回退；另新增显式单Agent受控应用绑定，不把registry selection冒充运行状态 | T11 / 管理员 |
+| V2-P5-04 | §13.2 提示词运行比较/应用 | 部分 | 已补独立私有文本试运行：固定revision/skill/case，先准备后显式收费确认、唯一派发、私有结果；注册表仍不影响普通运行。已补完整固定集双版本私有历史只读精确比较，费用未知阻断；报告绑定的人审应用/回退已实现首期local Claude CLI/pinned API-key/新无项目任务范围，11场景真实DB+无网络Node替身通过；项目任务、其它执行profile和真实CLI效果不在当前已验范围；目标/可见范围边界见[设计说明](../plans/2026-10-26-p5-runtime-application-boundaries.md) | T11 / 受限builtin Claude API-key profile；真实CLI待验 |
 | V2-P5-05 | §13.2 成本路由 | 部分 | cost-routing-preview 有策略/CAS/不可变诊断；evaluate.ts 全部 blocked、selectedAgentId=null，实际路由未实现 | T11 仅验失败关闭；先补真实执行上下文证明 |
 | V2-P5-06 | §13 持续指标/一周使用 | 仅待实测 | 用指定观察期记录真实质量/成本/人工修正；未来持续优化不应固定百分比结项 | T12 / 真实团队与窗口 |
 | V2-SYS-01 | §9 公司/secret/API合同 | 实现完成 | 共享validators、DB schema、公司授权及敏感命名空间；建议 API 路径不是必须逐字相同 | T00,T02 / 两公司 |
