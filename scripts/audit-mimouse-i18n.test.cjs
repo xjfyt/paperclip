@@ -4,7 +4,8 @@ const path = require("node:path");
 const fs = require("node:fs");
 const os = require("node:os");
 const { spawnSync } = require("node:child_process");
-const { collectCandidates, collectAudit, selectInventory, routedRoutineFiles, consumedUiComponents, consumedUiFiles } = require("./audit-mimouse-i18n.cjs");
+const { collectCandidates, collectAudit, selectInventory, routedRoutineFiles, consumedUiComponents, consumedUiFiles,
+  routedCompanyPages, routedCompanyFiles, buildObservationComponents, buildObservationFiles } = require("./audit-mimouse-i18n.cjs");
 const parserEntry = process.env.AUDIT_I18N_PARSER
   ? path.resolve(process.env.AUDIT_I18N_PARSER)
   : path.resolve(__dirname, "../node_modules/.pnpm/@babel+parser@7.29.8/node_modules/@babel/parser/lib/index.js");
@@ -36,6 +37,42 @@ test("includes production and legacy route implementations but not unrelated bas
 });
 
 const audit = source => collectAudit(source, "fixture.tsx", parse);
+test("includes only the known custom ariaLabel prop and preserves manual classification", () => {
+  const result = audit(`const x = <><CopyText ariaLabel="Copy public key" />
+    <CopyText ariaLabel={busy ? "Copying public key" : t("copy.publicKey", { name: user.name })} />
+    <CopyText ariaLabel={\`Copy \${user.name}\`} copyAriaLabel="Unknown custom prop" />
+    <PropertyRow label="Status">{"SHA-256"}</PropertyRow></>;`);
+  assert.deepEqual(result.candidates.map(row => row.text), ["Copy public key", "Copying public key", "Copy", "Status", "SHA-256"]);
+  assert.equal(result.candidates[0].kind, "jsx-attribute");
+  assert.deepEqual(result.dynamicCandidates.map(row => row.expression), ["user.name"]);
+  assert.ok([...result.candidates, ...result.dynamicCandidates].every(row => row.classification === "needs_manual_review"));
+});
+
+test("inventories direct window.confirm message fragments without evaluating user interpolation", () => {
+  const result = audit(`window.confirm("Archive this company?");
+    window.confirm(\`Delete \${company.name}? This cannot be undone.\`);
+    window.confirm(enabled ? "Continue anyway?" : diagnostic.message);
+    window.confirm("Remove " + user.name);
+    window.confirm();`);
+  assert.deepEqual(result.candidates.map(row => row.text), ["Archive this company?", "Delete", "? This cannot be undone.", "Continue anyway?", "Remove"]);
+  assert.ok(result.candidates.every(row => row.kind === "window-confirm"));
+  assert.deepEqual(result.dynamicCandidates.map(row => row.expression), ["company.name", "diagnostic.message", "user.name"]);
+  assert.ok(result.dynamicCandidates.every(row => row.kind === "window-confirm-dynamic"));
+  assert.equal(result.candidates[1].line, 2);
+  assert.ok([...result.candidates, ...result.dynamicCandidates].every(row => row.classification === "needs_manual_review"));
+});
+
+test("omits translated ariaLabel and confirm keys without widening to arbitrary confirm APIs", () => {
+  const result = audit(`const x = <CopyText ariaLabel={mimouseT("copy.key", { name: user.name })} />;
+    window.confirm(t("archive.confirm", { companyName: company.name }));
+    window.confirm(\`\${i18n.t("archive.confirm")}\`);
+    window.confirm(mimouseI18n.t(dynamicKey));
+    confirm("Bare alias outside scope"); dialogs.confirm("Custom API outside scope");
+    window["confirm"]("Computed key outside scope"); globalThis.confirm("Other global outside scope");
+    const payload = { ariaLabel: "Non JSX payload", message: "Not a confirmation" };`);
+  assert.deepEqual(result, { candidates: [], dynamicCandidates: [] });
+});
+
 test("includes standalone in in JSX and selected display attributes as manual-review candidates", () => {
   const result = audit('const x = <><span> in </span><input title="in" aria-label={"in"} /></>;');
   assert.deepEqual(result.candidates.map(row => row.text), ["in", "in", "in"]);
@@ -162,9 +199,68 @@ test("reports each missing consumed path even when a same-basename substitute ex
   }
 });
 
+test("adds only two exact company routes and the explicit build-observation component/direct host", () => {
+  assert.deepEqual(routedCompanyFiles, ["ui/src/pages/Companies.tsx", "ui/src/pages/CompanySettings.tsx"]);
+  assert.deepEqual(buildObservationFiles, ["ui/src/components/MimouseBuildObservations.tsx", "ui/src/pages/MimouseCoding.tsx"]);
+  const exactOnly = [...routedCompanyFiles, buildObservationFiles[0]];
+  const wrongPaths = exactOnly.flatMap(file => [
+    `ui/src/elsewhere/${path.basename(file)}`, file.replace(".tsx", ".production.tsx"),
+    file.replace(".tsx", ".legacy.tsx"), file.replace(".tsx", ".test.tsx"), file.replace(".tsx", ".stories.tsx"),
+  ]);
+  const inventory = selectInventory([...routedCompanyFiles, ...buildObservationFiles, ...buildObservationFiles, ...wrongPaths]);
+  assert.deepEqual(inventory.selected, [...routedCompanyFiles, ...buildObservationFiles].sort());
+  assert.deepEqual(inventory.missingCompanyRouteFiles, []);
+  assert.deepEqual(inventory.missingBuildObservationFiles, []);
+  assert.deepEqual(selectInventory(wrongPaths).selected, []);
+  assert.deepEqual(selectInventory(wrongPaths).missingCompanyRouteFiles, routedCompanyFiles);
+  assert.deepEqual(selectInventory(wrongPaths).missingBuildObservationFiles, buildObservationFiles);
+  assert.equal(routedRoutineFiles.length, 21);
+  assert.equal(consumedUiFiles.length, 3);
+  assert.equal(consumedUiComponents.flatMap(component => component.hosts).length, 5);
+  assert.ok([...routedCompanyFiles, ...buildObservationFiles].every(file => !routedRoutineFiles.includes(file) && !consumedUiFiles.includes(file)));
+});
+
+function walkAst(node, visit) {
+  if (!node || typeof node !== "object") return;
+  visit(node);
+  for (const value of Object.values(node)) {
+    if (Array.isArray(value)) value.forEach(item => walkAst(item, visit));
+    else if (value && typeof value === "object") walkAst(value, visit);
+  }
+}
+
+test("App imports and mounts both exact company pages and the build-observation host at their real routes", () => {
+  const source = fs.readFileSync(path.join(__dirname, "../ui/src/App.tsx"), "utf8");
+  const ast = parse(source, { sourceType: "module", plugins: ["typescript", "jsx"] });
+  const pages = [...routedCompanyPages, { file: "ui/src/pages/MimouseCoding.tsx", importSource: "./pages/MimouseCoding", routePattern: "coding" }];
+  for (const page of pages) {
+    assert.equal(path.posix.normalize(`ui/src/${page.importSource}.tsx`), page.file);
+    assert.ok(fs.statSync(path.join(__dirname, "..", page.file)).isFile());
+    const declaration = ast.program.body.find(node => node.type === "ImportDeclaration" && node.source.value === page.importSource);
+    const symbol = path.basename(page.file, ".tsx");
+    const binding = declaration?.specifiers.find(node => node.type === "ImportSpecifier" && node.imported.name === symbol && node.importKind !== "type");
+    assert.ok(binding && declaration.importKind !== "type", `App must import ${symbol}`);
+    let mounted = false;
+    walkAst(ast.program, node => {
+      if (node.type !== "JSXOpeningElement" || node.name.type !== "JSXIdentifier" || node.name.name !== "Route") return;
+      const route = node.attributes.find(attribute => attribute.name?.name === "path");
+      const element = node.attributes.find(attribute => attribute.name?.name === "element");
+      if (route?.value?.type !== "StringLiteral" || route.value.value !== page.routePattern) return;
+      walkAst(element, child => {
+        if (child.type === "JSXOpeningElement" && child.name.type === "JSXIdentifier" && child.name.name === binding.local.name) mounted = true;
+      });
+    });
+    assert.equal(mounted, true, `App must render ${symbol} at ${page.routePattern}`);
+  }
+});
+
 test("recorded hosts really import and render the exact consumed components", () => {
   const root = path.resolve(__dirname, "..");
-  for (const { file, hosts } of consumedUiComponents) {
+  assert.deepEqual(buildObservationComponents, [{
+    file: "ui/src/components/MimouseBuildObservations.tsx",
+    hosts: [{ file: "ui/src/pages/MimouseCoding.tsx", importSource: "@/components/MimouseBuildObservations" }],
+  }]);
+  for (const { file, hosts } of [...consumedUiComponents, ...buildObservationComponents]) {
     assert.ok(fs.statSync(path.join(root, file)).isFile(), file);
     assert.ok(hosts.length > 0, file);
     for (const host of hosts) {
@@ -205,7 +301,7 @@ function cliFixture(t, missing) {
   write("ui/src/App.tsx", "export const App = () => null;");
   const files = [
     ...selectInventory([]).unmatchedBasenames.map(name => `ui/src/pages/${name}.tsx`),
-    ...routedRoutineFiles, ...consumedUiFiles,
+    ...routedRoutineFiles, ...consumedUiFiles, ...routedCompanyFiles, ...buildObservationFiles,
   ];
   for (const file of files.filter(file => file !== missing)) write(file, "export const View = () => <span />;");
   if (missing) write(`ui/src/elsewhere/${path.basename(missing)}`, "export const Unused = () => <span />;");
@@ -219,6 +315,7 @@ function cliFixture(t, missing) {
 test("CLI keeps consumed host metadata separate from the unchanged routine route scope", t => {
   const { result, report } = cliFixture(t);
   assert.equal(result.status, 0, result.stderr);
+  assert.equal(report.schemaVersion, 3);
   assert.deepEqual(report.requestedConsumedFiles, consumedUiFiles);
   assert.deepEqual(report.missingConsumedFiles, []);
   assert.deepEqual(report.scope.consumedComponentHosts, consumedUiComponents);
@@ -227,8 +324,19 @@ test("CLI keeps consumed host metadata separate from the unchanged routine route
   assert.deepEqual(report.requestedRoutedFiles, routedRoutineFiles);
   assert.equal(report.scope.routeSource, "ui/src/App.tsx");
   assert.deepEqual(report.scope.routePatterns, ["routines", "routines/:routineId", "routines/:routineId/:section"]);
+  assert.deepEqual(report.requestedCompanyRouteFiles, routedCompanyFiles);
+  assert.deepEqual(report.missingCompanyRouteFiles, []);
+  assert.deepEqual(report.scope.companyRoutes, routedCompanyPages);
+  assert.equal(report.scope.companyRouteMatchedFiles, 2);
+  assert.deepEqual(report.requestedBuildObservationFiles, buildObservationFiles);
+  assert.deepEqual(report.missingBuildObservationFiles, []);
+  assert.deepEqual(report.scope.buildObservationComponentHosts, buildObservationComponents);
+  assert.equal(report.scope.buildObservationMatchedFiles, 2);
+  assert.equal(report.files.filter(row => row.file === "ui/src/pages/MimouseCoding.tsx").length, 1);
   assert.equal(report.files.some(row => row.file === "ui/src/components/TaskChatThread.tsx"), false);
   assert.ok(report.limits.some(limit => limit.includes("not every consumer or a routine route")));
+  assert.ok(report.limits.some(limit => limit.includes("not directly comparable")));
+  assert.ok(report.limits.some(limit => limit.includes("canonical labels") && limit.includes("does not mean untranslated")));
 });
 
 test("CLI fails closed for a missing consumed component instead of accepting its wrong-path duplicate", t => {
@@ -240,4 +348,18 @@ test("CLI fails closed for a missing consumed component instead of accepting its
   assert.deepEqual(report.unmatchedBasenames, []);
   assert.equal(report.scope.consumedMatchedFiles, 2);
   assert.equal(report.files.some(row => row.file === `ui/src/elsewhere/${path.basename(missing)}`), false);
+});
+
+test("CLI reports every missing new exact path even if a same-basename file exists", t => {
+  for (const missing of [...routedCompanyFiles, ...buildObservationFiles]) {
+    const { result, report } = cliFixture(t, missing);
+    assert.equal(result.status, 1, `${missing}: ${result.stderr}`);
+    assert.deepEqual(report.missingCompanyRouteFiles, routedCompanyFiles.includes(missing) ? [missing] : []);
+    assert.deepEqual(report.missingBuildObservationFiles, buildObservationFiles.includes(missing) ? [missing] : []);
+    assert.deepEqual(report.missingRoutedFiles, []);
+    assert.deepEqual(report.missingConsumedFiles, []);
+    assert.deepEqual(report.unmatchedBasenames, []);
+    assert.equal(report.files.some(row => row.file === missing), false);
+    assert.ok(!report.requestedBasenames.includes("Companies") && !report.requestedBasenames.includes("CompanySettings") && !report.requestedBasenames.includes("MimouseBuildObservations"));
+  }
 });
