@@ -1255,7 +1255,7 @@ export function Routines() {
               result={railFolderResult}
               selection={folderSelection}
               allLabel={mimouseT("routineOps.all")}
-              itemLabelPlural="routines"
+              itemLabelPlural={mimouseT("commonUi.routines")}
               loading={foldersLoading}
               onSelect={setFolderSelection}
               onCreate={() => openCreateFolder()}
@@ -1282,7 +1282,7 @@ export function Routines() {
           {routineViewState.groupBy === "folder" && !hasRoutineFolders && !foldersLoading && visibleRoutines.length > 0 ? (
             <AllUnfiledBanner
               storageKey={`paperclip:routines-folder-nudge:${selectedCompanyId ?? "none"}`}
-              itemLabelPlural="routines"
+              itemLabelPlural={mimouseT("commonUi.routines")}
               onCreateFolder={() => openCreateFolder()}
             />
           ) : null}
@@ -1413,7 +1413,7 @@ export function Routines() {
       <DeleteFolderDialog
         open={deleteFolderTarget !== null}
         folder={deleteFolderTarget}
-        itemLabelPlural="routines"
+        itemLabelPlural={mimouseT("commonUi.routines")}
         pending={deleteFolder.isPending}
         onOpenChange={(open) => {
           if (!open) setDeleteFolderTarget(null);
@@ -1428,7 +1428,7 @@ export function Routines() {
         result={railFolderResult}
         selection={folderSelection}
         allLabel={mimouseT("routineOps.all")}
-        itemLabelPlural="Routines"
+        itemLabelPlural={mimouseT("commonUi.routines")}
         onSelect={setFolderSelection}
         onCreate={() => openCreateFolder()}
       />

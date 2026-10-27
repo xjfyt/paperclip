@@ -1,3 +1,4 @@
+import { useTranslation } from "@/i18n";
 import { SkillBinaryFile } from "../components/SkillBinaryFile";
 import { SkillSourceProvenance } from "../components/SkillSourceProvenance";
 import { AgentIdentity } from "@/components/AgentIdentity";
@@ -1133,6 +1134,7 @@ export function DiscoveryGrid({
   /** Category/folder navigation stays available in production, but the Streamlined UI relies on search and scrolling. */
   showBrowseRails?: boolean;
 }) {
+  const { t } = useTranslation();
   const installedView = tab === "installed";
   const viewTitle = installedView ? "Installed skills" : "Discover skills";
   const viewDescription = installedView
@@ -1404,7 +1406,7 @@ export function DiscoveryGrid({
           {folderNudgeStorageKey && onCreateFolder && folderResult && folderResult.folders.length === 0 && !loading && cards.length > 0 ? (
             <AllUnfiledBanner
               storageKey={folderNudgeStorageKey}
-              itemLabelPlural="skills"
+              itemLabelPlural={t("workflow.skills")}
               onCreateFolder={onCreateFolder}
             />
           ) : null}
@@ -4016,6 +4018,7 @@ function SkillPane({
 }
 
 export function CompanySkills() {
+  const { t } = useTranslation();
   const { "*": routePath } = useParams<{ "*": string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -5407,7 +5410,7 @@ export function CompanySkills() {
       <DeleteFolderDialog
         open={deleteFolderTarget !== null}
         folder={deleteFolderTarget}
-        itemLabelPlural="skills"
+        itemLabelPlural={t("workflow.skills")}
         pending={deleteFolder.isPending}
         onOpenChange={(open) => {
           if (!open) setDeleteFolderTarget(null);
@@ -5422,7 +5425,7 @@ export function CompanySkills() {
         result={railSkillFolderResult}
         selection={folderSelection}
         allLabel="All skills"
-        itemLabelPlural="Skills"
+        itemLabelPlural={t("workflow.skills")}
         onSelect={setFolderSelection}
         onCreate={() => openCreateFolder()}
       />
