@@ -1,0 +1,11 @@
+{
+  "taskAssignCeoRole": "Enabled automatically for CEO agents.",
+  "taskAssignAgentCreator": "Enabled automatically while this agent can create new agents.",
+  "taskAssignExplicitGrant": "Enabled via explicit organization permission grant.",
+  "taskAssignSimpleDefault": "Enabled by simple organization-wide task assignment defaults.",
+  "taskAssignNone": "Disabled unless explicitly granted.",
+  "sourceTimer": "Timer",
+  "sourceAssignment": "Assignment",
+  "sourceOnDemand": "On-demand",
+  "sourceAutomation": "Automation"
+}

@@ -1,0 +1,11 @@
+{
+  "taskAssignCeoRole": "Se activa automáticamente para los agentes CEO.",
+  "taskAssignAgentCreator": "Se activa automáticamente mientras este agente pueda crear nuevos agentes.",
+  "taskAssignExplicitGrant": "Se activa mediante una concesión explícita de permisos de la organización.",
+  "taskAssignSimpleDefault": "Se activa por la configuración predeterminada de asignación simple de tareas para toda la organización.",
+  "taskAssignNone": "Se desactiva salvo que se conceda explícitamente.",
+  "sourceTimer": "Temporizador",
+  "sourceAssignment": "Asignación",
+  "sourceOnDemand": "Bajo demanda",
+  "sourceAutomation": "Automatización"
+}

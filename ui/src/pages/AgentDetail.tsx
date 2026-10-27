@@ -242,12 +242,16 @@ function formatEnvForDisplay(envValue: unknown, censorUsernameInLogs: boolean): 
     .join("\n");
 }
 
-const sourceLabels: Record<string, string> = {
-  timer: "Timer",
-  assignment: "Assignment",
-  on_demand: "On-demand",
-  automation: "Automation",
+const sourceLabelKeys: Record<string, string> = {
+  timer: "agentPermissionSourcesUi.sourceTimer",
+  assignment: "agentPermissionSourcesUi.sourceAssignment",
+  on_demand: "agentPermissionSourcesUi.sourceOnDemand",
+  automation: "agentPermissionSourcesUi.sourceAutomation",
 };
+
+function invocationSourceLabel(source: string): string {
+  return Object.hasOwn(sourceLabelKeys, source) ? mimouseT(sourceLabelKeys[source]) : source;
+}
 
 const LIVE_SCROLL_BOTTOM_TOLERANCE_PX = 32;
 type ScrollContainer = Window | HTMLElement;
@@ -1694,7 +1698,7 @@ function LatestRunCard({
                   : run.invocationSource === "on_demand" ? "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/50 dark:text-cyan-300"
                   : "bg-muted text-muted-foreground"
               )}>
-                {sourceLabels[run.invocationSource] ?? run.invocationSource}
+                {invocationSourceLabel(run.invocationSource)}
               </Badge>
             </>
           )}
@@ -2084,16 +2088,16 @@ export function ConfigurationTab({
   const canAssignTasks = Boolean(agent.access?.canAssignTasks);
   const taskAssignSource = agent.access?.taskAssignSource ?? "none";
   const taskAssignLocked = agent.role === "ceo" || canCreateAgents;
-  const taskAssignHint =
+  const taskAssignHintKey =
     taskAssignSource === "ceo_role"
-      ? "Enabled automatically for CEO agents."
+      ? "agentPermissionSourcesUi.taskAssignCeoRole"
       : taskAssignSource === "agent_creator"
-        ? "Enabled automatically while this agent can create new agents."
+        ? "agentPermissionSourcesUi.taskAssignAgentCreator"
         : taskAssignSource === "explicit_grant"
-          ? "Enabled via explicit organization permission grant."
+          ? "agentPermissionSourcesUi.taskAssignExplicitGrant"
           : taskAssignSource === "simple_default"
-            ? "Enabled by simple organization-wide task assignment defaults."
-            : "Disabled unless explicitly granted.";
+            ? "agentPermissionSourcesUi.taskAssignSimpleDefault"
+            : "agentPermissionSourcesUi.taskAssignNone";
 
   return (
     <div className="agent-settings-form space-y-6">
@@ -2183,7 +2187,7 @@ export function ConfigurationTab({
             <div className="space-y-1">
               <div>{mimouseT("workflowHelp.canAssignTasks")}</div>
               <p className="text-xs text-muted-foreground">
-                {taskAssignHint}
+                {mimouseT(taskAssignHintKey)}
               </p>
             </div>
             <ToggleSwitch
@@ -3255,7 +3259,7 @@ function RunListItem({ run, isSelected, agentId }: { run: HeartbeatRun; isSelect
             : run.invocationSource === "on_demand" ? "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/50 dark:text-cyan-300"
             : "bg-muted text-muted-foreground"
         )}>
-          {sourceLabels[run.invocationSource] ?? run.invocationSource}
+          {invocationSourceLabel(run.invocationSource)}
         </Badge>
         {sourceResolvedFold ? <SourceResolvedFoldBadge showIcon={false} className="shrink-0 text-(length:--text-nano) py-0" /> : null}
         <span className="ml-auto text-(length:--text-micro) text-muted-foreground shrink-0">

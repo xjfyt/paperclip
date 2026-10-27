@@ -1,0 +1,11 @@
+{
+  "taskAssignCeoRole": "CEO エージェントには自動的に有効になります。",
+  "taskAssignAgentCreator": "このエージェントが新しいエージェントを作成できる間は、自動的に有効になります。",
+  "taskAssignExplicitGrant": "組織の明示的な権限付与により有効になっています。",
+  "taskAssignSimpleDefault": "組織全体のシンプルなタスク割り当ての既定設定により有効になっています。",
+  "taskAssignNone": "明示的に権限が付与されない限り無効です。",
+  "sourceTimer": "タイマー",
+  "sourceAssignment": "割り当て",
+  "sourceOnDemand": "オンデマンド",
+  "sourceAutomation": "自動化"
+}

@@ -1,0 +1,11 @@
+{
+  "taskAssignCeoRole": "CEO Agent 自动拥有此权限。",
+  "taskAssignAgentCreator": "此 Agent 可以创建新 Agent 时，自动拥有此权限。",
+  "taskAssignExplicitGrant": "通过组织的显式权限授权启用。",
+  "taskAssignSimpleDefault": "通过组织范围的简单任务分配默认设置启用。",
+  "taskAssignNone": "除非显式授权，否则禁用。",
+  "sourceTimer": "定时器",
+  "sourceAssignment": "任务分配",
+  "sourceOnDemand": "按需",
+  "sourceAutomation": "自动化"
+}
