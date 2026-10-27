@@ -26,6 +26,26 @@
     "noRemoteStop": "停止本地桥接不代表远端供应商已经停止。",
     "denyToolApproval": "权限请求默认拒绝，尚无已验收的人工批准往返流程。"
   },
+  "agentInstructionEditorUi": {
+    "managedPathFallback": "（托管）",
+    "entryBadge": "入口",
+    "deprecatedVirtualFile": "已弃用的虚拟文件",
+    "languageFile": "{{language}} 文件",
+    "newFile": "此指令包中的新文件",
+    "preservedRegionLabel": "为 {{path}} 保留的修改",
+    "preservedReadOnly": "只读：{{originalPath}}。如需将其中的修改保留到 {{currentPath}}，请复制内容并明确编辑当前入口文件。",
+    "copyPreservedLabel": "复制为 {{path}} 保留的修改",
+    "editorPlaceholder": "# Agent 指令",
+    "editsNotRetrieved": "尚未获取这些指令修改。",
+    "copyInstructionsLabel": "将指令文件复制为 Markdown",
+    "copied": "已复制",
+    "confirmDelete": "删除 {{path}}？",
+    "view": {
+      "read": "阅读",
+      "edit": "编辑",
+      "raw": "源码"
+    }
+  },
   "agentSelect": {
     "placeholder": "选择 Agent…",
     "empty": "暂无 Agent。",
@@ -1847,6 +1867,30 @@
     "operator": "操作员",
     "viewer": "只读成员"
   },
+  "issueFeedbackUi": {
+    "failedRunMissing": "失败的运行已不可用。",
+    "retryQueued": "重试已排队",
+    "retryQueuedBody": "任务就绪后将重试原始请求。",
+    "retryFailed": "运行重试失败",
+    "retryFailedBody": "无法重试运行",
+    "inboxRestored": "任务已恢复到收件箱",
+    "undoFailed": "撤销失败",
+    "undoFailedBody": "无法将此任务恢复到收件箱",
+    "updateFailed": "任务更新失败",
+    "updateFailedBody": "无法保存任务更改",
+    "stoppedDone": "运行已停止，任务已完成",
+    "stoppedCancelled": "运行已停止，任务已取消",
+    "stoppedUpdateFailed": "运行已停止；任务更新失败",
+    "stopDoneFailed": "停止并完成失败",
+    "stopCancelFailed": "停止并取消失败",
+    "stopFinalizeFailedBody": "无法停止运行并更新任务",
+    "inboxArchived": "任务已从收件箱归档",
+    "archiveFailed": "归档失败",
+    "archiveFailedBody": "无法从收件箱归档此任务",
+    "undo": "撤销",
+    "stoppedUpdateFailedBody": "运行已停止，但更新任务失败：{{message}}",
+    "stoppedUpdateFailedFallback": "运行已停止，但更新任务失败。请重试更新任务状态。"
+  },
   "issueModelUi": {
     "overrideSummary": "覆盖 · {{details}}",
     "overrideFallback": "覆盖 · 适配器选项",
@@ -1934,7 +1978,26 @@
     "panelSections": "属性面板分区",
     "closeTab": "关闭{{label}}标签页",
     "openClosedTab": "打开已关闭的侧栏标签页",
-    "allTabsOpen": "所有侧栏标签页均已打开"
+    "allTabsOpen": "所有侧栏标签页均已打开",
+    "runReview": "立即开始审查",
+    "runApproval": "立即开始审批",
+    "reviewChangesBy": "{{participant}} 在审查中要求修改",
+    "approvalChangesBy": "{{participant}} 在审批中要求修改",
+    "reviewChanges": "审查要求修改",
+    "approvalChanges": "审批要求修改",
+    "reviewPendingWith": "等待 {{participant}} 审查",
+    "approvalPendingWith": "等待 {{participant}} 审批",
+    "reviewPending": "等待审查",
+    "approvalPending": "等待审批",
+    "moreRelations": "另有 {{count}} 项",
+    "pullRequestsFailed": "无法加载合并请求。",
+    "retry": "重试",
+    "policyUnavailable": "执行策略不可用。请刷新后重试。",
+    "viaAgent": "通过 {{agent}}",
+    "archivedBy": "由 {{agent}} 归档 · {{time}}",
+    "unarchiving": "正在取消归档…",
+    "unarchive": "取消归档",
+    "unarchiveFailed": "无法取消归档此任务。请重试。"
   },
   "issueRecoveryUi": {
     "detachedUnknown": "分离状态 / 未知",
@@ -2112,7 +2175,10 @@
     "noRecoveryAction": "没有可处理的恢复操作。",
     "resolutionFailed": "恢复处理失败",
     "resolutionFailedBody": "无法处理恢复操作",
-    "createdRunBody": "{{identifier}} 将在新的隔离工作区中运行。"
+    "createdRunBody": "{{identifier}} 将在新的隔离工作区中运行。",
+    "noReconcileWorkspace": "此任务没有可协调的执行工作区。",
+    "repairFailed": "修复失败",
+    "noRepairWorkspace": "此任务没有可修复的执行工作区。"
   },
   "issueRetryUi": {
     "waitingWorkspace": "等待工作区",
@@ -3087,7 +3153,8 @@
     "plan": "计划",
     "artifacts": "产物",
     "references": "引用",
-    "externalObjects": "外部对象"
+    "externalObjects": "外部对象",
+    "triage": "分诊"
   },
   "remoteMcpFormUi": {
     "helpWith": "{{label}}帮助",

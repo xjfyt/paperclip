@@ -26,6 +26,26 @@
     "noRemoteStop": "ローカルブリッジの停止はリモート側の停止を保証しません。",
     "denyToolApproval": "権限要求は既定で拒否し、人による承認フローは未検証です。"
   },
+  "agentInstructionEditorUi": {
+    "managedPathFallback": "（管理対象）",
+    "entryBadge": "エントリ",
+    "deprecatedVirtualFile": "非推奨の仮想ファイル",
+    "languageFile": "{{language}} ファイル",
+    "newFile": "このバンドル内の新しいファイル",
+    "preservedRegionLabel": "{{path}} の保持された編集内容",
+    "preservedReadOnly": "読み取り専用：{{originalPath}}。これらの編集内容を {{currentPath}} に残すには、内容をコピーし、現在のエントリファイルを明示的に編集してください。",
+    "copyPreservedLabel": "{{path}} の保持された編集内容をコピー",
+    "editorPlaceholder": "# Agent の指示",
+    "editsNotRetrieved": "これらの指示の編集内容はまだ取得されていません。",
+    "copyInstructionsLabel": "指示ファイルを Markdown としてコピー",
+    "copied": "コピーしました",
+    "confirmDelete": "{{path}} を削除しますか？",
+    "view": {
+      "read": "閲覧",
+      "edit": "編集",
+      "raw": "ソース"
+    }
+  },
   "agentSelect": {
     "placeholder": "Agent を選択…",
     "empty": "Agent はまだありません。",
@@ -1847,6 +1867,30 @@
     "operator": "オペレーター",
     "viewer": "閲覧者"
   },
+  "issueFeedbackUi": {
+    "failedRunMissing": "失敗した実行はもう利用できません。",
+    "retryQueued": "再試行をキューに追加しました",
+    "retryQueuedBody": "このタスクの準備が整うと、元のリクエストが再試行されます。",
+    "retryFailed": "実行の再試行に失敗しました",
+    "retryFailedBody": "実行を再試行できません",
+    "inboxRestored": "タスクを受信トレイに戻しました",
+    "undoFailed": "元に戻せませんでした",
+    "undoFailedBody": "このタスクを受信トレイに戻せません",
+    "updateFailed": "タスクの更新に失敗しました",
+    "updateFailedBody": "タスクの変更を保存できません",
+    "stoppedDone": "実行を停止し、タスクを完了しました",
+    "stoppedCancelled": "実行を停止し、タスクをキャンセルしました",
+    "stoppedUpdateFailed": "実行は停止しましたが、タスクの更新に失敗しました",
+    "stopDoneFailed": "停止して完了できませんでした",
+    "stopCancelFailed": "停止してキャンセルできませんでした",
+    "stopFinalizeFailedBody": "実行を停止してタスクを更新できません",
+    "inboxArchived": "タスクを受信トレイからアーカイブしました",
+    "archiveFailed": "アーカイブに失敗しました",
+    "archiveFailedBody": "このタスクを受信トレイからアーカイブできません",
+    "undo": "元に戻す",
+    "stoppedUpdateFailedBody": "実行は停止しましたが、タスクの更新に失敗しました：{{message}}",
+    "stoppedUpdateFailedFallback": "実行は停止しましたが、タスクの更新に失敗しました。タスクのステータス更新を再試行してください。"
+  },
   "issueModelUi": {
     "overrideSummary": "上書き · {{details}}",
     "overrideFallback": "上書き · アダプター設定",
@@ -1934,7 +1978,26 @@
     "panelSections": "プロパティパネルのセクション",
     "closeTab": "{{label}} タブを閉じる",
     "openClosedTab": "閉じたサイドバーのタブを開く",
-    "allTabsOpen": "サイドバーのタブはすべて開いています"
+    "allTabsOpen": "サイドバーのタブはすべて開いています",
+    "runReview": "今すぐレビューを開始",
+    "runApproval": "今すぐ承認を開始",
+    "reviewChangesBy": "{{participant}} がレビューで変更を要求",
+    "approvalChangesBy": "{{participant}} が承認で変更を要求",
+    "reviewChanges": "レビューで変更を要求",
+    "approvalChanges": "承認で変更を要求",
+    "reviewPendingWith": "{{participant}} のレビュー待ち",
+    "approvalPendingWith": "{{participant}} の承認待ち",
+    "reviewPending": "レビュー待ち",
+    "approvalPending": "承認待ち",
+    "moreRelations": "他 {{count}} 件",
+    "pullRequestsFailed": "マージリクエストを読み込めませんでした。",
+    "retry": "再試行",
+    "policyUnavailable": "実行ポリシーを利用できません。更新して再試行してください。",
+    "viaAgent": "{{agent}} 経由",
+    "archivedBy": "{{agent}} がアーカイブ · {{time}}",
+    "unarchiving": "アーカイブ解除中…",
+    "unarchive": "アーカイブを解除",
+    "unarchiveFailed": "このタスクのアーカイブを解除できませんでした。再試行してください。"
   },
   "issueRecoveryUi": {
     "detachedUnknown": "分離状態 / 不明",
@@ -2112,7 +2175,10 @@
     "noRecoveryAction": "解決する復旧アクションがありません。",
     "resolutionFailed": "復旧の解決に失敗しました",
     "resolutionFailedBody": "復旧アクションを解決できませんでした",
-    "createdRunBody": "{{identifier}} は新しい隔離ワークスペースで実行されます。"
+    "createdRunBody": "{{identifier}} は新しい隔離ワークスペースで実行されます。",
+    "noReconcileWorkspace": "このタスクには整合する実行ワークスペースがありません。",
+    "repairFailed": "修復に失敗しました",
+    "noRepairWorkspace": "このタスクには修復する実行ワークスペースがありません。"
   },
   "issueRetryUi": {
     "waitingWorkspace": "ワークスペースを待機中",
@@ -3087,7 +3153,8 @@
     "plan": "計画",
     "artifacts": "成果物",
     "references": "参照",
-    "externalObjects": "外部オブジェクト"
+    "externalObjects": "外部オブジェクト",
+    "triage": "トリアージ"
   },
   "remoteMcpFormUi": {
     "helpWith": "{{label}} のヘルプ",

@@ -26,6 +26,26 @@
     "noRemoteStop": "Detener el puente local no confirma que el proveedor remoto se haya detenido.",
     "denyToolApproval": "Las solicitudes de permiso se deniegan por defecto; no hay circuito de aprobación humana validado."
   },
+  "agentInstructionEditorUi": {
+    "managedPathFallback": "(gestionado)",
+    "entryBadge": "entrada",
+    "deprecatedVirtualFile": "Archivo virtual obsoleto",
+    "languageFile": "Archivo {{language}}",
+    "newFile": "Archivo nuevo en este paquete",
+    "preservedRegionLabel": "Cambios conservados para {{path}}",
+    "preservedReadOnly": "Solo lectura: {{originalPath}}. Para conservar cualquiera de estos cambios en {{currentPath}}, cópialos y edita explícitamente el archivo de entrada actual.",
+    "copyPreservedLabel": "Copiar cambios conservados para {{path}}",
+    "editorPlaceholder": "# Instrucciones del Agent",
+    "editsNotRetrieved": "Estos cambios de instrucciones aún no se han recuperado.",
+    "copyInstructionsLabel": "Copiar archivo de instrucciones como Markdown",
+    "copied": "Copiado",
+    "confirmDelete": "¿Eliminar {{path}}?",
+    "view": {
+      "read": "leer",
+      "edit": "editar",
+      "raw": "fuente"
+    }
+  },
   "agentSelect": {
     "placeholder": "Seleccionar Agent…",
     "empty": "Todavía no hay Agents.",
@@ -1847,6 +1867,30 @@
     "operator": "Operador",
     "viewer": "Lector"
   },
+  "issueFeedbackUi": {
+    "failedRunMissing": "La ejecución fallida ya no está disponible.",
+    "retryQueued": "Reintento en cola",
+    "retryQueuedBody": "La solicitud original se reintentará cuando esta tarea esté lista.",
+    "retryFailed": "Error al reintentar la ejecución",
+    "retryFailedBody": "No se pudo reintentar la ejecución",
+    "inboxRestored": "Tarea restaurada en la bandeja de entrada",
+    "undoFailed": "Error al deshacer",
+    "undoFailedBody": "No se pudo restaurar esta tarea en la bandeja de entrada",
+    "updateFailed": "Error al actualizar la tarea",
+    "updateFailedBody": "No se pudieron guardar los cambios de la tarea",
+    "stoppedDone": "Ejecución detenida y tarea completada",
+    "stoppedCancelled": "Ejecución detenida y tarea cancelada",
+    "stoppedUpdateFailed": "Ejecución detenida; error al actualizar la tarea",
+    "stopDoneFailed": "Error al detener y completar",
+    "stopCancelFailed": "Error al detener y cancelar",
+    "stopFinalizeFailedBody": "No se pudo detener la ejecución y actualizar la tarea",
+    "inboxArchived": "Tarea archivada de la bandeja de entrada",
+    "archiveFailed": "Error al archivar",
+    "archiveFailedBody": "No se pudo archivar esta tarea de la bandeja de entrada",
+    "undo": "Deshacer",
+    "stoppedUpdateFailedBody": "La ejecución se detuvo, pero no se pudo actualizar la tarea: {{message}}",
+    "stoppedUpdateFailedFallback": "La ejecución se detuvo, pero no se pudo actualizar la tarea. Reintenta actualizar su estado."
+  },
   "issueModelUi": {
     "overrideSummary": "Sobrescritura · {{details}}",
     "overrideFallback": "Sobrescritura · opciones del adaptador",
@@ -1934,7 +1978,26 @@
     "panelSections": "Secciones del panel de propiedades",
     "closeTab": "Cerrar pestaña {{label}}",
     "openClosedTab": "Abrir pestaña cerrada de la barra lateral",
-    "allTabsOpen": "Todas las pestañas de la barra lateral están abiertas"
+    "allTabsOpen": "Todas las pestañas de la barra lateral están abiertas",
+    "runReview": "Iniciar revisión ahora",
+    "runApproval": "Iniciar aprobación ahora",
+    "reviewChangesBy": "{{participant}} solicitó cambios en la revisión",
+    "approvalChangesBy": "{{participant}} solicitó cambios en la aprobación",
+    "reviewChanges": "Cambios solicitados en la revisión",
+    "approvalChanges": "Cambios solicitados en la aprobación",
+    "reviewPendingWith": "Revisión pendiente de {{participant}}",
+    "approvalPendingWith": "Aprobación pendiente de {{participant}}",
+    "reviewPending": "Revisión pendiente",
+    "approvalPending": "Aprobación pendiente",
+    "moreRelations": "+{{count}} más",
+    "pullRequestsFailed": "No se pudieron cargar las solicitudes de fusión.",
+    "retry": "Reintentar",
+    "policyUnavailable": "La política de ejecución no está disponible. Actualiza para reintentar.",
+    "viaAgent": "mediante {{agent}}",
+    "archivedBy": "Archivado por {{agent}} · {{time}}",
+    "unarchiving": "Desarchivando…",
+    "unarchive": "Desarchivar",
+    "unarchiveFailed": "No se pudo desarchivar esta tarea. Inténtalo de nuevo."
   },
   "issueRecoveryUi": {
     "detachedUnknown": "separada / desconocida",
@@ -2112,7 +2175,10 @@
     "noRecoveryAction": "No hay ninguna acción de recuperación que resolver.",
     "resolutionFailed": "Error al resolver la recuperación",
     "resolutionFailedBody": "No se pudo resolver la acción de recuperación",
-    "createdRunBody": "{{identifier}} se ejecutará en un nuevo espacio de trabajo aislado."
+    "createdRunBody": "{{identifier}} se ejecutará en un nuevo espacio de trabajo aislado.",
+    "noReconcileWorkspace": "Esta tarea no tiene un espacio de ejecución que reconciliar.",
+    "repairFailed": "Error al reparar",
+    "noRepairWorkspace": "Esta tarea no tiene un espacio de ejecución que reparar."
   },
   "issueRetryUi": {
     "waitingWorkspace": "Esperando el espacio de trabajo",
@@ -3087,7 +3153,8 @@
     "plan": "Plan",
     "artifacts": "Artefactos",
     "references": "Referencias",
-    "externalObjects": "Objetos externos"
+    "externalObjects": "Objetos externos",
+    "triage": "Clasificación"
   },
   "remoteMcpFormUi": {
     "helpWith": "Ayuda con {{label}}",

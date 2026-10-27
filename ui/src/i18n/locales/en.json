@@ -26,6 +26,26 @@
     "noRemoteStop": "Stopping the local bridge does not prove that the remote provider stopped.",
     "denyToolApproval": "Permission requests are denied by default; no qualified human-approval round trip."
   },
+  "agentInstructionEditorUi": {
+    "managedPathFallback": "(managed)",
+    "entryBadge": "entry",
+    "deprecatedVirtualFile": "Deprecated virtual file",
+    "languageFile": "{{language}} file",
+    "newFile": "New file in this bundle",
+    "preservedRegionLabel": "Preserved edits for {{path}}",
+    "preservedReadOnly": "Read only: {{originalPath}}. To keep any of these edits in {{currentPath}}, copy them and edit the current entry explicitly.",
+    "copyPreservedLabel": "Copy preserved edits for {{path}}",
+    "editorPlaceholder": "# Agent instructions",
+    "editsNotRetrieved": "These instruction edits have not been retrieved yet.",
+    "copyInstructionsLabel": "Copy instructions file as markdown",
+    "copied": "Copied",
+    "confirmDelete": "Delete {{path}}?",
+    "view": {
+      "read": "read",
+      "edit": "edit",
+      "raw": "raw"
+    }
+  },
   "agentSelect": {
     "placeholder": "Select agent…",
     "empty": "No agents yet.",
@@ -1847,6 +1867,30 @@
     "operator": "Operator",
     "viewer": "Viewer"
   },
+  "issueFeedbackUi": {
+    "failedRunMissing": "Failed run is no longer available.",
+    "retryQueued": "Retry queued",
+    "retryQueuedBody": "The exact request will retry when this task is ready.",
+    "retryFailed": "Run retry failed",
+    "retryFailedBody": "Unable to retry run",
+    "inboxRestored": "Task restored to inbox",
+    "undoFailed": "Undo failed",
+    "undoFailedBody": "Unable to restore this task to the inbox",
+    "updateFailed": "Task update failed",
+    "updateFailedBody": "Unable to save task changes",
+    "stoppedDone": "Run stopped and task done",
+    "stoppedCancelled": "Run stopped and task cancelled",
+    "stoppedUpdateFailed": "Run stopped; task update failed",
+    "stopDoneFailed": "Stop and done failed",
+    "stopCancelFailed": "Stop and cancel failed",
+    "stopFinalizeFailedBody": "Unable to stop the run and update the task",
+    "inboxArchived": "Task archived from inbox",
+    "archiveFailed": "Archive failed",
+    "archiveFailedBody": "Unable to archive this task from the inbox",
+    "undo": "Undo",
+    "stoppedUpdateFailedBody": "Run was stopped, but updating the task failed: {{message}}",
+    "stoppedUpdateFailedFallback": "Run was stopped, but updating the task failed. Retry the task status update."
+  },
   "issueModelUi": {
     "overrideSummary": "Override · {{details}}",
     "overrideFallback": "Override · adapter options",
@@ -1934,7 +1978,26 @@
     "panelSections": "Properties panel sections",
     "closeTab": "Close {{label}} tab",
     "openClosedTab": "Open closed sidebar tab",
-    "allTabsOpen": "All sidebar tabs are open"
+    "allTabsOpen": "All sidebar tabs are open",
+    "runReview": "Run review now",
+    "runApproval": "Run approval now",
+    "reviewChangesBy": "Review requested changes by {{participant}}",
+    "approvalChangesBy": "Approval requested changes by {{participant}}",
+    "reviewChanges": "Review requested changes",
+    "approvalChanges": "Approval requested changes",
+    "reviewPendingWith": "Review pending with {{participant}}",
+    "approvalPendingWith": "Approval pending with {{participant}}",
+    "reviewPending": "Review pending",
+    "approvalPending": "Approval pending",
+    "moreRelations": "+{{count}} more",
+    "pullRequestsFailed": "Couldn’t load pull requests.",
+    "retry": "Retry",
+    "policyUnavailable": "Execution policy unavailable. Refresh to try again.",
+    "viaAgent": "via {{agent}}",
+    "archivedBy": "Archived by {{agent}} · {{time}}",
+    "unarchiving": "Unarchiving…",
+    "unarchive": "Unarchive",
+    "unarchiveFailed": "Failed to unarchive this issue. Please try again."
   },
   "issueRecoveryUi": {
     "detachedUnknown": "detached / unknown",
@@ -2112,7 +2175,10 @@
     "noRecoveryAction": "No recovery action to resolve.",
     "resolutionFailed": "Recovery resolution failed",
     "resolutionFailedBody": "Unable to resolve recovery action",
-    "createdRunBody": "{{identifier}} will run on a fresh isolated workspace."
+    "createdRunBody": "{{identifier}} will run on a fresh isolated workspace.",
+    "noReconcileWorkspace": "This task has no execution workspace to reconcile.",
+    "repairFailed": "Repair failed",
+    "noRepairWorkspace": "This task has no execution workspace to repair."
   },
   "issueRetryUi": {
     "waitingWorkspace": "Waiting for workspace",
@@ -3087,7 +3153,8 @@
     "plan": "Plan",
     "artifacts": "Artifacts",
     "references": "References",
-    "externalObjects": "External objects"
+    "externalObjects": "External objects",
+    "triage": "Triage"
   },
   "remoteMcpFormUi": {
     "helpWith": "Help with {{label}}",
