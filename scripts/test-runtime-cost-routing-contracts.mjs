@@ -109,6 +109,9 @@ test("readback accepts metadata only and requires action-specific scope", () => 
     bad(contract.runtimeRoutingRequestQuerySchema, value);
   }
 });
+test("read-only recovery never treats clock-only expiry as a durable closure", () => {
+  assert.deepEqual(contract.runtimeRoutingRequestClosureReasons, ["generation_advanced", "binding_already_claimed"]);
+});
 test("schema carries scoped FKs, request uniqueness and closed binding states without a database", () => {
   const configs = [runtimeRoutingPolicies, runtimeRoutingHeads, runtimeRoutingReceipts, runtimeRoutingBindings].map(getTableConfig);
   assert.deepEqual(configs.map(c => c.name), ["runtime_routing_policies", "runtime_routing_heads", "runtime_routing_receipts", "runtime_routing_bindings"]);

@@ -86,8 +86,11 @@ creation and execution remain gated. Authentication changes require fresh
 readback, not replay of old confirmations.
 
 All-null readback means **unknown**, not failed. An authoritative receipt or a
-proven generation/expiry/claimed-binding closure is required before clearing
-uncertainty. A lost response cannot authorize another wake or a new request ID.
+proven persisted generation advance or already-claimed binding is required before
+clearing uncertainty. Clock-only approval expiry does not prove permanent closure:
+GET stays read-only and returns unknown unless a durable monotone fact closes the
+request. A future explicit closure mutation would need its own persisted fence.
+A lost response cannot authorize another wake or a new request ID.
 Withdrawal invalidates future use; it does not cancel an in-flight process,
 reverse billed costs, or restore an old policy/application automatically.
 

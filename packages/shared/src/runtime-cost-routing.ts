@@ -127,9 +127,11 @@ export const runtimeRoutingRequestQuerySchema = z.object({
   }
 });
 export type RuntimeRoutingRequestQuery = z.infer<typeof runtimeRoutingRequestQuerySchema>;
+/** Readback closes only on persisted monotone facts, never a clock-only expiry. */
+export const runtimeRoutingRequestClosureReasons = ["generation_advanced", "binding_already_claimed"] as const;
 export interface RuntimeRoutingRequestClosure {
   outcome: "not_applied_closed"; requestId: string; action: RuntimeRoutingRequestQuery["action"];
-  reason: "generation_advanced" | "approval_expired" | "binding_already_claimed";
+  reason: typeof runtimeRoutingRequestClosureReasons[number];
   currentGeneration: number;
 }
 /** All-null is UNKNOWN, not proof of failure; readback never wakes or replays. */
