@@ -1743,6 +1743,12 @@ export function AgentOverview({
     ?? asNonEmptyString(agent.runtimeConfig?.model)
     ?? systemLabel("Adapter default");
   const lastRun = runs[0] ?? null;
+  const lastRunStatusLabel = lastRun ? mimouseT(
+    lastRun.status === "scheduled_retry" || lastRun.status === "interrupted"
+      ? `agentOverviewUi.runStatus.${lastRun.status}`
+      : `statuses.${lastRun.status}`,
+    { defaultValue: lastRun.status },
+  ) : null;
   const identity = useQuery({
     queryKey: [...queryKeys.agents.identity(agent.id), lastRun?.id, lastRun?.status],
     queryFn: () => agentsApi.getIdentity(agent.id, agent.companyId),
@@ -1759,7 +1765,7 @@ export function AgentOverview({
           </div>
           <div className="space-y-3">
             <SummaryRow label={mimouseT("workflow.role")}><span className="text-sm">{roleLabels[agent.role] ?? agent.role}</span></SummaryRow>
-            <SummaryRow label={mimouseT("commonUi.title")}><span className="text-sm">{agent.title ?? "Not set"}</span></SummaryRow>
+            <SummaryRow label={mimouseT("commonUi.title")}><span className="text-sm">{agent.title ?? mimouseT("agentOverviewUi.titleNotSet")}</span></SummaryRow>
             <SummaryRow label={mimouseT("workflow.reportsTo")}>
               {reportsToAgent ? (
                 <Link className="text-sm hover:underline" to={agentDetailHref(agentRouteRef(reportsToAgent))}>
@@ -1772,7 +1778,7 @@ export function AgentOverview({
               {identity.isPending ? <span className="text-sm text-muted-foreground">{mimouseT("workflow.loading")}</span>
                 : identity.isError ? <span className="text-sm text-destructive">{mimouseT("workflow.publicKeyFailed")}</span>
                 : identity.data ? (
-                  <CopyText text={identity.data.publicKeyPem} ariaLabel="Copy public key" title={mimouseT("workflow.copyPublicKey")}>
+                  <CopyText text={identity.data.publicKeyPem} ariaLabel={mimouseT("workflow.copyPublicKey")} title={mimouseT("workflow.copyPublicKey")}>
                     <span className="font-mono text-sm">{identity.data.keyId.slice(0, 19)}…</span>
                   </CopyText>
                 ) : (
@@ -1795,7 +1801,7 @@ export function AgentOverview({
             <SummaryRow label={mimouseT("workflow.model")}><span className="max-w-64 truncate text-sm font-mono">{configuredModel}</span></SummaryRow>
             <SummaryRow label={mimouseT("workflow.session")}><span className="max-w-64 truncate text-sm font-mono">{runtimeState?.sessionDisplayId ?? runtimeState?.sessionId ?? systemLabel("No session")}</span></SummaryRow>
             <SummaryRow label={mimouseT("workflow.lastRun")}>
-              <span className="text-sm">{lastRun ? `${lastRun.status} · ${relativeTime(lastRun.createdAt)}` : systemLabel("No runs")}</span>
+              <span className="text-sm">{lastRun ? `${lastRunStatusLabel} · ${relativeTime(lastRun.createdAt)}` : systemLabel("No runs")}</span>
             </SummaryRow>
           </div>
         </section>
@@ -1820,7 +1826,7 @@ export function AgentOverview({
           {skillNames.length > 0 ? (
             <div className="flex flex-wrap gap-2">
               {skillNames.slice(0, 8).map((skill) => <Badge key={skill} variant="secondary">{skill}</Badge>)}
-              {skillNames.length > 8 ? <Badge variant="outline">+{skillNames.length - 8} more</Badge> : null}
+              {skillNames.length > 8 ? <Badge variant="outline">{mimouseT("agentOverviewUi.moreSkills", { count: skillNames.length - 8 })}</Badge> : null}
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">{mimouseT("workflow.noSkills")}</p>
@@ -1851,7 +1857,7 @@ export function AgentOverview({
             ))}
             {assignedIssues.length > 6 && (
               <div className="border-t border-border px-3 py-2 text-center text-xs text-muted-foreground">
-                +{assignedIssues.length - 6} more tasks
+                {mimouseT("agentOverviewUi.moreTasks", { count: assignedIssues.length - 6 })}
               </div>
             )}
           </div>

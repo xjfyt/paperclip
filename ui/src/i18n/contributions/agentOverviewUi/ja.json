@@ -1,0 +1,11 @@
+{
+  "titleNotSet": "未設定",
+  "moreSkills_one": "他 {{count}} 件のスキル",
+  "moreSkills_other": "他 {{count}} 件のスキル",
+  "moreTasks_one": "他 {{count}} 件のタスク",
+  "moreTasks_other": "他 {{count}} 件のタスク",
+  "runStatus": {
+    "scheduled_retry": "再試行予定",
+    "interrupted": "中断済み"
+  }
+}
