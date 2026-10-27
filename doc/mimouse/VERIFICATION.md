@@ -1,5 +1,15 @@
 # 本地集成验证记录
 
+## 5500键协议显示与运行时问答草稿修复（2026-10-27，已本地验证）
+
+- 本批冻结`122be536a9aa67d91ad57c514924c987f9795990`，范围和逐步手测见[协议界面与草稿清单](checklists/PROTOCOL-UI-RUNTIME-DRAFT-20261027.md)。补齐工具display API、活动摘要、workspace/runtime卡、QuestionForm/RichInput、本地Thread默认值，并追加Inspector独立可达卡片。canonical分类/去重/排序和原始provider内容保留；同文raw来源不由英语字符串反推翻译。
+- 功能修复9fef7999独立于翻译：Form收到原始拒绝、不再把失败当成功清草稿；Form/Card同步attempt及layout清理隔离晚到结果，structured草稿由Form单独拥有，稳定request/run/turn/draft身份隔离legacy字段。同act防重、真实Thread runtime→durable同key交接、旧完成/失败、新草稿保持均有红→绿证据；独立只读复核无阻断。原QuestionForm已有id/draftKey wrapper，不夸大原问题；跨turn同ID重用仅属防御测试。
+- [schema4审计](checklists/I18N-AUDIT-20261027-5500.json)把AST范围从78扩为82，另列5份manual源证据；原范围、候选行定义保持。最终278 literal/1974 dynamic不是漏翻总数；AST source SHA-256 `9d72c17c3f37a8e15618db93a8eadb7e3559fe355692347503efcabd5837d6c3`，manual SHA-256 `aa943fbcb0dfc86f83f16d9d0caedc4d49a9f49d3ae9c815d4c52772b5b7665f`，所有missing/unmatched为空。新增加的Card13项在Inspector条件可达，不能因主timeline不用这些卡就当死代码；已补并测试真实Preview解析/投影/Card，非完整浏览器Inspector。Group Permission只作fixture能力覆盖，不宣称生产供值。
+- 最终完整UI类型通过（`/tmp/paperclip-5500-ui-types.log`），串行标准UI构建4.12秒通过（`/tmp/paperclip-5500-ui-build.log`）；保留既有大chunk/dynamic-import/CSS提示。中间5486类型首轮3个测试夹具问题已按真实类型修复（47cb687f），没有放宽生产类型或断言。18文件717项中央通过（`/tmp/paperclip-5500-central-ui.log`，5条既有scrollTo提示），61项脚本及compose/token/palette/cliplab/no-git-push门禁通过（`/tmp/paperclip-5500-scripts.log`）。
+- 新完整UI为新inventory/9分片/2并行，**868文件、87批、11830项严格聚合通过**，零失败/跳过/todo，sourceUnchanged均为true；不沿用5142的11588项。环境恢复后核对改动与日志并重跑在途验证；worker缺新资源/协议schema/Pi源依赖的失败在主线相应邻接用例补验，未删失败记录。后端server/packages/cli对2d6d12c9无差异（`/tmp/paperclip-5500-backend-unchanged.log`为0），旧164项编译API/48c9c1d0构建保持历史范围，不冒称本批新跑。
+- 最终聚合证据`test-results/mimouse-ui/aggregate-2026-10-27T18-32-00-887Z-PU6lQU/aggregate.json`，聚合日志`/tmp/paperclip-5500-ui-parallel-aggregate-cce5f7fb.log`，监督日志`/tmp/paperclip-5500-ui-parallel-supervisor.log`，分片清单`/tmp/paperclip-5500-ui-parallel-manifests.txt`。UI源码SHA-256 `ed1d79f336ff7e22fba9b81dc9886435cc5a371792066815aff0c9e377a5e0a8`，runtime-trees-v2摘要`646bf37f2c708722b7f2d46cd9199021ec2ca2cea60d629350b91f208d081b6a`。这是同输入严格覆盖聚合，不伪称一次不中断执行。
+- 未执行真实账户/模型/通知、完整浏览器/IME、独立all-dist安装包或跨平台验收。部分按钮为明确hidden条件下的组件能力测试，不能当生产路径。原85项需求状态不因5500键或mock数量而变更；发布以远端mimouse完整SHA核对为准。
+
 ## 5142键动态来源补全（2026-10-27，已本地验证）
 
 - 本批冻结 `91492969b2abfab58386851c861f636c7630f98e`。从前批1862个动态位置追踪实际宿主与本地来源，补齐权限/来源、审核策略、列表排序/分组/依赖、日期/账单、活动完整句、聊天本地错误/附件类别、引导与selector上游、类型化暂时不可用、角色/环境、责任人opt-in和实际时间线。逐片证据、已撤回误报及源契约/真实host差别见[动态文案清单](checklists/I18N-DYNAMIC-CLOSURE-20261027.md)。
