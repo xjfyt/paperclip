@@ -1,3 +1,10 @@
+import { issueDetailMessages } from "../i18n/issue-detail-test-resources";
+import { IssueChatFeedbackButtons } from "../components/AgentBubbleActionRow";
+import type { ApprovalCard } from "../components/ApprovalCard";
+import type { IssueDocumentsSection } from "../components/IssueDocumentsSection";
+import type { IssuesList } from "../components/IssuesList";
+import type { approvalsApi } from "../api/approvals";
+import { formatDurationMs, formatTokens } from "../lib/utils";
 import { AgentChat } from "./AgentChat";
 import type { agentChatsApi } from "../api/agentChats";
 import { restoreSubmittedCommentDraft } from "../lib/comment-submit-draft";
@@ -25,6 +32,9 @@ import { RichWorkProductCard } from "../components/task-chat/RichWorkProductCard
 import { QueryClient, QueryClientProvider, type InfiniteData } from "@tanstack/react-query";
 import type {
   Agent,
+  Approval,
+  FeedbackVote,
+  IssueCostSummary,
   AuthSession,
   ExecutionWorkspace,
   IssueRecoveryAction,
@@ -48,6 +58,7 @@ import type {
 import { ONBOARDING_FIRST_TASK_ORIGIN_KIND } from "@paperclipai/shared";
 import type {
   AnchorHTMLAttributes,
+  ComponentProps,
   ButtonHTMLAttributes,
   ReactElement,
   ReactNode,
@@ -125,6 +136,12 @@ const mockIssuesApi = vi.hoisted(() => ({
 const mockAgentChatsApi = vi.hoisted(() => ({ get: vi.fn<typeof agentChatsApi.get>(), ensure: vi.fn<typeof agentChatsApi.ensure>() }));
 vi.mock("../api/agentChats", () => ({ agentChatsApi: mockAgentChatsApi }));
 
+const mockApprovalsApi = vi.hoisted(() => ({ approve: vi.fn<typeof approvalsApi.approve>(), reject: vi.fn<typeof approvalsApi.reject>() }));
+const mockApprovalLiteralRender = vi.hoisted(() => vi.fn<(props: ComponentProps<typeof ApprovalCard>) => void>());
+const mockListLiteralRender = vi.hoisted(() => vi.fn<(props: ComponentProps<typeof IssuesList>) => void>());
+const mockDocumentsLiteralRender = vi.hoisted(() => vi.fn<(props: ComponentProps<typeof IssueDocumentsSection>) => void>());
+const mockActualConsentControls = vi.hoisted(() => ({ enabled: false }));
+
 const mockActivityApi = vi.hoisted(() => ({
   forIssue: vi.fn(),
   runsForIssue: vi.fn(),
@@ -174,7 +191,7 @@ type FeedbackThreadProps = Pick<TaskChatThreadProps,
   "onQuarantineRestoreRecoveryAction" | "reconcileRecoveryActionPending" | "quarantineRestoreRecoveryActionPending" |
   "onAcceptInteraction" | "onRejectInteraction" | "onSubmitInteractionAnswers" |
   "onSubmitInteractionVerdicts" | "onCancelInteraction" | "onSkipInteraction" |
-  "onAdd" | "onDeleteComment" | "onCancelQueued" | "onDiscardQueuedComment" | "queuedCommentQueue" | "comments" | "composerRef"
+  "onAdd" | "onDeleteComment" | "onCancelQueued" | "onDiscardQueuedComment" | "queuedCommentQueue" | "comments" | "composerRef" | "onVote" | "feedbackDataSharingPreference" | "feedbackTermsUrl"
 >;
 const mockFeedbackThreadRender = vi.hoisted(() => vi.fn<(props: FeedbackThreadProps) => void>());
 const mockFeedbackToast = vi.hoisted(() => vi.fn<(toast: ToastInput) => void>());
@@ -252,10 +269,7 @@ vi.mock("../api/heartbeats", () => ({
 }));
 
 vi.mock("../api/approvals", () => ({
-  approvalsApi: {
-    approve: vi.fn(),
-    reject: vi.fn(),
-  },
+  approvalsApi: mockApprovalsApi,
 }));
 
 vi.mock("../api/agents", () => ({
@@ -495,6 +509,10 @@ vi.mock("../components/TaskChatThread", () => ({
       <div data-testid="task-chat-thread">
         {props.threadHeader}
         Task chat thread
+        {mockActualConsentControls.enabled && props.onVote ? <IssueChatFeedbackButtons
+          activeVote={null} sharingPreference={props.feedbackDataSharingPreference ?? "prompt"} termsUrl={props.feedbackTermsUrl ?? null}
+          onVote={(vote, options) => props.onVote!("feedback-original", vote, options)}
+        /> : null}
         {props.comments?.map((comment, index) => comment.metadata?.recovery ? <DispositionRecoveryNotice key={index} snapshot={comment.metadata.recovery} /> : null)}
         {props.workProducts?.map((workProduct) => (
           <RichWorkProductCard
@@ -537,7 +555,7 @@ vi.mock("../components/TaskChatThread", () => ({
 }));
 
 vi.mock("../components/IssueDocumentsSection", () => ({
-  IssueDocumentsSection: () => <div>Documents</div>,
+  IssueDocumentsSection: (props: ComponentProps<typeof IssueDocumentsSection>) => { mockDocumentsLiteralRender(props); return <div>Documents{props.extraActions}</div>; },
 }));
 
 vi.mock("../components/MarkdownBody", () => ({
@@ -547,8 +565,9 @@ vi.mock("../components/MarkdownBody", () => ({
 }));
 
 vi.mock("../components/IssuesList", () => ({
-  IssuesList: (props: { issueBadgeById?: Map<string, string> }) => {
+  IssuesList: (props: ComponentProps<typeof IssuesList>) => {
     mockIssuesListRender(props);
+    mockListLiteralRender(props);
     return (
       <div>
         Sub-issues
@@ -653,7 +672,7 @@ vi.mock("../components/PriorityIcon", () => ({
 }));
 
 vi.mock("../components/ApprovalCard", () => ({
-  ApprovalCard: () => <div>Approval</div>,
+  ApprovalCard: (props: ComponentProps<typeof ApprovalCard>) => { mockApprovalLiteralRender(props); return <div>Approval</div>; },
 }));
 
 vi.mock("../components/Identity", () => ({
@@ -1383,6 +1402,12 @@ describe("IssueDetail", () => {
     localStorage.clear();
     sessionStorage.clear();
     mockPanelState.panelVisible = true;
+    mockActualConsentControls.enabled = false;
+    mockApprovalsApi.approve.mockReset();
+    mockApprovalsApi.reject.mockReset();
+    mockApprovalLiteralRender.mockClear();
+    mockListLiteralRender.mockClear();
+    mockDocumentsLiteralRender.mockClear();
     mockSidebarState.isMobile = false;
     container = document.createElement("div");
     document.body.appendChild(container);
@@ -2578,6 +2603,234 @@ describe("IssueDetail", () => {
     expect(mockIssuesApi.addComment).toHaveBeenCalledWith(issueB.id, "New B body", undefined, undefined, [], "request-B");
     expect(feedbackThread().comments.some((comment) => comment.body === "Original A body")).toBe(false);
     expect(mockFeedbackToast).not.toHaveBeenCalled();
+  });
+
+  function literalApproval(): Approval {
+    return { id: "approval-original", companyId: "company-1", type: "request_board_approval", requestedByAgentId: null, requestedByUserId: "user-1", status: "pending", payload: { title: "Authored approval 原文" }, decisionNote: null, decidedByUserId: null, decidedAt: null, createdAt: new Date(0), updatedAt: new Date(0) };
+  }
+  function literalVote(): FeedbackVote {
+    return { id: "vote-original", companyId: "company-1", issueId: "issue-1", targetType: "issue_comment", targetId: "feedback-original", authorUserId: "user-1", vote: "up", reason: null, sharedWithLabs: false, sharedAt: null, consentVersion: null, redactionSummary: null, createdAt: new Date(0), updatedAt: new Date(0) };
+  }
+  async function renderLiteralActivity(locale: string, issue = createIssue()) {
+    mockInstanceSettingsApi.getExperimental.mockResolvedValue({ enableClassicTaskInterface: true });
+    mockLocation.hash = "#document-continuation-summary";
+    mockIssuesApi.get.mockResolvedValue(issue);
+    await act(async () => { await i18n.changeLanguage(locale); root.render(<QueryClientProvider client={queryClient}><IssueDetail /></QueryClientProvider>); });
+  }
+
+  it.each(Object.entries(issueDetailMessages))("batch4 localizes approval outcomes with unchanged actions and pending state in %s", async (locale, messages) => {
+    const approval = literalApproval();
+    mockIssuesApi.listApprovals.mockResolvedValue([approval]);
+    await renderLiteralActivity("en");
+    await waitForAssertion(() => expect(mockApprovalLiteralRender).toHaveBeenCalled());
+    for (const action of ["approve", "reject"] as const) {
+      const api = mockApprovalsApi[action];
+      const pending = createDeferred<Approval>();
+      api.mockReturnValueOnce(pending.promise);
+      const invoke = () => { const props = mockApprovalLiteralRender.mock.calls.at(-1)![0]; if (action === "approve") props.onApprove?.(); else props.onReject?.(); };
+      mockFeedbackToast.mockClear();
+      await act(async () => invoke());
+      await waitForAssertion(() => expect(mockApprovalLiteralRender.mock.calls.at(-1)![0]).toMatchObject({ isPending: true, pendingAction: action }));
+      expect(api).toHaveBeenCalledExactlyOnceWith(approval.id);
+      expect(mockFeedbackToast).not.toHaveBeenCalled();
+      await act(async () => { await i18n.changeLanguage(locale); pending.resolve({ ...approval, status: action === "approve" ? "approved" : "rejected" }); });
+      await waitForAssertion(() => expect(mockFeedbackToast).toHaveBeenCalledExactlyOnceWith({ title: action === "approve" ? messages.approvalApproved : messages.approvalRejected, tone: "success" }));
+      await waitForAssertion(() => expect(mockApprovalLiteralRender.mock.calls.at(-1)![0].isPending).toBe(false));
+      for (const error of [new Error("Raw approval error 原文 {{keep}}"), { privatePayload: "not rendered" }]) {
+        api.mockRejectedValueOnce(error); mockFeedbackToast.mockClear();
+        await act(async () => invoke());
+        await waitForAssertion(() => expect(mockFeedbackToast).toHaveBeenCalledExactlyOnceWith({ title: action === "approve" ? messages.approveFailed : messages.rejectFailed, body: error instanceof Error ? error.message : messages.approvalUpdateFailed, tone: "error" }));
+      }
+      expect(api).toHaveBeenCalledTimes(3);
+    }
+  });
+
+  it.each(Object.entries(issueDetailMessages))("batch4 keeps child updates unchanged and translates only local failures in %s", async (locale, messages) => {
+    const child = createIssue({ id: "child-original", parentId: "issue-1", identifier: "PAP-2", title: "Child title 原文" });
+    mockIssuesApi.list.mockResolvedValue([child]);
+    await renderLiteralActivity(locale);
+    await waitForAssertion(() => expect(mockListLiteralRender).toHaveBeenCalled());
+    const data = { title: "  New child title {{keep}}  ", status: "todo" as const };
+    mockIssuesApi.update.mockReset().mockResolvedValueOnce({ ...child, ...data });
+    await act(async () => mockListLiteralRender.mock.calls.at(-1)![0].onUpdateIssue(child.id, data));
+    await waitForAssertion(() => expect(mockIssuesApi.update).toHaveBeenCalledExactlyOnceWith(child.id, data));
+    expect(mockFeedbackToast).not.toHaveBeenCalled();
+    for (const error of [new Error("Task update failed"), { privatePayload: "not rendered" }]) {
+      mockIssuesApi.update.mockRejectedValueOnce(error); mockFeedbackToast.mockClear();
+      await act(async () => mockListLiteralRender.mock.calls.at(-1)![0].onUpdateIssue(child.id, data));
+      await waitForAssertion(() => expect(mockFeedbackToast).toHaveBeenCalledExactlyOnceWith({ title: messages.taskUpdateFailed, body: error instanceof Error ? error.message : messages.subtaskSaveFailed, tone: "error" }));
+      expect(mockIssuesApi.update).toHaveBeenLastCalledWith(child.id, data);
+    }
+  });
+
+  it.each(Object.entries(issueDetailMessages).flatMap(([locale, messages]) => [false, true].map((share) => ({ locale, messages, share }))))("batch4 keeps real feedback consent explicit before $locale sharing=$share", async ({ locale, messages, share }) => {
+    mockActualConsentControls.enabled = true;
+    const pending = createDeferred<FeedbackVote>();
+    mockIssuesApi.upsertFeedbackVote.mockReset().mockReturnValue(pending.promise);
+    await renderFeedbackHost("en");
+    await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Helpful"]')!.click());
+    expect(mockIssuesApi.upsertFeedbackVote).not.toHaveBeenCalled();
+    expect(mockFeedbackToast).not.toHaveBeenCalled();
+    const consent = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.trim() === (share ? "Always allow" : "Don't allow"));
+    expect(consent).toBeDefined();
+    await act(async () => consent!.click());
+    await waitForAssertion(() => expect(mockIssuesApi.upsertFeedbackVote).toHaveBeenCalledExactlyOnceWith("PAP-1", { targetType: "issue_comment", targetId: "feedback-original", vote: "up", ...(share ? { allowSharing: true } : {}) }));
+    expect(mockFeedbackToast).not.toHaveBeenCalled();
+    expect(container.querySelector<HTMLButtonElement>('button[aria-label="Helpful"]')!.disabled).toBe(true);
+    await act(async () => { await i18n.changeLanguage(locale); pending.resolve({ ...literalVote(), sharedWithLabs: share }); });
+    await waitForAssertion(() => expect(mockFeedbackToast).toHaveBeenCalledExactlyOnceWith({ title: share ? messages.feedbackFutureShared : messages.feedbackFutureLocal, tone: "success" }));
+  });
+
+  it.each(Object.entries(issueDetailMessages))("batch4 preserves vote reason, sharing payload, rollback and raw failures in %s", async (locale, messages) => {
+    mockInstanceSettingsApi.getGeneral.mockResolvedValue({ feedbackDataSharingPreference: "not_allowed" });
+    await renderFeedbackHost(locale);
+    const reason = "  Raw reason 原文 {{keep}}\nline 2  ";
+    mockIssuesApi.upsertFeedbackVote.mockReset().mockResolvedValue(literalVote());
+    for (const allowSharing of [false, true]) {
+      mockFeedbackToast.mockClear();
+      await act(async () => { await feedbackThread().onVote?.("feedback-original", "down", { reason, allowSharing }); });
+      expect(mockIssuesApi.upsertFeedbackVote).toHaveBeenLastCalledWith("PAP-1", { targetType: "issue_comment", targetId: "feedback-original", vote: "down", reason, ...(allowSharing ? { allowSharing: true } : {}) });
+      expect(mockFeedbackToast).toHaveBeenCalledExactlyOnceWith({ title: allowSharing ? messages.feedbackSharingEnabled : messages.feedbackSaved, tone: "success" });
+    }
+    for (const error of [new Error("Unknown error"), new Error("Server feedback error 原文"), { privatePayload: "not rendered" }]) {
+      queryClient.setQueryData(queryKeys.issues.feedbackVotes("PAP-1"), [literalVote()]);
+      mockIssuesApi.upsertFeedbackVote.mockRejectedValueOnce(error); mockFeedbackToast.mockClear();
+      await act(async () => { await expect(feedbackThread().onVote?.("feedback-original", "down", { reason })).rejects.toBe(error); });
+      expect(mockFeedbackToast).toHaveBeenCalledExactlyOnceWith({ title: messages.feedbackSaveFailed, body: error instanceof Error ? error.message : messages.unknownError, tone: "error" });
+      expect(queryClient.getQueryData(queryKeys.issues.feedbackVotes("PAP-1"))).toEqual([literalVote()]);
+    }
+    expect(mockIssuesApi.upsertFeedbackVote).toHaveBeenCalledTimes(5);
+  });
+
+  it.each(Object.entries(issueDetailMessages))("batch4 preserves document revision feedback identity and explicit sharing in %s", async (locale, messages) => {
+    await renderLiteralActivity(locale);
+    await waitForAssertion(() => expect(mockDocumentsLiteralRender).toHaveBeenCalled());
+    mockIssuesApi.upsertFeedbackVote.mockReset().mockResolvedValue({ ...literalVote(), targetType: "issue_document_revision", targetId: "revision-original" });
+    for (const allowSharing of [false, true]) {
+      mockFeedbackToast.mockClear();
+      await act(async () => { await mockDocumentsLiteralRender.mock.calls.at(-1)![0].onVote?.("revision-original", "up", { allowSharing, reason: "  Revision reason 原文  " }); });
+      expect(mockIssuesApi.upsertFeedbackVote).toHaveBeenLastCalledWith("PAP-1", { targetType: "issue_document_revision", targetId: "revision-original", vote: "up", reason: "  Revision reason 原文  ", ...(allowSharing ? { allowSharing: true } : {}) });
+      expect(mockFeedbackToast).toHaveBeenCalledExactlyOnceWith({ title: allowSharing ? messages.feedbackFutureShared : messages.feedbackFutureLocal, tone: "success" });
+    }
+    expect(mockIssuesApi.upsertFeedbackVote).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(Object.entries(issueDetailMessages).flatMap(([locale, messages]) => [0, 1, 3].map((count) => ({ locale, messages, count }))))("batch4 renders complete cost templates in $locale at count $count", async ({ locale, messages, count }) => {
+    const cached = count === 1 ? 7 : 0;
+    const runs: RunForIssue[] = Array.from({ length: count }, (_, index) => ({ runId: `run-${index}`, status: "succeeded", agentId: "agent-1", adapterType: "codex_local", startedAt: "2026-04-21T00:00:00Z", finishedAt: "2026-04-21T00:00:02Z", createdAt: "2026-04-21T00:00:00Z", invocationSource: "issue", usageJson: { inputTokens: 100, outputTokens: 50, cachedInputTokens: cached, totalTokens: 150 + cached }, resultJson: null }));
+    const tree: IssueCostSummary = { issueId: "issue-1", issueCount: count, includeDescendants: true, costCents: 10, inputTokens: 123, outputTokens: 45, cachedInputTokens: cached, runCount: count, runtimeMs: count * 3000 };
+    mockActivityApi.runsForIssue.mockResolvedValue(runs);
+    mockIssuesApi.getCostSummary.mockResolvedValue(tree);
+    await renderLiteralActivity(locale);
+    const tokenText = (input: number, output: number, cache: number, total = input + output + cache) => (cache ? messages.costTokensCached : messages.costTokens).replace("{{total}}", formatTokens(total)).replace("{{input}}", formatTokens(input)).replace("{{output}}", formatTokens(output)).replace("{{cached}}", formatTokens(cache));
+    await waitForAssertion(() => expect(container.textContent).toContain(tokenText(123, 45, cached)));
+    const suffix = count === 1 && ["en", "es"].includes(locale) ? "one" : "other";
+    expect(container.textContent).toContain(messages[`taskCount_${suffix}`].replace("{{count}}", String(count)));
+    if (count > 0) {
+      // Codex historical input already includes cached input; preserve that total.
+      expect(container.textContent).toContain(tokenText(count * 100, count * 50, count * cached, count * 150));
+      for (const duration of [count * 2000, count * 3000]) expect(container.textContent).toContain(messages[`costRuntime_${suffix}`].replace("{{count}}", String(count)).replace("{{duration}}", formatDurationMs(duration)));
+    }
+    expect(mockIssuesApi.getCostSummary).toHaveBeenCalledWith("issue-1");
+  });
+
+  it.each(Object.entries(issueDetailMessages).flatMap(([locale, messages]) => (["ask", "planning"] as const).map((mode) => ({ locale, messages, mode }))))("batch4 translates seeded/resolved routine and $mode state labels in $locale", async ({ locale, messages, mode }) => {
+    const issue = createIssue({ originKind: "routine_execution", originId: "routine-original-原文", workMode: mode });
+    const pending = createDeferred<Issue>();
+    mockIssuesApi.get.mockReturnValue(pending.promise);
+    mockInstanceSettingsApi.getExperimental.mockResolvedValue({ enableClassicTaskInterface: true });
+    mockLocation.state = { issueDetailHeaderSeed: { id: issue.id, identifier: issue.identifier, title: issue.title, status: issue.status, priority: issue.priority, projectId: null, projectName: null, originKind: issue.originKind, originId: issue.originId } };
+    await act(async () => { await i18n.changeLanguage(locale); root.render(<QueryClientProvider client={queryClient}><IssueDetail /></QueryClientProvider>); });
+    const title = messages.routineExecution.replace("{{id}}", issue.originId!);
+    await waitForAssertion(() => expect(Array.from(container.querySelectorAll("[title]")).some((element) => element.getAttribute("title") === title)).toBe(true));
+    await act(async () => pending.resolve(issue));
+    await waitForAssertion(() => expect(container.querySelector(`a[href="/routines/${issue.originId}"]`)?.getAttribute("title")).toBe(title));
+    expect(Array.from(container.querySelectorAll("[title]")).some((element) => element.getAttribute("title") === (mode === "ask" ? messages.askState : messages.planningState))).toBe(true);
+    expect(container.textContent).toContain(mode === "ask" ? messages.askMode : messages.planningMode);
+  });
+
+  it.each(Object.entries(issueDetailMessages))("batch4 updates agent configure accessibility on locale changes without renaming the agent in %s", async (locale, messages) => {
+    const agent = createAgent({ name: "Agent 原名 {{keep}}" });
+    const canonical = createIssue({ conversationAgentId: agent.id });
+    mockIssuesApi.get.mockResolvedValue(canonical);
+    await act(async () => { await i18n.changeLanguage(locale === "en" ? "ja" : "en"); });
+    await act(async () => root.render(<QueryClientProvider client={queryClient}><TaskDetailSurface conversation={{ agent, issue: canonical, ensureIssue: async () => canonical }} /></QueryClientProvider>));
+    await flushReact();
+    mockSetBreadcrumbs.mockClear();
+    await act(async () => { await i18n.changeLanguage(locale); });
+    await waitForAssertion(() => {
+      const crumbs: Array<{ label: string; trailing?: ReactElement<ButtonHTMLAttributes<HTMLButtonElement>> }> = mockSetBreadcrumbs.mock.calls.at(-1)?.[0] ?? [];
+      expect(crumbs[0]?.label).toBe(agent.name);
+      expect(crumbs[0]?.trailing?.props["aria-label"]).toBe(messages.configureAgent.replace("{{name}}", agent.name));
+    });
+  });
+
+  it.each(Object.entries(issueDetailMessages))("batch4 translates the reachable classic mobile properties sheet heading in %s", async (locale, messages) => {
+    mockSidebarState.isMobile = true;
+    mockInstanceSettingsApi.getExperimental.mockResolvedValue({ enableClassicTaskInterface: true });
+    mockIssuesApi.get.mockResolvedValue(createIssue());
+    await act(async () => { await i18n.changeLanguage(locale); root.render(<QueryClientProvider client={queryClient}><IssueDetail /></QueryClientProvider>); });
+    let button: HTMLButtonElement | undefined;
+    await waitForAssertion(() => {
+      button = Array.from(container.querySelectorAll<HTMLButtonElement>("button[title]")).find((entry) => entry.title === i18n.t("workflow.properties"));
+      expect(button).toBeDefined();
+    });
+    await act(async () => button!.click());
+    await waitForAssertion(() => expect(Array.from(document.querySelectorAll("h2")).some((heading) => heading.textContent === messages.properties)).toBe(true));
+    // Classic document links stay in the center column, so the Plan branch is
+    // translated by the contribution contract, not claimed as a mounted path.
+  });
+
+  it.each(Object.entries(issueDetailMessages))("batch4 keeps upload pending labels truthful and preserves the file request in %s", async (locale, messages) => {
+    const pending = createDeferred<IssueAttachment>();
+    mockIssuesApi.uploadAttachment.mockReset().mockReturnValue(pending.promise);
+    await renderLiteralActivity(locale);
+    await waitForAssertion(() => expect(container.querySelector('input[type="file"]')).not.toBeNull());
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
+    const file = new File(["original-bytes"], "Original 原名.png", { type: "image/png" });
+    Object.defineProperty(input, "files", { configurable: true, value: [file] });
+    await act(async () => input.dispatchEvent(new Event("change", { bubbles: true })));
+    await waitForAssertion(() => expect(mockIssuesApi.uploadAttachment).toHaveBeenCalledExactlyOnceWith("company-1", "issue-1", file));
+    await waitForAssertion(() => expect(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some((button) => button.disabled && button.textContent?.trim() === messages.uploading)).toBe(true));
+    expect(mockFeedbackToast).not.toHaveBeenCalled();
+    await act(async () => pending.resolve(createAttachment({ id: "original-upload", originalFilename: file.name })));
+    await waitForAssertion(() => expect(container.textContent).not.toContain(messages.uploading));
+    expect(mockFeedbackToast).not.toHaveBeenCalled();
+  });
+
+  it.each(Object.entries(issueDetailMessages))("batch4 reports clipboard outcomes only after the real copy result in %s", async (locale, messages) => {
+    const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+    const secureDescriptor = Object.getOwnPropertyDescriptor(window, "isSecureContext");
+    const execDescriptor = Object.getOwnPropertyDescriptor(document, "execCommand");
+    const pending = createDeferred<void>();
+    const write = vi.fn<(text: string) => Promise<void>>().mockReturnValueOnce(pending.promise);
+    const exec = vi.fn<(command: string) => boolean>();
+    Object.defineProperty(window, "isSecureContext", { configurable: true, value: true });
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: write } });
+    Object.defineProperty(document, "execCommand", { configurable: true, value: exec });
+    try {
+      await renderFeedbackHost("en", createIssue({ title: "Raw &amp; title 原文", description: "Body &lt;tag&gt;\n{{keep}}" }));
+      const copy = async () => {
+        await act(async () => container.querySelector<HTMLButtonElement>(`button[aria-label="${i18n.t("workflow.moreTaskActions")}"]`)!.click());
+        const button = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((entry) => entry.textContent?.trim() === i18n.t("workflow.copyMarkdown"));
+        expect(button).toBeDefined(); await act(async () => button!.click());
+      };
+      await copy();
+      expect(write).toHaveBeenCalledExactlyOnceWith("# PAP-1: Raw & title 原文\n\nBody <tag>\n{{keep}}");
+      expect(mockFeedbackToast).not.toHaveBeenCalled();
+      await act(async () => { await i18n.changeLanguage(locale); pending.resolve(); });
+      await waitForAssertion(() => expect(mockFeedbackToast).toHaveBeenCalledExactlyOnceWith({ title: messages.copied, tone: "success" }));
+      for (const error of [new Error("Clipboard raw error 原文"), { privatePayload: "not rendered" }]) {
+        write.mockRejectedValueOnce(new Error("Native clipboard denied")); exec.mockImplementationOnce(() => { throw error; }); mockFeedbackToast.mockClear();
+        await copy();
+        await waitForAssertion(() => expect(mockFeedbackToast).toHaveBeenCalledExactlyOnceWith({ title: messages.copyFailed, body: error instanceof Error ? error.message : messages.copyFailedBody, tone: "error" }));
+      }
+      expect(exec).toHaveBeenCalledTimes(2);
+    } finally {
+      if (clipboardDescriptor) Object.defineProperty(navigator, "clipboard", clipboardDescriptor); else Reflect.deleteProperty(navigator, "clipboard");
+      if (secureDescriptor) Object.defineProperty(window, "isSecureContext", secureDescriptor); else Reflect.deleteProperty(window, "isSecureContext");
+      if (execDescriptor) Object.defineProperty(document, "execCommand", execDescriptor); else Reflect.deleteProperty(document, "execCommand");
+    }
   });
 
   it.each(Object.entries(issueRetryMessages))("localizes the actual activity-tab scheduled retry host and keeps its request identity in %s", async (locale, messages) => {

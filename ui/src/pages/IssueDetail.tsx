@@ -1040,7 +1040,7 @@ function IssueDetailLoadingState({
                 <Badge
                   variant="outline"
                   className="border-violet-500/30 bg-violet-500/10 text-(length:--text-nano) text-violet-600 dark:text-violet-400"
-                  title={`Routine execution from routine ${headerSeed.originId}`}
+                  title={mimouseT("issueDetailUi.routineExecution", { id: headerSeed.originId })}
                 >
                   <Repeat className="h-3 w-3" />{mimouseT("workflow.routine")}</Badge>
               ) : null}
@@ -2818,16 +2818,13 @@ function IssueDetailActivityTab({
                   </span>
                 ) : null}
                 {issueCostSummary.hasTokens ? (
-                  <span>{mimouseT("workflow.tokens")}{formatTokens(issueCostSummary.totalTokens)}
-                    {issueCostSummary.cached > 0
-                      ? ` (in ${formatTokens(issueCostSummary.input)}, out ${formatTokens(issueCostSummary.output)}, cached ${formatTokens(issueCostSummary.cached)})`
-                      : ` (in ${formatTokens(issueCostSummary.input)}, out ${formatTokens(issueCostSummary.output)})`}
-                  </span>
+                  <span>{mimouseT(issueCostSummary.cached > 0 ? "issueDetailUi.costTokensCached" : "issueDetailUi.costTokens", {
+                    total: formatTokens(issueCostSummary.totalTokens), input: formatTokens(issueCostSummary.input),
+                    output: formatTokens(issueCostSummary.output), cached: formatTokens(issueCostSummary.cached),
+                  })}</span>
                 ) : null}
                 {issueCostSummary.hasRuntime ? (
-                  <span>{mimouseT("workflow.runtime")}{formatDurationMs(issueCostSummary.runtimeMs)}
-                    {` (${issueCostSummary.runCount} run${issueCostSummary.runCount === 1 ? "" : "s"})`}
-                  </span>
+                  <span>{mimouseT("issueDetailUi.costRuntime", { duration: formatDurationMs(issueCostSummary.runtimeMs), count: issueCostSummary.runCount })}</span>
                 ) : null}
                 {!issueCostSummary.hasCost &&
                 !issueCostSummary.hasTokens &&
@@ -2848,20 +2845,14 @@ function IssueDetailActivityTab({
                       },
                     )}
                   </span>
-                  <span>{mimouseT("workflow.tokens")}{formatTokens(issueTreeCostTokens)}
-                    {issueTreeCostSummary.cachedInputTokens > 0
-                      ? ` (in ${formatTokens(issueTreeCostSummary.inputTokens)}, out ${formatTokens(issueTreeCostSummary.outputTokens)}, cached ${formatTokens(issueTreeCostSummary.cachedInputTokens)})`
-                      : ` (in ${formatTokens(issueTreeCostSummary.inputTokens)}, out ${formatTokens(issueTreeCostSummary.outputTokens)})`}
-                  </span>
+                  <span>{mimouseT(issueTreeCostSummary.cachedInputTokens > 0 ? "issueDetailUi.costTokensCached" : "issueDetailUi.costTokens", {
+                    total: formatTokens(issueTreeCostTokens), input: formatTokens(issueTreeCostSummary.inputTokens),
+                    output: formatTokens(issueTreeCostSummary.outputTokens), cached: formatTokens(issueTreeCostSummary.cachedInputTokens),
+                  })}</span>
                   {issueTreeCostSummary.runCount > 0 ? (
-                    <span>{mimouseT("workflow.runtime")}{formatDurationMs(issueTreeCostSummary.runtimeMs)}
-                      {` (${issueTreeCostSummary.runCount} run${issueTreeCostSummary.runCount === 1 ? "" : "s"})`}
-                    </span>
+                    <span>{mimouseT("issueDetailUi.costRuntime", { duration: formatDurationMs(issueTreeCostSummary.runtimeMs), count: issueTreeCostSummary.runCount })}</span>
                   ) : null}
-                  <span>
-                    {issueTreeCostSummary.issueCount} task
-                    {issueTreeCostSummary.issueCount === 1 ? "" : "s"}
-                  </span>
+                  <span>{mimouseT("issueDetailUi.taskCount", { count: issueTreeCostSummary.issueCount })}</span>
                 </div>
               ) : null}
             </div>
@@ -4557,11 +4548,11 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
     },
     onError: (err) => {
       pushToast({
-        title: "Task update failed",
+        title: mimouseT("issueDetailUi.taskUpdateFailed"),
         body:
           err instanceof Error
             ? err.message
-            : "Unable to save sub-task changes",
+            : mimouseT("issueDetailUi.subtaskSaveFailed"),
         tone: "error",
       });
     },
@@ -4697,8 +4688,8 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       pushToast({
         title:
           variables.action === "approve"
-            ? "Approval approved"
-            : "Approval rejected",
+            ? mimouseT("issueDetailUi.approvalApproved")
+            : mimouseT("issueDetailUi.approvalRejected"),
         tone: "success",
       });
     },
@@ -4706,9 +4697,9 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       pushToast({
         title:
           variables.action === "approve"
-            ? "Approval failed"
-            : "Rejection failed",
-        body: err instanceof Error ? err.message : "Unable to update approval",
+            ? mimouseT("issueDetailUi.approveFailed")
+            : mimouseT("issueDetailUi.rejectFailed"),
+        body: err instanceof Error ? err.message : mimouseT("issueDetailUi.approvalUpdateFailed"),
         tone: "error",
       });
     },
@@ -5529,11 +5520,11 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
         title:
           variables.sharingPreferenceAtSubmit === "prompt"
             ? variables.allowSharing
-              ? "Feedback saved. Future votes will share"
-              : "Feedback saved. Future votes will stay local"
+              ? mimouseT("issueDetailUi.feedbackFutureShared")
+              : mimouseT("issueDetailUi.feedbackFutureLocal")
             : variables.allowSharing
-              ? "Feedback saved and sharing enabled"
-              : "Feedback saved",
+              ? mimouseT("issueDetailUi.feedbackSharingEnabled")
+              : mimouseT("issueDetailUi.feedbackSaved"),
         tone: "success",
       });
     },
@@ -5545,8 +5536,8 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
         );
       }
       pushToast({
-        title: "Failed to save feedback",
-        body: err instanceof Error ? err.message : "Unknown error",
+        title: mimouseT("issueDetailUi.feedbackSaveFailed"),
+        body: err instanceof Error ? err.message : mimouseT("issueDetailUi.unknownError"),
         tone: "error",
       });
     },
@@ -5701,7 +5692,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
         label: conversationAgent.name,
         leading: <AgentAvatar agent={conversationAgent} size={24} />,
         leadingKey: `agent:${conversationAgent.id}:${JSON.stringify(conversationAgent.appearance)}`,
-        trailing: <Button variant="ghost" size="icon-xs" asChild aria-label={`Configure ${conversationAgent.name}`}><Link to={agentDetailHref(conversationAgent.id, "runtime")}><ChatSettings /></Link></Button>,
+        trailing: <Button variant="ghost" size="icon-xs" asChild aria-label={mimouseT("issueDetailUi.configureAgent", { name: conversationAgent.name })}><Link to={agentDetailHref(conversationAgent.id, "runtime")}><ChatSettings /></Link></Button>,
         trailingKey: `configure:${conversationAgent.id}`,
       }]);
       return;
@@ -5719,6 +5710,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
     ]);
   }, [
     conversationAgent,
+    breadcrumbLocale,
     breadcrumbTitle,
     breadcrumbIdentifier,
     hasLiveRuns,
@@ -6400,15 +6392,15 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
     try {
       await copyTextToClipboard(md);
       setCopied(true);
-      pushToast({ title: "Copied to clipboard", tone: "success" });
+      pushToast({ title: mimouseT("issueDetailUi.copied"), tone: "success" });
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
       pushToast({
-        title: "Copy failed",
+        title: mimouseT("issueDetailUi.copyFailed"),
         body:
           error instanceof Error
             ? error.message
-            : "Unable to copy task markdown",
+            : mimouseT("issueDetailUi.copyFailedBody"),
         tone: "error",
       });
     }
@@ -7209,7 +7201,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       >
         <Paperclip className="h-3.5 w-3.5 mr-1.5" />
         {uploadAttachment.isPending || importMarkdownDocument.isPending ? (
-          "Uploading..."
+          mimouseT("issueDetailUi.uploading")
         ) : (
           <>
             <span className="hidden sm:inline">{mimouseT("workflow.uploadAttachment")}</span>
@@ -7352,7 +7344,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
           <Link
             to={`/routines/${issue.originId}`}
             className="inline-flex items-center gap-1 rounded-full bg-violet-500/10 border border-violet-500/30 px-2 py-0.5 text-(length:--text-nano) font-medium text-violet-600 dark:text-violet-400 shrink-0 hover:bg-violet-500/20 transition-colors"
-            title={`Routine execution from routine ${issue.originId}`}
+            title={mimouseT("issueDetailUi.routineExecution", { id: issue.originId })}
           >
             <Repeat className="h-3 w-3" />{mimouseT("workflow.routine")}</Link>
         )}
@@ -7382,10 +7374,10 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
                     "text-(length:--text-nano)",
                     workModeMeta.classes.badge,
                   )}
-                  title={`This task is in ${workModeMeta.label.toLowerCase()}.`}
+                  title={mimouseT(issue.workMode === "ask" ? "issueDetailUi.askState" : "issueDetailUi.planningState")}
                 >
                   <WorkModeIcon className="h-3 w-3" aria-hidden />
-                  {workModeMeta.label}
+                  {mimouseT(issue.workMode === "ask" ? "issueDetailUi.askMode" : "issueDetailUi.planningMode")}
                 </Badge>
               );
             })()
@@ -8594,8 +8586,8 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
                   <SheetHeader>
                     <SheetTitle className="text-sm">
                       {documentDeepLink?.documentKey === "plan"
-                        ? "Plan"
-                        : "Properties"}
+                        ? mimouseT("issueDetailUi.plan")
+                        : mimouseT("issueDetailUi.properties")}
                     </SheetTitle>
                   </SheetHeader>
                   <ScrollArea className="flex-1 overflow-y-auto">
