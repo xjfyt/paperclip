@@ -1,3 +1,4 @@
+import { useTranslation } from "@/i18n";
 import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCompany } from "../context/CompanyContext";
@@ -33,6 +34,7 @@ import {
 } from "lucide-react";
 
 export function Companies() {
+  const { t } = useTranslation();
   const {
     companies,
     selectedCompanyId,
@@ -89,8 +91,8 @@ export function Companies() {
   });
 
   useEffect(() => {
-    setBreadcrumbs([{ label: "Organizations" }]);
-  }, [setBreadcrumbs]);
+    setBreadcrumbs([{ label: t("companiesDirectoryUi.organizations") }]);
+  }, [setBreadcrumbs, t]);
 
   function startEdit(companyId: string, currentName: string) {
     setEditingId(companyId);
@@ -113,13 +115,13 @@ export function Companies() {
         {isCloud ? null : (
           <Button size="sm" onClick={() => openOnboarding()}>
             <Plus className="h-3.5 w-3.5 mr-1.5" />
-            New Organization
+            {t("companiesDirectoryUi.newOrganization")}
           </Button>
         )}
       </div>
 
       <div className="h-6">
-        {loading && <p className="text-sm text-muted-foreground">Loading organizations...</p>}
+        {loading && <p className="text-sm text-muted-foreground">{t("companiesDirectoryUi.loading")}</p>}
         {error && <p className="text-sm text-destructive">{error.message}</p>}
       </div>
 
@@ -164,6 +166,7 @@ export function Companies() {
                       onClick={(e) => e.stopPropagation()}
                     >
                       <Input
+                        aria-label={t("companiesDirectoryUi.organizationName")}
                         value={editName}
                         onChange={(e) => setEditName(e.target.value)}
                         className="h-7 text-sm"
@@ -176,12 +179,13 @@ export function Companies() {
                       <Button
                         variant="ghost"
                         size="icon-xs"
+                        aria-label={t("companiesDirectoryUi.saveName")}
                         onClick={saveEdit}
                         disabled={editMutation.isPending}
                       >
                         <Check className="h-3.5 w-3.5 text-green-500" />
                       </Button>
-                      <Button variant="ghost" size="icon-xs" onClick={cancelEdit}>
+                      <Button variant="ghost" size="icon-xs" onClick={cancelEdit} aria-label={t("companiesDirectoryUi.cancelRename")}>
                         <X className="h-3.5 w-3.5 text-muted-foreground" />
                       </Button>
                     </div>
@@ -197,12 +201,13 @@ export function Companies() {
                               : "bg-muted text-muted-foreground"
                         }`}
                       >
-                        {company.status}
+                        {t(`companiesDirectoryUi.status.${company.status}`, { defaultValue: company.status })}
                       </Badge>
                       <Button
                         variant="ghost"
                         size="icon-xs"
                         className="text-muted-foreground opacity-0 group-hover:opacity-100"
+                        aria-label={t("companiesDirectoryUi.renameOrganization", { name: company.name })}
                         onClick={(e) => {
                           e.stopPropagation();
                           startEdit(company.id, company.name);
@@ -227,6 +232,7 @@ export function Companies() {
                         variant="ghost"
                         size="icon-xs"
                         className="text-muted-foreground opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100"
+                        aria-label={t("companiesDirectoryUi.organizationActions", { name: company.name })}
                       >
                         <MoreHorizontal className="h-4 w-4" />
                       </Button>
@@ -236,7 +242,7 @@ export function Companies() {
                         onClick={() => startEdit(company.id, company.name)}
                       >
                         <Pencil className="h-3.5 w-3.5" />
-                        Rename
+                        {t("companiesDirectoryUi.rename")}
                       </DropdownMenuItem>
                       {company.status === "archived" && (
                         <DropdownMenuItem
@@ -244,7 +250,7 @@ export function Companies() {
                           onClick={() => unarchiveMutation.mutate(company.id)}
                         >
                           <ArchiveRestore className="h-3.5 w-3.5" />
-                          Unarchive
+                          {t("companiesDirectoryUi.unarchive")}
                         </DropdownMenuItem>
                       )}
                       <DropdownMenuSeparator />
@@ -253,7 +259,7 @@ export function Companies() {
                         onClick={() => setConfirmDeleteId(company.id)}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
-                        Delete Organization
+                        {t("companiesDirectoryUi.deleteOrganization")}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -265,13 +271,13 @@ export function Companies() {
                 <div className="flex items-center gap-1.5">
                   <Users className="h-3.5 w-3.5" />
                   <span>
-                    {agentCount} {agentCount === 1 ? "agent" : "agents"}
+                    {t("companiesDirectoryUi.agentCount", { count: agentCount })}
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <CircleDot className="h-3.5 w-3.5" />
                   <span>
-                    {issueCount} {issueCount === 1 ? "task" : "tasks"}
+                    {t("companiesDirectoryUi.taskCount", { count: issueCount })}
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 tabular-nums">
@@ -280,12 +286,12 @@ export function Companies() {
                     {formatCents(company.spentMonthlyCents)}
                     {company.budgetMonthlyCents > 0
                       ? <> / {formatCents(company.budgetMonthlyCents)} <span className="text-xs">({budgetPct}%)</span></>
-                      : <span className="text-xs ml-1">Unlimited budget</span>}
+                      : <span className="text-xs ml-1">{t("companiesDirectoryUi.unlimitedBudget")}</span>}
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 ml-auto">
                   <Calendar className="h-3.5 w-3.5" />
-                  <span>Created {relativeTime(company.createdAt)}</span>
+                  <span>{t("companiesDirectoryUi.created", { time: relativeTime(company.createdAt) })}</span>
                 </div>
               </div>
 
@@ -296,7 +302,7 @@ export function Companies() {
                   onClick={(e) => e.stopPropagation()}
                 >
                   <p className="text-sm text-destructive font-medium">
-                    Delete this organization and all its data? This cannot be undone.
+                    {t("companiesDirectoryUi.deleteConfirmation")}
                   </p>
                   <div className="flex items-center gap-2 ml-4 shrink-0">
                     <Button
@@ -305,7 +311,7 @@ export function Companies() {
                       onClick={() => setConfirmDeleteId(null)}
                       disabled={deleteMutation.isPending}
                     >
-                      Cancel
+                      {t("commonUi.cancel")}
                     </Button>
                     <Button
                       variant="destructive"
@@ -313,7 +319,7 @@ export function Companies() {
                       onClick={() => deleteMutation.mutate(company.id)}
                       disabled={deleteMutation.isPending}
                     >
-                      {deleteMutation.isPending ? "Deleting…" : "Delete"}
+                      {deleteMutation.isPending ? t("companiesDirectoryUi.deleting") : t("commonUi.delete")}
                     </Button>
                   </div>
                 </div>

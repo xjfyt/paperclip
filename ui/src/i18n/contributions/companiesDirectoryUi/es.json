@@ -1,0 +1,22 @@
+{
+  "organizations": "Organizaciones",
+  "newOrganization": "Nueva organización",
+  "loading": "Cargando organizaciones…",
+  "organizationName": "Nombre de la organización",
+  "saveName": "Guardar nombre de la organización",
+  "cancelRename": "Cancelar cambio de nombre",
+  "renameOrganization": "Cambiar el nombre de {{name}}",
+  "organizationActions": "Acciones para {{name}}",
+  "rename": "Cambiar nombre",
+  "unarchive": "Desarchivar",
+  "deleteOrganization": "Eliminar organización",
+  "agentCount_one": "{{count}} agente",
+  "agentCount_other": "{{count}} agentes",
+  "taskCount_one": "{{count}} tarea",
+  "taskCount_other": "{{count}} tareas",
+  "unlimitedBudget": "Presupuesto ilimitado",
+  "created": "Creada {{time}}",
+  "deleteConfirmation": "¿Eliminar esta organización y todos sus datos? Esta acción no se puede deshacer.",
+  "deleting": "Eliminando…",
+  "status": { "active": "Activa", "paused": "En pausa", "archived": "Archivada" }
+}

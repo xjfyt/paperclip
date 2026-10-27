@@ -1,0 +1,22 @@
+{
+  "organizations": "组织",
+  "newOrganization": "新建组织",
+  "loading": "正在加载组织…",
+  "organizationName": "组织名称",
+  "saveName": "保存组织名称",
+  "cancelRename": "取消重命名",
+  "renameOrganization": "重命名 {{name}}",
+  "organizationActions": "{{name}} 的操作",
+  "rename": "重命名",
+  "unarchive": "取消归档",
+  "deleteOrganization": "删除组织",
+  "agentCount_one": "{{count}} 个 Agent",
+  "agentCount_other": "{{count}} 个 Agent",
+  "taskCount_one": "{{count}} 个任务",
+  "taskCount_other": "{{count}} 个任务",
+  "unlimitedBudget": "预算不限",
+  "created": "创建于 {{time}}",
+  "deleteConfirmation": "删除此组织及其全部数据？此操作无法撤销。",
+  "deleting": "正在删除…",
+  "status": { "active": "活跃", "paused": "已暂停", "archived": "已归档" }
+}

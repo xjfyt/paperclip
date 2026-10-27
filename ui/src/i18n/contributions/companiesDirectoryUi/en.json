@@ -1,0 +1,22 @@
+{
+  "organizations": "Organizations",
+  "newOrganization": "New Organization",
+  "loading": "Loading organizations...",
+  "organizationName": "Organization name",
+  "saveName": "Save organization name",
+  "cancelRename": "Cancel rename",
+  "renameOrganization": "Rename {{name}}",
+  "organizationActions": "Actions for {{name}}",
+  "rename": "Rename",
+  "unarchive": "Unarchive",
+  "deleteOrganization": "Delete Organization",
+  "agentCount_one": "{{count}} agent",
+  "agentCount_other": "{{count}} agents",
+  "taskCount_one": "{{count}} task",
+  "taskCount_other": "{{count}} tasks",
+  "unlimitedBudget": "Unlimited budget",
+  "created": "Created {{time}}",
+  "deleteConfirmation": "Delete this organization and all its data? This cannot be undone.",
+  "deleting": "Deleting…",
+  "status": { "active": "Active", "paused": "Paused", "archived": "Archived" }
+}
