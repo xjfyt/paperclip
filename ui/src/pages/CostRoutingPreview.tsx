@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { costRoutingPreviewApi as api } from "@/api/cost-routing-preview";
 import { routingPolicySchema, type RoutingPolicyRecord, type RoutingPreviewRecord } from "@paperclipai/shared/cost-routing-preview";
 export function CostRoutingPreview() {
-  const { selectedCompanyId } = useCompany(), { t } = useTranslation();
+  const { selectedCompanyId, selectedCompany } = useCompany(), { t } = useTranslation();
   const { setBreadcrumbs } = useBreadcrumbs();
   useEffect(() => { setBreadcrumbs([{ label: t("costRoutingPreview.title") }]); }, [setBreadcrumbs, t]);
   const session = useQuery({ queryKey: queryKeys.auth.session, queryFn: authApi.getSession, retry: false });
@@ -24,7 +24,7 @@ export function CostRoutingPreview() {
     : health.isSuccess && !health.isFetching && health.data.deploymentMode === "local_trusted" ? "local-board" : null;
   if (!identity) return <p role="alert">{t("costRoutingPreview.error")}</p>;
   return <div className="space-y-6"><CompanyPolicy key={`${selectedCompanyId}:${identity}`} companyId={selectedCompanyId} identity={identity} />
-    {userId && session.data?.session?.id && <RuntimeCostRouting companyId={selectedCompanyId} userId={userId} sessionId={session.data.session.id} authEpoch={session.dataUpdatedAt} />}
+    {userId && session.data?.session?.id && <RuntimeCostRouting companyId={selectedCompanyId} companyPrefix={selectedCompany?.id === selectedCompanyId ? selectedCompany.issuePrefix : null} userId={userId} sessionId={session.data.session.id} authEpoch={session.dataUpdatedAt} />}
   </div>;
 }
 function CompanyPolicy({ companyId, identity }: { companyId: string; identity: string }) {

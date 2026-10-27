@@ -80,5 +80,11 @@
   "previousSessionPending": "A request from your earlier sign-in is still unresolved. Readback only: its confirmations and execution intent were not transferred.",
   "closeExpired": "Verify and close the expired, unapplied proposal",
   "confirmCloseExpired": "I authorize only permanently closing this expired, never-applied proposal. This does not approve a policy, cancel a run, or reverse charges.",
-  "closeExpiredBoundary": "First read back the pending approval. The server checks expiry and refuses to close an active or previously approved proposal. The original request stays pending until an authorized readback proves its outcome."
+  "closeExpiredBoundary": "First read back the pending approval. The server checks expiry and refuses to close an active or previously approved proposal. The original request stays pending until an authorized readback proves its outcome.",
+  "bindingBound": "Task bound",
+  "bindingWakePending": "Run request recorded",
+  "bindingRunClaimed": "Run association recorded",
+  "bindingStartRequested": "Start request recorded",
+  "bindingWitnessBoundary": "These routing records are not the task’s current run status. They do not prove that the model consumed input or completed successfully. Open the task to inspect progress, errors and results.",
+  "openTask": "Open task and run details"
 }

@@ -80,5 +80,11 @@
   "previousSessionPending": "你之前登录会话的请求尚未确定结果。仅允许回读，不会转移其确认或执行意图。",
   "closeExpired": "核实并关闭已过期未生效提案",
   "confirmCloseExpired": "我仅授权永久关闭此已过期且从未生效的提案；这不会批准策略、取消运行或退回费用。",
-  "closeExpiredBoundary": "请先回读待确认的批准请求。服务端会检查过期状态，拒绝关闭当前生效或曾经获批的提案。原请求仍保持待确认，直到获授权的回读证实其结果。"
+  "closeExpiredBoundary": "请先回读待确认的批准请求。服务端会检查过期状态，拒绝关闭当前生效或曾经获批的提案。原请求仍保持待确认，直到获授权的回读证实其结果。",
+  "bindingBound": "任务已绑定",
+  "bindingWakePending": "已记录运行请求",
+  "bindingRunClaimed": "已记录运行关联",
+  "bindingStartRequested": "已记录启动请求",
+  "bindingWitnessBoundary": "这些路由凭据不是任务当前的运行状态，也不证明模型已使用输入或成功完成。请打开任务查看进度、错误和结果。",
+  "openTask": "打开任务和运行详情"
 }

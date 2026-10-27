@@ -3,12 +3,15 @@ import { runtimeRoutingPolicySchema, createRuntimeRoutingTaskSchema, type Create
 import { runtimeCostRoutingApi, type RuntimePolicyRecord, type RuntimeBinding, type RuntimeCurrent } from "@/api/runtime-cost-routing";
 import { ApiError } from "@/api/client";
 import { readActorRoutingJournal, rememberRoutingBinding, readRoutingBindingReference, clearRoutingJournal, readRoutingJournal, startRoutingJournal, routingInputDigest, type RoutingJournal, type RoutingScope } from "@/lib/runtime-cost-routing-journal";
+import { applyCompanyPrefix } from "@/lib/company-routes";
+import { createIssueDetailPath } from "@/lib/issueDetailBreadcrumb";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatNumber, useTranslation } from "@/i18n";
 
-type Props = RoutingScope & { authPending?: boolean };
+type Props = RoutingScope & { authPending?: boolean; companyPrefix?: string | null };
 const approvalChecks = ["confirmBare", "confirmHistorical", "confirmNew", "confirmNoRun", "confirmAudience"] as const;
+const bindingStateLabels: Record<RuntimeBinding["state"], string> = { bound: "bindingBound", wake_pending: "bindingWakePending", run_claimed: "bindingRunClaimed", start_requested: "bindingStartRequested" };
 type Api = ReturnType<typeof runtimeCostRoutingApi>;
 /** Identity, authorization epoch and company transitions destroy plaintext and checked intent. */
 export function RuntimeCostRouting(props: Props) {
@@ -187,6 +190,8 @@ function RoutingSession(scope: Props) {
     } catch (error) { if (current()) { clearChecks(); reject(error); } }
     finally { lock.current = false; if (current()) setBusy(false); }
   }
+  const taskHref = binding && binding.companyId === scope.companyId.toLowerCase() && scope.companyPrefix?.trim()
+    ? applyCompanyPrefix(createIssueDetailPath(binding.issueId), scope.companyPrefix) : null;
   const locked = busy || Boolean(journal) || storageFailed || denied;
   function check(key: string, checked: boolean, onChange: (checked: boolean) => void, disabled = false) {
     return <label className="flex items-start gap-2"><input type="checkbox" aria-label={label(key)} checked={checked} disabled={disabled} onChange={event => onChange(event.target.checked)} /><span>{label(key)}</span></label>;
@@ -224,7 +229,10 @@ function RoutingSession(scope: Props) {
         <Button disabled={!taskChecked || !title.trim()} onClick={() => void mutate("create_task")}>{label("createTask")}</Button>
       </fieldset>
       <p>{label("runBoundary")}</p>
-      {binding && <div className="space-y-2">{!canRun && binding.state === "bound" && <p>{label("boundPolicyInactive")}</p>}<p>{label("bindingState")}: <span className="font-mono">{binding.state}</span></p><dl className="font-mono break-all">{[["bindingId", binding.id], ["taskId", binding.issueId], ["agent", binding.selectedAgentId], ["policyId", binding.policyId]].map(([key, value]) => <div key={key}><dt>{label(key!)}</dt><dd>{value}</dd></div>)}</dl>
+      {binding && <div className="space-y-2">{!canRun && binding.state === "bound" && <p>{label("boundPolicyInactive")}</p>}<p>{label("bindingState")}: <span>{label(bindingStateLabels[binding.state])}</span></p>
+        <p className="text-sm text-muted-foreground">{label("bindingWitnessBoundary")}</p>
+        {taskHref && <a className="text-primary underline underline-offset-4" href={taskHref}>{label("openTask")}</a>}
+        <dl className="font-mono break-all">{[["bindingId", binding.id], ["taskId", binding.issueId], ["agent", binding.selectedAgentId], ["policyId", binding.policyId]].map(([key, value]) => <div key={key}><dt>{label(key!)}</dt><dd>{value}</dd></div>)}</dl>
         <fieldset disabled={busy || !canRun || Boolean(journal && (journal.action !== "run" || !reviewed))} className="space-y-2">
           {check("confirmRun", runChecked, setRunChecked)}{!journal && <Button disabled={!runChecked} onClick={() => void mutate("run")}>{label("run")}</Button>}
         </fieldset></div>}

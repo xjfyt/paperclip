@@ -4,14 +4,15 @@ import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { CostRoutingPreview } from "./CostRoutingPreview";
-vi.mock("./RuntimeCostRouting", () => ({ RuntimeCostRouting: () => null }));
-const calls = vi.hoisted(() => ({ current: vi.fn(), preview: vi.fn(), save: vi.fn(), session: vi.fn() }));
+vi.mock("./RuntimeCostRouting", () => ({ RuntimeCostRouting: (props: unknown) => { calls.runtime(props); return null; } }));
+const calls = vi.hoisted(() => ({ current: vi.fn(), preview: vi.fn(), save: vi.fn(), session: vi.fn(), runtime: vi.fn() }));
+const company = vi.hoisted(() => ({ selectedCompanyId: "company-a", selectedCompany: { id: "company-a", issuePrefix: "CORRECT" } }));
 vi.mock("@/context/BreadcrumbContext", () => ({ useBreadcrumbs: () => ({ setBreadcrumbs: () => {} }) }));
 vi.mock("@/api/cost-routing-preview", () => ({ costRoutingPreviewApi: calls }));
 vi.mock("@/api/auth", () => ({ authApi: { getSession: calls.session } }));
 vi.mock("@/api/health", () => ({ healthApi: { get: async () => ({ deploymentMode: "authenticated" }) } }));
 vi.mock("@/lib/queryKeys", () => ({ queryKeys: { auth: { session: ["session"] }, health: ["health"] } }));
-vi.mock("@/context/CompanyContext", () => ({ useCompany: () => ({ selectedCompanyId: "company-a" }) }));
+vi.mock("@/context/CompanyContext", () => ({ useCompany: () => company }));
 vi.mock("@/i18n", () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 vi.mock("@/components/ui/button", () => ({ Button: (props: React.ButtonHTMLAttributes<HTMLButtonElement>) => <button {...props} /> }));
 let host: HTMLDivElement, root: Root, client: QueryClient;
@@ -19,6 +20,7 @@ const policy = { revision: 1, policy: { privateAdminMarker: "admin-only-draft" }
 async function flush() { await act(async () => { await new Promise(resolve => setTimeout(resolve, 15)); }); }
 async function mount() { await act(async () => root.render(<QueryClientProvider client={client}><CostRoutingPreview /></QueryClientProvider>)); await flush(); await flush(); }
 beforeEach(() => {
+  calls.runtime.mockReset(); company.selectedCompany = { id: "company-a", issuePrefix: "CORRECT" };
   calls.current.mockReset().mockResolvedValue(policy); calls.preview.mockReset(); calls.save.mockReset();
   calls.session.mockReset().mockResolvedValue({ user: { id: "admin" }, session: { id: "session-1" } });
   client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -57,4 +59,9 @@ it("clears loaded admin data when a mutation returns forbidden", async () => {
   await mount(); calls.preview.mockRejectedValue({ status: 403 });
   await act(async () => [...host.querySelectorAll("button")].find(b => b.textContent === "costRoutingPreview.preview")!.click());
   await flush(); expect(host.querySelector("textarea")).toBeNull(); expect(host.textContent).not.toContain("admin-only-draft");
+});
+it("provides task-link scope only from the company matching the authorized selected ID", async () => {
+  await mount(); expect(calls.runtime.mock.lastCall?.[0]).toMatchObject({ companyId: "company-a", companyPrefix: "CORRECT" });
+  company.selectedCompany = { id: "company-b", issuePrefix: "WRONG" }; await mount();
+  expect(calls.runtime.mock.lastCall?.[0]).toMatchObject({ companyId: "company-a", companyPrefix: null }); expect(calls.save).not.toHaveBeenCalled(); expect(calls.preview).not.toHaveBeenCalled();
 });

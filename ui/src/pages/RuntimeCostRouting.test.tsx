@@ -12,7 +12,7 @@ import zh from "@/i18n/contributions/runtimeCostRoutingUi/zh-CN.json";
 import es from "@/i18n/contributions/runtimeCostRoutingUi/es.json";
 import ja from "@/i18n/contributions/runtimeCostRoutingUi/ja.json";
 const calls = { current: vi.fn(), closeExpired: vi.fn(), prepare: vi.fn(), approve: vi.fn(), disable: vi.fn(), createTask: vi.fn(), run: vi.fn(), request: vi.fn(), policy: vi.fn(), binding: vi.fn() };
-const props = { companyId: id(1), userId: "owner", sessionId: "session-1", authEpoch: 1 };
+const props = { companyId: id(1), userId: "owner", sessionId: "session-1", authEpoch: 1, companyPrefix: "rc" };
 let host: HTMLDivElement, root: Root;
 const label = (key: string) => i18n.t(`runtimeCostRoutingUi.${key}`);
 const button = (key: string) => [...host.querySelectorAll("button")].find(value => value.textContent === label(key))!;
@@ -231,4 +231,28 @@ it("an approval that became active before close is read back instead of being cl
   calls.current.mockResolvedValue(head(true)); calls.request.mockResolvedValue({ enabled: true, companyPaused: false, policy: null, binding: null, closure: null,
     receipt: { id: id(300), requestId: original.requestId, policyId: id(3), action: "approve", generation: 1, createdAt: new Date().toISOString(), executionStarted: false } });
   await check("confirmCloseExpired"); await click("closeExpired"); expect(calls.closeExpired).not.toHaveBeenCalled(); expect(readRoutingJournal(props)).toBeNull(); expect(host.textContent).toContain(label("approved"));
+});
+it.each([
+  ["bound", "bindingBound"], ["wake_pending", "bindingWakePending"], ["run_claimed", "bindingRunClaimed"], ["start_requested", "bindingStartRequested"],
+] as const)("localizes %s as a routing witness in four languages and links the exact company task", async (state, stateKey) => {
+  calls.current.mockResolvedValue(head(true));
+  calls.createTask.mockImplementation(async body => ({ binding: binding({ requestId: body.requestId, state,
+    dispatchRequestId: state === "bound" ? null : id(210), runId: ["run_claimed", "start_requested"].includes(state) ? id(211) : null,
+    wakeRequestedAt: state === "bound" ? null : new Date().toISOString(), startRequestedAt: state === "start_requested" ? new Date().toISOString() : null }), duplicate: false }));
+  await mount(); await fill("taskTitle", "Actual work"); await check("confirmTask"); await click("createTask");
+  const reads = calls.current.mock.calls.length;
+  for (const locale of ["en", "zh-CN", "es", "ja"]) {
+    await act(async () => { await i18n.changeLanguage(locale); });
+    const stateRow = [...host.querySelectorAll("p")].find(value => value.textContent?.startsWith(`${label("bindingState")}:`));
+    expect(stateRow?.querySelector("span")?.textContent).toBe(label(stateKey)); expect(host.textContent).toContain(label("bindingWitnessBoundary"));
+    const link = [...host.querySelectorAll("a")].find(value => value.textContent === label("openTask"));
+    expect(link?.getAttribute("href")).toBe(`/RC/issues/${id(202)}`); expect(host.textContent).toContain(id(202));
+  }
+  expect(calls.current).toHaveBeenCalledTimes(reads); expect(calls.createTask).toHaveBeenCalledTimes(1); expect(calls.run).not.toHaveBeenCalled();
+});
+it("does not produce an unscoped task link when the matching company prefix is unavailable", async () => {
+  calls.current.mockResolvedValue(head(true)); await mount({ companyPrefix: null }); await fill("taskTitle", "Work"); await check("confirmTask"); await click("createTask");
+  expect(host.querySelector("a")).toBeNull(); expect(host.textContent).toContain(id(202));
+  calls.current.mockResolvedValue(head(false)); await mount({ companyId: id(999), companyPrefix: "other" });
+  expect(host.querySelector("a")).toBeNull(); expect(host.textContent).not.toContain(id(202)); expect(calls.run).not.toHaveBeenCalled();
 });
