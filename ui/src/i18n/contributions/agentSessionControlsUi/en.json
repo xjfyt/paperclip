@@ -1,0 +1,18 @@
+{
+  "claudeLogin": "Login to Claude Code",
+  "claudeLoginPending": "Running claude login...",
+  "claudeLoginFailed": "Failed to run Claude login",
+  "sessionChanged": "(changed)",
+  "sessionBefore": "Before",
+  "sessionAfter": "After",
+  "clearSessionConfirm_one": "Clear the session for {{count}} task touched by this run?",
+  "clearSessionConfirm_other": "Clear sessions for {{count}} tasks touched by this run?",
+  "clearSession": "Clear sessions for these tasks",
+  "clearSessionPending": "Clearing sessions...",
+  "clearSessionFailed": "Failed to clear sessions",
+  "stderrExcerpt": "stderr excerpt",
+  "stdoutExcerpt": "stdout excerpt",
+  "adapterResultJson": "Adapter result JSON",
+  "hideKey": "Hide API key",
+  "showKey": "Show API key"
+}

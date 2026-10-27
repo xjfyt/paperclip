@@ -1,0 +1,18 @@
+{
+  "claudeLogin": "Iniciar sesión en Claude Code",
+  "claudeLoginPending": "Ejecutando claude login…",
+  "claudeLoginFailed": "No se pudo ejecutar el inicio de sesión de Claude",
+  "sessionChanged": "(cambiada)",
+  "sessionBefore": "Antes",
+  "sessionAfter": "Después",
+  "clearSessionConfirm_one": "¿Borrar la sesión de {{count}} tarea afectada por esta ejecución?",
+  "clearSessionConfirm_other": "¿Borrar las sesiones de {{count}} tareas afectadas por esta ejecución?",
+  "clearSession": "Borrar las sesiones de estas tareas",
+  "clearSessionPending": "Borrando sesiones…",
+  "clearSessionFailed": "No se pudieron borrar las sesiones",
+  "stderrExcerpt": "Extracto de stderr",
+  "stdoutExcerpt": "Extracto de stdout",
+  "adapterResultJson": "JSON del resultado del adaptador",
+  "hideKey": "Ocultar clave de API",
+  "showKey": "Mostrar clave de API"
+}

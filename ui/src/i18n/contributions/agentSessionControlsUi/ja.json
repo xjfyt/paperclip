@@ -1,0 +1,18 @@
+{
+  "claudeLogin": "Claude Code にログイン",
+  "claudeLoginPending": "claude login を実行中…",
+  "claudeLoginFailed": "Claude のログインを実行できませんでした",
+  "sessionChanged": "（変更済み）",
+  "sessionBefore": "変更前",
+  "sessionAfter": "変更後",
+  "clearSessionConfirm_one": "この実行が扱った {{count}} 件のタスクのセッションをクリアしますか？",
+  "clearSessionConfirm_other": "この実行が扱った {{count}} 件のタスクのセッションをクリアしますか？",
+  "clearSession": "これらのタスクのセッションをクリア",
+  "clearSessionPending": "セッションをクリア中…",
+  "clearSessionFailed": "セッションをクリアできませんでした",
+  "stderrExcerpt": "stderr の抜粋",
+  "stdoutExcerpt": "stdout の抜粋",
+  "adapterResultJson": "アダプターの結果 JSON",
+  "hideKey": "API キーを非表示",
+  "showKey": "API キーを表示"
+}

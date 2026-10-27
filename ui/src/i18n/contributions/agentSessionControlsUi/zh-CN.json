@@ -1,0 +1,18 @@
+{
+  "claudeLogin": "登录 Claude Code",
+  "claudeLoginPending": "正在运行 claude login…",
+  "claudeLoginFailed": "运行 Claude 登录失败",
+  "sessionChanged": "（已更改）",
+  "sessionBefore": "之前",
+  "sessionAfter": "之后",
+  "clearSessionConfirm_one": "清除此运行涉及的 {{count}} 个任务的会话？",
+  "clearSessionConfirm_other": "清除此运行涉及的 {{count}} 个任务的会话？",
+  "clearSession": "清除这些任务的会话",
+  "clearSessionPending": "正在清除会话…",
+  "clearSessionFailed": "清除会话失败",
+  "stderrExcerpt": "stderr 摘录",
+  "stdoutExcerpt": "stdout 摘录",
+  "adapterResultJson": "适配器结果 JSON",
+  "hideKey": "隐藏 API 密钥",
+  "showKey": "显示 API 密钥"
+}
