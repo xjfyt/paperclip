@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { i18n } from "@/i18n/review-policy-test-resources";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   formatReviewPolicyValue,
@@ -62,3 +63,6 @@ describe("readIssueReviewPolicyMetadata", () => {
     expect(readIssueReviewPolicyMetadata({ reviewPolicy: 3 })).toBeNull();
   });
 });
+
+beforeEach(async () => { await i18n.changeLanguage("en"); });
+afterEach(async () => { await i18n.changeLanguage("en"); });

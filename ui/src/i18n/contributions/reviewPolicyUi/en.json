@@ -1,0 +1,19 @@
+{
+  "notCreator": "Anyone else",
+  "notCreatorDescription": "Anyone except whoever asked for the review can approve it.",
+  "humanOnly": "Human only",
+  "humanOnlyDescription": "Only a person can approve this review. Agents cannot give the verdict.",
+  "anyoneValue": "anyone",
+  "notCreatorValue": "anyone else",
+  "humanOnlyValue": "human only",
+  "approved": "Review approved — issue marked done.",
+  "changesRequested": "Changes requested — issue returned to the assignee.",
+  "sentBack": "Sent back to work — issue returned to the assignee.",
+  "errorTitle": "Could not record the review decision",
+  "retry": "Please try again.",
+  "notePlaceholder": "Add a note — required to request changes, optional otherwise…",
+  "sendBack": "Send back to work",
+  "noteRequired": "Add a note to request changes",
+  "requestChanges": "Request changes",
+  "approve": "Approve"
+}

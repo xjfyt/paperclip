@@ -1,0 +1,19 @@
+{
+  "notCreator": "其他审核人",
+  "notCreatorDescription": "除发起审核的人以外，其他人均可批准。",
+  "humanOnly": "仅限人工",
+  "humanOnlyDescription": "只有人类用户可以批准此审核，智能体不能作出审核决定。",
+  "anyoneValue": "任何人",
+  "notCreatorValue": "其他审核人",
+  "humanOnlyValue": "仅限人工",
+  "approved": "审核已批准，任务已标记为完成。",
+  "changesRequested": "已请求修改，任务已退回负责人。",
+  "sentBack": "已退回处理，任务已返回负责人。",
+  "errorTitle": "无法记录审核决定",
+  "retry": "请重试。",
+  "notePlaceholder": "添加备注：请求修改时必填，其他操作可选…",
+  "sendBack": "退回处理",
+  "noteRequired": "请添加备注以请求修改",
+  "requestChanges": "请求修改",
+  "approve": "批准"
+}

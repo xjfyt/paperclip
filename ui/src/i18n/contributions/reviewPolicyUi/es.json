@@ -1,0 +1,19 @@
+{
+  "notCreator": "Otra persona",
+  "notCreatorDescription": "Cualquiera salvo quien solicitó la revisión puede aprobarla.",
+  "humanOnly": "Solo humanos",
+  "humanOnlyDescription": "Solo una persona puede aprobar esta revisión. Los agentes no pueden decidir.",
+  "anyoneValue": "cualquiera",
+  "notCreatorValue": "otra persona",
+  "humanOnlyValue": "solo humanos",
+  "approved": "Revisión aprobada; tarea marcada como completada.",
+  "changesRequested": "Se solicitaron cambios; tarea devuelta al responsable.",
+  "sentBack": "Devuelta al trabajo; tarea devuelta al responsable.",
+  "errorTitle": "No se pudo registrar la decisión de revisión",
+  "retry": "Inténtalo de nuevo.",
+  "notePlaceholder": "Añade una nota: obligatoria para solicitar cambios, opcional en otros casos…",
+  "sendBack": "Devolver al trabajo",
+  "noteRequired": "Añade una nota para solicitar cambios",
+  "requestChanges": "Solicitar cambios",
+  "approve": "Aprobar"
+}

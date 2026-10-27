@@ -1,0 +1,19 @@
+{
+  "notCreator": "依頼者以外",
+  "notCreatorDescription": "レビューを依頼した本人以外は承認できます。",
+  "humanOnly": "人間のみ",
+  "humanOnlyDescription": "このレビューを承認できるのは人間のみです。エージェントは判断できません。",
+  "anyoneValue": "誰でも",
+  "notCreatorValue": "依頼者以外",
+  "humanOnlyValue": "人間のみ",
+  "approved": "レビューを承認し、タスクを完了にしました。",
+  "changesRequested": "変更を依頼し、タスクを担当者に差し戻しました。",
+  "sentBack": "作業に戻し、タスクを担当者に差し戻しました。",
+  "errorTitle": "レビューの判断を記録できませんでした",
+  "retry": "もう一度お試しください。",
+  "notePlaceholder": "メモを追加：変更を依頼する場合は必須、それ以外は任意…",
+  "sendBack": "作業に戻す",
+  "noteRequired": "変更を依頼するにはメモを追加してください",
+  "requestChanges": "変更を依頼",
+  "approve": "承認"
+}
