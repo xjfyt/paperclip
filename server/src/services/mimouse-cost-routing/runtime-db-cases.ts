@@ -4,6 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { agents, companies, companyMemberships, principalPermissionGrants, heartbeatRuns, heartbeatRunEvents, issues, agentWakeupRequests, type Db } from "@paperclipai/db";
 import { runtimeRoutingBindings } from "@paperclipai/db/schema/runtime_cost_routing";
 import { promptApplicationService } from "../mimouse-prompt-applications/service.js";
+import { issueService } from "../issues.js";
 import { runtimeCostRoutingService } from "./service.js";
 import type { verifyProducedRuntimeRoutingEvidence } from "./evidence-db-cases.js";
 import type { PrivatePromptIdentity } from "../mimouse-private-prompt-tests/service.js";
@@ -56,6 +57,7 @@ export async function verifyRuntimeRoutingDispatch(db: Db, actor: PrivatePromptI
   const bound = (await service.binding(actor, created.binding.id)).binding;
   const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, bound.runId!));
   expect(run.status, JSON.stringify({ error: run.error, code: run.errorCode })).toBe("succeeded"); expect(ordinaryCalls()).toBe(before + 1);
+  await expect(issueService(db).checkout(bound.issueId, bound.selectedAgentId, ["backlog", "todo", "in_progress"], run.id)).rejects.toThrow("runtime_routing_checkout_denied");
   expect(bound.state).toBe("start_requested"); expect(bound.providerConsumed).toBe(false);
   expect(await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.idempotencyKey, `runtime-cost-routing:${bound.id}`))).toHaveLength(1);
   expect(await db.select().from(heartbeatRunEvents).where(and(eq(heartbeatRunEvents.runId, run.id), eq(heartbeatRunEvents.eventType, "runtime_cost_routing.start_requested")))).toHaveLength(1);
