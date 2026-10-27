@@ -321,7 +321,10 @@ export function FolderRailItem({
             onChange={(event) => onRenameDraftChange(event.target.value)}
             onClick={(event) => event.stopPropagation()}
             onKeyDown={(event) => {
-              if (event.key === "Enter") onRenameCommit();
+              if (event.key === "Enter") {
+                if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
+                onRenameCommit();
+              }
               if (event.key === "Escape") onRenameCancel();
             }}
             onBlur={onRenameCommit}
@@ -664,7 +667,8 @@ export function FolderFormDialog({
               onChange={(event) => setName(event.target.value)}
               autoFocus
               onKeyDown={(event) => {
-                if (event.key === "Enter" && name.trim()) onSubmit({ name: name.trim(), color });
+                if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
+                if (event.key === "Enter" && !pending && name.trim()) onSubmit({ name: name.trim(), color });
               }}
             />
           </div>

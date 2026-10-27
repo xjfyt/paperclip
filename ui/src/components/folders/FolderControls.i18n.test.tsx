@@ -71,6 +71,58 @@ describe.each(locales)("shared folder controls in %s", (locale, strings) => {
     expect(folder.companyId).toBe("company-original");
   });
 
+  it("keeps inline rename drafts during IME confirmation until an ordinary Enter", async () => {
+    await language(locale);
+    const onRename = vi.fn();
+    await act(async () => root.render(<FolderRail result={result} selection={folder.id} itemLabelPlural={noun} allLabel={allLabel}
+      onSelect={vi.fn()} onCreate={vi.fn()} onRename={onRename} onEdit={vi.fn()} onDelete={vi.fn()} />));
+    const row = Array.from(host.querySelectorAll("button")).find(el => el.textContent === folder.name)!;
+    await act(async () => row.dispatchEvent(new MouseEvent("dblclick", { bubbles: true })));
+    const input = host.querySelector("input")!;
+    await act(async () => inputValue(input, "  確定前 draft Ω  "));
+    for (const composition of [{ isComposing: true }, { keyCode: 229 }]) {
+      await act(async () => input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, ...composition })));
+      expect(onRename).not.toHaveBeenCalled();
+      expect(host.querySelector("input")?.value).toBe("  確定前 draft Ω  ");
+    }
+    await act(async () => input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+    expect(onRename).toHaveBeenCalledExactlyOnceWith(folder, "確定前 draft Ω");
+  });
+
+  it("does not submit the folder form while confirming an IME candidate", async () => {
+    await language(locale);
+    const onSubmit = vi.fn();
+    await act(async () => root.render(<FolderFormDialog open kind="routine" folder={null} onSubmit={onSubmit} onOpenChange={vi.fn()} />));
+    const input = document.querySelector<HTMLInputElement>("#folder-name")!;
+    await act(async () => inputValue(input, "  入力中 draft Ω  "));
+    for (const composition of [{ isComposing: true }, { keyCode: 229 }]) {
+      await act(async () => input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, ...composition })));
+      expect(onSubmit).not.toHaveBeenCalled();
+      expect(input.value).toBe("  入力中 draft Ω  ");
+    }
+    await act(async () => input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+    expect(onSubmit).toHaveBeenCalledExactlyOnceWith({ name: "入力中 draft Ω", color: "indigo" });
+  });
+
+  it("blocks repeated Enter while saving and allows one ordinary Enter after pending ends", async () => {
+    await language(locale);
+    const onSubmit = vi.fn();
+    const render = (pending: boolean) => root.render(<FolderFormDialog open kind="routine" folder={folder} pending={pending} onSubmit={onSubmit} onOpenChange={vi.fn()} />);
+    await act(async () => render(true));
+    const input = document.querySelector<HTMLInputElement>("#folder-name")!;
+    for (let repeat = 0; repeat < 3; repeat++) {
+      await act(async () => input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", repeat: repeat > 0, bubbles: true })));
+    }
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(button(strings.saving).disabled).toBe(true);
+    await switchLanguage(locale);
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(input.value).toBe(folder.name);
+    await act(async () => render(false));
+    await act(async () => input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+    expect(onSubmit).toHaveBeenCalledExactlyOnceWith({ name: folder.name, color: folder.color });
+  });
+
   it("translates form controls without resetting draft/color or submitting during a language change", async () => {
     await language(locale);
     const onSubmit = vi.fn(), onOpenChange = vi.fn();
