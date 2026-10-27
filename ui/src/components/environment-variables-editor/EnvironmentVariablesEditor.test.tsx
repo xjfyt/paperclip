@@ -7,6 +7,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import type { CompanySecret, EnvBinding } from "@paperclipai/shared";
 import { EnvironmentVariablesEditor } from "./index";
 import { SecretPicker } from "./SecretPicker";
+import "./i18n-test-resources";
 
 // Radix (DropdownMenu/Popover) relies on Pointer Capture APIs that jsdom omits.
 const OriginalPointerEvent = globalThis.PointerEvent;
