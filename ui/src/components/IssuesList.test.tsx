@@ -1,3 +1,5 @@
+import { act as reactAct } from "react";
+import { issueListDisplayMessages } from "../i18n/issue-list-display-test-resources";
 // @vitest-environment jsdom
 
 import { changeLocale } from "../i18n";
@@ -1233,6 +1235,155 @@ describe("IssuesList", () => {
     act(() => {
       root.unmount();
     });
+  });
+
+  it.each(Object.entries(issueListDisplayMessages))("localizes missing group headings in %s but keeps named groups and group keys unchanged", async (locale, messages) => {
+    const act = reactAct;
+    const workspace: Project["workspaces"][number] = {
+      id: "workspace-original", companyId: "company-1", projectId: "project-original", name: "No Workspace",
+      sourceType: "local_path", cwd: null, repoUrl: null, repoRef: null, defaultRef: null, visibility: "default",
+      setupCommand: null, cleanupCommand: null, remoteProvider: null, remoteWorkspaceRef: null, sharedWorkspaceKey: null,
+      metadata: null, runtimeConfig: null, isPrimary: false,
+      createdAt: new Date("2026-04-07T00:00:00Z"), updatedAt: new Date("2026-04-07T00:00:00Z"),
+    };
+    const project: Project = {
+      id: workspace.projectId, companyId: "company-1", urlKey: "project-original", goalId: null, goalIds: [], goals: [],
+      name: "No Project", description: null, status: "in_progress", leadAgentId: null, targetDate: null, color: null,
+      icon: null, env: null, pauseReason: null, pausedAt: null, executionWorkspacePolicy: null,
+      codebase: { workspaceId: null, repoUrl: null, repoRef: null, defaultRef: null, repoName: null, localFolder: null,
+        managedFolder: "", effectiveLocalFolder: "", origin: "local_folder" },
+      workspaces: [workspace], primaryWorkspace: null, archivedAt: null,
+      createdAt: workspace.createdAt, updatedAt: workspace.updatedAt,
+    };
+    const parent = createIssue({ id: "parent-original", title: "No Parent" });
+    const issues = [parent, createIssue({ id: "bound-task", title: "Bound task 原文", parentId: parent.id,
+      projectId: project.id, projectWorkspaceId: workspace.id }), createIssue({ id: "unbound-task", title: "Unbound task 原文" })];
+    const onUpdateIssue = vi.fn<NonNullable<Parameters<typeof IssuesList>[0]["onUpdateIssue"]>>();
+    const viewStateKey = "paperclip:test-group-headings";
+    let mounted!: ReturnType<typeof renderWithQueryClient>;
+    await act(async () => {
+      mounted = renderWithQueryClient(<IssuesList issues={issues} agents={[]} projects={[project]}
+        viewStateKey={viewStateKey} rowPresentation="task" toolbarPresentation="collection" onUpdateIssue={onUpdateIssue} />, container);
+    });
+    const { root, queryClient } = mounted;
+    const cases = [
+      { value: "workspace", key: "__no_workspace", label: messages.noWorkspace, namedKey: workspace.id, name: workspace.name },
+      { value: "project", key: "__no_project", label: messages.noProject, namedKey: project.id, name: project.name },
+      { value: "parent", key: "__no_parent", label: messages.noParent, namedKey: parent.id, name: `${parent.identifier}: ${parent.title}` },
+    ];
+    try {
+      await waitForAssertion(() => expect(container.querySelectorAll('[data-testid="issue-row"]')).toHaveLength(3));
+      await act(async () => { await changeLocale(locale); });
+      const trigger = container.querySelector<HTMLButtonElement>(`button[title="${i18n.t("commonUi.group")}"]`);
+      await act(async () => { trigger?.click(); });
+      for (const entry of cases) {
+        const option = Array.from(document.body.querySelectorAll<HTMLButtonElement>('[data-slot="popover-content"] button'))
+          .find(button => button.textContent === i18n.t(`issueListControlsUi.group_${entry.value}`));
+        expect(option).toBeDefined();
+        await act(async () => { option?.click(); });
+        const header = container.querySelector(`[data-issues-group-key="${entry.key}"]`);
+        const namedHeader = container.querySelector(`[data-issues-group-key="${entry.namedKey}"]`);
+        expect(header?.querySelector('button[aria-expanded]')?.textContent).toBe(entry.label);
+        expect(namedHeader?.querySelector('button[aria-expanded]')?.textContent).toBe(entry.name);
+        const newButton = header?.querySelector<HTMLButtonElement>('button[title]');
+        expect(newButton?.title).toBe(i18n.t("taskListUi.newIn", { group: entry.label }));
+        await act(async () => { newButton?.click(); });
+        expect(dialogState.openNewIssue).toHaveBeenLastCalledWith({});
+        const collapse = header?.querySelector<HTMLButtonElement>('button[aria-expanded]');
+        await act(async () => { collapse?.click(); });
+        expect(JSON.parse(localStorage.getItem(`${viewStateKey}:company-1`) ?? "null"))
+          .toMatchObject({ groupBy: entry.value, collapsedGroups: [entry.key] });
+        const preferences = localStorage.getItem(`${viewStateKey}:company-1`);
+        await act(async () => { await changeLocale(locale === "en" ? "ja" : "en"); });
+        await act(async () => { await changeLocale(locale); });
+        expect(header?.querySelector('button[aria-expanded]')?.textContent).toBe(entry.label);
+        expect(namedHeader?.querySelector('button[aria-expanded]')?.textContent).toBe(entry.name);
+        expect(localStorage.getItem(`${viewStateKey}:company-1`)).toBe(preferences);
+        await act(async () => { collapse?.click(); });
+        expect(container.textContent).toContain("Bound task 原文");
+        expect(container.textContent).toContain("Unbound task 原文");
+      }
+      expect(dialogState.openNewIssue).toHaveBeenCalledTimes(3);
+      expect(onUpdateIssue).not.toHaveBeenCalled();
+      expect(mockNavigate).not.toHaveBeenCalled();
+      expect(mockIssuesApi.list).not.toHaveBeenCalled();
+    } finally {
+      await act(async () => { root.unmount(); }); queryClient.clear();
+      await act(async () => { await changeLocale("en"); });
+    }
+  });
+
+  it.each(Object.entries(issueListDisplayMessages).flatMap(([locale, messages]) =>
+    [0, 1, 2, 4].map(count => ({ locale, messages, count }))))(
+    "localizes workflow dependency chip count=$count in $locale without changing blocker targets", async ({ locale, messages, count }) => {
+      const act = reactAct;
+      const blockers = Array.from({ length: count }, (_, index) => createIssue({ id: `blocker-original-${index}`,
+        identifier: `原始-${index + 1}`, title: `Blocker title 原文 ${index}`, createdAt: new Date(`2026-04-0${index + 1}T00:00:00Z`) }));
+      const blocked = createIssue({ id: "blocked-original", title: "Blocked title 原文", status: "blocked",
+        createdAt: new Date("2026-04-09T00:00:00Z"), blockedBy: blockers.map(issue => ({
+          id: issue.id, identifier: issue.identifier, title: issue.title, status: issue.status, priority: issue.priority,
+          assigneeAgentId: issue.assigneeAgentId, assigneeUserId: issue.assigneeUserId,
+        })) });
+      const onUpdateIssue = vi.fn<NonNullable<Parameters<typeof IssuesList>[0]["onUpdateIssue"]>>();
+      let mounted!: ReturnType<typeof renderWithQueryClient>;
+      await act(async () => {
+        mounted = renderWithQueryClient(<IssuesList issues={[blocked, ...blockers]} agents={[]} projects={[]}
+          viewStateKey="paperclip:test-dependency-locales" defaultSortField="workflow" onUpdateIssue={onUpdateIssue} />, container);
+      });
+      const { root, queryClient } = mounted;
+      const simple = (index: number, texts: typeof messages) => texts.blockedByStep
+        .replace("{{label}}", blockers[index].identifier ?? "").replace("{{step}}", String(index + 1));
+      const summary = (texts: typeof messages, language: string) => {
+        const additional = count - 1;
+        if (additional === 0) return simple(0, texts);
+        const suffix = additional === 1 && ["en", "es"].includes(language) ? "one" : "other";
+        return texts[`blockedByStepMore_${suffix}`].replace("{{label}}", blockers[0].identifier ?? "")
+          .replace("{{step}}", "1").replace("{{count}}", String(additional));
+      };
+      try {
+        await waitForAssertion(() => expect(container.querySelectorAll('[data-testid="issue-row"]')).toHaveLength(count + 1));
+        await act(async () => { await changeLocale(locale); });
+        const chip = container.querySelector<HTMLButtonElement>('[data-issue-row-id="blocked-original"] button[data-slot="icon-button"][title]');
+        if (count === 0) expect(chip).toBeNull();
+        else {
+          expect(chip?.textContent).toBe(summary(messages, locale));
+          const title = count === 1 ? summary(messages, locale)
+            : `${summary(messages, locale)}: ${blockers.slice(1).map((_issue, index) => simple(index + 1, messages)).join(", ")}`;
+          expect(chip?.title).toBe(title);
+          expect(chip?.getAttribute("aria-label")).toBe(title);
+          const target = document.getElementById(`issue-workflow-row-${blockers[0].id}`);
+          expect(target).not.toBeNull();
+          if (!target) throw new Error("Missing original blocker row");
+          const scroll = vi.spyOn(target, "scrollIntoView");
+          const focus = vi.spyOn(target, "focus");
+          await act(async () => { chip?.click(); });
+          expect(scroll).toHaveBeenCalledExactlyOnceWith({ behavior: "smooth", block: "nearest" });
+          expect(focus).toHaveBeenCalledTimes(1);
+          await act(async () => { await changeLocale(locale === "en" ? "ja" : "en"); });
+          expect(chip?.textContent).toBe(summary(locale === "en" ? issueListDisplayMessages.ja : issueListDisplayMessages.en, locale === "en" ? "ja" : "en"));
+          scroll.mockRestore(); focus.mockRestore();
+        }
+        expect(container.textContent).toContain(blocked.title);
+        for (const blocker of blockers) expect(container.textContent).toContain(blocker.title);
+        expect(blocked.blockedBy?.map(issue => issue.id)).toEqual(blockers.map(issue => issue.id));
+        expect(onUpdateIssue).not.toHaveBeenCalled(); expect(mockNavigate).not.toHaveBeenCalled();
+        expect(mockIssuesApi.list).not.toHaveBeenCalled();
+      } finally {
+        await act(async () => { root.unmount(); }); queryClient.clear();
+        await act(async () => { await changeLocale("en"); });
+      }
+    },
+  );
+
+  it.each(Object.entries(issueListDisplayMessages))("validates complete group and dependency templates for %s", (locale, messages) => {
+    expect(validateLocaleMessages(messages, issueListDisplayMessages.en)).toEqual([]);
+    for (const count of [0, 1, 3]) {
+      const suffix = count === 1 && ["en", "es"].includes(locale) ? "one" : "other";
+      for (const key of ["blockedByMore", "blockedByStepMore"] as const) {
+        expect(i18n.getFixedT(locale)(`issueListDisplayUi.${key}`, { label: "RAW-原始", step: "2.1", count }))
+          .toBe(messages[`${key}_${suffix}`].replace("{{label}}", "RAW-原始").replace("{{step}}", "2.1").replace("{{count}}", String(count)));
+      }
+    }
   });
 
   it("hides the workflow blocker chip when a sub-issue is blocked only by its previous sibling", async () => {

@@ -1,0 +1,11 @@
+{
+  "noWorkspace": "无工作区",
+  "noProject": "无项目",
+  "noParent": "无父任务",
+  "blockedBy": "受 {{label}} 阻塞",
+  "blockedByStep": "受 {{label}} 阻塞 · 第 {{step}} 步",
+  "blockedByMore_one": "受 {{label}} 及另外 {{count}} 个任务阻塞",
+  "blockedByMore_other": "受 {{label}} 及另外 {{count}} 个任务阻塞",
+  "blockedByStepMore_one": "受 {{label}}（第 {{step}} 步）及另外 {{count}} 个任务阻塞",
+  "blockedByStepMore_other": "受 {{label}}（第 {{step}} 步）及另外 {{count}} 个任务阻塞"
+}

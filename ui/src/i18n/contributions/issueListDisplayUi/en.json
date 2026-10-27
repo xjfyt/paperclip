@@ -1,0 +1,11 @@
+{
+  "noWorkspace": "No Workspace",
+  "noProject": "No Project",
+  "noParent": "No Parent",
+  "blockedBy": "blocked by {{label}}",
+  "blockedByStep": "blocked by {{label}} · step {{step}}",
+  "blockedByMore_one": "blocked by {{label}} ... and {{count}} more",
+  "blockedByMore_other": "blocked by {{label}} ... and {{count}} more",
+  "blockedByStepMore_one": "blocked by {{label}} · step {{step}} ... and {{count}} more",
+  "blockedByStepMore_other": "blocked by {{label}} · step {{step}} ... and {{count}} more"
+}

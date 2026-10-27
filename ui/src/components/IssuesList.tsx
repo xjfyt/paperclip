@@ -1325,7 +1325,7 @@ function StreamlinedIssuesList({
         })
         .map((key) => ({
           key,
-          label: key === "__no_workspace" ? "No Workspace" : (workspaceNameMap.get(key) ?? key.slice(0, 8)),
+          label: key === "__no_workspace" ? mimouseT("issueListDisplayUi.noWorkspace") : (workspaceNameMap.get(key) ?? key.slice(0, 8)),
           items: groups[key]!,
         }));
     }
@@ -1341,7 +1341,7 @@ function StreamlinedIssuesList({
         })
         .map((key) => ({
           key,
-          label: key === "__no_project" ? "No Project" : (projectById.get(key)?.name ?? key.slice(0, 8)),
+          label: key === "__no_project" ? mimouseT("issueListDisplayUi.noProject") : (projectById.get(key)?.name ?? key.slice(0, 8)),
           items: groups[key]!,
         }));
     }
@@ -1356,7 +1356,7 @@ function StreamlinedIssuesList({
         })
         .map((key) => ({
           key,
-          label: key === "__no_parent" ? "No Parent" : (issueTitleMap.get(key) ?? key.slice(0, 8)),
+          label: key === "__no_parent" ? mimouseT("issueListDisplayUi.noParent") : (issueTitleMap.get(key) ?? key.slice(0, 8)),
           items: groups[key]!,
         }));
     }
@@ -2134,17 +2134,24 @@ function StreamlinedIssuesList({
                       if (!blockerIssue) return null;
                       const label = blockerIssue.identifier ?? blockerIssue.id.slice(0, 8);
                       const blockerStep = checklistMeta?.stepNumberByIssueId.get(blockerId);
-                      const blockerStepSuffix = blockerStep ? ` \u00b7 step ${blockerStep}` : "";
-                      return { blockerId, chipLabel: `blocked by ${label}${blockerStepSuffix}` };
+                      return {
+                        blockerId,
+                        label,
+                        blockerStep,
+                        chipLabel: mimouseT(blockerStep ? "issueListDisplayUi.blockedByStep" : "issueListDisplayUi.blockedBy", { label, step: blockerStep }),
+                      };
                     })
-                    .filter((chip): chip is { blockerId: string; chipLabel: string } => chip !== null);
+                    .filter((chip): chip is { blockerId: string; label: string; blockerStep: string | undefined; chipLabel: string } => chip !== null);
                   const firstVisibleBlockerChip = visibleBlockerChips[0] ?? null;
                   const additionalVisibleBlockerCount = Math.max(visibleBlockerChips.length - 1, 0);
-                  const additionalVisibleBlockerLabel = additionalVisibleBlockerCount > 0
-                    ? ` ... and ${additionalVisibleBlockerCount} more`
-                    : "";
                   const firstVisibleBlockerDisplayLabel = firstVisibleBlockerChip
-                    ? `${firstVisibleBlockerChip.chipLabel}${additionalVisibleBlockerLabel}`
+                    ? additionalVisibleBlockerCount > 0
+                      ? mimouseT(firstVisibleBlockerChip.blockerStep ? "issueListDisplayUi.blockedByStepMore" : "issueListDisplayUi.blockedByMore", {
+                          label: firstVisibleBlockerChip.label,
+                          step: firstVisibleBlockerChip.blockerStep,
+                          count: additionalVisibleBlockerCount,
+                        })
+                      : firstVisibleBlockerChip.chipLabel
                     : "";
                   const hiddenVisibleBlockerLabels = visibleBlockerChips
                     .slice(1)

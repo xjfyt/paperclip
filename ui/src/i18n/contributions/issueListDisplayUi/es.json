@@ -1,0 +1,11 @@
+{
+  "noWorkspace": "Sin espacio de trabajo",
+  "noProject": "Sin proyecto",
+  "noParent": "Sin tarea principal",
+  "blockedBy": "bloqueada por {{label}}",
+  "blockedByStep": "bloqueada por {{label}} · paso {{step}}",
+  "blockedByMore_one": "bloqueada por {{label}} y {{count}} tarea más",
+  "blockedByMore_other": "bloqueada por {{label}} y {{count}} tareas más",
+  "blockedByStepMore_one": "bloqueada por {{label}} · paso {{step}} y {{count}} tarea más",
+  "blockedByStepMore_other": "bloqueada por {{label}} · paso {{step}} y {{count}} tareas más"
+}

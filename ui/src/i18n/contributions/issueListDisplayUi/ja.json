@@ -1,0 +1,11 @@
+{
+  "noWorkspace": "ワークスペースなし",
+  "noProject": "プロジェクトなし",
+  "noParent": "親タスクなし",
+  "blockedBy": "{{label}} によりブロックされています",
+  "blockedByStep": "{{label}}（ステップ {{step}}）によりブロックされています",
+  "blockedByMore_one": "{{label}} と他 {{count}} 件のタスクによりブロックされています",
+  "blockedByMore_other": "{{label}} と他 {{count}} 件のタスクによりブロックされています",
+  "blockedByStepMore_one": "{{label}}（ステップ {{step}}）と他 {{count}} 件のタスクによりブロックされています",
+  "blockedByStepMore_other": "{{label}}（ステップ {{step}}）と他 {{count}} 件のタスクによりブロックされています"
+}
