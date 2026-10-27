@@ -95,12 +95,13 @@ export async function assertRuntimeRoutingEarlyBinding(db: Db, run: typeof heart
       if (found && found.id !== row.id) throw blocked("runtime_routing_issue_identity_mismatch"); found = row;
     }
     if (!found) return null;
-    if (!runtimeRoutingRunMatches(found, run, issueId)) throw blocked("runtime_routing_run_binding_denied");
+    if (!runtimeRoutingRunMatches(found, run, issueId) || !found.dispatchActorUserId || !found.dispatchActorSessionId) throw blocked("runtime_routing_run_binding_denied");
+    const actor = { companyId: found.companyId, userId: found.dispatchActorUserId, sessionId: found.dispatchActorSessionId };
     const [wake] = await tx.select().from(agentWakeupRequests).where(and(eq(agentWakeupRequests.id, run.wakeupRequestId ?? "00000000-0000-0000-0000-000000000000"), eq(agentWakeupRequests.companyId, run.companyId)));
     if (!wake || wake.idempotencyKey !== `runtime-cost-routing:${found.id}` || wake.runId !== run.id || wake.requestedByActorId !== found.dispatchActorUserId || wake.requestedByActorType !== "user") throw blocked("runtime_routing_wake_receipt_denied");
     const [prior] = await tx.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, run.companyId), eq(heartbeatRuns.issueId, found.issueId), ne(heartbeatRuns.id, run.id))).limit(1);
     if (prior) throw blocked("runtime_routing_first_attempt_required");
-    await assertRuntimeRoutingBindingCurrent(tx, found, { companyId: found.companyId, userId: found.dispatchActorUserId, sessionId: found.dispatchActorSessionId });
+    await assertRuntimeRoutingBindingCurrent(tx, found, actor);
     return found;
   }).catch(error => { throw runtimeRoutingPreflightError(error, bindingIdentified); });
 }
@@ -117,8 +118,9 @@ export async function guardRuntimeRoutingExecution(db: Db, input: HeartbeatRunti
       await db.transaction(async tx => {
         await tx.select({ id: issues.id }).from(issues).where(eq(issues.id, row.issueId)).for("share");
         const [current] = await tx.select().from(bindings).where(eq(bindings.id, row.id)).for("update");
-        if (!current || current.state !== "run_claimed" || current.runId !== input.run.id || input.control.executionControl.controller.signal.aborted) throw blocked("runtime_routing_start_denied");
-        await assertRuntimeRoutingBindingCurrent(tx, current, { companyId: row.companyId, userId: row.dispatchActorUserId!, sessionId: row.dispatchActorSessionId! });
+        if (!current || current.state !== "run_claimed" || current.runId !== input.run.id || input.control.executionControl.controller.signal.aborted ||
+          !current.dispatchActorUserId || !current.dispatchActorSessionId || current.dispatchActorUserId !== row.dispatchActorUserId || current.dispatchActorSessionId !== row.dispatchActorSessionId) throw blocked("runtime_routing_start_denied");
+        await assertRuntimeRoutingBindingCurrent(tx, current, { companyId: current.companyId, userId: current.dispatchActorUserId, sessionId: current.dispatchActorSessionId });
         await tx.update(bindings).set({ state: "start_requested", startRequestedAt: await runtimeRoutingClock(tx) }).where(eq(bindings.id, row.id));
         await appendHeartbeatRunEvent(tx as unknown as Db, { companyId: row.companyId, agentId: row.selectedAgentId, runId: input.run.id,
           eventType: "runtime_cost_routing.start_requested", stream: "system", level: "info", message: "Controlled routing start requested; provider consumption is unconfirmed.",

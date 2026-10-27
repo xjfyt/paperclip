@@ -59,7 +59,9 @@ it.each([{ id: "retry" }, { companyId: "foreign" }, { agentId: "fallback" }, { i
 });
 it("durable start witness prevents same-run replay after restart", () => {
   expect(runtimeRoutingRunMatches({ ...binding, state: "start_requested" }, run, "task")).toBe(false);
-  expect(runtimeRoutingRunMatches({ ...binding, dispatchActorSessionId: null }, run, "task")).toBe(false);
+});
+it.each([{ dispatchActorSessionId: null }, { dispatchActorSessionId: "" }, { dispatchActorUserId: null }, { dispatchActorUserId: "" }])("rejects missing durable dispatch identity %j", patch => {
+  expect(runtimeRoutingRunMatches({ ...binding, ...patch }, run, "task")).toBe(false);
 });
 it("private runtime policy HTTP paths never log supplied identifiers or query/body text", () => {
   for (const url of ["/api/companies/secret/runtime-cost-routing/prepare?input=secret", "https://host/API/companies/secret/RUNTIME-COST-ROUTING/bindings/secret/run"]) {
