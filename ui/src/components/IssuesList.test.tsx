@@ -1238,7 +1238,7 @@ describe("IssuesList", () => {
     });
   });
 
-  it.each(Object.entries(issueListDisplayMessages))("localizes missing group headings in %s but keeps named groups and group keys unchanged", async (locale, messages) => {
+  it.each((["en", "zh-CN", "es", "ja"] as const).map(locale => [locale, issueListDisplayMessages[locale]] as const))("localizes missing group headings in %s but keeps named groups and group keys unchanged", async (locale, messages) => {
     const act = reactAct;
     const workspace: Project["workspaces"][number] = {
       id: "workspace-original", companyId: "company-1", projectId: "project-original", name: "No Workspace",
@@ -1314,7 +1314,7 @@ describe("IssuesList", () => {
     }
   });
 
-  it.each(Object.entries(issueListDisplayMessages).flatMap(([locale, messages]) =>
+  it.each((["en", "zh-CN", "es", "ja"] as const).map(locale => [locale, issueListDisplayMessages[locale]] as const).flatMap(([locale, messages]) =>
     [0, 1, 2, 4].map(count => ({ locale, messages, count }))))(
     "localizes workflow dependency chip count=$count in $locale without changing blocker targets", async ({ locale, messages, count }) => {
       const act = reactAct;
@@ -1376,7 +1376,7 @@ describe("IssuesList", () => {
     },
   );
 
-  it.each(Object.entries(issueListDisplayMessages))("validates complete group and dependency templates for %s", (locale, messages) => {
+  it.each((["en", "zh-CN", "es", "ja"] as const).map(locale => [locale, issueListDisplayMessages[locale]] as const))("validates complete group and dependency templates for %s", (locale, messages) => {
     expect(validateLocaleMessages(messages, issueListDisplayMessages.en)).toEqual([]);
     for (const count of [0, 1, 3]) {
       const suffix = count === 1 && ["en", "es"].includes(locale) ? "one" : "other";

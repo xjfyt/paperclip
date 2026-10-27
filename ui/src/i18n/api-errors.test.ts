@@ -9,6 +9,7 @@ it("keeps the real API error class, status, raw message and reconnect classifica
   const response = new Response("<html>Unavailable</html>", { status: 503 });
   const error = await readApiJson(response).catch(value => value);
   expect(error).toBeInstanceOf(ApiUnavailableError);
+  if (!(error instanceof ApiUnavailableError)) throw new Error("Expected the local availability error");
   expect(error.status).toBe(503);
   expect(error.message).toBe(apiErrorMessages.en.unavailable);
   expect(isTemporaryApiError(error)).toBe(true);
