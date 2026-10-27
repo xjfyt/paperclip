@@ -3,7 +3,7 @@ import { expect } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import { activityLog, authSessions, companyMemberships, type Db } from "@paperclipai/db";
 import { runtimeRoutingPolicies as policies, runtimeRoutingReceipts as receipts } from "@paperclipai/db/schema/runtime_cost_routing";
-import type { PrivatePromptIdentity } from "../mimouse-private-prompt-tests/service.js";
+import type { PrivatePromptIdentity, PrivatePromptTx } from "../mimouse-private-prompt-tests/service.js";
 import { applicationDigest } from "../mimouse-prompt-applications/target.js";
 import { runtimeCostRoutingService } from "./service.js";
 
@@ -91,20 +91,54 @@ async function verifyRuntimeRoutingSqlGuards(db: Db, actor: PrivatePromptIdentit
     await rejectsGuard(db.insert(receipts).values(receipt(elapsed.id)), "runtime_routing_approval_changed_or_expired");
     // Hold the non-key policy UPDATE open while a raw approve INSERT competes.
     // The trigger's FOR UPDATE must serialize it; FK KEY SHARE alone would not.
-    let release!: () => void, locked!: () => void;
+    let release!: () => void, locked!: (holder: { pid: number; tx: PrivatePromptTx }) => void;
     const mayCommit = new Promise<void>(resolve => { release = resolve; });
-    const hasLock = new Promise<void>(resolve => { locked = resolve; });
+    const hasLock = new Promise<{ pid: number; tx: PrivatePromptTx }>(resolve => { locked = resolve; });
     const closing = db.transaction(async tx => {
+      await tx.execute(sql`set local statement_timeout = '8s'`);
+      const [backend] = await tx.execute(sql`select pg_backend_pid() as pid`);
       await tx.update(policies).set({ approvalClosedAt: sql`clock_timestamp()` }).where(scope(elapsed.id));
-      locked(); await mayCommit;
+      locked({ pid: Number(backend.pid), tx }); await mayCommit;
     });
-    await Promise.race([hasLock, closing]);
-    let insertion: Promise<void>;
+    let insertion: Promise<void> | undefined;
     try {
-      insertion = rejectsGuard(db.insert(receipts).values(receipt(elapsed.id)), "runtime_routing_approval_changed_or_expired");
-      await new Promise<void>(resolve => setImmediate(resolve));
-    } finally { release(); }
-    await Promise.all([closing, insertion!]);
+      const holder = await Promise.race([hasLock, closing.then(() => { throw Error("Owned closing transaction ended before acquiring its row lock"); })]);
+      let started!: (pid: number) => void, insertionSettled = false;
+      const hasInsertionPid = new Promise<number>(resolve => { started = resolve; });
+      insertion = rejectsGuard(db.transaction(async tx => {
+        await tx.execute(sql`set local lock_timeout = '8s'`);
+        await tx.execute(sql`set local statement_timeout = '8s'`);
+        const [backend] = await tx.execute(sql`select pg_backend_pid() as pid`);
+        started(Number(backend.pid));
+        await tx.insert(receipts).values(receipt(elapsed.id));
+      }), "runtime_routing_approval_changed_or_expired");
+      // Handle both outcomes immediately, but retain the original assertion
+      // promise for finally. Expiry rejection alone is not evidence of locking.
+      void insertion.then(() => { insertionSettled = true; }, () => { insertionSettled = true; });
+      const insertionPid = await Promise.race([hasInsertionPid, insertion.then(() => { throw Error("Approve INSERT finished before its backend could be observed"); })]);
+      expect(insertionPid).not.toBe(holder.pid);
+      let observedOwnedWait = false;
+      const waitDeadline = performance.now() + 5000;
+      while (performance.now() < waitDeadline && !insertionSettled) {
+        // Observe from the still-open closer, so this probe needs only its two
+        // owned connections. Refresh statistics inside that transaction.
+        await holder.tx.execute(sql`select pg_stat_clear_snapshot()`);
+        const [activity] = await holder.tx.execute(sql`select wait_event_type,
+          ${holder.pid}::integer = any(pg_blocking_pids(pid)) as blocked_by_owned_closer
+          from pg_stat_activity where pid = ${insertionPid}::integer and datname = current_database()`);
+        if (activity?.wait_event_type === "Lock" && activity.blocked_by_owned_closer === true) {
+          observedOwnedWait = true; break;
+        }
+        await new Promise<void>(resolve => setTimeout(resolve, 25));
+      }
+      expect(observedOwnedWait, "Approve INSERT must wait on the owned closing backend before release; expiry rejection alone is insufficient").toBe(true);
+    } finally {
+      release();
+      // Release even on an observation/assertion failure, and settle both
+      // owned transactions before the exact fixture DELETE cleanup below.
+      const settled = await Promise.allSettled([closing, ...(insertion ? [insertion] : [])]);
+      for (const result of settled) if (result.status === "rejected") throw result.reason;
+    }
     expect(await db.select().from(receipts).where(and(eq(receipts.companyId, actor.companyId), eq(receipts.policyId, elapsed.id)))).toHaveLength(0);
 
     // A lifecycle receipt INSERT is accepted only during its lease. Once that
