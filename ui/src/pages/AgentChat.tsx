@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { t } from "@/i18n";
 import { agentChatsApi } from "@/api/agentChats";
 import { agentsApi } from "@/api/agents";
 import { authApi } from "@/api/auth";
@@ -43,32 +44,43 @@ export function AgentChat() {
     queryFn: () => agentChatsApi.get(selectedCompanyId!, agent!.id),
     enabled: enabled && !!agent && session.isFetched,
   });
-  const creating = useRef<Promise<Issue> | null>(null);
-  useEffect(() => {
-    creating.current = null;
-  }, [selectedCompanyId, userId, agent?.id]);
+  const sessionId = session.data?.session?.id ?? null;
+  const creating = useRef(new Map<string, Promise<Issue>>());
   useEffect(() => {
     if (enabled && agent && session.isSuccess && chat.isSuccess)
       recordAgentChatVisit(agent.companyId, userId, agent.id, chat.data?.id ?? null);
   }, [enabled, agent?.id, agent?.companyId, userId, session.isSuccess, chat.isSuccess, chat.data?.id]);
   const ensureIssue = useCallback(async () => {
     if (!agent || !selectedCompanyId) throw new Error("Agent not found");
-    if (chat.data) return chat.data;
-    const promise = (creating.current ??= agentChatsApi.ensure(
-      selectedCompanyId,
-      agent.id,
-    ));
+    const assertActor = () => {
+      const current = client.getQueryData<Awaited<ReturnType<typeof authApi.getSession>>>(queryKeys.auth.session);
+      if ((current?.user?.id ?? current?.session?.userId ?? null) !== userId ||
+        (current?.session?.id ?? null) !== sessionId) throw new Error(t("issueRecoveryUi.taskNotLoaded"));
+    };
+    const assertTarget = (issue: Issue) => {
+      if (issue.companyId !== selectedCompanyId || issue.conversationAgentId !== agent.id ||
+        (userId !== null && issue.conversationUserId !== userId) ||
+        (chat.data && issue.id !== chat.data.id)) throw new Error(t("issueRecoveryUi.taskNotLoaded"));
+    };
+    assertActor();
+    const existing = chat.data ?? client.getQueryData<Issue | null>(chatKey);
+    if (existing) { assertTarget(existing); return existing; }
+    // A stale route callback must not reuse another conversation's creation.
+    const scope = JSON.stringify([selectedCompanyId, userId, sessionId, agent.id]);
+    const promise = creating.current.get(scope) ?? agentChatsApi.ensure(selectedCompanyId, agent.id);
+    creating.current.set(scope, promise);
     try {
       const issue = await promise;
+      assertActor();
+      assertTarget(issue);
       client.setQueryData(queryKeys.issues.detail(issue.id), issue);
       client.setQueryData(chatKey, issue);
       void client.invalidateQueries({ queryKey: queryKeys.agentChats.list(selectedCompanyId, userId) });
       return issue;
-    } catch (error) {
-      creating.current = null;
-      throw error;
+    } finally {
+      if (creating.current.get(scope) === promise) creating.current.delete(scope);
     }
-  }, [agent, selectedCompanyId, chat.data, client, userId]);
+  }, [agent, selectedCompanyId, chat.data, client, userId, sessionId]);
   if (!loaded || agents.isPending || session.isPending || historyAgent.isFetching && !agent)
     return (
       <p className="text-sm text-muted-foreground">Loading conversation…</p>
