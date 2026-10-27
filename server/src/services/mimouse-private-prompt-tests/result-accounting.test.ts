@@ -1,7 +1,9 @@
 import { expect, it } from "vitest";
+import type { AdapterExecutionResult } from "@paperclipai/adapter-utils";
 import { privatePromptPublicResult, sealPrivatePromptResult } from "./result.js";
 const model = "claude-sonnet-4-5-20250929", secret = "PRIVATE_ACCOUNTING_SENTINEL";
-function fixture() { return { exitCode: 0, signal: null, timedOut: false, model, costUsd: 0.0125, usageBasis: "per_run" as const,
+type AccountingFixture = AdapterExecutionResult & { resultJson: { modelUsage: Record<string, unknown> } };
+function fixture(): AccountingFixture { return { exitCode: 0, signal: null, timedOut: false, model, costUsd: 0.0125, usageBasis: "per_run" as const,
   usage: { inputTokens: 4, cachedInputTokens: 1, outputTokens: 2 }, usageComplete: true,
   resultJson: { type: "result", subtype: "success", result: secret, modelUsage: { [model]: { inputTokens: 4, outputTokens: 2, cacheReadInputTokens: 1, cacheCreationInputTokens: 0, costUSD: 0.0125 } } } }; }
 it("emits reported CLI USD accounting and actual approved identity, without private payload", () => {
