@@ -1,5 +1,14 @@
 # 本地集成验证记录
 
+## 4762键四语界面补全（2026-10-27，已本地验证候选）
+
+- 本轮补齐组织目录/通用设置、production导航、账户/项目壳、正常账号额度与旧订阅回退、Agent/Issue详情。旧有限372候选按源路径分类的98个UI缺口已抽取；另有45已有包装器、19保留标识、210不可达/测试候选（含经典Plan分支1个），不称全站全覆盖。
+- schema 3范围扩大到78文件，[4762键报告](checklists/I18N-AUDIT-20261027-4762.json)为278个literal、1862个dynamic位置，source SHA-256 `db401e942b4a7589dc58c54cd7306bd53e9ff3c286cc31c56768800e3ae2ab9f`；不能与旧73文件schema 2直接比较完成率。最终冻结`8126fab167bc5cd3071eafa0d468bdff15683bd6`；4762键合成、token/palette/cliplab/no-git-push及52项Node脚本复验通过（`/tmp/paperclip-4762-scripts.log`）。
+- 合并后类型首轮的3处插件夹具字段和1处act回调返回值已修正（08de28ef）；4735快照完整UI类型复验通过（`/tmp/paperclip-4735-ui-types-final.log`）、两文件359项类型修复邻接通过、16文件766项中央通过（`/tmp/paperclip-4735-central-ui.log`，7条既有canvas警告保留）。
+- 扩围发现的21个ProviderQuotaCard可达标签及1个ApprovalDetail原生确认已由11be921b/659a5ab6补齐；分别80/80及39/39 focused通过，审批取消零调用/原ID单次确认/pending/error已覆盖，首轮复现失败保留。当前278 literal为213无生产消费者、45已有包装器、20保留标识；1862 dynamic尚未全面判定，不能称全站零漏翻。4762完整UI类型通过（`/tmp/paperclip-4762-ui-types.log`），生产构建4.12秒通过（`/tmp/paperclip-4762-ui-build.log`），保留既有大于500KB chunk及无效dynamic import警告。新inventory的**844文件、85批、11160项完整UI严格聚合通过**；9个新分片、2并行，全部sourceUnchanged=true，零失败/跳过/todo，不沿用4735或旧10792项替代新输入运行。
+- 完整UI聚合证据：`test-results/mimouse-ui/aggregate-2026-10-27T16-31-41-086Z-kvwE3O/aggregate.json`；聚合日志`/tmp/paperclip-4762-ui-parallel-aggregate-843e99c7.log`，监督日志`/tmp/paperclip-4762-ui-parallel-supervisor.log`，分片清单`/tmp/paperclip-4762-ui-parallel-manifests.txt`。UI源码SHA-256为`cbdf704756ea97e2446d487e1b31e90efbc5783c17bc720e8a7bc60d1c007e09`；runtime-trees-v2输入SHA-256为`a23b1ba85c2ebb739192f94913599c118c7b48fa4d7131154797869383a70929`。这是同冻结输入完整覆盖的分片聚合，不伪称一次不中断运行或真实浏览器/供应商验收。
+- 最终输入server/packages/cli与469e773f差异为0（`/tmp/paperclip-4762-backend-unchanged.log`），沿用48c9c1d0后端构建与164编译API历史证据；本轮未重跑后端，也未声称all-dist或真实外部验证。详见[本轮范围、分类和手测清单](checklists/I18N-CLOSURE-20261027.md)。未确认最终远端前，本段不作已推送声明。
+
 记录起始日期：2026-10-25 UTC。基线为 v2026.1023.0 / 1b4c803816e82b0265c8422e1a804327a7ed8c54。开发分支 mimouse。此记录是可审查候选版的本地证据，不是全部需求完成或生产上线证明。
 
 ## 0361公司永久删除依赖修复（2026-10-27，后端限定补丁）
