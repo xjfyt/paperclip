@@ -2,7 +2,7 @@ import { appendFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { createServer } from "node:net";
 import { createHash, randomUUID } from "node:crypto";
-import { mkdtemp, readFile, readdir, writeFile, appendFile, rm, access } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, writeFile, appendFile, rm, access } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -46,10 +46,18 @@ vi.mock("node:fs/promises", async original => {
   };
 });
 vi.mock("../../adapters/plugin-loader.js", () => ({ buildExternalAdapters: async () => [] }));
-const processBoundary = vi.hoisted(() => ({ inputs: [] as string[], calls: 0, hold: false, releasePath: null as string | null, notifySpawn: null as null | (() => void) }));
+const processBoundary = vi.hoisted(() => ({ inputs: [] as string[], calls: 0, ordinaryCalls: 0, ordinaryAllowed: false, hold: false, releasePath: null as string | null, notifySpawn: null as null | (() => void) }));
 vi.mock("@paperclipai/adapter-utils/execution-target", async original => {
   const actual = await original<typeof import("@paperclipai/adapter-utils/execution-target")>();
   return { ...actual, runAdapterExecutionTargetProcess: async (runId: string, target: unknown, command: string, args: string[], options: any) => {
+    if (!args.includes("--bare")) {
+      if (!processBoundary.ordinaryAllowed || command !== "claude" || (target as { kind?: string })?.kind !== "local" ||
+        !options.requireSpawnReceipt || args.includes("--resume") || options.env.ANTHROPIC_API_KEY !== "fixture-not-a-real-key") throw Error("Unexpected ordinary provider boundary; real CLI forbidden");
+      processBoundary.ordinaryCalls++;
+      const script = `let body='';process.stdin.setEncoding('utf8');process.stdin.on('data',d=>body+=d);process.stdin.on('end',()=>process.stdout.write(JSON.stringify({type:'result',subtype:'success',session_id:'11111111-1111-4111-8111-111111111111',result:body,is_error:false,usage:{input_tokens:1,output_tokens:1},total_cost_usd:0})+'\\n'));`;
+      // Actual adapter target wrapper + strict spawn receipt, only an inert Node child.
+      return actual.runAdapterExecutionTargetProcess(runId, null, process.execPath, ["-e", script], options);
+    }
     if (command !== "claude" || target !== null || !args.includes("--bare") || options.inheritEnv !== false ||
         Object.keys(options.env).some(key => !["HOME", "CLAUDE_CONFIG_DIR", "ANTHROPIC_API_KEY"].includes(key)) ||
         options.env.ANTHROPIC_API_KEY !== "fixture-not-a-real-key") throw Error("Unexpected process boundary; real CLI forbidden");
@@ -718,9 +726,26 @@ it("private historical comparison is scoped, sealed and read only", async () => 
 it("produces own-agent routing proof through private execution and central accounting, never manual cost rows", async () => {
   const before = processBoundary.calls;
   const { verifyProducedRuntimeRoutingEvidence } = await import("../mimouse-cost-routing/evidence-db-cases.js");
-  await verifyProducedRuntimeRoutingEvidence(db, actor, heartbeat, input.agentId, input.skillVersionId);
+  const produced = await verifyProducedRuntimeRoutingEvidence(db, actor, heartbeat, input.agentId, input.skillVersionId);
   expect(processBoundary.calls).toBe(before + 4);
-}, 90000);
+  await mkdir(join(home, "routing-bin")); await writeFile(join(home, "routing-bin", "claude"), "#!/bin/sh\n# Hash-only fixture, never execute.\nexit 97\n", { mode: 0o700 });
+  vi.stubEnv("PATH", `${join(home, "routing-bin")}:${process.env.PATH}`);
+  for (const name of Object.keys(process.env).filter(k => /^(LD_|DYLD_|NODE_OPTIONS$|NODE_PATH$|BASH_ENV$|ENV$|ANTHROPIC_AUTH_TOKEN$|ANTHROPIC_BASE_URL$|CLAUDE_CODE_OAUTH_TOKEN$|CLAUDE_CODE_USE_)/i.test(k))) vi.stubEnv(name, "");
+  vi.stubEnv("PAPERCLIP_PROMPT_APPLICATIONS_ENABLED", "true"); vi.stubEnv("PAPERCLIP_RUNTIME_COST_ROUTING_ENABLED", "true");
+  const { resolveDefaultAgentWorkspaceDir } = await import("../../home-paths.js");
+  // Private harness preparation may have initialized the selected agent's
+  // managed home. Remove only that descendant of this marked disposable fixture
+  // to exercise genuine ordinary workspace initialization, never pre-mkdir it.
+  const selectedHome = resolve(resolveDefaultAgentWorkspaceDir(produced[1].reference.agentId));
+  if (!selectedHome.startsWith(`${resolve(home)}/`) || await readFile(join(home, ".private-prompt-test-fixture"), "utf8") !== "paperclip-private-prompt-disposable-v1") throw Error("Refusing non-fixture workspace cleanup");
+  await rm(selectedHome, { recursive: true, force: true });
+  expect(await access(selectedHome).then(() => true, () => false)).toBe(false);
+  const { verifyRuntimeRoutingDispatch } = await import("../mimouse-cost-routing/runtime-db-cases.js");
+  processBoundary.ordinaryAllowed = true;
+  try { await verifyRuntimeRoutingDispatch(db, actor, heartbeat, produced, () => processBoundary.ordinaryCalls); }
+  finally { processBoundary.ordinaryAllowed = false; }
+  expect(processBoundary.calls).toBe(before + 4); expect(processBoundary.ordinaryCalls).toBe(1);
+}, 180000);
 it("denies another active administrator and a revoked original administrator", async () => {
   const before = processBoundary.calls;
   const userId = randomUUID(), sessionId = randomUUID(), now = new Date();
