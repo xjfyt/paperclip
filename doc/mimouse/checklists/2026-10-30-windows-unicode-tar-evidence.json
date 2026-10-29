@@ -1,0 +1,132 @@
+{
+  "schema": "mimouse.local-verification.v1",
+  "recordedAt": "2026-10-30T04:03:04.294649+08:00",
+  "platform": "native Windows x64, actual System32 bsdtar3.8.9 and Git for Windows GNU tar1.35, Node24; owned temporary filesystem only",
+  "problem": "Windows bsdtar cannot convert original UTF-8 NUL-list names including 雪-💾 and corrupts/rejects some Unicode reads. Locale flags do not repair it; direct Unicode argv or dot-root can crash. These are real local tool failures, not a fixture encoding adjustment.",
+  "productionChanges": [
+    "Only on Windows, resolve a real absolute GNU tar.exe from operator PATH or adjacent/standard Git for Windows installations, confirm --version, cache successful resolution keyed by PATH and installation-root environment.",
+    "Both local create and extraction use that absolute executable with shell:false and --force-local. No fallback to known-broken Windows bsdtar is used; absence produces actionable windows_workspace_archive_requires_gnu_tar.",
+    "Use winsymlinks:nativestrict for MSYS tar so extraction restores native symlinks or fails, never Cygwin text placeholders.",
+    "Preserve original streaming top-level NUL list, --exclude semantics, 32MiB child diagnostic buffer, namespaced long cwd and absence of dot-root entry; the POSIX tar command and arguments are unchanged.",
+    "Existing extractTarballToDirectory is now a named module export for direct real filesystem regression coverage; no REST/API contract changes."
+  ],
+  "verification": {
+    "command": "cd packages/adapter-utils; node ../../node_modules/vitest/vitest.mjs run src/tar-long-path.test.ts --reporter=default --reporter=json --outputFile=../../test-results/project-closure-20261029/tar-unicode-final.json",
+    "passed": 4,
+    "failed": 0,
+    "pending": 0,
+    "log": {
+      "path": "test-results/project-closure-20261029/tar-unicode-final.log",
+      "sha256": "e7cc201c1519d525b1ba81e39aa44982cf7df3b90ee9db47a88fe5d13dc33ccc"
+    },
+    "json": {
+      "path": "test-results/project-closure-20261029/tar-unicode-final.json",
+      "sha256": "338ab291f02be30332994a42bd8baa2d742a910508cfd30b3852296ad7086c8f"
+    },
+    "scope": [
+      "Real source directory beyond 260 characters; ASCII baseline retains exact bytes and no self entry.",
+      "Original Unicode and leading-dash member names, UTF-8 raw tar headers and binary bytes, nested exclusion/.git/resource-fork exclusion and no ./ self entry.",
+      "Real production extraction returns original bytes and actual native Unicode-target symlink.",
+      "Explicit followSymlinks dereferences source link; real extraction returns regular/hardlinked content with exact original bytes.",
+      "With PATH and Git roots isolated away from GNU tar, actual System32 bsdtar is rejected, no archive is created and original source bytes stay unchanged."
+    ]
+  },
+  "redRegression": {
+    "method": "Vitest transform only switches execTar back to original PATH tar and removes GNU --force-local injection; working-tree source is unchanged. Targeted original Unicode regression genuinely fails at bsdtar wchar_t conversion. Three pending results are name-filtered tests, not platform support skips.",
+    "command": "cd packages/adapter-utils; node ../../node_modules/vitest/vitest.mjs run --config ../../test-results/project-closure-20261029/tar-unicode-before.vitest.mjs src/tar-long-path.test.ts -t \"preserves UTF-8 NUL entry names\" --reporter=default --reporter=json --outputFile=../../test-results/project-closure-20261029/tar-unicode-before-red.json",
+    "passed": 0,
+    "failed": 1,
+    "pending": 3,
+    "log": {
+      "path": "test-results/project-closure-20261029/tar-unicode-before-red.log",
+      "sha256": "56fcf386ed93519b74b28c58c41d5f99d867f87d50b0e6b8c32b872ea08b40e7"
+    },
+    "json": {
+      "path": "test-results/project-closure-20261029/tar-unicode-before-red.json",
+      "sha256": "f8bb4554081d1d7a5e49a01857cb0cc068d2d65b153c8351502eab53b56fa313"
+    },
+    "config": {
+      "path": "test-results/project-closure-20261029/tar-unicode-before.vitest.mjs",
+      "sha256": "63f4eab0f951e4e403352658242dbc223292b3b4a97ae9a0d2a440d89fc3688a"
+    }
+  },
+  "experiments": [
+    {
+      "scope": "Original actual System32 tool: four LANG/LC_ALL variants, hdrcharset option, original direct Unicode argv and dot root all fail/crash.",
+      "script": {
+        "path": "test-results/project-closure-20261029/probe-tar-unicode.mjs",
+        "sha256": "a7ac25235418ded997d3dedd6c74ec5a8bd08b1a958b20f20b7f99f0948b4dbb"
+      },
+      "log": {
+        "path": "test-results/project-closure-20261029/probe-tar-unicode-baseline.log",
+        "sha256": "9511b6d808b56f4eba81ab6bbf5894aaafe84e5e67785e6da91cd730e7d9faa1"
+      }
+    },
+    {
+      "scope": "Actual GNUtar --force-local preserves Unicode NUL name and bytes. 326-character cwd requires the existing Node namespace prefix; shorter cwd works both ways.",
+      "script": {
+        "path": "test-results/project-closure-20261029/probe-gnu-tar-unicode.mjs",
+        "sha256": "c81b0e5889a53265a4a3eb5c7e06a6926328c692dd442fcb330953c775a91482"
+      },
+      "log": {
+        "path": "test-results/project-closure-20261029/probe-gnu-tar-unicode.log",
+        "sha256": "60c557bf19f9ad57dcdc79a443cd7e8606a14033031f2872109def3e96dfd914"
+      }
+    },
+    {
+      "scope": "Independent System32 reader can list one Unicode member but Unicode argv extraction is corrupted/rejected, so actual production extraction plus raw archive bytes are the regression oracle.",
+      "script": {
+        "path": "test-results/project-closure-20261029/probe-tar-unicode-reader.mjs",
+        "sha256": "f21203a2e47cb2e492e28acca91744f328b7fc686fc54f2f665496874b41a782"
+      },
+      "log": {
+        "path": "test-results/project-closure-20261029/probe-tar-unicode-reader.log",
+        "sha256": "8bb9fdd3a1afdef04ef7837fe207a19f9bee32518b8361177c52f8c3b8a6030d"
+      }
+    }
+  ],
+  "intermediate": {
+    "scope": "Second test attempt 2/4: old ASCII and missing-tool tests passed; two failures exposed that System32 reader is also not a valid Unicode extraction oracle. Replaced those reader operations with raw header/body inspection and production extraction, preserving exact expected names and bytes.",
+    "passed": 2,
+    "failed": 2,
+    "pending": 0,
+    "log": {
+      "path": "test-results/project-closure-20261029/tar-unicode-second.log",
+      "sha256": "34d327357f1f1f9e31b96c4a798169f77473bb8b95e42e5cfa736e1d2c9d712a"
+    },
+    "json": {
+      "path": "test-results/project-closure-20261029/tar-unicode-second.json",
+      "sha256": "ddd07e3b2714f3d5a5c486d39683277b97bee1446049161cd0d52bc8d01686f5"
+    }
+  },
+  "checks": [
+    {
+      "command": "pnpm --filter @paperclipai/adapter-utils exec tsc --noEmit",
+      "exitCode": 0,
+      "log": {
+        "path": "test-results/project-closure-20261029/tar-unicode-types-final.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "command": "git diff --check -- packages/adapter-utils/src/sandbox-managed-runtime.ts packages/adapter-utils/src/tar-long-path.test.ts",
+      "exitCode": 0
+    }
+  ],
+  "sources": [
+    {
+      "path": "packages/adapter-utils/src/sandbox-managed-runtime.ts",
+      "sha256": "405c63c9f0b9d806e332a4fca5d59c0e3f573089bc99849ecfff4d2b54a4117c"
+    },
+    {
+      "path": "packages/adapter-utils/src/tar-long-path.test.ts",
+      "sha256": "cf78c8b36e6c0a2738e5554e4d469a7fc77502080baf86c8564abcf7d35c7d2e"
+    }
+  ],
+  "limits": [
+    "The 40,000-file / >32MiB manifest full-lane streaming test and adapter-utils whole-package final8 are run and reported separately by the root agent; this narrow receipt does not claim those passed.",
+    "Actual Windows native symlink extraction requires the Windows host to allow native symlink creation; strict mode fails rather than producing non-native placeholder files.",
+    "GNUtar/Git for Windows is now an explicit Windows local archive prerequisite. No dependency installation, lockfile modification, host Git configuration or external provider operation occurred.",
+    "New missing-GNU test is Windows-specific and runs on this host; all four applicable local tests passed with zero pending."
+  ]
+}

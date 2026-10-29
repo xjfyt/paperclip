@@ -848,12 +848,52 @@ async function persistDurableSeedArchive(input: {
   }
 }
 
+let windowsTarCache: { environment: string; command: string } | undefined;
+
+async function windowsArchiveTar(): Promise<string> {
+  const pathValue = Object.entries(process.env).find(([key]) => key.toLowerCase() === "path")?.[1] ?? "";
+  const roots = [process.env.ProgramFiles, process.env["ProgramFiles(x86)"], process.env.LOCALAPPDATA];
+  const environment = JSON.stringify([pathValue, ...roots]);
+  if (windowsTarCache?.environment === environment) return windowsTarCache.command;
+  const directories = pathValue.split(path.delimiter)
+    .map((directory) => directory.replace(/^"(.*)"$/, "$1"))
+    .filter((directory) => path.isAbsolute(directory));
+  // Preserve operator PATH selection and recognize Git's cmd/mingw64/bin
+  // layouts even when its POSIX tools are deliberately absent from PATH.
+  const candidates = new Set([
+    ...directories.map((directory) => path.join(directory, "tar.exe")),
+    ...directories.flatMap((directory) => [
+      path.resolve(directory, "../usr/bin/tar.exe"),
+      path.resolve(directory, "../../usr/bin/tar.exe"),
+    ]),
+    ...roots.filter((root): root is string => Boolean(root) && path.isAbsolute(root!))
+      .flatMap((root) => [path.join(root, "Git/usr/bin/tar.exe"), path.join(root, "Programs/Git/usr/bin/tar.exe")]),
+  ]);
+  for (const candidate of candidates) {
+    try {
+      if (!(await fs.stat(candidate)).isFile()) continue;
+      const { stdout } = await execFile(candidate, ["--version"], { timeout: 10_000, maxBuffer: 64 * 1024 });
+      if (!/^tar \(GNU tar\) /m.test(stdout)) continue;
+      windowsTarCache = { environment, command: candidate };
+      return candidate;
+    } catch {
+      // A missing/non-executable/non-GNU candidate is never used for data.
+    }
+  }
+  throw new Error("windows_workspace_archive_requires_gnu_tar: install Git for Windows (including usr/bin/tar.exe) or put GNU tar.exe on PATH; Windows bsdtar cannot safely archive UTF-8 NUL file lists");
+}
+
 async function execTar(args: string[], cwd?: string): Promise<void> {
-  await execFile("tar", args, {
+  const windows = process.platform === "win32";
+  const command = windows ? await windowsArchiveTar() : "tar";
+  await execFile(command, windows ? ["--force-local", ...args] : args, {
     ...(cwd ? { cwd: process.platform === "win32" ? path.toNamespacedPath(cwd) : cwd } : {}),
     env: {
       ...process.env,
       COPYFILE_DISABLE: "1",
+      // Git's MSYS tar must restore real native links, never Cygwin text
+      // placeholders that Node would mistake for regular workspace files.
+      ...(windows ? { MSYS: `${(process.env.MSYS ?? "").replace(/\bwinsymlinks:\S+/g, "")} winsymlinks:nativestrict`.trim() } : {}),
     },
     maxBuffer: 32 * 1024 * 1024,
   });
@@ -880,9 +920,9 @@ export async function createTarballFromDirectory(input: {
     try {
       for await (const entry of await fs.opendir(input.localDir)) await file.writeFile(`${entry.name}\0`);
     } finally { await file.close(); }
-    // Windows bsdtar cannot chdir to a >260-character -C path, even with
-    // a namespace prefix. Node can start it in that directory; relative -C
-    // then preserves the archive layout without shortening the source path.
+    // Windows tar cannot reliably chdir to a >260-character -C path. Node
+    // can start it in that directory using a namespace prefix; relative -C
+    // preserves the layout without shortening the source or changing names.
     const nativeCwd = process.platform === "win32" ? path.resolve(input.localDir) : undefined;
     await execTar(["-c", "--no-xattrs", ...(input.followSymlinks ? ["-h"] : []),
       "-f", nativeCwd ? path.resolve(input.archivePath) : input.archivePath,
@@ -890,7 +930,7 @@ export async function createTarballFromDirectory(input: {
   });
 }
 
-async function extractTarballToDirectory(input: {
+export async function extractTarballToDirectory(input: {
   archivePath: string;
   localDir: string;
 }): Promise<void> {
