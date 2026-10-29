@@ -1,3 +1,5 @@
+import { useTranslation } from "../i18n";
+import { decisionGroupLabel } from "../i18n/decision-desk-display";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Loader2, Settings2, X } from "lucide-react";
@@ -37,7 +39,7 @@ import {
   type AttentionGroupBy,
   type AttentionSortOrder,
 } from "../lib/attention";
-import { cn } from "../lib/utils";
+import { cn, formatNumber } from "../lib/utils";
 import { PageSkeleton } from "../components/PageSkeleton";
 import { AttentionQueueRow } from "../components/AttentionQueueRow";
 import { DecisionsToolbar } from "../components/DecisionsToolbar";
@@ -60,6 +62,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popove
  * is surfaced.
  */
 export function DecisionQueuePage() {
+  const { t } = useTranslation();
   const { selectedCompanyId } = useCompany();
   const { setBreadcrumbs } = useBreadcrumbs();
   const { pushToast } = useToastActions();
@@ -128,8 +131,8 @@ export function DecisionQueuePage() {
   }, [agents]);
 
   useEffect(() => {
-    setBreadcrumbs([{ label: "Decisions", href: "/decisions" }, { label: queue?.title ?? queueKey }]);
-  }, [setBreadcrumbs, queue?.title, queueKey]);
+    setBreadcrumbs([{ label: t("decisionDeskUi.decisions"), href: "/decisions" }, { label: queue?.title ?? queueKey }]);
+  }, [setBreadcrumbs, queue?.title, queueKey, t]);
 
   // Re-hydrate per-company preferences when the company changes.
   useEffect(() => {
@@ -212,16 +215,13 @@ export function DecisionQueuePage() {
     },
     onError: (err, receipt) => {
       if (!seedBoundary.isCurrent(receipt)) return;
-      pushToast({ title: "Could not update seeding", body: err instanceof Error ? err.message : "Please try again.", tone: "error" });
+      pushToast({ title: t("decisionDeskUi.seedError"), body: err instanceof Error ? err.message : t("decisionDeskUi.tryAgain"), tone: "error" });
     },
     onSettled: (_data, _error, receipt) => seedBoundary.finish(receipt),
   });
 
   if (!selectedCompanyId) {
-    return <p className="text-sm text-muted-foreground">Select an organization first.</p>;
-  }
-  if (isLoading) {
-    return <PageSkeleton variant="approvals" />;
+    return <p className="text-sm text-muted-foreground">{t("decisionDeskUi.selectCompany")}</p>;
   }
 
   const isEmpty = activeItems.length === 0;
@@ -271,23 +271,25 @@ export function DecisionQueuePage() {
 
       {error && <p className="text-sm text-destructive">{(error as Error).message}</p>}
 
-      {isEmpty ? (
+      {isLoading ? (
+        <PageSkeleton variant="approvals" />
+      ) : isEmpty ? (
         <div className="rounded-xl border border-dashed border-border py-14 text-center">
-          <p className="text-sm font-medium text-foreground">This queue is empty.</p>
+          <p className="text-sm font-medium text-foreground">{t("decisionDeskUi.emptyQueue")}</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Decisions land here when they match the queue's rules or an agent adds them.
+            {t("decisionDeskUi.emptyQueueHelp")}
           </p>
         </div>
       ) : (
         <div className="space-y-4">
           {visibleCount === 0 ? (
             <div className="rounded-xl border border-dashed border-border py-10 text-center">
-              <p className="text-sm font-medium text-foreground">No decisions match your filters.</p>
-              <p className="mt-1 text-xs text-muted-foreground">Adjust or clear the filters to see the rest.</p>
+              <p className="text-sm font-medium text-foreground">{t("decisionDeskUi.noMatch")}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{t("decisionDeskUi.adjustFilters")}</p>
             </div>
           ) : (
             groups.map((group) => {
-              const groupLabel = group.label;
+              const groupLabel = decisionGroupLabel(group);
               const collapsed = groupLabel !== null && collapsedGroupKeys.has(group.key);
               return (
                 <section key={group.key} className="space-y-2">
@@ -298,7 +300,7 @@ export function DecisionQueuePage() {
                       collapsed={collapsed}
                       onToggle={() => toggleGroupCollapse(group.key)}
                       trailing={
-                        <span className="text-xs tabular-nums text-muted-foreground">{group.items.length}</span>
+                        <span className="text-xs tabular-nums text-muted-foreground">{formatNumber(group.items.length)}</span>
                       }
                     />
                   )}
@@ -329,13 +331,13 @@ export function DecisionQueuePage() {
 
           {agingItems.length > 0 && (
             <Curtain
-              label="Aging"
+              label={t("decisionDeskUi.aging")}
               count={agingItems.length}
               open={agingOpen}
               onToggle={() => setAgingOpen((prev) => !prev)}
             >
               <p className="text-xs text-muted-foreground">
-                Idle past {ATTENTION_AGING_DAYS} days — kept off the queue. Keep any you still want surfaced.
+                {t("decisionDeskUi.agingQueue", { days: formatNumber(ATTENTION_AGING_DAYS) })}
               </p>
               {agingItems.map((item) => (
                 <AgingItemRow
@@ -377,17 +379,18 @@ function SeedRulesCard({
   pending: boolean;
   onToggle: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="rounded-xl border border-border bg-muted/20 p-3">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-2">
           <Settings2 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
           <div className="min-w-0 space-y-1">
-            <p className="text-sm font-medium text-foreground">Auto-seeding is {enabled ? "on" : "off"}</p>
+            <p className="text-sm font-medium text-foreground">{t(enabled ? "decisionDeskUi.seedOn" : "decisionDeskUi.seedOff")}</p>
             <p className="text-xs text-muted-foreground">
               {enabled
-                ? "This queue fills itself automatically. Decisions are added the moment they match any of its rules:"
-                : "Automatic adds are paused. These rules would add decisions to the queue when on:"}
+                ? t("decisionDeskUi.seedOnHelp")
+                : t("decisionDeskUi.seedOffHelp")}
             </p>
             <ul className="mt-0.5 space-y-0.5">
               {rules.map((rule) => (
@@ -399,14 +402,14 @@ function SeedRulesCard({
             </ul>
             <p className="text-(length:--text-nano) text-muted-foreground">
               {enabled
-                ? "Turning it off stops new automatic adds only — decisions already here stay, and you can still add or remove decisions by hand."
-                : "Adding or removing decisions by hand still works while automatic seeding is off."}
+                ? t("decisionDeskUi.disableSeedHelp")
+                : t("decisionDeskUi.disabledSeedHelp")}
             </p>
           </div>
         </div>
         <Button type="button" variant="outline" size="xs" className="h-7 shrink-0" disabled={pending} onClick={onToggle}>
           {pending && <Loader2 className="h-3 w-3 animate-spin" />}
-          {enabled ? "Disable" : "Enable"}
+          {t(enabled ? "decisionDeskUi.disable" : "decisionDeskUi.enable")}
         </Button>
       </div>
     </div>
@@ -438,6 +441,7 @@ function QueueItemRow({
   onSnooze: (item: AttentionItem, snoozedUntil: string) => void;
   onExcluded: () => void;
 }) {
+  const { t } = useTranslation();
   const { pushToast } = useToastActions();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
@@ -456,12 +460,12 @@ function QueueItemRow({
       if (!boundary.isCurrent(receipt) || draftRevision.current !== receipt.input.revision) return;
       setOpen(false);
       setReason("");
-      pushToast({ title: "Removed from queue", body: receipt.input.title ?? undefined, tone: "info" });
+      pushToast({ title: t("decisionDeskUi.removed"), body: receipt.input.title ?? undefined, tone: "info" });
       onExcluded();
     },
     onError: (err, receipt) => {
       if (!boundary.isCurrent(receipt) || draftRevision.current !== receipt.input.revision) return;
-      pushToast({ title: "Could not exclude", body: err instanceof Error ? err.message : "Please try again.", tone: "error" });
+      pushToast({ title: t("decisionDeskUi.excludeError"), body: err instanceof Error ? err.message : t("decisionDeskUi.tryAgain"), tone: "error" });
     },
     onSettled: (_data, _error, receipt) => boundary.finish(receipt),
   });
@@ -473,20 +477,20 @@ function QueueItemRow({
           <PopoverTrigger asChild>
             <Button type="button" variant="ghost" size="xs" className="h-7 gap-1 text-muted-foreground">
               <X className="h-3.5 w-3.5" />
-              Exclude
+              {t("decisionDeskUi.exclude")}
             </Button>
           </PopoverTrigger>
           <PopoverContent align="end" className="w-64 space-y-2 p-3">
-            <p className="text-xs font-medium text-foreground">Remove from this queue</p>
+            <p className="text-xs font-medium text-foreground">{t("decisionDeskUi.removeTitle")}</p>
             <textarea
               value={reason}
               onChange={(event) => { draftRevision.current++; setReason(event.target.value); }}
-              placeholder="Reason (optional)…"
+              placeholder={t("decisionDeskUi.reasonPlaceholder")}
               className="min-h-16 w-full rounded-sm border border-border bg-background px-2 py-1 text-xs"
             />
             <div className="flex justify-end gap-1">
               <Button type="button" variant="ghost" size="xs" onClick={() => changeOpen(false)}>
-                Cancel
+                {t("decisionDeskUi.cancel")}
               </Button>
               <Button
                 type="button"
@@ -499,7 +503,7 @@ function QueueItemRow({
                 }}
               >
                 {boundary.pending && <Loader2 className="h-3 w-3 animate-spin" />}
-                Exclude
+                {t("decisionDeskUi.exclude")}
               </Button>
             </div>
           </PopoverContent>

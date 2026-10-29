@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import "../i18n/decision-desk-test-resources";
 import "../i18n/decision-card-test-resources";
 import { act, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";

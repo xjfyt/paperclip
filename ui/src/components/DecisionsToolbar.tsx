@@ -1,3 +1,5 @@
+import { useTranslation } from "../i18n";
+import { formatNumber } from "../lib/utils";
 import { type ReactNode } from "react";
 import { ArrowUpDown, Check, Layers, ListFilter } from "lucide-react";
 import {
@@ -7,7 +9,6 @@ import {
   countActiveAttentionFilters,
   defaultAttentionFilterState,
   NO_GROUP_SENTINEL,
-  sourceMeta,
   type AttentionFilterState,
   type AttentionGroupBy,
   type AttentionSortOrder,
@@ -16,13 +17,6 @@ import { cn } from "../lib/utils";
 import { Button } from "./ui/button";
 import { Checkbox } from "./ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
-
-const SEVERITY_LABELS: Record<string, string> = {
-  critical: "Critical",
-  high: "High",
-  medium: "Medium",
-  low: "Low",
-};
 
 interface DecisionsToolbarProps {
   /** Number of decisions currently shown, for the count pill. */
@@ -52,12 +46,13 @@ export function DecisionsToolbar({
   sortOrder,
   onSortOrderChange,
 }: DecisionsToolbarProps) {
+  const { t } = useTranslation();
   const activeFilterCount = countActiveAttentionFilters(filters);
   return (
     <div className="flex items-center gap-2">
       {visibleCount > 0 && (
         <span className="text-sm text-muted-foreground">
-          {visibleCount} {visibleCount === 1 ? "decision" : "decisions"}
+          {t("decisionDeskUi.count", { count: visibleCount, n: formatNumber(visibleCount) })}
         </span>
       )}
       {/* Filter */}
@@ -68,8 +63,8 @@ export function DecisionsToolbar({
             variant="outline"
             size="icon"
             className={cn("h-8 w-8 shrink-0", activeFilterCount > 0 && "bg-accent")}
-            title="Filter"
-            aria-label="Filter"
+            title={t("decisionDeskUi.filter")}
+            aria-label={t("decisionDeskUi.filter")}
           >
             <ListFilter className="h-3.5 w-3.5" />
           </Button>
@@ -86,15 +81,15 @@ export function DecisionsToolbar({
             variant="outline"
             size="icon"
             className={cn("h-8 w-8 shrink-0", groupBy !== "none" && "bg-accent")}
-            title="Group"
-            aria-label="Group"
+            title={t("decisionDeskUi.group")}
+            aria-label={t("decisionDeskUi.group")}
           >
             <Layers className="h-3.5 w-3.5" />
           </Button>
         </PopoverTrigger>
         <PopoverContent align="end" className="w-40 p-2">
           <div className="space-y-0.5">
-            {ATTENTION_GROUP_BY_OPTIONS.map(([value, label]) => (
+            {ATTENTION_GROUP_BY_OPTIONS.map(([value]) => (
               <button
                 key={value}
                 type="button"
@@ -104,7 +99,7 @@ export function DecisionsToolbar({
                 )}
                 onClick={() => onGroupByChange(value)}
               >
-                <span>{label}</span>
+                <span>{t(`decisionDeskUi.groupBy.${value}`)}</span>
                 {groupBy === value ? <Check className="h-3.5 w-3.5" /> : null}
               </button>
             ))}
@@ -119,15 +114,15 @@ export function DecisionsToolbar({
             variant="outline"
             size="icon"
             className="h-8 w-8 shrink-0"
-            title="Sort"
-            aria-label="Sort"
+            title={t("decisionDeskUi.sort")}
+            aria-label={t("decisionDeskUi.sort")}
           >
             <ArrowUpDown className="h-3.5 w-3.5" />
           </Button>
         </PopoverTrigger>
         <PopoverContent align="end" className="w-44 p-2">
           <div className="space-y-0.5">
-            {ATTENTION_SORT_OPTIONS.map(([value, label]) => (
+            {ATTENTION_SORT_OPTIONS.map(([value]) => (
               <button
                 key={value}
                 type="button"
@@ -137,7 +132,7 @@ export function DecisionsToolbar({
                 )}
                 onClick={() => onSortOrderChange(value)}
               >
-                <span>{label}</span>
+                <span>{t(`decisionDeskUi.sortBy.${value}`)}</span>
                 {sortOrder === value ? <Check className="h-3.5 w-3.5" /> : null}
               </button>
             ))}
@@ -157,6 +152,7 @@ function FilterMenu({
   filters: AttentionFilterState;
   onChange: (next: AttentionFilterState) => void;
 }) {
+  const { t } = useTranslation();
   const toggle = (key: keyof AttentionFilterState, value: string) => {
     const list = filters[key] as string[];
     const nextList = list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
@@ -167,24 +163,24 @@ function FilterMenu({
   return (
     <div className="max-h-(--sz-70vh) overflow-y-auto">
       <div className="flex items-center justify-between px-3 py-2">
-        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Filter</span>
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("decisionDeskUi.filter")}</span>
         {hasActive && (
           <button
             type="button"
             className="text-xs text-muted-foreground hover:text-foreground"
             onClick={() => onChange(defaultAttentionFilterState)}
           >
-            Clear
+            {t("decisionDeskUi.clear")}
           </button>
         )}
       </div>
 
       {options.sourceKinds.length > 1 && (
-        <FilterSection title="Type">
+        <FilterSection title={t("decisionDeskUi.type")}>
           {options.sourceKinds.map((kind) => (
             <FilterRow
               key={kind}
-              label={sourceMeta(kind).label}
+              label={t(`decisionDeskUi.source.${kind}`, { defaultValue: kind })}
               checked={filters.sourceKinds.includes(kind)}
               onToggle={() => toggle("sourceKinds", kind)}
             />
@@ -193,11 +189,11 @@ function FilterMenu({
       )}
 
       {options.severities.length > 1 && (
-        <FilterSection title="Severity">
+        <FilterSection title={t("decisionDeskUi.severity")}>
           {options.severities.map((severity) => (
             <FilterRow
               key={severity}
-              label={SEVERITY_LABELS[severity] ?? severity}
+              label={t(`decisionDeskUi.severities.${severity}`, { defaultValue: severity })}
               checked={filters.severities.includes(severity)}
               onToggle={() => toggle("severities", severity)}
             />
@@ -206,7 +202,7 @@ function FilterMenu({
       )}
 
       {(options.projects.length > 0 || options.hasNoProject) && (
-        <FilterSection title="Project">
+        <FilterSection title={t("decisionDeskUi.project")}>
           {options.projects.map((project) => (
             <FilterRow
               key={project.id}
@@ -217,7 +213,7 @@ function FilterMenu({
           ))}
           {options.hasNoProject && (
             <FilterRow
-              label="No project"
+              label={t("decisionDeskUi.noProject")}
               checked={filters.projectIds.includes(NO_GROUP_SENTINEL)}
               onToggle={() => toggle("projectIds", NO_GROUP_SENTINEL)}
             />
@@ -226,7 +222,7 @@ function FilterMenu({
       )}
 
       {(options.workspaces.length > 0 || options.hasNoWorkspace) && (
-        <FilterSection title="Workspace">
+        <FilterSection title={t("decisionDeskUi.workspace")}>
           {options.workspaces.map((workspace) => (
             <FilterRow
               key={workspace.id}
@@ -237,7 +233,7 @@ function FilterMenu({
           ))}
           {options.hasNoWorkspace && (
             <FilterRow
-              label="No workspace"
+              label={t("decisionDeskUi.noWorkspace")}
               checked={filters.workspaceIds.includes(NO_GROUP_SENTINEL)}
               onToggle={() => toggle("workspaceIds", NO_GROUP_SENTINEL)}
             />

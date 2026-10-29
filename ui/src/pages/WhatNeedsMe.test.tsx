@@ -1,3 +1,4 @@
+import "../i18n/decision-desk-test-resources";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { DecisionBundleHeader, decisionHistoryCount, decisionHistoryQueryEnabled } from "./WhatNeedsMe";

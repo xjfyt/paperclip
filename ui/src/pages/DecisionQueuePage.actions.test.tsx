@@ -1,12 +1,16 @@
 // @vitest-environment jsdom
+import { decisionDeskMessages, i18n } from "../i18n/decision-desk-test-resources";
+import { validateLocaleMessages } from "../i18n/locale-validation";
+import { decisionGroupLabel } from "../i18n/decision-desk-display";
+import { WhatNeedsMe } from "./WhatNeedsMe";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DecisionQueuePage } from "./DecisionQueuePage";
 import { queryKeys } from "../lib/queryKeys";
-const state = vi.hoisted(() => ({ companyId: "c1", queue: "q1", toast: vi.fn(), remove: vi.fn(), update: vi.fn() }));
-vi.mock("@/lib/router", () => ({ useParams: () => ({ key: state.queue }), useLocation: () => ({ pathname: `/decisions/queues/${state.queue}`, key: state.queue }), Link: ({ children }: { children: React.ReactNode }) => <span>{children}</span> }));
+const state = vi.hoisted(() => ({ companyId: "c1", queue: "q1", toast: vi.fn(), remove: vi.fn(), update: vi.fn(), list: vi.fn(), history: vi.fn() }));
+vi.mock("@/lib/router", () => ({ useNavigate: () => vi.fn(), useSearchParams: () => [new URLSearchParams(), vi.fn()], useParams: () => ({ key: state.queue }), useLocation: () => ({ pathname: `/decisions/queues/${state.queue}`, key: state.queue }), Link: ({ children }: { children: React.ReactNode }) => <span>{children}</span> }));
 vi.mock("../context/CompanyContext", () => ({ useCompany: () => ({ selectedCompanyId: state.companyId }) }));
 vi.mock("../context/BreadcrumbContext", () => ({ useBreadcrumbs: () => ({ setBreadcrumbs: () => {} }) }));
 vi.mock("../context/ToastContext", () => ({ useToastActions: () => ({ pushToast: state.toast }) }));
@@ -15,7 +19,8 @@ vi.mock("../components/AttentionQueueRow", () => ({ AttentionQueueRow: () => <di
 vi.mock("../api/decisionQueues", () => ({ decisionQueuesApi: { list: async () => [{ key: state.queue, title: "Raw queue", seedRules: [], itemCount: 1 }], removeItem: state.remove, update: state.update } }));
 vi.mock("../api/agents", () => ({ agentsApi: { list: async () => [] } }));
 vi.mock("../api/auth", () => ({ authApi: { getSession: async () => ({ user: { id: "viewer1" }, session: { id: "session1" } }) } }));
-vi.mock("../api/attention", () => ({ attentionApi: { list: async () => ({ generatedAt: "2026-10-29T00:00:00Z", items: [{ id: "a1", companyId: state.companyId, sourceKind: "decision", subject: { id: "d1", title: "Raw title" }, queues: [], shelf: false, keep: false, severity: "medium", activityAt: "2026-10-29T00:00:00Z", dismissal: null }] }) } }));
+vi.mock("../api/decisions", () => ({ decisionsApi: { list: state.history } }));
+vi.mock("../api/attention", () => ({ attentionApi: { list: (...args: unknown[]) => { state.list(...args); return Promise.resolve({ generatedAt: "2026-10-29T00:00:00Z", items: [{ id: "a1", companyId: state.companyId, sourceKind: "decision", subject: { id: "d1", title: "Raw title" }, queues: [], shelf: false, keep: false, severity: "medium", createdAt: "2026-10-29T00:00:00Z", activityAt: "2026-10-29T00:00:00Z", dismissal: null }] }); } } }));
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 let host: HTMLDivElement, root: Root, client: QueryClient;
 const flush = async () => { await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); }); };
@@ -27,12 +32,12 @@ async function type(value: string) { await act(async () => {
   input.dispatchEvent(new Event("input", { bubbles: true }));
 }); }
 beforeEach(() => {
-  state.companyId = "c1"; state.queue = "q1"; state.toast.mockReset(); state.remove.mockReset();
+  state.companyId = "c1"; state.queue = "q1"; state.toast.mockReset(); state.remove.mockReset(); state.list.mockReset(); state.history.mockReset().mockResolvedValue([]); localStorage.clear();
   host = document.createElement("div"); document.body.append(host); root = createRoot(host);
   client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity }, mutations: { retry: false } } });
   client.setQueryData(queryKeys.auth.session, { user: { id: "viewer1" }, session: { id: "session1" } });
 });
-afterEach(async () => { await act(async () => root.unmount()); client.clear(); host.remove(); });
+afterEach(async () => { await act(async () => root.unmount()); client.clear(); host.remove(); await i18n.changeLanguage("en"); });
 describe("actual queue page exclusion boundary", () => {
   it("reserves exclusion synchronously and snapshots its reason", async () => {
     state.remove.mockImplementation(() => new Promise(() => {}));
@@ -54,4 +59,69 @@ describe("actual queue page exclusion boundary", () => {
     expect(document.querySelector("textarea")?.value).toBe("new reason");
     expect(state.toast).not.toHaveBeenCalled();
   });
+});
+
+
+describe.each(Object.entries(decisionDeskMessages))("actual decision desk %s", (locale, strings) => {
+  it("localizes real page headings, history curtains and lazy empty results", async () => {
+    expect(validateLocaleMessages(strings, decisionDeskMessages.en)).toEqual([]);
+    await i18n.changeLanguage(locale);
+    await act(async () => root.render(<QueryClientProvider client={client}><WhatNeedsMe /></QueryClientProvider>)); await flush();
+    expect(host.querySelector("h1")?.textContent).toBe(strings.decisions);
+    expect(host.textContent).toContain(strings.shelf["new-today"]);
+    expect(host.textContent).toContain(strings.decided);
+    expect(host.textContent).toContain(strings.expired);
+    expect(state.history).not.toHaveBeenCalled();
+    const curtain = [...host.querySelectorAll("button")].find(node => node.textContent?.includes(strings.decided))!;
+    await act(async () => curtain.click()); await flush();
+    expect(host.textContent).toContain(strings.emptyDecided);
+    expect(state.history).toHaveBeenCalledExactlyOnceWith("c1", { status: "decided", limit: 51 });
+    expect(host.textContent).not.toContain("decisionDeskUi.");
+    expect(decisionGroupLabel({ key: "project:user-id", label: "Earlier", items: [] })).toBe("Earlier");
+  });
+});
+it("hot-switches the actual queue exclusion form without losing reason/focus or issuing requests", async () => {
+  await render(); await act(async () => button("Exclude").click()); await type("raw reason Ω");
+  const field = document.querySelector("textarea")!; field.focus(); field.setSelectionRange(1, 4);
+  const reads = state.list.mock.calls.length;
+  for (const [locale, strings] of Object.entries(decisionDeskMessages)) {
+    await act(async () => { await i18n.changeLanguage(locale); });
+    expect(document.querySelector("textarea")).toBe(field);
+    expect(field.value).toBe("raw reason Ω");
+    expect(field.placeholder).toBe(strings.reasonPlaceholder);
+    expect(document.activeElement).toBe(field);
+    expect([field.selectionStart, field.selectionEnd]).toEqual([1, 4]);
+    expect(host.querySelector("h1")?.textContent).toBe("Raw queue");
+    expect(state.list).toHaveBeenCalledTimes(reads);
+    expect(state.remove).not.toHaveBeenCalled();
+  }
+});
+it("retains the actual filter menu and canonical checked selection across all locales", async () => {
+  await render(); await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Filter"]')!.click());
+  await act(async () => button("No project").click());
+  const panel = document.querySelector('[data-slot="popover-content"]');
+  const reads = state.list.mock.calls.length;
+  for (const [locale, strings] of Object.entries(decisionDeskMessages)) {
+    await act(async () => { await i18n.changeLanguage(locale); });
+    expect(document.querySelector('[data-slot="popover-content"]')).toBe(panel);
+    expect(button(strings.noProject).querySelector('[role="checkbox"]')?.getAttribute("aria-checked")).toBe("true");
+    expect(state.list).toHaveBeenCalledTimes(reads);
+    expect(state.remove).not.toHaveBeenCalled();
+  }
+});
+it("keeps custom native date input values and open popover stable while display language changes", async () => {
+  await render(); await act(async () => button("Custom").click());
+  const from = document.querySelector<HTMLInputElement>('input[type="date"]')!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(from, "2026-10-01");
+    from.dispatchEvent(new Event("input", { bubbles: true }));
+  }); await flush();
+  const reads = state.list.mock.calls.length;
+  for (const [locale, strings] of Object.entries(decisionDeskMessages)) {
+    await act(async () => { await i18n.changeLanguage(locale); });
+    expect(document.querySelector('input[type="date"]')).toBe(from);
+    expect(from.value).toBe("2026-10-01");
+    expect(from.getAttribute("aria-label")).toBe(strings.from);
+    expect(state.list).toHaveBeenCalledTimes(reads);
+  }
 });
