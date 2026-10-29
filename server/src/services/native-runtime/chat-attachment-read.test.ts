@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, readFile, symlink, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, symlink, stat } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -74,6 +74,7 @@ describe("native same-conversation historical attachment reading", () => {
   const principalId = "10000000-0000-4000-8000-000000000108";
   const userId = "chat-user-1";
   let workspaceRoot: string;
+  const ownedDirectories: string[] = [];
   let currentCommentId: string;
   let sourceCommentId: string;
   let sourceAttachmentId: string;
@@ -91,6 +92,7 @@ describe("native same-conversation historical attachment reading", () => {
     const storageRoot = await mkdtemp(
       path.join(tmpdir(), "paperclip-chat-reuse-"),
     );
+    ownedDirectories.push(workspaceRoot, storageRoot);
     await mkdir(storageRoot, { recursive: true });
     storage = createStorageService(createLocalDiskStorageProvider(storageRoot));
     await db.insert(companies).values({
@@ -312,6 +314,7 @@ describe("native same-conversation historical attachment reading", () => {
 
   afterAll(async () => {
     await temporary?.cleanup();
+    for (const directory of ownedDirectories) await rm(directory, { recursive: true, force: true });
   });
 
   const binding = { companyId, agentId, issueId, runId };
@@ -333,10 +336,32 @@ describe("native same-conversation historical attachment reading", () => {
     return { sourceCommentId, attachmentId: sourceAttachmentId };
   }
 
+  async function readWithPlatformContract<T>(read: () => Promise<T>): Promise<T | null> {
+    if (process.platform !== "win32") return read();
+    // Native confined staging cannot prove descriptor paths on Windows.
+    // Exercise the real refusal and its lack of publication effects, without
+    // mocking the guard or reporting a POSIX staging journey as supported.
+    const attachmentsBefore = await db.select().from(issueAttachments);
+    const publicationsBefore = await db.select().from(chatPublications);
+    await expect(read()).rejects.toThrow("paperclip_runner_file_handoff_descriptor_unverifiable");
+    expect(await db.select().from(issueAttachments)).toEqual(attachmentsBefore);
+    expect(await db.select().from(chatPublications)).toEqual(publicationsBefore);
+    const entries = await readdir(workspaceRoot, { recursive: true, withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isFile()) expect((await stat(path.join(entry.parentPath, entry.name))).size).toBe(0);
+    }
+    return null;
+  }
+
   it("opens verified historical bytes without creating a publication or deliverable, then clears its exact inode", async () => {
     const reader = scope();
     const before = await db.select().from(issueAttachments);
-    const result = await reader.read(selection());
+    const result = await readWithPlatformContract(() => reader.read(selection()));
+    if (!result) {
+      await reader.close();
+      expect(() => reader.read(selection())).toThrow("scope_closed");
+      return;
+    }
     expect(result).toMatchObject({
       attachmentId: sourceAttachmentId,
       contentAccess: "staged_workspace_file",
@@ -502,6 +527,7 @@ describe("native same-conversation historical attachment reading", () => {
     const outside = await mkdtemp(
       path.join(tmpdir(), "paperclip-chat-read-outside-"),
     );
+    ownedDirectories.push(unsafeRoot, outside);
     await symlink(outside, path.join(unsafeRoot, ".paperclip-inbound"));
     const reader = scope({ workspaceRoot: unsafeRoot });
     try {
@@ -656,15 +682,15 @@ describe("native same-conversation historical attachment reading", () => {
           byteSize: 0,
         }),
       );
-      const result = (await authority.execute({
+      const result = (await readWithPlatformContract(() => authority.execute({
         tool: "read_chat_attachment",
         callId: "read-empty",
         arguments: selection(),
-      })) as { workspaceRelativePath: string; selectedForPublication: boolean };
-      expect(result.selectedForPublication).toBe(false);
-      expect(
-        await readFile(path.join(workspaceRoot, result.workspaceRelativePath)),
-      ).toEqual(Buffer.alloc(0));
+      }))) as { workspaceRelativePath: string; selectedForPublication: boolean } | null;
+      if (result) {
+        expect(result.selectedForPublication).toBe(false);
+        expect(await readFile(path.join(workspaceRoot, result.workspaceRelativePath))).toEqual(Buffer.alloc(0));
+      }
       await expect(
         authority.execute({
           tool: "read_chat_attachment",
@@ -725,7 +751,8 @@ describe("native same-conversation historical attachment reading", () => {
       })
       .where(eq(assets.id, asset!.id));
     try {
-      const result = await reader.read(selection());
+      const result = await readWithPlatformContract(() => reader.read(selection()));
+      if (!result) return;
       expect(result).toMatchObject({
         contentType: "image/png",
         filename: "pixel.png",
@@ -769,7 +796,8 @@ describe("native same-conversation historical attachment reading", () => {
     const reader = scope();
     const releaseTimer = setTimeout(release, 100);
     try {
-      const result = await reader.read(selection());
+      const result = await readWithPlatformContract(() => reader.read(selection()));
+      if (!result) return;
       expect(
         await readFile(path.join(workspaceRoot, result.workspaceRelativePath)),
       ).toEqual(sourceBody);
@@ -924,8 +952,9 @@ describe("native same-conversation historical attachment reading", () => {
       checked = true;
     };
     try {
-      const result = await reader.read(selection());
+      const result = await readWithPlatformContract(() => reader.read(selection()));
       expect(checked).toBe(true);
+      if (!result) return;
       expect(
         await readFile(path.join(workspaceRoot, result.workspaceRelativePath)),
       ).toEqual(sourceBody);
@@ -1001,21 +1030,15 @@ describe("native same-conversation historical attachment reading", () => {
             }),
           ]),
         });
-        const result = (await authority.execute({
+        const result = (await readWithPlatformContract(() => authority.execute({
           tool: "read_chat_attachment",
           callId: `read-${attachment.id}`,
           arguments: { sourceCommentId, attachmentId: attachment.id },
-        })) as { workspaceRelativePath: string };
-        expect(result).toMatchObject({
-          filename,
-          contentType,
-          selectedForPublication: false,
-        });
-        expect(
-          await readFile(
-            path.join(workspaceRoot, result.workspaceRelativePath),
-          ),
-        ).toEqual(body);
+        }))) as { workspaceRelativePath: string } | null;
+        if (result) {
+          expect(result).toMatchObject({ filename, contentType, selectedForPublication: false });
+          expect(await readFile(path.join(workspaceRoot, result.workspaceRelativePath))).toEqual(body);
+        }
         const reused = (await authority.execute({
           tool: "reuse_chat_attachment",
           callId: `reuse-${attachment.id}`,
@@ -1089,7 +1112,7 @@ describe("native same-conversation historical attachment reading", () => {
       stagedPath = path.join(workspaceRoot, relativePath);
     };
     const rejected = expect(reader.read(selection())).rejects.toThrow(
-      "scope_closed",
+      process.platform === "win32" ? "paperclip_runner_file_handoff_descriptor_unverifiable" : "scope_closed",
     );
     try {
       await entered;
@@ -1097,8 +1120,11 @@ describe("native same-conversation historical attachment reading", () => {
       release();
       await rejected;
       await closing;
-      expect(stagedPath).toBeDefined();
-      expect((await stat(stagedPath!)).size).toBe(0);
+      if (process.platform === "win32") expect(stagedPath).toBeUndefined();
+      else {
+        expect(stagedPath).toBeDefined();
+        expect((await stat(stagedPath!)).size).toBe(0);
+      }
     } finally {
       release();
       stagingControl.beforeStage = undefined;

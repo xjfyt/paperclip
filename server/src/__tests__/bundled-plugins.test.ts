@@ -13,7 +13,7 @@ import {
   type ResolvedBundledPlugin,
 } from "../services/bundled-plugins.js";
 
-const CATALOG_ROOT = "/app/packages/plugins";
+const CATALOG_ROOT = path.resolve("/app/packages/plugins");
 
 const tempDirs: string[] = [];
 function makeTempDir(prefix: string): string {
@@ -142,7 +142,7 @@ describe("resolveBundledPluginInstalls", () => {
       {
         key: "kubernetes",
         pluginKey: "paperclip.kubernetes-sandbox-provider",
-        localPath: "/somewhere/else/kubernetes",
+        localPath: path.resolve("/somewhere/else/kubernetes"),
       },
     ]);
   });
@@ -177,7 +177,7 @@ describe("resolveBundledPluginInstalls", () => {
     expect(entry).toEqual({
       key: "kubernetes",
       pluginKey: "paperclip.kubernetes-sandbox-provider",
-      localPath: "/app/packages/plugins/sandbox-providers/kubernetes",
+      localPath: path.resolve("/app/packages/plugins/sandbox-providers/kubernetes"),
     });
   });
 
@@ -247,7 +247,7 @@ function makeDeps(overrides?: {
   const installPlugin = vi.fn(async ({ localPath }: { localPath: string }) => {
     if (overrides?.installError) throw overrides.installError;
     const entry = BUNDLED_PLUGIN_CATALOG.find((candidate) =>
-      localPath.endsWith(candidate.relativePath),
+      localPath.endsWith(path.normalize(candidate.relativePath)),
     );
     const pluginKey = entry?.pluginKey ?? "unknown";
     installedRows.set(pluginKey, normalize({ id: `id-${pluginKey}`, pluginKey, status: "installed" }));
@@ -257,7 +257,7 @@ function makeDeps(overrides?: {
   const updateStatus = vi.fn(async () => undefined);
   const loadManifest = vi.fn(async (localPath: string) => {
     const entry = BUNDLED_PLUGIN_CATALOG.find((candidate) =>
-      localPath.endsWith(candidate.relativePath),
+      localPath.endsWith(path.normalize(candidate.relativePath)),
     );
     const pluginKey = entry?.pluginKey ?? "unknown";
     const persisted = installedRows.get(pluginKey);
