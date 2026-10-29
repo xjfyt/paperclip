@@ -4,6 +4,7 @@ import { cachedAgentFileManifest, checkpointSnapshot, type AgentFileManifest } f
 import { constants } from "node:fs";
 import { Readable } from "node:stream";
 import path from "node:path";
+import { agentDownloadStream, snapshotAgentDownload } from "./agent-download-snapshot.js";
 import { and, eq } from "drizzle-orm";
 import { agents, activityLog, agentInstructionHeads, agentInstructionRevisions, type Db } from "@paperclipai/db";
 import { captureDirectorySnapshot, mergeDirectoryWithBaseline, type DirectorySnapshot } from "@paperclipai/adapter-utils/workspace-restore-merge";
@@ -88,16 +89,28 @@ export async function adoptAgentFiles(tx: Tx, agent: Agent): Promise<string> {
 
 async function openAgentFile(root: string, relative: string) {
   const filename = await assertInstructionPathSafe(root, relative);
+  const entry = process.platform === "win32"
+    ? await fs.lstat(filename, { bigint: true }).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return null;
+      throw error;
+    }) : null;
   const handle = await fs.open(filename, constants.O_RDONLY | constants.O_NOFOLLOW).catch((error: NodeJS.ErrnoException) => {
     if (error.code === "ENOENT") return null;
     throw error;
   });
   if (!handle) return null;
   try {
-    const stat = await handle.stat();
-    if (!stat.isFile() || stat.nlink !== 1) throw unprocessable("Agent files must be regular files without links");
-    assertFileSize(stat.size, relative);
-    return { handle, size: stat.size };
+    const stat = await handle.stat({ bigint: true });
+    if (process.platform === "win32") {
+      const current = await fs.lstat(filename, { bigint: true });
+      if (!entry?.isFile() || entry.isSymbolicLink() || !current.isFile() || current.isSymbolicLink() ||
+        entry.dev !== stat.dev || entry.ino !== stat.ino || current.dev !== stat.dev || current.ino !== stat.ino) {
+        throw unprocessable("Agent files must be regular files without links");
+      }
+    }
+    if (!stat.isFile() || stat.nlink !== 1n) throw unprocessable("Agent files must be regular files without links");
+    assertFileSize(Number(stat.size), relative);
+    return { handle, size: Number(stat.size), identity: stat };
   } catch (error) { await handle.close(); throw error; }
 }
 
@@ -132,7 +145,11 @@ async function scanAgentFiles(root: string, enforceLimits = true) {
   const entries = new Set<string>();
   let fullFile: string | undefined;
   async function walk(dir: string) {
-    for (const item of await fs.readdir(path.join(root, dir), { withFileTypes: true })) {
+    const children = await fs.readdir(path.join(root, dir), { withFileTypes: true });
+    // Reject a known oversized directory before issuing one stat per entry.
+    // Keep the incremental check for descendants discovered during traversal.
+    if (enforceLimits) assertDirectorySize(size, count + children.length);
+    for (const item of children) {
       const relative = agentFilePath(dir ? `${dir}/${item.name}` : item.name);
       const stat = await fs.lstat(path.join(root, relative));
       count++;
@@ -181,18 +198,33 @@ export function agentFileStore(db: Db) {
   return {
     locked,
     download: async (companyId: string, agentId: string, relative: string, actor: AuthorizationActor) => {
-      const opened: { file: Awaited<ReturnType<typeof openAgentFile>> } = { file: null };
+      const opened: { file: { handle: fs.FileHandle; size: number } | null } = { file: null };
+      let snapshotDirectory: string | undefined;
       try {
         const file = await locked(companyId, agentId, actor, false, async (_tx, _agent, root) => {
-          opened.file = await openAgentFile(root, instructionPath(relative));
+          const source = await openAgentFile(root, instructionPath(relative));
+          opened.file = source;
+          // Even an empty source descriptor blocks replacement on Windows.
+          if (source?.size === 0) await source.handle.close();
+          if (process.platform === "win32" && source && source.size > 0) {
+            const snapshot = await snapshotAgentDownload(source);
+            snapshotDirectory = snapshot.directory;
+            opened.file = snapshot;
+          }
           return opened.file;
         });
         // Transfer outside the database lock. The open descriptor pins the file
         // across concurrent atomic replacements; end bounds concurrent growth.
         if (!file) return null;
         if (file.size === 0) { await file.handle.close(); return { size: 0, stream: Readable.from([]) }; }
-        return { size: file.size, stream: file.handle.createReadStream({ end: file.size - 1 }) };
-      } catch (error) { await opened.file?.handle.close(); throw error; }
+        const stream = agentDownloadStream({ ...file, directory: snapshotDirectory });
+        return { size: file.size, stream };
+      } catch (error) {
+        try { await opened.file?.handle.close(); } finally {
+          if (snapshotDirectory) await fs.rm(snapshotDirectory, { recursive: true, force: true });
+        }
+        throw error;
+      }
     },
     read: (companyId: string, agentId: string, relative: string, actor: AuthorizationActor) =>
       locked(companyId, agentId, actor, false, (_tx, _agent, root) => readAgentFile(root, instructionPath(relative))),

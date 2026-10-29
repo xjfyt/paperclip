@@ -4919,6 +4919,9 @@ export function agentRoutes(
     if (req.query.download === "true" && agentInstructionsBundleMode(existing) === "managed") {
       const download = await agentFiles.download(existing.companyId, existing.id, relativePath, req.actor);
       if (download === null) throw notFound("Agent file not found");
+      // The client may have disconnected while Windows captured its snapshot.
+      // Transfer ownership to close cleanup even when there is no response left.
+      if (res.destroyed) { download.stream.destroy(); return; }
       res.setHeader("Content-Type", "application/octet-stream");
       res.setHeader("X-Content-Type-Options", "nosniff");
       res.attachment(relativePath.split("/").at(-1)!);

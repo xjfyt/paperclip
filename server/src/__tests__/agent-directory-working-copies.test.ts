@@ -3,6 +3,7 @@ import { execFile as execFileCallback } from "node:child_process";
 import { promisify } from "node:util";
 import * as executionTargetTools from "@paperclipai/adapter-utils/execution-target";
 import * as ssh from "@paperclipai/adapter-utils/ssh";
+import { sandboxPath, shellExecutable, shellScript, shellEnvironment, runLocalSandboxProcess } from "@paperclipai/adapter-utils/test-fixtures/local-sandbox";
 const execFile = promisify(execFileCallback);
 import os from "node:os";
 import path from "node:path";
@@ -294,7 +295,13 @@ describe("persistent agent directories", () => {
     expect(download.size).toBe(size);
     // The lock is released before consuming the stream. An editor replacement
     // must not change the already opened download's bytes.
-    await store.write({ ...target(), path: "large.bin", bytes: Buffer.from("replacement"), baseHash: restored!.hash }, board());
+    try {
+      await store.write({ ...target(), path: "large.bin", bytes: Buffer.from("replacement"), baseHash: restored!.hash }, board());
+    } catch (error) {
+      const stat = await fs.lstat(path.join(root, "large.bin"));
+      download.stream.destroy();
+      throw new Error(`Download replacement failed (mode=${stat.mode.toString(8)}, links=${stat.nlink})`, { cause: error });
+    }
     const hash = createHash("sha256");
     let downloaded = 0;
     for await (const chunk of download.stream) { downloaded += chunk.length; hash.update(chunk); }
@@ -423,9 +430,11 @@ describe("persistent agent directories", () => {
     const entries = await fs.readdir(directory, { withFileTypes: true });
     // Exercise the walker bound without creating 100,001 physical files.
     const readdir = vi.spyOn(fs, "readdir").mockResolvedValue(Array(MAX_AGENT_DIRECTORY_ENTRIES + 1).fill(entries[0]));
+    const lstat = vi.spyOn(fs, "lstat");
     try {
       await expect(snapshotAgentFiles(directory)).rejects.toMatchObject({ status: 422, message: expect.stringContaining("100,000-entry limit") });
-    } finally { readdir.mockRestore(); }
+      expect(lstat.mock.calls.some(([filename]) => path.resolve(String(filename)) === path.join(directory, "empty"))).toBe(false);
+    } finally { lstat.mockRestore(); readdir.mockRestore(); }
   }, 30_000);
 
   it("keeps the entry's 1 MiB limit and cleans up failed synchronization", async () => {
@@ -825,7 +834,7 @@ describe("persistent agent directories", () => {
     await expect(fs.stat(copy.localRoot)).rejects.toMatchObject({ code: "ENOENT" });
   });
   it("uses the workspace transport to restore after destruction of the remote filesystem", async () => {
-    const remoteCwd = path.join(home, "remote-task");
+    const remoteCwd = sandboxPath(path.join(home, "remote-task"));
     await fs.mkdir(remoteCwd, { recursive: true });
     await execFile("git", ["init", remoteCwd]);
     const runner: import("@paperclipai/adapter-utils/command-managed-runtime").CommandManagedRuntimeRunner = {
@@ -838,7 +847,14 @@ describe("persistent agent directories", () => {
           args[1] = `printf '%s' "$PAPERCLIP_TEST_STDIN" | (${args[1]})`;
         }
         try {
-          const result = await execFile(input.command, args, { cwd: input.cwd, env, timeout: input.timeoutMs, maxBuffer: 32 * 1024 * 1024 });
+          if (process.platform === "win32" && args[1]?.includes("Invalid agent directory root")) {
+            args[1] = args[1].replace("node -e '", 'node -e \'process.argv[1]=require("node:path").resolve(process.argv[1]);');
+          }
+          const result = await runLocalSandboxProcess("agent-directory-fixture", shellExecutable(input.command), args.map(shellScript), {
+            cwd: input.cwd ?? process.cwd(), env: shellEnvironment(env), timeoutSec: (input.timeoutMs ?? 120_000) / 1000,
+            graceSec: 1, onLog: async () => {},
+          });
+          if (result.exitCode !== 0) return result;
           return { exitCode: 0, signal: null, timedOut: false, stdout: result.stdout, stderr: result.stderr, pid: null, startedAt };
         } catch (error) {
           const e = error as { code?: number; signal?: NodeJS.Signals; stdout?: string; stderr?: string };
@@ -886,7 +902,7 @@ describe("persistent agent directories", () => {
   });
 
   it("checkpoints and reuses the remote directory through the real transport without copying unchanged bytes", async () => {
-    const remoteCwd = path.join(home, "warm-remote-task");
+    const remoteCwd = sandboxPath(path.join(home, "warm-remote-task"));
     await fs.mkdir(remoteCwd, { recursive: true });
     const runner: import("@paperclipai/adapter-utils/command-managed-runtime").CommandManagedRuntimeRunner = {
       execute: async input => {
@@ -898,7 +914,20 @@ describe("persistent agent directories", () => {
           args[1] = `printf '%s' "$PAPERCLIP_TEST_STDIN" | (${args[1]})`;
         }
         try {
-          const result = await execFile(input.command, args, { cwd: input.cwd, env, timeout: input.timeoutMs, maxBuffer: 32 * 1024 * 1024 });
+          if (process.platform === "win32" && args[1]?.includes("Invalid agent directory root")) {
+            args[1] = args[1].replace("node -e '", 'node -e \'process.argv[1]=require("node:path").resolve(process.argv[1]);');
+          }
+          if (process.platform === "win32" && args[1]?.includes("const input = JSON.parse(process.argv[2]);")) {
+            // JSON inside shell arguments is not converted by MSYS. Translate
+            // the fake remote namespace only at this local provider boundary.
+            args[1] = args[1].replace("const input = JSON.parse(process.argv[2]);",
+              'const input = JSON.parse(process.argv[2]); for (const key of ["root", "output", "cacheFile"]) input[key] = path.resolve(input[key].replace(/^\\/([a-z])\\//i, (_, drive) => drive.toUpperCase() + ":/"));');
+          }
+          const result = await runLocalSandboxProcess("agent-directory-fixture", shellExecutable(input.command), args.map(shellScript), {
+            cwd: input.cwd ?? process.cwd(), env: shellEnvironment(env), timeoutSec: (input.timeoutMs ?? 120_000) / 1000,
+            graceSec: 1, onLog: async () => {},
+          });
+          if (result.exitCode !== 0) return result;
           return { exitCode: 0, signal: null, timedOut: false, stdout: result.stdout, stderr: result.stderr, pid: null, startedAt };
         } catch (error) {
           const e = error as { code?: number; signal?: NodeJS.Signals; stdout?: string; stderr?: string };
@@ -933,7 +962,8 @@ describe("persistent agent directories", () => {
     expect(await fs.stat(copy.executionRoot)).toBeTruthy();
     expect((await copies.collectStopped({ companyId, runId: copy.runId, target: executionTarget }))?.receipt).toMatchObject({ cleanupPending: false });
     await expect(fs.stat(copy.executionRoot)).rejects.toMatchObject({ code: "ENOENT" });
-  });
+  // Three complete transfers launch real Git Bash/Node processes on Windows.
+  }, process.platform === "win32" ? 45_000 : 15_000);
 
   it("stages SSH agent files at the registered root without a nested task workspace", async () => {
     const remoteCwd = path.join(home, "ssh-task");

@@ -1,0 +1,118 @@
+{
+  "schema": "mimouse.local-verification.v1",
+  "recordedAt": "2026-10-30T02:29:58.809983+08:00",
+  "platform": {
+    "os": "Windows",
+    "arch": "x64",
+    "runtime": "Node.js 24.16.0 / pnpm 9.15.4"
+  },
+  "scope": "Agent file download snapshot and empty-source descriptor lifetime; real local filesystem and isolated embedded PostgreSQL only.",
+  "changes": [
+    "Private bounded 64 KiB disk snapshot with exclusive destination creation; original BigInt identity and size must remain stable before and after copying.",
+    "Handle short writes; reject zero writes; attempt cleanup after copy and close failures while preserving the primary cause.",
+    "Native Windows directory-entry / open descriptor identity checks supplement unavailable O_NOFOLLOW.",
+    "Destroy an owned download stream if its HTTP response disconnected while awaiting snapshot capture.",
+    "Close even empty source descriptors while the agent row lock is still held."
+  ],
+  "verification": [
+    {
+      "command": "cd server; node ../node_modules/vitest/vitest.mjs run src/__tests__/agent-download-snapshot.test.ts src/__tests__/agent-directory-working-copies.test.ts -t 'agent download disk snapshots|saves and restores files beyond' --reporter=default --reporter=json --outputFile=../test-results/project-audit-windows-closure/agent-download-snapshot-final.json",
+      "scope": "9 snapshot cases plus the existing real 66 MiB download / concurrent atomic editor replacement case. The 86 pending cases are name-filtered, not new skips.",
+      "expectedOutcome": "pass",
+      "passed": 10,
+      "failed": 0,
+      "pending": 86,
+      "files": 5,
+      "log": {
+        "path": "test-results/project-audit-windows-closure/agent-download-snapshot-final.log",
+        "sha256": "04394b9b98a4c3a2555b5cbe3df473fb87bf412ccb4ae787920e003d4236fae8"
+      },
+      "json": {
+        "path": "test-results/project-audit-windows-closure/agent-download-snapshot-final.json",
+        "sha256": "22e53f09c9a9631800f875f0a75260d65be40e21f663a6a58d7cb6384d64d0c5"
+      }
+    },
+    {
+      "command": "cd server; node ../node_modules/vitest/vitest.mjs run src/__tests__/agent-download-empty-lock.test.ts --reporter=default --reporter=json --outputFile=../test-results/project-audit-windows-closure/agent-download-empty-lock-final.json",
+      "scope": "Real transaction callback is paused before commit; empty FD stat returns EBADF, another real editor transaction is observed waiting on a PostgreSQL Lock, then commits a replacement after release.",
+      "expectedOutcome": "pass",
+      "passed": 1,
+      "failed": 0,
+      "pending": 0,
+      "files": 1,
+      "log": {
+        "path": "test-results/project-audit-windows-closure/agent-download-empty-lock-final.log",
+        "sha256": "c690fc6ec3f370c8404b91f8174cd4a10fdf73ec3308fd451c51863f46f236e4"
+      },
+      "json": {
+        "path": "test-results/project-audit-windows-closure/agent-download-empty-lock-final.json",
+        "sha256": "efbcc863600b0abfa627cd010be930f56d8b03bd6a1b085bf3467505179ccdf8"
+      }
+    },
+    {
+      "command": "cd server; node ../node_modules/vitest/vitest.mjs run src/__tests__/agent-download-empty-lock.test.ts --config ../test-results/project-audit-windows-closure/agent-download-empty-before-fix.vitest.mjs --reporter=default --reporter=json --outputFile=../test-results/project-audit-windows-closure/agent-download-empty-lock-red.json",
+      "scope": "Vitest transform removes only the new empty-source close; the same real descriptor check receives Stats instead of EBADF. No workspace production source is reverted.",
+      "expectedOutcome": "intentional regression failure",
+      "passed": 0,
+      "failed": 1,
+      "pending": 0,
+      "files": 1,
+      "log": {
+        "path": "test-results/project-audit-windows-closure/agent-download-empty-lock-red.log",
+        "sha256": "9e2d56b5ac726634bc3a2988d5f4b95876aa8c85056455649fc8375c1aa5145c"
+      },
+      "json": {
+        "path": "test-results/project-audit-windows-closure/agent-download-empty-lock-red.json",
+        "sha256": "729acb6590431496c6c975756bf52ad87cf4c176681167471c07d120ee6853a9"
+      }
+    }
+  ],
+  "history": [
+    {
+      "command": "cd server; node ../node_modules/vitest/vitest.mjs run src/__tests__/agent-download-empty-lock.test.ts",
+      "scope": "Initial independent fixture used an arbitrary instructions root. Existing production external-storage guard correctly refused it. Corrected fixture uses the canonical managed root and real scoped membership/grant.",
+      "expectedOutcome": "fixture setup failure",
+      "passed": 0,
+      "failed": 1,
+      "pending": 0,
+      "files": 1,
+      "log": {
+        "path": "test-results/project-audit-windows-closure/agent-download-empty-lock-fixture-first.log",
+        "sha256": "31cebe7631b052dd077bad24e7576e76e1dc2ababb73e319dc186126126514f2"
+      },
+      "json": {
+        "path": "test-results/project-audit-windows-closure/agent-download-empty-lock-fixture-first.json",
+        "sha256": "aaecd4af32b751a2a91471e404a65a62f1ed2f532ac41341b2a849c93c917fe8"
+      }
+    }
+  ],
+  "sourceReceiptScope": "Hashes below identify the current source at receipt creation. The nonempty snapshot helper is unchanged since its final 9-case / 66 MiB run. The subsequent empty-FD fix has its separate real PostgreSQL regression. Root-owned scan-limit changes in agent-file-store.ts require the separately reported full working-copy suite; they are not claimed by this receipt.",
+  "sources": [
+    {
+      "path": "server/src/services/agent-download-snapshot.ts",
+      "sha256": "e249fffcf1c9ab10dc6420767628b32cbd775b000d1800292573f062603efa90"
+    },
+    {
+      "path": "server/src/services/agent-file-store.ts",
+      "sha256": "f5b803fd800c901dd20b1e90c04875515665169ccd8c8be777c817326547ffe8"
+    },
+    {
+      "path": "server/src/routes/agents.ts",
+      "sha256": "4cc226e510103e87926dcdd6cce6e505eeeec15d33d36f81bc0da873c993b57b"
+    },
+    {
+      "path": "server/src/__tests__/agent-download-snapshot.test.ts",
+      "sha256": "2a379b075f63d76ab505007dc8b36d579d1d671762f99025152d650905e63f8e"
+    },
+    {
+      "path": "server/src/__tests__/agent-download-empty-lock.test.ts",
+      "sha256": "948175ef5a5e1a775de2defc6064be11cc6efa26630ecf70dcef28eb44188452"
+    }
+  ],
+  "limits": [
+    "Native Windows only in this run; no new POSIX qualification claim.",
+    "Consumer destroy before and during reading is verified on real streams; the pre-pipeline HTTP res.destroyed guard is a source review change, not an independently exercised live HTTP disconnect test.",
+    "No claim that arbitrary hostile writable ancestor races are solved by final-entry identity checks.",
+    "No external provider, network credential, or real user database was used."
+  ]
+}
