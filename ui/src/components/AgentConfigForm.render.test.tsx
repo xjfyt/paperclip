@@ -7,13 +7,14 @@ import { agentConfigurationMessages } from "@/i18n/agent-configuration-test-reso
 import { useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { flushSync } from "react-dom";
+import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Agent, Environment, UserSecretDefinition } from "@paperclipai/shared";
 import { getEnvironmentCapabilities } from "@paperclipai/shared";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ToastProvider } from "../context/ToastContext";
-import { AgentConfigForm, AdapterLoginPanel, subtractPersistedOverlay, type AdapterLoginDescriptor } from "./AgentConfigForm";
+import { AgentConfigForm, AdapterEnvironmentResult, AdapterLoginPanel, subtractPersistedOverlay, type AdapterLoginDescriptor } from "./AgentConfigForm";
 import { AgentLifecycleStatus, useAgentLifecycleStatus } from "./AgentLifecycleStatus";
 import { queryKeys } from "../lib/queryKeys";
 import { defaultCreateValues } from "./agent-config-defaults";
@@ -752,7 +753,7 @@ describe("AgentConfigForm environment selector", () => {
   });
 
   it.each(["en", "zh-CN", "es", "ja"] as const)("preserves actual configuration drafts, focus, selections and save payload across %s switch", async locale => {
-    const environment = { id: "sandbox-raw-id", name: "Customer environment 原文", driver: "sandbox", config: { provider: "daytona" } } as Environment;
+    const environment = makeEnvironment({ id: "sandbox-raw-id", name: "Customer environment 原文", driver: "sandbox", config: { provider: "daytona" } });
     const result = await renderForm([environment], { adapterConfig: { model: "vendor/model-raw", cwd: "/customer/raw-path", env: { API_KEY: { type: "secret_ref", secretId: "secret-raw-id", version: "latest" } } } });
     roots.push(result.root);
     await clickByText(result.container, "Advanced Run Policy");
@@ -797,6 +798,56 @@ describe("AgentConfigForm environment selector", () => {
     expect(result.onSave).not.toHaveBeenCalled(); expect(mockAgentsApi.testEnvironment).not.toHaveBeenCalled();
   });
 
+  it.each(["en", "zh-CN", "es", "ja"] as const)("keeps a pending environment test and local fallback bound to the same request in %s", async locale => {
+    let rejectTest!: (reason: unknown) => void;
+    mockAgentsApi.testEnvironment.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectTest = reject; }));
+    const result = await renderForm([], { defaultEnvironmentId: "environment-wire-id", adapterConfig: { model: "vendor/model", env: { API_KEY: { type: "secret_ref", secretId: "secret-wire-id", version: "latest" } } } }, { showAdapterTestEnvironmentButton: true }); roots.push(result.root);
+    await clickByText(result.container, "Test"); await flushReact();
+    const button = [...result.container.querySelectorAll("button")].find(button => button.textContent === "Testing…")!;
+    const originalCall = structuredClone(mockAgentsApi.testEnvironment.mock.calls[0]);
+    expect(button.disabled).toBe(true);
+    await act(async () => { await i18n.changeLanguage(locale); }); await flushReact();
+    expect(button.textContent).toBe(agentConfigurationMessages[locale].testPending); expect(button.disabled).toBe(true);
+    expect(mockAgentsApi.testEnvironment).toHaveBeenCalledOnce(); expect(mockAgentsApi.testEnvironment.mock.calls[0]).toEqual(originalCall);
+    await act(async () => rejectTest("non-Error response")); await flushReact();
+    expect(result.container.textContent).toContain(agentConfigurationMessages[locale].testFailed);
+    await act(async () => { await i18n.changeLanguage(locale === "en" ? "ja" : "en"); }); await flushReact();
+    expect(result.container.textContent).toContain(i18n.t("agentConfigurationUi.testFailed"));
+    expect(mockAgentsApi.testEnvironment).toHaveBeenCalledOnce(); expect(result.onSave).not.toHaveBeenCalled();
+  });
+
+  it.each(["en", "zh-CN", "es", "ja"] as const)("does not translate a provider Error even when its text matches a local fallback in %s", async locale => {
+    mockAgentsApi.testEnvironment.mockRejectedValueOnce(new Error("Environment test failed"));
+    const result = await renderForm([], { defaultEnvironmentId: "environment-wire-id" }, { showAdapterTestEnvironmentButton: true }); roots.push(result.root);
+    await clickByText(result.container, "Test"); await flushReact();
+    await act(async () => { await i18n.changeLanguage(locale); }); await flushReact();
+    expect(result.container.textContent).toContain("Environment test failed");
+    if (locale !== "en") expect(result.container.textContent).not.toContain(agentConfigurationMessages[locale].testFailed);
+    expect(mockAgentsApi.testEnvironment).toHaveBeenCalledOnce(); expect(result.onSave).not.toHaveBeenCalled();
+  });
+
+  it.each(["en", "zh-CN", "es", "ja"] as const)("preserves original diagnostics, technical statuses and model/effort IDs in %s", async locale => {
+    const result = await renderForm([], { adapterConfig: { model: "gpt-6-astra", modelReasoningEffort: "high" } }); roots.push(result.root);
+    await clickByText(result.container, "High"); await flushReact();
+    const popover = document.body.querySelector('[data-slot="popover-content"]')!;
+    const low = [...popover.querySelectorAll("button")].find(button => button.textContent === "Lowlow")!; low.focus();
+    await act(async () => { await i18n.changeLanguage(locale); }); await flushReact();
+    expect(document.body.querySelector('[data-slot="popover-content"]')).toBe(popover); expect(document.activeElement).toBe(low);
+    expect(low.textContent).toBe(`${agentConfigurationMessages[locale].effortLow}low`);
+    expect(result.onSave).not.toHaveBeenCalled();
+    await act(async () => low.click()); await clickByText(result.container, i18n.t("common.save")); await flushReact();
+    expect(result.onSave).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ adapterConfig: expect.objectContaining({ model: "gpt-6-astra", modelReasoningEffort: "low" }) }));
+    for (const status of ["pass", "warn", "fail", "provider_future_status"] as const) {
+      const html = renderToStaticMarkup(<AdapterEnvironmentResult result={{ adapterType: "codex_local", testedAt: "2026-10-26T12:30:00Z", status, checks: [
+        { code: "check-wire-code", level: "error", message: "Environment test failed", detail: "/customer/path/model", hint: "provider --original" },
+        { code: "future-wire-code", level: "provider_future_level", message: "Keep original response" },
+      ] } as unknown as import("@paperclipai/shared").AdapterEnvironmentTestResult} />);
+      expect(html).toContain(status === "provider_future_status" ? status : i18n.t(`agentConfigurationUi.${{ pass: "passed", warn: "warnings", fail: "failed" }[status]}`));
+      for (const raw of ["Environment test failed", "/customer/path/model", "provider --original", "provider_future_level"]) expect(html).toContain(raw);
+      expect(html).toContain(agentConfigurationMessages[locale].checkError);
+    }
+  });
+
   it("promotes environment drafts through the page Save action and discards them through the page Discard action", async () => {
     const dirty = vi.fn();
     let save: (() => void) | null = null;
@@ -828,11 +879,11 @@ describe("AgentConfigForm environment selector", () => {
   it("reads and saves Pi thinking effort using the Pi runtime key", async () => {
     const result = await renderForm([], { adapterType: "pi_local", adapterConfig: { model: "openrouter/anthropic/claude-sonnet-4.6", thinking: "high" } });
     roots.push(result.root);
-    const effort = [...result.container.querySelectorAll("button")].find(button => button.textContent?.trim() === "high")!;
+    const effort = [...result.container.querySelectorAll("button")].find(button => button.textContent?.trim() === i18n.t("agentConfigurationUi.effortHigh"))!;
     expect(effort).toBeTruthy();
     await act(async () => effort.click());
     await flushReact();
-    const low = [...document.querySelectorAll("button")].find(button => button.textContent?.trim() === "lowlow")!;
+    const low = [...document.querySelectorAll("button")].find(button => button.textContent?.trim() === `${i18n.t("agentConfigurationUi.effortLow")}low`)!;
     expect(low).toBeTruthy();
     await act(async () => low.click());
     await flushReact();

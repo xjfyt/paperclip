@@ -1,3 +1,4 @@
+import { LocalizedUiError } from "./localized-ui-error";
 import type { Environment } from "@paperclipai/shared";
 
 /**
@@ -8,9 +9,10 @@ import type { Environment } from "@paperclipai/shared";
  * fall back to a local host probe, because a host probe would report a result
  * for a target the real run never uses.
  */
-export class ManagedSandboxUnavailableForTestError extends Error {
+export class ManagedSandboxUnavailableForTestError extends LocalizedUiError {
   constructor() {
     super(
+      "agentConfigurationUi.managedSandboxUnavailable",
       "This instance runs agents only in its managed sandbox environment, but no " +
         "managed sandbox environment is available to test in. Check that the managed " +
         "sandbox provider is active, then retry the test.",

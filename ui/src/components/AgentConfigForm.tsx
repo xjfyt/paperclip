@@ -76,7 +76,6 @@ import {
   CollapsibleSection,
   DraftInput,
   DraftNumberInput,
-  help,
   adapterLabels,
 } from "./agent-config-primitives";
 import { defaultCreateValues } from "./agent-config-defaults";
@@ -923,7 +922,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
     }),
     enabled: Boolean(selectedCompanyId) && !connectionModels,
   });
-  const [refreshModelsError, setRefreshModelsError] = useState<string | null>(null);
+  const [refreshModelsError, setRefreshModelsError] = useState<LocalizedUiMessage | null>(null);
   const [refreshingModels, setRefreshingModels] = useState(false);
   const models = connectionModels?.models ?? fetchedModels ?? externalModels ?? [];
   const modelError = connectionModels ? connectionModels.error : fetchedModelsError;
@@ -1009,7 +1008,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
   const testEnvironment = useMutation({
     mutationFn: async () => {
       if (!selectedCompanyId) {
-        throw new Error("Select an organization to test adapter environment");
+        throw new LocalizedUiError("agentConfigurationUi.testOrganization", "Select an organization to test adapter environment");
       }
       const flushedEnv = flushEnvironmentDraft();
       const adapterConfigPatch = flushedEnv ? { env: flushedEnv } : undefined;
@@ -1058,7 +1057,8 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
           environmentList = resolvedEnvironments;
           managedSandboxOnly = resolvedExperimental?.enableManagedSandboxOnly === true;
         } catch {
-          throw new Error(
+          throw new LocalizedUiError(
+            "agentConfigurationUi.testSettingsFailed",
             "Could not load environment settings to determine which environment to test in. Retry the test.",
           );
         }
@@ -1098,8 +1098,9 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
     },
   });
   const [testActionPending, setTestActionPending] = useState(false);
-  const [testActionError, setTestActionError] = useState<string | null>(null);
-  const testActionLabel = "Test";
+  const [testActionError, setTestActionError] = useState<LocalizedUiMessage | null>(null);
+  const testError = testActionError ?? (testEnvironment.error ? localizedUiErrorMessage(testEnvironment.error, "agentConfigurationUi.testFailed") : null);
+  const testErrorText = testError ? typeof testError === "string" ? testError : t(testError.key) : null;
   const isSavePending = !isCreate && Boolean(props.isSaving);
   const testEnvironmentDisabled = testActionPending || isSavePending || !selectedCompanyId;
 
@@ -1179,7 +1180,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
     (!loginNeedsPty || providerSupportsLoginPty);
   const runEnvironmentTest = useCallback(async () => {
     if (!selectedCompanyId) {
-      throw new Error("Select an organization to test adapter environment");
+      throw new LocalizedUiError("agentConfigurationUi.testOrganization", "Select an organization to test adapter environment");
     }
     setTestActionPending(true);
     setTestActionError(null);
@@ -1187,7 +1188,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
     try {
       return await testEnvironment.mutateAsync();
     } catch (error) {
-      setTestActionError(error instanceof Error ? error.message : "Environment test failed");
+      setTestActionError(localizedUiErrorMessage(error, "agentConfigurationUi.testFailed"));
       throw error;
     } finally {
       setTestActionPending(false);
@@ -1236,12 +1237,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
   useEffect(() => {
     if (!props.onTestFeedbackChange) return;
     props.onTestFeedbackChange({
-      errorMessage: testActionError
-        ?? (testEnvironment.error instanceof Error
-          ? testEnvironment.error.message
-          : testEnvironment.error
-            ? "Environment test failed"
-            : null),
+      errorMessage: testErrorText,
       result: testEnvironment.data ?? null,
       // `showAdapterLogin` already requires a selected company and a non-empty
       // environment id, so both are present here.
@@ -1255,7 +1251,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
     };
   }, [
     props.onTestFeedbackChange,
-    testActionError,
+    testErrorText,
     testEnvironment.data,
     testEnvironment.error,
     showAdapterLogin,
@@ -1278,7 +1274,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
       const refreshed = await agentsApi.adapterModels(selectedCompanyId, adapterType, { refresh: true, environmentId: currentDefaultEnvironmentId || null, provider: modelProvider });
       queryClient.setQueryData(modelQueryKey, refreshed);
     } catch (error) {
-      setRefreshModelsError(error instanceof Error ? error.message : "Failed to refresh adapter models.");
+      setRefreshModelsError(localizedUiErrorMessage(error, "agentConfigurationUi.refreshModelsFailed"));
     } finally {
       setRefreshingModels(false);
     }
@@ -1606,7 +1602,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
               onClick={triggerTestEnvironment}
               disabled={testEnvironmentDisabled}
             >
-              {testActionPending ? `${testActionLabel}...` : testActionLabel}
+              {testActionPending ? t("agentConfigurationUi.testPending") : t("agentConfigurationUi.test")}
             </Button>
           )}
         </div>
@@ -1694,10 +1690,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
 
           {showInlineAdapterTestEnvironmentFeedback && !props.compactTestFeedback && (testActionError || testEnvironment.error) && (
             <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-              {testActionError
-                ?? (testEnvironment.error instanceof Error
-                  ? testEnvironment.error.message
-                  : "Environment test failed")}
+              {testErrorText}
             </div>
           )}
 
@@ -1770,7 +1763,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                 }}
                 open={modelOpen}
                 onOpenChange={setModelOpen}
-                defaultLabel={adapterType === "claude_local" ? `Default (${DEFAULT_CLAUDE_LOCAL_MODEL})` : undefined}
+                defaultLabel={adapterType === "claude_local" ? t("agentConfigurationUi.defaultModel", { model: DEFAULT_CLAUDE_LOCAL_MODEL }) : undefined}
                 allowDefault={adapterType !== "opencode_local" && adapterType !== "pi_local" && adapterType !== "paperclip_runner"}
                 required={adapterType === "opencode_local" || adapterType === "pi_local"}
                 groupByProvider={!connectionModels && (adapterType === "opencode_local" || adapterType === "pi_local")}
@@ -1790,15 +1783,14 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                     : undefined
                 }
                 refreshingModels={connectionModels?.refreshing ?? refreshingModels}
-                detectModelLabel="Detect model"
-                emptyDetectHint="No model detected. Select or enter one manually."
+                detectModelLabel={t("agentConfigurationUi.detectModel")}
+                emptyDetectHint={t("agentConfigurationUi.noModelDetected")}
               />
               {(refreshModelsError || modelError) && (
                 <p className="text-xs text-destructive">
                   {refreshModelsError
-                    ?? (modelError instanceof Error
-                      ? modelError.message
-                      : "Failed to load adapter models.")}
+                    ? typeof refreshModelsError === "string" ? refreshModelsError : t(refreshModelsError.key)
+                    : modelError instanceof Error ? modelError.message : t("agentConfigurationUi.loadModelsFailed")}
                 </p>
               )}
               {adapterType === "opencode_local"
@@ -1806,7 +1798,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                 && currentDefaultEnvironment
                 && currentDefaultEnvironment.driver !== "local" && (
                 <p className="text-xs text-muted-foreground">
-                  Live OpenCode model discovery only runs for Local environments. Using the curated list and manual entry for {currentDefaultEnvironment.name}.
+                  {t("agentConfigurationUi.openCodeDiscovery", { environment: currentDefaultEnvironment.name })}
                 </p>
               )}
 
@@ -1827,7 +1819,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                     codexSearchEnabled &&
                     currentThinkingEffort === "minimal" && (
                       <p className="text-xs text-amber-400">
-                        Codex may reject `minimal` thinking when search is enabled.
+                        {t("agentConfigurationUi.minimalSearchWarning")}
                       </p>
                     )}
                 </>
@@ -2173,7 +2165,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
           variant={isDotRunner ? "prerequisites" : "connection"}
           state={testActionPending ? "running" : testActionError || testEnvironment.error ? "fail" : testResult?.status ?? "idle"}
           result={testResult ?? null}
-          error={testActionError ?? (testEnvironment.error instanceof Error ? testEnvironment.error.message : null)}
+          error={testErrorText}
           onTest={triggerTestEnvironment}
           disabled={testEnvironmentDisabled}
         />
@@ -3639,8 +3631,10 @@ function SubmittedBrowserCodeLoginPanel({
 }
 
 export function AdapterEnvironmentResult({ result }: { result: AdapterEnvironmentTestResult }) {
-  const statusLabel =
-    result.status === "pass" ? "Passed" : result.status === "warn" ? "Warnings" : "Failed";
+  const { t, i18n } = useTranslation();
+  const statusLabels: Record<string, string> = { pass: "passed", warn: "warnings", fail: "failed" };
+  const checkLabels: Record<string, string> = { info: "checkInfo", warn: "checkWarn", error: "checkError" };
+  const statusLabel = Object.hasOwn(statusLabels, result.status) ? t(`agentConfigurationUi.${statusLabels[result.status]}`) : result.status;
   const statusClass =
     result.status === "pass"
       ? "text-green-700 dark:text-green-300 border-green-300 dark:border-green-500/40 bg-green-50 dark:bg-green-500/10"
@@ -3653,19 +3647,19 @@ export function AdapterEnvironmentResult({ result }: { result: AdapterEnvironmen
       <div className="flex items-center justify-between gap-2">
         <span className="font-medium">{statusLabel}</span>
         <span className="text-(length:--text-micro) opacity-80">
-          {new Date(result.testedAt).toLocaleTimeString()}
+          {new Date(result.testedAt).toLocaleTimeString(i18n.language)}
         </span>
       </div>
       <div className="mt-2 space-y-1.5">
         {result.checks.map((check, idx) => (
           <div key={`${check.code}-${idx}`} className="text-(length:--text-micro) leading-relaxed break-words">
             <span className="font-medium uppercase tracking-wide opacity-80">
-              {check.level}
+              {Object.hasOwn(checkLabels, check.level) ? t(`agentConfigurationUi.${checkLabels[check.level]}`) : check.level}
             </span>
             <span className="mx-1 opacity-60">·</span>
             <span>{check.message}</span>
             {check.detail && <span className="block opacity-75 break-all">({check.detail})</span>}
-            {check.hint && <span className="block opacity-90 break-words">Hint: {check.hint}</span>}
+            {check.hint && <span className="block opacity-90 break-words">{t("agentConfigurationUi.hint", { hint: check.hint })}</span>}
           </div>
         ))}
       </div>
@@ -3687,6 +3681,7 @@ export function AdapterTypeDropdown({
   openAiDotEnabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const { t } = useTranslation();
   const selectedDisplay = getAdapterDisplay(value);
   const adapterList = useMemo(
     () =>
@@ -3744,7 +3739,7 @@ export function AdapterTypeDropdown({
               {item.experimental && <ExperimentalBadge />}
             </span>
             {item.comingSoon && (
-              <span className="text-(length:--text-nano) text-muted-foreground">Coming soon</span>
+              <span className="text-(length:--text-nano) text-muted-foreground">{t("agentConfigurationUi.comingSoon")}</span>
             )}
           </button>
         ))}
@@ -3754,9 +3749,10 @@ export function AdapterTypeDropdown({
 }
 
 function ExperimentalBadge() {
+  const { t } = useTranslation();
   return (
     <span className="shrink-0 rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-(length:--text-nano) font-medium leading-none text-amber-700 dark:text-amber-200">
-      Experimental
+      {t("agentConfigurationUi.experimental")}
     </span>
   );
 }
@@ -4146,14 +4142,17 @@ function ThinkingEffortDropdown({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const { t } = useTranslation();
+  const effortKeys: Record<string, string> = { "": "effortAuto", off: "effortOff", minimal: "effortMinimal", low: "effortLow", medium: "effortMedium", high: "effortHigh", xhigh: "effortXhigh", max: "effortMax", ultra: "effortUltra", plan: "effortPlan", ask: "effortAsk" };
+  const effortLabel = (option: { id: string; label: string }) => Object.hasOwn(effortKeys, option.id) ? t(`agentConfigurationUi.${effortKeys[option.id]}`) : option.label;
   const selected = options.find((option) => option.id === value) ?? options[0];
 
   return (
-    <Field label="Thinking effort" hint={help.thinkingEffort}>
+    <Field label={t("agentConfigurationUi.thinkingEffort")} hint={t("agentConfigurationUi.helpThinkingEffort")}>
       <Popover open={open} onOpenChange={onOpenChange}>
         <PopoverTrigger asChild>
           <button className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-sm hover:bg-accent/50 transition-colors w-full justify-between">
-            <span className={cn(!value && "text-muted-foreground")}>{selected?.label ?? "Auto"}</span>
+            <span className={cn(!value && "text-muted-foreground")}>{selected ? effortLabel(selected) : t("agentConfigurationUi.effortAuto")}</span>
             <ChevronDown className="h-3 w-3 text-muted-foreground" />
           </button>
         </PopoverTrigger>
@@ -4170,7 +4169,7 @@ function ThinkingEffortDropdown({
                 onOpenChange(false);
               }}
             >
-              <span>{option.label}</span>
+              <span>{effortLabel(option)}</span>
               {option.id ? <span className="text-xs text-muted-foreground font-mono">{option.id}</span> : null}
             </button>
           ))}
