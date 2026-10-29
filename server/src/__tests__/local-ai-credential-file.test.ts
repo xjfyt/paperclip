@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { chmod, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, realpath, rm, symlink, writeFile, readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { readLocalAiCredentialFile } from "../services/local-ai-credential-file.js";
@@ -7,9 +7,14 @@ let home: string;
 beforeEach(async () => { home = await realpath(await mkdtemp(path.join(os.tmpdir(), "ai-auth-read-"))); });
 afterEach(async () => { await rm(home, { recursive: true, force: true }); });
 describe("isolated credential file safety", () => {
-  it("reads only bounded private regular files", async () => {
+  it(process.platform === "win32" ? "refuses unverifiable regular credential files without altering their bytes" : "reads only bounded private regular files", async () => {
     const filename = path.join(home, "credentials.json");
     await writeFile(filename, "fixture", { mode: 0o600 });
+    if (process.platform === "win32") {
+      await expect(readLocalAiCredentialFile(filename)).rejects.toThrow("require a platform with confined file opens");
+      expect(await readFile(filename, "utf8")).toBe("fixture");
+      return;
+    }
     await expect(readLocalAiCredentialFile(filename)).resolves.toBe("fixture");
     await chmod(filename, 0o644);
     await expect(readLocalAiCredentialFile(filename)).rejects.toThrow();
