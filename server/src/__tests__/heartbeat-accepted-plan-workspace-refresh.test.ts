@@ -410,10 +410,8 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
     });
 
     expect(run).not.toBeNull();
-    await vi.waitFor(async () => {
-      const latest = await heartbeat.getRun(run!.id);
-      expect(latest?.status).toBe("succeeded");
-    }, { timeout: 10_000 });
+    await heartbeat.drainActiveRunExecutions();
+    expect((await heartbeat.getRun(run!.id))?.status).toBe("succeeded");
 
     expect(adapterExecute).toHaveBeenCalledTimes(1);
     const adapterInput = adapterExecute.mock.calls[0]?.[0] as {
@@ -567,10 +565,8 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
       },
     });
     expect(sourceRun).not.toBeNull();
-    await vi.waitFor(async () => {
-      const latest = await heartbeat.getRun(sourceRun!.id);
-      expect(latest?.status).toBe("succeeded");
-    }, { timeout: 10_000 });
+    await heartbeat.drainActiveRunExecutions();
+    expect((await heartbeat.getRun(sourceRun!.id))?.status).toBe("succeeded");
 
     const sourceWorkspace = await db
       .select()
@@ -675,10 +671,8 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
       },
     });
     expect(childRun).not.toBeNull();
-    await vi.waitFor(async () => {
-      const latest = await heartbeat.getRun(childRun!.id);
-      expect(latest?.status).toBe("succeeded");
-    }, { timeout: 10_000 });
+    await heartbeat.drainActiveRunExecutions();
+    expect((await heartbeat.getRun(childRun!.id))?.status).toBe("succeeded");
 
     expect(childRunWorkspace).not.toBeNull();
     expect(childRunWorkspace?.executionWorkspaceId).not.toBe(sourceWorkspace?.id);
@@ -828,10 +822,8 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
     });
 
     expect(run).not.toBeNull();
-    await vi.waitFor(async () => {
-      const latest = await heartbeat.getRun(run!.id);
-      expect(latest?.status).toBe("succeeded");
-    }, { timeout: 10_000 });
+    await heartbeat.drainActiveRunExecutions();
+    expect((await heartbeat.getRun(run!.id))?.status).toBe("succeeded");
 
     expect(adapterExecute).toHaveBeenCalledTimes(1);
     const adapterInput = adapterExecute.mock.calls[0]?.[0] as {
@@ -989,10 +981,8 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
     });
 
     expect(run).not.toBeNull();
-    await vi.waitFor(async () => {
-      const latest = await heartbeat.getRun(run!.id);
-      expect(latest?.status).toBe("succeeded");
-    }, { timeout: 10_000 });
+    await heartbeat.drainActiveRunExecutions();
+    expect((await heartbeat.getRun(run!.id))?.status).toBe("succeeded");
 
     expect(adapterExecute).toHaveBeenCalledTimes(1);
     const adapterInput = adapterExecute.mock.calls[0]?.[0] as {
@@ -1130,10 +1120,8 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
     });
 
     expect(run).not.toBeNull();
-    await vi.waitFor(async () => {
-      const latest = await heartbeat.getRun(run!.id);
-      expect(latest?.status).toBe("succeeded");
-    }, { timeout: 10_000 });
+    await heartbeat.drainActiveRunExecutions();
+    expect((await heartbeat.getRun(run!.id))?.status).toBe("succeeded");
 
     expect(adapterExecute).toHaveBeenCalledTimes(1);
     const adapterInput = adapterExecute.mock.calls[0]?.[0] as {

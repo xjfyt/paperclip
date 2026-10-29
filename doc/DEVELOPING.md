@@ -531,6 +531,28 @@ verifying Vite/HMR behavior.
 
 For normal issue work, start with the smallest targeted check that proves the change. Reserve repo-wide typecheck/build/test runs for PR-ready handoff or changes broad enough that narrow checks do not cover the risk.
 
+### Asynchronous test cleanup
+
+A Vitest timeout does not cancel the test callback, its SQL transactions, or its
+child processes. Release fixture gates and join the original callback and child
+work before restoring mocks, changing shared configuration, or deleting rows.
+Register ownership before the first asynchronous setup step. A gate registered
+after cleanup starts must also be released. If cleanup cannot finish, keep the
+ownership record and refuse the next case instead of allowing late writes to
+contaminate it. The test-only helper
+[`owned-case-work.ts`](../server/src/__tests__/helpers/owned-case-work.ts)
+provides this lifecycle for the AI and generic MCP connection fixtures; return
+its original body promise so assertions and rejections still fail the test.
+
+When a heartbeat test needs a completed run, await `drainActiveRunExecutions()`
+before asserting terminal state, lease release, and completion bookkeeping.
+Use a separate short polling deadline only when that deadline is the behavior
+under test. On native Windows, avoid running several database and real ACL
+suites simultaneously while diagnosing deadlines: OS permission probes and Git
+process startup share host resources. Preserve the initial failure and rerun
+the complete affected file with bounded concurrency; a filtered passing case
+does not establish a complete file result.
+
 #### Embedded Postgres template cache
 
 Suites that call `startEmbeddedPostgresTestDatabase` (from `@paperclipai/db`)

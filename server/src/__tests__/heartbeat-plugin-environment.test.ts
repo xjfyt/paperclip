@@ -205,10 +205,8 @@ describeEmbeddedPostgres("heartbeat plugin environments", () => {
     });
 
     expect(run).not.toBeNull();
-    await vi.waitFor(async () => {
-      const latest = await heartbeat.getRun(run!.id);
-      expect(latest?.status).toBe("succeeded");
-    }, { timeout: 5_000 });
+    await heartbeat.drainActiveRunExecutions();
+    expect((await heartbeat.getRun(run!.id))?.status).toBe("succeeded");
 
     expect(workerManager.call).toHaveBeenNthCalledWith(1, pluginId, "environmentAcquireLease", {
       driverKey: "sandbox",
@@ -227,22 +225,21 @@ describeEmbeddedPostgres("heartbeat plugin environments", () => {
       // shipped by editing only the non-heartbeat one.
       adapterType: "codex_local",
     });
-    await vi.waitFor(() => {
-      expect(workerManager.call).toHaveBeenCalledWith(pluginId, "environmentReleaseLease", {
+    expect(workerManager.call).toHaveBeenCalledWith(pluginId, "environmentReleaseLease", {
+      driverKey: "sandbox",
+      companyId,
+      environmentId,
+      issueId: null,
+      config: { template: "base" },
+      providerLeaseId: "plugin-heartbeat-lease",
+      leaseMetadata: expect.objectContaining({
+        driver: "plugin",
+        pluginId,
+        pluginKey,
         driverKey: "sandbox",
-        companyId,
-        environmentId,
-        issueId: null,
-        config: { template: "base" },
-        providerLeaseId: "plugin-heartbeat-lease",
-        leaseMetadata: expect.objectContaining({
-          driver: "plugin",
-          pluginId,
-          pluginKey,
-          driverKey: "sandbox",
-        }),
-      });
-    }, { timeout: 5_000 });
+      }),
+    });
+
     expect(adapterExecute).toHaveBeenCalledTimes(1);
   }, 15_000);
 
@@ -449,14 +446,13 @@ describeEmbeddedPostgres("heartbeat plugin environments", () => {
 
     expect(sharedRun).not.toBeNull();
     expect(overrideRun).not.toBeNull();
-    await vi.waitFor(async () => {
-      const [latestShared, latestOverride] = await Promise.all([
-        heartbeat.getRun(sharedRun!.id),
-        heartbeat.getRun(overrideRun!.id),
-      ]);
-      expect(latestShared?.status).toBe("succeeded");
-      expect(latestOverride?.status).toBe("succeeded");
-    }, { timeout: 5_000 });
+    await heartbeat.drainActiveRunExecutions();
+    const [latestShared, latestOverride] = await Promise.all([
+      heartbeat.getRun(sharedRun!.id),
+      heartbeat.getRun(overrideRun!.id),
+    ]);
+    expect(latestShared?.status).toBe("succeeded");
+    expect(latestOverride?.status).toBe("succeeded");
 
     const acquireCalls = workerManager.call.mock.calls
       .filter(([, method]) => method === "environmentAcquireLease");
@@ -669,10 +665,8 @@ describeEmbeddedPostgres("heartbeat plugin environments", () => {
     });
 
     expect(run).not.toBeNull();
-    await vi.waitFor(async () => {
-      const latest = await heartbeat.getRun(run!.id);
-      expect(latest?.status).toBe("succeeded");
-    }, { timeout: 5_000 });
+    await heartbeat.drainActiveRunExecutions();
+    expect((await heartbeat.getRun(run!.id))?.status).toBe("succeeded");
 
     expect(workerManager.call).toHaveBeenNthCalledWith(1, pluginId, "environmentAcquireLease", {
       driverKey: "sandbox",

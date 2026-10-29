@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { and, eq, sql } from "drizzle-orm";
@@ -26,45 +26,12 @@ if (!embeddedPostgresSupport.supported) {
   );
 }
 
-async function waitForRunToFinish(
-  heartbeat: ReturnType<typeof heartbeatService>,
-  runId: string,
-  timeoutMs = 5_000,
-) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const run = await heartbeat.getRun(runId);
-    if (run && !["queued", "running"].includes(run.status)) return run;
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-  return await heartbeat.getRun(runId);
-}
-
-async function waitForRunLeasesToRelease(
-  db: ReturnType<typeof createDb>,
-  runId: string,
-  timeoutMs = 5_000,
-) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const leases = await db
-      .select()
-      .from(environmentLeases)
-      .where(eq(environmentLeases.heartbeatRunId, runId));
-    if (leases.length > 0 && leases.every((lease) => lease.status !== "active")) return leases;
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-  return await db
-    .select()
-    .from(environmentLeases)
-    .where(eq(environmentLeases.heartbeatRunId, runId));
-}
-
 describeEmbeddedPostgres("heartbeat local environment lifecycle", () => {
   let db!: ReturnType<typeof createDb>;
   let heartbeat!: ReturnType<typeof heartbeatService>;
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
   let previousAgentJwtSecret: string | undefined;
+  const temporaryRoots = new Set<string>();
 
   beforeAll(async () => {
     previousAgentJwtSecret = process.env.PAPERCLIP_AGENT_JWT_SECRET;
@@ -81,6 +48,10 @@ describeEmbeddedPostgres("heartbeat local environment lifecycle", () => {
     // before the TRUNCATE below, or a write that lands after the company row
     // is gone violates heartbeat_run_events' foreign key.
     await heartbeat.drainActiveRunExecutions();
+    for (const root of temporaryRoots) {
+      await rm(root, { recursive: true, force: true });
+      temporaryRoots.delete(root);
+    }
     await db.execute(sql.raw(`
       TRUNCATE TABLE
         "environment_leases",
@@ -141,7 +112,8 @@ describeEmbeddedPostgres("heartbeat local environment lifecycle", () => {
     const queued = await heartbeat.invoke(agentId, "on_demand", {}, "manual");
     expect(queued).not.toBeNull();
 
-    const finished = await waitForRunToFinish(heartbeat, queued!.id);
+    await heartbeat.drainActiveRunExecutions();
+    const finished = await heartbeat.getRun(queued!.id);
     expect(finished?.status).toBe("succeeded");
 
     const localRows = await db
@@ -151,7 +123,8 @@ describeEmbeddedPostgres("heartbeat local environment lifecycle", () => {
     expect(localRows).toHaveLength(1);
     expect(localRows[0]?.name).toBe("Local");
 
-    const leases = await waitForRunLeasesToRelease(db, queued!.id);
+    const leases = await db.select().from(environmentLeases)
+      .where(eq(environmentLeases.heartbeatRunId, queued!.id));
     expect(leases).toHaveLength(1);
     expect(leases[0]?.environmentId).toBe(localRows[0]?.id);
     expect(leases[0]?.status).toBe("released");
@@ -172,6 +145,7 @@ describeEmbeddedPostgres("heartbeat local environment lifecycle", () => {
     const agentId = randomUUID();
     const issuePrefix = `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
     const tempDir = await mkdtemp(join(tmpdir(), "paperclip-process-env-"));
+    temporaryRoots.add(tempDir);
     const envPath = join(tempDir, "env.json");
 
     await db.insert(companies).values({
@@ -212,7 +186,8 @@ describeEmbeddedPostgres("heartbeat local environment lifecycle", () => {
     const queued = await heartbeat.invoke(agentId, "on_demand", {}, "manual");
     expect(queued).not.toBeNull();
 
-    const finished = await waitForRunToFinish(heartbeat, queued!.id);
+    await heartbeat.drainActiveRunExecutions();
+    const finished = await heartbeat.getRun(queued!.id);
     expect(finished?.status).toBe("succeeded");
 
     const captured = JSON.parse(await readFile(envPath, "utf8")) as Record<string, unknown>;

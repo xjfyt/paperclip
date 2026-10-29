@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-29T22:26:56.150Z",
+  "kind": "complete-heartbeat-fixture-verification",
+  "headBeforeCommit": "b8e174a492ec7c8d2426c6fc5a711c318760b2aa",
+  "scope": "Five complete server test files; fixture cleanup/completion waits only. No production scheduling, authorization, or test-case deadline changes.",
+  "changes": [
+    "Await actual heartbeat execution and trailing bookkeeping before terminal-state assertions instead of unrelated 3/5/10-second polls.",
+    "Keep terminal state, lease release, adapter call, and workspace assertions; assert recorded lastRunId after completion.",
+    "Drain stale-queue work before resetting dispatch hooks and mocks. Remove only captured temporary roots after process runs drain."
+  ],
+  "verification": {
+    "passed": 74,
+    "failed": 0,
+    "pending": 0,
+    "unhandledErrors": 0,
+    "frameworkDiagnostics": [],
+    "applicationWarnLines": 77,
+    "durationSeconds": 429.25,
+    "files": [
+      {
+        "file": "server/src/__tests__/heartbeat-accepted-plan-workspace-refresh.test.ts",
+        "status": "passed",
+        "assertions": 5
+      },
+      {
+        "file": "server/src/__tests__/heartbeat-local-environment.test.ts",
+        "status": "passed",
+        "assertions": 2
+      },
+      {
+        "file": "server/src/__tests__/heartbeat-plugin-environment.test.ts",
+        "status": "passed",
+        "assertions": 3
+      },
+      {
+        "file": "server/src/__tests__/heartbeat-stale-queue-invalidation.test.ts",
+        "status": "passed",
+        "assertions": 61
+      },
+      {
+        "file": "server/src/__tests__/heartbeat-workspace-finalize-branch.test.ts",
+        "status": "passed",
+        "assertions": 3
+      }
+    ],
+    "inputChanges": []
+  },
+  "input": {
+    "capturedAt": "2026-10-29T22:04:43.346Z",
+    "files": [
+      {
+        "file": "server/src/__tests__/heartbeat-stale-queue-invalidation.test.ts",
+        "sha256": "c8b501cf64b3ab95347d6425022e4c9ce9293cbb577c9ee62e03ce7483484b6c",
+        "warnings": 0
+      },
+      {
+        "file": "server/src/__tests__/heartbeat-accepted-plan-workspace-refresh.test.ts",
+        "sha256": "73e26e94df940e3d3f712fb869f52ecba291051ff727bb70648cc81908a73afa",
+        "warnings": 0
+      },
+      {
+        "file": "server/src/__tests__/heartbeat-local-environment.test.ts",
+        "sha256": "7ddd695e7a7911b46c7211a0a60c9fb851638a38c1eedb10913639fb921c4ab0",
+        "warnings": 0
+      },
+      {
+        "file": "server/src/__tests__/heartbeat-plugin-environment.test.ts",
+        "sha256": "b9318e51d1d0cab6d6efb5ba74b1ab14b722cebaf31c30cd8056f08c2535d109",
+        "warnings": 0
+      },
+      {
+        "file": "server/src/__tests__/heartbeat-workspace-finalize-branch.test.ts",
+        "sha256": "c9e2c3a4f7437a52c037680c57375a6eefdef587b0d2ee084bba7f54e8151d2f",
+        "warnings": 0
+      }
+    ]
+  },
+  "evidence": [
+    {
+      "file": "test-results/project-closure-20261029/heartbeat-drain-complete-final.json",
+      "sha256": "ab4f5ccb7da798422ee8c582461eaab3831a53b77bf6d7874955d29edc6513ea"
+    },
+    {
+      "file": "test-results/project-closure-20261029/heartbeat-drain-complete-final.log",
+      "sha256": "872a8ab346c2ae0f9c6fd815f47c8ac3581f741c0c45edaf25d5daafffad7c85"
+    },
+    {
+      "file": "test-results/project-closure-20261029/heartbeat-drain-complete-final-invocation.json",
+      "sha256": "1daf79b56a89e27dcea802785c5766f5b973658266891cf7ecf145da50a453dd"
+    },
+    {
+      "file": "test-results/project-closure-20261029/heartbeat-drain-fixtures-input.json",
+      "sha256": "53bdd89ba8e4181822222164d3c3c3e43da9b936360bf530e2d59692bcdec181"
+    },
+    {
+      "file": "test-results/project-closure-20261029/server-fixture-lifecycle-types-final.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "historicalFailures": {
+    "evidence": [
+      {
+        "file": "test-results/project-closure-20261029/general-frozen-shard-0.log",
+        "sha256": "939ec3ac822ef5fadb5abef5d927a436b17fd9b49c4af19b5a5072bac1ba9578"
+      },
+      {
+        "file": "test-results/project-closure-20261029/general-frozen-shard-2.log",
+        "sha256": "d34d0e69ac26ef05138bc0493356378958c85ae8c31f9b11875ba4e4cf58bec9"
+      },
+      {
+        "file": "test-results/project-closure-20261029/general-frozen-shard-3.log",
+        "sha256": "31d4e168b267f82e3bb06f2e27e879b32a949dc2540a3328dc857ff55ed37137"
+      }
+    ],
+    "assertions": 10,
+    "interpretation": "Original failures are preserved. Their short terminal-state polls could observe running before trailing execution completed."
+  },
+  "boundaries": [
+    "Application warning logs remain in the raw log; zero framework diagnostics does not mean negative/unconfigured fixture paths emitted no application warnings.",
+    "The native executor startup-Stop fix changed during this run; this is not a frozen repository-wide pass or evidence for native cancellation. Those changes have separate native regressions.",
+    "This receipt covers ordinary local/process/plugin heartbeat fixture paths, not external provider accounts or other operating systems."
+  ]
+}

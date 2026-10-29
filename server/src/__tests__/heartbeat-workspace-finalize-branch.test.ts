@@ -93,27 +93,16 @@ async function createGitRepo() {
   return repoRoot;
 }
 
-async function waitForRunToFinish(heartbeat: Heartbeat, runId: string, timeoutMs = 10_000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const run = await heartbeat.getRun(runId);
-    if (run && run.status !== "queued" && run.status !== "running") return run;
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
+async function waitForRunToFinish(heartbeat: Heartbeat, runId: string) {
+  // Terminal status precedes finalization writes; await the actual execution.
+  await heartbeat.drainActiveRunExecutions();
   return heartbeat.getRun(runId);
 }
 
-async function waitForRuntimeStateLastRun(db: Db, agentId: string, runId: string, timeoutMs = 5_000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const state = await db
-      .select({ lastRunId: agentRuntimeState.lastRunId })
-      .from(agentRuntimeState)
-      .where(eq(agentRuntimeState.agentId, agentId))
-      .then((rows) => rows[0] ?? null);
-    if (state?.lastRunId === runId) return;
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
+async function assertRuntimeStateLastRun(db: Db, agentId: string, runId: string) {
+  const [state] = await db.select({ lastRunId: agentRuntimeState.lastRunId })
+    .from(agentRuntimeState).where(eq(agentRuntimeState.agentId, agentId));
+  expect(state?.lastRunId).toBe(runId);
 }
 
 async function deleteHeartbeatRowsAfterActivityLogDrains(db: Db) {
@@ -351,7 +340,7 @@ describeEmbeddedPostgres("heartbeat workspace finalization branch guard", () => 
       errorCode: null,
       error: null,
     });
-    await waitForRuntimeStateLastRun(db, agentId, run!.id);
+    await assertRuntimeStateLastRun(db, agentId, run!.id);
     expect(adapterExecute).toHaveBeenCalledTimes(1);
     await expect(execFileAsync("git", ["branch", "--show-current"], { cwd: workspaceCwd! }))
       .resolves.toMatchObject({ stdout: `${recordedBranch}\n` });
@@ -439,7 +428,7 @@ describeEmbeddedPostgres("heartbeat workspace finalization branch guard", () => 
       errorCode: null,
       error: null,
     });
-    await waitForRuntimeStateLastRun(db, agentId, run!.id);
+    await assertRuntimeStateLastRun(db, agentId, run!.id);
     expect(adapterExecute).toHaveBeenCalledTimes(1);
 
     const finalizedWorkspace = await db
@@ -510,7 +499,7 @@ describeEmbeddedPostgres("heartbeat workspace finalization branch guard", () => 
       errorCode: null,
       error: null,
     });
-    await waitForRuntimeStateLastRun(db, agentId, run!.id);
+    await assertRuntimeStateLastRun(db, agentId, run!.id);
     expect(adapterExecute).toHaveBeenCalledTimes(1);
 
     const finalizedWorkspace = await db

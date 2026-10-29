@@ -160,6 +160,12 @@ describeEmbeddedPostgres("heartbeat stale queued-run invalidation", () => {
   }, 20_000);
 
   afterEach(async () => {
+    // A table poll for "queued" or "running" rows cannot see a wakeup promise
+    // that has not yet written its run row. The shared drain helper awaits
+    // both in-flight wakeup promises and in-flight run executions first, then
+    // re-checks the run table, so a late writer cannot still be in flight when
+    // the TRUNCATE below runs.
+    await drainHeartbeatRunsToQuiescence(db, heartbeat);
     beforeContinuationDispatchCheck = null;
     afterContinuationDispatchCheck = null;
     mockAdapterExecute.mockReset();
@@ -173,12 +179,6 @@ describeEmbeddedPostgres("heartbeat stale queued-run invalidation", () => {
       model: "test-model",
     }));
     runningProcesses.clear();
-    // A table poll for "queued" or "running" rows cannot see a wakeup promise
-    // that has not yet written its run row. The shared drain helper awaits
-    // both in-flight wakeup promises and in-flight run executions first, then
-    // re-checks the run table, so a late writer cannot still be in flight when
-    // the TRUNCATE below runs.
-    await drainHeartbeatRunsToQuiescence(db, heartbeat);
     await cleanupHeartbeatInvalidationFixture(db);
   });
 
@@ -231,8 +231,8 @@ describeEmbeddedPostgres("heartbeat stale queued-run invalidation", () => {
     await db.update(agents).set({ status: "idle", lifecycleState: "ready" }).where(eq(agents.id, agentId));
     const recovered = heartbeatService(db, { runtimeEnv: { ...process.env, PAPERCLIP_IN_WORKTREE: "false" } });
     await recovered.resumeQueuedRuns();
-    expect(await waitForCondition(async () => countExecuteCallsForRun(run!.id) === 1)).toBe(true);
-    await recovered.waitForRunExecutionDrain(run!.id);
+    // Join the dispatched work rather than imposing a second wall-clock deadline.
+    await recovered.drainActiveRunExecutions();
     expect(countExecuteCallsForRun(run!.id)).toBe(1);
   });
 
@@ -778,19 +778,7 @@ describeEmbeddedPostgres("heartbeat stale queued-run invalidation", () => {
       };
 
       await heartbeat.resumeQueuedRuns();
-      await waitForCondition(async () => {
-        const [run, wakeup] = await Promise.all([
-          db.select({ status: heartbeatRuns.status })
-            .from(heartbeatRuns)
-            .where(eq(heartbeatRuns.id, runId))
-            .then((rows) => rows[0] ?? null),
-          db.select({ status: agentWakeupRequests.status })
-            .from(agentWakeupRequests)
-            .where(eq(agentWakeupRequests.id, wakeupRequestId))
-            .then((rows) => rows[0] ?? null),
-        ]);
-        return run?.status === "cancelled" && wakeup?.status === "skipped";
-      });
+      await heartbeat.drainActiveRunExecutions();
 
       const [run, wakeup, issue] = await Promise.all([
         db.select({ status: heartbeatRuns.status, errorCode: heartbeatRuns.errorCode })
@@ -1777,12 +1765,10 @@ describeEmbeddedPostgres("heartbeat stale queued-run invalidation", () => {
         originCommentIds: [wakeCommentId],
         interactionResolvedAt: new Date().toISOString(), mutation: "interaction", source: `${interactionKind}.resolved`, forceFreshSession: true } });
     await heartbeat.resumeQueuedRuns();
-    expect(await waitForCondition(async () => (await db.select({ status: heartbeatRuns.status }).from(heartbeatRuns).where(eq(heartbeatRuns.id, runId)))[0]?.status === "succeeded")).toBe(true);
-    // Terminal status precedes completion bookkeeping. Drain those writes before
-    // afterEach truncates the fixture, otherwise PostgreSQL can deadlock.
-    await heartbeat.waitForRunExecutionDrain(runId);
+    // Join execution and completion bookkeeping before inspecting the terminal row.
+    await heartbeat.drainActiveRunExecutions();
+    expect((await heartbeat.getRun(runId))?.status).toBe("succeeded");
     expect(countExecuteCallsForRun(runId)).toBe(1);
-    await waitForCondition(async () => claimedIssue !== null);
     expect(claimedIssue).toEqual({ status: "in_progress", executionRunId: runId });
   });
 });
