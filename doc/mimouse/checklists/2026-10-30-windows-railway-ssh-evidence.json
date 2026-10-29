@@ -1,0 +1,49 @@
+{
+  "recordedAt": "2026-10-29T19:27:15.904Z",
+  "platform": "native Windows; installed system OpenSSH and real NTFS DACLs",
+  "scope": "Railway SSH local execution/storage protocol. No real Railway connection or provider credentials.",
+  "command": "node node_modules/vitest/vitest.mjs run --project @paperclipai/server server/src/__tests__/railway.test.ts server/src/__tests__/railway-ssh.test.ts server/src/__tests__/railway-connection.test.ts server/src/__tests__/railway-ssh-windows-security.test.ts --maxWorkers=1 --no-file-parallelism --exclude **/dist/** --reporter=default --reporter=json --outputFile=test-results/project-closure-20261029/railway-windows-final2.json",
+  "result": {
+    "files": 4,
+    "passed": 44,
+    "failed": 0,
+    "skipped": 0
+  },
+  "typecheck": {
+    "command": "node node_modules/typescript/bin/tsc --noEmit -p server/tsconfig.json",
+    "exitCode": 0
+  },
+  "assertions": [
+    "Installed fixed SystemRoot/System32/OpenSSH keygen produces a fresh real Ed25519 key after private DACL protection of the empty directory",
+    "New empty command directory/key/known_hosts paths protected before first secret byte; generated key DACL verified before reading",
+    "Missing fixed tools reject before any temporary state without ambient PATH fallback",
+    "Permission probe failure rejects; unrelated existing broad home ACL and original synthetic bytes remain unchanged",
+    "Real offline ssh -G validates NUL configuration, strict host checking and disabled identity agent without network connection",
+    "Minimal Windows OS environment includes ProgramData: single-variable offline diagnosis proved installed Win32 OpenSSH exits 255 without it; no user profile/SSH agent/provider token is forwarded",
+    "Original completion marker, local zero exit without confirmation, timeout/cancellation, output bound, cleanup and grant reconnect/removal regressions remain active"
+  ],
+  "diagnostics": {
+    "frameworkWarnings": 0,
+    "unhandledErrors": 0,
+    "applicationWarnings": 0
+  },
+  "inputs": {
+    "server/src/services/railway-ssh.ts": "364c6e72b0c25ce294bef26b594514b2f83ac70b69664a1ac300c90a2a5d88dc",
+    "server/src/__tests__/railway-ssh.test.ts": "116728aa849d779ccb7b1329fff0b9618052945cb0dbc314520e6b774dbdc608",
+    "server/src/__tests__/railway-ssh-windows-security.test.ts": "6675960d3d646b8c68e2743554194df8d82f7d12d8e81d2ea30b7f2b46c1d642",
+    "server/src/__tests__/railway-connection.test.ts": "3590bc59e16cc71afa451bea938d6348f2314ee62fde992d5be43a1007c11571",
+    "server/src/__tests__/railway.test.ts": "8f671d054a43e67eb7434a5cc2f1ea897c35b559029f2b7b795b1a70d6f5d6eb",
+    "packages/shared/src/private-filesystem-permissions.ts": "5760605ae7d8139a6529b006ac777e21a8985c0140b0ed9faf07209771519c1a"
+  },
+  "logs": {
+    "test-results/project-closure-20261029/railway-windows-final2.json": "c9e35043717543297874a72d7ab72e9d1b28bf19eb4f3766c466793d5d11fd04",
+    "test-results/project-closure-20261029/railway-windows-final2.log": "3d72b6968cd089d41443142cc6c6b2057c64eac3aed6baae324344841794f7fa",
+    "test-results/project-closure-20261029/railway-windows-typecheck-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "firstFailurePreserved": "test-results/project-closure-20261029/railway-windows-final.json",
+  "limitations": [
+    "No live Railway enrollment, independently verified provider host key, network account or actual container command success claimed",
+    "POSIX behavior retained in source; no Linux/macOS machine execution claimed",
+    "Only new exclusively created temporary paths receive ACL changes; existing paths are never silently repaired"
+  ]
+}

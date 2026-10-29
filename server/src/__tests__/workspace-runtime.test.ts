@@ -8,7 +8,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { parse as parseEnvContents } from "dotenv";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { writeCliFixture } from "@paperclipai/adapter-utils/test-fixtures/native-cli";
+import { shellExecutable } from "@paperclipai/adapter-utils/test-fixtures/local-sandbox";
 import {
   activityLog,
   agents,
@@ -83,6 +85,7 @@ import type { WorkspaceOperation } from "@paperclipai/shared";
 import type { WorkspaceOperationRecorder } from "../services/workspace-operations.ts";
 import { HttpError } from "../errors.ts";
 import { deriveWorktreeInstanceId } from "../services/workspace-instance-cleanup.ts";
+import { resolvePnpmInvocation } from "../services/pnpm-invocation.js";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -94,6 +97,31 @@ const RUNTIME_OWNED_GIT_BRANCH_METADATA = {
 } as const;
 
 const execFileAsync = promisify(execFile);
+const processSpies = vi.hoisted(() => ({ spawn: vi.fn() }));
+vi.mock("node:child_process", async importOriginal => {
+  const actual = await importOriginal<typeof import("node:child_process")>();
+  processSpies.spawn.mockImplementation(actual.spawn);
+  return { ...actual, spawn: processSpies.spawn };
+});
+const hostPlatform = process.platform;
+const posixServiceTest = it.skipIf(hostPlatform === "win32");
+const originalPath = process.env.PATH;
+beforeEach(() => {
+  // These authored commands are POSIX shell source. Do not select WSL's bash
+  // or let a failed isolated-PATH setup contaminate later real Git fixtures.
+  if (hostPlatform === "win32") {
+    vi.stubEnv("SHELL", shellExecutable("bash"));
+    vi.stubEnv("PATH", `${path.dirname(shellExecutable("bash"))}${path.delimiter}${originalPath ?? ""}`);
+  }
+  vi.stubEnv("LC_ALL", "C");
+  vi.stubEnv("LANG", "C");
+});
+
+function runProvisionScript(script: string, options: { cwd: string; env: NodeJS.ProcessEnv }) {
+  return hostPlatform === "win32"
+    ? execFileAsync(shellExecutable("bash"), [script.replaceAll("\\", "/")], options)
+    : execFileAsync(script, [], options);
+}
 
 function stableStringifyForTest(value: unknown): string {
   if (Array.isArray(value)) {
@@ -153,7 +181,8 @@ async function readGit(cwd: string, args: string[]) {
 }
 
 async function runPnpm(cwd: string, args: string[]) {
-  await execFileAsync("pnpm", args, { cwd });
+  const invocation = resolvePnpmInvocation();
+  await execFileAsync(invocation.file, [...invocation.args, ...args], { cwd });
 }
 
 async function writeRegisteredSourceConfig(baseCwd: string, instanceId = "source-instance") {
@@ -172,6 +201,7 @@ async function createTempRepo(defaultBranch = "main") {
   await runGit(repoRoot, ["init"]);
   await runGit(repoRoot, ["config", "user.email", "paperclip@example.com"]);
   await runGit(repoRoot, ["config", "user.name", "Paperclip Test"]);
+  await runGit(repoRoot, ["config", "core.autocrlf", "false"]);
   await fs.writeFile(path.join(repoRoot, "README.md"), "hello\n", "utf8");
   await runGit(repoRoot, ["add", "README.md"]);
   await runGit(repoRoot, ["commit", "-m", "Initial commit"]);
@@ -447,6 +477,7 @@ function createWorkspaceOperationRecorderDouble() {
 }
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
   await Promise.all(
     Array.from(leasedRunIds).map(async (runId) => {
       await releaseRuntimeServicesForRun(runId);
@@ -794,6 +825,43 @@ describe("ensureServerWorkspaceLinksCurrent", () => {
 });
 
 describe("realizeExecutionWorkspace", () => {
+  it.runIf(hostPlatform === "win32").each(["inline", "file"] as const)("rejects Windows fallback %s key material before target writes and preserves the source", async mode => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-fallback-secret-"));
+    const source = path.join(root, "source"), target = path.join(root, "target"), bin = path.join(root, "bin");
+    const configPath = path.join(source, ".paperclip", "config.json"), envPath = path.join(source, ".paperclip", ".env");
+    const sourceKey = path.join(source, "synthetic-master-key");
+    const targetConfig = path.join(target, ".paperclip", "config.json");
+    const secret = "synthetic-fallback-key-local-only";
+    try {
+      await fs.mkdir(path.dirname(configPath), { recursive: true });
+      await fs.mkdir(path.dirname(targetConfig), { recursive: true });
+      await fs.mkdir(bin);
+      await fs.symlink(process.execPath, path.join(bin, "node.exe"));
+      await fs.writeFile(configPath, JSON.stringify({ secrets: { localEncrypted: { keyFilePath: sourceKey } } }));
+      await fs.writeFile(envPath, mode === "inline" ? `PAPERCLIP_SECRETS_MASTER_KEY=${secret}\n` : "");
+      if (mode === "file") await fs.writeFile(sourceKey, secret);
+      await fs.writeFile(targetConfig, "old unrelated target config");
+      const sourceBefore = await fs.readFile(configPath);
+      const envBefore = await fs.readFile(envPath);
+      const bash = shellExecutable("bash");
+      let failure: unknown;
+      try { await runProvisionScript(fileURLToPath(provisionWorktreeScriptPath), { cwd: target, env: {
+        ...process.env, PATH: [bin, path.dirname(bash)].join(path.delimiter),
+        PAPERCLIP_WORKSPACE_BASE_CWD: source, PAPERCLIP_WORKSPACE_CWD: target,
+        PAPERCLIP_WORKTREES_DIR: path.join(root, "runtime"),
+      } }); } catch (error) { failure = error; }
+      expect(failure).toBeTruthy();
+      expect(String(failure)).toContain("Windows fallback cannot safely provision secret material");
+      expect(String(failure)).not.toContain(secret);
+      expect(await fs.readFile(configPath)).toEqual(sourceBefore);
+      expect(await fs.readFile(envPath)).toEqual(envBefore);
+      if (mode === "file") expect(await fs.readFile(sourceKey, "utf8")).toBe(secret);
+      expect(await fs.readFile(targetConfig, "utf8")).toBe("old unrelated target config");
+      expect(await fs.readdir(path.dirname(targetConfig))).toEqual(["config.json"]);
+      expect(existsSync(path.join(root, "runtime"))).toBe(false);
+    } finally { await fs.rm(root, { recursive: true, force: true }); }
+  });
+
   it("defaults new git worktrees to freshly fetched origin/master", async () => {
     const sourceRepo = await createTempRepo("master");
     const remoteDir = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-worktree-remote-"));
@@ -1260,7 +1328,9 @@ describe("realizeExecutionWorkspace", () => {
     expect(unresolved.attemptedRefs).toEqual(["origin/fix/does-not-exist"]);
     const diagnostic = readUnresolvedWorkspaceBaseRefDiagnostic(Object.freeze(unresolved));
     expect(diagnostic).toEqual({ schemaVersion: 1, remoteLookup: "resolved", authLookup: "not_requested",
-      fetch: "failed", fetchExitCode: 128, fetchFailureKind: "remote_ref_not_found", refResolution: "failed", refExitCode: 128 });
+      // Windows' local Git transport appends a second fatal hangup line;
+      // the closed classifier deliberately treats mixed evidence as unknown.
+      fetch: "failed", fetchExitCode: 128, fetchFailureKind: hostPlatform === "win32" ? "unknown" : "remote_ref_not_found", refResolution: "failed", refExitCode: 128 });
     diagnostic!.fetch = "succeeded";
     expect(readUnresolvedWorkspaceBaseRefDiagnostic(unresolved)?.fetch).toBe("failed");
     expect(JSON.stringify(readUnresolvedWorkspaceBaseRefDiagnostic(unresolved))).not.toContain("fix/");
@@ -1389,10 +1459,12 @@ describe("realizeExecutionWorkspace", () => {
     }));
     for (const { authLookup, diagnostic } of results) expect(diagnostic).toEqual({ schemaVersion: 1,
       remoteLookup: "resolved", authLookup, fetch: "failed", fetchExitCode: 128,
-      fetchFailureKind: "remote_ref_not_found", refResolution: "failed", refExitCode: 128 });
+      fetchFailureKind: hostPlatform === "win32" ? "unknown" : "remote_ref_not_found", refResolution: "failed", refExitCode: 128 });
   });
 
   it.each([
+    ["remote_ref_not_found", "fatal: couldn't find remote ref refs/heads/absent-fixture\n", 128],
+    ["unknown", "fatal: couldn't find remote ref refs/heads/absent-fixture\nfatal: the remote end hung up unexpectedly\n", 128],
     ["authentication_failed", "fatal: Authentication failed for 'https://fixture.example.invalid/private-repo'\n", 128],
     ["dns_failure", "fatal: unable to access 'https://fixture.example.invalid/private-repo': Could not resolve host: fixture.example.invalid\n", 128],
     ["unknown", "fatal: Authentication failed for 'https://fixture.example.invalid/private-repo'\nfatal: unable to create local lock\n", 128],
@@ -1403,14 +1475,14 @@ describe("realizeExecutionWorkspace", () => {
     await runGit(repoRoot, ["remote", "set-url", "origin", "https://fixture.example.invalid/private-repo"]);
     const bin = path.join(repoRoot, "fixture-bin"), calls = path.join(repoRoot, "fixture-calls.jsonl");
     await fs.mkdir(bin);
-    await fs.writeFile(path.join(bin, "git"), `#!${process.execPath}
+    await writeCliFixture(path.join(bin, "git"), `#!${process.execPath}
 const fs = require("node:fs");
 fs.appendFileSync(${JSON.stringify(calls)}, JSON.stringify(process.argv.slice(2)) + "\\n");
 process.stderr.write(${JSON.stringify(stderr)}, () => { process.exitCode = ${code}; });
 `);
     await fs.chmod(path.join(bin, "git"), 0o700);
     const error = await realizeWorktreeForTest(repoRoot, "absent-fixture", async () => ({
-      configArgs: [], env: { PATH: `${bin}:${process.env.PATH}` }, source: "server_env",
+      configArgs: [], env: { PATH: `${bin}${path.delimiter}${process.env.PATH}` }, source: "server_env",
     })).catch(error => error);
     expect(error).toBeInstanceOf(UnresolvedWorkspaceBaseRefError);
     const diagnostic = readUnresolvedWorkspaceBaseRefDiagnostic(error);
@@ -1907,7 +1979,9 @@ process.stderr.write(${JSON.stringify(stderr)}, () => { process.exitCode = ${cod
     // Keep this server-side fixture on provision-worktree.sh's config writer path;
     // CLI/database seeding is covered by the CLI worktree tests.
     await fs.symlink(process.execPath, path.join(isolatedBin, "node"));
-    process.env.PATH = `${isolatedBin}${path.delimiter}/usr/bin${path.delimiter}/bin`;
+    process.env.PATH = hostPlatform === "win32"
+      ? [isolatedBin, path.dirname(shellExecutable("bash")), path.resolve(path.dirname(shellExecutable("bash")), "..", "..", "cmd")].join(path.delimiter)
+      : `${isolatedBin}${path.delimiter}/usr/bin${path.delimiter}/bin`;
 
     await fs.mkdir(sharedConfigDir, { recursive: true });
     await fs.writeFile(
@@ -2032,7 +2106,8 @@ process.stderr.write(${JSON.stringify(stderr)}, () => { process.exitCode = ${cod
       );
       expect(envContents).not.toContain("DATABASE_URL=");
       const envVars = parseEnvContents(envContents);
-      expect(envVars.PAPERCLIP_HOME).toBe(isolatedWorktreeHome);
+      expect(path.resolve(envVars.PAPERCLIP_HOME!)).toBe(path.resolve(isolatedWorktreeHome));
+      expect(path.resolve(envVars.PAPERCLIP_CONTEXT!)).toBe(path.join(isolatedWorktreeHome, "context.json"));
       expect(envVars.PAPERCLIP_INSTANCE_ID).toBe(expectedInstanceId);
       expect(await fs.realpath(envVars.PAPERCLIP_CONFIG!)).toBe(await fs.realpath(configPath));
       expect(envVars.PAPERCLIP_IN_WORKTREE).toBe("true");
@@ -2309,7 +2384,7 @@ process.stderr.write(${JSON.stringify(stderr)}, () => { process.exitCode = ${cod
         JSON.stringify({ name: "ui", private: true, dependencies: {} }, null, 2),
         "utf8",
       );
-      await fs.writeFile(
+      await writeCliFixture(
         fakePnpmPath,
         [
           "#!/bin/sh",
@@ -2324,15 +2399,13 @@ process.stderr.write(${JSON.stringify(stderr)}, () => { process.exitCode = ${cod
           "exit 1",
           "",
         ].join("\n"),
-        "utf8",
       );
-      await fs.chmod(fakePnpmPath, 0o755);
 
-      const runScript = () => execFileAsync(scriptPath, [], {
+      const runScript = () => runProvisionScript(scriptPath, {
         cwd: worktreeRoot,
         env: {
           ...process.env,
-          PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
+          PATH: `${fakeBin}${path.delimiter}${process.env.PATH ?? ""}`,
           PAPERCLIP_WORKSPACE_BASE_CWD: baseRoot,
           PAPERCLIP_WORKSPACE_CWD: worktreeRoot,
         },
@@ -2378,7 +2451,7 @@ process.stderr.write(${JSON.stringify(stderr)}, () => { process.exitCode = ${cod
       await fs.mkdir(fakeBin, { recursive: true });
       await fs.copyFile(provisionWorktreeScriptPath, scriptPath);
       await fs.chmod(scriptPath, 0o755);
-      await fs.writeFile(
+      await writeCliFixture(
         fakePnpmPath,
         [
           "#!/bin/sh",
@@ -2392,17 +2465,15 @@ process.stderr.write(${JSON.stringify(stderr)}, () => { process.exitCode = ${cod
           "exit 0",
           "",
         ].join("\n"),
-        "utf8",
       );
-      await fs.chmod(fakePnpmPath, 0o755);
 
       let caught: Error | null = null;
       try {
-        await execFileAsync(scriptPath, [], {
+        await runProvisionScript(scriptPath, {
           cwd: worktreeRoot,
           env: {
             ...process.env,
-            PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
+            PATH: `${fakeBin}${path.delimiter}${process.env.PATH ?? ""}`,
             PAPERCLIP_WORKSPACE_BASE_CWD: baseRoot,
             PAPERCLIP_WORKSPACE_CWD: worktreeRoot,
           },
@@ -2472,7 +2543,7 @@ process.stderr.write(${JSON.stringify(stderr)}, () => { process.exitCode = ${cod
         ].join("\n"),
         "utf8",
       );
-      await fs.writeFile(
+      await writeCliFixture(
         fakePnpmPath,
         [
           "#!/bin/sh",
@@ -2480,33 +2551,33 @@ process.stderr.write(${JSON.stringify(stderr)}, () => { process.exitCode = ${cod
           "  exit 0",
           "fi",
           "if [ \"$1\" = \"paperclipai\" ] && [ \"$2\" = \"worktree\" ] && [ \"$3\" = \"init\" ]; then",
+          "  native_pwd=\"$PWD\"",
+          "  if command -v cygpath >/dev/null 2>&1; then native_pwd=\"$(cygpath -m \"$PWD\")\"; fi",
           "  mkdir -p \"$PWD/.paperclip\"",
-          "  printf '%s\\n' '{\"database\":{\"embeddedPostgresDataDir\":\"'$PWD'/.paperclip/runtime/db\"}}' > \"$PWD/.paperclip/config.json\"",
-          "  printf '%s\\n' \"PAPERCLIP_HOME=$PWD/.paperclip/runtime\" \"PAPERCLIP_INSTANCE_ID=healthy\" \"PAPERCLIP_CONFIG=$PWD/.paperclip/config.json\" > \"$PWD/.paperclip/.env\"",
+          "  printf '%s\\n' '{\"database\":{\"embeddedPostgresDataDir\":\"'$native_pwd'/.paperclip/runtime/db\"}}' > \"$PWD/.paperclip/config.json\"",
+          "  printf '%s\\n' \"PAPERCLIP_HOME=$native_pwd/.paperclip/runtime\" \"PAPERCLIP_INSTANCE_ID=healthy\" \"PAPERCLIP_CONFIG=$native_pwd/.paperclip/config.json\" > \"$PWD/.paperclip/.env\"",
           "  exit 0",
           "fi",
           "exit 0",
           "",
         ].join("\n"),
-        "utf8",
       );
-      await fs.chmod(fakePnpmPath, 0o755);
 
-      const result = await execFileAsync(scriptPath, [], {
+      const result = await runProvisionScript(scriptPath, {
         cwd: worktreeRoot,
         env: {
           ...process.env,
-          PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
+          PATH: `${fakeBin}${path.delimiter}${process.env.PATH ?? ""}`,
           PAPERCLIP_WORKSPACE_BASE_CWD: baseRoot,
           PAPERCLIP_WORKSPACE_CWD: worktreeRoot,
         },
       });
 
       expect(result.stderr).toContain("Existing isolated Paperclip worktree config is stale for this host; regenerating.");
-      await expect(fs.readFile(path.join(paperclipDir, ".env"), "utf8")).resolves.toContain(
-        `PAPERCLIP_CONFIG=${worktreeRoot}/.paperclip/config.json`,
-      );
-      await expect(fs.readFile(path.join(paperclipDir, "config.json"), "utf8")).resolves.toContain(worktreeRoot);
+      const repairedEnv = parseEnvContents(await fs.readFile(path.join(paperclipDir, ".env"), "utf8"));
+      expect(path.resolve(repairedEnv.PAPERCLIP_CONFIG!)).toBe(path.join(worktreeRoot, ".paperclip", "config.json"));
+      const repairedConfig = JSON.parse(await fs.readFile(path.join(paperclipDir, "config.json"), "utf8"));
+      expect(path.resolve(repairedConfig.database.embeddedPostgresDataDir)).toBe(path.join(worktreeRoot, ".paperclip", "runtime", "db"));
     } finally {
       await fs.rm(tempRoot, { recursive: true, force: true });
     }
@@ -2545,7 +2616,7 @@ process.stderr.write(${JSON.stringify(stderr)}, () => { process.exitCode = ${cod
         ["lockfileVersion: '9.0'", "", "importers:", "  .: {}", ""].join("\n"),
         "utf8",
       );
-      await fs.writeFile(
+      await writeCliFixture(
         fakePnpmPath,
         [
           "#!/bin/sh",
@@ -2564,15 +2635,13 @@ process.stderr.write(${JSON.stringify(stderr)}, () => { process.exitCode = ${cod
           "exit 0",
           "",
         ].join("\n"),
-        "utf8",
       );
-      await fs.chmod(fakePnpmPath, 0o755);
 
-      const result = await execFileAsync(scriptPath, [], {
+      const result = await runProvisionScript(scriptPath, {
         cwd: worktreeRoot,
         env: {
           ...process.env,
-          PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
+          PATH: `${fakeBin}${path.delimiter}${process.env.PATH ?? ""}`,
           PAPERCLIP_WORKSPACE_BASE_CWD: baseRoot,
           PAPERCLIP_WORKSPACE_CWD: worktreeRoot,
         },
@@ -4341,7 +4410,31 @@ describe("ensureRuntimeServicesForRun", () => {
     };
   }
 
-  it("runs runtime provisioning once when service starts race for the same workspace", async () => {
+  it.runIf(hostPlatform === "win32").each([
+    { entry: "control", provision: false }, { entry: "control", provision: true },
+    { entry: "run", provision: false }, { entry: "run", provision: true },
+  ] as const)("rejects unsupported Windows service before effects: $entry provision=$provision", async ({ entry, provision }) => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-service-refusal-"));
+    const restore = configureRuntimeProvisionTestHome(root, "windows-refusal");
+    const { recorder, operations } = createWorkspaceOperationRecorderDouble();
+    const spawnSpy = processSpies.spawn.mockClear();
+    const workspace = buildWorkspace(root);
+    const marker = path.join(root, "must-not-run");
+    const command = `${JSON.stringify(process.execPath)} -e ${JSON.stringify(`require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'unexpected')`)}`;
+    const config = runtimeProvisionTestConfig({ serviceCommand: command, ...(provision ? { provisionCommand: command } : {}) });
+    try {
+      const attempt = entry === "control"
+        ? startRuntimeServicesForWorkspaceControl(runtimeProvisionStartInput({ workspace, config, recorder }))
+        : ensureRuntimeServicesForRun({ runId: randomUUID(), agent: { id: "agent-1", name: "Refusal", companyId: "company-1" }, issue: null,
+          workspace, executionWorkspaceId: "execution-workspace-1", config, adapterEnv: {}, recorder });
+      await expect(attempt).rejects.toMatchObject({ status: 422, details: { code: "workspace_runtime_service_platform_unsupported" } });
+      expect(spawnSpy).not.toHaveBeenCalled();
+      expect(operations).toEqual([]);
+      expect(await fs.readdir(root)).toEqual([]);
+    } finally { restore(); await fs.rm(root, { recursive: true, force: true }); }
+  });
+
+  posixServiceTest("runs runtime provisioning once when service starts race for the same workspace", async () => {
     const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-runtime-provision-race-"));
     const restorePaperclipEnv = configureRuntimeProvisionTestHome(workspaceRoot, "runtime-provision-race");
     const counterPath = path.join(workspaceRoot, "runtime-provision-count.txt");
@@ -4386,7 +4479,7 @@ describe("ensureRuntimeServicesForRun", () => {
     }
   });
 
-  it("logs runtime provisioning failure and retries it on the next service start", async () => {
+  posixServiceTest("logs runtime provisioning failure and retries it on the next service start", async () => {
     const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-runtime-provision-retry-"));
     const restorePaperclipEnv = configureRuntimeProvisionTestHome(workspaceRoot, "runtime-provision-retry");
     const attemptPath = path.join(workspaceRoot, "runtime-provision-attempt.txt");
@@ -4438,7 +4531,7 @@ describe("ensureRuntimeServicesForRun", () => {
     }
   });
 
-  it("records the built-in deferred seed as failed when its manifest is not verified", async () => {
+  posixServiceTest("records the built-in deferred seed as failed when its manifest is not verified", async () => {
     const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-workspace-seed-operation-"));
     const restorePaperclipEnv = configureRuntimeProvisionTestHome(workspaceRoot, "workspace-seed-operation");
     const scriptsDir = path.join(workspaceRoot, "scripts");
@@ -4496,7 +4589,7 @@ describe("ensureRuntimeServicesForRun", () => {
     }
   });
 
-  it("keeps an explicit command matching the built-in seed command as runtime provisioning", async () => {
+  posixServiceTest("keeps an explicit command matching the built-in seed command as runtime provisioning", async () => {
     const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-explicit-runtime-provision-"));
     const restorePaperclipEnv = configureRuntimeProvisionTestHome(workspaceRoot, "explicit-runtime-provision");
     const scriptsDir = path.join(workspaceRoot, "scripts");
@@ -4539,7 +4632,7 @@ describe("ensureRuntimeServicesForRun", () => {
     }
   });
 
-  it("does not create a runtime provision operation when the command is absent", async () => {
+  posixServiceTest("does not create a runtime provision operation when the command is absent", async () => {
     const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-runtime-provision-noop-"));
     const restorePaperclipEnv = configureRuntimeProvisionTestHome(workspaceRoot, "runtime-provision-noop");
     const workspace = buildWorkspace(workspaceRoot);
@@ -4562,7 +4655,7 @@ describe("ensureRuntimeServicesForRun", () => {
     }
   });
 
-  it("preserves the selected persisted runtime id when starting one configured service", async () => {
+  posixServiceTest("preserves the selected persisted runtime id when starting one configured service", async () => {
     const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-runtime-selected-id-"));
     const workspace = buildWorkspace(workspaceRoot);
     const restorePaperclipEnv = configureRuntimeProvisionTestHome(workspaceRoot, "runtime-selected-id");
@@ -4619,7 +4712,7 @@ describe("ensureRuntimeServicesForRun", () => {
     expect(services).toEqual([]);
   });
 
-  it("enables UI dev middleware by default for managed Paperclip worktree runtimes", async () => {
+  posixServiceTest("enables UI dev middleware by default for managed Paperclip worktree runtimes", async () => {
     const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-runtime-ui-dev-"));
     const workspace = buildWorkspace(workspaceRoot);
     const serviceScript =
@@ -4672,7 +4765,7 @@ describe("ensureRuntimeServicesForRun", () => {
     }
   });
 
-  it("injects isolated browser callback origins into separate worktree runtimes", async () => {
+  posixServiceTest("injects isolated browser callback origins into separate worktree runtimes", async () => {
     const firstRoot = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-runtime-origin-first-"));
     const secondRoot = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-runtime-origin-second-"));
     const firstWorkspace: RealizedExecutionWorkspace = {
@@ -4759,7 +4852,7 @@ describe("ensureRuntimeServicesForRun", () => {
     }
   }, 15_000);
 
-  it("requires Paperclip dev runtime services to pass /api/health readiness", async () => {
+  posixServiceTest("requires Paperclip dev runtime services to pass /api/health readiness", async () => {
     const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-runtime-health-"));
     const workspace = buildWorkspace(workspaceRoot);
     const runId = "run-paperclip-health";
@@ -4815,7 +4908,7 @@ describe("ensureRuntimeServicesForRun", () => {
     }
   });
 
-  it("replaces a reused Paperclip dev runtime whose 2xx health payload is unhealthy", async () => {
+  posixServiceTest("replaces a reused Paperclip dev runtime whose 2xx health payload is unhealthy", async () => {
     const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-runtime-misreported-health-"));
     const workspace = buildWorkspace(workspaceRoot);
     const serviceCommand =
@@ -4860,7 +4953,7 @@ describe("ensureRuntimeServicesForRun", () => {
     }
   }, 30_000);
 
-  it("reuses a shared Paperclip dev runtime after one transient unhealthy response", async () => {
+  posixServiceTest("reuses a shared Paperclip dev runtime after one transient unhealthy response", async () => {
     const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-runtime-transient-health-"));
     const workspace = buildWorkspace(workspaceRoot);
     const serviceCommand =
@@ -4899,7 +4992,7 @@ describe("ensureRuntimeServicesForRun", () => {
     }
   }, 30_000);
 
-  it("rejects an unreachable exposed origin even when readiness uses a local probe", async () => {
+  posixServiceTest("rejects an unreachable exposed origin even when readiness uses a local probe", async () => {
     const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-runtime-explicit-readiness-"));
     const workspace = buildWorkspace(workspaceRoot);
     const runId = "run-paperclip-explicit-readiness";
@@ -4949,7 +5042,7 @@ describe("ensureRuntimeServicesForRun", () => {
     }
   });
 
-  it("reuses shared runtime services across runs and starts a new service after release", async () => {
+  posixServiceTest("reuses shared runtime services across runs and starts a new service after release", async () => {
     const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-runtime-workspace-"));
     const workspace = buildWorkspace(workspaceRoot);
     const serviceCommand =
@@ -5048,7 +5141,7 @@ describe("ensureRuntimeServicesForRun", () => {
     expect(third[0]?.id).not.toBe(first[0]?.id);
   }, 10_000);
 
-  it("does not reuse project-scoped shared services across different workspace launch contexts", async () => {
+  posixServiceTest("does not reuse project-scoped shared services across different workspace launch contexts", async () => {
     const primaryWorkspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-runtime-primary-"));
     const worktreeWorkspaceRoot = path.join(primaryWorkspaceRoot, ".paperclip", "worktrees", "PAP-874-chat-speed-issues");
     await fs.mkdir(worktreeWorkspaceRoot, { recursive: true });
@@ -5145,7 +5238,7 @@ describe("ensureRuntimeServicesForRun", () => {
     expect(await executionResponse.text()).toBe(path.join(worktreeWorkspaceRoot, ".paperclip", "runtime-services"));
   });
 
-  it("does not leak parent Paperclip instance env into runtime service commands", async () => {
+  posixServiceTest("does not leak parent Paperclip instance env into runtime service commands", async () => {
     const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-runtime-env-"));
     const workspace = buildWorkspace(workspaceRoot);
     const envCapturePath = path.join(workspaceRoot, "captured-env.json");
@@ -5225,7 +5318,7 @@ describe("ensureRuntimeServicesForRun", () => {
     expect(services[0]?.scopeId).toBe("execution-workspace-1");
   });
 
-  it("stops execution workspace runtime services by executionWorkspaceId", async () => {
+  posixServiceTest("stops execution workspace runtime services by executionWorkspaceId", async () => {
     const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-runtime-stop-"));
     const workspace = buildWorkspace(workspaceRoot);
     const runId = "run-stop";
@@ -5279,7 +5372,7 @@ describe("ensureRuntimeServicesForRun", () => {
     await expect(fetch(services[0]!.url!)).rejects.toThrow();
   });
 
-  it("does not stop services in sibling directories when matching by workspace cwd", async () => {
+  posixServiceTest("does not stop services in sibling directories when matching by workspace cwd", async () => {
     const workspaceParent = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-runtime-sibling-"));
     const targetWorkspaceRoot = path.join(workspaceParent, "project");
     const siblingWorkspaceRoot = path.join(workspaceParent, "project-extended", "service");
@@ -5338,7 +5431,7 @@ describe("ensureRuntimeServicesForRun", () => {
     leasedRunIds.delete(runId);
   });
 
-  it("starts only the selected workspace-controlled runtime service", async () => {
+  posixServiceTest("starts only the selected workspace-controlled runtime service", async () => {
     const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-runtime-control-start-"));
     const workspace = buildWorkspace(workspaceRoot);
 
@@ -5399,7 +5492,7 @@ describe("ensureRuntimeServicesForRun", () => {
     });
   });
 
-  it("stops only the selected execution workspace runtime service", async () => {
+  posixServiceTest("stops only the selected execution workspace runtime service", async () => {
     const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-runtime-control-stop-"));
     const workspace = buildWorkspace(workspaceRoot);
 
@@ -5706,15 +5799,13 @@ describe("readLocalServicePortOwner", () => {
     const port = 43_123;
     const listenerPid = 43_210;
     const launchedPid = 32_000;
-    await fs.writeFile(
+    await writeCliFixture(
       path.join(fakeBin, "netstat"),
       `#!/bin/sh\nprintf '  TCP    127.0.0.1:${port}    0.0.0.0:0    LISTENING    ${listenerPid}\\n'\n`,
-      { mode: 0o755 },
     );
-    await fs.writeFile(
-      path.join(fakeBin, "powershell.exe"),
+    await writeCliFixture(
+      path.join(fakeBin, hostPlatform === "win32" ? "powershell" : "powershell.exe"),
       `#!/bin/sh\nprintf '${launchedPid}\\n'\n`,
-      { mode: 0o755 },
     );
     process.env.PATH = `${fakeBin}${path.delimiter}${previousPath ?? ""}`;
     Object.defineProperty(process, "platform", { value: "win32" });
@@ -5742,10 +5833,9 @@ describe("readLocalServicePortOwner", () => {
     const previousPath = process.env.PATH;
     const reportedCwd = path.join(os.tmpdir(), "paperclip-runtime-line\nbreak ");
     const output = `p${process.pid}\0fcwd\0n${reportedCwd}\0\n`;
-    await fs.writeFile(
+    await writeCliFixture(
       path.join(fakeBin, "lsof"),
       `#!${process.execPath}\nprocess.stdout.write(${JSON.stringify(output)});\n`,
-      { mode: 0o755 },
     );
     Object.defineProperty(process, "platform", { value: "darwin" });
     process.env.PATH = fakeBin;
@@ -6717,7 +6807,7 @@ describeEmbeddedPostgres("workspace runtime service control persistence", () => 
     await db.delete(companies);
   });
 
-  it("persists provisioning before starting and excludes provision time from readiness timeout", async () => {
+  posixServiceTest("persists provisioning before starting and excludes provision time from readiness timeout", async () => {
     const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-runtime-slow-control-"));
     const paperclipHome = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-runtime-control-home-"));
     const previousPaperclipHome = process.env.PAPERCLIP_HOME;
@@ -7115,7 +7205,7 @@ describeEmbeddedPostgres("workspace runtime service control persistence", () => 
     };
   }
 
-  it("waits for every managed process-tree listener before requesting HTTPS exposure", async () => {
+  posixServiceTest("waits for every managed process-tree listener before requesting HTTPS exposure", async () => {
     const fixture = await createRuntimeFixture();
     const cleanupRuntimeHome = await createRuntimeHome();
     const workspace = fixture.workspaces[0]!;
@@ -7200,7 +7290,7 @@ describeEmbeddedPostgres("workspace runtime service control persistence", () => 
     }
   }, 15_000);
 
-  it("rejects a foreign listener that races onto a reserved HTTPS companion port", async () => {
+  posixServiceTest("rejects a foreign listener that races onto a reserved HTTPS companion port", async () => {
     const fixture = await createRuntimeFixture();
     const cleanupRuntimeHome = await createRuntimeHome();
     const workspace = fixture.workspaces[0]!;
@@ -7270,7 +7360,7 @@ describeEmbeddedPostgres("workspace runtime service control persistence", () => 
     }
   }, 15_000);
 
-  it("allocates distinct persisted ports for concurrent isolated siblings without stopping either service", async () => {
+  posixServiceTest("allocates distinct persisted ports for concurrent isolated siblings without stopping either service", async () => {
     const fixture = await createRuntimeFixture({
       workspaceModes: ["isolated_workspace", "isolated_workspace"],
     });
@@ -7341,7 +7431,7 @@ describeEmbeddedPostgres("workspace runtime service control persistence", () => 
     }
   }, 20_000);
 
-  it("commits fixed-port reservations before readiness windows longer than 60 seconds", async () => {
+  posixServiceTest("commits fixed-port reservations before readiness windows longer than 60 seconds", async () => {
     const fixture = await createRuntimeFixture();
     const cleanupRuntimeHome = await createRuntimeHome();
     const workspace = fixture.workspaces[0]!;
@@ -7431,7 +7521,7 @@ describeEmbeddedPostgres("workspace runtime service control persistence", () => 
     }
   }, 80_000);
 
-  it("reuses a stopped isolated workspace's actual port when it is free", async () => {
+  posixServiceTest("reuses a stopped isolated workspace's actual port when it is free", async () => {
     const fixture = await createRuntimeFixture();
     const cleanupRuntimeHome = await createRuntimeHome();
     const workspace = fixture.workspaces[0]!;
@@ -7478,7 +7568,7 @@ describeEmbeddedPostgres("workspace runtime service control persistence", () => 
     }
   }, 20_000);
 
-  it("retries a bind race on the next bounded port and persists the selected URL", async () => {
+  posixServiceTest("retries a bind race on the next bounded port and persists the selected URL", async () => {
     const fixture = await createRuntimeFixture();
     const cleanupRuntimeHome = await createRuntimeHome();
     const workspace = fixture.workspaces[0]!;
@@ -7548,7 +7638,7 @@ describeEmbeddedPostgres("workspace runtime service control persistence", () => 
     }
   }, 20_000);
 
-  it("does not accept an occupied allocated port when listener ownership is unavailable", async () => {
+  posixServiceTest("does not accept an occupied allocated port when listener ownership is unavailable", async () => {
     const fixture = await createRuntimeFixture();
     const cleanupRuntimeHome = await createRuntimeHome();
     const workspace = fixture.workspaces[0]!;
@@ -7590,7 +7680,7 @@ describeEmbeddedPostgres("workspace runtime service control persistence", () => 
     }
   }, 20_000);
 
-  it("returns a bounded structured conflict and exposes only same-company workspace references", async () => {
+  posixServiceTest("returns a bounded structured conflict and exposes only same-company workspace references", async () => {
     const fixture = await createRuntimeFixture({
       workspaceModes: ["isolated_workspace", "isolated_workspace"],
     });
@@ -7778,7 +7868,7 @@ describeEmbeddedPostgres("workspace runtime startup reconciliation", () => {
     await db.delete(companies);
   });
 
-  it("restores desired services when one row is stopped and a live registered service has no row", async () => {
+  posixServiceTest("restores desired services when one row is stopped and a live registered service has no row", async () => {
     const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-runtime-desired-reconcile-"));
     const paperclipHome = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-runtime-home-"));
     process.env.PAPERCLIP_HOME = paperclipHome;
@@ -7964,7 +8054,7 @@ describeEmbeddedPostgres("workspace runtime startup reconciliation", () => {
     }
   }, 20_000);
 
-  it("backfills a pre-existing HTTP-only managed worktree runtime to verified HTTPS in place", async () => {
+  posixServiceTest("backfills a pre-existing HTTP-only managed worktree runtime to verified HTTPS in place", async () => {
     // PAP-17158: an eligible workspace created before the feature must come
     // forward on the *same* workspace/runtime-service row — not by recreating it
     // — and must never keep its HTTP URL as a healthy fallback.
@@ -8189,7 +8279,7 @@ describeEmbeddedPostgres("workspace runtime startup reconciliation", () => {
     }
   }, 40_000);
 
-  it("re-adopts a request-logging service on the same auto port after supervisor stdio closes", async () => {
+  posixServiceTest("re-adopts a request-logging service on the same auto port after supervisor stdio closes", async () => {
     const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-runtime-reconcile-"));
     const paperclipHome = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-runtime-home-"));
     process.env.PAPERCLIP_HOME = paperclipHome;
@@ -8311,7 +8401,7 @@ describeEmbeddedPostgres("workspace runtime startup reconciliation", () => {
     await expect(fetch(service!.url!)).rejects.toThrow();
   });
 
-  it("re-adopts a live service whose shell command differs from the surviving process argv", async () => {
+  posixServiceTest("re-adopts a live service whose shell command differs from the surviving process argv", async () => {
     const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-runtime-pnpm-reconcile-"));
     const paperclipHome = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-runtime-home-"));
     const previousPaperclipHome = process.env.PAPERCLIP_HOME;
@@ -8532,7 +8622,7 @@ describeEmbeddedPostgres("workspace runtime startup reconciliation", () => {
     }
   }, 20_000);
 
-  it("does not reuse a stopped auto-port service port while another process owns it", async () => {
+  posixServiceTest("does not reuse a stopped auto-port service port while another process owns it", async () => {
     const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-runtime-unhealthy-adopt-"));
     const paperclipHome = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-runtime-home-"));
     process.env.PAPERCLIP_HOME = paperclipHome;
@@ -8845,7 +8935,7 @@ describeEmbeddedPostgres("workspace runtime startup reconciliation", () => {
     expect(persisted?.stoppedAt).not.toBeNull();
   });
 
-  it("adopts stopped persisted local services when a matching registry process is alive", async () => {
+  posixServiceTest("adopts stopped persisted local services when a matching registry process is alive", async () => {
     const companyId = randomUUID();
     const runtimeServiceId = randomUUID();
     const startedAt = new Date("2026-04-04T17:00:00.000Z");
@@ -8953,7 +9043,7 @@ describeEmbeddedPostgres("workspace runtime startup reconciliation", () => {
     expect(persisted?.providerRef).toBe(String(process.pid));
   });
 
-  it("persists controlled execution workspace stops as stopped", async () => {
+  posixServiceTest("persists controlled execution workspace stops as stopped", async () => {
     const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-runtime-stop-persisted-"));
     const companyId = randomUUID();
     const agentId = randomUUID();
@@ -9074,7 +9164,7 @@ describeEmbeddedPostgres("workspace runtime startup reconciliation", () => {
     expect(persisted?.stoppedAt).toBeTruthy();
   });
 
-  it("restarts a stopped auto-port service on the same port when rendered env changes", async () => {
+  posixServiceTest("restarts a stopped auto-port service on the same port when rendered env changes", async () => {
     const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-runtime-port-reuse-env-"));
     const companyId = randomUUID();
     const agentId = randomUUID();
@@ -9199,7 +9289,7 @@ describeEmbeddedPostgres("workspace runtime startup reconciliation", () => {
     });
   });
 
-  it("restarts a stopped auto-port service on the same port when it is available", async () => {
+  posixServiceTest("restarts a stopped auto-port service on the same port when it is available", async () => {
     const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-runtime-port-reuse-"));
     const companyId = randomUUID();
     const agentId = randomUUID();

@@ -29,3 +29,5 @@ MCP 凭据、CLI 本地主密钥检查、决策签名密钥和独立 Daytona hos
 决策签名使用实例 `secrets/decision-signing.key`，或受控配置的 `PAPERCLIP_DECISION_SIGNING_SECRET`。Windows 新目录与新空临时文件先保护再写入，完整临时 key 通过原子 hard link 发布；并发已有胜者时读取已验证的胜者，不覆盖它。旧 Windows secrets 目录或 key 若有宽 ACL、链接或无法验证权限，启动会拒绝，原字节和旧 ACL 保留。升级前保全同一签名密钥，由授权运维核对 owner、精确路径和 DACL 后处理；不要删除 key 自动重建或复制到宽权限目录，这会改变决策签名身份。POSIX 的既有 mode 修复合同保持独立，不能拿它替代 NTFS 证明。
 
 回归需要覆盖新空路径保护、子文件继承、真实宽 ACL 拒绝、旧路径不被修改、链接拒绝及探针不可用时拒绝。mock、POSIX mode 断言与原生 NTFS 测试分别记录。凭据文件权限通过也不证明远端认证、公司授权或业务写入已经成功；部署、备份与实际集成仍按对应[配置](01-configuration.md)、[备份升级](../05-maintenance/04-backup-upgrade.md)和[集成合同](../04-modules/01-integration-boundaries.md)验证。
+
+尚未安装 CLI 的工作树 provision fallback 无法安全加载共享私密 writer 时，Windows 遇到需要复制或写入源主密钥会在首个目标秘密字节前拒绝，保留源材料及已有目标配置。此时可在受支持的 POSIX 宿主使用 CLI worktree init，或另行验明平台上的私密存储流程；普通 Windows CLI 命令通过不证明 seeded-secret 迁移的 DACL 已满足合同。不以 `chmod` 代替 DACL，也不删掉源密钥来绕过检查。没有待迁移秘密的普通依赖准备不受该拒绝影响。

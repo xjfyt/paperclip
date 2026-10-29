@@ -1,9 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-base_cwd="${PAPERCLIP_WORKSPACE_BASE_CWD:?PAPERCLIP_WORKSPACE_BASE_CWD is required}"
-worktree_cwd="${PAPERCLIP_WORKSPACE_CWD:?PAPERCLIP_WORKSPACE_CWD is required}"
-paperclip_home="${PAPERCLIP_HOME:-$HOME/.paperclip}"
+# Only declared host paths cross this boundary. Keep Bash's namespace separate
+# from native Node's drive-qualified paths; never rewrite commands or secrets.
+shell_host_path() {
+  if [[ -n "$1" && ( "${OSTYPE:-}" == msys* || "${OSTYPE:-}" == cygwin* ) ]]; then
+    cygpath -u -- "$1"
+  else printf '%s' "$1"; fi
+}
+native_host_path() {
+  if [[ -n "$1" && ( "${OSTYPE:-}" == msys* || "${OSTYPE:-}" == cygwin* ) ]]; then
+    cygpath -m -- "$1"
+  else printf '%s' "$1"; fi
+}
+
+base_cwd="$(shell_host_path "${PAPERCLIP_WORKSPACE_BASE_CWD:?PAPERCLIP_WORKSPACE_BASE_CWD is required}")"
+worktree_cwd="$(shell_host_path "${PAPERCLIP_WORKSPACE_CWD:?PAPERCLIP_WORKSPACE_CWD is required}")"
+paperclip_home="$(shell_host_path "${PAPERCLIP_HOME:-$HOME/.paperclip}")"
+configured_source_config_path="$(shell_host_path "${PAPERCLIP_CONFIG:-}")"
 paperclip_instance_id="${PAPERCLIP_INSTANCE_ID:-default}"
 default_source_config_path="$paperclip_home/instances/$paperclip_instance_id/config.json"
 paperclip_dir="$worktree_cwd/.paperclip"
@@ -14,7 +28,7 @@ seed_pending_marker_path="$paperclip_dir/seed-pending"
 seed_complete_marker_path="$paperclip_dir/seed-complete"
 worktree_name="${PAPERCLIP_WORKSPACE_BRANCH:-$(basename "$worktree_cwd")}"
 created_worktree_config=0
-worktree_instance_id="$(WORKTREE_CWD="$worktree_cwd" node <<'EOF'
+worktree_instance_id="$(WORKTREE_CWD="$(native_host_path "$worktree_cwd")" node <<'EOF'
 const crypto = require("node:crypto");
 const path = require("node:path");
 
@@ -54,7 +68,7 @@ if [[ ! -e "$source_config_path" && ! -L "$source_config_path" ]]; then
   # A base workspace that is a plain checkout carries no instance config of its own.
   # Fall back to the control plane's own registered instance config, which is process
   # state this workspace cannot rewrite.
-  source_config_path="${PAPERCLIP_CONFIG:-$default_source_config_path}"
+  source_config_path="${configured_source_config_path:-$default_source_config_path}"
   source_config_origin="control-plane instance"
   # Environment-configured servers need no local instance config. A new plain
   # checkout can still prepare dependencies without inventing a seed source.
@@ -212,8 +226,8 @@ paperclipai_command_available() {
 }
 
 existing_worktree_config_is_usable() {
-  WORKTREE_CONFIG_PATH="$worktree_config_path" \
-  WORKTREE_ENV_PATH="$worktree_env_path" \
+  WORKTREE_CONFIG_PATH="$(native_host_path "$worktree_config_path")" \
+  WORKTREE_ENV_PATH="$(native_host_path "$worktree_env_path")" \
   WORKTREE_INSTANCE_ID="$worktree_instance_id" \
   node <<'EOF'
 const fs = require("node:fs");
@@ -295,8 +309,8 @@ EOF
 }
 
 reconcile_worktree_deployment_mode() {
-  SOURCE_CONFIG_PATH="$source_config_path" \
-  WORKTREE_CONFIG_PATH="$worktree_config_path" \
+  SOURCE_CONFIG_PATH="$(native_host_path "$source_config_path")" \
+  WORKTREE_CONFIG_PATH="$(native_host_path "$worktree_config_path")" \
   node <<'EOF'
 const fs = require("node:fs");
 const path = require("node:path");
@@ -340,10 +354,10 @@ EOF
 }
 
 write_seed_pending_manifest() {
-  SEED_MANIFEST_PATH="$seed_manifest_path" \
-  SEED_PENDING_MARKER_PATH="$seed_pending_marker_path" \
-  SEED_COMPLETE_MARKER_PATH="$seed_complete_marker_path" \
-  SOURCE_CONFIG_PATH="$source_config_path" \
+  SEED_MANIFEST_PATH="$(native_host_path "$seed_manifest_path")" \
+  SEED_PENDING_MARKER_PATH="$(native_host_path "$seed_pending_marker_path")" \
+  SEED_COMPLETE_MARKER_PATH="$(native_host_path "$seed_complete_marker_path")" \
+  SOURCE_CONFIG_PATH="$(native_host_path "$source_config_path")" \
   TARGET_INSTANCE_ID="$worktree_instance_id" \
   node <<'EOF'
 const crypto = require("node:crypto");
@@ -389,11 +403,11 @@ EOF
 
 write_fallback_worktree_config() {
   WORKTREE_NAME="$worktree_name" \
-  BASE_CWD="$base_cwd" \
-  WORKTREE_CWD="$worktree_cwd" \
-  PAPERCLIP_DIR="$paperclip_dir" \
-  SOURCE_CONFIG_PATH="$source_config_path" \
-  SOURCE_ENV_PATH="$source_env_path" \
+  BASE_CWD="$(native_host_path "$base_cwd")" \
+  WORKTREE_CWD="$(native_host_path "$worktree_cwd")" \
+  PAPERCLIP_DIR="$(native_host_path "$paperclip_dir")" \
+  SOURCE_CONFIG_PATH="$(native_host_path "$source_config_path")" \
+  SOURCE_ENV_PATH="$(native_host_path "$source_env_path")" \
   WORKTREE_INSTANCE_ID="$worktree_instance_id" \
   PAPERCLIP_WORKTREES_DIR="${PAPERCLIP_WORKTREES_DIR:-}" \
   node <<'EOF'
@@ -518,6 +532,21 @@ async function main() {
       ? parseEnvFile(fs.readFileSync(sourceEnvPath, "utf8"))
       : {};
 
+  const inlineMasterKey = nonEmpty(sourceEnvEntries.PAPERCLIP_SECRETS_MASTER_KEY);
+  const sourceKeyFilePath = nonEmpty(sourceEnvEntries.PAPERCLIP_SECRETS_MASTER_KEY_FILE)
+    ? resolveRuntimeLikePath(sourceEnvEntries.PAPERCLIP_SECRETS_MASTER_KEY_FILE, sourceConfigPath)
+    : nonEmpty(sourceConfig?.secrets?.localEncrypted?.keyFilePath)
+      ? resolveRuntimeLikePath(sourceConfig.secrets.localEncrypted.keyFilePath, sourceConfigPath)
+      : null;
+  // The uninstalled fallback has no safely loadable shared private writer.
+  // Refuse before any target key bytes or existing config are changed.
+  if (process.platform === "win32" && (inlineMasterKey || (sourceKeyFilePath && fs.existsSync(sourceKeyFilePath)))) {
+    throw new Error("Windows fallback cannot safely provision secret material; use Paperclip CLI worktree init on a supported POSIX host or a separately verified private-storage flow.");
+  }
+  function dotenvHostPath(value) {
+    return process.platform === "win32" ? value.replaceAll("\\", "/") : value;
+  }
+
   const preferredServerPort = Number(sourceConfig?.server?.port ?? 3101) + 1;
   const serverPort = await findAvailablePort(preferredServerPort);
   const preferredDbPort = Number(sourceConfig?.database?.embeddedPostgresPort ?? 54329) + 1;
@@ -589,7 +618,6 @@ async function main() {
 
   fs.writeFileSync(configPath, `${JSON.stringify(targetConfig, null, 2)}\n`, { mode: 0o600 });
 
-  const inlineMasterKey = nonEmpty(sourceEnvEntries.PAPERCLIP_SECRETS_MASTER_KEY);
   if (inlineMasterKey) {
     fs.mkdirSync(path.resolve(instanceRoot, "secrets"), { recursive: true });
     fs.writeFileSync(targetConfig.secrets.localEncrypted.keyFilePath, inlineMasterKey, {
@@ -597,12 +625,6 @@ async function main() {
       mode: 0o600,
     });
   } else {
-    const sourceKeyFilePath = nonEmpty(sourceEnvEntries.PAPERCLIP_SECRETS_MASTER_KEY_FILE)
-      ? resolveRuntimeLikePath(sourceEnvEntries.PAPERCLIP_SECRETS_MASTER_KEY_FILE, sourceConfigPath)
-      : nonEmpty(sourceConfig?.secrets?.localEncrypted?.keyFilePath)
-        ? resolveRuntimeLikePath(sourceConfig.secrets.localEncrypted.keyFilePath, sourceConfigPath)
-        : null;
-
     if (sourceKeyFilePath && fs.existsSync(sourceKeyFilePath)) {
       fs.mkdirSync(path.resolve(instanceRoot, "secrets"), { recursive: true });
       fs.copyFileSync(sourceKeyFilePath, targetConfig.secrets.localEncrypted.keyFilePath);
@@ -611,10 +633,10 @@ async function main() {
   }
 
   const envLines = [
-    "PAPERCLIP_HOME=" + JSON.stringify(worktreeHome),
+    "PAPERCLIP_HOME=" + JSON.stringify(dotenvHostPath(worktreeHome)),
     "PAPERCLIP_INSTANCE_ID=" + JSON.stringify(instanceId),
-    "PAPERCLIP_CONFIG=" + JSON.stringify(configPath),
-    "PAPERCLIP_CONTEXT=" + JSON.stringify(path.resolve(worktreeHome, "context.json")),
+    "PAPERCLIP_CONFIG=" + JSON.stringify(dotenvHostPath(configPath)),
+    "PAPERCLIP_CONTEXT=" + JSON.stringify(dotenvHostPath(path.resolve(worktreeHome, "context.json"))),
     "PAPERCLIP_IN_WORKTREE=true",
     "PAPERCLIP_WORKTREE_NAME=" + JSON.stringify(worktreeName),
   ];
@@ -701,7 +723,7 @@ list_base_node_modules_paths() {
 }
 
 compute_pnpm_install_fingerprint() {
-  WORKTREE_CWD="$worktree_cwd" node <<'EOF'
+  WORKTREE_CWD="$(native_host_path "$worktree_cwd")" node <<'EOF'
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
