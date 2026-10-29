@@ -1,6 +1,6 @@
 # Railway
 
-Updated: 2026-09-16. Status: implementation review; live provider qualification outstanding.
+Updated: 2026-10-30. Status: local protocol and Windows storage verification; live provider qualification outstanding.
 
 Railway appears in Apps and uses Paperclip's shared remote-MCP OAuth connection,
 vault, catalog, grants, policies, gateway, and audit trail. It is a resource
@@ -95,11 +95,24 @@ The connection's Permissions page includes Container access:
 The private key stays in the instance vault, attached to one exact grant.
 Personal keys retain their owner binding. Each command resolves that grant's key
 after normal company/run/grant/policy checks. It uses a fresh temporary directory,
-0600 key files, a fixed system OpenSSH executable, a minimal environment, and no
+0600 key files on POSIX, a fixed system OpenSSH executable, a minimal environment, and no
 ambient SSH agent, user configuration, host directory, forwarding, or shared
 control socket. Files are removed on success, error, timeout and cancellation.
 The process must confirm remote command completion; SSH exit code zero alone is
 insufficient. Noninteractive commands receive no stdin.
+
+On native Windows the runtime requires the installed system OpenSSH tools at
+`%SystemRoot%\System32\OpenSSH\ssh.exe` and `ssh-keygen.exe`. Missing tools fail
+before temporary state is created; there is no ambient PATH fallback. The host
+uses `NUL` for empty SSH configuration; the container command remains POSIX.
+New empty temporary directories and files receive a private owner DACL before
+the first secret byte is written. Permissions must remain verifiable before
+reading generated keys or launching SSH. Existing home directories, keys and
+ACLs are not repaired or imported. A failed permission probe rejects the operation
+with `railway_ssh_private_material_unavailable`; do not disable the check.
+Local tests exercise real system key generation, NTFS ACLs and offline SSH
+configuration parsing. They do not establish Railway enrollment, host-key
+provenance or a successful live container command.
 
 SSH connects to a deployed service **container**, not the underlying Railway host.
 The SSH username is a deployment **instance** ID, checked against that deployment.

@@ -48,6 +48,8 @@ pnpm dev:list --data-dir ./tmp/paperclip-dev
 
 当前修复和本机边界见[审计报告](../../doc/mimouse/checklists/2026-10-29-project-audit.md)。源码修复并不自动代表干净安装、其它 OS 或最终包已经验证。
 
+Windows 托管嵌套 Git clone 使用任务 anchor 内的短临时路径和同卷 rename，`core.longpaths` 只配置新仓库，不修改全局 Git，也不承诺任意路径长度。插件 autobuild 解析已安装 pnpm 的原生可执行文件或 JS 入口，不把 cmd wrapper 字符串交给 shell 执行。工作树 provision 选择明确的 Git Bash 并使用 LF 脚本；满足 POSIX 脚本前提不代表原生 Windows 长驻服务已受支持。
+
 ## 四、一次性测试与数据库
 
 测试拒绝真实配置、缺 marker、已有数据库或未知服务是隔离保护，不应删掉检查来使测试运行。

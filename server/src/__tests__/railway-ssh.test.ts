@@ -30,7 +30,7 @@ describe("Railway isolated container command runner", () => {
   it("rejects untrusted aliases and ambient SSH state", () => {
     for (const line of ["* ssh-ed25519 AAAA", "evil.test ssh-ed25519 AAAA", `${host}\nHost *`, "@cert-authority " + host]) expect(() => validateRailwayKnownHosts(line)).toThrow();
     const args = railwaySshArguments("/tmp/dedicated", instanceId);
-    expect(args).toEqual(expect.arrayContaining(["/dev/null", "IdentityAgent=none", "StrictHostKeyChecking=yes", "IdentitiesOnly=yes", "ForwardAgent=no", "ControlPath=none"]));
+    expect(args).toEqual(expect.arrayContaining([process.platform === "win32" ? "NUL" : "/dev/null", "IdentityAgent=none", "StrictHostKeyChecking=yes", "IdentitiesOnly=yes", "ForwardAgent=no", "ControlPath=none"]));
     expect(args.slice(-3)).toEqual(["--", `${instanceId}@ssh.railway.com`, "sh -s"]);
   });
   it("requires remote completion and cleans its isolated directory", async () => {
@@ -44,7 +44,11 @@ describe("Railway isolated container command runner", () => {
     const args = spawnMock.mock.calls[0][1] as string[];
     const keyPath = args[args.indexOf("-i") + 1];
     await expect(access(path.dirname(keyPath))).rejects.toThrow();
-    expect(spawnMock.mock.calls[0][2].env).toEqual({ PATH: "/usr/bin:/bin", LANG: "C.UTF-8" });
+    const systemRoot = process.env.SystemRoot ?? "C:\\Windows";
+    expect(spawnMock.mock.calls[0][0]).toBe(process.platform === "win32" ? path.join(systemRoot, "System32", "OpenSSH", "ssh.exe") : "/usr/bin/ssh");
+    expect(spawnMock.mock.calls[0][2].env).toEqual(process.platform === "win32"
+      ? { SystemRoot: systemRoot, WINDIR: systemRoot, ProgramData: process.env.ProgramData ?? path.join(path.parse(systemRoot).root, "ProgramData"), PATH: path.join(systemRoot, "System32", "OpenSSH"), LANG: "C.UTF-8" }
+      : { PATH: "/usr/bin:/bin", LANG: "C.UTF-8" });
   });
   it("never treats local success or stdin failure as confirmed remote success", async () => {
     fakeProcess((child) => { child.stdin.emit("error", new Error("EPIPE")); child.emit("close", 0); });

@@ -62,5 +62,6 @@
 | Runner 本地文件交付与入站附件暂存 | 本地 reader 必须从已打开的 descriptor 证明文件仍受控；当前 Windows 分支无法提供该证明，保持 `descriptor_unverifiable` 拒绝，不降级为只检查 `realpath(candidate)`。此限制也适用于入站附件 staging 与旧暂存字节 scrub；无法证明归属的残留保持原字节，不用粗暴删除代替清理证明。附件、产物、评论、收据和存储写入需在可信读取后才能发生。使用支持该证明的 POSIX 控制器，或单独授权并验证的既有 remote reader。 |
 | Runner 的 Grok 本地订阅凭据读取 | 同样受本地 credential reader 的 descriptor 证明限制；Windows 控制器不能靠把执行目标标成 remote 绕过本地读取。使用受支持的控制器，或按公司授权显式选择 xAI API key 路径；不回落到宿主环境中的无关凭据。 |
 | 本地 SSH env-lab 与受管 CLI 安装 | 分别见[测试排障](../05-maintenance/03-troubleshooting.md#四一次性测试与数据库)与[部署平台选择](../02-getting-started/03-deployment.md#一先选择部署形态)。平台跳过和早期拒绝不算相应用户旅程通过。 |
+| 远程 Pi companion 的本地安装器 | 现有控制器合同只接受 macOS/Linux；原生 Windows 在创建缓存、读取发布内容或安装前拒绝。26 项 POSIX 生命周期用例在 Windows 明确跳过，另有 2 项真实 Windows 无落地拒绝回归；不代表 Windows 安装远程 Pi 已可用。 |
 
 对应实现入口为 `server/src/services/workspace-runtime.ts`、`server/src/services/native-runtime/native-runner-file-handoff.ts`、`server/src/services/native-runtime/grok-runner-credentials.ts`。真实供应商、远端 controller 和最终发行包仍须按明确版本及授权目标验收；不因本机拒绝回归通过就宣布远端运行已成功。
