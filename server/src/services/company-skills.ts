@@ -28,6 +28,10 @@ import {
   issues,
   issueThreadInteractions,
   issueWorkProducts,
+  mimouseEvaluationComparisons,
+  mimouseEvaluationDatasets,
+  mimouseEvaluationRestores,
+  mimousePrivatePromptTests,
 } from "@paperclipai/db";
 import { readPaperclipSkillSyncPreference, writePaperclipSkillSyncPreference } from "@paperclipai/adapter-utils/server-utils";
 import type { PaperclipDesiredSkillEntry, PaperclipSkillEntry } from "@paperclipai/adapter-utils/server-utils";
@@ -3128,6 +3132,28 @@ export function companySkillService(db: Db, testHooks: { beforeAuditPersist?: ()
     );
   }
 
+  async function hasRetainedMimouseSkillHistory(companyId: string, skillId: string, database: DbOrTransaction = db) {
+    const [row] = await database.execute(sql`select
+      exists (select 1 from ${mimouseEvaluationDatasets}
+        where ${mimouseEvaluationDatasets.companyId} = ${companyId} and ${mimouseEvaluationDatasets.skillId} = ${skillId})
+      or exists (select 1 from ${mimouseEvaluationComparisons} inner join ${companySkillVersions}
+        on (${companySkillVersions.id} = ${mimouseEvaluationComparisons.baselineVersionId} or ${companySkillVersions.id} = ${mimouseEvaluationComparisons.candidateVersionId})
+        where ${mimouseEvaluationComparisons.companyId} = ${companyId} and ${companySkillVersions.companyId} = ${companyId}
+          and ${companySkillVersions.companySkillId} = ${skillId})
+      or exists (select 1 from ${mimouseEvaluationRestores}
+        where ${mimouseEvaluationRestores.companyId} = ${companyId} and (${mimouseEvaluationRestores.skillId} = ${skillId}
+          or exists (select 1 from ${companySkillVersions} where ${companySkillVersions.companyId} = ${companyId}
+            and ${companySkillVersions.companySkillId} = ${skillId}
+            and (${companySkillVersions.id} = ${mimouseEvaluationRestores.beforeVersionId} or ${companySkillVersions.id} = ${mimouseEvaluationRestores.targetVersionId}))))
+      or exists (select 1 from ${mimousePrivatePromptTests} inner join ${companySkillVersions}
+        on ${companySkillVersions.id} = ${mimousePrivatePromptTests.skillVersionId}
+        where ${mimousePrivatePromptTests.companyId} = ${companyId} and ${companySkillVersions.companyId} = ${companyId}
+          and ${companySkillVersions.companySkillId} = ${skillId})
+      as retained
+    `);
+    return Boolean(row?.retained);
+  }
+
   async function reconcileLocalPathSkillSources(companyId: string) {
     const rows = await db
       .select({
@@ -3191,7 +3217,7 @@ export function companySkillService(db: Db, testHooks: { beforeAuditPersist?: ()
       }
 
       const usedByAgents = await usage(companyId, skill.key);
-      if (usedByAgents.length > 0) {
+      if (usedByAgents.length > 0 || await hasRetainedMimouseSkillHistory(companyId, skill.id)) {
         const metadata = withMissingSourceMarker(
           skill.metadata,
           buildMissingLocalSourceMarker(skill),
@@ -3206,11 +3232,18 @@ export function companySkillService(db: Db, testHooks: { beforeAuditPersist?: ()
         continue;
       }
 
+      await testHooks.beforeReconcilePersist?.(skill.id);
       await removeRuntimeSkillCache(resolveManagedSkillsRoot(companyId), skill.id, () => db.transaction(async tx => {
         await tx.execute(sql`select ${companies.id} from ${companies} where ${companies.id}=${companyId} for no key update`);
         await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${companyId}:${skill.slug}`}, 0))`);
         const [latest] = await tx.select({ id: companySkills.id }).from(companySkills).where(unchanged).for("update");
         if (!latest) return;
+        // A history admission may have won after the optimistic check. Preserve
+        // its row and snapshots under the same company/name/skill lock order.
+        if (await hasRetainedMimouseSkillHistory(companyId, skill.id, tx)) {
+          await tx.update(companySkills).set({ metadata: withMissingSourceMarker(skill.metadata, buildMissingLocalSourceMarker(skill)), updatedAt: new Date() }).where(unchanged);
+          return;
+        }
         await fs.rm(resolveRuntimeSkillMaterializedPath(companyId, skill), { recursive: true, force: true });
         await tx.delete(companySkills).where(unchanged);
       }));
@@ -7247,6 +7280,14 @@ export function companySkillService(db: Db, testHooks: { beforeAuditPersist?: ()
       );
     }
     await assertUnused(initial);
+    async function assertHistoryUnreferenced(database: DbOrTransaction = db) {
+      if (await hasRetainedMimouseSkillHistory(companyId, skillId, database)) {
+        throw conflict("Cannot delete a skill with retained MiMouse evaluation, restoration, or private-test history.", {
+          skillId, reason: "mimouse_history_retained",
+        });
+      }
+    }
+    await assertHistoryUnreferenced();
     const managedRoot = resolveManagedSkillsRoot(companyId);
     let movedSource: { source: string; quarantine: string } | undefined;
     let deleted: CompanySkill | null = null;
@@ -7260,13 +7301,17 @@ export function companySkillService(db: Db, testHooks: { beforeAuditPersist?: ()
     await removeRuntimeSkillCache(managedRoot, initial.id, async () => {
       try {
         deleted = await db.transaction(async (tx) => {
+          await tx.execute(sql`select ${companies.id} from ${companies} where ${companies.id} = ${companyId} for no key update`);
           // Share creation's name lock and re-read the ID, so a second delete
           // cannot remove a newly recreated skill with the same name.
           await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${companyId}:${initial.slug}`}, 0))`);
+          await tx.execute(sql`select ${companySkills.id} from ${companySkills}
+            where ${companySkills.id} = ${skillId} and ${companySkills.companyId} = ${companyId} for update`);
           const skill = await getById(companyId, skillId, tx);
           if (!skill) return null;
           if (skill.slug !== initial.slug) throw conflict("Skill changed during deletion. Retry the request.");
           await assertUnused(skill);
+          await assertHistoryUnreferenced(tx);
           try {
             await fs.rm(resolveRuntimeSkillMaterializedPath(companyId, skill), { recursive: true, force: true });
             if (isPaperclipManagedRenameTarget(skill)) {

@@ -4,7 +4,49 @@ import { promisify } from "node:util";
 import { mkdtemp, writeFile, rm, chmod, access } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+const siblingRead = vi.hoisted(() => ({ armed: false,
+  child: null as import("node:child_process").ChildProcess | null,
+  held: undefined as undefined | (() => void), listed: undefined as undefined | (() => void),
+  closed: undefined as undefined | Promise<void>,
+}));
+vi.mock("node:child_process", async original => {
+  const actual = await original<typeof import("node:child_process")>();
+  const { promisify } = await import("node:util");
+  // The native function's custom-promisify property is non-configurable.
+  // Wrap its call boundary so the fixture can retain the same result shape.
+  const proxy = new Proxy((...args: unknown[]) => Reflect.apply(actual.execFile, undefined, args), {
+    apply(target, receiver, args) {
+      const commandArgs = args[1] as string[];
+      if (siblingRead.armed && args[0] === "git" && commandArgs.includes("--show-current")) {
+        const child = actual.execFile(process.execPath, ["-e", "process.stdout.write('fixture-held\\n');process.stdin.resume();process.stdin.on('end',()=>process.stdout.write('paperclip/review\\n'));"], args[2], args[3]);
+        siblingRead.child = child;
+        siblingRead.closed = new Promise<void>(resolve => child.once("close", () => resolve()));
+        child.stdout?.on("data", chunk => { if (String(chunk).includes("fixture-held")) siblingRead.held?.(); });
+        return child;
+      }
+      if (siblingRead.armed && args[0] === "git" && commandArgs.includes("ls-files")) {
+        const callback = args[3];
+        args = [...args.slice(0, 3), (...result: unknown[]) => { callback(...result); siblingRead.listed?.(); }];
+      }
+      return Reflect.apply(target, receiver, args);
+    },
+    get(target, property, receiver) {
+      if (property !== promisify.custom) return Reflect.get(target, property, receiver);
+      return (...args: unknown[]) => {
+        let child: import("node:child_process").ChildProcess | undefined;
+        const promise = new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+          child = Reflect.apply(proxy, undefined, [...args, (error: Error | null, stdout: string, stderr: string) => {
+            if (error) reject(Object.assign(error, { stdout, stderr }));
+            else resolve({ stdout, stderr });
+          }]);
+        });
+        return Object.assign(promise, { child });
+      };
+    },
+  });
+  return { ...actual, execFile: proxy };
+});
 import { fixedCommitDiff, reviewBinding, reviewedHead, reviewReceipt, type ReviewDelivery } from "../services/mimouse-coding/diff-review.js";
 const exec = promisify(execFile); const roots: string[] = [];
 const project = { id: 3, http_url_to_repo: "https://git.example/team/repo.git", ssh_url_to_repo: "git@git.example:team/repo.git" };
@@ -92,6 +134,31 @@ describe("source-pinned coding review", () => {
     await f.git("commit", "-m", "gitlink"); f.row.headSha = await f.git("rev-parse", "HEAD");
     await expect(f.diff()).rejects.toThrow("submodule_workspace_requires_external_review");
     await expect(verifyLocalCodingHead(f.workspace, f.row.baseSha, f.row.headSha)).rejects.toThrow("submodule_workspace_requires_external_review");
+  });
+  it("waits for a real sibling process to close before returning an earlier status refusal", async () => {
+    const f = await fixture();
+    await f.git("update-index", "--add", "--cacheinfo", `160000,${f.row.baseSha},nested`);
+    await f.git("commit", "-m", "gitlink"); f.row.headSha = await f.git("rev-parse", "HEAD");
+    const held = new Promise<void>(resolve => { siblingRead.held = resolve; });
+    const listed = new Promise<void>(resolve => { siblingRead.listed = resolve; });
+    siblingRead.armed = true;
+    let settled = false;
+    const operation = verifyLocalCodingHead(f.workspace, f.row.baseSha, f.row.headSha);
+    void operation.then(() => { settled = true; }, () => { settled = true; });
+    try {
+      await Promise.all([held, listed]);
+      // All reactions from the real Git gitlink result settle before this
+      // event-loop barrier. The other owned Node process still holds cwd.
+      await new Promise(resolve => setImmediate(resolve));
+      expect(siblingRead.child?.exitCode).toBeNull();
+      expect(settled).toBe(false);
+    } finally {
+      siblingRead.child?.stdin?.end();
+      await siblingRead.closed;
+      siblingRead.armed = false; siblingRead.child = null;
+      siblingRead.held = undefined; siblingRead.listed = undefined; siblingRead.closed = undefined;
+    }
+    await expect(operation).rejects.toThrow("submodule_workspace_requires_external_review");
   });
   it("missing promisor blob fails locally without invoking a secondary remote helper", async () => {
     const f = await fixture();

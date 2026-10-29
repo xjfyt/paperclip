@@ -28,7 +28,12 @@ export interface CodingWorkspace { cwd: string; repoUrl: string; branchName: str
 export async function verifyLocalCodingHead(workspace: CodingWorkspace, baseSha: string, headSha: string) {
   if (!/^[a-f0-9]{40}$/.test(headSha) || !/^[a-f0-9]{40}$/.test(baseSha)) throw new GitLabError("invalid_commit_sha");
   const git = await readonlyCodingGit(workspace.cwd);
-  const [head, branch, status] = await Promise.all([git(["rev-parse", "HEAD"]), git(["branch", "--show-current"]), git(["status", "--porcelain"])]);
+  const reads = [git(["rev-parse", "HEAD"]), git(["branch", "--show-current"]), git(["status", "--porcelain"])] as const;
+  const [head, branch, status] = await Promise.all(reads).catch(async error => {
+    // A refusal must not leave sibling Git processes holding the workspace.
+    await Promise.allSettled(reads);
+    throw error;
+  });
   if (head.trim() !== headSha || branch.trim() !== workspace.branchName) throw new GitLabError("workspace_head_changed");
   if (status.trim()) throw new GitLabError("workspace_not_clean");
   await git(["check-ref-format", "--branch", workspace.branchName]);

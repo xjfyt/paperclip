@@ -10,6 +10,7 @@ import {
   companies,
   companySkillVersions,
   companySkills,
+  mimouseEvaluationDatasets,
   createDb,
   folders,
   projects,
@@ -21,7 +22,7 @@ import {
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
 import { companySkillService } from "../services/company-skills.ts";
-import { removeRuntimeSkillCache } from "../services/runtime-skill-cache.js";
+import { removeRuntimeSkillCache, runtimeSkillCacheRoot } from "../services/runtime-skill-cache.js";
 import { folderService } from "../services/folders.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
@@ -102,6 +103,59 @@ describeEmbeddedPostgres("companySkillService.list", () => {
     });
     return { companyId, skillId, key: `company/${companyId}/cached` };
   }
+
+  async function retainedDeletionFixture() {
+    if (!paperclipHome) throw new Error("Expected owned test home");
+    const companyId = randomUUID(), datasetId = randomUUID();
+    await db.insert(companies).values({ id: companyId, name: "Retained deletion", issuePrefix: `T${companyId.slice(0, 6)}` });
+    const skill = await svc.createLocalSkill(companyId, { name: "Retained deletion", slug: "retained", markdown: "# Keep historical bytes\n" });
+    const source = skill.sourceLocator;
+    if (!source) throw new Error("Expected real managed skill source");
+    const cache = runtimeSkillCacheRoot(path.join(paperclipHome, "instances", "default", "skills", companyId), skill.id);
+    await fs.mkdir(cache, { recursive: true }); await fs.writeFile(path.join(cache, "sentinel"), "keep existing history cache");
+    const versions = await db.select().from(companySkillVersions).where(eq(companySkillVersions.companySkillId, skill.id));
+    const createReference = () => db.insert(mimouseEvaluationDatasets).values({ id: datasetId, companyId, skillId: skill.id,
+      requestId: randomUUID(), requestDigest: "owned-retained-reference", name: "Owned historical reference", actorId: "fixture-owner",
+      datasetHash: "a".repeat(64), cases: [{ id: randomUUID(), input: "Fixed", expected: "Fixed" }] });
+    return { companyId, datasetId, skill, source, cache, versions, createReference };
+  }
+
+  it("refuses explicit deletion of retained MiMouse history with 409 before changing source or cache", async () => {
+    const f = await retainedDeletionFixture();
+    try {
+      await f.createReference();
+      await expect(svc.deleteSkill(f.companyId, f.skill.id)).rejects.toMatchObject({ status: 409 });
+      expect(await fs.readFile(path.join(f.source, "SKILL.md"), "utf8")).toBe("# Keep historical bytes\n");
+      expect(await fs.readFile(path.join(f.cache, "sentinel"), "utf8")).toBe("keep existing history cache");
+      expect(await db.select().from(companySkills).where(eq(companySkills.id, f.skill.id))).toHaveLength(1);
+      expect(await db.select().from(companySkillVersions).where(eq(companySkillVersions.companySkillId, f.skill.id))).toEqual(f.versions);
+      expect(await db.select().from(mimouseEvaluationDatasets).where(eq(mimouseEvaluationDatasets.id, f.datasetId))).toHaveLength(1);
+    } finally { await db.delete(mimouseEvaluationDatasets).where(eq(mimouseEvaluationDatasets.id, f.datasetId)); }
+  });
+
+  it("rechecks deletion history after preflight under locks and preserves a late admitted reference", async () => {
+    const f = await retainedDeletionFixture();
+    let admitted = false;
+    const concurrentDb = new Proxy(db, { get(target, key, receiver) {
+      if (key === "transaction") return async (...args: unknown[]) => {
+        if (!admitted) { await f.createReference(); admitted = true; }
+        return Reflect.apply(target.transaction, target, args);
+      };
+      const value = Reflect.get(target, key, receiver);
+      return typeof value === "function" ? value.bind(target) : value;
+    } });
+    try {
+      await expect(companySkillService(concurrentDb).deleteSkill(f.companyId, f.skill.id)).rejects.toMatchObject({ status: 409 });
+      expect(admitted).toBe(true);
+      expect(await fs.readFile(path.join(f.source, "SKILL.md"), "utf8")).toBe("# Keep historical bytes\n");
+      expect(await db.select().from(companySkills).where(eq(companySkills.id, f.skill.id))).toHaveLength(1);
+      expect(await db.select().from(companySkillVersions).where(eq(companySkillVersions.companySkillId, f.skill.id))).toEqual(f.versions);
+      expect(await db.select().from(mimouseEvaluationDatasets).where(eq(mimouseEvaluationDatasets.id, f.datasetId))).toHaveLength(1);
+      // The pre-existing cache API may invalidate derived cache before SQL;
+      // a late reference still preserves the authoritative source and history.
+      await expect(fs.access(f.cache)).rejects.toMatchObject({ code: "ENOENT" });
+    } finally { await db.delete(mimouseEvaluationDatasets).where(eq(mimouseEvaluationDatasets.id, f.datasetId)); }
+  });
 
   it("refreshes once, reuses pinned runtime contents across service instances, and ignores cosmetic changes", async () => {
     const { companyId, skillId, key } = await createPinnedRuntimeFixture();
