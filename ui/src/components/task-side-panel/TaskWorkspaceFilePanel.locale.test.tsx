@@ -5,6 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { i18n } from "@/i18n";
+import { queryKeys } from "@/lib/queryKeys";
 import { TaskWorkspaceFilePanel } from "./TaskWorkspaceFilePanel";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import type { TaskSidePanelTabPayload } from "@/lib/task-side-panel-state";
@@ -36,4 +37,15 @@ it("reports rejection without unhandled errors and translates chrome without tou
   expect(container.textContent).toContain("No se pudo copiar");
   expect(container.querySelector('button[aria-label="Copiar contenido del archivo"]')).not.toBeNull();
   expect(container.textContent).toContain("Raw 原文 1234");
+});
+
+it("ignores late clipboard and announcements after the displayed source changes", async () => {
+  let resolve!: () => void; vi.mocked(copyTextToClipboard).mockReturnValue(new Promise<void>(done => { resolve = done; }));
+  await render(); const announce = mock.announce!;
+  await act(async () => (container.querySelector('button[aria-label="Copy file contents"]') as HTMLButtonElement).click());
+  const { kind: _kind, ...state } = payload;
+  await act(async () => { client.setQueryData(queryKeys.issues.fileResourceContent("one", state), { content: { data: "new raw source", encoding: "utf8" } }); });
+  await render();
+  await act(async () => { resolve(); announce("Old source status"); });
+  expect(container.textContent).not.toContain("Copied"); expect(container.textContent).not.toContain("Old source status");
 });

@@ -1,5 +1,8 @@
 // @vitest-environment jsdom
+import "@/i18n/workspace-browser-test-resources";
 
+import { i18n } from "@/i18n";
+import { workspaceBrowserMessages } from "@/i18n/workspace-browser-test-resources";
 import type { ComponentProps } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -250,6 +253,42 @@ describe("WorkspaceFileBrowser", () => {
       .at(-1);
   }
 
+  it("shows a lazy-folder read failure with retry rather than an empty folder", () => {
+    const retry = vi.fn();
+    const parent = availableAllResponse([createDirectoryItem({ title: "docs", relativePath: "docs", displayPath: "docs/" })], null);
+    useQueryMock.mockImplementation((options: { queryKey: readonly unknown[] }) => {
+      const query = options.queryKey[4] as { path?: string | null } | undefined;
+      return query?.path === "docs" ? { ...ok(undefined), isError: true, error: new ApiError("raw folder failure", 403, null), refetch: retry } : ok(parent);
+    });
+    renderBrowser();
+    act(() => (container.querySelector('[role="treeitem"][title="docs"]') as HTMLButtonElement).click());
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Could not load this folder.");
+    act(() => (container.querySelector('[role="alert"] button') as HTMLButtonElement).click());
+    expect(retry).toHaveBeenCalledOnce();
+  });
+  it("shows project-list failure rather than a false empty-workspace state", () => {
+    const retry = vi.fn();
+    useQueryMock.mockImplementation((options: { queryKey: readonly unknown[] }) => options.queryKey[0] === "projects"
+      ? { ...ok(undefined), isError: true, error: new ApiError("raw failure", 403, null), refetch: retry }
+      : ok(undefined));
+    renderBrowser(vi.fn(), { companyId: "company-1", initialProjectId: "project", initialWorkspaceId: "workspace" });
+    expect(container.textContent).toContain("Could not load project workspaces.");
+    expect(container.textContent).not.toContain("No project workspaces");
+    act(() => (container.querySelector('[role="alert"] button') as HTMLButtonElement).click());
+    expect(retry).toHaveBeenCalledOnce();
+  });
+  it("keeps cached file rows after refresh failure and hot-switches system labels only", async () => {
+    useQueryMock.mockReturnValue({ ...ok(availableResponse([createItem()])), isError: true, error: new ApiError("raw failure", 500, null) });
+    renderBrowser();
+    try {
+      for (const [locale, messages] of Object.entries(workspaceBrowserMessages)) {
+        await i18n.changeLanguage(locale); await new Promise(resolve => setTimeout(resolve, 0));
+        expect(container.querySelector('[role="alert"]')?.textContent).toContain(messages.loadError);
+        expect(container.textContent).toContain("IssueDetail.tsx");
+        expect(container.querySelector('input')?.getAttribute("placeholder")).toBe(messages.searchPlaceholder);
+      }
+    } finally { await i18n.changeLanguage("en"); }
+  });
   it("does not enable changed-file enumeration before the Files panel opens", () => {
     useQueryMock.mockReturnValue(ok(availableResponse([])));
 

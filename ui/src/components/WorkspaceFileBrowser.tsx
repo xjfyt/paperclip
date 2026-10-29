@@ -1,3 +1,4 @@
+import { t, formatNumber, useTranslation } from "@/i18n";
 import {
   useEffect,
   useId,
@@ -80,28 +81,28 @@ export function describeUnavailable(reason: string): { title: string; body: stri
   if (lower.includes("remote")) {
     return {
       icon: <Cloud aria-hidden="true" className="h-5 w-5 text-muted-foreground" />,
-      title: "Remote workspace preview not supported",
-      body: "This workspace is hosted remotely and is not available for inline preview yet.",
+      title: t("fileViewerUi.remoteTitle"),
+      body: t("fileViewerUi.remoteBody"),
     };
   }
   if (lower.includes("no_workspace") || lower.includes("no_local")) {
     return {
       icon: <FolderOpen aria-hidden="true" className="h-5 w-5 text-muted-foreground" />,
-      title: "No workspace yet",
-      body: "This issue does not have a workspace to browse. Files appear here once a run creates one.",
+      title: t("workspaceBrowserUi.noWorkspace"),
+      body: t("workspaceBrowserUi.noWorkspaceBody"),
     };
   }
   if (lower.includes("archiv") || lower.includes("cleaned") || lower.includes("unavailable")) {
     return {
       icon: <FolderOpen aria-hidden="true" className="h-5 w-5 text-muted-foreground" />,
-      title: "Workspace is no longer available",
-      body: "The isolated worktree for this issue has been cleaned up, so files cannot be previewed.",
+      title: t("fileViewerUi.unavailableTitle"),
+      body: t("fileViewerUi.unavailableBody"),
     };
   }
   return {
     icon: <AlertTriangle aria-hidden="true" className="h-5 w-5 text-amber-500" />,
-    title: "Workspace unavailable",
-    body: "These workspace files can't be browsed right now.",
+    title: t("workspaceBrowserUi.unavailable"),
+    body: t("workspaceBrowserUi.unavailableBody"),
   };
 }
 
@@ -137,11 +138,12 @@ function WorkspaceFileBreadcrumbs({
   folderPath: string | null;
   onOpenFolder: (path: string | null) => void;
 }) {
+  useTranslation();
   const segments = folderPath?.split("/").filter(Boolean) ?? [];
   if (!rootLabel && segments.length === 0) return null;
 
   return (
-    <nav aria-label="Current folder" className="min-w-0 overflow-hidden text-(length:--text-micro) text-muted-foreground">
+    <nav aria-label={t("workspaceBrowserUi.currentFolder")} className="min-w-0 overflow-hidden text-(length:--text-micro) text-muted-foreground">
       <ol className="flex min-w-0 items-center gap-1 overflow-hidden">
         {rootLabel ? (
           <li className="min-w-0 shrink">
@@ -188,6 +190,7 @@ interface WorkspaceFileRowProps {
 }
 
 function WorkspaceFileRow({ item, treeItemId, selected, highlighted, depth, onOpen, onHover, downloadUrl }: WorkspaceFileRowProps) {
+  useTranslation();
   const name = basename(item.relativePath);
   return (
     <div
@@ -209,8 +212,8 @@ function WorkspaceFileRow({ item, treeItemId, selected, highlighted, depth, onOp
         <a
           href={downloadUrl}
           download={name}
-          aria-label={`Download ${name}`}
-          title={`Download ${name}`}
+          aria-label={t("documentUi.downloadTitle", { title: name })}
+          title={t("documentUi.downloadTitle", { title: name })}
           onClick={(event) => event.stopPropagation()}
           className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-70 hover:bg-background/70 hover:text-foreground hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
@@ -357,6 +360,8 @@ interface WorkspaceFileTreeProps {
   getLazyChildren?: (path: string, depth: number) => WorkspaceFileTreeNode[];
   isLazyFolderFetching?: (path: string) => boolean;
   isLazyFolderTruncated?: (path: string) => boolean;
+  isLazyFolderError?: (path: string) => boolean;
+  onRetryFolder?: (path: string) => void;
   onLoadMoreFolder?: (path: string) => void;
   onToggleFolder: (key: string) => void;
   onOpen: (item: WorkspaceFileListFileItem) => void;
@@ -375,12 +380,15 @@ function WorkspaceFileTree({
   getLazyChildren,
   isLazyFolderFetching,
   isLazyFolderTruncated,
+  isLazyFolderError,
+  onRetryFolder,
   onLoadMoreFolder,
   onToggleFolder,
   onOpen,
   onHoverFile,
   getDownloadUrl,
 }: WorkspaceFileTreeProps) {
+  useTranslation();
   function renderNode(node: WorkspaceFileTreeNode): ReactNode {
     if (node.kind === "folder") {
       const expanded = node.lazy
@@ -411,13 +419,19 @@ function WorkspaceFileTree({
           {expanded ? (
             <>
               {children.map(renderNode)}
+              {node.lazy && isLazyFolderError?.(node.key) ? (
+                <div role="alert" className="ml-5 text-xs text-muted-foreground">
+                  {t("workspaceBrowserUi.folderError")}
+                  <Button variant="ghost" size="sm" onClick={() => onRetryFolder?.(node.key)}>{t("documentUi.retry")}</Button>
+                </div>
+              ) : null}
               {loading ? (
                 <div
                   className="flex min-h-(--sz-30px) items-center gap-2 py-1 pr-2 text-xs text-muted-foreground"
                   style={{ paddingLeft: `${1 + (node.depth + 1) * 0.875}rem` }}
                 >
                   <Loader2 aria-hidden="true" className="h-3.5 w-3.5 animate-spin" />
-                  <span>Loading folder…</span>
+                  <span>{t("workspaceBrowserUi.folderLoading")}</span>
                 </div>
               ) : null}
               {truncated ? (
@@ -428,7 +442,7 @@ function WorkspaceFileTree({
                   style={{ paddingLeft: `${1 + (node.depth + 1) * 0.875}rem` }}
                 >
                   <span className="h-3.5 w-3.5 shrink-0" />
-                  <span>Load more from this folder</span>
+                  <span>{t("workspaceBrowserUi.loadMore")}</span>
                 </button>
               ) : null}
             </>
@@ -453,7 +467,7 @@ function WorkspaceFileTree({
   }
 
   return (
-    <div role="tree" id={listboxId} aria-label="Workspace files" className="space-y-0.5 py-1">
+    <div role="tree" id={listboxId} aria-label={t("workspaceBrowserUi.files")} className="space-y-0.5 py-1">
       {nodes.map(renderNode)}
     </div>
   );
@@ -509,6 +523,7 @@ export function WorkspaceFileBrowser({
   active = true,
   className,
 }: WorkspaceFileBrowserProps) {
+  const { i18n } = useTranslation();
   const queryClient = useQueryClient();
   const { visible: pageVisible } = usePageVisibility();
   const source: BrowserSource =
@@ -835,12 +850,12 @@ export function WorkspaceFileBrowser({
   ]);
 
   const announcement = useMemo(() => {
-    if (listQuery.isFetching) return "Loading workspace files…";
-    if (listQuery.isError) return "Unable to load workspace files.";
+    if (listQuery.isFetching) return t("workspaceBrowserUi.loading");
+    if (listQuery.isError) return t("workspaceBrowserUi.loadError");
     if (data?.state === "unavailable") return describeUnavailable(data.unavailableReason ?? "").title;
-    if (items.length === 0) return "No matching files.";
-    return `${items.length} item${items.length === 1 ? "" : "s"} found.`;
-  }, [data, items.length, listQuery.isError, listQuery.isFetching]);
+    if (items.length === 0) return t("workspaceBrowserUi.noMatches");
+    return t("workspaceBrowserUi.found", { count: items.length, number: formatNumber(items.length) });
+  }, [data, items.length, listQuery.isError, listQuery.isFetching, i18n.language]);
 
   function openTypedPath() {
     const value = searchInput.trim();
@@ -987,24 +1002,29 @@ export function WorkspaceFileBrowser({
     body = (
       <StateMessage
         icon={<FolderOpen aria-hidden="true" className="h-5 w-5 text-muted-foreground" />}
-        title="No organization selected"
-        body="Choose an organization before browsing another project workspace."
+        title={t("workspaceBrowserUi.noCompany")}
+        body={t("workspaceBrowserUi.noCompanyBody")}
       />
     );
   } else if (source === "other" && projectsQuery.isFetching && projectsWithWorkspaces.length === 0) {
     body = (
       <StateMessage
         icon={<Loader2 aria-hidden="true" className="h-5 w-5 animate-spin text-muted-foreground" />}
-        title="Loading project workspaces"
-        body="Registered workspaces will appear here."
+        title={t("workspaceBrowserUi.projectsLoading")}
+        body={t("workspaceBrowserUi.projectsLoadingBody")}
       />
     );
+  } else if (source === "other" && projectsQuery.isError && projectsWithWorkspaces.length === 0) {
+    body = <div role="alert" className="py-4 text-sm text-muted-foreground">
+      {t("workspaceBrowserUi.projectsError")}
+      <Button variant="ghost" size="sm" onClick={() => void projectsQuery.refetch()}>{t("documentUi.retry")}</Button>
+    </div>;
   } else if (source === "other" && !canListFiles) {
     body = (
       <StateMessage
         icon={<FolderOpen aria-hidden="true" className="h-5 w-5 text-muted-foreground" />}
-        title="No project workspaces"
-        body="No same-organization project has a registered workspace to browse."
+        title={t("workspaceBrowserUi.noProjects")}
+        body={t("workspaceBrowserUi.noProjectsBody")}
       />
     );
   } else if (listQuery.isFetching && !data) {
@@ -1018,7 +1038,7 @@ export function WorkspaceFileBrowser({
         ))}
       </div>
     );
-  } else if (listQuery.isError) {
+  } else if (listQuery.isError && !data) {
     const status = listQuery.error instanceof ApiError ? listQuery.error.status : 0;
     const errorCode = listQuery.error instanceof ApiError && listQuery.error.body && typeof listQuery.error.body === "object"
       ? (listQuery.error.body as { code?: unknown }).code
@@ -1032,15 +1052,15 @@ export function WorkspaceFileBrowser({
     body = (
       <StateMessage
         icon={<AlertTriangle aria-hidden="true" className="h-5 w-5 text-amber-500" />}
-        title={changedFilesTemporarilyUnavailable ? "Changed files temporarily unavailable" : "Couldn't load files"}
+        title={changedFilesTemporarilyUnavailable ? t("workspaceBrowserUi.changedUnavailable") : t("workspaceBrowserUi.couldNotLoad")}
         body={
           changedFilesTemporarilyUnavailable
-            ? "Paperclip is limiting workspace scans to keep the server responsive. Try again in a moment."
+            ? t("workspaceBrowserUi.rateLimited")
             : status === 404
-            ? "Workspace browsing isn't available for this issue."
-            : "Something went wrong loading workspace files."
+            ? t("workspaceBrowserUi.browseUnavailable")
+            : t("workspaceBrowserUi.loadFailed")
         }
-        actions={changedFilesTemporarilyUnavailable ? (
+        actions={(
           <Button
             type="button"
             variant="outline"
@@ -1048,9 +1068,9 @@ export function WorkspaceFileBrowser({
             disabled={!queriesEnabled}
             onClick={() => void listQuery.refetch()}
           >
-            <RefreshCcw aria-hidden="true" className="mr-1 h-3 w-3" /> Retry
+            <RefreshCcw aria-hidden="true" className="mr-1 h-3 w-3" /> {t("documentUi.retry")}
           </Button>
-        ) : null}
+        )}
       />
     );
   } else if (data?.state === "unavailable") {
@@ -1060,8 +1080,8 @@ export function WorkspaceFileBrowser({
     body = (
       <StateMessage
         icon={<Search aria-hidden="true" className="h-5 w-5 text-muted-foreground" />}
-        title={isSearch ? `No files match “${q}”` : "No recently changed files yet"}
-        body="Try searching by name or path."
+        title={isSearch ? t("workspaceBrowserUi.queryNoMatches", { query: q }) : t("workspaceBrowserUi.noRecent")}
+        body={t("workspaceBrowserUi.searchHint")}
       />
     );
   } else {
@@ -1077,6 +1097,10 @@ export function WorkspaceFileBrowser({
         getLazyChildren={lazyChildren}
         isLazyFolderFetching={(path) => lazyFetchingFolders.has(path)}
         isLazyFolderTruncated={(path) => lazyTruncatedFolders.has(path)}
+        isLazyFolderError={(path) => lazyErroredFolders.has(path)}
+        onRetryFolder={(path) => {
+          folderPageSpecs.forEach((spec, index) => { if (spec.path === path) void folderPageQueries[index]?.refetch(); });
+        }}
         onLoadMoreFolder={loadMoreFolder}
         onToggleFolder={toggleFolder}
         onOpen={openItem}
@@ -1100,8 +1124,8 @@ export function WorkspaceFileBrowser({
             value={searchInput}
             onChange={(event) => setSearchInput(event.target.value)}
             onKeyDown={handleSearchKeyDown}
-            placeholder="Search files by name or path…"
-            aria-label="Search workspace files"
+            placeholder={t("workspaceBrowserUi.searchPlaceholder")}
+            aria-label={t("workspaceBrowserUi.search")}
             role="combobox"
             aria-expanded={items.length > 0}
             aria-controls={items.length > 0 ? listboxId : undefined}
@@ -1118,8 +1142,8 @@ export function WorkspaceFileBrowser({
           size="icon-sm"
           onClick={() => void listQuery.refetch()}
           disabled={!queriesEnabled || listQuery.isFetching}
-          aria-label="Refresh workspace files"
-          title="Refresh workspace files"
+          aria-label={t("workspaceBrowserUi.refresh")}
+          title={t("workspaceBrowserUi.refresh")}
           className="h-8 w-8 shrink-0"
         >
           <RefreshCcw aria-hidden="true" className={cn("h-3.5 w-3.5", listQuery.isFetching && "animate-spin")} />
@@ -1136,6 +1160,14 @@ export function WorkspaceFileBrowser({
         {announcement}
       </div>
 
+      {listQuery.isError && data ? <div role="alert" className="text-sm text-muted-foreground">
+        {t("workspaceBrowserUi.loadError")}
+        <Button variant="ghost" size="sm" onClick={() => void listQuery.refetch()}>{t("documentUi.retry")}</Button>
+      </div> : null}
+      {source === "other" && projectsQuery.isError && projectsWithWorkspaces.length > 0 ? <div role="alert" className="text-sm text-muted-foreground">
+        {t("workspaceBrowserUi.projectsError")}
+        <Button variant="ghost" size="sm" onClick={() => void projectsQuery.refetch()}>{t("documentUi.retry")}</Button>
+      </div> : null}
       <div ref={scrollContainerRef} className="min-h-0 flex-1 overflow-y-auto">{body}</div>
 
       {lazyTruncatedFolders.has(currentFolderKey) || (data?.truncated && !isLazyBrowse) ? (
@@ -1146,10 +1178,10 @@ export function WorkspaceFileBrowser({
               onClick={() => loadMoreFolder(currentFolderKey)}
               className="rounded px-1 py-0.5 text-left hover:bg-accent hover:text-foreground"
             >
-              Load more from this folder
+              {t("workspaceBrowserUi.loadMore")}
             </button>
           ) : (
-            <>Showing first {items.length} — refine the search to narrow.</>
+            <>{t("workspaceBrowserUi.showingFirst", { number: formatNumber(items.length) })}</>
           )}
         </div>
       ) : null}

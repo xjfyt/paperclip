@@ -2,7 +2,7 @@ import { useTranslation } from "@/i18n";
 import { useOptionalCompany } from "@/context/CompanyContext";
 import { useCommittedResourceScope } from "@/hooks/useCommittedResourceScope";
 import { isCsvFile } from "@/lib/csv-preview";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Check, Copy, Download } from "lucide-react";
 import { fileResourcesApi } from "@/api/file-resources";
@@ -34,12 +34,7 @@ export function TaskWorkspaceFilePanel({
   const [announcement, setAnnouncement] = useState("");
   const [copyFailed, setCopyFailed] = useState(false);
   const timer = useRef<number | null>(null);
-  const scope = JSON.stringify([company?.selectedCompanyId, issueId, payload.path, payload.workspace, payload.workspaceId, payload.projectId]);
-  const isCurrent = useCommittedResourceScope(scope);
-  useLayoutEffect(() => {
-    setPreviewMode("rendered"); setCopied(false); setCopyFailed(false); setAnnouncement("");
-    return () => { if (timer.current !== null) window.clearTimeout(timer.current); };
-  }, [scope]);
+  const attempt = useRef(0);
   const state: FileViewerUrlState = {
     path: payload.path,
     workspace: payload.workspace,
@@ -60,6 +55,15 @@ export function TaskWorkspaceFilePanel({
     enabled: resource?.capabilities.preview === true,
     retry: false,
   });
+  const scope = JSON.stringify([company?.selectedCompanyId, issueId, payload.path, payload.workspace, payload.workspaceId, payload.projectId, resource?.workspaceId, resource?.provider]);
+  const isCurrent = useCommittedResourceScope(scope, contentQuery.data?.content.data);
+  useLayoutEffect(() => {
+    attempt.current += 1;
+    setCopied(false); setCopyFailed(false); setAnnouncement("");
+    return () => { if (timer.current !== null) window.clearTimeout(timer.current); };
+  }, [scope, contentQuery.data?.content.data]);
+  useLayoutEffect(() => setPreviewMode("rendered"), [scope]);
+  const setScopedAnnouncement = useCallback((message: string) => { if (isCurrent()) setAnnouncement(message); }, [isCurrent]);
   const downloadUrl = resource?.capabilities.download
     ? fileResourcesApi.downloadUrl(issueId, state)
     : null;
@@ -83,13 +87,14 @@ export function TaskWorkspaceFilePanel({
               aria-label={t("documentUi.copyFile")}
               title={t(copied ? "documentUi.copied" : "documentUi.copyFile")}
               onClick={() => {
+                const token = ++attempt.current;
                 void copyTextToClipboard(contentQuery.data!.content.data).then(() => {
-                  if (!isCurrent()) return;
+                  if (!isCurrent() || token !== attempt.current) return;
                   setCopied(true); setCopyFailed(false);
                   if (timer.current !== null) window.clearTimeout(timer.current);
-                  timer.current = window.setTimeout(() => { if (isCurrent()) setCopied(false); }, 1800);
+                  timer.current = window.setTimeout(() => { if (isCurrent() && token === attempt.current) setCopied(false); }, 1800);
                 }).catch(() => {
-                  if (isCurrent()) { setCopied(false); setCopyFailed(true); }
+                  if (isCurrent() && token === attempt.current) { setCopied(false); setCopyFailed(true); }
                 });
               }}
             >
@@ -119,7 +124,7 @@ export function TaskWorkspaceFilePanel({
             void resourceQuery.refetch();
             if (resource?.capabilities.preview) void contentQuery.refetch();
           }}
-          onSetAnnouncement={(message) => { if (isCurrent()) setAnnouncement(message); }}
+          onSetAnnouncement={setScopedAnnouncement}
           onFallbackToProject={onFallbackToProject ?? null}
         />
       </div>

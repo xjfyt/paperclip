@@ -1,3 +1,4 @@
+import "@/i18n/file-viewer-test-resources";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { WorkspaceFileContent } from "@paperclipai/shared";

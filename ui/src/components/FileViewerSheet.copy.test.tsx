@@ -1,5 +1,8 @@
 // @vitest-environment jsdom
+import "@/i18n/file-viewer-test-resources";
 
+import { i18n } from "@/i18n";
+import { fileViewerMessages } from "@/i18n/file-viewer-test-resources";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -97,18 +100,20 @@ describe("FileViewerSheet copy actions", () => {
     window.history.pushState({}, "", "/PAP/issues/PAP-10629?file=videos%2F90-days-paperclip%2Ftweet.md");
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     flushSync(() => root.unmount());
     container.remove();
     document.body.innerHTML = "";
     vi.clearAllMocks();
+    await i18n.changeLanguage("en");
   });
 
-  function renderSheet() {
+  function renderSheet(issueId = "issue-1", companyId = "company-1") {
     flushSync(() => {
       root.render(
         <FileViewerSheet
-          issueId="issue-1"
+          issueId={issueId}
+          companyId={companyId}
           state={{
             path: "videos/90-days-paperclip/tweet.md",
             workspace: "auto",
@@ -133,6 +138,51 @@ describe("FileViewerSheet copy actions", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
 
+  it.each(["issue", "company"])("ignores a late copy after changing %s at the same path", async changed => {
+    let finish!: () => void;
+    writeText.mockImplementation(() => new Promise<void>(resolve => { finish = resolve; }));
+    renderSheet(); await click("Copy file contents");
+    renderSheet(changed === "issue" ? "issue-2" : "issue-1", changed === "company" ? "company-2" : "company-1");
+    finish(); await new Promise(resolve => setTimeout(resolve, 0));
+    expect(document.body.textContent).not.toContain("Copied contents");
+    expect(document.body.querySelector('button[aria-label="Copied file contents"]')).toBeNull();
+  });
+  it("ignores a late copy after replacing source at the same resource", async () => {
+    let finish!: () => void;
+    writeText.mockImplementation(() => new Promise<void>(resolve => { finish = resolve; }));
+    renderSheet(); await click("Copy file contents");
+    const nextContent = { ...content, content: { ...content.content, data: "New raw source 1234" } };
+    useQueryMock.mockImplementation((options: { queryKey?: readonly unknown[] }) => JSON.stringify(options.queryKey).includes('"content"') ? ok(nextContent) : ok(resolvedResource));
+    renderSheet(); finish(); await new Promise(resolve => setTimeout(resolve, 0));
+    expect(document.body.textContent).not.toContain("Copied contents");
+    expect(document.body.textContent).toContain("New raw source 1234");
+  });
+  it("keeps the latest copy feedback when an earlier attempt rejects late", async () => {
+    let reject!: (reason: Error) => void;
+    writeText.mockImplementationOnce(() => new Promise<void>((_, fail) => { reject = fail; }));
+    renderSheet(); await click("Copy file contents"); await click("Copy link to this file view");
+    reject(new Error("old raw failure")); await new Promise(resolve => setTimeout(resolve, 0));
+    expect(document.body.textContent).toContain("Copied link");
+    expect(document.body.textContent).not.toContain("Copy failed");
+  });
+  it("hot-switches copied feedback and preview chrome without replacing raw contents or mode", async () => {
+    renderSheet(); await click("Show raw Markdown"); await click("Copy file contents");
+    const region = document.body.querySelector('[role="region"]');
+    for (const [locale, messages] of Object.entries(fileViewerMessages)) {
+      await i18n.changeLanguage(locale); await new Promise(resolve => setTimeout(resolve, 0));
+      expect(document.body.textContent).toContain(messages.copiedContents);
+      expect(document.body.querySelector('[role="region"]')).toBe(region);
+      expect(document.body.querySelector('code')?.textContent).toBe("hello from the file");
+    }
+  });
+  it("keeps cached preview visible with retry after a refresh error", () => {
+    useQueryMock.mockImplementation((options: { queryKey?: readonly unknown[] }) => JSON.stringify(options.queryKey).includes('"content"')
+      ? { ...ok(content), isError: true, error: new Error("Raw diagnostics") }
+      : ok(resolvedResource));
+    renderSheet();
+    expect(document.body.textContent).toContain("hello from the file");
+    expect(document.body.querySelector('[role="alert"]')?.textContent).toContain("Unable to load file content.");
+  });
   it("copies file contents and shows confirmation", async () => {
     renderSheet();
 
