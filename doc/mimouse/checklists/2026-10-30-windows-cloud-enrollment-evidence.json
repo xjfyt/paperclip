@@ -1,0 +1,98 @@
+{
+  "schema": "mimouse.local-verification.v1",
+  "recordedAt": "2026-10-30T03:14:28.286243+08:00",
+  "platform": "native Windows x64 / actual NTFS DACL inspection / synthetic isolated key material / injected broker function, no network",
+  "changes": [
+    "Create an empty exclusive secrets directory with a verified private Windows DACL before any key storage. Existing wide/reparse directories and identities are refused without ACL repair or silent key rotation.",
+    "Open a unique wx empty temporary file, protect it before writing key bytes, validate existing target again before atomic replacement, and close/remove only an owned temporary file on failure. A collision is not deleted.",
+    "Before reading native Windows keys, validate directory/file permissions and bind exact BigInt entry identity to the descriptor and read result. Namespace rechecks do not repeat ACL subprocesses or cache permissions.",
+    "Managed environment overrides bypass unused local identity reads in both enrollment status and connector configuration.",
+    "POSIX directory/file modes remain 0700/0600. Four original multi-round identity cases use a Windows-only 40s test budget for real ACL subprocess costs; production timeouts and POSIX test budgets are unchanged."
+  ],
+  "verification": [
+    {
+      "label": "Full frozen file: original 15 plus eight security/storage cases, 23 pass / zero skips.",
+      "passed": 23,
+      "failed": 0,
+      "pending": 0,
+      "command": "cd server; node ../node_modules/vitest/vitest.mjs run src/services/paperclip-cloud-connector-enrollment.test.ts --reporter=default --reporter=json --outputFile=../test-results/project-audit-windows-closure/cloud-enrollment-final.json",
+      "log": {
+        "path": "test-results/project-audit-windows-closure/cloud-enrollment-final.log",
+        "sha256": "aafefe7d15af0ed9f206ee833bbc6cd5176d8959137a4bc2b7629d29065bcc3b"
+      },
+      "json": {
+        "path": "test-results/project-audit-windows-closure/cloud-enrollment-final.json",
+        "sha256": "aa7cbe196a2aab0b5be760b5fab859b8bdb9f1958c42362b308229319ba72d0a"
+      }
+    },
+    {
+      "label": "Intentional regression: original tracked enrollment source is substituted only in Vitest transform. The same owner-only case actually inspects NTFS DACL and fails false vs true; 22 cases name-filtered, workspace source unchanged.",
+      "passed": 0,
+      "failed": 1,
+      "pending": 22,
+      "command": "cd server; node ../node_modules/vitest/vitest.mjs run src/services/paperclip-cloud-connector-enrollment.test.ts -t \"keeps private keys owner-only\" --config ../test-results/project-audit-windows-closure/cloud-enrollment-before-fix.vitest.mjs --reporter=default --reporter=json --outputFile=../test-results/project-audit-windows-closure/cloud-enrollment-private-red.json",
+      "log": {
+        "path": "test-results/project-audit-windows-closure/cloud-enrollment-private-red.log",
+        "sha256": "483fb467f4752fedfbc32a56857691e8607c792fca30a77a042cdfb0351d90ed"
+      },
+      "json": {
+        "path": "test-results/project-audit-windows-closure/cloud-enrollment-private-red.json",
+        "sha256": "93149d36d6485c6357a61793e36d64ad79801f51f911c36671c7bf79c962752e"
+      }
+    }
+  ],
+  "securityCoverage": [
+    "Actual new directory and empty temporary file are private before the first key byte.",
+    "Existing wide directory/file bytes and exact SDDL remain unchanged; unsafe load/start refuses and broker mock is not called.",
+    "Identity symlink target bytes remain unchanged and broker is not called.",
+    "A planted colliding temp file remains untouched; no identity appears or broker call occurs.",
+    "A key-write failure removes only its new protected temporary file.",
+    "Target permissions broadened after initial validation are rechecked before replacement; original hash/SDDL remain and only the owned temp is cleaned.",
+    "A managed override performs zero local identity reads even with an existing wide key; bytes/SDDL remain unchanged.",
+    "Original one-time state, signing claims, target isolation, overlapping enrollments, and managed configuration assertions all pass."
+  ],
+  "history": [
+    {
+      "label": "First strict implementation: 17 pass, four original multi-round cases exceeded 15s due to repeated real ACL probes; no relaxed permission or identity assertions. Subsequently removed duplicate same-read probes and budgeted only the four Windows multi-round cases.",
+      "passed": 17,
+      "failed": 4,
+      "pending": 0,
+      "command": "cd server; node ../node_modules/vitest/vitest.mjs run src/services/paperclip-cloud-connector-enrollment.test.ts",
+      "log": {
+        "path": "test-results/project-audit-windows-closure/cloud-enrollment-probe-budget-first.log",
+        "sha256": "586826b1f5288339ecaab3d9a0a61ef523426840a1d8c0dcc15f39ef61383579"
+      },
+      "json": {
+        "path": "test-results/project-audit-windows-closure/cloud-enrollment-probe-budget-first.json",
+        "sha256": "70fa5d96d5fb8665b4cc81a035bbae362097cfcede023a9895eda3fde049dc80"
+      }
+    }
+  ],
+  "typecheck": {
+    "command": "pnpm --filter @paperclipai/server exec tsc --noEmit",
+    "exitCode": 0,
+    "log": {
+      "path": "test-results/project-audit-windows-closure/cloud-enrollment-types-final.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "sources": [
+    {
+      "path": "server/src/services/paperclip-cloud-connector-enrollment.ts",
+      "sha256": "9bb90945532ff9350dfd43665fa7166932f048946d6377d96f43699ec83856d0"
+    },
+    {
+      "path": "server/src/services/paperclip-cloud-connector-enrollment.test.ts",
+      "sha256": "ac0a66febeac872f9d32e3403a143cd87a7aba8797cfb96901e84c234e82e912"
+    },
+    {
+      "path": "server/src/services/paperclip-cloud-connector.ts",
+      "sha256": "60f9199283aea350d5425bb5a63572abaf4e4d69cfe55ad82da646b86c97fa25"
+    }
+  ],
+  "limits": [
+    "No actual Cloud enrollment, external provider call or real credential was used.",
+    "This verifies the native Windows secret-file boundaries and existing POSIX mode contract in code; it is not a new POSIX host execution qualification.",
+    "No power-loss durability or hostile writable-ancestor global atomicity claim is added."
+  ]
+}

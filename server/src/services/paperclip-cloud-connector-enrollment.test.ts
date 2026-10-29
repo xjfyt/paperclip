@@ -1,4 +1,8 @@
-import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync, fstatSync, existsSync, mkdirSync, writeFileSync, readdirSync, symlinkSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { hasPrivatePermissions, protectNewPrivatePath } from "@paperclipai/shared/private-filesystem-permissions";
+import { setFixtureAcl } from "@paperclipai/adapter-utils/test-fixtures/windows-private-acl";
+import { execFileSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -12,6 +16,33 @@ import {
 } from "./paperclip-cloud-connector-enrollment.js";
 import { paperclipCloudConnectorConfigFromEnv } from "./paperclip-cloud-connector.js";
 import { reconcilePaperclipCloudConnectorEnrollmentStatus } from "./paperclip-cloud-connector-status.js";
+
+const storageHooks = vi.hoisted(() => ({
+  beforeOpen: undefined as undefined | ((filename: string) => void),
+  beforeWrite: undefined as undefined | ((descriptor: string | number) => void),
+  beforeRead: undefined as undefined | ((descriptor: string | number) => void),
+  temporary: undefined as undefined | { filename: string; descriptor: number },
+}));
+vi.mock("node:fs", async importOriginal => {
+  const actual = await importOriginal<typeof import("node:fs")>();
+  return { ...actual,
+    openSync: (...args: Parameters<typeof actual.openSync>) => {
+      const filename = String(args[0]);
+      storageHooks.beforeOpen?.(filename);
+      const descriptor = actual.openSync(...args);
+      if (filename.includes("paperclip-cloud-connector.json.") && filename.endsWith(".tmp")) storageHooks.temporary = { filename, descriptor };
+      return descriptor;
+    },
+    readFileSync: (...args: Parameters<typeof actual.readFileSync>) => {
+      storageHooks.beforeRead?.(args[0] as string | number);
+      return actual.readFileSync(...args);
+    },
+    writeFileSync: (...args: Parameters<typeof actual.writeFileSync>) => {
+      storageHooks.beforeWrite?.(args[0] as string | number);
+      return actual.writeFileSync(...args);
+    },
+  };
+});
 
 describe("Paperclip Cloud self-host enrollment", () => {
   let root = "";
@@ -27,11 +58,146 @@ describe("Paperclip Cloud self-host enrollment", () => {
   });
 
   afterEach(() => {
+    storageHooks.beforeOpen = undefined; storageHooks.beforeWrite = undefined; storageHooks.beforeRead = undefined; storageHooks.temporary = undefined;
     if (previousHome === undefined) delete process.env.PAPERCLIP_HOME;
     else process.env.PAPERCLIP_HOME = previousHome;
     if (previousInstance === undefined) delete process.env.PAPERCLIP_INSTANCE_ID;
     else process.env.PAPERCLIP_INSTANCE_ID = previousInstance;
     rmSync(root, { recursive: true, force: true });
+  });
+
+  const localEnrollment = (request: typeof fetch) => startPaperclipCloudConnectorEnrollment({
+    origin: "https://private.example.test",
+    env: { PAPERCLIP_CLOUD_CONNECTOR_BASE_URL: "https://my.example.test", PAPERCLIP_CLOUD_CONNECTOR_ENVIRONMENT: "development" },
+    request,
+  });
+  const brokerResponse = () => Response.json({ enrollmentId: "enroll-test",
+    verificationUrl: "https://my.example.test/connections/enroll?id=enroll-test", expiresAt: new Date(Date.now() + 60_000).toISOString() }, { status: 201 });
+  const digest = (filename: string) => createHash("sha256").update(readFileSync(filename)).digest("hex");
+  function acl(filename: string): string {
+    return execFileSync(path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe"),
+      ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(`
+$ErrorActionPreference='Stop'
+$target=$env:PAPERCLIP_FIXTURE_ACL_TARGET
+$acl=if([IO.Directory]::Exists($target)){[IO.Directory]::GetAccessControl($target)}else{[IO.File]::GetAccessControl($target)}
+[Console]::Out.Write($acl.GetSecurityDescriptorSddlForm([Security.AccessControl.AccessControlSections]'Access,Owner,Group'))
+`, "utf16le").toString("base64")], { env: { ...process.env, PAPERCLIP_FIXTURE_ACL_TARGET: filename },
+        encoding: "utf8", windowsHide: true, timeout: 10_000, stdio: ["ignore", "pipe", "pipe"] });
+  }
+
+  it("establishes real private permissions before the first private-key byte", async () => {
+    let writes = 0;
+    storageHooks.beforeWrite = descriptor => {
+      const temporary = storageHooks.temporary;
+      if (!temporary || descriptor !== temporary.descriptor) return;
+      const empty = fstatSync(temporary.descriptor);
+      expect(empty.size).toBe(0);
+      expect(hasPrivatePermissions(temporary.filename, empty.mode)).toBe(true);
+      const directory = path.dirname(temporary.filename);
+      expect(hasPrivatePermissions(directory, statSync(directory).mode)).toBe(true);
+      writes++;
+    };
+    await localEnrollment(vi.fn(async () => brokerResponse()) as typeof fetch);
+    expect(writes).toBeGreaterThanOrEqual(2);
+  });
+
+  it("does not delete a colliding temporary file or contact the broker", async () => {
+    let collision: string | undefined;
+    storageHooks.beforeOpen = filename => {
+      if (!filename.includes("paperclip-cloud-connector.json.") || !filename.endsWith(".tmp")) return;
+      collision = filename;
+      storageHooks.beforeOpen = undefined;
+      writeFileSync(filename, "pre-existing fixture bytes");
+    };
+    const request = vi.fn();
+    await expect(localEnrollment(request as typeof fetch)).rejects.toMatchObject({ code: "EEXIST" });
+    expect(request).not.toHaveBeenCalled();
+    expect(readFileSync(collision!, "utf8")).toBe("pre-existing fixture bytes");
+    expect(existsSync(paperclipCloudConnectorIdentityPath())).toBe(false);
+  });
+
+  it("cleans only its own empty protected temporary file when key writing fails", async () => {
+    storageHooks.beforeWrite = descriptor => {
+      if (descriptor === storageHooks.temporary?.descriptor) throw new Error("injected credential write failure");
+    };
+    const request = vi.fn();
+    await expect(localEnrollment(request as typeof fetch)).rejects.toThrow("injected credential write failure");
+    expect(request).not.toHaveBeenCalled();
+    expect(readdirSync(path.dirname(paperclipCloudConnectorIdentityPath()))).toEqual([]);
+  });
+
+  if (process.platform === "win32") describe("native Windows private identity refusal", () => {
+    it("does not read an unused wide local key when managed identity overrides it", async () => {
+      await localEnrollment(vi.fn(async () => brokerResponse()) as typeof fetch);
+      const filename = paperclipCloudConnectorIdentityPath();
+      setFixtureAcl(root, filename, true);
+      const originalBytes = digest(filename), originalAcl = acl(filename);
+      let reads = 0;
+      storageHooks.beforeRead = descriptor => {
+        if (descriptor === filename || typeof descriptor === "number") reads++;
+      };
+      const env = { PAPERCLIP_CLOUD_CONNECTOR_INSTANCE_ID: "managed-instance",
+        PAPERCLIP_CLOUD_CONNECTOR_SIGN_PRIVATE_KEY: "synthetic-managed-signing-key",
+        PAPERCLIP_CLOUD_CONNECTOR_SEAL_PRIVATE_KEY: "synthetic-managed-sealing-key",
+        PAPERCLIP_CLOUD_CONNECTOR_ENVIRONMENT: "development",
+        PAPERCLIP_CLOUD_CONNECTOR_BASE_URL: "https://my.example.test" };
+      expect(paperclipCloudConnectorEnrollmentStatus(env)).toMatchObject({ configured: true, instanceId: "managed-instance" });
+      expect(paperclipCloudConnectorConfigFromEnv(env)).toMatchObject({ instanceId: "managed-instance" });
+      expect(reads).toBe(0);
+      storageHooks.beforeRead = undefined;
+      expect(digest(filename)).toBe(originalBytes);
+      expect(acl(filename)).toBe(originalAcl);
+    });
+
+    it.each(["directory", "file"] as const)("refuses an existing wide %s without reading, rotating, or changing its ACL", async kind => {
+      const request = vi.fn(async () => brokerResponse());
+      await localEnrollment(request as typeof fetch);
+      const filename = paperclipCloudConnectorIdentityPath();
+      const target = kind === "directory" ? path.dirname(filename) : filename;
+      setFixtureAcl(root, target, true);
+      const originalBytes = digest(filename), originalAcl = acl(target);
+      request.mockClear();
+      expect(() => loadPaperclipCloudConnectorIdentity()).toThrow("verified private storage");
+      await expect(localEnrollment(request as typeof fetch)).rejects.toMatchObject({ code: "EACCES" });
+      expect(request).not.toHaveBeenCalled();
+      expect(digest(filename)).toBe(originalBytes);
+      expect(acl(target)).toBe(originalAcl);
+    });
+
+    it("refuses an existing identity symlink and leaves its target unchanged", async () => {
+      const filename = paperclipCloudConnectorIdentityPath();
+      const directory = path.dirname(filename);
+      mkdirSync(directory, { recursive: true });
+      protectNewPrivatePath(directory);
+      const outside = path.join(root, "outside-identity");
+      writeFileSync(outside, "outside synthetic identity");
+      symlinkSync(outside, filename);
+      const originalBytes = digest(outside);
+      const request = vi.fn();
+      expect(() => loadPaperclipCloudConnectorIdentity()).toThrow("verified private storage");
+      await expect(localEnrollment(request as typeof fetch)).rejects.toMatchObject({ code: "EACCES" });
+      expect(request).not.toHaveBeenCalled();
+      expect(digest(outside)).toBe(originalBytes);
+    });
+
+    it("revalidates the existing identity before replacing it and cleans only its new temporary file", async () => {
+      let brokerReturned = false, originalBytes = "", originalAcl = "";
+      const filename = paperclipCloudConnectorIdentityPath();
+      storageHooks.beforeWrite = descriptor => {
+        if (!brokerReturned || descriptor !== storageHooks.temporary?.descriptor) return;
+        storageHooks.beforeWrite = undefined;
+        originalBytes = digest(filename);
+        setFixtureAcl(root, filename, true);
+        originalAcl = acl(filename);
+      };
+      const request = vi.fn(async () => { brokerReturned = true; return brokerResponse(); });
+      await expect(localEnrollment(request as typeof fetch)).rejects.toMatchObject({ code: "EACCES" });
+      expect(request).toHaveBeenCalledOnce();
+      expect(originalBytes).not.toBe("");
+      expect(digest(filename)).toBe(originalBytes);
+      expect(acl(filename)).toBe(originalAcl);
+      expect(readdirSync(path.dirname(filename))).toEqual([path.basename(filename)]);
+    });
   });
 
   it("keeps private keys owner-only and activates only the matching one-time callback", async () => {
@@ -73,8 +239,14 @@ describe("Paperclip Cloud self-host enrollment", () => {
     });
     expect(pending.status).toBe("pending");
     expect(pending.verificationUrl).toBe("https://my.example.test/connections/enroll?id=enroll-test");
-    expect(statSync(path.dirname(paperclipCloudConnectorIdentityPath())).mode & 0o777).toBe(0o700);
-    expect(statSync(paperclipCloudConnectorIdentityPath()).mode & 0o777).toBe(0o600);
+    const directory = path.dirname(paperclipCloudConnectorIdentityPath());
+    if (process.platform === "win32") {
+      expect(hasPrivatePermissions(directory, statSync(directory).mode)).toBe(true);
+      expect(hasPrivatePermissions(paperclipCloudConnectorIdentityPath(), statSync(paperclipCloudConnectorIdentityPath()).mode)).toBe(true);
+    } else {
+      expect(statSync(directory).mode & 0o777).toBe(0o700);
+      expect(statSync(paperclipCloudConnectorIdentityPath()).mode & 0o777).toBe(0o600);
+    }
     expect(readFileSync(paperclipCloudConnectorIdentityPath(), "utf8")).not.toContain("approval-code");
 
     await expect(completePaperclipCloudConnectorEnrollment({
@@ -105,7 +277,7 @@ describe("Paperclip Cloud self-host enrollment", () => {
       status: "suspended",
       instanceId: active.instanceId,
     });
-  });
+  }, process.platform === "win32" ? 40_000 : undefined);
 
   it("rejects non-loopback plain HTTP destinations before creating keys", async () => {
     await expect(startPaperclipCloudConnectorEnrollment({
@@ -246,7 +418,7 @@ describe("Paperclip Cloud self-host enrollment", () => {
     expect(stagingIdentity.signPublicKey).not.toBe(productionIdentity.signPublicKey);
     expect(stagingIdentity.sealPublicKey).not.toBe(productionIdentity.sealPublicKey);
     expect(stagingRequest).toHaveBeenCalledOnce();
-  });
+  }, process.platform === "win32" ? 40_000 : undefined);
 
   it("fails closed when the configured target changes during callback or after activation", async () => {
     const origin = "https://private.example.test";
@@ -306,7 +478,7 @@ describe("Paperclip Cloud self-host enrollment", () => {
     expect(activeSwitchRequest).not.toHaveBeenCalled();
     expect(loadPaperclipCloudConnectorIdentity()).toEqual(activeIdentity);
     expect(paperclipCloudConnectorConfigFromEnv(stagingEnv)).toBeNull();
-  });
+  }, process.platform === "win32" ? 40_000 : undefined);
 
   it("treats managed environment identity as an atomic override of local identity", async () => {
     const origin = "https://private.example.test";
@@ -389,7 +561,7 @@ describe("Paperclip Cloud self-host enrollment", () => {
       signPrivateKey: localIdentity.signPrivateKey,
       sealPrivateKey: localIdentity.sealPrivateKey,
     });
-  });
+  }, process.platform === "win32" ? 40_000 : undefined);
 
   it("rejects known Cloud broker and environment mismatches", () => {
     const managedIdentity = {

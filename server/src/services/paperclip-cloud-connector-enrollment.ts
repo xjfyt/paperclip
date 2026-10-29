@@ -7,8 +7,9 @@ import {
   sign,
   type KeyObject,
 } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { chmodSync, closeSync, constants, existsSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeFileSync, type BigIntStats } from "node:fs";
 import path from "node:path";
+import { hasPrivatePermissions, protectNewPrivatePath } from "@paperclipai/shared/private-filesystem-permissions";
 
 import { resolvePaperclipInstanceRoot } from "../home-paths.js";
 import { runtimePublicOrigin } from "./cloud-runtime-identity.js";
@@ -61,6 +62,20 @@ export function paperclipCloudConnectorIdentityPath(): string {
 
 export function loadPaperclipCloudConnectorIdentity(): PaperclipCloudConnectorIdentity | null {
   const filePath = paperclipCloudConnectorIdentityPath();
+  if (process.platform === "win32") {
+    const entry = privateIdentityEntry(filePath);
+    if (!entry) return null;
+    // Windows lacks O_NOFOLLOW; bind the inspected entry to the actual handle
+    // before reading a private key. Unsafe storage must not look like absence.
+    const descriptor = openSync(filePath, constants.O_RDONLY | constants.O_NOFOLLOW);
+    try {
+      const opened = fstatSync(descriptor, { bigint: true });
+      if (!sameIdentityEntry(opened, entry) || !sameIdentityEntry(lstatSync(filePath, { bigint: true }), entry)) throw privateStorageError();
+      const raw = readFileSync(descriptor, "utf8");
+      if (!sameIdentityEntry(fstatSync(descriptor, { bigint: true }), entry)) throw privateStorageError();
+      try { return parseIdentity(JSON.parse(raw)); } catch { return null; }
+    } finally { closeSync(descriptor); }
+  }
   if (!existsSync(filePath)) return null;
   try {
     const parsed = JSON.parse(readFileSync(filePath, "utf8")) as unknown;
@@ -73,7 +88,6 @@ export function loadPaperclipCloudConnectorIdentity(): PaperclipCloudConnectorId
 export function paperclipCloudConnectorEnrollmentStatus(
   env: NodeJS.ProcessEnv = process.env,
 ): PaperclipCloudConnectorEnrollmentStatus {
-  const identity = loadPaperclipCloudConnectorIdentity();
   const managedInstanceId = env.PAPERCLIP_CLOUD_CONNECTOR_INSTANCE_ID?.trim();
   const managedSignPrivateKey = env.PAPERCLIP_CLOUD_CONNECTOR_SIGN_PRIVATE_KEY?.trim();
   const managedSealPrivateKey = env.PAPERCLIP_CLOUD_CONNECTOR_SEAL_PRIVATE_KEY?.trim();
@@ -102,6 +116,7 @@ export function paperclipCloudConnectorEnrollmentStatus(
       origins: publicOrigin ? [publicOrigin] : [],
     };
   }
+  const identity = loadPaperclipCloudConnectorIdentity();
   const { brokerBaseUrl, environment } = connectorTarget(env, identity);
   if (!identity) {
     return { configured: false, status: "not_configured", brokerBaseUrl, instanceId: null, environment, origins: [] };
@@ -318,13 +333,62 @@ function createIdentity(env: NodeJS.ProcessEnv): PaperclipCloudConnectorIdentity
 function saveIdentity(identity: PaperclipCloudConnectorIdentity): void {
   const filePath = paperclipCloudConnectorIdentityPath();
   const directory = path.dirname(filePath);
-  mkdirSync(directory, { recursive: true, mode: 0o700 });
-  chmodSync(directory, 0o700);
+  if (process.platform === "win32") {
+    mkdirSync(path.dirname(directory), { recursive: true });
+    try { mkdirSync(directory, { mode: 0o700 }); protectNewPrivatePath(directory); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
+    assertPrivateIdentityDirectory(directory);
+  } else {
+    mkdirSync(directory, { recursive: true, mode: 0o700 });
+    chmodSync(directory, 0o700);
+  }
+  const original = process.platform === "win32" ? privateIdentityEntry(filePath) : null;
   const temporaryPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
-  writeFileSync(temporaryPath, `${JSON.stringify(identity, null, 2)}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
-  chmodSync(temporaryPath, 0o600);
-  renameSync(temporaryPath, filePath);
-  chmodSync(filePath, 0o600);
+  let descriptor: number | undefined;
+  let ownsTemporary = false;
+  try {
+    descriptor = openSync(temporaryPath, "wx", 0o600);
+    ownsTemporary = true;
+    protectNewPrivatePath(temporaryPath);
+    writeFileSync(descriptor, `${JSON.stringify(identity, null, 2)}\n`, "utf8");
+    closeSync(descriptor);
+    descriptor = undefined;
+    if (process.platform === "win32") {
+      if (!sameIdentityEntry(privateIdentityEntry(filePath), original)) throw privateStorageError();
+    } else chmodSync(temporaryPath, 0o600);
+    renameSync(temporaryPath, filePath);
+    ownsTemporary = false;
+    if (process.platform !== "win32") chmodSync(filePath, 0o600);
+  } finally {
+    try { if (descriptor !== undefined) closeSync(descriptor); }
+    finally { if (ownsTemporary) rmSync(temporaryPath, { force: true }); }
+  }
+}
+
+function privateStorageError(): Error {
+  return Object.assign(new Error("Cloud connector identity requires verified private storage."), { code: "EACCES" });
+}
+
+function assertPrivateIdentityDirectory(directory: string): void {
+  const entry = lstatSync(directory);
+  if (!entry.isDirectory() || entry.isSymbolicLink() || !hasPrivatePermissions(directory, entry.mode)) throw privateStorageError();
+}
+
+function privateIdentityEntry(filePath: string): BigIntStats | null {
+  const entry = (() => {
+    try { return lstatSync(filePath, { bigint: true }); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return null; throw error; }
+  })();
+  if (!entry) return null;
+  assertPrivateIdentityDirectory(path.dirname(filePath));
+  if (!entry.isFile() || entry.isSymbolicLink() || entry.nlink !== 1n || !hasPrivatePermissions(filePath, Number(entry.mode))) throw privateStorageError();
+  return entry;
+}
+
+function sameIdentityEntry(actual: BigIntStats | null, expected: BigIntStats | null): boolean {
+  if (!actual || !expected) return actual === expected;
+  return actual.isFile() && actual.nlink === 1n && actual.dev === expected.dev && actual.ino === expected.ino &&
+    actual.size === expected.size && actual.mtimeNs === expected.mtimeNs && actual.ctimeNs === expected.ctimeNs;
 }
 
 function parseIdentity(value: unknown): PaperclipCloudConnectorIdentity {
