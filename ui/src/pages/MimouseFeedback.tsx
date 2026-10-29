@@ -1,8 +1,9 @@
+import { MimouseFeedbackRunLog, MimouseFeedbackRunLogSource, isRunLogCandidate } from "@/components/MimouseFeedbackRunLog";
 import { MimouseFeedbackVerification } from "@/components/MimouseFeedbackVerification";
 import { MimouseFeedbackEvidence } from "@/components/MimouseFeedbackEvidence";
 import { MimouseWecomPanel } from "@/components/MimouseWecomPanel";
 import { MimouseLangfusePanel } from "@/components/MimouseLangfusePanel";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { FeedbackImportInput, FeedbackInboxItem, FeedbackInboxPage, FeedbackPromotionInput, FeedbackPromotionReceipt } from "@paperclipai/shared";
 import { api } from "@/api/client";
@@ -17,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 type PromotionStatus = { recorded: boolean; receipt: FeedbackPromotionReceipt | null };
 const textAreaClass = "min-h-24 w-full rounded-md border border-border bg-background p-3 text-sm";
-function useActive() { const active = useRef(true); useEffect(() => { active.current = true; return () => { active.current = false; }; }, []); return active; }
+function useActive() { const active = useRef(true); useLayoutEffect(() => { active.current = true; return () => { active.current = false; }; }, []); return active; }
 function blankImport() { return { sourceKind: "manual" as FeedbackImportInput["sourceKind"], sourceInstance: "manual-ui", externalId: crypto.randomUUID() as string, title: "", text: "", product: "", softwareVersion: "", commitSha: "", traceId: "", occurredAt: new Date().toISOString() }; }
 export function MimouseFeedback() {
   const { t } = useTranslation(), { setBreadcrumbs } = useBreadcrumbs(), { selectedCompanyId } = useCompany();
@@ -32,11 +33,14 @@ export function MimouseFeedback() {
 }
 function FeedbackCompany({ companyId, userId, sessionId, privateSessionReady }: { companyId: string; userId: string; sessionId: string; privateSessionReady: boolean }) {
   const { t } = useTranslation(), client = useQueryClient(), active = useActive();
-  const [beforeId, setBeforeId] = useState<string>(), [selectedId, setSelectedId] = useState<string | null>(null), [form, setForm] = useState(blankImport), [notice, setNotice] = useState("");
+  const [beforeId, setBeforeId] = useState<string>(), [selectedId, setSelectedId] = useState<string | null>(null), [form, setFormDraft] = useState(blankImport), [notice, setNotice] = useState("");
+  const importAttempt = useRef(0), importBusy = useRef(false);
+  function setForm(value: ReturnType<typeof blankImport>) { importAttempt.current++; setFormDraft(value); setNotice(""); }
   const root = `/companies/${companyId}/feedback-inbox`, key = ["mimouse-feedback", companyId, userId, sessionId];
   const query = useQuery({ queryKey: [...key, "list", beforeId], gcTime: 0, staleTime: 0, queryFn: ({ signal }) => privateFeedbackGet<FeedbackInboxPage>(`${root}${beforeId ? `?beforeId=${encodeURIComponent(beforeId)}` : ""}`, signal), retry: false });
-  const mutation = useMutation({ mutationFn: (payload: FeedbackImportInput) => api.post<{ item: FeedbackInboxItem; duplicate: boolean }>(root, payload),
-    onSuccess: result => { void client.invalidateQueries({ queryKey: key }); if (!active.current) return; setSelectedId(result.item.id); setNotice(result.duplicate ? "duplicate" : "imported"); } });
+  const mutation = useMutation({ mutationFn: ({ input }: { input: FeedbackImportInput; attempt: number }) => api.post<{ item: FeedbackInboxItem; duplicate: boolean }>(root, input),
+    onSuccess: (result, variables) => { if (!active.current || variables.attempt !== importAttempt.current) return; void client.invalidateQueries({ queryKey: key }); setSelectedId(result.item.id); setNotice(result.duplicate ? "duplicate" : "imported"); },
+    onSettled: () => { importBusy.current = false; } });
   if (query.isPending || query.isFetching) return <p>{t("common.loading")}</p>;
   if (query.isError) return <p role="alert">{t("feedbackUi.readError")}</p>;
   const fields = ["sourceInstance", "externalId", "title", "product", "softwareVersion", "commitSha", "traceId", "occurredAt"] as const;
@@ -45,7 +49,8 @@ function FeedbackCompany({ companyId, userId, sessionId, privateSessionReady }: 
     <p className="text-sm text-muted-foreground">{t("feedbackUi.boundary")}</p>
     <details className="rounded-lg border border-border p-4"><summary className="cursor-pointer font-medium">{t("langfuseUi.title")}</summary><div className="pt-4"><MimouseLangfusePanel companyId={companyId} onImported={() => { void client.invalidateQueries({ queryKey: key }); }} /></div></details>
     <details className="rounded-lg border border-border p-4"><summary className="cursor-pointer font-medium">{t("wecomUi.title")}</summary><div className="pt-4"><MimouseWecomPanel companyId={companyId} userId={userId} sessionId={privateSessionReady ? sessionId : ""} /></div></details>
-    <form className="space-y-3 rounded-lg border border-border p-4" onSubmit={event => { event.preventDefault(); setNotice(""); mutation.mutate({ ...form, commitSha: form.commitSha || null, traceId: form.traceId || null }); }}>
+    <MimouseFeedbackRunLog companyId={companyId} userId={userId} sessionId={sessionId} onImported={result => { if (!active.current) return; setSelectedId(result.item.id); setNotice(result.duplicate ? "duplicate" : "imported"); void client.invalidateQueries({ queryKey: key }); }} />
+    <form className="space-y-3 rounded-lg border border-border p-4" onSubmit={event => { event.preventDefault(); if (importBusy.current) return; importBusy.current = true; setNotice(""); mutation.mutate({ input: { ...form, commitSha: form.commitSha || null, traceId: form.traceId || null }, attempt: ++importAttempt.current }); }}>
       <h2 className="font-medium">{t("feedbackUi.importTitle")}</h2>
       <fieldset disabled={mutation.isPending} className="space-y-3">
         <label className="block space-y-1"><span>{t("feedbackUi.sourceKind")}</span><select className="w-full rounded-md border border-border bg-background p-2 text-sm" value={form.sourceKind} onChange={event => setForm({ ...form, sourceKind: event.target.value as FeedbackImportInput["sourceKind"] })}>{["manual", "application_log", "langfuse", "wecom_smart_bot"].map(value => <option key={value} value={value}>{t(`feedbackUi.source_${value}`)}</option>)}</select></label>
@@ -59,7 +64,7 @@ function FeedbackCompany({ companyId, userId, sessionId, privateSessionReady }: 
     <section className="space-y-3" aria-label={t("feedbackUi.records")}>
       <h2 className="font-medium">{t("feedbackUi.records")}</h2>
       {!query.data.items.length && <p>{t("feedbackUi.empty")}</p>}
-      <div className="space-y-2">{query.data.items.map(item => <Button key={item.id} variant="outline" className="h-auto w-full justify-start whitespace-normal text-left" onClick={() => setSelectedId(item.id)}>{item.title} · {item.product} · {item.softwareVersion}</Button>)}</div>
+      <div className="space-y-2">{query.data.items.map(item => <Button key={item.id} variant="outline" className="h-auto w-full justify-start whitespace-normal text-left" onClick={() => setSelectedId(item.id)}>{isRunLogCandidate(item) ? t("feedbackRunLogUi.title") : item.title} · {item.product} · {item.softwareVersion}</Button>)}</div>
       <div className="flex gap-2">{beforeId && <Button variant="outline" onClick={() => setBeforeId(undefined)}>{t("feedbackUi.latest")}</Button>}{query.data.nextBeforeId && <Button variant="outline" onClick={() => setBeforeId(query.data.nextBeforeId!)}>{t("feedbackUi.older")}</Button>}</div>
     </section>
     {selectedId && <FeedbackDetail key={selectedId} companyId={companyId} userId={userId} sessionId={sessionId} id={selectedId} onSelect={setSelectedId} />}
@@ -72,10 +77,10 @@ function FeedbackDetail({ companyId, userId, sessionId, id, onSelect }: { compan
   if (source.isPending || source.isFetching) return <p>{t("common.loading")}</p>;
   if (source.isError) return <p role="alert">{t("feedbackUi.readError")}</p>;
   return <section className="space-y-4 rounded-lg border border-border p-4">
-    <h2 className="font-medium">{source.data.title}</h2><p className="break-all font-mono text-xs">{source.data.id}</p>
+    <h2 className="font-medium">{isRunLogCandidate(source.data) ? t("feedbackRunLogUi.title") : source.data.title}</h2><p className="break-all font-mono text-xs">{source.data.id}</p>
     <p className="text-sm">{t(source.data.ingestionMode === "provider_fetch" ? "feedbackUi.providerFetched" : source.data.ingestionMode === "provider_push" ? "feedbackUi.providerPushed" : "feedbackUi.manualOnly")}</p>
     {source.data.sourceUrl && <p className="break-all text-xs">{t("feedbackUi.sourceUrl")}: {source.data.sourceUrl}</p>}
-    <pre className="whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-sm">{source.data.text}</pre>
+    {isRunLogCandidate(source.data) ? <MimouseFeedbackRunLogSource companyId={companyId} userId={userId} sessionId={sessionId} item={source.data} /> : <pre className="whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-sm">{source.data.text}</pre>}
     <h3 className="font-medium">{t("feedbackUi.candidates")}</h3><p className="text-xs text-muted-foreground">{t("feedbackUi.candidateBoundary")}</p>
     {candidates.isPending || candidates.isFetching ? <p>{t("common.loading")}</p> : candidates.isError ? <p role="alert">{t("feedbackUi.readError")}</p> : candidates.data.items.length ? candidates.data.items.map(item => <Button key={item.id} variant="outline" className="h-auto whitespace-normal" onClick={() => onSelect(item.id)}>{item.title} · {item.sourceInstance}</Button>) : <p>{t("feedbackUi.noCandidates")}</p>}
     {!candidates.isError && !candidates.isFetching && candidates.data?.hasMore && <p>{t("feedbackUi.moreCandidates")}</p>}

@@ -1,0 +1,23 @@
+{
+  "title": "内部运行日志引用",
+  "boundary": "仅导入服务器记录的标识和时间。不复制日志内容、私有任务正文、供应商字段或来源访问权限；不执行任何操作。",
+  "open": "导入运行日志引用",
+  "runId": "运行标识",
+  "eventId": "事件标识",
+  "eventSeq": "事件序号",
+  "runCreatedAt": "运行创建时间",
+  "eventCreatedAt": "事件创建时间",
+  "referenceDigest": "引用摘要",
+  "unknownVersion": "软件版本与提交：未知",
+  "notReproduced": "复现状态：未执行",
+  "preview": "预览引用",
+  "confirm": "我确认将此不含内容的引用导入本公司反馈收件箱。",
+  "cancel": "取消",
+  "import": "确认导入",
+  "retry": "重试同一导入",
+  "previewError": "引用不可用或选择无效，请检查来源权限后重新预览。",
+  "importError": "尚未确认导入成功。可重试同一请求，或取消后重新预览。",
+  "verifySource": "检查原来源访问权限",
+  "sourceVerified": "已重新验证原来源权限与身份，未加载日志内容。",
+  "sourceUnavailable": "原来源不可用或已变化。查看此引用不会授予来源访问权限。"
+}

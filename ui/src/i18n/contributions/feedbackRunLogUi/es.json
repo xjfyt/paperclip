@@ -1,0 +1,23 @@
+{
+  "title": "Referencia interna de registro de ejecución",
+  "boundary": "Solo se importan identificadores y fechas registrados por el servidor. No se copia el contenido del registro, texto privado de tareas, campos del proveedor ni acceso al origen. No se ejecuta nada.",
+  "open": "Importar referencia de registro",
+  "runId": "ID de ejecución",
+  "eventId": "ID de evento",
+  "eventSeq": "Secuencia del evento",
+  "runCreatedAt": "Creación de la ejecución",
+  "eventCreatedAt": "Creación del evento",
+  "referenceDigest": "Resumen de referencia",
+  "unknownVersion": "Versión y commit: desconocidos",
+  "notReproduced": "Reproducción: no realizada",
+  "preview": "Vista previa de la referencia",
+  "confirm": "Confirmo importar esta referencia sin contenido a la bandeja de comentarios de la empresa.",
+  "cancel": "Cancelar",
+  "import": "Confirmar importación",
+  "retry": "Reintentar la misma importación",
+  "previewError": "Referencia no disponible o selección inválida. Comprueba el acceso al origen y vuelve a previsualizar.",
+  "importError": "No se confirmó la importación. Reintenta la misma solicitud o cancela y vuelve a previsualizar.",
+  "verifySource": "Comprobar acceso al origen",
+  "sourceVerified": "Acceso e identidad del origen verificados ahora. No se cargó contenido del registro.",
+  "sourceUnavailable": "El origen no está disponible o cambió. Ver esta referencia no concede acceso."
+}

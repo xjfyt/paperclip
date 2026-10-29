@@ -1,0 +1,23 @@
+{
+  "title": "Internal run-log reference",
+  "boundary": "Only server-recorded IDs and timestamps are imported. No log content, private task text, provider fields, or source access is copied. Nothing is executed.",
+  "open": "Import run-log reference",
+  "runId": "Run ID",
+  "eventId": "Event ID",
+  "eventSeq": "Event sequence",
+  "runCreatedAt": "Run created",
+  "eventCreatedAt": "Event created",
+  "referenceDigest": "Reference digest",
+  "unknownVersion": "Software version and commit: unknown",
+  "notReproduced": "Reproduction: not performed",
+  "preview": "Preview reference",
+  "confirm": "I confirm importing this content-free reference into the company feedback inbox.",
+  "cancel": "Cancel",
+  "import": "Confirm import",
+  "retry": "Retry same import",
+  "previewError": "Reference unavailable or selection invalid. Check source access and preview again.",
+  "importError": "Import was not confirmed. Retry the same request or cancel and preview again.",
+  "verifySource": "Check original source access",
+  "sourceVerified": "Original source access and identity verified now. No log content was loaded.",
+  "sourceUnavailable": "Original source is unavailable or changed. Viewing this reference does not grant access."
+}

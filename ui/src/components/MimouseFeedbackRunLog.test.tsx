@@ -1,0 +1,51 @@
+// @vitest-environment jsdom
+import { act, type ReactNode } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { i18n, runLogMessages } from "@/i18n/feedback-run-log-test-resources";
+import { MimouseFeedbackRunLog } from "./MimouseFeedbackRunLog";
+const calls = vi.hoisted(() => ({ post: vi.fn(), imported: vi.fn() }));
+vi.mock("@/api/client", () => ({ api: { post: calls.post } }));
+vi.mock("@/api/private-feedback", () => ({ privateFeedbackGet: vi.fn() }));
+vi.mock("@/components/ui/dialog", () => ({ Dialog: ({ open, children }: { open: boolean; children: ReactNode }) => open ? <div role="dialog">{children}</div> : null,
+  DialogContent: ({ children }: { children: ReactNode }) => <div>{children}</div>, DialogHeader: ({ children }: { children: ReactNode }) => <div>{children}</div>, DialogTitle: ({ children }: { children: ReactNode }) => <h2>{children}</h2>, DialogDescription: ({ children }: { children: ReactNode }) => <p>{children}</p> }));
+const runId = "11111111-1111-4111-8111-111111111111";
+const reference = { contractVersion: "feedback-run-log-reference-v1", companyId: "company-a", runId, eventId: "17", eventSeq: 1,
+  runCreatedAt: "2026-10-29T00:00:00Z", eventCreatedAt: "2026-10-29T00:00:01Z", referenceDigest: "a".repeat(64), softwareVersion: "unknown", commitSha: null, reproduction: "not_performed", contentIncluded: false };
+const preview = { reference, previewDigest: "b".repeat(64) }, receipt = { item: { id: "feedback-a" }, duplicate: false };
+let root: Root, host: HTMLDivElement;
+async function flush() { await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); }); }
+async function render(overrides = {}) { await act(async () => root.render(<MimouseFeedbackRunLog companyId="company-a" userId="user-a" sessionId="session-a" onImported={calls.imported} {...overrides} />)); }
+function button(key: string) { const node = [...host.querySelectorAll("button")].find(item => item.textContent === i18n.t(`feedbackRunLogUi.${key}`)); expect(node).toBeTruthy(); return node!; }
+async function click(node: Element) { await act(async () => node.dispatchEvent(new MouseEvent("click", { bubbles: true }))); await flush(); }
+async function input(index: number, value: string) { const node = host.querySelectorAll("input")[index]; await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(node, value); node.dispatchEvent(new Event("input", { bubbles: true })); }); }
+async function select() { await click(button("open")); await input(0, runId); await input(1, "1"); }
+async function confirm() { await click(button("preview")); await click(host.querySelector('input[type="checkbox"]')!); }
+beforeEach(async () => { vi.clearAllMocks(); await i18n.changeLanguage("en"); host = document.createElement("div"); document.body.append(host); root = createRoot(host); calls.post.mockImplementation(async (url: string) => url.endsWith("preview") ? preview : receipt); });
+afterEach(async () => { await act(async () => root.unmount()); host.remove(); await i18n.changeLanguage("en"); });
+it("requires an explicit preview and confirmation and sends no source text", async () => {
+  await render(); expect(calls.post).not.toHaveBeenCalled(); await select(); expect(button("import").disabled).toBe(true); await confirm(); await click(button("import"));
+  expect(calls.post.mock.calls).toEqual([["/companies/company-a/feedback-inbox/run-log-preview", { runId, eventSeq: 1 }], ["/companies/company-a/feedback-inbox/run-log-import", { runId, eventSeq: 1, previewDigest: preview.previewDigest, confirm: true }]]);
+  expect(calls.imported).toHaveBeenCalledTimes(1); expect(host.querySelector('[role="dialog"]')).toBeNull();
+});
+it.each(["company", "user", "session", "close"])("discards old preview on %s lifecycle change", async kind => {
+  let resolve!: (value: unknown) => void; calls.post.mockReturnValue(new Promise(done => { resolve = done; })); await render(); await select(); await click(button("preview"));
+  if (kind === "close") { await click(button("cancel")); await click(button("open")); } else await render(kind === "company" ? { companyId: "company-b" } : kind === "user" ? { userId: "user-b" } : { sessionId: "session-b" });
+  await act(async () => resolve(preview)); await flush(); expect(host.textContent).not.toContain(reference.referenceDigest); expect(calls.imported).not.toHaveBeenCalled();
+});
+it("new selection clears confirmation and stale in-flight previews cannot overwrite it", async () => {
+  await render(); await select(); await confirm(); await input(1, "2"); expect(button("import").disabled).toBe(true); expect(host.querySelector('input[type="checkbox"]')).toBeNull();
+  let resolve!: (value: unknown) => void; calls.post.mockReturnValue(new Promise(done => { resolve = done; })); await click(button("preview")); await input(1, "3");
+  await act(async () => resolve({ ...preview, reference: { ...reference, eventSeq: 2 } })); await flush(); expect(host.textContent).not.toContain(reference.referenceDigest);
+});
+it("freezes same-attempt retries, prevents same-tick duplicates and ignores late import after reopen", async () => {
+  await render(); await select(); await confirm(); let reject!: (error: Error) => void; calls.post.mockReturnValue(new Promise((_done, fail) => { reject = fail; }));
+  const save = button("import"); await act(async () => { save.click(); save.click(); }); expect(calls.post).toHaveBeenCalledTimes(2);
+  await act(async () => reject(new Error("PRIVATE_PROVIDER_ERROR"))); await flush(); expect(host.textContent).not.toContain("PRIVATE_PROVIDER_ERROR");
+  const sent = calls.post.mock.calls[1][1]; let resolve!: (value: unknown) => void; calls.post.mockReturnValue(new Promise(done => { resolve = done; })); await click(button("retry")); expect(calls.post.mock.calls[2][1]).toEqual(sent);
+  await click(button("cancel")); await click(button("open")); await act(async () => resolve(receipt)); await flush(); expect(calls.imported).not.toHaveBeenCalled(); expect(host.querySelector('[role="dialog"]')).not.toBeNull();
+});
+it("keeps raw identifiers while changing only local copy in all four languages", async () => {
+  await render(); await select(); await confirm();
+  for (const [locale, messages] of Object.entries(runLogMessages)) { await act(async () => { await i18n.changeLanguage(locale); }); expect(host.textContent).toContain(messages.boundary); expect(host.textContent).toContain(runId); expect(host.textContent).toContain(messages.notReproduced); expect((host.querySelector('input[type="checkbox"]') as HTMLInputElement).checked).toBe(true); }
+});
