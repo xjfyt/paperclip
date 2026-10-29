@@ -1,3 +1,5 @@
+import { feedbackRunLogService } from "../services/mimouse-feedback-run-log.js";
+import { feedbackRunLogSelectionSchema, feedbackRunLogImportSchema } from "@paperclipai/shared/mimouse-feedback-run-log";
 import { feedbackVerificationService } from "../services/mimouse-feedback-verification.js";
 import { feedbackVerificationPreviewSchema, feedbackVerificationConfirmSchema } from "@paperclipai/shared/mimouse-feedback-verification";
 import { feedbackPromotionService } from "../services/mimouse-feedback-promotion.js";
@@ -30,6 +32,20 @@ export function mimouseFeedbackRoutes(db: Db) {
     if (req.actor.type !== "board" || req.actor.source !== "session" || !req.actor.userId) throw forbidden("A signed-in human must review feedback verification");
     return req.actor.userId;
   }
+  const runLogs = feedbackRunLogService(db);
+  router.post(`${path}/run-log-preview`, validate(feedbackRunLogSelectionSchema), async (req, res) => {
+    const companyId = admin(req); reviewer(req); res.setHeader("Cache-Control", "no-store");
+    res.json(await runLogs.preview(companyId, req.actor, feedbackRunLogSelectionSchema.parse(req.body)));
+  });
+  router.post(`${path}/run-log-import`, validate(feedbackRunLogImportSchema), async (req, res) => {
+    const companyId = admin(req); reviewer(req); res.setHeader("Cache-Control", "no-store");
+    const result = await runLogs.import(companyId, req.actor, feedbackRunLogImportSchema.parse(req.body));
+    res.status(result.duplicate ? 200 : 201).json(result);
+  });
+  router.get(`${path}/:id/run-log-source`, async (req, res) => {
+    const companyId = admin(req); reviewer(req); res.setHeader("Cache-Control", "no-store");
+    res.json(await runLogs.source(companyId, req.actor, id(req)));
+  });
   const verification = feedbackVerificationService(db);
   router.get(`${path}/:id/verification-options`, async (req, res) => {
     const companyId = admin(req), actor = reviewer(req); res.setHeader("Cache-Control", "no-store");

@@ -2,7 +2,7 @@ import { z } from "zod";
 const sourceId = z.string().trim().min(1).max(160).regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]*$/);
 export const feedbackImportSchema = z.object({
   sourceKind: z.enum(["manual", "application_log", "langfuse", "wecom_smart_bot"]),
-  sourceInstance: sourceId, externalId: sourceId,
+  sourceInstance: sourceId.refine(value => !/^internal(?:[.:-]|$)/i.test(value), "Internal source namespaces are server-only"), externalId: sourceId,
   title: z.string().trim().min(1).max(240), text: z.string().trim().min(1).max(32000),
   product: z.string().trim().min(1).max(120), softwareVersion: z.string().trim().max(120).default(""),
   commitSha: z.string().regex(/^[a-f0-9]{40}$/).nullable().default(null),
