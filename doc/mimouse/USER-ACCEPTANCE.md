@@ -2,13 +2,13 @@
 
 ## 2026-10-29 重建候选验收入口
 
-本次从远端`e2bab5dc`重建，当前文档核对源码为`9e9b02e`；前一环境的`c5af04fa`未找回。**代码已阶段推送**：05:29 UTC已核对远端`mimouse`为`9e9b02eab952da86fdd37cd13e2765d3108c76b9`（[提交](https://github.com/xjfyt/paperclip/commit/9e9b02eab952da86fdd37cd13e2765d3108c76b9)），可按第1节拉取。完整UI/浏览器和远端CI尚未全部收口；本次文档随后单独提交/推送，不把阶段发布当完整验收。当前类型/聚合/API/浏览器终态见[验证表](VERIFICATION.md#2026-10-29-重建候选当前证据与未完成检查)，旧852/914项或下方历史全UI数字不算本批通过。
+本次从远端`e2bab5dc`重建，当前候选源码为`358bd7a`（7279键）；前一环境`c5af04fa`未找回。**06:08 UTC已阶段推送并核对完整远端SHA`358bd7a8cee36ec0999d305c50b2d3992dc5b990`**（[提交](https://github.com/xjfyt/paperclip/commit/358bd7a8cee36ec0999d305c50b2d3992dc5b990)），可按第1节拉取；本次文档随后单独提交/推送，[该SHA资源CI](https://github.com/xjfyt/paperclip/actions/runs/40827338157/job/123293288349)成功但不代表完整CI。完整UI首轮失败修正后，358bd7a的914文件/92批/12896项于06:26:23 UTC严格聚合通过；已知普通Claude/Codex运行设置文案补译尚在后续切片，不能视作本次已验。实际浏览器[环境blocked、未打开页面且无截图](checklists/BROWSER-ENVIRONMENT-20261029.md)，不是应用失败。检查终态见[验证表](VERIFICATION.md#2026-10-29-重建候选当前证据与未完成检查)；旧852/914项和历史全UI数字不迁移。
 
 ### 本批需要你协助的输入
 
-1. **发布授权环境**：本次GitHub设备登录和代码阶段推送已完成，仍须核对后续文档提交和该SHA的CI；不要把token、cookie、密码或设备授权材料写进仓库/验收报告。代码推送与登录授权是两回事，最终仍需核对远端SHA。
+1. **发布授权环境**：本次GitHub设备登录与358bd7a阶段推送已完成，当前SHA资源CI已成功（非完整CI），后续文档提交仍须核对；不要把token、cookie、密码或设备授权材料写进仓库/验收报告。代码推送与登录授权是两回事，最终仍需核对远端SHA。
 2. **四项合同**：六目标Runner/controller/签名准入、内部产物上传、业务只读源、业务write/apply/持久对账，按[剩余项合同表](REMAINING.md#四项仍依赖外部合同的实现缺口不是只等用户测试)提供说明与脱敏样本。它们仍有代码缺口，不要求你测试不存在的成功路径。
-3. **真实环境验收**：选定可销毁测试公司/项目、浏览器/OS/输入法；实连时另提供允许的Casdoor/Agent/通知/GitLab等测试范围、额度及收件目标。凭据只放受控secret store，不放本文。
+3. **真实环境验收**：本机浏览器受环境限制，请在[受支持环境复验](checklists/BROWSER-ENVIRONMENT-20261029.md#在受支持环境复验)，选定可销毁测试公司/项目、浏览器/OS/输入法；实连时另提供允许的Casdoor/Agent/通知/GitLab等测试范围、额度及收件目标。凭据只放受控secret store，不放本文。
 
 ### 重建增量的可执行手测
 
@@ -25,6 +25,7 @@
 | R29-07 运行日志引用 | 在反馈页以当前有效管理员session选合成run/eventSeq，预览、勾人工确认、导入，再同事件重复；预览后撤权/换会话，另一无源权限管理员读取来源。 | 只保存ID/时间/摘要，无日志正文、payload或私有任务文本；同事件一条引用/审计；旧预览拒绝，候选不授予源访问，版本unknown/复现not_performed不伪装成功。 |
 | R29-08 调研只读历史 | 打开已绑定routine历史，翻页、刷新、切语言；暂停公司后读取；将历史源任务/祖先/项目改为private后再读旧页/游标，另模拟超时。 | 只读状态/时间/ID/摘要，无报告正文、触发载荷；hidden cursor拒绝、预算耗尽503而非假空；不启用routine、不创建run、不检索来源。received不等于执行成功/来源已验证。 |
 | R29-09 真实四语/IME | 在任务输入、描述/文档编辑、Agent配置、成本历史、审计、引导和决策入口分别走en/zh-CN/es/ja；中文/日文组合输入Enter、窄窗、西语长标签、键盘关闭/取消。 | 组合不误提交、焦点合理、可见标签及aria一致；语言不改变API payload、时区、金额或技术身份。逐入口记录遗漏；单元/jsdom不能替代本例。 |
+| R29-10 侧栏与浏览器恢复 | 在四语下打开最近任务菜单/重命名、secret access、技能侧栏和路由错误恢复；在合成浏览器会话以鼠标/键盘重选当前尺寸、选不同尺寸、Escape取消、显式fit、刷新/关闭/停止；切语并模拟连接/resize失败后撤权。 | 草稿/焦点/原始诊断保留，已知本地错误随语言更新；同值重选恰好一次resize、取消零派发；语言切换不重建iframe/轮询/租约，撤权后旧回执不恢复iframe；没有合成会话时记blocked，不创建真实外部浏览会话。 |
 
 ### 新认证编译smoke复验命令
 
@@ -38,7 +39,7 @@ node tests/mimouse/prepare-disposable-db.mjs
 pnpm test:mimouse:recovery-api
 ```
 
-入口固定authenticated隔离fixture、编译server入口与回环TCP，覆盖授权分页、日志引用、调研历史、同用户两个真实会话4项。使用真实BetterAuth登录/cookie/持久session，但数据是合成的，无模型/通知/供应商调用；Playwright APIRequestContext不启动浏览器，workspace TS依赖仍在，不是全dist安装证明。若3100端口或隔离库不可用，先停止并排查，不复用未知服务、不删PID/锁，也不关闭认证使检查变绿。
+`prepare-disposable-db.mjs`只初始化全新绝对路径且带marker的临时库，并关闭该测试库的Unix socket；它拒绝既有状态，不删锁、不启动服务。准备失败立即停止，不继续smoke。入口固定authenticated隔离fixture、编译server入口与回环TCP，覆盖授权分页、日志引用、调研历史、同用户两个真实会话4项。使用真实BetterAuth登录/cookie/持久session，但数据是合成的，无模型/通知/供应商调用；Playwright APIRequestContext不启动浏览器，workspace TS依赖仍在，不是全dist安装证明。若3100端口或隔离库不可用，先停止并排查，不复用未知服务、不删PID/锁，也不关闭认证使检查变绿。
 
 ## 历史候选说明（以下不替代本批验证）
 
@@ -162,7 +163,7 @@ cp pnpm-lock.yaml "$TEST_HOME/evidence/pnpm-lock.before.yaml"
 pnpm install --frozen-lockfile
 ```
 
-安装规则与 [DEVELOPING.md](../DEVELOPING.md) 的锁文件政策一致：GitHub Actions负责提交锁文件，PR不提交本地生成的锁文件。若冻结安装**明确**报过期锁文件（例如新增`@paperclipai/paperclip-eval-kernel` devDependency未进入server importer）或patched-dependency hash mismatch，保留错误输出及退出码，检查错误确属这两类后，仅允许一次本地重试：
+安装规则与 [DEVELOPING.md锁文件政策](../DEVELOPING.md#dependency-lockfile-policy)一致：GitHub Actions负责提交锁文件，PR不提交本地生成的锁文件。若冻结安装**明确**报过期锁文件（例如新增`@paperclipai/paperclip-eval-kernel` devDependency未进入server importer）或patched-dependency hash mismatch，保留错误输出及退出码，检查错误确属这两类后，仅允许一次本地重试：
 
 ```sh
 pnpm install --no-frozen-lockfile
@@ -173,6 +174,8 @@ node --version > "$TEST_HOME/evidence/node-version.txt"
 pnpm --version > "$TEST_HOME/evidence/pnpm-version.txt"
 git status --short
 ```
+
+2026-10-29重建环境实际遇到server的eval-kernel workspace声明缺少lock importer条目；一次非冻结重试成功，锁文件未提交。此经验不保证你机器安装成功，也不是新版本all-dist独立安装通过。
 
 网络、认证、权限、平台编译或其它失败**不能**用非冻结安装泛化重试；也不能改依赖版本/补丁内容使它通过。重试生成的锁文件只留本测试克隆，不stage、不commit、不push；报告测试时标明这项本地差异，不把工作树称作完全干净。只保存无秘密的配置与日志。隔离HOME后包管理器如需初始化，先按自身安装文档完成；不要恢复原HOME去继承供应商凭据。
 

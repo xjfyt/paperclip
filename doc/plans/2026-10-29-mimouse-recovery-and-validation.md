@@ -27,7 +27,7 @@
 本文件是重建计划，不是完成证明。后续结果应绑定新的实际提交和证据，不能倒填已不可取得的旧测试终态。
 
 
-## 2026-10-29 05:29 UTC 集成检查点
+## 2026-10-29 05:29 UTC 历史集成检查点
 
 当前主线核对点`9e9b02eab952da86fdd37cd13e2765d3108c76b9`。上述恢复切片已整合；另补真实session的opaque摘要响应头/no-store和私有回调同步fence，保持旧JSON、cookie及服务端授权不变。内部运行日志内容无关引用和调研只读历史已接入，但不称完整日志采集/外部来源调度或自动复现闭环已完成。
 
@@ -38,3 +38,12 @@
 - 原计划外部合同的代码边界仍有四项：六目标Runner/controller/签名准入、内部产物上传、业务只读接入、业务write/apply/持久对账。Casdoor/国内Agent/通知等已有有界实现的真实实测另列，不混写为同类阻塞。最低输入见[REMAINING](../mimouse/REMAINING.md)，可执行手测见[USER-ACCEPTANCE](../mimouse/USER-ACCEPTANCE.md)。
 
 退出条件是当前输入完整检查取得终态、失败已处理或明确阻塞、用户待测/接口合同列明，并在有可用授权后核对远端SHA和其CI；不是原计划未来所有持续优化已完成。
+
+
+## 2026-10-29 06:29 UTC 当前统一复验
+
+当前源码`358bd7a8cee36ec0999d305c50b2d3992dc5b990`，7279键。首轮完整UI的批注认证fixture、Markdown成果旧文案断言、Composer插件工厂mock已修正；另补最近任务/secret access/技能/路由错误/browser恢复控件，并以12项红测修复同尺寸重选重复resize。第20/31批shell解析失败重跑通过，但首轮不能称完整严格聚合通过。当前新输入完整类型、标准UI构建（13.61秒）及51项审计通过；组合shell因末尾误写`test:token-gates`整体exit254，正确`pnpm check:token-gates`已于06:07:13 UTC单独exit0。358bd7a全新完整UI于06:26:23 UTC严格聚合通过，监督日志`/tmp/ui-final-rerun-supervisor-20261029.log`；首轮失败结果未冒充新输入通过。
+
+后端与实际构建印章`8b590bf`无差异，保留已实际通过的164+4项API证据，不把它们当新UI浏览器证明。浏览器穷尽合法兼容尝试后环境blocked，未打开应用页面、无截图；复验方法见[环境清单](../mimouse/checklists/BROWSER-ENVIRONMENT-20261029.md)。06:08 UTC已核对远端当前阶段`358bd7a8cee36ec0999d305c50b2d3992dc5b990`，其[resources CI](https://github.com/xjfyt/paperclip/actions/runs/40827338157/job/123293288349)已成功（非完整CI），文档随后单独提交/推送；仍不宣称全计划完成。新UI库存914文件/92批，输入摘要`b58af7a122b0b8971ba1e6793a8e4d106e5bea5e6fff3dd2b585b17f447c3d84`，完整聚合914文件/92批/12896项通过，10个manifest均sourceUnchanged=true。普通Claude/Codex运行设置两个文件已确认仍有文案遗漏，独立补译切片准备中；后续新输入必须重新整体验证，不能移用358bd7a结果。
+
+当前源码与完整UI证据已持久保全；不在仓库记录私有存储ID或凭据。

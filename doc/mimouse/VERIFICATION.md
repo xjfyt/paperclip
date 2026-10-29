@@ -2,7 +2,7 @@
 
 ## 2026-10-29 重建候选：当前证据与未完成检查
 
-记录截至 **2026-10-29 05:29 UTC**。本次从远端 `mimouse` 的 `e2bab5dcec32b09fa5aba852774a1039b12c9997` 重建，当前核对源码为 `9e9b02eab952da86fdd37cd13e2765d3108c76b9`。前一环境的未推送 `c5af04fa690622ad5e51c230b24691c8edf25787` 源码/日志没有找回；本批是逐片重新实现与验证，**不是找回旧工作树**。旧852/914项定向结果以及下方10月27日的类型、API、全UI和浏览器记录均为历史，不证明本批通过。
+记录截至 **2026-10-29 06:29 UTC**。本次从远端 `mimouse` 的 `e2bab5dcec32b09fa5aba852774a1039b12c9997` 重建，当前核对源码为 `358bd7a8cee36ec0999d305c50b2d3992dc5b990`。前一环境的未推送 `c5af04fa690622ad5e51c230b24691c8edf25787` 源码/日志没有找回；本批是逐片重新实现与验证，**不是找回旧工作树**。旧852/914项定向结果以及下方10月27日的类型、API、全UI和浏览器记录均为历史，不证明本批通过。
 
 ### 本批实际代码范围
 
@@ -13,25 +13,39 @@
 - 新增调研例行**只读运行历史**：当前成员/session、完整来源公开边界、canonical run权限、可读游标和有界查询；暂停公司可读但不派发。历史入口不是新增调度器，不证明真实来源采集已完成。这两项是已有反馈/调研机制的增量，不应把原计划相关能力倒写为此前全部缺失。
 - `/api/auth/get-session` 保留既有 JSON `session.id`、cookie和服务端授权；真实 session 附加域分离SHA-256 `X-Paperclip-Session-Scope`，响应及客户端读取为 `no-store`。标记没有认证能力，只作前端缓存/回执身份；`scopeKey`缺失按旧身份兼容，未知缓存与已知null本地会话分开。私有回调在认证缓存事件发生时同步失效，而非等React后续提交；没有把标记当成新访问权限。
 
-新增有界i18n审计在`a0b4015`/`9e9b02e`纠正3条旧消费边并补充11个helper；[审计报告](checklists/2026-10-29-i18n-final-audit.json)当前160个AST文件、710个literal候选、3355个dynamic位置，另20个manual helper、51个host、123条消费边，全仓共有780个eligible TSX，其中620个不在此AST扫描内（其中4个仅作host/helper证据，不算AST扫描）。候选数不是漏翻数，160不是全仓覆盖分母；原§4.2高频切片补齐不等于全仓100%翻译。
+### 首轮完整UI发现的问题与后续补齐
+
+首轮`9e9b02e`的911文件/92批检查**没有取得完整严格聚合通过**。诊断继续执行了其余批次，未发现其它应用失败；第20/31批另因共享shell脚本在执行期间被修改而解析失败，重跑已通过，不能把该环境/调度失败隐藏，或将这些不同输入/补跑拼作新输入全量通过。
+
+- `6929165`只修批注宿主fixture：原6项失败因未mock真实认证查询，相对URL在Node fetch解析失败导致缓存unknown；生产guard正确拒绝，未放宽身份栅栏。12文件78项复验通过（`/tmp/annotation-auth-all-green.log`）。
+- `534854b`只修Markdown成果fixture：2项旧英文大小写/引号断言对齐实际资源，保留413/415/422不自动重试及错误/原始路径合同；3文件24项通过。
+- `4eae310`只修Composer的`realmPlugin` mock：旧mock返回对象而非工厂造成187项空编辑器级联失败；原202项及邻接合计5文件347项通过（`/tmp/task-thread-composer-full-green.log`），没有修改生产或删除断言；该347项日志随后因缺少既有`plugin-sdk/ui`生成产物而类型失败，保留整体exit1；复用同源码既有ignored dist后`/tmp/task-thread-composer-types-green.log`于05:50:11 UTC类型复验exit0。
+- `9d24e91`补近期任务侧栏/重命名和secret access四语，3文件68项通过；`238feb4`补TaskSkillPanel、RouteErrorBoundary与浏览器footer，保留原文、协议值及恢复时序。
+- `42feae2`修正实际菜单同尺寸重选的双resize派发：鼠标/键盘12项基线红测，移除重复item回调后仍允许同值重选一次，67项邻接通过（`/tmp/browser-resize-baseline.log`、`/tmp/browser-resize-fixed.log`）。这是组件交互证明，不是本机Chromium已运行。
+- `5ff27dc`补Panel/viewport本地错误四语、保留原始`browser.error`；语言切换不更换iframe/重启轮询或租约，撤权后旧请求不能恢复iframe。最终相关8文件102项通过（`/tmp/browser-panel-final.log`）。
+
+`1757a7b`/`358bd7a`将审计扩至166个AST文件、21个manual helper、另5个协议source、54个host、130条边；[当前报告](checklists/2026-10-29-i18n-final-audit.json)为711个literal候选、3382个dynamic位置，780个eligible TSX中614个未扫描（其中5个仅作证据）。7279个四语键、候选数及范围扩展都不是全仓翻译完成率。此前160/20/51/123与49项审计测试是05:29检查点的历史口径，不冒充当前分母。
 
 ### 可核验检查表
 
 | 检查 | 当前结果 | 证据与边界 |
 |---|---|---|
-| 标准完整 server 构建 | **通过** | `/tmp/rebuild-server-final-20261029.log`，05:20:44 UTC退出0；实际`server/dist/build-info.json`印章为`8b590bf8f1e0c8752d98dd4c02fd32bab8214d12`。包含runner/eval准备、类型检查/emit和资源阶段；Rust既有7条warning保留。核对该印章到`9e9b02e`的server/packages/cli/external-adapters差异为0。 |
+| 标准完整 server 构建 | **通过** | `/tmp/rebuild-server-final-20261029.log`，05:20:44 UTC退出0；实际`server/dist/build-info.json`印章为`8b590bf8f1e0c8752d98dd4c02fd32bab8214d12`。包含runner/eval准备、类型检查/emit和资源阶段；Rust既有7条warning保留。核对该印章到`358bd7a`的server/packages/cli/external-adapters差异为0。 |
 | 首次 server 构建 | **失败后修复** | `/tmp/rebuild-server-standard-20261029.log`的7条research测试类型错误由`024c288`按真实任务归属字段修复，随后标准完整构建重新通过；不是删除断言或放宽产品类型。 |
-| 最终完整 UI 类型 | **修复后通过** | 首次`/tmp/rebuild-ui-types-final-20261029.log`于05:22:12 UTC退出1，`auth-session-boundaries.test.tsx:32/48`联合函数签名TS2349；`d69be2d`只修正强类型fixture，保留检查。完整重跑`/tmp/rebuild-ui-types-fixed-final-20261029.log`于05:26:55 UTC退出0。此前`00cbb95`检查点结果不代替本次。 |
-| 最终标准 UI 构建 | **通过** | `/tmp/rebuild-ui-build-final-20261029.log`于05:22:52 UTC退出0，12.46秒；保留大chunk/无效动态导入提示。该构建后仅类型fixture/审计和文档调整，类型另按修复后的完整重跑记录。 |
-| i18n审计脚本 | **49/49通过** | `/tmp/i18n-audit-final-20261029.log`，05:26:24 UTC退出0，零失败/跳过/todo；这是有界清单/消费证据工具检查，不证明所有候选已人工判定或翻译完成。 |
-| 最终完整 UI 严格聚合 | **待完成** | `9e9b02e`下911文件、92批正在执行，尚无总通过结论。需最终同输入的新inventory/manifest/聚合证据；不能复用10月27日分片或旧852/914项定向结果。 |
-| 编译 server 入口完整164项 API | **164/164通过** | 新标记隔离库，`/tmp/mimouse-compiled-final-20261029.log`，1.3分钟，05:25:27 UTC退出0。此为新运行，不借旧164项结果；编译入口仍有workspace TS依赖与源码fixtures，不是all-dist安装。 |
-| 新认证 recovery API smoke（4项） | **4/4通过** | `/tmp/recovery-compiled-final-20261029.log`，18秒，05:23:44 UTC退出0。独立新HOME、authenticated/private/static UI、真实BetterAuth cookie/session与编译注册路由；包含同用户两个真实session的header隔离。入口`pnpm test:mimouse:recovery-api`检查stamp/后端差异/UI产物。DB合成数据，workspace包仍TS，不是all-dist安装、浏览器或真实Casdoor。 |
+| 当前完整 UI 类型 | **通过** | `358bd7a`完整类型阶段通过，日志`/tmp/paperclip-integrated-final-checks-20261029.log`；其后正常进入标准UI构建。该组合shell最后因错写token命令退出254，不是类型失败。05:26:55通过保留为此前检查点。 |
+| 当前标准 UI 构建 | **通过** | 同一中央日志，Vite标准构建13.61秒通过；既有动态导入/大chunk等提示保留。不能将整个组合shell称退出0；末尾命令拼写错误另列。 |
+| 当前i18n/资源/token门禁 | **51项审计与正确门禁通过** | 中央审计51/51、零失败/跳过/todo；组合shell末尾误写不存在的`test:token-gates`，06:05:20 UTC整体exit254。另行正确`pnpm check:token-gates`于06:07:13 UTC exit0，1379文件、四项gate及palette/cliplab同步通过，日志`/tmp/paperclip-integrated-token-gates-20261029.log`。保留错误命令，不伪称原命令全绿。 |
+| 358bd7a完整 UI 严格聚合 | **914文件/92批/12896项通过** | 06:26:23 UTC严格聚合passed，10个新manifest全部sourceUnchanged=true；源码SHA-256 `57f5d2a6accd9544f7749e0f0aa982ccd0ad8de8d227655fb177837db16d9aa7`，runtime-trees-v2输入`b58af7a122b0b8971ba1e6793a8e4d106e5bea5e6fff3dd2b585b17f447c3d84`。证据`test-results/mimouse-ui/aggregate-2026-10-29T06-26-23-061Z-9Tz21t/aggregate.json`，监督日志`/tmp/ui-final-rerun-supervisor-20261029.log`。这是同输入完整覆盖聚合，不是假称单次无中断运行；不复用首轮失败分片。 |
+| 编译 server 入口完整164项 API | **164/164通过** | 新标记隔离库，`/tmp/mimouse-compiled-final-20261029.log`，1.3分钟，05:25:27 UTC退出0。这是05:25本次重建的实际运行；后端到`358bd7a`无差异，因此仅沿用后端证据，不冒称新UI复跑API；编译入口仍有workspace TS依赖与源码fixtures，不是all-dist安装。 |
+| 新认证 recovery API smoke（4项） | **4/4通过** | `/tmp/recovery-compiled-final-20261029.log`，18秒，05:23:44 UTC退出0。独立新HOME、authenticated/private/static UI、真实BetterAuth cookie/session与编译注册路由；包含同用户两个真实session的header隔离。入口`pnpm test:mimouse:recovery-api`检查stamp/后端差异/UI产物。后端到`358bd7a`无差异，仅沿用后端证据；DB合成数据，workspace包仍TS，不是all-dist安装、新UI浏览器或真实Casdoor。 |
+| 依赖安装与lockfile | **本地一次非冻结重试成功；锁文件未提交** | 冻结安装因server的`paperclip-eval-kernel` workspace声明缺少lock importer条目失败；依[仓库锁文件政策](../DEVELOPING.md#dependency-lockfile-policy)仅本地一次`--no-frozen-lockfile`重试成功。提交锁文件由bot负责；这不是独立安装包验证，不修改依赖/补丁或把网络/权限失败泛化重试。 |
 | 根级全工作区检查/独立安装 | **未取得本批整体结果** | 分包server/UI类型构建与MiMouse API不等于根`pnpm -r typecheck`、`pnpm test:run`、`pnpm build`整体通过；本批独立all-dist安装与既有数据升级恢复尚待专门验收。 |
-| 本批实际浏览器、OS输入法及跨平台 | **待完成/需指定环境** | 组件/jsdom与Playwright APIRequestContext均不代替实际浏览器；真实IME、供应商、六平台证据独立验收。 |
-| 阶段推送与远端 CI | **代码已推送；CI待核验** | 05:29 UTC推送`mimouse`后，`git ls-remote`核对远端为完整SHA`9e9b02eab952da86fdd37cd13e2765d3108c76b9`（[提交](https://github.com/xjfyt/paperclip/commit/9e9b02eab952da86fdd37cd13e2765d3108c76b9)）。这是已验证切片的阶段发布，不是完整验收；本次文档为其后续变更，提交/推送另核对。该SHA的CI尚无结论。 |
+| 本批实际浏览器、OS输入法及跨平台 | **环境blocked；未完成浏览器验收** | Chromium在IPC socket阶段受限，独立浏览器不可达执行机回环，官方headless-shell下载不是有效ZIP；未打开应用页面、没有截图，不是page failure。合法兼容尝试结束且临时实例正常停止；详见[环境记录与复验](checklists/BROWSER-ENVIRONMENT-20261029.md)。OS输入法/六平台仍需用户环境。 |
+| 阶段推送与远端 CI | **当前代码已推送；资源CI成功** | 06:08 UTC核对远端`mimouse`为`358bd7a8cee36ec0999d305c50b2d3992dc5b990`（[提交](https://github.com/xjfyt/paperclip/commit/358bd7a8cee36ec0999d305c50b2d3992dc5b990)）；[该SHA资源CI](https://github.com/xjfyt/paperclip/actions/runs/40827338157/job/123293288349)已completed/success，仅证明resources检查，不是完整CI/全UI/浏览器通过。本次文档随后单独提交/推送。 |
 
-运行中的检查待取得完整终态后再更新本节。日志路径是当前执行环境的证据定位，不是用户机器上保证存在的文件。用户复验步骤及尚需提供的合同见[用户验收](USER-ACCEPTANCE.md#2026-10-29-重建候选验收入口)与[剩余项](REMAINING.md#2026-10-29-当前阻塞与明确代码边界)。当前**不能宣称全计划完成、最终全量通过或生产就绪**。
+当前358bd7a源码与本次完整UI证据已持久保全；保全不替代远端SHA、CI或独立安装验证。
+
+另有已确认的普通Claude/Codex适配器运行设置文案缺口（沙箱/搜索/fast、Chrome/权限/最大轮次与本地help）在独立切片准备，尚未计入本次358bd7a通过范围；后续合入必须重新验证新的输入，不能迁移12896项结论。日志路径是当前执行环境的证据定位，不是用户机器上保证存在的文件。用户复验步骤及尚需提供的合同见[用户验收](USER-ACCEPTANCE.md#2026-10-29-重建候选验收入口)与[剩余项](REMAINING.md#2026-10-29-当前阻塞与明确代码边界)。当前只能宣称358bd7a的上述有界检查通过，**不能宣称全计划完成、全仓全类检查通过或生产就绪**。
 
 ## 历史记录（以下均按原日期与冻结输入解读）
 
