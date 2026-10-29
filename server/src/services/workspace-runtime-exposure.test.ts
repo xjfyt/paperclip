@@ -18,20 +18,34 @@ import {
 } from "./runtime-exposure/loopback-listener.js";
 import {
   classifyExposureHostCollisions,
+  ensureRuntimeServicesForRun,
   type ExposurePortHostState,
   resetRuntimeServicesForTests,
   setWorkspaceRuntimeExposureDepsForTests,
   startRuntimeServicesForWorkspaceControl,
   stopRuntimeServicesForExecutionWorkspace,
 } from "./workspace-runtime.js";
+import { listLocalServiceRegistryRecords } from "./local-service-supervisor.js";
+
+const observedSpawns = vi.hoisted(() => vi.fn());
+vi.mock("node:child_process", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:child_process")>();
+  return { ...actual, spawn: (...args: Parameters<typeof actual.spawn>) => {
+    observedSpawns(args[0]);
+    return actual.spawn(...args);
+  } };
+});
 
 const EXECUTION_WORKSPACE_ID = "11111111-2222-4333-8444-555566667777";
 const HANDLE = "handle-abcdef1234567890";
+// Windows lacks a verified ownership/stop lifecycle; exercise its refusal below.
+const posixServiceTest = it.skipIf(process.platform === "win32");
 
 // The shared test setup pins the automatic default off so unrelated suites do
 // not probe for a real host broker. This suite is about the default, so it opts
 // back in and restores the harness value afterwards.
 beforeEach(async () => {
+  observedSpawns.mockClear();
   vi.stubEnv("PAPERCLIP_MANAGED_RUNTIME_HTTPS", "auto");
   // Registry records and append-only logs must not share a developer's instance
   // or a previous test's service identity.
@@ -362,8 +376,51 @@ function startInput(options?: {
   };
 }
 
+const windowsRefusalCases: Array<{ name: string; options?: Parameters<typeof startInput>[0]; available?: boolean; failDns?: boolean }> = [
+  { name: "explicit HTTPS" },
+  { name: "legacy automatic HTTPS", options: { serviceName: "paperclip-dev", expose: LEGACY_HTTP_EXPOSE } },
+  { name: "deliberate plain-HTTP opt-out", options: { serviceName: "paperclip-dev", expose: { ...LEGACY_HTTP_EXPOSE, tailscaleHttps: false } } },
+  { name: "custom local service", options: { serviceName: "custom", expose: null } },
+  { name: "unavailable broker", available: false },
+  { name: "hostname failure", failDns: true },
+];
+
+it.runIf(process.platform === "win32").each(windowsRefusalCases)("Windows ownership refusal before effects: $name", async (scenario) => {
+  const { broker, calls } = createBroker();
+  const available = vi.fn(async () => scenario.available ?? true);
+  const ports = vi.fn(async () => true);
+  const hostname = vi.fn(async () => {
+    if (scenario.failDns) throw new Error("fixture hostname unavailable");
+    return "fixture.tail.invalid";
+  });
+  installDeps({ broker, isBrokerAvailable: available, isPortAvailable: ports, resolveHostname: hostname });
+  const home = process.env.PAPERCLIP_HOME!;
+  const marker = path.join(home, "must-not-provision");
+  const provisionFile = path.join(guestDir, "refused-provision.cjs");
+  await fs.writeFile(provisionFile, `require('node:fs').writeFileSync(process.argv[2], 'unexpected provision');`);
+  const ps = (value: string) => `'${value.replaceAll("'", "''")}'`;
+  vi.stubEnv("SHELL", path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe"));
+  const input = startInput(scenario.options);
+  const config = { ...input.config, runtimeProvisionCommand: `& ${ps(process.execPath)} ${ps(provisionFile)} ${ps(marker)}` };
+  for (const attempt of [
+    () => startRuntimeServicesForWorkspaceControl({ ...input, config }),
+    () => ensureRuntimeServicesForRun({ runId: "windows-refused-run", agent: input.actor, issue: input.issue, workspace: input.workspace,
+      executionWorkspaceId: input.executionWorkspaceId, config, adapterEnv: input.adapterEnv }),
+  ]) {
+    await expect(attempt()).rejects.toMatchObject({ status: 422, details: { code: "workspace_runtime_service_platform_unsupported" } });
+    expect(observedSpawns).not.toHaveBeenCalled();
+    expect(calls).toEqual([]);
+    expect(available).not.toHaveBeenCalled();
+    expect(ports).not.toHaveBeenCalled();
+    expect(hostname).not.toHaveBeenCalled();
+    expect(await listLocalServiceRegistryRecords()).toEqual([]);
+    expect(await fs.readdir(home, { recursive: true })).toEqual([]);
+    await expect(fs.access(marker)).rejects.toMatchObject({ code: "ENOENT" });
+  }
+});
+
 describe("workspace runtime tailscale_https lifecycle", () => {
-  it("reserves before spawn, exposes after backend readiness, and removes on stop", async () => {
+  posixServiceTest("POSIX lifecycle: reserves before spawn, exposes after backend readiness, and removes on stop", async () => {
     const { broker, calls } = createBroker();
     let reservedPorts: number[] = [];
     installDeps({
@@ -403,7 +460,7 @@ describe("workspace runtime tailscale_https lifecycle", () => {
     for (const port of reservedPorts) expect(await isLoopbackPortFree(port)).toBe(true);
   }, 35_000);
 
-  it("fails closed and removes the mapping when external HTTPS validation fails", async () => {
+  posixServiceTest("POSIX lifecycle: fails closed and removes the mapping when external HTTPS validation fails", async () => {
     const { broker, calls } = createBroker();
     installDeps({ broker, probeHealth: async () => false });
 
@@ -413,7 +470,7 @@ describe("workspace runtime tailscale_https lifecycle", () => {
 });
 
 describe("automatic tailscale_https default for managed worktree runtimes", () => {
-  it("defaults a legacy paperclip-dev service with no exposure block, relocating its pinned port", async () => {
+  posixServiceTest("POSIX lifecycle: defaults a legacy paperclip-dev service with no exposure block, relocating its pinned port", async () => {
     const { broker, calls } = createBroker();
     installDeps({ broker });
 
@@ -435,7 +492,7 @@ describe("automatic tailscale_https default for managed worktree runtimes", () =
     expect(runtime.exposure?.state).toBe("ready");
   }, 15_000);
 
-  it("keeps an existing runtime port that is already inside the dedicated range", async () => {
+  posixServiceTest("POSIX lifecycle: keeps an existing runtime port that is already inside the dedicated range", async () => {
     const { broker } = createBroker();
     installDeps({ broker });
 
@@ -457,7 +514,7 @@ describe("automatic tailscale_https default for managed worktree runtimes", () =
     expect(runtime.url).toBe(`https://runner.tail123.ts.net:${pinnedPort}`);
   }, 15_000);
 
-  it("preserves a deliberate opt-out and leaves the service on plain HTTP", async () => {
+  posixServiceTest("POSIX lifecycle: preserves a deliberate opt-out and leaves the service on plain HTTP", async () => {
     const { broker, calls } = createBroker();
     installDeps({ broker });
 
@@ -472,7 +529,7 @@ describe("automatic tailscale_https default for managed worktree runtimes", () =
     expect(runtime.url).toBe(`http://paperclip-dev:${runtime.port}`);
   }, 15_000);
 
-  it("leaves an unmanaged/custom service untouched", async () => {
+  posixServiceTest("POSIX lifecycle: leaves an unmanaged/custom service untouched", async () => {
     const { broker, calls } = createBroker();
     installDeps({ broker });
 
@@ -487,7 +544,7 @@ describe("automatic tailscale_https default for managed worktree runtimes", () =
     expect(runtime.url).toBe(`http://paperclip-dev:${runtime.port}`);
   }, 15_000);
 
-  it("does not default when the host broker is unavailable", async () => {
+  posixServiceTest("POSIX lifecycle: does not default when the host broker is unavailable", async () => {
     const { broker, calls } = createBroker();
     installDeps({ broker, isBrokerAvailable: async () => false });
 
@@ -501,7 +558,7 @@ describe("automatic tailscale_https default for managed worktree runtimes", () =
     expect(runtime.exposure ?? null).toBeNull();
   }, 15_000);
 
-  it("still honors an explicit opt-in when the broker socket is missing, failing loudly", async () => {
+  posixServiceTest("POSIX lifecycle: still honors an explicit opt-in when the broker socket is missing, failing loudly", async () => {
     // A missing broker must never silently downgrade a requested HTTPS preview.
     const { broker, calls } = createBroker();
     const failing: BrokerClient = {
@@ -519,7 +576,7 @@ describe("automatic tailscale_https default for managed worktree runtimes", () =
     expect(calls).toEqual(["reserve"]);
   }, 15_000);
 
-  it("is idempotent across repeated starts: the same port pair is reserved again", async () => {
+  posixServiceTest("POSIX lifecycle: is idempotent across repeated starts: the same port pair is reserved again", async () => {
     const { broker, calls } = createBroker();
     installDeps({ broker });
 
@@ -546,7 +603,7 @@ describe("automatic tailscale_https default for managed worktree runtimes", () =
     expect(second.url).toBe(`https://runner.tail123.ts.net:${firstPort}`);
   }, 25_000);
 
-  it("releases the in-flight pair claim when hostname resolution fails, so a retry storm cannot exhaust the range", async () => {
+  posixServiceTest("POSIX lifecycle: releases the in-flight pair claim when hostname resolution fails, so a retry storm cannot exhaust the range", async () => {
     // The reservation keeps the winning pair's in-process claim on purpose, for
     // the caller to release on stop/teardown. A hostname failure throws before any
     // runtime record exists, so that teardown can never run for this pair — and
@@ -596,7 +653,7 @@ describe("automatic tailscale_https default for managed worktree runtimes", () =
  * via env vars that checkout never read.
  */
 describe("loopback bind is forced on the guest, not merely requested (PAP-17256)", () => {
-  it("starts a fresh service-index-0 lane whose guest only honours argv", async () => {
+  posixServiceTest("POSIX lifecycle: starts a fresh service-index-0 lane whose guest only honours argv", async () => {
     const { broker, calls } = createBroker();
     installDeps({ broker });
 
@@ -670,7 +727,7 @@ describe("loopback bind is forced on the guest, not merely requested (PAP-17256)
     expect(error!.message).toContain("--bind loopback");
   }, 20_000);
 
-  it("leaves a non-Paperclip service's --bind argument alone", async () => {
+  posixServiceTest("POSIX lifecycle: leaves a non-Paperclip service's --bind argument alone", async () => {
     // `--bind` means something entirely different to the HTTPS probe canaries
     // (`python3 -m http.server --bind 127.0.0.1`); rewriting it would break them.
     const { broker, calls } = createBroker();
@@ -689,7 +746,7 @@ describe("loopback bind is forced on the guest, not merely requested (PAP-17256)
     expect(runtime.exposure?.state).toBe("ready");
   }, 20_000);
 
-  it("does not rewrite a Paperclip dev command when the service is not exposed", async () => {
+  posixServiceTest("POSIX lifecycle: does not rewrite a Paperclip dev command when the service is not exposed", async () => {
     const { broker, calls } = createBroker();
     installDeps({ broker });
 
@@ -707,7 +764,7 @@ describe("loopback bind is forced on the guest, not merely requested (PAP-17256)
     expect(runtime.command).toBe(declared);
   }, 20_000);
 
-  it("surfaces a deployment/bind conflict from a guest that exits during startup", async () => {
+  posixServiceTest("POSIX lifecycle: surfaces a deployment/bind conflict from a guest that exits during startup", async () => {
     const { broker } = createBroker();
     installDeps({ broker });
 
@@ -723,7 +780,7 @@ describe("loopback bind is forced on the guest, not merely requested (PAP-17256)
 });
 
 describe("readiness probes loopback for an exposed runtime (PAP-17256)", () => {
-  it("starts even when the only readiness target is the MagicDNS display URL", async () => {
+  posixServiceTest("POSIX lifecycle: starts even when the only readiness target is the MagicDNS display URL", async () => {
     // The live project config declares a loopback readiness URL, but when it does
     // not, readiness falls back to `expose.urlTemplate` — a MagicDNS name that
     // resolves off-loopback. That only ever answered because the guest was bound
@@ -781,7 +838,7 @@ describe.each([false, true])("guest exposure-port collision reporting (base pair
   // test is not reachable here: a real host listener that holds the assigned port
   // is intercepted earlier, either by the pre-spawn ownership guard or by the
   // allocated-port bind wait, before the EADDRINUSE-text quarantine branch runs.
-  it("does not quarantine the pair when the guest fabricates an assigned-port EADDRINUSE with no host listener", async () => {
+  posixServiceTest("POSIX lifecycle: does not quarantine the pair when the guest fabricates an assigned-port EADDRINUSE with no host listener", async () => {
     const { broker } = createBroker();
     const reservedAppPorts: number[] = [];
     const recordingBroker: BrokerClient = {
@@ -826,7 +883,7 @@ describe.each([false, true])("guest exposure-port collision reporting (base pair
     expect(diagnosis).not.toContain("collided during startup");
   }, 25_000);
 
-  it("does not quarantine the pair for an EADDRINUSE on an unrelated auxiliary port", async () => {
+  posixServiceTest("POSIX lifecycle: does not quarantine the pair for an EADDRINUSE on an unrelated auxiliary port", async () => {
     const { broker } = createBroker();
     const reservedAppPorts: number[] = [];
     const recordingBroker: BrokerClient = {
@@ -871,7 +928,7 @@ describe.each([false, true])("guest exposure-port collision reporting (base pair
     expect(diagnosis).not.toContain("collided during startup");
   }, 25_000);
 
-  it("does not quarantine when an auxiliary EADDRINUSE mixes with a benign assigned-port line", async () => {
+  posixServiceTest("POSIX lifecycle: does not quarantine when an auxiliary EADDRINUSE mixes with a benign assigned-port line", async () => {
     const { broker } = createBroker();
     const reservedAppPorts: number[] = [];
     const recordingBroker: BrokerClient = {

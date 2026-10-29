@@ -43,7 +43,7 @@ import fs from "node:fs/promises";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   activityLog,
   companies,
@@ -74,6 +74,17 @@ import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
+import { listLocalServiceRegistryRecords } from "../services/local-service-supervisor.js";
+
+const observedSpawns = vi.hoisted(() => vi.fn());
+vi.mock("node:child_process", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:child_process")>();
+  return { ...actual, spawn: (...args: Parameters<typeof actual.spawn>) => {
+    observedSpawns(args[0]);
+    return actual.spawn(...args);
+  } };
+});
+const posixServiceTest = it.skipIf(process.platform === "win32");
 
 /**
  * The first app port this suite may select. A real instance can hold a pair
@@ -310,11 +321,19 @@ const GUEST_COMMAND =
       // Discover two verified-free pairs on the real host right before each
       // case runs, so the window between the probe and the guest bind stays
       // as short as possible.
-      const locallyLeasedPorts = await readLocallyLeasedPorts();
-      LEASED_APP_PORT = await findFreeExposureAppPort(RUNTIME_EXPOSURE_SUITE_APP_PORT_START, locallyLeasedPorts);
+      if (process.platform === "win32") {
+        // Refusal/reconciliation uses only the synthetic DB/broker model; it
+        // must not bind or probe host ports for an unsupported local service.
+        LEASED_APP_PORT = RUNTIME_EXPOSURE_SUITE_APP_PORT_START;
+        NEXT_APP_PORT = LEASED_APP_PORT + 1;
+      } else {
+        const locallyLeasedPorts = await readLocallyLeasedPorts();
+        LEASED_APP_PORT = await findFreeExposureAppPort(RUNTIME_EXPOSURE_SUITE_APP_PORT_START, locallyLeasedPorts);
+        NEXT_APP_PORT = await findFreeExposureAppPort(LEASED_APP_PORT + 1, locallyLeasedPorts);
+      }
       LEASED_HMR_PORT = deriveViteHmrPort(LEASED_APP_PORT);
-      NEXT_APP_PORT = await findFreeExposureAppPort(LEASED_APP_PORT + 1, locallyLeasedPorts);
       NEXT_HMR_PORT = deriveViteHmrPort(NEXT_APP_PORT);
+      observedSpawns.mockClear();
 
       workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pap17419-workspace-"));
       paperclipHome = await fs.mkdtemp(path.join(os.tmpdir(), "pap17419-home-"));
@@ -468,7 +487,32 @@ const GUEST_COMMAND =
       };
     }
 
-    it("regression 1: does not hand a stopped-but-leased pair to another workspace", async () => {
+    it.runIf(process.platform === "win32").each([
+      ["active", "other"], ["active", "self"], ["archived", "other"], ["archived", "self"],
+    ] as const)("Windows ownership refusal preserves a %s lease for %s startup", async (leaseStatus, target) => {
+      const seed = await seedIncident({ leaseStatus });
+      const { broker, calls } = createFakeBroker();
+      const ports = vi.fn(async () => true);
+      const list = vi.spyOn(broker, "list");
+      installDeps(broker, { isPortAvailable: ports });
+      const state = async () => ({
+        leases: await db.select().from(executionWorkspaces),
+        runtimes: await db.select().from(workspaceRuntimeServices),
+        activity: await db.select().from(activityLog),
+      });
+      const before = await state();
+      await expect(startRuntimeServicesForWorkspaceControl(startInput(seed, target === "self" ? seed.leasedWorkspaceId : seed.otherWorkspaceId)))
+        .rejects.toMatchObject({ status: 422, details: { code: "workspace_runtime_service_platform_unsupported" } });
+      expect(await state()).toEqual(before);
+      expect(observedSpawns).not.toHaveBeenCalled();
+      expect(ports).not.toHaveBeenCalled();
+      expect(list).not.toHaveBeenCalled();
+      expect(calls).toEqual([]);
+      expect(await listLocalServiceRegistryRecords()).toEqual([]);
+      expect(await fs.readdir(paperclipHome, { recursive: true })).toEqual([]);
+    });
+
+    posixServiceTest("POSIX lifecycle: regression 1: does not hand a stopped-but-leased pair to another workspace", async () => {
       const seed = await seedIncident();
       const { broker, calls } = createFakeBroker();
       installDeps(broker);
@@ -486,7 +530,7 @@ const GUEST_COMMAND =
       expect(calls[0]).toBe(`reserve:${NEXT_APP_PORT},${NEXT_HMR_PORT}`);
     }, 30_000);
 
-    it("regression 1: fails closed rather than reusing the leased pair when it is the only one left", async () => {
+    posixServiceTest("POSIX lifecycle: regression 1: fails closed rather than reusing the leased pair when it is the only one left", async () => {
       const seed = await seedIncident();
       const { broker, calls } = createFakeBroker();
       // A host on which the leased pair is the only free pair in the range.
@@ -501,7 +545,7 @@ const GUEST_COMMAND =
       expect(calls).toEqual([]);
     }, 30_000);
 
-    it("regression 1: lets the leaseholder's own workspace take its pair back", async () => {
+    posixServiceTest("POSIX lifecycle: regression 1: lets the leaseholder's own workspace take its pair back", async () => {
       const seed = await seedIncident();
       const { broker } = createFakeBroker();
       installDeps(broker);
@@ -514,7 +558,7 @@ const GUEST_COMMAND =
       expect(runtime.port).toBe(LEASED_APP_PORT);
     }, 30_000);
 
-    it("regression 3: denies a pair whose Serve mapping belongs to another runtime", async () => {
+    posixServiceTest("POSIX lifecycle: regression 3: denies a pair whose Serve mapping belongs to another runtime", async () => {
       const seed = await seedIncident();
       const { broker, foreignListeners } = createFakeBroker();
       // The pair the allocator would otherwise relocate to is already published
@@ -527,7 +571,7 @@ const GUEST_COMMAND =
       )).rejects.toThrow(/no free app\/HMR port pair available|HTTPS exposure allocation denied/);
     }, 30_000);
 
-    it("regression 5: release makes the pair reusable by a different workspace", async () => {
+    posixServiceTest("POSIX lifecycle: regression 5: release makes the pair reusable by a different workspace", async () => {
       const seed = await seedIncident({ leaseStatus: "archived" });
       const { broker } = createFakeBroker();
       installDeps(broker);
@@ -570,7 +614,7 @@ const GUEST_COMMAND =
       expect(row!.port).toBe(LEASED_APP_PORT);
     }, 30_000);
 
-    it("regression 4: concurrent starts in different workspaces never share a pair", async () => {
+    posixServiceTest("POSIX lifecycle: regression 4: concurrent starts in different workspaces never share a pair", async () => {
       const seed = await seedIncident({ leaseStatus: "archived" });
       const { broker } = createFakeBroker();
       installDeps(broker);
