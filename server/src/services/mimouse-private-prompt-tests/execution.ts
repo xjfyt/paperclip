@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
-import { heartbeatRuns, issues, type Db } from "@paperclipai/db";
+import { companies, heartbeatRuns, issues, type Db } from "@paperclipai/db";
 import { mimousePrivatePromptTests as tests } from "@paperclipai/db/schema/mimouse_private_prompt_tests";
 import type { AdapterExecutionResult } from "@paperclipai/adapter-utils";
 import type { HeartbeatRuntimeExecutionInput } from "../heartbeat/runtime-execution.js";
@@ -17,6 +17,13 @@ import { privatePromptPublicResult, sealPrivatePromptResult } from "./result.js"
 export async function findPrivatePromptExecution(db: Db, companyId: string, issueId: string | null) {
   if (!issueId) return null;
   return (await db.select().from(tests).where(and(eq(tests.companyId, companyId), eq(tests.issueId, issueId))))[0] ?? null;
+}
+async function lockExecutionContext(tx: PrivatePromptTx, binding: PrivatePromptRow) {
+  // Harness retries lock company -> intent; queue/completion lock issue ->
+  // intent. Hold a company SHARE before either row, including before FK
+  // key-share checks, so a stale retry cannot form the opposite lock cycle.
+  await tx.select({ id: companies.id }).from(companies).where(eq(companies.id, binding.companyId)).for("share");
+  await tx.select({ id: issues.id }).from(issues).where(and(eq(issues.id, binding.issueId!), eq(issues.companyId, binding.companyId))).for("share");
 }
 async function validate(tx: PrivatePromptTx, row: PrivatePromptRow, input: HeartbeatRuntimeExecutionInput) {
   const { run, agent } = input;
@@ -51,8 +58,10 @@ export async function executePrivatePromptHeartbeat(db: Db, input: HeartbeatRunt
   let spawned = false;
   try {
     const bound = await db.transaction(async tx => {
-      const [row] = await tx.select().from(tests).where(eq(tests.id, binding.id)).for("update");
-      if (row.status !== "queued" || row.attemptId) throw conflict("private_prompt_attempt_already_claimed");
+      await lockExecutionContext(tx, binding);
+      const [row] = await tx.select().from(tests).where(and(eq(tests.id, binding.id),
+        eq(tests.companyId, binding.companyId), eq(tests.issueId, binding.issueId!))).for("update");
+      if (!row || row.status !== "queued" || row.attemptId) throw conflict("private_prompt_attempt_already_claimed");
       const bound = await validate(tx, row, input);
       attemptId = randomUUID();
       await tx.update(tests).set({ attemptId, updatedAt: new Date() }).where(eq(tests.id, row.id));
@@ -87,8 +96,10 @@ export async function executePrivatePromptHeartbeat(db: Db, input: HeartbeatRunt
         privatePromptTest: { literalRevision: bound.revision.content, fixedContext, apiKey,
           prepare: async prompt => {
             await db.transaction(async tx => {
-              const [row] = await tx.select().from(tests).where(eq(tests.id, binding.id)).for("update");
-              if (row.status !== "queued" || row.attemptId !== attemptId) throw conflict("private_prompt_prepare_conflict");
+              await lockExecutionContext(tx, binding);
+              const [row] = await tx.select().from(tests).where(and(eq(tests.id, binding.id),
+                eq(tests.companyId, binding.companyId), eq(tests.issueId, binding.issueId!))).for("update");
+              if (!row || row.status !== "queued" || row.attemptId !== attemptId) throw conflict("private_prompt_prepare_conflict");
               await validate(tx, row, input);
               if (input.control.executionControl.controller.signal.aborted) throw conflict("private_prompt_cancelled");
               await tx.update(tests).set({ status: "prepared", updatedAt: new Date(), prepared: {
@@ -108,6 +119,7 @@ export async function executePrivatePromptHeartbeat(db: Db, input: HeartbeatRunt
     const sealed = sealPrivatePromptResult(result, spawned);
     const publications: ActivityPublication[] = [], actions: IssuePostCommitAction[] = [];
     await db.transaction(async tx => {
+      await tx.select({ id: companies.id }).from(companies).where(eq(companies.id, binding.companyId)).for("share");
       // Match queue lock order: issue before private intent; rollback both writes together.
       if (sealed.status === "completed") await completePrivatePromptHarness(db, tx, binding, input.run.id, publications, actions);
       const changed = await tx.update(tests).set({ status: sealed.status, errorCode: sealed.errorCode, privateResult: sealed.privateResult, updatedAt: new Date() })

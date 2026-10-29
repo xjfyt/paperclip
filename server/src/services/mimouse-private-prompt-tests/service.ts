@@ -101,8 +101,11 @@ export function assertPrivatePromptBoundSnapshot(row: PrivatePromptRow, bound: V
 export async function assertPrivatePromptEarlyBinding(db: Db, run: typeof heartbeatRuns.$inferSelect, issueId: string | null) {
   if (!issueId) return null;
   return db.transaction(async tx => {
-    const [row] = await tx.select().from(tests).where(and(eq(tests.companyId, run.companyId), eq(tests.issueId, issueId))).for("share");
+    // Match private queue/dispatch order before validating the still-current
+    // binding. A delayed harness retry may require company UPDATE -> intent.
+    await tx.select({ id: companies.id }).from(companies).where(eq(companies.id, run.companyId)).for("share");
     const [issue] = await tx.select().from(issues).where(and(eq(issues.companyId, run.companyId), eq(issues.id, issueId))).for("share");
+    const [row] = await tx.select().from(tests).where(and(eq(tests.companyId, run.companyId), eq(tests.issueId, issueId))).for("share");
     if (!row) {
       if (issue?.originKind === "private_prompt_test") throw conflict("private_prompt_missing_binding");
       return null;
@@ -161,8 +164,13 @@ async function reconcilePrivatePromptState(tx: PrivatePromptTx, row: PrivateProm
           return settled ?? row;
         }
       }
-      if (row.heartbeatRunId && ["queued", "prepared", "spawned"].includes(row.status)) {
-        const [run] = await tx.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, row.heartbeatRunId));
+      if (row.heartbeatRunId && ["queued", "prepared", "spawned", "failed"].includes(row.status)) {
+        const [run] = await tx.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.id, row.heartbeatRunId), eq(heartbeatRuns.companyId, row.companyId)));
+        // Windows termination may provide only a numeric exit code, so the
+        // adapter can settle as failed before Stop persists its acknowledged
+        // cancellation. Reconcile that durable outcome without inventing a
+        // provider-stop receipt or permitting another attempt.
+        if (row.status === "failed" && !(row.attemptId && run?.status === "cancelled")) return row;
         if (!run || ["succeeded", "failed", "cancelled", "timed_out"].includes(run.status)) {
           const [settled] = await tx.update(tests).set({ status: row.attemptId ? "unknown" : run?.status === "cancelled" ? "cancelled" : "failed",
             errorCode: row.attemptId ? "private_prompt_execution_unconfirmed" : "private_prompt_not_dispatched", updatedAt: new Date() })
@@ -255,6 +263,11 @@ export function privatePromptTestService(db: Db, wake?: (agentId: string, opts: 
       });
       if (["pending_harness", "pending_wake"].includes(created.row.status)) {
         await db.transaction(async tx => {
+          // Creating the harness increments the company's issue counter. Take
+          // that write lock before the intent, matching authorization's company
+          // -> intent order; upgrading SHARE after locking the intent can
+          // deadlock with a concurrent confirmation of the same ticket.
+          await tx.select({ id: companies.id }).from(companies).where(eq(companies.id, actor.companyId)).for("update");
           const [row] = await tx.select().from(tests).where(eq(tests.id, created.row.id)).for("update");
           if (row.status !== "pending_harness") return;
           const bound = await validatePrivatePromptResources(tx, { ...actor, sessionId: row.actorSessionId }, privatePromptInput(row), promptId, true);

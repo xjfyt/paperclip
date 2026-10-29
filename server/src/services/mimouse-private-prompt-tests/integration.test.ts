@@ -4,13 +4,14 @@ import { createServer } from "node:net";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, mkdir, readFile, readdir, writeFile, appendFile, rm, access } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { delimiter, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import { activityLog, agents, authSessions, authUsers, companies, companyMemberships, companySkills, companySkillVersions,
   mimouseEvaluationDatasets, issueCreateIdempotencyKeys, heartbeatRuns, heartbeatRunEvents, issues, agentWakeupRequests, createDb, type Db,
-  ensurePostgresDatabase, applyPendingMigrations, inspectMigrations, reconcilePendingMigrationHistory, instanceSettings, environments } from "@paperclipai/db";
+  ensurePostgresDatabase, applyPendingMigrations, inspectMigrations, reconcilePendingMigrationHistory, instanceSettings, environments,
+  loadEmbeddedPostgres, loadWithoutEmbeddedPostgresExitHooks } from "@paperclipai/db";
 import { mimousePrivatePromptTests as tests } from "@paperclipai/db/schema/mimouse_private_prompt_tests";
 
 // Only catalog discovery is scoped to the historical checkpoint. SQL reads and
@@ -46,6 +47,19 @@ vi.mock("node:fs/promises", async original => {
   };
 });
 vi.mock("../../adapters/plugin-loader.js", () => ({ buildExternalAdapters: async () => [] }));
+const harnessGate = vi.hoisted(() => ({ beforeCreate: null as null | (() => Promise<void>) }));
+vi.mock("../issues.js", async original => {
+  const actual = await original<typeof import("../issues.js")>();
+  return { ...actual, issueService: (...args: Parameters<typeof actual.issueService>) => {
+    const service = actual.issueService(...args);
+    return { ...service, create: async (...input: Parameters<typeof service.create>) => {
+      // Only pause scheduling; the real issue transaction and database remain
+      // intact so PostgreSQL observes the production lock order.
+      await harnessGate.beforeCreate?.();
+      return service.create(...input);
+    } };
+  } };
+});
 const processBoundary = vi.hoisted(() => ({ inputs: [] as string[], calls: 0, ordinaryCalls: 0, ordinaryAllowed: false, hold: false, releasePath: null as string | null, notifySpawn: null as null | (() => void) }));
 vi.mock("@paperclipai/adapter-utils/execution-target", async original => {
   const actual = await original<typeof import("@paperclipai/adapter-utils/execution-target")>();
@@ -227,8 +241,7 @@ beforeAll(async () => {
       socket.close(error => error ? reject(error) : accept(address.port));
     });
   });
-  const require = createRequire(new URL("../../../../packages/db/package.json", import.meta.url));
-  const { default: EmbeddedPostgres } = await import(require.resolve("embedded-postgres"));
+  const { default: EmbeddedPostgres } = await loadWithoutEmbeddedPostgresExitHooks(loadEmbeddedPostgres);
   pg = new EmbeddedPostgres({ databaseDir: dataDir, user: "paperclip", password: "paperclip", port, persistent: true,
     initdbFlags: ["--encoding=UTF8", "--locale=C", "--lc-messages=C"], onLog: recordPg, onError: recordPg });
   await pg.initialise();
@@ -584,6 +597,150 @@ function confirmation(approvalDigest: string) {
   return { approvalDigest, executionProfile: "claude_cli_bare_api_key_v1" as const,
     confirmRestrictedProfile: true as const, confirmExecution: true as const, confirmPossibleCharges: true as const };
 }
+/** Scheduling instrumentation only: all builders, SQL, rows, transactions,
+ * authorization and provider-boundary processes execute unchanged. */
+function scheduledPrivateDb(options: {
+  afterTransaction?: (result: any) => Promise<void>;
+  afterLock?: (table: unknown, strength: string, rows: any[]) => Promise<void>;
+  errors: string[];
+}): Db {
+  const builder = (query: any, table?: unknown, strength?: string): any => new Proxy(query, {
+    get(target, key) {
+      if (key === "then") return (accept: any, reject: any) => Promise.resolve(target).then(async rows => {
+        if (strength && options.afterLock) await options.afterLock(table, strength, rows as any[]);
+        return rows;
+      }).then(accept, reject);
+      const value = Reflect.get(target, key);
+      if (typeof value !== "function") return value;
+      return (...args: any[]) => {
+        const result = value.apply(target, args);
+        return result && typeof result === "object" ? builder(result, key === "from" ? args[0] : table,
+          key === "for" ? args[0] : strength) : result;
+      };
+    },
+  });
+  return new Proxy(db, {
+    get(target, key) {
+      if (key === "transaction") return async (callback: any, config: any) => {
+        try {
+          const result = await target.transaction(tx => callback(new Proxy(tx, {
+            get(transaction, property) {
+              if (property === "select") return (...args: any[]) => builder((transaction.select as any)(...args));
+              const value = Reflect.get(transaction, property);
+              return typeof value === "function" ? value.bind(transaction) : value;
+            },
+          })), config);
+          await options.afterTransaction?.(result);
+          return result;
+        } catch (error) {
+          let cause: any = error;
+          while (cause) { if (typeof cause.code === "string") options.errors.push(cause.code); cause = cause.cause; }
+          throw error;
+        }
+      };
+      const value = Reflect.get(target, key);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+}
+it.each(["queue", "early_binding", "claim", "prepare", "completion"])("orders stale harness retries against the real private %s transaction", async phase => {
+  const before = processBoundary.calls;
+  const errors: string[] = [];
+  let wakeArgs: Parameters<typeof heartbeat.wakeup> | undefined;
+  const service = rawPrivatePromptTestService(db, async (...args) => { wakeArgs = args; return null; });
+  const ticket = await service.prepare(actor, promptId, preparationInput());
+  const admitted = await service.execute(actor, promptId, ticket.item.id, confirmation(ticket.item.approvalDigest));
+  expect(admitted.item.status).toBe("pending_wake"); expect(wakeArgs).toBeDefined();
+  let releaseSnapshot!: () => void, releaseWorker!: () => void;
+  let snapshotReached = false, workerReached = false, duplicateSettled = false;
+  const snapshotGate = new Promise<void>(resolve => { releaseSnapshot = resolve; });
+  const workerGate = new Promise<void>(resolve => { releaseWorker = resolve; });
+  let firstTransaction = true;
+  const duplicateDb = scheduledPrivateDb({ errors, afterTransaction: async () => {
+    if (!firstTransaction) return;
+    firstTransaction = false; snapshotReached = true; await snapshotGate;
+  } });
+  const workerDb = scheduledPrivateDb({ errors, afterLock: async (table, strength, rows) => {
+    if (workerReached || !rows.length) return;
+    const row = rows[0];
+    const selected = phase === "completion"
+      ? table === issues && strength === "update" && row.id === admitted.item.issueId && processBoundary.calls > before
+      : table === tests && row.id === ticket.item.id && (
+        phase === "queue" ? strength === "update" && row.status === "pending_wake"
+        : phase === "early_binding" ? strength === "share" && row.status === "queued"
+        : strength === "update" && row.status === "queued" && (phase === "prepare" ? Boolean(row.attemptId) : !row.attemptId));
+    if (selected) { workerReached = true; await workerGate; }
+  } });
+  const worker = heartbeatService(workerDb, { runtimeEnv: {} });
+  const duplicate = rawPrivatePromptTestService(duplicateDb, async () => null)
+    .execute(actor, promptId, ticket.item.id, confirmation(ticket.item.approvalDigest));
+  const duplicateOutcome = duplicate.then(value => { duplicateSettled = true; return { value }; }, error => { duplicateSettled = true; return { error }; });
+  let waking: Promise<unknown> | undefined;
+  try {
+    await vi.waitFor(() => expect(snapshotReached).toBe(true), { timeout: 10000 });
+    // The request really read pending_wake before queueing. Resume it only
+    // after the real worker/queue holds its production row lock.
+    waking = worker.wakeup(...wakeArgs!);
+    waking.catch(() => {});
+    await vi.waitFor(() => expect(workerReached).toBe(true), { timeout: 20000 });
+    releaseSnapshot();
+    await vi.waitFor(async () => {
+      const waiting = await db.execute(sql`select query from pg_stat_activity where datname = current_database()
+        and wait_event_type = 'Lock' and pid <> pg_backend_pid()`);
+      expect(duplicateSettled).toBe(false);
+      expect(waiting.some(row => /(?:companies|mimouse_private_prompt_tests)/.test(String(row.query)))).toBe(true);
+    }, { timeout: 10000 });
+    releaseWorker();
+    const result = await duplicateOutcome;
+    expect("error" in result ? result.error : null).toBeNull();
+    await waking;
+    await drainHeartbeatRunsToQuiescence(workerDb, worker);
+    const completed = await service.detail(actor, promptId, ticket.item.id);
+    expect(errors).not.toContain("40P01");
+    expect(completed.item.status).toBe("completed");
+    expect(processBoundary.calls).toBe(before + 1);
+    expect(await db.select().from(issues).where(eq(issues.originId, ticket.item.id))).toHaveLength(1);
+    expect(await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.idempotencyKey, `private-prompt-test:${ticket.item.id}`))).toHaveLength(1);
+    expect((await db.select().from(issues).where(eq(issues.id, admitted.item.issueId!)))[0].status).toBe("done");
+    console.log(`private lock regression ${phase}: completed once; PostgreSQL deadlock codes=${JSON.stringify(errors)}`);
+  } finally {
+    releaseSnapshot(); releaseWorker();
+    await duplicateOutcome;
+    await waking?.catch(() => {});
+    await drainHeartbeatRunsToQuiescence(workerDb, worker);
+  }
+}, 45000);
+it("orders company and intent locks when a duplicate confirmation overlaps harness creation", async () => {
+  const before = processBoundary.calls;
+  const service = rawPrivatePromptTestService(db, async () => null);
+  const ticket = await service.prepare(actor, promptId, preparationInput());
+  let entered!: () => void, release!: () => void;
+  const reached = new Promise<void>(resolve => { entered = resolve; });
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  harnessGate.beforeCreate = async () => { harnessGate.beforeCreate = null; entered(); await gate; };
+  const first = service.execute(actor, promptId, ticket.item.id, confirmation(ticket.item.approvalDigest));
+  let second: typeof first | undefined;
+  try {
+    await reached;
+    second = service.execute(actor, promptId, ticket.item.id, confirmation(ticket.item.approvalDigest));
+    await vi.waitFor(async () => {
+      const waiting = await db.execute(sql`select query from pg_stat_activity where datname = current_database()
+        and wait_event_type = 'Lock' and pid <> pg_backend_pid()`);
+      expect(waiting.some(row => /(?:companies|mimouse_private_prompt_tests)/.test(String(row.query)))).toBe(true);
+    }, { timeout: 10000 });
+    release();
+    const results = await Promise.all([first, second]);
+    expect(results.map(result => result.item.id)).toEqual([ticket.item.id, ticket.item.id]);
+    expect(new Set(results.map(result => result.item.issueId)).size).toBe(1);
+    expect(results[0].item.issueId).not.toBeNull();
+    expect(await db.select().from(issues).where(eq(issues.originId, ticket.item.id))).toHaveLength(1);
+    expect(processBoundary.calls).toBe(before);
+  } finally {
+    harnessGate.beforeCreate = null;
+    release();
+    await Promise.allSettled(second ? [first, second] : [first]);
+  }
+}, 30000);
 it("prepares metadata only and never resumes an existing ticket even after admission", async () => {
   const before = processBoundary.calls, wake = vi.fn(async () => null), service = rawPrivatePromptTestService(db, wake);
   const preparation = preparationInput();
@@ -728,8 +885,8 @@ it("produces own-agent routing proof through private execution and central accou
   const { verifyProducedRuntimeRoutingEvidence } = await import("../mimouse-cost-routing/evidence-db-cases.js");
   const produced = await verifyProducedRuntimeRoutingEvidence(db, actor, heartbeat, input.agentId, input.skillVersionId);
   expect(processBoundary.calls).toBe(before + 4);
-  await mkdir(join(home, "routing-bin")); await writeFile(join(home, "routing-bin", "claude"), "#!/bin/sh\n# Hash-only fixture, never execute.\nexit 97\n", { mode: 0o700 });
-  vi.stubEnv("PATH", `${join(home, "routing-bin")}:${process.env.PATH}`);
+  await mkdir(join(home, "routing-bin")); await writeFile(join(home, "routing-bin", process.platform === "win32" ? "claude.cmd" : "claude"), "#!/bin/sh\n# Hash-only fixture, never execute.\nexit 97\n", { mode: 0o700 });
+  vi.stubEnv("PATH", `${join(home, "routing-bin")}${delimiter}${process.env.PATH}`);
   for (const name of Object.keys(process.env).filter(k => /^(LD_|DYLD_|NODE_OPTIONS$|NODE_PATH$|BASH_ENV$|ENV$|ANTHROPIC_AUTH_TOKEN$|ANTHROPIC_BASE_URL$|CLAUDE_CODE_OAUTH_TOKEN$|CLAUDE_CODE_USE_)/i.test(k))) vi.stubEnv(name, "");
   vi.stubEnv("PAPERCLIP_PROMPT_APPLICATIONS_ENABLED", "true"); vi.stubEnv("PAPERCLIP_RUNTIME_COST_ROUTING_ENABLED", "true");
   const { resolveDefaultAgentWorkspaceDir } = await import("../../home-paths.js");
@@ -737,12 +894,35 @@ it("produces own-agent routing proof through private execution and central accou
   // managed home. Remove only that descendant of this marked disposable fixture
   // to exercise genuine ordinary workspace initialization, never pre-mkdir it.
   const selectedHome = resolve(resolveDefaultAgentWorkspaceDir(produced[1].reference.agentId));
-  if (!selectedHome.startsWith(`${resolve(home)}/`) || await readFile(join(home, ".private-prompt-test-fixture"), "utf8") !== "paperclip-private-prompt-disposable-v1") throw Error("Refusing non-fixture workspace cleanup");
+  const selectedRelative = relative(resolve(home), selectedHome);
+  if (!selectedRelative || selectedRelative === ".." || selectedRelative.startsWith(`..${sep}`) || isAbsolute(selectedRelative) ||
+      await readFile(join(home, ".private-prompt-test-fixture"), "utf8") !== "paperclip-private-prompt-disposable-v1") throw Error("Refusing non-fixture workspace cleanup");
   await rm(selectedHome, { recursive: true, force: true });
   expect(await access(selectedHome).then(() => true, () => false)).toBe(false);
   const { verifyRuntimeRoutingDispatch } = await import("../mimouse-cost-routing/runtime-db-cases.js");
   processBoundary.ordinaryAllowed = true;
-  try { await verifyRuntimeRoutingDispatch(db, actor, heartbeat, produced, () => processBoundary.ordinaryCalls); }
+  try {
+    // Terminal run/accounting rows can precede the worker's finally cleanup.
+    // Approval requires actual stop evidence, so await that same real gate;
+    // never clear a PID, fake a receipt or lower the production requirement.
+    const { agentExecutionsHaveStopped } = await import("../agent-execution-stop.js");
+    await vi.waitFor(async () => expect(await agentExecutionsHaveStopped(db, produced.map(item => item.reference.agentId))).toBe(true),
+      { timeout: 20000, interval: 100 });
+    await verifyRuntimeRoutingDispatch(db, actor, heartbeat, produced, () => processBoundary.ordinaryCalls);
+  }
+  catch (error) {
+    const runs = await db.select({ id: heartbeatRuns.id, agentId: heartbeatRuns.agentId, status: heartbeatRuns.status,
+      processPid: heartbeatRuns.processPid, processGroupId: heartbeatRuns.processGroupId, processStartedAt: heartbeatRuns.processStartedAt,
+      controllerLeaseExpiresAt: heartbeatRuns.controllerLeaseExpiresAt, executionStage: heartbeatRuns.executionStage }).from(heartbeatRuns);
+    const { readProcessStartedAt } = await import("../hot-restart.js");
+    const observations = [];
+    for (const run of runs.filter(row => produced.some(item => item.reference.agentId === row.agentId))) {
+      let alive = false; try { if (run.processPid) { process.kill(run.processPid, 0); alive = true; } } catch {}
+      observations.push({ ...run, alive, actualStartedAt: alive ? await readProcessStartedAt(run.processPid!).catch(e => String(e)) : null });
+    }
+    console.error("private routing stop diagnostics", JSON.stringify(observations));
+    throw error;
+  }
   finally { processBoundary.ordinaryAllowed = false; }
   expect(processBoundary.calls).toBe(before + 4); expect(processBoundary.ordinaryCalls).toBe(1);
 }, 180000);

@@ -1,4 +1,5 @@
 import { snapshotFile } from "../skill-snapshot.js";
+import path from "node:path";
 import { expect, it } from "vitest";
 import { privatePromptExecutionPolicy, privatePromptFixedContext, assertPrivatePromptLocalEnvironment, assertPrivatePromptTextInventory, assertPrivatePromptHarness, assertPrivatePromptRuntimeConfig, assertPrivatePromptProfile, privateConfigDigest } from "./profile.js";
 import { privatePromptWakeAuthority, privatePromptWakeOptions } from "./wake-authority.js";
@@ -13,6 +14,12 @@ it("accepts only the explicit fixed-version API-key CLI profile", () => {
 it("canonical config digest is order independent and changes with pinned configuration", () => {
   expect(privateConfigDigest({ b: 2, a: 1 })).toBe(privateConfigDigest({ a: 1, b: 2 }));
   expect(privateConfigDigest(profile)).not.toBe(privateConfigDigest({ ...profile, model: "claude-other" }));
+});
+it("accepts the host's absolute workspace paths and rejects relative working directories", () => {
+  expect(() => assertPrivatePromptProfile("claude_local", { ...profile, cwd: path.resolve("fixture-workspace") })).not.toThrow();
+  for (const cwd of ["relative/workspace", "../workspace", "", 42]) {
+    expect(() => assertPrivatePromptProfile("claude_local", { ...profile, cwd })).toThrow("private_prompt_profile_unsupported");
+  }
 });
 it("serialized/copied/generic wake options cannot forge server-owned authority", () => {
   const opts = privatePromptWakeOptions({ id: "test", issueId: "issue", actorUserId: "user" } as never);

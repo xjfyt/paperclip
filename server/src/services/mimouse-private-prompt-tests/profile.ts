@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import path from "node:path";
 import { isExecutionForcedToKubernetes, isLocalExecutionDenied } from "../execution-allowlist.js";
 import { unprocessable } from "../../errors.js";
 export const PRIVATE_PROMPT_IMPLEMENTATION = "paperclip.builtin.claude-local.cli.literal.v1" as const;
@@ -22,7 +23,7 @@ export function assertPrivatePromptProfile(adapterType: string, raw: unknown) {
   const binding = env.ANTHROPIC_API_KEY as Record<string, unknown> | undefined;
   if (adapterType !== "claude_local" || config.engine !== "cli" || Object.keys(config).some(key => !allowed.has(key)) ||
       typeof config.model !== "string" || !/^claude-[a-zA-Z0-9.-]+$/.test(config.model) ||
-      config.cwd !== undefined && (typeof config.cwd !== "string" || !config.cwd.startsWith("/")) ||
+      config.cwd !== undefined && (typeof config.cwd !== "string" || !path.isAbsolute(config.cwd)) ||
       Object.keys(env).length !== 1 || !binding || binding.type !== "secret_ref" ||
       typeof binding.secretId !== "string" || typeof binding.version !== "number" || !Number.isSafeInteger(binding.version) || binding.version < 1) {
     throw unprocessable("private_prompt_profile_unsupported");

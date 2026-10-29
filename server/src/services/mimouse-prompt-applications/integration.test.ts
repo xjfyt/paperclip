@@ -1,14 +1,13 @@
-import { createRequire } from "node:module";
 import { createServer } from "node:net";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, writeFile, appendFile, rm, mkdir, access } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { delimiter, join, resolve } from "node:path";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import { activityLog, agents, authSessions, authUsers, companies, companyMemberships, companySkills, companySkillVersions, costEvents,
   createDb, ensurePostgresDatabase, applyPendingMigrations, environments, heartbeatRuns, heartbeatRunEvents, issues, agentWakeupRequests,
-  mimousePrompts, mimousePromptRevisions, mimouseEvaluationDatasets, principalPermissionGrants, type Db } from "@paperclipai/db";
+  mimousePrompts, mimousePromptRevisions, mimouseEvaluationDatasets, principalPermissionGrants, loadEmbeddedPostgres, loadWithoutEmbeddedPostgresExitHooks, type Db } from "@paperclipai/db";
 import { mimousePrivatePromptTests } from "@paperclipai/db/schema/mimouse_private_prompt_tests";
 import { mimousePromptApplications, mimousePromptApplicationHeads, mimousePromptApplicationDispatches } from "@paperclipai/db/schema/mimouse_prompt_applications";
 vi.mock("../../adapters/plugin-loader.js", () => ({ buildExternalAdapters: async () => [] }));
@@ -49,8 +48,8 @@ beforeAll(async () => {
   vi.stubEnv("PAPERCLIP_PROMPT_APPLICATIONS_ENABLED", "true"); vi.stubEnv("PAPERCLIP_TELEMETRY_DISABLED", "1"); vi.stubEnv("DO_NOT_TRACK", "1");
   vi.stubEnv("PAPERCLIP_DISABLE_CWD_ENV_FILE", "true"); vi.stubEnv("DATABASE_URL", ""); vi.stubEnv("DATABASE_MIGRATION_URL", "");
   for (const key of ["ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "ANTHROPIC_BEDROCK_BASE_URL", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY"]) vi.stubEnv(key, "");
-  await mkdir(join(home, "bin")); await writeFile(join(home, "bin", "claude"), "#!/bin/sh\n# Inert hash-only fixture. Must never execute.\nexit 97\n", { mode: 0o700 });
-  vi.stubEnv("PATH", `${join(home, "bin")}:${process.env.PATH}`);
+  await mkdir(join(home, "bin")); await writeFile(join(home, "bin", process.platform === "win32" ? "claude.cmd" : "claude"), "#!/bin/sh\n# Inert hash-only fixture. Must never execute.\nexit 97\n", { mode: 0o700 });
+  vi.stubEnv("PATH", `${join(home, "bin")}${delimiter}${process.env.PATH}`);
   for (const name of Object.keys(process.env).filter(k => /^(LD_|DYLD_|NODE_OPTIONS$|NODE_PATH$|BASH_ENV$|ENV$)/i.test(k))) vi.stubEnv(name, "");
   vi.stubGlobal("fetch", vi.fn(async () => { throw Error("Network forbidden in controlled prompt fixture"); }));
   const port = await new Promise<number>((accept, reject) => { const socket = createServer(); socket.once("error", reject); socket.listen(0, "127.0.0.1", () => {
@@ -58,8 +57,7 @@ beforeAll(async () => {
   const dataDir = join(home, "db");
   if (!resolve(home).startsWith(join(tmpdir(), "paperclip-prompt-application-")) || await readFile(join(home, ".owned-test"), "utf8") !== "controlled-prompt-disposable-v1") throw Error("Missing owned fixture boundary");
   for (const name of ["PG_VERSION", "postmaster.pid"]) if (await access(join(dataDir, name)).then(() => true, () => false)) throw Error("Refusing pre-existing PostgreSQL state");
-  const require = createRequire(new URL("../../../../packages/db/package.json", import.meta.url));
-  const { default: EmbeddedPostgres } = await import(require.resolve("embedded-postgres"));
+  const { default: EmbeddedPostgres } = await loadWithoutEmbeddedPostgresExitHooks(loadEmbeddedPostgres);
   pg = new EmbeddedPostgres({ databaseDir: join(home, "db"), user: "paperclip", password: "paperclip", port, persistent: true,
     initdbFlags: ["--encoding=UTF8", "--locale=C", "--lc-messages=C"], onLog: () => {}, onError: () => {} });
   await pg.initialise(); await appendFile(join(home, "db", "postgresql.conf"), "\nunix_socket_directories = ''\nlisten_addresses = '127.0.0.1'\n"); await pg.start();

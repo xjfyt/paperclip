@@ -2692,6 +2692,12 @@ export function createHeartbeatQueue(db: Db, dependencies: HeartbeatQueueDepende
 
       const outcome = await db
         .transaction(async (tx) => {
+          if (privateTestId) {
+            // A stale private harness retry takes company UPDATE -> intent.
+            // Establish the same company -> issue -> intent order before the
+            // queue's validation and company foreign-key key-share checks.
+            await tx.select({ id: companies.id }).from(companies).where(eq(companies.id, agent.companyId)).for("share");
+          }
           await tx.execute(
             sql`select id from issues where id = ${issueId} and company_id = ${agent.companyId} for update`,
           );
