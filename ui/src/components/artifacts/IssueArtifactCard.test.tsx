@@ -1,3 +1,4 @@
+import "@/i18n/artifact-test-resources";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";

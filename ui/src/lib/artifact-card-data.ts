@@ -1,3 +1,5 @@
+import { formatNumber } from "@/i18n";
+
 /** Optional producer metadata must never become invented facts in an artifact card. */
 export function artifactText(
   metadata: Record<string, unknown> | null,
@@ -42,9 +44,9 @@ export function artifactPreviewUrl(value: string): string {
 
 export function artifactFileSize(bytes: number | null): string {
   if (bytes === null) return "";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes < 1024) return `${formatNumber(bytes)} B`;
+  if (bytes < 1024 * 1024) return `${formatNumber(bytes / 1024, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} KB`;
+  return `${formatNumber(bytes / (1024 * 1024), { minimumFractionDigits: 1, maximumFractionDigits: 1 })} MB`;
 }
 
 export const CSV_PREVIEW_MAX_BYTES = 1024 * 1024;

@@ -1,4 +1,4 @@
-import { t as chromeT, useTranslation as useChromeTranslation } from "@/i18n";
+import { t as chromeT, useTranslation as useChromeTranslation, formatNumber } from "@/i18n";
 import { localProviderChrome } from "../transcript/local-provider-chrome";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
@@ -522,7 +522,7 @@ function WorkspaceFileCard({ item }: { item: TaskChatWorkspaceFileItem }) {
     ? item.displayName.split(".").at(-1)?.toUpperCase()
     : "FILE";
   const label =
-    item.presentation === "generic" ? "File" : titleCaseKey(item.presentation);
+    chromeT(`artifactUi.${item.presentation === "generic" ? "file" : item.presentation}`);
   const workspaceFileRef = useMemo(
     () => ({
       path: item.path,
@@ -541,7 +541,7 @@ function WorkspaceFileCard({ item }: { item: TaskChatWorkspaceFileItem }) {
         status={
           item.source === "runner_verified" ? "completed" : "informational"
         }
-        summary={`${label} · ${extension}${item.line ? ` · line ${item.line}` : ""}`}
+        summary={`${label} · ${extension}${item.line ? ` · ${chromeT("artifactUi.line", { line: formatNumber(item.line) })}` : ""}`}
         testId="task-chat-workspace-file"
       >
         <div className="flex flex-wrap items-center gap-2">

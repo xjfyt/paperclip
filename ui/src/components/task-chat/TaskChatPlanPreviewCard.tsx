@@ -1,3 +1,4 @@
+import { formatNumber, useTranslation } from "@/i18n";
 import type { IssueDocument } from "@paperclipai/shared";
 import { Lightbulb, Maximize2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -5,7 +6,7 @@ import type { TaskChatProviderActivityItem } from "./task-chat-model";
 
 const PLAN_PREVIEW_LINE_COUNT = 3;
 
-export function planPreviewContent(markdown: string) {
+export function planPreviewContent(markdown: string, fallbackTitle = "Plan") {
   const lines = markdown
     .split("\n")
     .map((line) => line.trim())
@@ -13,7 +14,7 @@ export function planPreviewContent(markdown: string) {
   const headingIndex = lines.findIndex((line) => /^#\s+/.test(line));
   const title = headingIndex >= 0
     ? lines[headingIndex]!.replace(/^#\s+/, "").trim()
-    : "Plan";
+    : fallbackTitle;
   const preview = lines
     .filter((line, index) => index !== headingIndex && !/^(```|~~~|---+$|\*\*\*+$|___+$)/.test(line))
     .map((line) => line
@@ -51,10 +52,10 @@ export interface TaskChatPlanPreviewCardProps {
   className?: string;
 }
 
-function livePlanContent(activity: TaskChatProviderActivityItem) {
+function livePlanContent(activity: TaskChatProviderActivityItem, fallbackTitle: string) {
   const title = activity.title.trim() && activity.title.trim().toLowerCase() !== "plan"
     ? activity.title.trim()
-    : "Plan";
+    : fallbackTitle;
   const preview = activity.steps
     .map((step) => step.label.trim())
     .filter(Boolean)
@@ -82,16 +83,17 @@ export function TaskChatPlanPreviewCard({
   testId = "task-chat-plan-preview",
   className,
 }: TaskChatPlanPreviewCardProps) {
+  const { t } = useTranslation();
   const revision = planRevision(source);
   const content = source.kind === "saved" && source.document
-    ? planPreviewContent(source.document.body)
+    ? planPreviewContent(source.document.body, t("artifactUi.plan"))
     : source.kind === "saved"
-      ? { title: source.fallbackTitle?.trim() || "Plan", preview: [] as string[] }
-      : livePlanContent(source.activity);
+      ? { title: source.fallbackTitle?.trim() || t("artifactUi.plan"), preview: [] as string[] }
+      : livePlanContent(source.activity, t("artifactUi.plan"));
   const live = source.kind === "live";
   const headerDetail = revision == null
     ? null
-    : `rev ${revision}`;
+    : t("artifactUi.shortRevision", { revision: formatNumber(revision) });
   const body = (
     <>
       <div className="flex items-center gap-2 border-b border-border/70 px-3 py-2.5 text-sm text-muted-foreground">
@@ -100,7 +102,7 @@ export function TaskChatPlanPreviewCard({
           className={cn("h-4 w-4 shrink-0", live && "text-(--status-agent-running)")}
         />
         <span className={cn("font-medium", live && "shimmer-text shimmer-text-muted")} data-testid={live ? "task-chat-plan-streaming-status" : undefined}>
-          {live ? "Writing plan" : "Plan"}
+          {t(live ? "artifactUi.writingPlan" : "artifactUi.plan")}
         </span>
         {headerDetail ? (
           <span
@@ -129,7 +131,7 @@ export function TaskChatPlanPreviewCard({
           </ul>
         ) : (
           <p className="mt-1 text-sm text-muted-foreground">
-            {live ? "Waiting for the first plan step…" : "Open the synchronized plan to review it."}
+            {t(live ? "artifactUi.waitingPlan" : "artifactUi.openPlanHint")}
           </p>
         )}
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-linear-to-b from-transparent to-card/95" />
@@ -147,7 +149,7 @@ export function TaskChatPlanPreviewCard({
       <a
         href={href}
         data-testid={testId}
-        aria-label={ariaLabel ?? `Open Plan${revision == null ? "" : ` revision ${revision}`}`}
+        aria-label={ariaLabel ?? (revision == null ? t("artifactUi.openPlan") : t("artifactUi.openPlanRevision", { revision: formatNumber(revision) }))}
         className={sharedClassName}
       >
         {body}
@@ -157,7 +159,7 @@ export function TaskChatPlanPreviewCard({
 
   return (
     <section
-      aria-label={ariaLabel ?? "Streaming Plan preview"}
+      aria-label={ariaLabel ?? t("artifactUi.streamingPlan")}
       data-testid={testId}
       className={sharedClassName}
     >

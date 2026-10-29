@@ -1,3 +1,4 @@
+import { t, formatNumber, useTranslation } from "@/i18n";
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Agent, AcceptedPlanDecompositionSummary } from "@paperclipai/shared";
@@ -14,18 +15,19 @@ interface IssuePlanDecompositionsSectionProps {
 }
 
 function StatusBadge({ status }: { status: AcceptedPlanDecompositionSummary["status"] }) {
+  useTranslation();
   if (status === "completed") {
     return (
       <span className="inline-flex items-center gap-1 rounded-sm border border-emerald-500/50 bg-emerald-500/10 px-2 py-0.5 text-(length:--text-micro) font-medium text-emerald-900 dark:text-emerald-100">
         <CheckCircle2 className="h-3 w-3" />
-        Completed
+        {t("artifactUi.completed")}
       </span>
     );
   }
   return (
     <span className="inline-flex items-center gap-1 rounded-sm border border-amber-500/50 bg-amber-500/10 px-2 py-0.5 text-(length:--text-micro) font-medium text-amber-900 dark:text-amber-100">
       <Loader2 className="h-3 w-3 animate-spin" />
-      In flight
+      {t("artifactUi.inFlight")}
     </span>
   );
 }
@@ -35,6 +37,7 @@ export function IssuePlanDecompositionsSection({
   issueIdentifier,
   agentMap,
 }: IssuePlanDecompositionsSectionProps) {
+  useTranslation();
   const { data: decompositions } = useQuery({
     queryKey: queryKeys.issues.acceptedPlanDecompositions(issueId),
     queryFn: () => issuesApi.listAcceptedPlanDecompositions(issueId),
@@ -46,9 +49,9 @@ export function IssuePlanDecompositionsSection({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-sm font-medium text-muted-foreground">Plan decomposition</h3>
+        <h3 className="text-sm font-medium text-muted-foreground">{t("artifactUi.decomposition")}</h3>
         <span className="text-(length:--text-micro) text-muted-foreground/80">
-          {items.length === 1 ? "1 accepted plan revision" : `${items.length} accepted plan revisions`}
+          {t("artifactUi.acceptedRevision", { count: items.length, number: formatNumber(items.length) })}
         </span>
       </div>
 
@@ -57,12 +60,12 @@ export function IssuePlanDecompositionsSection({
           const requested = record.requestedChildCount ?? 0;
           const created = record.childIssueIds?.length ?? 0;
           const ownerName = record.ownerAgentId
-            ? agentMap?.get(record.ownerAgentId)?.name ?? "agent"
+            ? agentMap?.get(record.ownerAgentId)?.name ?? t("artifactUi.agent")
             : null;
           const revisionLabel =
             record.acceptedPlanRevisionNumber != null
-              ? `revision ${record.acceptedPlanRevisionNumber}`
-              : `revision ${record.acceptedPlanRevisionId.slice(0, 8)}`;
+              ? formatNumber(record.acceptedPlanRevisionNumber)
+              : record.acceptedPlanRevisionId.slice(0, 8);
           const completedAt =
             record.completedAt && typeof record.completedAt === "string"
               ? record.completedAt
@@ -91,40 +94,40 @@ export function IssuePlanDecompositionsSection({
               <div className="flex flex-wrap items-center gap-2">
                 <StatusBadge status={record.status} />
                 <span className="text-xs text-muted-foreground">
-                  Plan {revisionLabel}
+                  {t("artifactUi.planRevision", { revision: revisionLabel })}
                 </span>
                 <span className="text-xs text-muted-foreground/70">·</span>
                 <span className="inline-flex items-center gap-1 text-xs text-foreground">
                   <GitBranch className="h-3 w-3 text-muted-foreground" />
-                  {created} of {requested} child {requested === 1 ? "task" : "tasks"} created
+                  {t("artifactUi.childrenCreated", { created: formatNumber(created), requested: formatNumber(requested) })}
                 </span>
                 {record.status === "completed" && requested > 0 ? (
                   <span
                     className="inline-flex items-center gap-1 rounded-sm border border-sky-500/40 bg-sky-500/10 px-1.5 py-0.5 text-(length:--text-nano) font-medium text-sky-900 dark:text-sky-100"
-                    title="Repeat attempts with this fingerprint reuse this record instead of creating new children"
+                    title={t("artifactUi.idempotentHint")}
                   >
                     <Repeat className="h-3 w-3" />
-                    Idempotent claim
+                    {t("artifactUi.idempotent")}
                   </span>
                 ) : null}
               </div>
 
               <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-(length:--text-micro) text-muted-foreground">
-                {ownerName ? <span>Owner: {ownerName}</span> : null}
+                {ownerName ? <span>{t("artifactUi.owner", { owner: ownerName })}</span> : null}
                 {startedAt ? (
-                  <span title={formatDateTime(startedAt)}>Started {relativeTime(startedAt)}</span>
+                  <span title={formatDateTime(startedAt)}>{t("artifactUi.started", { time: relativeTime(startedAt) })}</span>
                 ) : null}
                 {completedAt ? (
-                  <span title={formatDateTime(completedAt)}>Completed {relativeTime(completedAt)}</span>
+                  <span title={formatDateTime(completedAt)}>{t("artifactUi.completedTime", { time: relativeTime(completedAt) })}</span>
                 ) : updatedAt ? (
-                  <span title={formatDateTime(updatedAt)}>Updated {relativeTime(updatedAt)}</span>
+                  <span title={formatDateTime(updatedAt)}>{t("artifactUi.updatedTime", { time: relativeTime(updatedAt) })}</span>
                 ) : null}
                 {issueIdentifier ? (
                   <Link
                     to={`/issues/${issueIdentifier}#document-plan`}
                     className="underline-offset-2 hover:underline"
                   >
-                    Plan document
+                    {t("artifactUi.planDocument")}
                   </Link>
                 ) : null}
               </div>

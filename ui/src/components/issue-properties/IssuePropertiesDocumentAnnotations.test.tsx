@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import "@/i18n/artifact-test-resources";
 
 import { act } from "react";
 import { createRoot } from "react-dom/client";
