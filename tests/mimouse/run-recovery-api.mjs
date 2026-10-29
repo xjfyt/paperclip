@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const stamp = path.join(root, "server/dist/build-info.json");
 if (!existsSync(stamp) || !existsSync(path.join(root, "server/dist/index.js"))) throw new Error("Build the server successfully before running compiled recovery tests");
+if (!existsSync(path.join(root, "ui/dist/index.html"))) throw new Error("Build the UI before running compiled recovery tests");
 const { commit } = JSON.parse(readFileSync(stamp, "utf8"));
 if (typeof commit !== "string" || !/^[a-f0-9]{40}$/.test(commit)) throw new Error("Valid server build stamp required");
 // A test/doc-only commit may follow the build; changed runtime sources may not.
@@ -18,6 +19,7 @@ const result = spawnSync(process.execPath, [require.resolve("@playwright/test/cl
     // Dedicated disposable-fixture values; never inherit a production auth key.
     BETTER_AUTH_SECRET: "mimouse-disposable-auth-fixture-secret-never-for-production",
     PAPERCLIP_AUTH_PUBLIC_BASE_URL: "http://127.0.0.1:3100",
+    PAPERCLIP_AUTH_BASE_URL_MODE: "explicit", PAPERCLIP_AUTH_DISABLE_SIGN_UP: "false",
   },
 });
 if (result.error) throw result.error;
