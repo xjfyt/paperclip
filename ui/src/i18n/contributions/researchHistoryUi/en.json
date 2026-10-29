@@ -1,0 +1,34 @@
+{
+  "title": "Routine history",
+  "boundary": "Read-only persisted receipts, not proof of execution success or verified external sources. Pages are separate snapshots. No agent is dispatched.",
+  "loading": "Loading history…",
+  "error": "History could not be read. Retry to check current access.",
+  "retry": "Retry",
+  "empty": "No visible history.",
+  "unknown": "Unknown",
+  "attempt": "Execution attempt",
+  "receipt": "Report receipt",
+  "latest": "Latest",
+  "older": "Older",
+  "report": {
+    "received": "Report received · quarantined and unverified",
+    "not_received": "No matching report receipt",
+    "needs_review": "Identity incomplete or inconsistent · needs review",
+    "coalesced": "Coalesced · another execution’s report is not this receipt"
+  },
+  "status": {
+    "received": "Trigger received",
+    "issue_created": "Task created",
+    "completed": "Task completed",
+    "failed": "Failed",
+    "coalesced": "Coalesced",
+    "skipped": "Skipped",
+    "skipped_paused": "Skipped while paused",
+    "queued": "Queued",
+    "running": "Running",
+    "succeeded": "Execution recorded as succeeded",
+    "timed_out": "Timed out",
+    "cancelled": "Cancelled",
+    "interrupted": "Interrupted"
+  }
+}

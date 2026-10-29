@@ -25,9 +25,10 @@ export function MimouseResearch() {
   if (session.isPending) return <p>{t("common.loading")}</p>;
   if (session.isError) return <p role="alert">{t("researchUi.readError")}</p>;
   const userId = session.data?.user?.id ?? session.data?.session?.userId ?? "local-board";
-  return <ResearchCompany key={`${selectedCompanyId}:${userId}`} companyId={selectedCompanyId} userId={userId} />;
+  const sessionId = session.data?.session?.id ?? "no-session";
+  return <ResearchCompany key={`${selectedCompanyId}:${userId}:${sessionId}`} companyId={selectedCompanyId} userId={userId} sessionId={sessionId} />;
 }
-function ResearchCompany({ companyId, userId }: { companyId: string; userId: string }) {
+function ResearchCompany({ companyId, userId, sessionId }: { companyId: string; userId: string; sessionId: string }) {
   const { t } = useTranslation(), active = useActive(), client = useQueryClient(), [search, setSearch] = useSearchParams();
   const [draft, setDraft] = useState(freshDraft), [invalid, setInvalid] = useState(false), [notice, setNotice] = useState(""), [beforeId, setBeforeId] = useState<string>();
   const selected = search.get("candidate"), root = `/companies/${companyId}/research-candidates`, key = ["mimouse-research", companyId, userId];
@@ -41,7 +42,7 @@ function ResearchCompany({ companyId, userId }: { companyId: string; userId: str
   if (list.isError) return <div><p role="alert">{t("researchUi.readError")}</p><Button onClick={() => { void list.refetch(); }}>{t("operationsUi.retryRead")}</Button></div>;
   return <div className="space-y-6">
     <p className="text-sm text-muted-foreground">{t("researchUi.boundary")}</p>
-    {userId !== "local-board" && <ResearchRoutinePanel key={`${companyId}:${userId}`} companyId={companyId} userId={userId} />}
+    {userId !== "local-board" && <ResearchRoutinePanel key={`${companyId}:${userId}:${sessionId}`} companyId={companyId} userId={userId} sessionId={sessionId} />}
     <form className="space-y-3 rounded-lg border border-border p-4" onSubmit={event => {
       event.preventDefault(); if (create.isPending) return; setInvalid(false); setNotice("");
       try { const result = researchCandidateSchema.safeParse({ ...draft, sources: JSON.parse(draft.sources) }); if (!result.success) { setInvalid(true); return; } create.mutate(result.data); } catch { setInvalid(true); }

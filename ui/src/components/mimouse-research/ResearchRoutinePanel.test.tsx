@@ -6,12 +6,14 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { i18n } from "@/i18n";
 import { ResearchRoutinePanel } from "./ResearchRoutinePanel";
 const calls = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn(), list: vi.fn(), create: vi.fn() }));
-vi.mock("@/api/client", () => ({ api: { get: calls.get, put: calls.put } }));
+vi.mock("@/api/client", () => ({ api: { put: calls.put } }));
+vi.mock("@/api/research-private", () => ({ researchPrivateGet: calls.get }));
+vi.mock("./ResearchRoutineHistory", () => ({ ResearchRoutineHistory: () => null }));
 vi.mock("@/api/routines", () => ({ routinesApi: { list: calls.list, create: calls.create } }));
 vi.mock("@/lib/router", () => ({ Link: ({ to, children }: { to: string; children: ReactNode }) => <a href={to}>{children}</a> }));
 let host: HTMLDivElement, root: Root, client: QueryClient;
 async function flush() { await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); }); }
-async function mount(companyId = "company") { await act(async () => root.render(<QueryClientProvider client={client}><ResearchRoutinePanel key={companyId} companyId={companyId} userId="owner" /></QueryClientProvider>)); await flush(); await flush(); }
+async function mount(companyId = "company", userId = "owner", sessionId = "session") { await act(async () => root.render(<QueryClientProvider client={client}><ResearchRoutinePanel companyId={companyId} userId={userId} sessionId={sessionId} /></QueryClientProvider>)); await flush(); await flush(); }
 async function setProduct(value: string) { const input = host.querySelector('input:not([type="checkbox"])') as HTMLInputElement;
   await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value); input.dispatchEvent(new Event("input", { bubbles: true })); }); }
 async function click(text: string) { const button = [...host.querySelectorAll("button")].find(node => node.textContent === text)!;
@@ -45,7 +47,7 @@ it.each(["zh-CN", "es", "ja"])("renders localized scheduled-research controls in
   await i18n.changeLanguage(language); await mount(); expect(host.textContent).not.toContain("Create paused research routine"); expect(host.querySelectorAll("button")).toHaveLength(2);
 });
 it("uses only the privacy-filtered research routine selector", async () => {
-  await mount(); expect(calls.get).toHaveBeenCalledWith("/companies/company/research-routines/available");
+  await mount(); expect(calls.get).toHaveBeenCalledWith("/companies/company/research-routines/available", expect.any(AbortSignal));
   expect(calls.list).not.toHaveBeenCalled(); expect(host.textContent).toContain("configure an open project or parent");
 });
 it("subscribes to language changes after mount and translates status without changing IDs", async () => {
@@ -64,4 +66,15 @@ it("does not create a second routine while the first creation is pending", async
   await act(async () => finish({ id: "new-routine", status: "paused" })); await flush();
   expect(calls.put).toHaveBeenCalledTimes(1);
   expect(calls.put).toHaveBeenCalledWith("/companies/company/research-routines/new-routine", { product: "MiWork", enabled: false });
+});
+
+it.each(["company", "user", "session"])("does not bind a late create after a %s change", async scope => {
+  let finish!: (value: { id: string; status: string }) => void;
+  calls.create.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+  await mount(); await setProduct("Old private draft"); await click("Create paused research routine");
+  await mount(scope === "company" ? "other" : "company", scope === "user" ? "other-owner" : "owner", scope === "session" ? "new-session" : "session");
+  await setProduct("New draft");
+  await act(async () => finish({ id: "old-routine", status: "paused" })); await flush();
+  expect(calls.put).not.toHaveBeenCalled();
+  expect((host.querySelector('input:not([type="checkbox"])') as HTMLInputElement).value).toBe("New draft");
 });

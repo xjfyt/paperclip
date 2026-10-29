@@ -1,0 +1,34 @@
+{
+  "title": "例行运行历史",
+  "boundary": "只读持久回执，不代表执行成功或外部来源已验证。各页为独立快照，不派发 Agent。",
+  "loading": "正在读取历史…",
+  "error": "无法读取历史。请重试以检查当前权限。",
+  "retry": "重试",
+  "empty": "暂无可见历史。",
+  "unknown": "未知",
+  "attempt": "执行尝试",
+  "receipt": "报告回执",
+  "latest": "最新",
+  "older": "更早",
+  "report": {
+    "received": "报告已接收 · 隔离且未验证",
+    "not_received": "暂无匹配的报告回执",
+    "needs_review": "身份缺失或不一致 · 需复核",
+    "coalesced": "已合并 · 不借用其他执行的报告回执"
+  },
+  "status": {
+    "received": "触发已接收",
+    "issue_created": "任务已创建",
+    "completed": "任务已完成",
+    "failed": "失败",
+    "coalesced": "已合并",
+    "skipped": "已跳过",
+    "skipped_paused": "暂停时跳过",
+    "queued": "排队中",
+    "running": "运行中",
+    "succeeded": "执行记录为成功",
+    "timed_out": "超时",
+    "cancelled": "已取消",
+    "interrupted": "已中断"
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "title": "Historial de la rutina",
+  "boundary": "Recibos persistidos de solo lectura; no prueban el éxito ni verifican fuentes externas. Cada página es una instantánea distinta. No se envía ningún agente.",
+  "loading": "Cargando historial…",
+  "error": "No se pudo leer el historial. Reintenta para comprobar el acceso actual.",
+  "retry": "Reintentar",
+  "empty": "No hay historial visible.",
+  "unknown": "Desconocido",
+  "attempt": "Intento de ejecución",
+  "receipt": "Recibo del informe",
+  "latest": "Más recientes",
+  "older": "Anteriores",
+  "report": {
+    "received": "Informe recibido · en cuarentena y sin verificar",
+    "not_received": "Sin recibo de informe coincidente",
+    "needs_review": "Identidad incompleta o incoherente · requiere revisión",
+    "coalesced": "Combinado · el informe de otra ejecución no es este recibo"
+  },
+  "status": {
+    "received": "Activación recibida",
+    "issue_created": "Tarea creada",
+    "completed": "Tarea completada",
+    "failed": "Fallido",
+    "coalesced": "Combinado",
+    "skipped": "Omitido",
+    "skipped_paused": "Omitido durante la pausa",
+    "queued": "En cola",
+    "running": "En ejecución",
+    "succeeded": "Ejecución registrada como correcta",
+    "timed_out": "Tiempo agotado",
+    "cancelled": "Cancelado",
+    "interrupted": "Interrumpido"
+  }
+}
