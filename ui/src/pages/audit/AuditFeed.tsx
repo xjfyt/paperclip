@@ -57,6 +57,12 @@ const ENTITY_TYPES: { value: string; label: string }[] = [
   { value: "tool_connection", label: "connection" },
 ];
 
+/** Display only known system entity types; custom types are opaque protocol values. */
+function auditEntityTypeLabel(type: string): string {
+  const entry = ENTITY_TYPES.find(candidate => candidate.value !== ALL && candidate.value === type);
+  return entry ? translate(`auditFeedUi.${entry.label}`) : type;
+}
+
 /**
  * Which actors the feed covers. `all` is the shared company activity view
  * (people, agents, and the system); `agents` is the privileged agent-action
@@ -189,7 +195,7 @@ function AuditEntityNode({ record }: { record: AuditActionRecord }) {
     );
   }
   // Non-linkable entities (company, agent, goal, …) — show a plain descriptor.
-  return <span className="text-muted-foreground">{record.entityType}</span>;
+  return <span className="text-muted-foreground">{auditEntityTypeLabel(record.entityType)}</span>;
 }
 
 function AuditRow({
@@ -537,7 +543,7 @@ export function AuditFeed({
             ? t("auditFeedUi.scopedRun", { run: lockedRunId.slice(0, 8) })
             : lockedAgentId
               ? t("auditFeedUi.scopedAgent")
-              : t("auditFeedUi.scopedEntity", { entity: lockedEntity?.label ?? lockedEntity?.type ?? t("auditFeedUi.entity") })}
+              : t("auditFeedUi.scopedEntity", { entity: lockedEntity?.label ?? (lockedEntity ? auditEntityTypeLabel(lockedEntity.type) : t("auditFeedUi.entity")) })}
         </div>
       ) : null}
 

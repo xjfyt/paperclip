@@ -619,6 +619,19 @@ describe("AuditFeed", () => {
     expect(revokeUrl).toHaveBeenCalledWith("blob:mock");
     expect(pushToastMock).toHaveBeenCalledWith(expect.objectContaining({ tone: "success" }));
   });
+  it.each(["en", "zh-CN", "es", "ja"] as const)("localizes known entity descriptors but keeps custom entity types raw in %s", async locale => {
+    listAgentActionsMock.mockResolvedValue({ items: [
+      record({ id: "known-entity", action: "company.updated", entityType: "company", entity: { issue: null, comment: null, document: null } }),
+      record({ id: "raw-entity", action: "vendor.raw_action", entityType: "vendor.raw_entity", entity: { issue: null, comment: null, document: null } }),
+    ], nextCursor: null, accessTier: "full" });
+    await render(); const reads = listAgentActionsMock.mock.calls.length;
+    await reactAct(async () => { await i18n.changeLanguage(locale); }); await flushReact();
+    const rows = [...container.querySelectorAll("li")];
+    expect(rows[0]?.querySelector("div.min-w-0.space-y-1 > div")?.lastElementChild?.textContent).toBe(i18n.t("auditFeedUi.company"));
+    expect(rows[1]?.querySelector("div.min-w-0.space-y-1 > div")?.lastElementChild?.textContent).toBe("vendor.raw_entity"); expect(rows[1]?.textContent).toContain("vendor.raw_action");
+    expect(listAgentActionsMock).toHaveBeenCalledTimes(reads);
+  });
+
   it.each(["en", "zh-CN", "es", "ja"] as const)("retains dates, focus, URLs and export identity through %s", async locale => {
     expect(validateLocaleMessages(auditFeedMessages[locale], auditFeedMessages.en)).toEqual([]);
     listAgentActionsMock.mockResolvedValue({ items: [record({ entity: { issue: { id: "issue-1", identifier: "PAP-1", title: "Activity" }, comment: { excerpt: "Export failed" }, document: null } })], nextCursor: null, accessTier: "full" });
