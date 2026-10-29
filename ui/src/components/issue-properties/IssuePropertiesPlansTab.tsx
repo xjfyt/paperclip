@@ -1,3 +1,5 @@
+import { formatDate, formatNumber, useTranslation } from "@/i18n";
+import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Issue, IssueThreadInteraction } from "@paperclipai/shared";
@@ -36,10 +38,12 @@ function hasPendingPlanConfirmation(interactions: IssueThreadInteraction[] | und
  * the /dev/task-chat-lab harness).
  */
 export function IssuePropertiesPlansTab({ issue }: IssuePropertiesPlansTabProps) {
-  const { data: planDocument, isLoading: planDocumentLoading } = useIssuePlanDocument(issue.id);
+  const { t } = useTranslation();
+  const planQuery = useIssuePlanDocument(issue.id);
+  const { data: planDocument } = planQuery;
   const location = useLocation();
   const [annotationPanelOpen, setAnnotationPanelOpen] = useState(false);
-  const { data } = useQuery({
+  const historyQuery = useQuery({
     queryKey: queryKeys.issues.acceptedPlanDecompositions(issue.id),
     queryFn: () => issuesApi.listAcceptedPlanDecompositions(issue.id),
   });
@@ -47,32 +51,46 @@ export function IssuePropertiesPlansTab({ issue }: IssuePropertiesPlansTabProps)
     queryKey: queryKeys.issues.interactions(issue.id),
     queryFn: () => issuesApi.listInteractions(issue.id),
   });
-  const hasPlans = (data?.length ?? 0) > 0;
+  const hasPlans = (historyQuery.data?.length ?? 0) > 0;
+  const feedback = (
+    <>
+      {planQuery.isError ? (
+        <div role="alert" className="text-sm text-muted-foreground">
+          {t("documentUi.planLoadError")}
+          <Button variant="ghost" size="sm" onClick={() => void planQuery.refetch()}>{t("documentUi.retry")}</Button>
+        </div>
+      ) : null}
+      {historyQuery.isError ? (
+        <div role="alert" className="text-sm text-muted-foreground">
+          {t("documentUi.historyLoadError")}
+          <Button variant="ghost" size="sm" onClick={() => void historyQuery.refetch()}>{t("documentUi.retry")}</Button>
+        </div>
+      ) : null}
+    </>
+  );
   const pendingPlanConfirmation = hasPendingPlanConfirmation(interactions);
 
   if (!planDocument && !hasPlans) {
     return (
       <div className="px-1 py-6 text-sm text-muted-foreground">
-        {planDocumentLoading ? (
-          "Loading plan…"
-        ) : issue.workMode === "planning" ? (
+        {feedback}
+        {planQuery.isLoading || historyQuery.isLoading ? (
+          <p role="status">{t(planQuery.isLoading ? "documentUi.planLoading" : "documentUi.historyLoading")}</p>
+        ) : planQuery.isError || historyQuery.isError ? null : issue.workMode === "planning" ? (
           <div className="space-y-2">
-            <p>This task is in plan mode but no plan document has been written yet.</p>
+            <p>{t("documentUi.planningMissing")}</p>
             {pendingPlanConfirmation ? (
-              <p className="text-amber-foreground">
-                A plan confirmation is pending, but the plan document it should confirm is missing.
-              </p>
+              <p className="text-amber-foreground">{t("documentUi.confirmationMissing")}</p>
             ) : null}
           </div>
-        ) : (
-          "No plan yet. The plan document, accepted plans, and their revisions will appear here."
-        )}
+        ) : t("documentUi.planMissing")}
       </div>
     );
   }
 
   return (
     <div className="space-y-4 py-2">
+      {feedback}
       {/* Plan approval lives in ONE place — the plan confirmation card in the
           conversation thread (PAP-418). This tab now only shows the plan itself
           and its accepted-revision history, so there is no second surface to
@@ -80,12 +98,11 @@ export function IssuePropertiesPlansTab({ issue }: IssuePropertiesPlansTabProps)
       {planDocument ? (
         <section data-testid="issue-plan-document" className="space-y-2">
           <div className="flex items-center gap-1 text-xs text-muted-foreground">
-            {`Revision ${planDocument.latestRevisionNumber ?? 1} · updated ${new Date(planDocument.updatedAt).toLocaleString([], {
-              month: "short",
-              day: "numeric",
-              hour: "numeric",
-              minute: "2-digit",
-            })}`}
+            {t("documentUi.revision", { revision: formatNumber(planDocument.latestRevisionNumber ?? 1) })}
+            {" · "}
+            {t("documentUi.updated", { date: formatDate(new Date(planDocument.updatedAt), {
+              month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+            }) })}
             <DocumentAnnotationsCountChip
               issueId={issue.id}
               docKey="plan"

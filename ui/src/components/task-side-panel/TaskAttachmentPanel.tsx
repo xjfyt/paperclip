@@ -1,3 +1,4 @@
+import { useTranslation } from "@/i18n";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Download } from "lucide-react";
@@ -47,6 +48,7 @@ export function TextAttachmentPreview({ title, text, markdown, html = false, csv
   csv?: boolean;
   downloadUrl: string;
 }) {
+  const { t } = useTranslation();
   const [mode, setMode] = useState<FilePreviewMode>("rendered");
   useEffect(() => setMode("rendered"), [title]);
   const renderCsv = csv && mode === "rendered" && text.length > 0;
@@ -55,23 +57,24 @@ export function TextAttachmentPreview({ title, text, markdown, html = false, csv
     <div className="flex h-full min-h-0 flex-col">
       <header className="flex items-center gap-2 border-b border-border px-3 py-2">
         <h2 className="min-w-0 flex-1 truncate text-sm font-medium" title={title}>{title}</h2>
-        {markdown || html || csv ? <FilePreviewModeToggle mode={mode} onChange={setMode} label={html ? "HTML view" : csv ? "CSV view" : "Markdown view"} /> : null}
+        {markdown || html || csv ? <FilePreviewModeToggle mode={mode} onChange={setMode} label={t(html ? "documentUi.htmlView" : csv ? "documentUi.csvView" : "documentUi.markdownView")} /> : null}
         <Button asChild variant="ghost" size="icon-sm">
-          <a href={downloadUrl} download aria-label={`Download ${title}`} title={`Download ${title}`}><Download aria-hidden /></a>
+          <a href={downloadUrl} download aria-label={t("documentUi.downloadTitle", { title })} title={t("documentUi.downloadTitle", { title })}><Download aria-hidden /></a>
         </Button>
       </header>
       <div className={renderHtml || renderCsv ? "flex min-h-0 flex-1 flex-col overflow-hidden" : "min-h-0 flex-1 overflow-auto p-4"}>
-        {text.length === 0 ? <p className="text-sm text-muted-foreground">File is empty.</p>
+        {text.length === 0 ? <p className="text-sm text-muted-foreground">{t("documentUi.fileEmpty")}</p>
           : renderCsv ? <CsvPreview text={text} title={title} />
           : renderHtml ? <HtmlArtifactPreview html={text} title={title} />
           : markdown && mode === "rendered" ? <MarkdownBody mediaMode="reference">{text}</MarkdownBody>
-          : <pre className="whitespace-pre-wrap break-words font-mono text-sm" aria-label={`${title} raw text`}>{text}</pre>}
+          : <pre className="whitespace-pre-wrap break-words font-mono text-sm" aria-label={t("documentUi.rawText", { title })}>{text}</pre>}
       </div>
     </div>
   );
 }
 
 export function TaskAttachmentPanel({ issueId, attachmentId }: { issueId: string; attachmentId: string }) {
+  const { t } = useTranslation();
   const attachments = useQuery({
     queryKey: queryKeys.issues.attachments(issueId),
     queryFn: () => issuesApi.listAttachments(issueId),
@@ -88,19 +91,19 @@ export function TaskAttachmentPanel({ issueId, attachmentId }: { issueId: string
     enabled: Boolean(eligible),
     retry: false,
   });
-  if (attachments.isLoading) return <p className="p-4 text-sm" role="status">Loading file…</p>;
-  if (attachments.isError) return <div className="p-4" role="alert">Could not load attachment details. <Button onClick={() => void attachments.refetch()}>Retry</Button></div>;
-  if (!attachment) return <p className="p-4 text-sm" role="status">File no longer available. Close this tab or choose another file.</p>;
+  if (attachments.isLoading) return <p className="p-4 text-sm" role="status">{t("documentUi.fileLoading")}</p>;
+  if (attachments.isError) return <div className="p-4" role="alert">{t("documentUi.attachmentLoadError")} <Button onClick={() => void attachments.refetch()}>{t("documentUi.retry")}</Button></div>;
+  if (!attachment) return <p className="p-4 text-sm" role="status">{t("documentUi.fileMissing")}</p>;
   const downloadUrl = attachmentDownloadPath(attachment);
   if (!eligible || content.isError) {
     return (
       <div className="space-y-3 p-4" role="alert">
-        <p className="text-sm">{content.isError ? "Could not preview this file. Retry or download it." : "This file is too large or is not supported for text preview. Download it instead."}</p>
-        {eligible ? <Button onClick={() => void content.refetch()}>Retry</Button> : null}
-        <Button asChild variant="outline"><a href={downloadUrl} download>Download file</a></Button>
+        <p className="text-sm">{t(content.isError ? "documentUi.previewError" : "documentUi.previewUnsupported")}</p>
+        {eligible ? <Button onClick={() => void content.refetch()}>{t("documentUi.retry")}</Button> : null}
+        <Button asChild variant="outline"><a href={downloadUrl} download>{t("documentUi.downloadFile")}</a></Button>
       </div>
     );
   }
-  if (content.data === undefined) return <p className="p-4 text-sm" role="status">Loading file…</p>;
+  if (content.data === undefined) return <p className="p-4 text-sm" role="status">{t("documentUi.fileLoading")}</p>;
   return <TextAttachmentPreview key={attachment.id} title={attachment.originalFilename ?? attachment.id} text={content.data} csv={isCsvFile(attachment.originalFilename ?? "", attachment.contentType)} markdown={isMarkdownAttachment(attachment)} html={isHtmlPreview(attachment.contentType, attachment.originalFilename)} downloadUrl={downloadUrl} />;
 }

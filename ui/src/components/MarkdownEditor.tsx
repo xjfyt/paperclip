@@ -38,6 +38,9 @@ import {
   defaultSvgIcons,
   type IconKey,
   type RealmPlugin,
+  realmPlugin,
+  translation$,
+  type Translation,
 } from "@mdxeditor/editor";
 import {
   buildAgentMentionHref,
@@ -138,6 +141,15 @@ function readHtmlAttribute(attrs: string, name: string): string | null {
   const match = new RegExp(`${name}\\s*=\\s*("([^"]*)"|'([^']*)'|([^\\s>]+))`, "i").exec(attrs);
   return match?.[2] ?? match?.[3] ?? match?.[4] ?? null;
 }
+
+// MDXEditor's translation prop initializes its realm only once. Publish updates
+// through the public plugin lifecycle instead of remounting the Lexical editor:
+// locale/label changes must not discard drafts, selection, or undo history.
+const liveTranslationPlugin = realmPlugin<{ translation: Translation }>({
+  update(realm, params) {
+    if (params) realm.pub(translation$, params.translation);
+  },
+});
 
 /** MDXEditor icon override: the image chip's delete button gets the lucide X. */
 function editorIconFor(name: IconKey): ReactElement {
@@ -746,6 +758,13 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
   readOnly = false,
 }: MarkdownEditorProps, forwardedRef) {
   const { t: editorT } = useTranslation();
+  const editorTranslation = useCallback<Translation>((key, fallback, interpolations = {}) =>
+    key === "contentArea.editableMarkdown"
+      ? ariaLabel ?? editorT("taskPanel.editableMarkdown")
+      : Object.entries(interpolations).reduce(
+          (text, [name, value]) => text.replaceAll(`{{${name}}}`, String(value)),
+          fallback,
+        ), [ariaLabel, editorT]);
   const editorValue = useMemo(() => prepareMarkdownForEditor(value), [value]);
   const { slashCommands: sharedSlashCommands } = useEditorAutocomplete();
   const slashCommands = useMemo(
@@ -1523,14 +1542,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
       <MarkdownEditorRichErrorBoundary onError={handleRichEditorRenderError}>
         <MDXEditor
           ref={setEditorRef}
-          translation={(key, fallback, interpolations = {}) =>
-            key === "contentArea.editableMarkdown"
-              ? ariaLabel ?? editorT("taskPanel.editableMarkdown")
-              : Object.entries(interpolations).reduce(
-                  (text, [name, value]) => text.replaceAll(`{{${name}}}`, String(value)),
-                  fallback,
-                )
-          }
+          translation={editorTranslation}
           markdown={editorValue}
           iconComponentFor={editorIconFor}
           suppressHtmlProcessing
@@ -1581,7 +1593,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
             contentClassName,
           )}
           additionalLexicalNodes={[MentionAwareLinkNode, mentionAwareLinkNodeReplacement]}
-          plugins={plugins}
+          plugins={[...plugins, liveTranslationPlugin({ translation: editorTranslation })]}
         />
       </MarkdownEditorRichErrorBoundary>
 

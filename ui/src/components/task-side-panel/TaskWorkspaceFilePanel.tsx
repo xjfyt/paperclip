@@ -1,5 +1,8 @@
+import { useTranslation } from "@/i18n";
+import { useOptionalCompany } from "@/context/CompanyContext";
+import { useCommittedResourceScope } from "@/hooks/useCommittedResourceScope";
 import { isCsvFile } from "@/lib/csv-preview";
-import { useEffect, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Check, Copy, Download } from "lucide-react";
 import { fileResourcesApi } from "@/api/file-resources";
@@ -23,10 +26,20 @@ export function TaskWorkspaceFilePanel({
   payload: WorkspaceFilePayload;
   onFallbackToProject?: () => void;
 }) {
+  const { t } = useTranslation();
+  const company = useOptionalCompany();
   const [previewMode, setPreviewMode] = useState<"raw" | "rendered">("rendered");
-  useEffect(() => setPreviewMode("rendered"), [payload.path, payload.workspace, payload.workspaceId, payload.projectId]);
+
   const [copied, setCopied] = useState(false);
   const [announcement, setAnnouncement] = useState("");
+  const [copyFailed, setCopyFailed] = useState(false);
+  const timer = useRef<number | null>(null);
+  const scope = JSON.stringify([company?.selectedCompanyId, issueId, payload.path, payload.workspace, payload.workspaceId, payload.projectId]);
+  const isCurrent = useCommittedResourceScope(scope);
+  useLayoutEffect(() => {
+    setPreviewMode("rendered"); setCopied(false); setCopyFailed(false); setAnnouncement("");
+    return () => { if (timer.current !== null) window.clearTimeout(timer.current); };
+  }, [scope]);
   const state: FileViewerUrlState = {
     path: payload.path,
     workspace: payload.workspace,
@@ -67,22 +80,26 @@ export function TaskWorkspaceFilePanel({
               type="button"
               variant="ghost"
               size="icon-sm"
-              aria-label="Copy file contents"
-              title={copied ? "Copied" : "Copy file contents"}
+              aria-label={t("documentUi.copyFile")}
+              title={t(copied ? "documentUi.copied" : "documentUi.copyFile")}
               onClick={() => {
                 void copyTextToClipboard(contentQuery.data!.content.data).then(() => {
-                  setCopied(true);
-                  window.setTimeout(() => setCopied(false), 1800);
+                  if (!isCurrent()) return;
+                  setCopied(true); setCopyFailed(false);
+                  if (timer.current !== null) window.clearTimeout(timer.current);
+                  timer.current = window.setTimeout(() => { if (isCurrent()) setCopied(false); }, 1800);
+                }).catch(() => {
+                  if (isCurrent()) { setCopied(false); setCopyFailed(true); }
                 });
               }}
             >
               {copied ? <Check aria-hidden /> : <Copy aria-hidden />}
             </Button>
           ) : null}
-          {renderedPreview && contentQuery.data ? <FilePreviewModeToggle mode={previewMode} onChange={setPreviewMode} label="File preview mode" /> : null}
+          {renderedPreview && contentQuery.data ? <FilePreviewModeToggle mode={previewMode} onChange={setPreviewMode} label={t("documentUi.filePreviewMode")} /> : null}
           {downloadUrl ? (
             <Button asChild variant="ghost" size="icon-sm">
-              <a href={downloadUrl} download={resource?.title} aria-label="Download file" title="Download file">
+              <a href={downloadUrl} download={resource?.title} aria-label={t("documentUi.downloadFile")} title={t("documentUi.downloadFile")}>
                 <Download aria-hidden />
               </a>
             </Button>
@@ -90,7 +107,7 @@ export function TaskWorkspaceFilePanel({
         </div>
       </header>
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="sr-only" aria-live="polite">{announcement}</div>
+        <div className="sr-only" aria-live="polite">{copyFailed ? t("documentUi.copyFailed") : copied ? t("documentUi.copied") : announcement}</div>
         <FileViewerBody
           previewMode={previewMode}
           resolveQuery={resourceQuery}
@@ -102,7 +119,7 @@ export function TaskWorkspaceFilePanel({
             void resourceQuery.refetch();
             if (resource?.capabilities.preview) void contentQuery.refetch();
           }}
-          onSetAnnouncement={setAnnouncement}
+          onSetAnnouncement={(message) => { if (isCurrent()) setAnnouncement(message); }}
           onFallbackToProject={onFallbackToProject ?? null}
         />
       </div>

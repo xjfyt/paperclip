@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import "@/i18n/document-test-resources";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
 import { act } from "react";
