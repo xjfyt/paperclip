@@ -179,7 +179,9 @@ vi.mock("@mdxeditor/editor", async () => {
     listsPlugin: () => ({}),
     markdownShortcutPlugin: () => ({}),
     quotePlugin: () => ({}),
-    realmPlugin: (plugin: unknown) => plugin,
+    // realmPlugin returns a parameterized factory, not the definition object.
+    realmPlugin: () => () => ({}),
+    translation$: Symbol("translation$"),
     tablePlugin: () => ({}),
     thematicBreakPlugin: () => ({}),
   };
