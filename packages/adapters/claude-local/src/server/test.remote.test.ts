@@ -1,3 +1,6 @@
+import { installIsolatedHostFixture } from "@paperclipai/adapter-utils/test-fixtures/isolated-host";
+// Register outer cleanup before this file registers its own resource hooks.
+installIsolatedHostFixture();
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AdapterExecutionTarget } from "@paperclipai/adapter-utils/execution-target";
 

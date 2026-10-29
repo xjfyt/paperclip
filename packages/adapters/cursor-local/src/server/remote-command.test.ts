@@ -1,8 +1,8 @@
+import { runPosixSandboxProcess as runChildProcess } from "@paperclipai/adapter-utils/test-fixtures/portable-cli";
 import fs from "node:fs/promises";
 import os from "node:os";
-import path from "node:path";
+import { fixturePath as path, sandboxPath, shellExecutable, shellArgs, shellEnvironment, shellScript } from "@paperclipai/adapter-utils/test-fixtures/local-sandbox";
 import { describe, expect, it } from "vitest";
-import { runChildProcess } from "@paperclipai/adapter-utils/server-utils";
 import { prepareCursorSandboxCommand } from "./remote-command.js";
 
 function createLocalSandboxRunner() {
@@ -19,9 +19,9 @@ function createLocalSandboxRunner() {
       onSpawn?: (meta: { pid: number; startedAt: string }) => Promise<void>;
     }) => {
       counter += 1;
-      return await runChildProcess(`cursor-remote-command-${counter}`, input.command, input.args ?? [], {
+      return await runChildProcess(`cursor-remote-command-${counter}`, shellExecutable(input.command), shellArgs(input.args), {
         cwd: input.cwd ?? process.cwd(),
-        env: input.env ?? {},
+        env: shellEnvironment(input.env),
         stdin: input.stdin,
         timeoutSec: Math.max(1, Math.ceil((input.timeoutMs ?? 30_000) / 1000)),
         graceSec: 5,
@@ -45,7 +45,7 @@ printf '%s\\n' ok
 
 describe("prepareCursorSandboxCommand", () => {
   it("prefers the Cursor installer bin directory when the default agent entrypoint is installed there", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-cursor-remote-command-cursor-bin-"));
+    const root = sandboxPath(await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-cursor-remote-command-cursor-bin-")));
     const systemHomeDir = path.join(root, "system-home");
     const managedHomeDir = path.join(root, "managed-home");
     const remoteWorkspace = path.join(root, "workspace");
@@ -91,7 +91,7 @@ describe("prepareCursorSandboxCommand", () => {
   });
 
   it("keeps probing the original sandbox home after managed HOME overrides", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-cursor-remote-command-"));
+    const root = sandboxPath(await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-cursor-remote-command-")));
     const systemHomeDir = path.join(root, "system-home");
     const managedHomeDir = path.join(root, "managed-home");
     const remoteWorkspace = path.join(root, "workspace");

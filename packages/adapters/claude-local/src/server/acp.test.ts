@@ -1,10 +1,13 @@
+import { installIsolatedHostFixture } from "@paperclipai/adapter-utils/test-fixtures/isolated-host";
+// Register outer cleanup before this file registers its own resource hooks.
+installIsolatedHostFixture();
 import fs from "node:fs/promises";
 import os from "node:os";
-import path from "node:path";
+import { fixturePath as path, sandboxPath, shellExecutable, shellArgs, shellEnvironment, cleanupLocalSandboxProcesses } from "@paperclipai/adapter-utils/test-fixtures/local-sandbox";
 import { createPromptContextFixture } from "@paperclipai/adapter-utils/test-fixtures/prompt-context";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AdapterExecutionContext, AdapterInvocationMeta } from "@paperclipai/adapter-utils";
-import { runChildProcess } from "@paperclipai/adapter-utils/server-utils";
+import { runPosixSandboxProcess as runChildProcess } from "@paperclipai/adapter-utils/test-fixtures/portable-cli";
 
 // Wrap the shared staging seam in a call-recording spy that still delegates to
 // the real implementation (a runner-backed sandbox test exercises it end to
@@ -45,10 +48,10 @@ function createLocalSandboxRunner() {
       onLog?: (stream: "stdout" | "stderr", chunk: string) => Promise<void>;
     }) => {
       counter += 1;
-      const command = input.command === "bash" ? "/bin/bash" : input.command;
-      return await runChildProcess(`claude-acp-sandbox-run-${counter}`, command, input.args ?? [], {
+      const command = shellExecutable(input.command);
+      return await runChildProcess(`claude-acp-sandbox-run-${counter}`, command, shellArgs(input.args), {
         cwd: input.cwd ?? process.cwd(),
-        env: input.env ?? {},
+        env: shellEnvironment(input.env),
         stdin: input.stdin,
         timeoutSec: Math.max(1, Math.ceil((input.timeoutMs ?? 30_000) / 1000)),
         graceSec: 5,
@@ -95,6 +98,7 @@ function setNodeVersion(version: string): void {
 }
 
 afterEach(async () => {
+  await cleanupLocalSandboxProcesses(tempRoots);
   setNodeVersion(originalNodeVersion);
   for (const [key, value] of Object.entries(originalEnv)) {
     if (value === undefined) delete process.env[key];
@@ -594,7 +598,7 @@ describe("claude_local ACP lane", () => {
     const root = await makeTempRoot("paperclip-claude-acp-skills-remote-");
     const skill = await createRuntimeSkill(root);
     const localCwd = path.join(root, "worktree");
-    const remoteCwd = path.join(root, "remote-workspace");
+    const remoteCwd = sandboxPath(path.join(root, "remote-workspace"));
     await fs.mkdir(localCwd, { recursive: true });
     await fs.mkdir(remoteCwd, { recursive: true });
 
@@ -666,7 +670,7 @@ describe("claude_local ACP lane", () => {
     // set (that fallback only fires when `paperclipRuntimeSkills` is absent).
     const skill = await createRuntimeSkill(root);
     const localCwd = path.join(root, "worktree");
-    const remoteCwd = path.join(root, "remote-workspace");
+    const remoteCwd = sandboxPath(path.join(root, "remote-workspace"));
     await fs.mkdir(localCwd, { recursive: true });
     await fs.mkdir(remoteCwd, { recursive: true });
 
@@ -720,7 +724,7 @@ describe("claude_local ACP lane", () => {
     const root = await makeTempRoot("paperclip-claude-acp-skills-no-syncback-");
     const skill = await createRuntimeSkill(root);
     const localCwd = path.join(root, "worktree");
-    const remoteCwd = path.join(root, "remote-workspace");
+    const remoteCwd = sandboxPath(path.join(root, "remote-workspace"));
     await fs.mkdir(localCwd, { recursive: true });
     await fs.mkdir(remoteCwd, { recursive: true });
     await fs.writeFile(path.join(localCwd, "hello.txt"), "hi", "utf8");
@@ -803,7 +807,7 @@ describe("claude_local ACP lane", () => {
   it("creates the ACP session on the in-sandbox workspace cwd for runner-backed remote runs", async () => {
     const root = await makeTempRoot("paperclip-claude-acp-remote-cwd-");
     const localCwd = path.join(root, "worktree");
-    const remoteCwd = path.join(root, "remote-workspace");
+    const remoteCwd = sandboxPath(path.join(root, "remote-workspace"));
     await fs.mkdir(localCwd, { recursive: true });
     await fs.mkdir(remoteCwd, { recursive: true });
     await fs.writeFile(path.join(localCwd, "hello.txt"), "hi", "utf8");
@@ -853,7 +857,7 @@ describe("claude_local ACP lane", () => {
   it("seeds the managed Claude config into the sandbox and repoints CLAUDE_CONFIG_DIR to the in-sandbox path", async () => {
     const root = await makeTempRoot("paperclip-claude-acp-home-seed-");
     const localCwd = path.join(root, "worktree");
-    const remoteCwd = path.join(root, "remote-workspace");
+    const remoteCwd = sandboxPath(path.join(root, "remote-workspace"));
     const sharedClaudeConfig = path.join(root, "shared-claude-config");
     await fs.mkdir(localCwd, { recursive: true });
     await fs.mkdir(remoteCwd, { recursive: true });
@@ -919,7 +923,7 @@ describe("claude_local ACP lane", () => {
   it("test_claude_acp_seam_registers_workspace_sync_back", async () => {
     const root = await makeTempRoot("paperclip-claude-acp-syncback-");
     const localCwd = path.join(root, "worktree");
-    const remoteCwd = path.join(root, "remote-workspace");
+    const remoteCwd = sandboxPath(path.join(root, "remote-workspace"));
     const sharedClaudeConfig = path.join(root, "shared-claude-config");
     await fs.mkdir(localCwd, { recursive: true });
     await fs.mkdir(remoteCwd, { recursive: true });
@@ -993,11 +997,11 @@ describe("claude_local ACP lane", () => {
     // Security regression for a workspace-restore write failure: the run log
     // is readable by any same-company actor, so the teardown must never write
     // the caught error's own message there — that message can carry the host
-    // workspace path. Force a real EACCES by making the workspace read-only,
-    // and name it with a sentinel marker so any leak is easy to spot.
+    // workspace path. POSIX denies writes with chmod; NTFS needs a precise
+    // commit-time EACCES injection because chmod does not alter its DACL.
     const root = await makeTempRoot("paperclip-claude-acp-restore-failure-");
     const localCwd = path.join(root, "SENTINEL-HOST-PATH-marker", "worktree");
-    const remoteCwd = path.join(root, "remote-workspace");
+    const remoteCwd = sandboxPath(path.join(root, "remote-workspace"));
     await fs.mkdir(localCwd, { recursive: true });
     await fs.mkdir(remoteCwd, { recursive: true });
     await fs.writeFile(path.join(localCwd, "hello.txt"), "hi", "utf8");
@@ -1012,6 +1016,16 @@ describe("claude_local ACP lane", () => {
     // that runs after the turn is the write this test forces to fail.
     const runtime = new FakeRuntime({});
     const startTurn = runtime.startTurn.bind(runtime);
+    let denyRestore = false;
+    let deniedRename = false;
+    const originalRename = fs.rename.bind(fs);
+    const renameSpy = process.platform === "win32" ? vi.spyOn(fs, "rename").mockImplementation(async (from, to) => {
+      if (denyRestore && path.resolve(String(to)) === path.join(localCwd, "from-sandbox.txt")) {
+        deniedRename = true;
+        throw Object.assign(new Error(`EACCES: restore commit denied at ${localCwd}`), { code: "EACCES" });
+      }
+      return originalRename(from, to);
+    }) : null;
     runtime.startTurn = (input) => {
       const turn = startTurn(input);
       const remoteWorkspaceCwd = input.handle.cwd ?? remoteCwd;
@@ -1019,7 +1033,8 @@ describe("claude_local ACP lane", () => {
         ...turn,
         result: (async () => {
           await fs.writeFile(path.join(remoteWorkspaceCwd, "from-sandbox.txt"), "synced", "utf8");
-          await fs.chmod(localCwd, 0o500);
+          if (process.platform === "win32") denyRestore = true;
+          else await fs.chmod(localCwd, 0o500);
           return await turn.result;
         })(),
       };
@@ -1064,6 +1079,7 @@ describe("claude_local ACP lane", () => {
       // Preserve the execution's exit code while reporting the restore failure.
       // Only a fixed diagnostic may contain the errno, never the raw error.
       expect(result.exitCode).toBe(0);
+      if (process.platform === "win32") expect(deniedRename).toBe(true);
       expect(result.resultJson?.workspaceRestoreFailure).toBe("restore_permission_denied");
       expect(result.resultJson?.workspaceRestoreDiagnostic).toEqual({
         phase: "workspace", step: "directory_merge", errorCode: "EACCES",
@@ -1076,6 +1092,7 @@ describe("claude_local ACP lane", () => {
       expect(loggedLines.filter((line) => line !== diagnostic).join("")).not.toContain("EACCES");
       expect(allLogs).toContain("permission denied");
     } finally {
+      renameSpy?.mockRestore();
       await fs.chmod(localCwd, 0o700).catch(() => undefined);
     }
   });
@@ -1083,7 +1100,7 @@ describe("claude_local ACP lane", () => {
   it("remaps a workspace-relative explicit CLAUDE_CONFIG_DIR onto the in-sandbox workspace path", async () => {
     const root = await makeTempRoot("paperclip-claude-acp-explicit-inworkspace-");
     const localCwd = path.join(root, "worktree");
-    const remoteCwd = path.join(root, "remote-workspace");
+    const remoteCwd = sandboxPath(path.join(root, "remote-workspace"));
     await fs.mkdir(localCwd, { recursive: true });
     await fs.mkdir(remoteCwd, { recursive: true });
     // Operator pins a config dir that lives INSIDE the workspace cwd, so it is
@@ -1149,7 +1166,7 @@ describe("claude_local ACP lane", () => {
   it("ignores a host-only explicit CLAUDE_CONFIG_DIR that cannot reach the sandbox and seeds the managed config instead", async () => {
     const root = await makeTempRoot("paperclip-claude-acp-explicit-hostonly-");
     const localCwd = path.join(root, "worktree");
-    const remoteCwd = path.join(root, "remote-workspace");
+    const remoteCwd = sandboxPath(path.join(root, "remote-workspace"));
     const sharedClaudeConfig = path.join(root, "shared-claude-config");
     // An operator-pinned config dir OUTSIDE the workspace cwd: a host-only path the
     // sandbox cannot reach, so it must not be forwarded verbatim.

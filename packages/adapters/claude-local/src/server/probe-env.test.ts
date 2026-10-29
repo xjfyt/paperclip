@@ -1,5 +1,6 @@
+import { writePosixCliFixture } from "@paperclipai/adapter-utils/test-fixtures/portable-cli";
 import { afterEach, describe, expect, it } from "vitest";
-import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { buildLocalAdapterTestProbeEnv } from "./probe-env.js";
@@ -9,9 +10,7 @@ const tempDirs: string[] = [];
 async function makeTrustedPathWithClaude(): Promise<{ dir: string; claudePath: string }> {
   const dir = await mkdtemp(path.join(os.tmpdir(), "paperclip-probe-env-"));
   tempDirs.push(dir);
-  const claudePath = path.join(dir, "claude");
-  await writeFile(claudePath, "#!/bin/sh\nexit 0\n");
-  await chmod(claudePath, 0o755);
+  const claudePath = await writePosixCliFixture(path.join(dir, "claude"), "#!/bin/sh\nexit 0\n");
   return { dir, claudePath };
 }
 
@@ -29,7 +28,7 @@ describe("buildLocalAdapterTestProbeEnv", () => {
       callerEnv: { PATH: "/hostile/bin", Path: "/hostile/bin", command: "/tmp/evil/claude" },
       trustedEnv: { PATH: dir },
     });
-    expect(built.command).toBe(claudePath);
+    expect(await realpath(String(built.command))).toBe(await realpath(claudePath));
     expect(built.env.PATH).toBeUndefined();
     expect(built.env.Path).toBeUndefined();
   });

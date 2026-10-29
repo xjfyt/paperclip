@@ -1,9 +1,9 @@
+import { runPosixSandboxProcess as runChildProcess } from "@paperclipai/adapter-utils/test-fixtures/portable-cli";
 import fs from "node:fs/promises";
 import os from "node:os";
-import path from "node:path";
+import { fixturePath as path, cleanupLocalSandboxProcesses, sandboxPath, shellExecutable, shellArgs, shellEnvironment, shellScript } from "@paperclipai/adapter-utils/test-fixtures/local-sandbox";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AdapterExecutionContext, AdapterInvocationMeta } from "@paperclipai/adapter-utils";
-import { runChildProcess } from "@paperclipai/adapter-utils/server-utils";
 
 // Every test in this file needs a real teardown, so the mock below delegates
 // to the actual factory by default. Only the wiring test further down reads
@@ -46,10 +46,10 @@ function createLocalSandboxRunner() {
       onLog?: (stream: "stdout" | "stderr", chunk: string) => Promise<void>;
     }) => {
       counter += 1;
-      const command = input.command === "bash" ? "/bin/bash" : input.command;
-      return await runChildProcess(`gemini-acp-sandbox-run-${counter}`, command, input.args ?? [], {
+      const command = shellExecutable(input.command);
+      return await runChildProcess(`gemini-acp-sandbox-run-${counter}`, command, shellArgs(input.args), {
         cwd: input.cwd ?? process.cwd(),
-        env: input.env ?? {},
+        env: shellEnvironment(input.env),
         stdin: input.stdin,
         timeoutSec: Math.max(1, Math.ceil((input.timeoutMs ?? 30_000) / 1000)),
         graceSec: 5,
@@ -101,6 +101,7 @@ afterEach(async () => {
   else process.env.HOME = originalHome;
   if (originalGeminiApiKey === undefined) delete process.env.GEMINI_API_KEY;
   else process.env.GEMINI_API_KEY = originalGeminiApiKey;
+  await cleanupLocalSandboxProcesses(tempRoots);
   await Promise.all(tempRoots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true })));
 });
 
@@ -193,7 +194,7 @@ class FakeRuntime {
 }
 
 async function makeTempRoot(prefix: string) {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
+  const root = sandboxPath(await fs.mkdtemp(path.join(os.tmpdir(), prefix)));
   tempRoots.push(root);
   return root;
 }
@@ -412,7 +413,7 @@ describe("gemini_local ACP lane", () => {
     expect(runtime.ensureInputs[0]).toMatchObject({
       agent: "gemini",
       mode: "persistent",
-      cwd: root,
+      cwd: path.resolve(root),
     });
     expect(runtime.startInputs[0]?.text).toContain("Do the assigned work.");
     expect(result).toMatchObject({
@@ -425,7 +426,7 @@ describe("gemini_local ACP lane", () => {
     expect(result.sessionParams).toMatchObject({
       agent: "gemini",
       acpSessionId: "acp-1",
-      cwd: root,
+      cwd: path.resolve(root),
     });
     expect(metas[0]).toMatchObject({
       adapterType: "gemini_local",

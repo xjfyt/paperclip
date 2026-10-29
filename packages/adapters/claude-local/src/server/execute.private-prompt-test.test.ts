@@ -65,7 +65,7 @@ vi.mock("@paperclipai/adapter-utils/execution-target", async () => {
 
 import { execute } from "./execute.js";
 
-function buildContext(config: Record<string, unknown> = {}) {
+function buildContext<Config extends Record<string, unknown>>(config: Config) {
   return {
     runId: "run-1",
     agent: {
@@ -96,7 +96,7 @@ describe("private literal prompt execution", () => {
   afterEach(async () => { vi.unstubAllEnvs(); await rm(home, { recursive: true, force: true }); });
   const literal = "  中文🧪\n{{agent.name}} <script>inert</script>\r\n  ";
   function privateContext() {
-    return { ...buildContext({ engine: "cli", model: "claude-sonnet-4-5", cwd: "/tmp" }), context: { forceFreshSession: true },
+    return { ...buildContext({ engine: "cli", model: "claude-sonnet-4-5", cwd: home }), context: { forceFreshSession: true },
       privatePromptTest: { literalRevision: literal, fixedContext: "Pinned case and skill", apiKey: "fixture-not-a-real-key", prepare: vi.fn(async (_prompt: string) => {}) },
       onMeta: vi.fn(async () => {}) };
   }

@@ -1,8 +1,9 @@
+import { runPosixSandboxProcess as runChildProcess } from "@paperclipai/adapter-utils/test-fixtures/portable-cli";
+import { writePosixCliFixture } from "@paperclipai/adapter-utils/test-fixtures/portable-cli";
 import fs from "node:fs/promises";
 import os from "node:os";
-import path from "node:path";
+import { fixturePath as path, sandboxPath, shellExecutable, shellArgs, shellEnvironment, shellScript } from "@paperclipai/adapter-utils/test-fixtures/local-sandbox";
 import { describe, expect, it } from "vitest";
-import { runChildProcess } from "@paperclipai/adapter-utils/server-utils";
 import { SANDBOX_INSTALL_COMMAND } from "../index.js";
 import { testEnvironment } from "./test.js";
 
@@ -50,13 +51,13 @@ function createSandboxRunner(options: { homeDir: string; installCommandPath: str
         installCommands.push(args[1]);
         args[1] = buildInstallSimulationCommand(options.installCommandPath);
       }
-      return await runChildProcess(`cursor-envtest-runner-${counter}`, input.command, args, {
+      return await runChildProcess(`cursor-envtest-runner-${counter}`, shellExecutable(input.command), shellArgs(args), {
         cwd: input.cwd ?? process.cwd(),
-        env: {
+        env: shellEnvironment({
           ...(input.env ?? {}),
           HOME: input.env?.HOME ?? options.homeDir,
           PATH: input.env?.PATH ?? systemPath,
-        },
+        }),
         stdin: input.stdin,
         timeoutSec: Math.max(1, Math.ceil((input.timeoutMs ?? 30_000) / 1000)),
         graceSec: 5,
@@ -71,20 +72,19 @@ function createSandboxRunner(options: { homeDir: string; installCommandPath: str
 
 describe("cursor testEnvironment", () => {
   it("shows the probe failure after an informational retrieval trace notice", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-cursor-probe-diagnostic-"));
-    const command = path.join(root, "agent");
-    await fs.writeFile(command, `#!/bin/sh
+    const root = sandboxPath(await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-cursor-probe-diagnostic-")));
+    const command = await writePosixCliFixture(path.join(root, "agent"), `#!/bin/sh
 if [ "$1" = "--version" ]; then
   printf '%s\\n' 'Cursor Agent 1.2.3'
   exit 0
 fi
 printf '%s\\n' "cursor-retrieval: tracing to '/tmp/fixture.log'" 'Provider connection failed' >&2
 exit 7
-`, { mode: 0o755 });
+`);
     try {
       const result = await testEnvironment({
         companyId: "company-1", adapterType: "cursor",
-        config: { command: "agent", cwd: root, env: { PATH: `${root}${path.delimiter}${process.env.PATH ?? ""}`, CURSOR_API_KEY: "fixture-cursor-key" } },
+        config: { command: "agent", cwd: root, env: { PATH: path.dirname(command), CURSOR_API_KEY: "fixture-cursor-key" } },
       });
       expect(result.checks).toEqual(expect.arrayContaining([
         expect.objectContaining({ code: "cursor_hello_probe_failed", detail: "Provider connection failed" }),
@@ -95,7 +95,7 @@ exit 7
   });
 
   it("re-resolves the installed agent under ~/.cursor/bin and verifies --version before the hello probe", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-cursor-envtest-"));
+    const root = sandboxPath(await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-cursor-envtest-")));
     const homeDir = path.join(root, "home");
     const workspace = path.join(root, "workspace");
     const remoteWorkspace = path.join(root, "remote-workspace");

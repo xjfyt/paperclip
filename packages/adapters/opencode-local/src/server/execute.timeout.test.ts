@@ -116,11 +116,13 @@ describe("OpenCode timeout reporting", () => {
 
   it("retains real local deadline and termination behavior without claiming provider origin", async () => {
     const actual = await vi.importActual<typeof import("@paperclipai/adapter-utils/execution-target")>("@paperclipai/adapter-utils/execution-target");
-    mocks.process.mockImplementation(actual.runAdapterExecutionTargetProcess);
-    const command = path.join(dir, "fixture-opencode");
-    await fs.writeFile(command, "#!/usr/bin/env node\nsetInterval(() => {}, 1000);\n", { mode: 0o755 });
+    const fixture = path.join(dir, "fixture-opencode.cjs");
+    await fs.writeFile(fixture, "setInterval(() => {}, 1000);\n");
+    // Keep the real process/deadline/termination path while selecting the
+    // offline fixture as Node's entry point on every OS (no shebang fallback).
+    mocks.process.mockImplementation((runId, target, command, args, options) => actual.runAdapterExecutionTargetProcess(runId, target, command, [fixture, ...args], options));
     const ctx = context(0.1, false);
-    ctx.config.command = command;
+    ctx.config.command = process.execPath;
     ctx.config.graceSec = 0.1;
     const result = await execute(ctx);
     expect(result).toMatchObject({ timedOut: true, exitCode: null, signal: "SIGTERM",

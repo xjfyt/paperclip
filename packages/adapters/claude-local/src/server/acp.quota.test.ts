@@ -1,3 +1,6 @@
+import { installIsolatedHostFixture } from "@paperclipai/adapter-utils/test-fixtures/isolated-host";
+// Register outer cleanup before this file registers its own resource hooks.
+installIsolatedHostFixture();
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -15,6 +18,16 @@ const now = new Date("2026-07-15T20:00:00.000Z");
 // Exercise both pinned dependency patches through the same real ACP child.
 const runnerRequire = createRequire(path.join(repoRoot, "packages/paperclip-runner/package.json"));
 const runnerAcpx = await import(runnerRequire.resolve("acpx/runtime"));
+
+// The runner's 0.13 registry accepts argv and deliberately refuses raw command
+// strings on Windows. Keep this fixture child explicit and fully offline.
+function runtimeForVersion(version: string): AcpxEngineExecutorOptions["createRuntime"] | undefined {
+  if (version !== "0.13.1") return undefined;
+  return (options) => runnerAcpx.createAcpRuntime({ ...options,
+    agentRegistry: runnerAcpx.createAgentRegistry({ overrides: { claude: [process.execPath, fixture] } }),
+  });
+}
+
 
 afterEach(async () => {
   vi.unstubAllEnvs();
@@ -65,7 +78,7 @@ it.each([
 ])("waits for a typed Claude quota reset with ACPX %s in %s mode with provider diagnostics", async (version, mode) => {
   const title = "You've hit your session limit · resets 4:30pm (America/Chicago)";
   const { result, logs } = await executeFailure(
-    title, "limit", mode, version === "0.13.1" ? runnerAcpx.createAcpRuntime : undefined,
+    title, "limit", mode, runtimeForVersion(version),
   );
   expect(result).toMatchObject({
     exitCode: 1,
@@ -97,7 +110,7 @@ it.each([
   const title = "HTTP 529: overloaded_error";
   const details = `${"provider context\n".repeat(300)}request_id=req_service_123\nCredential echoed: ${secret}\nInherited credential: ${inheritedSecret}\n    at prompt (agent.js:42:7)`;
   const { result, logs } = await executeFailure(
-    title, "service", mode, version === "0.13.1" ? runnerAcpx.createAcpRuntime : undefined,
+    title, "service", mode, runtimeForVersion(version),
     { PROVIDER_SETTING: secret }, details,
   );
   expect(result).toMatchObject({
@@ -138,7 +151,7 @@ it.each([
   // @agentclientprotocol/claude-agent-acp's quota_exhausted fallback title.
   const title = "The Claude account has no available quota.";
   const { result, logs } = await executeFailure(
-    title, "limit", mode, version === "0.13.1" ? runnerAcpx.createAcpRuntime : undefined,
+    title, "limit", mode, runtimeForVersion(version),
   );
   expect(result).toMatchObject({
     exitCode: 1,

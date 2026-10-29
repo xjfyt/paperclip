@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { AdapterExecutionContext } from "@paperclipai/adapter-utils";
+import { writeCliFixture } from "@paperclipai/adapter-utils/test-fixtures/native-cli";
 
 import { execute } from "./execute.js";
 import { sessionCodec } from "./index.js";
@@ -28,7 +29,7 @@ describe("Hermes managed instruction delivery (real capture process)", () => {
     instructionsFilePath = path.join(dir, "instructions.md");
     capturePath = path.join(dir, "invocations.jsonl");
     await fs.writeFile(instructionsFilePath, INSTRUCTIONS);
-    await fs.writeFile(command, `#!${process.execPath}
+    await writeCliFixture(command, `#!${process.execPath}
 const fs = require("node:fs");
 const args = process.argv.slice(2);
 fs.appendFileSync(process.env.CAPTURE_PATH, JSON.stringify({
@@ -46,7 +47,8 @@ if (process.env.FIXTURE_PROVIDER_ERROR) {
   process.exit(1);
 }
 console.log("Fixture completed\\nsession_id: ${SESSION_ID}");
-`, { mode: 0o700 });
+`);
+    if (process.platform === "win32") command += ".exe";
   });
 
   afterEach(async () => {

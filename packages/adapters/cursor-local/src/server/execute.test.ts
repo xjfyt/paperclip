@@ -1,9 +1,10 @@
+import { runPosixSandboxProcess as runChildProcess } from "@paperclipai/adapter-utils/test-fixtures/portable-cli";
+import { writePosixCliFixture } from "@paperclipai/adapter-utils/test-fixtures/portable-cli";
 import fs from "node:fs/promises";
 import os from "node:os";
-import path from "node:path";
+import { fixturePath as path, sandboxPath, shellExecutable, shellArgs, shellEnvironment, shellScript } from "@paperclipai/adapter-utils/test-fixtures/local-sandbox";
 import { describe, expect, it, vi } from "vitest";
 import type { AdapterExecutionTarget } from "@paperclipai/adapter-utils/execution-target";
-import { runChildProcess } from "@paperclipai/adapter-utils/server-utils";
 import { SANDBOX_INSTALL_COMMAND } from "../index.js";
 import { execute } from "./execute.js";
 import { createPromptContextFixture } from "@paperclipai/adapter-utils/test-fixtures/prompt-context";
@@ -93,7 +94,7 @@ function createFreshLeaseSandboxRunner(options: {
     "/bin",
     "/usr/sbin",
     "/sbin",
-  ].join(path.delimiter);
+  ].join(":");
 
   return {
     installCommands,
@@ -115,16 +116,16 @@ function createFreshLeaseSandboxRunner(options: {
       }
 
       const inheritedPath = input.env?.PATH ?? systemPath;
-      const pathWithLocalBin = `${path.join(options.homeDir, ".local", "bin")}${path.delimiter}${inheritedPath}`;
+      const pathWithLocalBin = `${path.join(options.homeDir, ".local", "bin")}:${inheritedPath}`;
       const env = {
         ...(input.env ?? {}),
         HOME: input.env?.HOME ?? options.homeDir,
         PATH: pathWithLocalBin,
       };
 
-      return await runChildProcess(`cursor-fresh-lease-${counter}`, input.command, args, {
+      return await runChildProcess(`cursor-fresh-lease-${counter}`, shellExecutable(input.command), shellArgs(args), {
         cwd: input.cwd ?? process.cwd(),
-        env,
+        env: shellEnvironment(env),
         stdin: input.stdin,
         timeoutSec: Math.max(1, Math.ceil((input.timeoutMs ?? 30_000) / 1000)),
         graceSec: 5,
@@ -144,13 +145,13 @@ describe("cursor execute", () => {
       command: input.command, env: input.env, remoteSystemHomeDir: null,
       addedPathEntry: null, preferredCommandPath: null,
     }));
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-cursor-legacy-"));
-    const command = path.join(root, "agent.sh");
-    await fs.writeFile(command, `#!/bin/sh
+    const root = sandboxPath(await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-cursor-legacy-")));
+    const scriptPath = path.join(root, "agent.sh");
+    const command = await writePosixCliFixture(scriptPath, `#!/bin/sh
 cat >/dev/null
 printf '%s\\n' '{"type":"step_finish","part":{"tokens":{"input":20,"output":5},"cost":0.01}}'
 exit ${exitCode}
-`, { mode: 0o755 });
+`);
     const onUsage = vi.fn();
     try {
       const result = await execute({
@@ -178,16 +179,16 @@ exit ${exitCode}
       command: input.command, env: input.env, remoteSystemHomeDir: null,
       addedPathEntry: null, preferredCommandPath: null,
     }));
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-cursor-diagnostic-"));
-    const command = path.join(root, "agent.sh");
+    const root = sandboxPath(await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-cursor-diagnostic-")));
+    const scriptPath = path.join(root, "agent.sh");
     const trace = "cursor-retrieval: tracing to '/tmp/fixture-cursor-retrieval.log'";
     // Values are fixed test fixtures, passed through env rather than shell code.
-    await fs.writeFile(command, `#!/bin/sh
+    const command = await writePosixCliFixture(scriptPath, `#!/bin/sh
 cat >/dev/null
 printf '%s\\n' "$FIXTURE_TRACE" "$FIXTURE_DETAIL" >&2
 printf '%s\\n' "$FIXTURE_STRUCTURED"
 exit 7
-`, { mode: 0o755 });
+`);
     try {
       const result = await execute({
         runId: "run-diagnostic-1",
@@ -212,7 +213,7 @@ exit 7
       return actual.prepareCursorSandboxCommand(input);
     });
 
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-cursor-fresh-lease-"));
+    const root = sandboxPath(await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-cursor-fresh-lease-")));
     const homeDir = path.join(root, "home");
     const workspace = path.join(root, "workspace");
     const remoteWorkspace = path.join(root, "remote-workspace");
@@ -270,8 +271,8 @@ exit 7
       const command = await fs.readFile(path.join(captureDir, "command.txt"), "utf8");
       const runtimePath = await fs.readFile(path.join(captureDir, "path.txt"), "utf8");
       const prompt = await fs.readFile(path.join(captureDir, "prompt.txt"), "utf8");
-      expect(command).toBe(agentPath);
-      expect(runtimePath.split(path.delimiter)).toContain(path.join(homeDir, ".local", "bin"));
+      expect(command).toBe(shellScript(agentPath));
+      expect(runtimePath.split(":")).toContain(shellScript(path.join(homeDir, ".local", "bin")));
       expect(prompt).toContain("Follow the paperclip heartbeat.");
       expect(prompt).toContain("## Owned assignment");
     } finally {
@@ -286,7 +287,7 @@ exit 7
     const prepareInputs: PrepareCursorSandboxCommandInput[] = [];
     let finalPreparedCommand: string | null = null;
 
-    const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-cursor-fresh-lease-managed-"));
+    const rootDir = sandboxPath(await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-cursor-fresh-lease-managed-")));
     const workspaceDir = path.join(rootDir, "workspace");
     const remoteWorkspace = path.join(rootDir, "remote-workspace");
     const systemHomeDir = path.join(rootDir, "system-home");
@@ -328,7 +329,7 @@ printf '%s\\n' '{"type":"result","subtype":"success","session_id":"cursor-sessio
       finalPreparedCommand = preferredCommandPath;
       const runtimeEnv = {
         ...input.env,
-        PATH: `${path.join(systemHomeDir, ".local", "bin")}${path.delimiter}${input.env.PATH ?? process.env.PATH ?? "/usr/bin:/bin"}`,
+        PATH: `${path.join(systemHomeDir, ".local", "bin")}:${input.env.PATH ?? process.env.PATH ?? "/usr/bin:/bin"}`,
       };
       await fs.mkdir(path.dirname(preferredCommandPath), { recursive: true });
       await fs.writeFile(preferredCommandPath, preferredAgentScript);
@@ -365,13 +366,13 @@ printf '%s\\n' '{"type":"result","subtype":"success","session_id":"cursor-sessio
         }
         // Exercise actual bounded file reads during managed-home restoration;
         // reporting empty success for every shell command hides missing bytes.
-        return runChildProcess(`cursor-fresh-lease-${runnerState.commands.length}`, input.command, args, {
+        return runChildProcess(`cursor-fresh-lease-${runnerState.commands.length}`, shellExecutable(input.command), shellArgs(args), {
           cwd: remoteWorkspace,
-          env: {
+          env: shellEnvironment({
             ...input.env,
             PATH: `${fixtureBinDir}:${input.env?.PATH ?? ""}:/usr/bin:/bin`,
             FIXTURE_CURL_ATTEMPT_PATH: networkAttemptPath,
-          },
+          }),
           stdin: input.stdin,
           timeoutSec: 30,
           graceSec: 5,
@@ -450,12 +451,12 @@ printf '%s\\n' '{"type":"result","subtype":"success","session_id":"cursor-sessio
       addedPathEntry: null,
       preferredCommandPath: null,
     }));
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-cursor-resume-"));
+    const root = sandboxPath(await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-cursor-resume-")));
     const workspace = path.join(root, "workspace");
-    const commandPath = path.join(root, "agent.sh");
+    const scriptPath = path.join(root, "agent.sh");
     const capturePath = path.join(root, "prompts.txt");
     await fs.mkdir(workspace, { recursive: true });
-    await fs.writeFile(commandPath, `#!/bin/sh
+    const commandPath = await writePosixCliFixture(scriptPath, `#!/bin/sh
 count_file=${JSON.stringify(path.join(root, "count"))}
 count=$(cat "$count_file" 2>/dev/null || printf '0')
 count=$((count + 1))
@@ -469,7 +470,6 @@ fi
 printf '%s\\n' '{"type":"system","subtype":"init","session_id":"cursor-session-fresh-2","model":"auto"}'
 printf '%s\\n' '{"type":"result","subtype":"success","session_id":"cursor-session-fresh-2","result":"ok"}'
 `);
-    await fs.chmod(commandPath, 0o755);
 
     try {
       const result = await execute({

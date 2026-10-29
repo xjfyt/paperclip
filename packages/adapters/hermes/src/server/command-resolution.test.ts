@@ -2,6 +2,7 @@ import os from "node:os";
 import path from "node:path";
 import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { expect, test } from "vitest";
+import { writeCliFixture } from "@paperclipai/adapter-utils/test-fixtures/native-cli";
 
 import { HERMES_CLI } from "../shared/constants.js";
 import { resolveHermesCommand } from "./execute.js";
@@ -19,15 +20,11 @@ test("resolveHermesCommand falls back to command before default hermes binary", 
 
 test("testEnvironment accepts config.command when hermesCommand is absent", async () => {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), "hermes-command-resolution-"));
-  const cliPath = path.join(tempDir, "fake-hermes");
+  const fixturePath = path.join(tempDir, "fake-hermes.cjs");
+  const cliPath = fixturePath + (process.platform === "win32" ? ".exe" : "");
 
   try {
-    await writeFile(
-      cliPath,
-      "#!/bin/sh\necho fake-hermes 1.2.3\n",
-      "utf8",
-    );
-    await chmod(cliPath, 0o755);
+    await writeCliFixture(fixturePath, `#!${process.execPath}\nconsole.log("fake-hermes 1.2.3");\n`);
 
     const result = await testEnvironment({
       companyId: "company-test",
@@ -49,10 +46,10 @@ test("testEnvironment accepts config.command when hermesCommand is absent", asyn
 
 test("managed connections probe the selected environment without falling back to host keys", async () => {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), "hermes-managed-probe-"));
-  const cliPath = path.join(tempDir, "fake-hermes");
+  const fixturePath = path.join(tempDir, "fake-hermes.cjs");
+  const cliPath = fixturePath + (process.platform === "win32" ? ".exe" : "");
   try {
-    await writeFile(cliPath, '#!/bin/sh\n[ "$HERMES_HOME" = "' + tempDir + '" ] || exit 1\n[ "$OPENAI_API_KEY" = "selected-key" ] || exit 1\n[ "$ANTHROPIC_API_KEY" = "" ] || exit 1\n[ "$1" = "chat" ] || exit 1\necho hello\n');
-    await chmod(cliPath, 0o755);
+    await writeCliFixture(fixturePath, `#!${process.execPath}\nif (process.env.HERMES_HOME !== ${JSON.stringify(tempDir)} || process.env.OPENAI_API_KEY !== "selected-key" || process.env.ANTHROPIC_API_KEY !== "" || process.argv[2] !== "chat") process.exit(1); console.log("hello");\n`);
     const config = { command: cliPath, managedAiRouting: true, model: "custom/model", provider: "auto", env: { HERMES_HOME: tempDir, OPENAI_API_KEY: "selected-key", ANTHROPIC_API_KEY: "" } };
     const passed = await testEnvironment({ companyId: "test", adapterType: "hermes_local", config });
     expect(passed.status).toBe("pass");

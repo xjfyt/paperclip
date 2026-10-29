@@ -2,6 +2,7 @@ import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { writeCliFixture } from "@paperclipai/adapter-utils/test-fixtures/native-cli";
 import {
   ensurePiModelConfiguredAndAvailable,
   listPiModels,
@@ -36,18 +37,10 @@ describe("pi models", () => {
 
   it("does not embed the model catalogue when the configured model is unavailable", async () => {
     const directory = await mkdtemp(join(tmpdir(), "paperclip-pi-models-"));
-    const command = join(directory, "pi");
+    const fixturePath = join(directory, "pi.cjs");
+    const command = fixturePath + (process.platform === "win32" ? ".exe" : "");
     const modelIds = Array.from({ length: 13 }, (_, index) => `provider/model-${index}`);
-    await writeFile(
-      command,
-      `#!/bin/sh\nprintf 'provider  model\\n';\n${modelIds
-        .map((id) => {
-          const [provider, model] = id.split("/");
-          return `printf '${provider}  ${model}\\n'`;
-        })
-        .join(";\n")}\n`,
-    );
-    await chmod(command, 0o755);
+    await writeCliFixture(fixturePath, `#!${process.execPath}\nconsole.log("provider  model"); for (const id of ${JSON.stringify(modelIds)}) console.log(id.replace("/", "  "));\n`);
 
     try {
       await expect(
