@@ -1,9 +1,12 @@
+import type { TFunction } from "i18next";
+import { useTranslation } from "@/i18n";
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { useLocation, useNavigate } from "@/lib/router";
 import { Button } from "@/components/ui/button";
 import { captureBrowserException } from "@/lib/sentry";
 
 type RouteErrorBoundaryInnerProps = {
+  t: TFunction;
   resetKey: string;
   onReset: () => void;
   children: ReactNode;
@@ -36,14 +39,15 @@ class RouteErrorBoundaryInner extends Component<RouteErrorBoundaryInnerProps, Ro
 
   override render() {
     const { error } = this.state;
+    const { t } = this.props;
     if (!error) return this.props.children;
 
     return (
       <div className="mx-auto max-w-2xl space-y-4 px-4 py-10">
         <div>
-          <h1 className="text-lg font-semibold">This page hit an error</h1>
+          <h1 className="text-lg font-semibold">{t("taskRecoveryControlsUi.route.title")}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Something went wrong while rendering this page. You can go back and try again, or reload.
+            {t("taskRecoveryControlsUi.route.description")}
           </p>
         </div>
         <pre className="overflow-auto rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive whitespace-pre-wrap">
@@ -51,10 +55,10 @@ class RouteErrorBoundaryInner extends Component<RouteErrorBoundaryInnerProps, Ro
         </pre>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={this.props.onReset}>
-            Go back
+            {t("taskRecoveryControlsUi.route.goBack")}
           </Button>
           <Button size="sm" onClick={() => window.location.reload()}>
-            Reload page
+            {t("taskRecoveryControlsUi.route.reload")}
           </Button>
         </div>
       </div>
@@ -63,12 +67,13 @@ class RouteErrorBoundaryInner extends Component<RouteErrorBoundaryInnerProps, Ro
 }
 
 export function RouteErrorBoundary({ children }: { children: ReactNode }) {
+  const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const resetKey = `${location.pathname}${location.search}`;
 
   return (
-    <RouteErrorBoundaryInner resetKey={resetKey} onReset={() => navigate(-1)}>
+    <RouteErrorBoundaryInner t={t} resetKey={resetKey} onReset={() => navigate(-1)}>
       {children}
     </RouteErrorBoundaryInner>
   );

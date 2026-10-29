@@ -1,0 +1,51 @@
+{
+  "skill": {
+    "loading": "Cargando habilidad…",
+    "unavailable": "La habilidad ya no está disponible.",
+    "forbidden": "No tienes acceso a esta habilidad.",
+    "loadFailed": "No se pudo cargar la habilidad.",
+    "retrying": "Reintentando…",
+    "retry": "Reintentar",
+    "openStudio": "Abrir en el estudio de habilidades",
+    "revision": "Revisión {{revision}}",
+    "currentVersion": "Versión actual",
+    "instructions": "Instrucciones de la habilidad",
+    "emptyInstructions": "Las instrucciones de la habilidad están vacías."
+  },
+  "browser": {
+    "session": "Sesión del navegador",
+    "closesIn": "Se cierra en <0>{{countdown}}</0>",
+    "closing": "Cerrando…",
+    "controlledElsewhere": "El tamaño sigue a otro espectador",
+    "resizing": "Cambiando el tamaño…",
+    "browsing": "Navegando",
+    "keepBrowsing": "Seguir navegando",
+    "keepBrowsingDescription": "Mantener este navegador abierto hasta {{minutes}} minutos más.",
+    "stopBrowsing": "Detener la navegación",
+    "stopDescription": "Detener el trabajo del agente en el navegador y dejarlo abierto.",
+    "options": "Opciones del navegador",
+    "size": "Tamaño del navegador",
+    "fit": "Ajustar al panel",
+    "default": "Predeterminado",
+    "fitHere": "Ajustar a este panel en su lugar",
+    "browserDefault": "Tamaño predeterminado del navegador",
+    "presets": {
+      "phone": "Teléfono",
+      "tablet": "Tableta",
+      "laptop": "Portátil",
+      "desktop": "Escritorio"
+    },
+    "reconnect": "Reconectar la vista",
+    "reconnectDescription": "Recargar la vista en directo. El trabajo del navegador continúa.",
+    "keepOpen": "Mantener el navegador abierto",
+    "keepOpenDescription": "Mantenerlo abierto hasta {{minutes}} minutos más.",
+    "close": "Cerrar el navegador",
+    "closeDescription": "Finalizar este navegador y detener toda la navegación."
+  },
+  "route": {
+    "title": "Se produjo un error en esta página",
+    "description": "Algo salió mal al mostrar esta página. Puedes volver e intentarlo de nuevo o recargarla.",
+    "goBack": "Volver",
+    "reload": "Recargar la página"
+  }
+}

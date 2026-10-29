@@ -1,0 +1,51 @@
+{
+  "skill": {
+    "loading": "正在加载技能…",
+    "unavailable": "此技能已不可用。",
+    "forbidden": "你无权访问此技能。",
+    "loadFailed": "无法加载技能。",
+    "retrying": "正在重试…",
+    "retry": "重试",
+    "openStudio": "在技能工作室中打开",
+    "revision": "修订 {{revision}}",
+    "currentVersion": "当前版本",
+    "instructions": "技能指令",
+    "emptyInstructions": "技能指令为空。"
+  },
+  "browser": {
+    "session": "浏览器会话",
+    "closesIn": "<0>{{countdown}}</0> 后关闭",
+    "closing": "正在关闭…",
+    "controlledElsewhere": "尺寸跟随另一位查看者",
+    "resizing": "正在调整尺寸…",
+    "browsing": "正在浏览",
+    "keepBrowsing": "继续浏览",
+    "keepBrowsingDescription": "将此浏览器保持打开，最多再延长 {{minutes}} 分钟。",
+    "stopBrowsing": "停止浏览",
+    "stopDescription": "停止智能体的浏览器操作，并保持浏览器打开。",
+    "options": "浏览器选项",
+    "size": "浏览器尺寸",
+    "fit": "适应面板",
+    "default": "默认",
+    "fitHere": "改为适应此面板",
+    "browserDefault": "浏览器默认尺寸",
+    "presets": {
+      "phone": "手机",
+      "tablet": "平板电脑",
+      "laptop": "笔记本电脑",
+      "desktop": "桌面电脑"
+    },
+    "reconnect": "重新连接视图",
+    "reconnectDescription": "重新加载实时视图。浏览器操作将继续运行。",
+    "keepOpen": "保持浏览器打开",
+    "keepOpenDescription": "保持打开，最多再延长 {{minutes}} 分钟。",
+    "close": "关闭浏览器",
+    "closeDescription": "结束此浏览器会话并停止所有浏览操作。"
+  },
+  "route": {
+    "title": "此页面出现错误",
+    "description": "渲染此页面时出现问题。你可以返回后重试，或重新加载页面。",
+    "goBack": "返回",
+    "reload": "重新加载页面"
+  }
+}

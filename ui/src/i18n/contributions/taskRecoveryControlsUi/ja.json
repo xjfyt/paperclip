@@ -1,0 +1,51 @@
+{
+  "skill": {
+    "loading": "スキルを読み込み中…",
+    "unavailable": "このスキルは利用できなくなりました。",
+    "forbidden": "このスキルへのアクセス権がありません。",
+    "loadFailed": "スキルを読み込めませんでした。",
+    "retrying": "再試行中…",
+    "retry": "再試行",
+    "openStudio": "スキルスタジオで開く",
+    "revision": "リビジョン {{revision}}",
+    "currentVersion": "現在のバージョン",
+    "instructions": "スキルの指示",
+    "emptyInstructions": "スキルの指示は空です。"
+  },
+  "browser": {
+    "session": "ブラウザーセッション",
+    "closesIn": "<0>{{countdown}}</0> 後に終了",
+    "closing": "終了中…",
+    "controlledElsewhere": "別の閲覧者に合わせたサイズ",
+    "resizing": "サイズを変更中…",
+    "browsing": "閲覧中",
+    "keepBrowsing": "閲覧を続ける",
+    "keepBrowsingDescription": "このブラウザーを最大 {{minutes}} 分間延長して開いたままにします。",
+    "stopBrowsing": "閲覧を停止",
+    "stopDescription": "エージェントのブラウザー操作を停止し、ブラウザーは開いたままにします。",
+    "options": "ブラウザーのオプション",
+    "size": "ブラウザーのサイズ",
+    "fit": "パネルに合わせる",
+    "default": "既定",
+    "fitHere": "代わりにこのパネルに合わせる",
+    "browserDefault": "ブラウザーの既定サイズ",
+    "presets": {
+      "phone": "スマートフォン",
+      "tablet": "タブレット",
+      "laptop": "ノートパソコン",
+      "desktop": "デスクトップ"
+    },
+    "reconnect": "表示を再接続",
+    "reconnectDescription": "ライブ表示を再読み込みします。ブラウザーの操作は継続します。",
+    "keepOpen": "ブラウザーを開いたままにする",
+    "keepOpenDescription": "最大 {{minutes}} 分間延長して開いたままにします。",
+    "close": "ブラウザーを閉じる",
+    "closeDescription": "このブラウザーを終了し、すべての閲覧を停止します。"
+  },
+  "route": {
+    "title": "このページでエラーが発生しました",
+    "description": "このページの表示中に問題が発生しました。戻ってやり直すか、再読み込みしてください。",
+    "goBack": "戻る",
+    "reload": "ページを再読み込み"
+  }
+}

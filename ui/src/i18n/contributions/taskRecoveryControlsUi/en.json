@@ -1,0 +1,51 @@
+{
+  "skill": {
+    "loading": "Loading skill…",
+    "unavailable": "Skill no longer available.",
+    "forbidden": "You do not have access to this skill.",
+    "loadFailed": "The skill could not be loaded.",
+    "retrying": "Retrying…",
+    "retry": "Retry",
+    "openStudio": "Open in Skill Studio",
+    "revision": "Revision {{revision}}",
+    "currentVersion": "Current version",
+    "instructions": "Skill instructions",
+    "emptyInstructions": "Skill instructions are empty."
+  },
+  "browser": {
+    "session": "Browser session",
+    "closesIn": "Closes in <0>{{countdown}}</0>",
+    "closing": "Closing…",
+    "controlledElsewhere": "Size follows another viewer",
+    "resizing": "Resizing…",
+    "browsing": "Browsing",
+    "keepBrowsing": "Keep browsing",
+    "keepBrowsingDescription": "Keep this browser open for up to {{minutes}} more minutes.",
+    "stopBrowsing": "Stop browsing",
+    "stopDescription": "Stop the agent’s browser work and leave the browser open.",
+    "options": "Browser options",
+    "size": "Browser size",
+    "fit": "Fit to pane",
+    "default": "Default",
+    "fitHere": "Fit to this pane instead",
+    "browserDefault": "Browser default",
+    "presets": {
+      "phone": "Phone",
+      "tablet": "Tablet",
+      "laptop": "Laptop",
+      "desktop": "Desktop"
+    },
+    "reconnect": "Reconnect view",
+    "reconnectDescription": "Reload the live view. Browser work keeps running.",
+    "keepOpen": "Keep browser open",
+    "keepOpenDescription": "Keep it open for up to {{minutes}} more minutes.",
+    "close": "Close browser",
+    "closeDescription": "End this browser and stop any browsing."
+  },
+  "route": {
+    "title": "This page hit an error",
+    "description": "Something went wrong while rendering this page. You can go back and try again, or reload.",
+    "goBack": "Go back",
+    "reload": "Reload page"
+  }
+}
