@@ -612,7 +612,7 @@ function issuePrivacyPrincipalCondition(actor: AuthorizationActor): SQL<boolean>
   )`;
 }
 
-function issuePrivacyCondition(actor: AuthorizationActor): SQL<boolean> {
+export function issuePrivacyCondition(actor: AuthorizationActor): SQL<boolean> {
   const principalCondition = issuePrivacyPrincipalCondition(actor);
   if (actor.type !== "agent" || !actor.onBehalfOfUserId) return principalCondition;
   const userId = actor.onBehalfOfUserId;

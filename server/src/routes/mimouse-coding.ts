@@ -1,7 +1,8 @@
+import { codingListQuerySchema, listCodingDeliveries } from "../services/mimouse-coding/delivery-list.js";
 import { mimouseBuildObservationRoutes } from "./mimouse-build-observations.js";
 import { saveCodingGoalSchema } from "@paperclipai/shared";
 import { codingGoalService } from "../services/mimouse-coding/goal-template.js";
-import { reviewBinding, reviewReceipt, reviewedHead } from "../services/mimouse-coding/diff-review.js";
+import { reviewBinding, reviewReceipt } from "../services/mimouse-coding/diff-review.js";
 import { buildMatrixInventory } from "../services/mimouse-coding/build-matrix.js";
 import { codingRepairService } from "../services/mimouse-coding/repairs.js";
 import { repairSettingsSchema } from "../services/mimouse-coding/repair-policy.js";
@@ -16,7 +17,7 @@ import { forbidden, notFound, unprocessable } from "../errors.js";
 import { validate } from "../middleware/validate.js";
 import { canActorReadIssuePrivacy } from "../services/authorization.js";
 import { codingService, verifyLocalCodingHead } from "../services/mimouse-coding/service.js";
-import { deliveryGate, gitlabOrigin, GitLabError, type CheckEvidence, type GitLabMergeRequest, type GitLabPipeline } from "../services/mimouse-coding/gitlab.js";
+import { gitlabOrigin, GitLabError } from "../services/mimouse-coding/gitlab.js";
 import { logActivity, publishActivity, type ActivityPublication } from "../services/activity-log.js";
 const sha = z.string().regex(/^[a-f0-9]{40}$/);
 const createSchema = z.object({ issueId: z.string().uuid(), workspaceId: z.string().uuid(), gitlabOrigin: z.string().url(), projectId: z.number().int().positive(), secretRef: z.string().uuid(), baseSha: sha, headSha: sha, targetBranch: z.string().min(1).max(200) }).strict();
@@ -86,14 +87,10 @@ export function mimouseCodingRoutes(db: Db, deps: { service?: ReturnType<typeof 
     res.json({ operatorEnabled: process.env.PAPERCLIP_CODING_REPAIR_ENABLED === "true", status: row.repairStatus, lastCode: row.repairLastCode, policy: row.repairPolicy, attempts: history });
   });
   router.get(root, async (req, res) => {
-    const companyId = admin(req); const rows = await db.select().from(deliveries).where(eq(deliveries.companyId, companyId)).orderBy(desc(deliveries.updatedAt)).limit(100); const visible = [];
-    for (const row of rows) {
-      const [issue] = await db.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, row.issueId)));
-      if (!issue || !await canActorReadIssuePrivacy(db, req.actor, issue)) continue;
-      const { secretRef: _secretRef, operationLease: _lease, ...publicRow } = row;
-      visible.push({ ...publicRow, buildMatrix: buildMatrixInventory(row), gate: deliveryGate({ headSha: row.headSha, reviewedSha: reviewedHead(row), mr: row.remoteEvidence.mr as GitLabMergeRequest ?? null, pipeline: row.remoteEvidence.pipeline as GitLabPipeline ?? null, evidence: row.evidence as unknown as CheckEvidence[] }) });
-    }
-    res.json({ deliveries: visible, publishEnabled: process.env.PAPERCLIP_GITLAB_PUBLISH_ENABLED === "true", liveVerified: false, automaticRepairEnabled: false });
+    const companyId = admin(req); const input = codingListQuerySchema.parse(req.query);
+    res.setHeader("Cache-Control", "no-store");
+    const page = await listCodingDeliveries(db, companyId, req.actor, input);
+    res.json({ ...page, publishEnabled: process.env.PAPERCLIP_GITLAB_PUBLISH_ENABLED === "true", liveVerified: false, automaticRepairEnabled: false });
   });
   router.get(`${root}/:id/build-matrix`, async (req, res) => {
     const row = await load(req);
@@ -106,9 +103,9 @@ export function mimouseCodingRoutes(db: Db, deps: { service?: ReturnType<typeof 
     if (input.targetBranch === workspace.branchName) throw unprocessable("Source and target branches must differ");
     const [secret] = await db.select({ id: companySecrets.id }).from(companySecrets).where(and(eq(companySecrets.id, input.secretRef), eq(companySecrets.companyId, companyId), eq(companySecrets.scope, "company"), eq(companySecrets.status, "active")));
     if (!secret) throw notFound("GitLab credential not found");
-    gitlabOrigin(input.gitlabOrigin, (process.env.PAPERCLIP_GITLAB_ALLOWED_ORIGINS ?? "").split(",").map(value => value.trim()));
+    const origin = gitlabOrigin(input.gitlabOrigin, (process.env.PAPERCLIP_GITLAB_ALLOWED_ORIGINS ?? "").split(",").map(value => value.trim()));
     await safe(() => verifyLocalCodingHead({ cwd: workspace.cwd!, repoUrl: workspace.repoUrl!, branchName: workspace.branchName! }, input.baseSha, input.headSha));
-    const [row] = await db.insert(deliveries).values({ ...input, companyId, sourceBranch: workspace.branchName }).returning();
+    const [row] = await db.insert(deliveries).values({ ...input, gitlabOrigin: origin, companyId, sourceBranch: workspace.branchName }).returning();
     await audit(req, "coding.delivery.created", row.id); res.status(201).json({ id: row.id, headSha: row.headSha });
   });
   router.post(`${root}/:id/evidence`, validate(evidenceSchema), async (req, res) => {
