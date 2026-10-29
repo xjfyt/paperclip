@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import "@/i18n/annotation-test-resources";
 
 import { act, createRef } from "react";
 import { createRoot } from "react-dom/client";

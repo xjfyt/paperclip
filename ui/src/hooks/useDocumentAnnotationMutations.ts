@@ -1,4 +1,7 @@
-import { useCallback, useMemo, useState } from "react";
+import { t, useTranslation } from "@/i18n";
+import { useOptionalCompany } from "@/context/CompanyContext";
+import { useCommittedResourceScope } from "./useCommittedResourceScope";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { DocumentAnnotationComment, DocumentAnnotationThreadStatus, DocumentAnnotationThreadWithComments } from "@paperclipai/shared";
 import { authApi } from "@/api/auth";
@@ -12,109 +15,114 @@ interface MutationOptions {
   baseRevisionNumber: number;
   pendingAnchor: PendingAnchor | null;
   onFocusThread: (threadId: string | null) => void;
-  onThreadCreated?: (thread: DocumentAnnotationThreadWithComments) => void;
+  onThreadCreated?: (thread: DocumentAnnotationThreadWithComments, submittedBody: string) => void;
   onReplyAdded?: (threadId: string) => void;
 }
 
 export function useDocumentAnnotationMutations(options: MutationOptions) {
+  useTranslation();
   const queryClient = useQueryClient();
-  const [mutationError, setMutationError] = useState<string | null>(null);
-  const { data: session } = useQuery({
-    queryKey: queryKeys.auth.session,
-    queryFn: () => authApi.getSession(),
-    staleTime: 5 * 60_000,
-  });
-  const currentUser = useMemo(() => ({
+  const company = useOptionalCompany();
+  const [error, setError] = useState<{ scope: string; message: string; isCurrent: () => boolean } | null>(null);
+  const scope = JSON.stringify([company?.selectedCompanyId, options.target, options.baseRevisionId, options.pendingAnchor?.selector]);
+  const isCurrent = useCommittedResourceScope(scope);
+  const { data: session } = useQuery({ queryKey: queryKeys.auth.session, queryFn: () => authApi.getSession(), staleTime: 5 * 60_000 });
+  const currentUser = {
     id: session?.user?.id ?? null,
-    name: session?.user?.name?.trim() || session?.user?.email?.trim() || "You",
+    name: session?.user?.name?.trim() || session?.user?.email?.trim() || t("annotationUi.you"),
     image: session?.user?.image ?? null,
-  }), [session]);
+  };
   const queryKey = useMemo(() => options.target.kind === "routine"
     ? queryKeys.routines.documentAnnotations(options.target.routineId, options.target.documentKey, "all")
     : options.target.kind === "case"
       ? queryKeys.cases.documentAnnotations(options.target.caseId, options.target.documentKey, "all")
       : queryKeys.issues.documentAnnotations(options.target.issueId, options.target.documentKey, "all"), [options.target]);
-  const invalidateAll = useCallback(() => queryClient.invalidateQueries({
-    predicate: (query) => Array.isArray(query.queryKey)
-      && query.queryKey[1] === "document-annotations"
-      && query.queryKey[2] === (options.target.kind === "issue" ? options.target.issueId : options.target.kind === "case" ? options.target.caseId : options.target.routineId)
-      && query.queryKey[3] === options.target.documentKey,
-  }), [options.target, queryClient]);
-
-  const createThread = useMutation({
-    mutationFn: async (body: string) => {
-      if (!options.pendingAnchor) throw new Error("No selection to anchor to.");
-      if (!options.baseRevisionId) throw new Error("Document has no revision yet.");
-      return documentAnnotationsApi.createForTarget(options.target, {
-        baseRevisionId: options.baseRevisionId,
-        baseRevisionNumber: options.baseRevisionNumber,
-        selector: options.pendingAnchor.selector,
-        body,
-      });
-    },
-    onMutate: async (body) => {
-      if (!options.pendingAnchor || !options.baseRevisionId) return undefined;
-      setMutationError(null);
-      await queryClient.cancelQueries({ queryKey });
-      const previous = queryClient.getQueryData<DocumentAnnotationThreadWithComments[]>(queryKey);
-      const optimistic = buildOptimisticThread(body, options, currentUser);
-      queryClient.setQueryData<DocumentAnnotationThreadWithComments[]>(queryKey, (current) => [...(current ?? []), optimistic]);
-      options.onFocusThread(optimistic.id);
-      return { previous, optimisticId: optimistic.id };
-    },
-    onError: (error, _body, context) => {
-      if (context?.previous) queryClient.setQueryData(queryKey, context.previous);
-      setMutationError(messageFor(error, "Failed to create comment."));
-    },
-    onSuccess: (thread, _body, context) => {
-      queryClient.setQueryData<DocumentAnnotationThreadWithComments[]>(queryKey, (current) =>
-        (current ?? []).map((entry) => entry.id === context?.optimisticId ? thread : entry));
-      setMutationError(null);
-      options.onFocusThread(thread.id);
-      options.onThreadCreated?.(thread);
-    },
-    onSettled: invalidateAll,
+  // Capture before mutate: React Query may replace observer options while an
+  // async onMutate is awaiting cancellation. The request and cache must retain
+  // the clicked target even when a different document commits meanwhile.
+  const snapshot = () => ({ options, queryKey, isCurrent, scope, user: currentUser });
+  type Snapshot = ReturnType<typeof snapshot>;
+  const clearError = (source: Snapshot) => { if (source.isCurrent()) setError(null); };
+  const fail = (source: Snapshot, error: unknown, fallback: string) => {
+    if (source.isCurrent()) setError({ scope: source.scope, message: messageFor(error, t(fallback)), isCurrent: source.isCurrent });
+  };
+  const invalidate = (source: Snapshot) => queryClient.invalidateQueries({
+    predicate: query => source.queryKey.slice(0, 4).every((part, index) => query.queryKey[index] === part),
   });
 
+  const createThread = useMutation({
+    mutationFn: async ({ body, source }: { body: string; source: Snapshot }) => {
+      const captured = source.options;
+      if (!captured.pendingAnchor) throw new Error("No selection to anchor to.");
+      if (!captured.baseRevisionId) throw new Error("Document has no revision yet.");
+      return documentAnnotationsApi.createForTarget(captured.target, {
+        baseRevisionId: captured.baseRevisionId, baseRevisionNumber: captured.baseRevisionNumber,
+        selector: captured.pendingAnchor.selector, body,
+      });
+    },
+    onMutate: async ({ body, source }) => {
+      if (!source.options.pendingAnchor || !source.options.baseRevisionId) return undefined;
+      clearError(source);
+      await queryClient.cancelQueries({ queryKey: source.queryKey });
+      const previous = queryClient.getQueryData<DocumentAnnotationThreadWithComments[]>(source.queryKey);
+      const optimistic = buildOptimisticThread(body, source.options, source.user);
+      queryClient.setQueryData<DocumentAnnotationThreadWithComments[]>(source.queryKey, current => [...(current ?? []), optimistic]);
+      if (source.isCurrent()) source.options.onFocusThread(optimistic.id);
+      return { previous, optimisticId: optimistic.id };
+    },
+    onError: (error, { source }, context) => {
+      if (context) queryClient.setQueryData(source.queryKey, context.previous ?? []);
+      fail(source, error, "annotationUi.createFailed");
+    },
+    onSuccess: (thread, { source, body }, context) => {
+      queryClient.setQueryData<DocumentAnnotationThreadWithComments[]>(source.queryKey, current =>
+        (current ?? []).map(entry => entry.id === context?.optimisticId ? thread : entry));
+      if (!source.isCurrent()) return;
+      clearError(source); source.options.onFocusThread(thread.id); source.options.onThreadCreated?.(thread, body);
+    },
+    onSettled: (_data, _error, { source }) => invalidate(source),
+  });
   const addReply = useMutation({
-    mutationFn: ({ threadId, body }: { threadId: string; body: string }) => documentAnnotationsApi.addCommentForTarget(options.target, threadId, { body }),
-    onMutate: async ({ threadId, body }) => {
-      setMutationError(null);
-      await queryClient.cancelQueries({ queryKey });
-      const previous = queryClient.getQueryData<DocumentAnnotationThreadWithComments[]>(queryKey);
-      const optimistic = buildOptimisticComment(body, threadId, options.target, currentUser.id);
-      queryClient.setQueryData<DocumentAnnotationThreadWithComments[]>(queryKey, (current) => (current ?? []).map((thread) =>
+    mutationFn: ({ threadId, body, source }: { threadId: string; body: string; source: Snapshot }) => documentAnnotationsApi.addCommentForTarget(source.options.target, threadId, { body }),
+    onMutate: async ({ threadId, body, source }) => {
+      clearError(source); await queryClient.cancelQueries({ queryKey: source.queryKey });
+      const previous = queryClient.getQueryData<DocumentAnnotationThreadWithComments[]>(source.queryKey);
+      const optimistic = buildOptimisticComment(body, threadId, source.options.target, source.user.id);
+      queryClient.setQueryData<DocumentAnnotationThreadWithComments[]>(source.queryKey, current => (current ?? []).map(thread =>
         thread.id === threadId ? { ...thread, comments: [...thread.comments, optimistic], updatedAt: optimistic.createdAt } : thread));
       return { previous };
     },
-    onError: (error, _variables, context) => {
-      if (context?.previous) queryClient.setQueryData(queryKey, context.previous);
-      setMutationError(messageFor(error, "Failed to add reply."));
+    onError: (error, { source }, context) => {
+      if (context) queryClient.setQueryData(source.queryKey, context.previous ?? []);
+      fail(source, error, "annotationUi.replyFailed");
     },
-    onSuccess: (_comment, variables) => {
-      setMutationError(null);
-      options.onReplyAdded?.(variables.threadId);
+    onSuccess: (_comment, { source, threadId }) => {
+      if (!source.isCurrent()) return;
+      clearError(source); source.options.onReplyAdded?.(threadId);
     },
-    onSettled: invalidateAll,
+    onSettled: (_data, _error, { source }) => invalidate(source),
   });
-
   const updateStatus = useMutation({
-    mutationFn: ({ threadId, status }: { threadId: string; status: DocumentAnnotationThreadStatus }) => documentAnnotationsApi.updateStatusForTarget(options.target, threadId, status),
-    onMutate: async ({ threadId, status }) => {
-      setMutationError(null);
-      await queryClient.cancelQueries({ queryKey });
-      const previous = queryClient.getQueryData<DocumentAnnotationThreadWithComments[]>(queryKey);
-      queryClient.setQueryData<DocumentAnnotationThreadWithComments[]>(queryKey, (current) => (current ?? []).map((thread) => thread.id === threadId ? { ...thread, status } : thread));
+    mutationFn: ({ threadId, status, source }: { threadId: string; status: DocumentAnnotationThreadStatus; source: Snapshot }) => documentAnnotationsApi.updateStatusForTarget(source.options.target, threadId, status),
+    onMutate: async ({ threadId, status, source }) => {
+      clearError(source); await queryClient.cancelQueries({ queryKey: source.queryKey });
+      const previous = queryClient.getQueryData<DocumentAnnotationThreadWithComments[]>(source.queryKey);
+      queryClient.setQueryData<DocumentAnnotationThreadWithComments[]>(source.queryKey, current => (current ?? []).map(thread => thread.id === threadId ? { ...thread, status } : thread));
       return { previous };
     },
-    onError: (error, _variables, context) => {
-      if (context?.previous) queryClient.setQueryData(queryKey, context.previous);
-      setMutationError(messageFor(error, "Failed to update comment status."));
+    onError: (error, { source }, context) => {
+      if (context) queryClient.setQueryData(source.queryKey, context.previous ?? []);
+      fail(source, error, "annotationUi.statusFailed");
     },
-    onSuccess: () => setMutationError(null),
-    onSettled: invalidateAll,
+    onSuccess: (_data, { source }) => clearError(source),
+    onSettled: (_data, _error, { source }) => invalidate(source),
   });
-  return { createThread, addReply, updateStatus, mutationError, currentUser };
+  return {
+    createThread: { ...createThread, isPending: createThread.isPending && createThread.variables?.source.scope === scope && createThread.variables.source.isCurrent(), mutate: (body: string) => createThread.mutate({ body, source: snapshot() }) },
+    addReply: { ...addReply, isPending: addReply.isPending && addReply.variables?.source.scope === scope && addReply.variables.source.isCurrent(), mutate: (variables: { threadId: string; body: string }) => addReply.mutate({ ...variables, source: snapshot() }) },
+    updateStatus: { ...updateStatus, isPending: updateStatus.isPending && updateStatus.variables?.source.scope === scope && updateStatus.variables.source.isCurrent(), mutate: (variables: { threadId: string; status: DocumentAnnotationThreadStatus }) => updateStatus.mutate({ ...variables, source: snapshot() }) },
+    mutationError: error?.scope === scope && error.isCurrent() ? error.message : null, currentUser,
+  };
 }
 
 function messageFor(error: unknown, fallback: string) { return error instanceof Error && error.message ? error.message : fallback; }

@@ -1,3 +1,4 @@
+import { t, formatNumber, useTranslation } from "@/i18n";
 import { Profiler, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Agent, DocumentAnnotationThreadWithComments, IssueDocument } from "@paperclipai/shared";
@@ -76,6 +77,7 @@ export function IssueDocumentAnnotations({
   initialComposerAnchor,
   onInitialComposerAnchorConsumed,
 }: IssueDocumentAnnotationsProps) {
+  useTranslation();
   const selectionDebugEnabled = isSelectionDebugEnabled();
   if (selectionDebugEnabled) initializeSelectionDebug();
   const containerRef = useRef<HTMLElement | null>(null);
@@ -130,13 +132,13 @@ export function IssueDocumentAnnotations({
 
   const newCommentDisabled = draftDirty || draftConflicted || historicalPreview || !doc.latestRevisionId;
   const newCommentDisabledReason = historicalPreview
-    ? "New comments are disabled while previewing a historical revision."
+    ? t("annotationUi.historyDisabled")
     : draftConflicted
-      ? "Resolve the document conflict before adding new comments."
+      ? t("annotationUi.conflictDisabled")
       : draftDirty
-        ? "Save the draft to anchor new comments."
+        ? t("annotationUi.draftDisabled")
         : !doc.latestRevisionId
-          ? "Document has no saved revision yet."
+          ? t("annotationUi.revisionDisabled")
           : null;
 
   const handleSelectionAnchorChange = useCallback((anchor: PendingAnchor | null) => {
@@ -291,6 +293,12 @@ export function IssueDocumentAnnotations({
         className={cn("relative min-w-0", showDesktopGutter && "lg:flex-1")}
         data-testid={`document-annotation-body-${doc.key}`}
       >
+        {annotationsQuery.isError ? (
+          <div role="alert" className="mb-2 text-sm text-muted-foreground">
+            {t("annotationUi.loadError")}
+            <Button variant="ghost" size="sm" onClick={() => void annotationsQuery.refetch()}>{t("documentUi.retry")}</Button>
+          </div>
+        ) : annotationsQuery.isLoading ? <p role="status" className="text-sm text-muted-foreground">{t("annotationUi.loading")}</p> : null}
         <div className="relative z-(--z-1)">
           {children}
         </div>
@@ -396,6 +404,7 @@ export function DocumentAnnotationsCountChip({
   panelOpen,
   onToggle,
 }: DocumentAnnotationsCountChipProps) {
+  useTranslation();
   const annotationsQuery = useQuery({
     queryKey: target?.kind === "routine"
       ? queryKeys.routines.documentAnnotations(target.routineId, target.documentKey, "all")
@@ -424,17 +433,19 @@ export function DocumentAnnotationsCountChip({
         panelOpen && "bg-muted text-foreground",
         openCount > 0 && "text-foreground",
       )}
-      onClick={onToggle}
+      onClick={() => { onToggle(); if (annotationsQuery.isError) void annotationsQuery.refetch(); }}
       data-testid={`document-annotation-count-${docKey}`}
-      aria-label={openCount === 0
-        ? `Open comments on ${docKey}`
-        : `Open ${openCount} unresolved comments on ${docKey}`}
+      aria-label={annotationsQuery.isError || annotationsQuery.isLoading
+        ? t("annotationUi.countUnknown", { document: docKey })
+        : openCount === 0
+          ? t("annotationUi.openComments", { document: docKey })
+          : t("annotationUi.openUnresolved", { document: docKey, number: formatNumber(openCount) })}
       aria-expanded={panelOpen}
     >
       <MessageSquare className="h-3 w-3" aria-hidden="true" />
-      <span className="tabular-nums">{openCount}</span>
+      <span className="tabular-nums">{annotationsQuery.isError || annotationsQuery.isLoading ? "—" : formatNumber(openCount)}</span>
       <span className="hidden sm:inline">
-        {openCount === 1 ? "comment" : "comments"}
+        {t("annotationUi.comment", { count: openCount })}
       </span>
     </Button>
   );

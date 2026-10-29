@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import "@/i18n/annotation-test-resources";
 
 import { useState } from "react";
 import { createRoot as createReactRoot } from "react-dom/client";

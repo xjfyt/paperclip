@@ -1,0 +1,56 @@
+// @vitest-environment jsdom
+import "@/i18n/annotation-test-resources";
+import { act } from "react";
+import { createRoot } from "react-dom/client";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { DocumentAnnotationThreadWithComments } from "@paperclipai/shared";
+import { expect, it, vi } from "vitest";
+import { documentAnnotationsApi, type DocumentAnnotationTarget } from "@/api/document-annotations";
+import { queryKeys } from "@/lib/queryKeys";
+import { useDocumentAnnotationMutations } from "./useDocumentAnnotationMutations";
+vi.mock("@/api/auth", () => ({ authApi: { getSession: async () => null } }));
+const anchor = { selectedText: "Original quote", selector: { quote: { exact: "Original quote", prefix: "", suffix: "" }, position: { normalizedStart: 0, normalizedEnd: 14, markdownStart: 0, markdownEnd: 14 } } };
+const first = { kind: "issue", issueId: "same-id", documentKey: "plan" } as const;
+const second = { kind: "routine", routineId: "same-id", documentKey: "plan" } as const;
+it("captures the clicked source before async onMutate and never clears a newer document draft", async () => {
+  const host = document.createElement("div"); const root = createRoot(host); const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  let current!: ReturnType<typeof useDocumentAnnotationMutations>;
+  let resume!: () => void; const cancelled = new Promise<void>(resolve => { resume = resolve; });
+  const cancel = vi.spyOn(client, "cancelQueries").mockReturnValueOnce(cancelled);
+  const created = { id: "created-first", comments: [] } as unknown as DocumentAnnotationThreadWithComments;
+  const create = vi.spyOn(documentAnnotationsApi, "createForTarget").mockResolvedValue(created);
+  const createdCallback = vi.fn(); const focus = vi.fn();
+  function Harness({ target }: { target: DocumentAnnotationTarget }) {
+    current = useDocumentAnnotationMutations({ target, baseRevisionId: "revision", baseRevisionNumber: 1, pendingAnchor: anchor, onFocusThread: focus, onThreadCreated: createdCallback });
+    return <p>{current.createThread.isPending ? "pending" : "ready"}</p>;
+  }
+  const render = async (target: DocumentAnnotationTarget) => { await act(async () => root.render(<QueryClientProvider client={client}><Harness target={target} /></QueryClientProvider>)); };
+  const keyA = queryKeys.issues.documentAnnotations(first.issueId, first.documentKey, "all");
+  const keyB = queryKeys.routines.documentAnnotations(second.routineId, second.documentKey, "all");
+  client.setQueryData(keyA, []); client.setQueryData(keyB, [{ id: "keep-newer-cache" }]);
+  try {
+    await render(first); await act(async () => current.createThread.mutate("Keep raw comment 原文"));
+    await render(second); expect(host.textContent).toBe("ready");
+    await act(async () => { resume(); await new Promise(resolve => setTimeout(resolve, 10)); });
+    expect(create).toHaveBeenCalledWith(first, expect.objectContaining({ body: "Keep raw comment 原文" }));
+    expect(createdCallback).not.toHaveBeenCalled(); expect(focus).not.toHaveBeenCalled();
+    expect(client.getQueryData(keyA)).toEqual([created]);
+    expect(client.getQueryData(keyB)).toEqual([{ id: "keep-newer-cache" }]);
+  } finally { await act(async () => root.unmount()); client.clear(); cancel.mockRestore(); create.mockRestore(); }
+});
+it("ignores a previous target's late mutation error", async () => {
+  const host = document.createElement("div"); const root = createRoot(host); const client = new QueryClient();
+  let current!: ReturnType<typeof useDocumentAnnotationMutations>; let reject!: (error: Error) => void;
+  const update = vi.spyOn(documentAnnotationsApi, "updateStatusForTarget").mockReturnValue(new Promise((_resolve, fail) => { reject = fail; }));
+  function Harness({ target }: { target: DocumentAnnotationTarget }) {
+    current = useDocumentAnnotationMutations({ target, baseRevisionId: "revision", baseRevisionNumber: 1, pendingAnchor: null, onFocusThread: () => {} });
+    return <p>{current.mutationError ?? "no error"}</p>;
+  }
+  try {
+    await act(async () => root.render(<QueryClientProvider client={client}><Harness target={first} /></QueryClientProvider>));
+    await act(async () => current.updateStatus.mutate({ threadId: "thread", status: "resolved" }));
+    await act(async () => root.render(<QueryClientProvider client={client}><Harness target={second} /></QueryClientProvider>));
+    await act(async () => { reject(new Error("Original provider failure")); await new Promise(resolve => setTimeout(resolve, 10)); });
+    expect(host.textContent).toBe("no error");
+  } finally { await act(async () => root.unmount()); client.clear(); update.mockRestore(); }
+});
