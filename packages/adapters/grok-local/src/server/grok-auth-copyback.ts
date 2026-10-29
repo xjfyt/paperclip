@@ -1,8 +1,10 @@
-import { mkdir, open, rename, rm } from "node:fs/promises";
+import { open, rename, rm } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { withDirectoryMergeLock } from "@paperclipai/adapter-utils/workspace-restore-merge";
 import { USE_SOURCE_EXIT, decideGrokAuthMerge } from "./grok-auth-merge-decision.js";
+import { ensurePrivateCredentialDirectory } from "@paperclipai/adapter-utils/private-credential-paths";
+import { protectNewPrivatePath } from "@paperclipai/shared/private-filesystem-permissions";
 
 // The copy-out runs the direction-agnostic decision predicate with the
 // sandbox credential as the `source` and the shared host credential as the
@@ -82,7 +84,7 @@ export async function copyBackGrokAuth(input: CopyBackGrokAuthInput): Promise<Co
   }
 
   try {
-    await mkdir(hostHomeDir, { recursive: true });
+    await ensurePrivateCredentialDirectory(hostHomeDir);
     return await withDirectoryMergeLock(
       hostHomeDir,
       async (canonicalHostHomeDir) => {
@@ -99,6 +101,7 @@ export async function copyBackGrokAuth(input: CopyBackGrokAuthInput): Promise<Co
         // pre-existing symlink.
         const handle = await open(stagedTempPath, "wx", 0o600);
         try {
+          protectNewPrivatePath(stagedTempPath);
           await handle.writeFile(sandboxAuthBytes);
           await handle.close();
 
@@ -109,7 +112,7 @@ export async function copyBackGrokAuth(input: CopyBackGrokAuthInput): Promise<Co
             // Atomic same-directory swap; rename preserves the temp's 0600 mode.
             await rename(stagedTempPath, hostAuthPath);
             await log(
-              "[paperclip] Grok auth copy-out: sandbox credential is strictly newer for the same identity; installed to the host at mode 0600.",
+              "[paperclip] Grok auth copy-out: sandbox credential is strictly newer for the same identity; installed with private permissions.",
             );
             return "copied";
           }

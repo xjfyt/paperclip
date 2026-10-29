@@ -1,3 +1,4 @@
+import { hasPrivatePermissions, protectNewPrivatePath } from "@paperclipai/shared/private-filesystem-permissions";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -66,7 +67,8 @@ describe("stageGrokHomeForSync", () => {
     cleanupDirs.push(staged);
 
     const mode = (await fs.stat(staged)).mode & 0o777;
-    expect(mode).toBe(0o700);
+    expect(hasPrivatePermissions(staged, mode)).toBe(true);
+    if (process.platform !== "win32") expect(mode).toBe(0o700);
   });
 
   it("writes the staged auth.json with mode 0600", async () => {
@@ -80,7 +82,8 @@ describe("stageGrokHomeForSync", () => {
     cleanupDirs.push(staged);
 
     const mode = (await fs.stat(path.join(staged, "auth.json"))).mode & 0o777;
-    expect(mode).toBe(0o600);
+    expect(hasPrivatePermissions(path.join(staged, "auth.json"), mode)).toBe(true);
+    if (process.platform !== "win32") expect(mode).toBe(0o600);
   });
 
   it("dereferences an auth.json symlink to bytes", async () => {

@@ -11,6 +11,8 @@ import {
   type GrokAuthPayload,
 } from "./grok-home.js";
 import { USE_SOURCE_EXIT, decideGrokAuthMerge } from "./grok-auth-merge-decision.js";
+import { ensurePrivateCredentialDirectory } from "@paperclipai/adapter-utils/private-credential-paths";
+import { protectNewPrivatePath } from "@paperclipai/shared/private-filesystem-permissions";
 
 // The Grok device-login credential promotion. It runs after a successful
 // device login, on the exact credential the login sandbox produced. It mirrors
@@ -96,6 +98,7 @@ export async function checkStagedGrokCredentialReadiness(
   }
   const scratchHome = await mkdtemp(path.join(os.tmpdir(), "paperclip-grok-login-readiness-"));
   try {
+    protectNewPrivatePath(scratchHome);
     await mkdir(scratchHome, { recursive: true, mode: READINESS_HOME_DIR_MODE });
     await writeFile(path.join(scratchHome, AUTH_FILE_NAME), authBytes, {
       mode: READINESS_AUTH_FILE_MODE,
@@ -268,6 +271,7 @@ async function writeAuthFileAtomically(authPath: string, authBytes: Buffer): Pro
   // already exists, so the write never goes through a pre-existing symlink.
   const handle = await open(stagedTempPath, "wx", PRIVATE_FILE_MODE);
   try {
+    protectNewPrivatePath(stagedTempPath);
     await handle.writeFile(authBytes);
     await handle.close();
     await rename(stagedTempPath, authPath);
@@ -298,6 +302,7 @@ async function writeSameIdentityCredentialIfFresher(
   );
   const handle = await open(stagedTempPath, "wx", PRIVATE_FILE_MODE);
   try {
+    protectNewPrivatePath(stagedTempPath);
     await handle.writeFile(authBytes);
     await handle.close();
     const decision = await decideGrokAuthMerge(stagedTempPath, authPath, {
@@ -362,10 +367,10 @@ export async function promoteGrokDeviceLoginCredential(
   //    or a non-Grok payload — is treated as a foreign identity, so the
   //    promotion fails closed and writes nothing.
   //
-  // 6. Write the company credential home. `mkdir` applies `mode` only when it
-  //    creates the directory, so an explicit `chmod` follows it. This keeps
-  //    the directory mode exact both for a new home and for a home that
-  //    already existed at a broader mode. An empty home is always seeded. A
+  // 6. Write the company credential home. POSIX reasserts the directory mode;
+  //    Windows protects a newly created empty home before writing and rejects
+  //    an existing home with a broad or unverifiable DACL. An empty home is
+  //    always seeded. A
   //    home that already holds the SAME identity is refreshed only when the
   //    login is strictly newer than the existing credential — the shared
   //    freshness predicate in `grok-auth-merge-decision.ts` decides this, the
@@ -378,10 +383,10 @@ export async function promoteGrokDeviceLoginCredential(
   // same lock the teardown copy-back takes on the same directory (see
   // `grok-auth-copyback.ts`). The directory must exist before the lock can
   // resolve a canonical real path, so `mkdir` runs once, up front, at the
-  // final private mode; a home that already exists keeps its current mode
-  // until the write path below re-asserts it.
+  // final private permissions. Existing Windows homes are validated here;
+  // the POSIX write path below reasserts its directory mode.
   const companyHome = resolveManagedGrokHomeDir(env, companyId);
-  await mkdir(companyHome, { recursive: true, mode: PRIVATE_DIR_MODE });
+  await ensurePrivateCredentialDirectory(companyHome);
   return await withDirectoryMergeLock(
     companyHome,
     async (canonicalCompanyHome) => {
@@ -400,7 +405,7 @@ export async function promoteGrokDeviceLoginCredential(
         return "kept_foreign_identity";
       }
 
-      await chmod(canonicalCompanyHome, PRIVATE_DIR_MODE);
+      if (process.platform !== "win32") await chmod(canonicalCompanyHome, PRIVATE_DIR_MODE);
 
       if (existingState.kind === "identity") {
         const wrote = await writeSameIdentityCredentialIfFresher(authBytes, authPath);
@@ -410,12 +415,12 @@ export async function promoteGrokDeviceLoginCredential(
           );
           return "kept";
         }
-        await log("[paperclip] Grok device-login promotion: wrote the company credential home at mode 0600.");
+        await log("[paperclip] Grok device-login promotion: wrote the company credential home with private permissions.");
         return "promoted";
       }
 
       await writeAuthFileAtomically(authPath, authBytes);
-      await log("[paperclip] Grok device-login promotion: wrote the company credential home at mode 0600.");
+      await log("[paperclip] Grok device-login promotion: wrote the company credential home with private permissions.");
       return "promoted";
     },
     env,

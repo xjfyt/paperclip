@@ -1,3 +1,5 @@
+import { hasPrivatePermissions, protectNewPrivatePath } from "@paperclipai/shared/private-filesystem-permissions";
+import { setFixtureAcl } from "@paperclipai/adapter-utils/test-fixtures/windows-private-acl";
 import { chmod, lstat, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -44,6 +46,7 @@ describe("grok device-login credential promotion", () => {
   async function makeInstanceRoot(): Promise<string> {
     const dir = await mkdtemp(path.join(os.tmpdir(), "paperclip-grok-promotion-"));
     cleanupDirs.push(dir);
+    protectNewPrivatePath(dir);
     return dir;
   }
 
@@ -238,7 +241,7 @@ describe("grok device-login credential promotion", () => {
     await expect(lstat(companyHomeAuthPath(env, COMPANY_A))).rejects.toThrow();
   });
 
-  it("creates the company Grok home at mode 0700 and writes auth.json at exact mode 0600", async () => {
+  it("creates a private company Grok home and credential using the platform permission model", async () => {
     const home = await makeInstanceRoot();
     const env = envFor(home);
     const outcome = await promoteGrokDeviceLoginCredential({
@@ -254,15 +257,17 @@ describe("grok device-login credential promotion", () => {
 
     const companyHome = resolveManagedGrokHomeDir(env, COMPANY_A);
     const dirStat = await lstat(companyHome);
-    expect(dirStat.mode & 0o777).toBe(0o700);
+    expect(hasPrivatePermissions(companyHome, dirStat.mode)).toBe(true);
+    if (process.platform !== "win32") expect(dirStat.mode & 0o777).toBe(0o700);
     const authPath = path.join(companyHome, "auth.json");
     const fileStat = await lstat(authPath);
-    expect(fileStat.mode & 0o777).toBe(0o600);
+    expect(hasPrivatePermissions(authPath, fileStat.mode)).toBe(true);
+    if (process.platform !== "win32") expect(fileStat.mode & 0o777).toBe(0o600);
     const written = JSON.parse(await readFile(authPath, "utf8"));
     expect(Object.keys(written)).toEqual([`${ISSUER}::${UUID_A}`]);
   });
 
-  it("normalizes the company Grok home to mode 0700 when the home already exists at a broader mode", async () => {
+  it("keeps an existing company home private using the platform permission model", async () => {
     const home = await makeInstanceRoot();
     const env = envFor(home);
     const companyHome = resolveManagedGrokHomeDir(env, COMPANY_A);
@@ -280,10 +285,30 @@ describe("grok device-login credential promotion", () => {
     expect(outcome).toBe("promoted");
 
     const dirStat = await lstat(companyHome);
-    expect(dirStat.mode & 0o777).toBe(0o700);
+    expect(hasPrivatePermissions(companyHome, dirStat.mode)).toBe(true);
+    if (process.platform !== "win32") expect(dirStat.mode & 0o777).toBe(0o700);
     const authPath = path.join(companyHome, "auth.json");
     const fileStat = await lstat(authPath);
-    expect(fileStat.mode & 0o777).toBe(0o600);
+    expect(hasPrivatePermissions(authPath, fileStat.mode)).toBe(true);
+    if (process.platform !== "win32") expect(fileStat.mode & 0o777).toBe(0o600);
+  });
+
+  it.runIf(process.platform === "win32")("refuses an existing broad Windows home without changing its ACL or credential", async () => {
+    const home = await makeInstanceRoot();
+    const env = envFor(home);
+    const companyHome = resolveManagedGrokHomeDir(env, COMPANY_A);
+    await mkdir(companyHome, { recursive: true });
+    const authPath = path.join(companyHome, "auth.json");
+    const before = grokAuth({ uuid: UUID_A });
+    await writeFile(authPath, before);
+    setFixtureAcl(home, companyHome, true);
+    await expect(promoteGrokDeviceLoginCredential({
+      authBytes: grokAuth({ uuid: UUID_A }), companyId: COMPANY_A,
+      userInitiated: true, checkReadiness: ready, isSoleActiveOwner: soleOwner, env, log: noopLog,
+    })).rejects.toMatchObject({ code: "EACCES" });
+    expect(await readFile(authPath)).toEqual(before);
+    expect(hasPrivatePermissions(companyHome, 0)).toBe(false);
+    expect(await readdir(companyHome)).toEqual(["auth.json"]);
   });
 
   it("keeps an occupied home that holds a different identity", async () => {

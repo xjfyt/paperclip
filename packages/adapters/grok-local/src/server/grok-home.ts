@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { resolvePaperclipInstanceRootForAdapter } from "@paperclipai/adapter-utils/server-utils";
+import { protectNewPrivatePath } from "@paperclipai/shared/private-filesystem-permissions";
 
 // `GROK_HOME` replaces `~/.grok` and holds `auth.json` plus session history.
 // Unlike Codex, a Grok `auth.json` has no fixed top-level key: it
@@ -173,6 +174,7 @@ export async function stageGrokHomeForSync(
     path.join(os.tmpdir(), `paperclip-grok-home-sync-${runIdPart ? `${runIdPart}-` : ""}`),
   );
   try {
+    protectNewPrivatePath(stagedHome);
     for (const entry of GROK_SYNC_ALLOWLIST) {
       const bytes = await readFileBytesIfPresent(path.join(effectiveGrokHome, entry));
       if (bytes === null) continue;

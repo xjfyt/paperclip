@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
+import { protectNewPrivatePath } from "@paperclipai/shared/private-filesystem-permissions";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AdapterExecutionContext } from "@paperclipai/adapter-utils";
 import { createPromptContextFixture } from "@paperclipai/adapter-utils/test-fixtures/prompt-context";
@@ -718,6 +719,7 @@ describe("grok_local execute", () => {
     async function seedHostGrokAuth(contents: string): Promise<string> {
       const hostGrokHome = resolveManagedGrokHomeDir(process.env, "company-1");
       await fs.mkdir(hostGrokHome, { recursive: true });
+      protectNewPrivatePath(hostGrokHome); // Fresh fixture directory, still empty.
       await fs.writeFile(path.join(hostGrokHome, "auth.json"), contents, "utf8");
       return hostGrokHome;
     }

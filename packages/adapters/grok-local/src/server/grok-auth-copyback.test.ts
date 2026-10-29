@@ -1,7 +1,20 @@
+import { hasPrivatePermissions, protectNewPrivatePath } from "@paperclipai/shared/private-filesystem-permissions";
 import { chmod, lstat, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+const renameFault = vi.hoisted(() => ({ target: null as string | null, calls: 0 }));
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs/promises")>();
+  return { ...actual, rename: async (source: string, destination: string) => {
+    if (destination === renameFault.target) {
+      renameFault.calls++;
+      throw Object.assign(new Error("synthetic install refusal"), { code: "EACCES" });
+    }
+    return actual.rename(source, destination);
+  } };
+});
 
 import { copyBackGrokAuth } from "./grok-auth-copyback.js";
 
@@ -16,6 +29,9 @@ describe("copyBackGrokAuth", () => {
   const cleanupDirs: string[] = [];
 
   afterEach(async () => {
+    vi.restoreAllMocks();
+    renameFault.target = null;
+    renameFault.calls = 0;
     while (cleanupDirs.length > 0) {
       const dir = cleanupDirs.pop();
       if (!dir) continue;
@@ -45,6 +61,7 @@ describe("copyBackGrokAuth", () => {
   async function makeHostDir(): Promise<string> {
     const dir = await mkdtemp(path.join(os.tmpdir(), "paperclip-grok-copyback-"));
     cleanupDirs.push(dir);
+    protectNewPrivatePath(dir);
     return dir;
   }
 
@@ -60,6 +77,7 @@ describe("copyBackGrokAuth", () => {
     outcome: Awaited<ReturnType<typeof copyBackGrokAuth>>;
     finalHostAuth: string | null;
     finalHostMode: number | null;
+    finalHostPrivate: boolean;
     logs: string[];
     leftoverEntries: string[];
   }> {
@@ -88,7 +106,7 @@ describe("copyBackGrokAuth", () => {
     );
     const finalHostMode = finalHostAuth === null ? null : (await lstat(hostAuthPath)).mode & 0o777;
     const leftoverEntries = (await readdir(hostHomeDir)).filter((name) => name !== "auth.json");
-    return { outcome, finalHostAuth, finalHostMode, logs, leftoverEntries };
+    return { outcome, finalHostAuth, finalHostMode, finalHostPrivate: finalHostMode !== null && hasPrivatePermissions(hostAuthPath, finalHostMode), logs, leftoverEntries };
   }
 
   it("installs a strictly-later same-identity credential at mode 0600", async () => {
@@ -99,7 +117,8 @@ describe("copyBackGrokAuth", () => {
 
     expect(result.outcome).toBe("copied");
     expect(result.finalHostAuth).toBe(sandboxAuth);
-    expect(result.finalHostMode).toBe(0o600);
+    expect(result.finalHostPrivate).toBe(true);
+    if (process.platform !== "win32") expect(result.finalHostMode).toBe(0o600);
     // Temp staging file must be gone once the swap completes.
     expect(result.leftoverEntries).toEqual([]);
     // Never leak token bytes in log output.
@@ -135,7 +154,8 @@ describe("copyBackGrokAuth", () => {
       const result = await runCopyBack({ sandboxAuth: entry.sandboxAuth, hostAuth: entry.hostAuth });
       expect(result.outcome, entry.name).toBe("kept-host");
       expect(result.finalHostAuth, entry.name).toBe(entry.hostAuth);
-      expect(result.finalHostMode, entry.name).toBe(0o600);
+      expect(result.finalHostPrivate, entry.name).toBe(true);
+      if (process.platform !== "win32") expect(result.finalHostMode, entry.name).toBe(0o600);
       expect(result.leftoverEntries, entry.name).toEqual([]);
     }
   });
@@ -240,7 +260,7 @@ describe("copyBackGrokAuth", () => {
     await writeFile(hostAuthPath, hostAuth, { mode: 0o600 });
     const before = await stat(hostAuthPath);
 
-    await chmod(hostHomeDir, 0o500); // r-x: readable/traversable, not writable
+    renameFault.target = hostAuthPath;
     try {
       const sandboxAuth = auth({ expiresAt: NEWER, marker: "sandbox-newer" });
       await expect(
@@ -255,8 +275,10 @@ describe("copyBackGrokAuth", () => {
     }
 
     const after = await stat(hostAuthPath);
+    expect(renameFault.calls).toBe(1);
     expect(await readFile(hostAuthPath, "utf8")).toBe(hostAuth);
-    expect(after.mode & 0o777).toBe(0o600);
+    expect(hasPrivatePermissions(hostAuthPath, after.mode)).toBe(true);
+    if (process.platform !== "win32") expect(after.mode & 0o777).toBe(0o600);
     expect(after.mtimeMs).toBe(before.mtimeMs);
     expect((await readdir(hostHomeDir)).filter((name) => name !== "auth.json")).toEqual([]);
   });
@@ -278,10 +300,11 @@ describe("copyBackGrokAuth", () => {
     const marker = "SECRET-ACCOUNT-HANDLE";
     const root = await mkdtemp(path.join(os.tmpdir(), `paperclip-grok-copyback-${marker}-`));
     cleanupDirs.push(root);
+    protectNewPrivatePath(root);
     const hostAuth = auth({ expiresAt: OLDER, marker: "HOST-TOKEN-SENTINEL" });
     await writeFile(path.join(root, "auth.json"), hostAuth, { mode: 0o600 });
 
-    await chmod(root, 0o500);
+    renameFault.target = path.join(root, "auth.json");
     const logs: string[] = [];
     try {
       await copyBackGrokAuth({
@@ -296,6 +319,7 @@ describe("copyBackGrokAuth", () => {
     }
 
     const combined = logs.join("\n");
+    expect(renameFault.calls).toBe(1);
     expect(combined).toContain("EACCES");
     expect(combined).toContain("failed");
     expect(combined).not.toContain(marker);
