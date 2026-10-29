@@ -8,7 +8,9 @@ const { collectCandidates, collectAudit, selectInventory, routedRoutineFiles, co
   routedCompanyPages, routedCompanyFiles, buildObservationComponents, buildObservationFiles,
   quotaComponents, quotaFiles, quotaRenderBoundary, browserMessageMethods,
   protocolDisplayComponents, protocolDisplayFiles, protocolThreadHosts, protocolRoute, protocolRenderBoundary,
-  manualProtocolSources, manualProtocolFiles, collectManualSourceEvidence } = require("./audit-mimouse-i18n.cjs");
+  manualProtocolSources, manualProtocolFiles, collectManualSourceEvidence,
+  baselineFile, baselineFileSha256, readBaseline, pathSetSha256, expandedScopeFiles, scopeEdges, manualScopeEdges, manualScopeFiles,
+  scopeEvidenceFiles, legacyDomain, sourceInventory, consumesEdge, verifyScopeEdges, collectScopeDenominators } = require("./audit-mimouse-i18n.cjs");
 const parserEntry = process.env.AUDIT_I18N_PARSER
   ? path.resolve(process.env.AUDIT_I18N_PARSER)
   : path.resolve(__dirname, "../node_modules/.pnpm/@babel+parser@7.29.8/node_modules/@babel/parser/lib/index.js");
@@ -371,13 +373,22 @@ function cliFixture(t, missing) {
     fs.writeFileSync(target, source);
   };
   write("scripts/audit-mimouse-i18n.cjs", fs.readFileSync(path.join(__dirname, "audit-mimouse-i18n.cjs")));
-  write("ui/src/App.tsx", "export const App = () => null;");
+  write(baselineFile, fs.readFileSync(path.join(__dirname, "..", baselineFile)));
+  const baseline = readBaseline(path.join(__dirname, ".."));
   const files = [
-    ...selectInventory([]).unmatchedBasenames.map(name => `ui/src/pages/${name}.tsx`),
+    ...baseline.files, ...expandedScopeFiles, ...manualScopeFiles, ...scopeEvidenceFiles,
     ...routedRoutineFiles, ...consumedUiFiles, ...routedCompanyFiles, ...buildObservationFiles, ...quotaFiles,
     ...protocolDisplayFiles, ...manualProtocolFiles,
   ];
   for (const file of files.filter(file => file !== missing)) write(file, "export const View = () => <span />;");
+  const hosts = new Map();
+  [...scopeEdges, ...manualScopeEdges].forEach((edge, index) => {
+    const alias = `Imported${index}`;
+    const usage = edge.usage === "jsx" ? `<${alias} />` : edge.usage === "call" ? `${alias}()` : alias;
+    hosts.set(edge.host, (hosts.get(edge.host) ?? "") + `import { ${edge.symbol} as ${alias} } from ${JSON.stringify(edge.importSource)}; const Fixture${index} = () => ${usage};\n`);
+    if (edge.through && edge.through !== missing) write(edge.through, fs.readFileSync(path.join(__dirname, "..", edge.through)));
+  });
+  for (const [file, source] of hosts) if (file !== missing) write(file, source);
   if (missing) write(`ui/src/elsewhere/${path.basename(missing)}`, "export const Unused = () => <span />;");
   const out = path.join(root, "report.json");
   const run = () => {
@@ -392,7 +403,7 @@ function cliFixture(t, missing) {
 test("CLI keeps consumed host metadata separate from the unchanged routine route scope", t => {
   const { result, report } = cliFixture(t);
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(report.schemaVersion, 4);
+  assert.equal(report.schemaVersion, 5);
   assert.deepEqual(report.requestedConsumedFiles, consumedUiFiles);
   assert.deepEqual(report.missingConsumedFiles, []);
   assert.deepEqual(report.scope.consumedComponentHosts, consumedUiComponents);
@@ -417,7 +428,7 @@ test("CLI keeps consumed host metadata separate from the unchanged routine route
   assert.deepEqual(report.scope.browserMessages, { receiver: "window", methods: ["confirm", "prompt", "alert"], messageArgumentIndex: 0 });
   assert.ok(report.limits.some(limit => limit.includes("prompt defaults and other arguments are excluded")));
   assert.equal(report.files.filter(row => row.file === "ui/src/pages/MimouseCoding.tsx").length, 1);
-  assert.equal(report.files.some(row => row.file === "ui/src/components/TaskChatThread.tsx"), false);
+  assert.equal(report.files.some(row => row.file === "ui/src/components/TaskChatThread.tsx"), true);
   assert.ok(report.limits.some(limit => limit.includes("not every consumer or a routine route")));
   assert.ok(report.limits.some(limit => limit.includes("not directly comparable")));
   assert.ok(report.limits.some(limit => limit.includes("canonical labels") && limit.includes("does not mean untranslated")));
@@ -565,7 +576,7 @@ test("schema 4 keeps protocol AST counts and manual source evidence separate fro
   assert.deepEqual(report.requestedManualSourceFiles, manualProtocolFiles);
   assert.deepEqual(report.missingManualSourceFiles, []);
   assert.equal(report.scope.manualSourceMatchedFiles, 5);
-  assert.equal(report.scope.previousScopeMatchedFiles, report.matchedFiles - 4);
+  assert.equal(report.scope.previousScopeMatchedFiles, report.legacyScope.matchedFiles - 4);
   assert.ok(manualProtocolFiles.every(file => !report.files.some(row => row.file === file)));
   assert.ok(report.manualSourceEvidence.every(row => row.classification === "needs_manual_review" && row.method === "source-hash-only" && /^[a-f0-9]{64}$/.test(row.sourceSha256)));
   assert.match(report.manualSourceSha256, /^[a-f0-9]{64}$/);
@@ -631,8 +642,8 @@ test("schema 4 extends the published 78-file inventory by exactly four paths wit
   const files = fs.readdirSync(path.join(root, "ui/src"), { recursive: true })
     .filter(file => file.endsWith(".tsx")).map(file => `ui/src/${file.split(path.sep).join("/")}`);
   const inventory = selectInventory(files);
-  assert.equal(inventory.selected.length, 82);
-  assert.deepEqual(inventory.selected.filter(file => !protocolDisplayFiles.includes(file)), oldFiles);
+  assert.equal(inventory.legacySelected.length, 82);
+  assert.deepEqual(inventory.legacySelected.filter(file => !protocolDisplayFiles.includes(file)), oldFiles);
   assert.deepEqual(routedRoutineFiles, baseline.requestedRoutedFiles);
   assert.deepEqual(consumedUiFiles, baseline.requestedConsumedFiles);
   assert.deepEqual(consumedUiComponents, baseline.scope.consumedComponentHosts);
@@ -651,4 +662,120 @@ test("schema 4 extends the published 78-file inventory by exactly four paths wit
   assert.deepEqual(Object.keys(rows.dynamicCandidates[0]), Object.keys(baseline.dynamicCandidates[0]));
   assert.equal(rows.candidates[0].classification, "needs_manual_review");
   assert.equal(rows.dynamicCandidates[0].classification, "needs_manual_review");
+});
+
+test("schema 5 freezes the entire 82-path baseline and verifies its published JSON SHA", () => {
+  const root = path.resolve(__dirname, "..");
+  const baseline = readBaseline(root);
+  assert.equal(baseline.files.length, 82);
+  assert.equal(baseline.fileSha256, baselineFileSha256);
+  assert.equal(baseline.historicalSourceSha256, "9d72c17c3f37a8e15618db93a8eadb7e3559fe355692347503efcabd5837d6c3");
+  assert.equal(baseline.pathSetSha256, pathSetSha256([...baseline.files].reverse()));
+  assert.deepEqual(selectInventory(baseline.files).legacySelected, baseline.files);
+  assert.ok(baseline.files.every(file => legacyDomain(file)));
+});
+
+test("schema 5 selects only exact additions; same basenames, tests and stories cannot replace them", () => {
+  const baseline = readBaseline(path.resolve(__dirname, ".."));
+  const additions = expandedScopeFiles.filter(file => !baseline.files.includes(file));
+  const wrong = additions.flatMap(file => [file.replace("ui/src/", "ui/src/elsewhere/"),
+    file.replace(".tsx", ".production.tsx"), file.replace(".tsx", ".test.tsx"), file.replace(".tsx", ".stories.tsx")]);
+  assert.deepEqual(selectInventory(wrong).selected, []);
+  for (const missing of additions) {
+    const result = selectInventory([...baseline.files, ...additions.filter(file => file !== missing), ...wrong]);
+    assert.deepEqual(result.missingExpandedScopeFiles, [missing]);
+    assert.deepEqual(result.legacySelected, baseline.files);
+  }
+  assert.ok(manualScopeFiles.every(file => !selectInventory([...baseline.files, ...expandedScopeFiles, ...manualScopeFiles]).selected.includes(file)));
+});
+
+test("all expanded imports resolve to exact consumers, including the TaskSidePanel barrel", () => {
+  assert.deepEqual(verifyScopeEdges(path.resolve(__dirname, ".."), parse), []);
+  for (const edge of [...scopeEdges, ...manualScopeEdges]) {
+    const imported = `import { ${edge.symbol} as Alias } from ${JSON.stringify(edge.importSource)};`;
+    assert.equal(consumesEdge(imported, edge, parse), false);
+    assert.equal(consumesEdge(`import type { ${edge.symbol} as Alias } from ${JSON.stringify(edge.importSource)}; const x = <Alias />;`, edge, parse), false);
+    const usage = edge.usage === "jsx" ? "<Alias />" : edge.usage === "call" ? "Alias()" : "Alias";
+    assert.equal(consumesEdge(`${imported} const x = ${usage};`, edge, parse), true);
+  }
+  assert.ok(scopeEdges.some(edge => edge.file.endsWith("/IssuePropertiesArtifactsTab.tsx") && edge.host.endsWith("/TaskSidePanel.tsx")));
+  assert.ok(scopeEdges.some(edge => edge.file.endsWith("/OnboardingWizard.tsx") && edge.host.endsWith("/OnboardingWizardVariant.tsx")));
+});
+
+test("CLI emits independently hashed five-domain, frozen legacy, explicit expansion and manual denominators", t => {
+  const { report, result, root } = cliFixture(t);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(report.schemaVersion, 5);
+  assert.deepEqual(report.legacyScope.requestedFiles, report.baseline.files);
+  assert.deepEqual(report.legacyPathDrift, []);
+  assert.deepEqual(report.expandedScope.requestedFiles, expandedScopeFiles);
+  assert.deepEqual(report.requestedExpandedScopeFiles, expandedScopeFiles);
+  assert.deepEqual(report.missingExpandedScopeFiles, []);
+  assert.deepEqual(report.invalidScopeEdges, []);
+  assert.deepEqual(report.scopeDenominators.map(scope => scope.domain), ["entry-navigation", "tasks", "agents-runs", "management", "new-modules"]);
+  const domains = report.scopeDenominators.flatMap(scope => scope.requestedFiles);
+  assert.equal(new Set(domains).size, domains.length, "five domains partition the AST denominator");
+  assert.deepEqual([...domains].sort(), report.files.map(row => row.file));
+  for (const scope of [report.legacyScope, report.expandedScope, report.manualScope, report.hostEvidence, ...report.scopeDenominators]) {
+    assert.equal(scope.pathSetSha256, pathSetSha256(scope.requestedFiles));
+    assert.deepEqual(scope.missingFiles, []);
+    assert.match(scope.sourceSha256, /^[a-f0-9]{64}$/);
+  }
+  assert.deepEqual(report.manualScope.requestedFiles, manualScopeFiles);
+  assert.equal(report.manualScope.method, "source-hash-only");
+  assert.ok(report.manualScope.evidence.every(row => row.method === "source-hash-only" && row.classification === "needs_manual_review"));
+  assert.ok(manualScopeFiles.every(file => !report.files.some(row => row.file === file)));
+  assert.deepEqual(report.scopeDenominators, collectScopeDenominators(root, report.baseline));
+  assert.ok(report.limits.some(limit => limit.includes("do not subtract old/new totals")));
+  assert.ok(report.limits.some(limit => limit.includes("not binding analysis or runtime reachability")));
+});
+
+test("CLI fails closed for a new scope path, manual helper, evidence-only host, barrel and missing import usage", t => {
+  for (const missing of ["ui/src/components/InstructionHistory.tsx", ...manualScopeFiles, "ui/src/main.tsx", "ui/src/components/task-side-panel/index.ts"]) {
+    const { result, report } = cliFixture(t, missing);
+    assert.equal(result.status, 1, `${missing}: ${result.stderr}`);
+    assert.ok([...report.missingExpandedScopeFiles, ...report.manualScope.missingFiles, ...report.hostEvidence.missingFiles].includes(missing));
+    assert.ok(report.invalidScopeEdges.some(edge => [edge.file, edge.host, edge.through].includes(missing)));
+  }
+  const fixture = cliFixture(t);
+  fixture.write("ui/src/main.tsx", 'import { App } from "./App"; export const Root = () => null;');
+  const { result, report } = fixture.run();
+  assert.equal(result.status, 1);
+  assert.ok(report.invalidScopeEdges.some(edge => edge.host === "ui/src/main.tsx"));
+  assert.deepEqual(report.hostEvidence.missingFiles, []);
+});
+
+test("CLI rejects unexpected old-basename paths and a tampered frozen report", t => {
+  const fixture = cliFixture(t);
+  fixture.write("ui/src/elsewhere/Auth.tsx", "export const Auth = () => null;");
+  const drift = fixture.run();
+  assert.equal(drift.result.status, 1);
+  assert.deepEqual(drift.report.legacyPathDrift, ["ui/src/elsewhere/Auth.tsx"]);
+  fixture.write(baselineFile, JSON.stringify({ schemaVersion: 4, files: [] }));
+  const result = spawnSync(process.execPath, [path.join(fixture.root, "scripts/audit-mimouse-i18n.cjs"), "--parser", parserEntry, "--out", path.join(fixture.root, "tampered.json")], { encoding: "utf8" });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /Frozen baseline SHA mismatch/);
+  assert.equal(fs.existsSync(path.join(fixture.root, "tampered.json")), false);
+});
+
+test("new AST, evidence-only host and pure helper source hashes cannot masquerade as old-scope translation progress", t => {
+  const fixture = cliFixture(t), before = fixture.report;
+  const append = (file, text) => fixture.write(file, fs.readFileSync(path.join(fixture.root, file), "utf8") + text);
+  append("ui/src/components/InstructionHistory.tsx", '\nconst NewCopy = () => <span>Owned system copy</span>;');
+  const afterAst = fixture.run().report;
+  assert.notEqual(afterAst.sourceSha256, before.sourceSha256);
+  assert.notEqual(afterAst.expandedScope.sourceSha256, before.expandedScope.sourceSha256);
+  assert.equal(afterAst.legacyScope.sourceSha256, before.legacyScope.sourceSha256);
+  assert.equal(afterAst.baseline.fileSha256, before.baseline.fileSha256);
+  append("ui/src/main.tsx", "\n// host-only evidence changed\n");
+  const afterHost = fixture.run().report;
+  assert.notEqual(afterHost.hostEvidence.sourceSha256, afterAst.hostEvidence.sourceSha256);
+  assert.equal(afterHost.sourceSha256, afterAst.sourceSha256);
+  append(manualScopeFiles[0], '\nconst helperCopy = "Returned system copy needs manual review";');
+  const afterHelper = fixture.run().report;
+  assert.notEqual(afterHelper.manualScope.sourceSha256, afterHost.manualScope.sourceSha256);
+  assert.equal(afterHelper.sourceSha256, afterHost.sourceSha256);
+  assert.equal(afterHelper.legacyScope.sourceSha256, before.legacyScope.sourceSha256);
+  assert.deepEqual(afterHelper.files, afterHost.files);
+  assert.deepEqual(afterHelper.scopeDenominators.map(x => x.pathSetSha256), before.scopeDenominators.map(x => x.pathSetSha256));
 });

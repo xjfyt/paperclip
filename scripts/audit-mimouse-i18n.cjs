@@ -163,6 +163,198 @@ function collectManualSourceEvidence(root) {
   return { manualSourceEvidence, missingManualSourceFiles, manualSourceSha256: hash.digest("hex") };
 }
 
+// Schema 5: explicit review denominator for the five agreed high-frequency
+// domains. An import is evidence only; it never recursively selects a file.
+const baselineFile = "doc/mimouse/checklists/I18N-AUDIT-20261027-5500.json";
+const baselineFileSha256 = "d7a518c101b7bdcee2db9aa99c5cec2438d935467698a36c6e1655b5834c7eb1";
+const sha256 = source => crypto.createHash("sha256").update(source).digest("hex");
+const pathSetSha256 = files => sha256([...new Set(files)].sort().join("\n") + "\n");
+function readBaseline(root) {
+  const bytes = fs.readFileSync(path.join(root, baselineFile));
+  if (sha256(bytes) !== baselineFileSha256) throw Error(`Frozen baseline SHA mismatch: ${baselineFile}`);
+  const report = JSON.parse(bytes);
+  const files = report.files.map(row => row.file);
+  if (report.schemaVersion !== 4 || files.length !== 82 || new Set(files).size !== 82) throw Error("Frozen baseline inventory mismatch");
+  return { file: baselineFile, fileSha256: baselineFileSha256, files, pathSetSha256: pathSetSha256(files),
+    historicalSourceSha256: report.sourceSha256, historicalMatchedFiles: report.matchedFiles };
+}
+const evidenceEdge = (domain, file, host, symbol, importSource, usage = "jsx", through = null) => ({
+  domain, file: `ui/src/${file}`, host: `ui/src/${host}`, symbol, importSource, usage,
+  ...(through ? { through: `ui/src/${through}` } : {}),
+});
+const scopeEdges = [
+  evidenceEdge("management", "pages/audit/AuditFeed.tsx", "pages/audit/AuditHub.tsx", "AuditFeed", "./AuditFeed"),
+  evidenceEdge("management", "pages/audit/AuditRuns.tsx", "pages/audit/AuditHub.tsx", "AuditRuns", "./AuditRuns"),
+  evidenceEdge("tasks", "pages/IssueDetail.tsx", "App.tsx", "IssueDetail", "./pages/IssueDetail"),
+  evidenceEdge("agents-runs", "pages/AgentDetail.tsx", "App.tsx", "AgentDetail", "./pages/AgentDetail"),
+  evidenceEdge("management", "pages/Costs.tsx", "App.tsx", "Costs", "./pages/Costs"),
+  evidenceEdge("new-modules", "pages/CompanySettings.tsx", "App.tsx", "CompanySettings", "./pages/CompanySettings"),
+  evidenceEdge("new-modules", "pages/MimouseCoding.tsx", "App.tsx", "MimouseCoding", "./pages/MimouseCoding"),
+  evidenceEdge("tasks", "pages/DecisionQueuePage.tsx", "App.tsx", "DecisionQueuePage", "./pages/DecisionQueuePage"),
+  evidenceEdge("tasks", "components/DecisionCard.tsx", "components/DecisionResolver.tsx", "DecisionCard", "./DecisionCard"),
+  evidenceEdge("tasks", "components/DecisionTriageStrip.tsx", "components/AttentionQueueRow.tsx", "DecisionTriageStrip", "./DecisionTriageStrip"),
+  evidenceEdge("tasks", "components/FileViewerSheet.tsx", "pages/IssueDetail.tsx", "FileViewerSheet", "../components/FileViewerSheet"),
+  evidenceEdge("tasks", "components/WorkspaceFileBrowser.tsx", "components/task-side-panel/TaskSidePanel.tsx", "WorkspaceFileBrowser", "@/components/WorkspaceFileBrowser"),
+  evidenceEdge("tasks", "components/IssuePlanDecompositionsSection.tsx", "components/issue-properties/IssuePropertiesPlansTab.tsx", "IssuePlanDecompositionsSection", "@/components/IssuePlanDecompositionsSection"),
+  evidenceEdge("tasks", "components/artifacts/IssueArtifactCard.tsx", "components/issue-properties/IssuePropertiesArtifactsTab.tsx", "IssueWorkProductArtifactCard", "@/components/artifacts/IssueArtifactCard"),
+  evidenceEdge("tasks", "components/artifacts/RichArtifactCards.tsx", "components/issue-properties/IssuePropertiesArtifactsTab.tsx", "DocumentCard", "@/components/artifacts/RichArtifactCards"),
+  evidenceEdge("tasks", "components/task-chat/RichWorkProductCard.tsx", "components/task-chat/TaskChatProtocolCard.tsx", "RichWorkProductCard", "./RichWorkProductCard"),
+  evidenceEdge("tasks", "components/task-chat/TaskChatPlanPreviewCard.tsx", "components/task-chat/TaskChatThreadView.tsx", "TaskChatPlanPreviewCard", "./TaskChatPlanPreviewCard"),
+  evidenceEdge("tasks", "components/task-chat/TaskChatPausedTakeover.tsx", "components/task-chat/TaskChatComposer.tsx", "TaskChatPausedTakeover", "./TaskChatPausedTakeover"),
+  evidenceEdge("tasks", "components/task-chat/TaskChatProjectCreatedCard.tsx", "components/task-chat/TaskChatThreadView.tsx", "TaskChatProjectCreatedCard", "./TaskChatProjectCreatedCard"),
+  evidenceEdge("tasks", "components/task-chat/TaskChatSkillCreatedCard.tsx", "components/task-chat/TaskChatThreadView.tsx", "TaskChatSkillCreatedCard", "./TaskChatSkillCreatedCard"),
+  evidenceEdge("tasks", "components/task-chat/TaskChatBubble.tsx", "components/task-chat/TaskChatThreadView.tsx", "TaskChatBubble", "./TaskChatBubble"),
+  evidenceEdge("tasks", "components/task-chat/TaskChatSystemNotice.tsx", "components/task-chat/TaskChatBubble.tsx", "TaskChatSystemNotice", "./TaskChatSystemNotice"),
+  evidenceEdge("tasks", "components/task-chat/TaskChatThinking.tsx", "components/task-chat/TaskChatThreadView.tsx", "TaskChatThinking", "./TaskChatThinking"),
+  evidenceEdge("tasks", "components/task-chat/TaskChatTurnStatusIsland.tsx", "components/TaskChatThread.tsx", "TaskChatTurnStatusIsland", "@/components/task-chat/TaskChatTurnStatusIsland"),
+  evidenceEdge("tasks", "components/task-chat/TaskMessageScroller.tsx", "components/task-chat/TaskChatThreadView.tsx", "TaskMessageScroller", "./TaskMessageScroller"),
+  evidenceEdge("tasks", "components/task-chat/ComposerAddMenu.tsx", "components/task-chat/TaskChatComposer.tsx", "ComposerAddMenu", "./ComposerAddMenu"),
+  evidenceEdge("tasks", "components/task-chat/ComposerWorktreePicker.tsx", "components/NewIssueDialog.tsx", "ComposerWorktreePicker", "./task-chat/ComposerWorktreePicker"),
+  evidenceEdge("tasks", "components/task-chat/TaskChatQueuedMessages.tsx", "components/TaskChatThread.tsx", "TaskChatQueuedMessages", "@/components/task-chat/TaskChatQueuedMessages"),
+  evidenceEdge("tasks", "components/SearchableSelect.tsx", "components/task-chat/ComposerWorktreePicker.tsx", "SearchableSelect", "@/components/SearchableSelect"),
+  evidenceEdge("tasks", "components/IssueThreadInteractionCard.tsx", "components/IssueChatThread.tsx", "IssueThreadInteractionCard", "./IssueThreadInteractionCard"),
+
+  evidenceEdge("entry-navigation", "App.tsx", "main.tsx", "App", "./App"),
+  evidenceEdge("entry-navigation", "components/OnboardingWizardVariant.tsx", "App.tsx", "OnboardingWizardVariant", "./components/OnboardingWizardVariant"),
+  evidenceEdge("entry-navigation", "components/OnboardingWizard.tsx", "components/OnboardingWizardVariant.tsx", "OnboardingWizard", "./OnboardingWizard"),
+  evidenceEdge("tasks", "pages/Inbox.tsx", "App.tsx", "Inbox", "./pages/Inbox"),
+  evidenceEdge("tasks", "pages/LegacyInbox.tsx", "pages/Inbox.tsx", "Inbox", "./LegacyInbox"),
+  evidenceEdge("tasks", "components/BlockedInboxView.tsx", "pages/Inbox.tsx", "BlockedInboxView", "../components/BlockedInboxView"),
+  evidenceEdge("tasks", "pages/WhatNeedsMe.tsx", "App.tsx", "WhatNeedsMe", "./pages/WhatNeedsMe"),
+  evidenceEdge("tasks", "components/AttentionQueueRow.tsx", "pages/WhatNeedsMe.tsx", "AttentionQueueRow", "../components/AttentionQueueRow"),
+  evidenceEdge("tasks", "components/DecisionsToolbar.tsx", "pages/WhatNeedsMe.tsx", "DecisionsToolbar", "../components/DecisionsToolbar"),
+  evidenceEdge("tasks", "components/DecisionShelf.tsx", "pages/WhatNeedsMe.tsx", "Curtain", "../components/DecisionShelf"),
+  evidenceEdge("tasks", "components/DecisionQueueRail.tsx", "pages/WhatNeedsMe.tsx", "DecisionQueueRail", "../components/DecisionQueueRail"),
+  evidenceEdge("tasks", "components/DecisionDateChips.tsx", "pages/WhatNeedsMe.tsx", "DecisionDateChips", "../components/DecisionDateChips"),
+  evidenceEdge("tasks", "components/DecisionResolver.tsx", "pages/WhatNeedsMe.tsx", "DecisionResolver", "../components/DecisionResolver"),
+  // This existing conditional binding is asserted separately by the route test.
+  evidenceEdge("tasks", "components/TaskChatThread.tsx", "pages/IssueDetail.tsx", "TaskChatThread", "../components/TaskChatThread", "reference"),
+  evidenceEdge("tasks", "components/IssueChatThread.tsx", "pages/IssueDetail.tsx", "IssueChatThread", "../components/IssueChatThread", "reference"),
+  evidenceEdge("tasks", "components/task-chat/TaskChatThreadView.tsx", "components/TaskChatThread.tsx", "TaskChatThreadView", "@/components/task-chat/TaskChatThreadView"),
+  evidenceEdge("tasks", "components/task-chat/TaskChatRunnerTurn.tsx", "components/TaskChatThread.tsx", "TaskChatRunnerTurn", "@/components/task-chat/TaskChatRunnerTurn"),
+  evidenceEdge("tasks", "components/task-chat/TaskChatLiveTail.tsx", "components/TaskChatThread.tsx", "TaskChatLiveTail", "@/components/task-chat/TaskChatLiveTail"),
+  evidenceEdge("tasks", "components/task-chat/TaskChatBubbleActions.tsx", "components/TaskChatThread.tsx", "TaskChatBubbleActions", "@/components/task-chat/TaskChatBubbleActions"),
+  evidenceEdge("tasks", "components/task-chat/TaskChatInteractionCard.tsx", "components/TaskChatThread.tsx", "TaskChatInteractionCard", "@/components/task-chat/TaskChatInteractionCard"),
+  evidenceEdge("tasks", "components/task-chat/TaskChatCompactInteractionCard.tsx", "components/task-chat/TaskChatInteractionCard.tsx", "TaskChatCompactInteractionCard", "./TaskChatCompactInteractionCard"),
+  evidenceEdge("tasks", "components/task-chat/TaskChatDescriptionBubble.tsx", "components/TaskChatThread.tsx", "TaskChatDescriptionBubble", "@/components/task-chat/TaskChatDescriptionBubble"),
+  evidenceEdge("tasks", "components/task-side-panel/TaskSidePanel.tsx", "pages/IssueDetail.tsx", "TaskSidePanel", "../components/task-side-panel", "jsx", "components/task-side-panel/index.ts"),
+  evidenceEdge("tasks", "components/task-side-panel/TaskDocumentPanel.tsx", "components/task-side-panel/TaskSidePanel.tsx", "TaskDocumentPanel", "./TaskDocumentPanel"),
+  evidenceEdge("tasks", "components/task-side-panel/TaskAttachmentPanel.tsx", "components/task-side-panel/TaskSidePanel.tsx", "TaskAttachmentPanel", "./TaskAttachmentPanel"),
+  evidenceEdge("tasks", "components/task-side-panel/TaskWorkspaceFilePanel.tsx", "components/task-side-panel/TaskSidePanel.tsx", "TaskWorkspaceFilePanel", "./TaskWorkspaceFilePanel"),
+  evidenceEdge("tasks", "components/issue-properties/IssuePropertiesPlansTab.tsx", "components/task-side-panel/TaskSidePanel.tsx", "IssuePropertiesPlansTab", "@/components/issue-properties/IssuePropertiesPlansTab"),
+  evidenceEdge("tasks", "components/issue-properties/IssuePropertiesArtifactsTab.tsx", "components/task-side-panel/TaskSidePanel.tsx", "IssuePropertiesArtifactsTab", "@/components/issue-properties/IssuePropertiesArtifactsTab"),
+  evidenceEdge("tasks", "components/FilePreviewModeToggle.tsx", "components/task-side-panel/TaskAttachmentPanel.tsx", "FilePreviewModeToggle", "@/components/FilePreviewModeToggle"),
+  evidenceEdge("tasks", "components/MarkdownEditor.tsx", "components/task-chat/TaskChatComposer.tsx", "MarkdownEditor", "@/components/MarkdownEditor"),
+  evidenceEdge("tasks", "components/IssueDocumentsSection.tsx", "pages/IssueDetail.tsx", "IssueDocumentsSection", "../components/IssueDocumentsSection"),
+  evidenceEdge("tasks", "components/DocumentDiffModal.tsx", "components/IssueDocumentsSection.tsx", "DocumentDiffModal", "./DocumentDiffModal"),
+  evidenceEdge("tasks", "components/IssueDocumentAnnotations.tsx", "components/task-side-panel/TaskDocumentPanel.tsx", "IssueDocumentAnnotations", "@/components/IssueDocumentAnnotations"),
+  evidenceEdge("tasks", "components/DocumentAnnotationPanel.tsx", "components/IssueDocumentAnnotations.tsx", "DocumentAnnotationPanel", "./DocumentAnnotationPanel"),
+  evidenceEdge("tasks", "components/DocumentAnnotationPopover.tsx", "components/IssueDocumentAnnotations.tsx", "DocumentAnnotationPopover", "./DocumentAnnotationPopover"),
+  evidenceEdge("tasks", "components/DocumentAnnotationLayer.tsx", "components/IssueDocumentAnnotations.tsx", "DocumentAnnotationLayer", "./DocumentAnnotationLayer"),
+  evidenceEdge("agents-runs", "components/AgentConfigForm.tsx", "pages/AgentDetail.tsx", "AgentConfigForm", "../components/AgentConfigForm"),
+  evidenceEdge("agents-runs", "components/AgentLifecycleStatus.tsx", "pages/AgentDetail.tsx", "AgentLifecycleStatus", "../components/AgentLifecycleStatus"),
+  evidenceEdge("agents-runs", "components/agent-config-primitives.tsx", "components/AgentConfigForm.tsx", "Field", "./agent-config-primitives"),
+  evidenceEdge("agents-runs", "components/TrustPresetSection.tsx", "pages/AgentDetail.tsx", "TrustPresetSection", "../components/TrustPresetSection"),
+  evidenceEdge("agents-runs", "components/chat/AgentChannelsPanel.tsx", "pages/AgentDetail.tsx", "AgentChannelsPanel", "../components/chat/AgentChannelsPanel"),
+  evidenceEdge("agents-runs", "components/primary-agent/PrimaryAgentPresentation.tsx", "components/NewIssueDialog.tsx", "usePrimaryAgentPresentation", "./primary-agent/PrimaryAgentPresentation", "call"),
+  evidenceEdge("agents-runs", "components/InstructionHistory.tsx", "pages/AgentDetail.tsx", "InstructionHistory", "../components/InstructionHistory"),
+  evidenceEdge("agents-runs", "pages/agent-skills/AgentSkillsTab.tsx", "pages/AgentDetail.tsx", "AgentSkillsTab", "./agent-skills/AgentSkillsTab"),
+  evidenceEdge("agents-runs", "pages/agent-skills/AgentSkillRow.tsx", "pages/agent-skills/AgentSkillsTab.tsx", "AgentSkillRow", "./AgentSkillRow"),
+  evidenceEdge("management", "components/decision-models/DecisionHistory.tsx", "pages/Costs.tsx", "DecisionHistory", "../components/decision-models/DecisionHistory"),
+  evidenceEdge("management", "components/fast-responses/FastResponseHistory.tsx", "pages/Costs.tsx", "FastResponseHistory", "../components/fast-responses/FastResponseHistory"),
+  evidenceEdge("management", "pages/audit/CompanyActivity.tsx", "App.tsx", "CompanyActivity", "./pages/audit/CompanyActivity"),
+  evidenceEdge("management", "pages/audit/AuditHub.tsx", "pages/audit/CompanyActivity.tsx", "AuditHub", "./AuditHub"),
+  evidenceEdge("management", "pages/audit/AuditHub.tsx", "App.tsx", "AuditHub", "./pages/audit/AuditHub"),
+  evidenceEdge("new-modules", "pages/CompanyConnections.tsx", "App.tsx", "CompanyConnections", "./pages/CompanyConnections"),
+  evidenceEdge("new-modules", "components/decision-models/DecisionModelSettings.tsx", "pages/CompanySettings.tsx", "DecisionModelSettingsSection", "../components/decision-models/DecisionModelSettings"),
+  evidenceEdge("new-modules", "components/fast-responses/FastResponseSettings.tsx", "pages/CompanyConnections.tsx", "FastResponseSettingsSection", "../components/fast-responses/FastResponseSettings"),
+  evidenceEdge("new-modules", "components/MimouseCodingProjects.tsx", "pages/MimouseCoding.tsx", "MimouseCodingProjects", "@/components/MimouseCodingProjects"),
+];
+const expandedScopeFiles = [...new Set(scopeEdges.map(edge => edge.file))].sort();
+// Pure helpers remain evidence-only: no fictional JSX coverage for returned copy.
+const manualScopeEdges = [
+  evidenceEdge("tasks", "lib/attention.ts", "components/DecisionsToolbar.tsx", "sourceMeta", "../lib/attention", "call"),
+  evidenceEdge("tasks", "lib/blockedInbox.ts", "components/BlockedInboxView.tsx", "formatStoppedAge", "../lib/blockedInbox", "call"),
+  evidenceEdge("tasks", "lib/inbox.ts", "pages/Inbox.tsx", "buildGroupedInboxSections", "../lib/inbox", "call"),
+  evidenceEdge("management", "lib/activity-format.ts", "pages/audit/AuditFeed.tsx", "formatActivityVerb", "@/lib/activity-format", "call"),
+  evidenceEdge("tasks", "hooks/useDocumentAnnotationMutations.ts", "components/DocumentAnnotationPanel.tsx", "useDocumentAnnotationMutations", "@/hooks/useDocumentAnnotationMutations", "call"),
+  evidenceEdge("tasks", "lib/artifact-card-data.ts", "components/artifacts/IssueArtifactCard.tsx", "loadArtifactCsv", "@/lib/artifact-card-data", "call"),
+  evidenceEdge("tasks", "lib/issue-artifacts.ts", "components/task-side-panel/TaskDocumentPanel.tsx", "documentDisplayTitle", "@/lib/issue-artifacts", "call"),
+  evidenceEdge("tasks", "lib/task-side-panel-state.ts", "components/task-side-panel/TaskSidePanel.tsx", "taskPanelArtifactsTab", "@/lib/task-side-panel-state", "call"),
+  evidenceEdge("management", "pages/audit/audit-navigation.ts", "pages/audit/AuditHub.tsx", "AUDIT_SECTIONS", "./audit-navigation", "reference"),
+];
+const manualScopeFiles = [...new Set(manualScopeEdges.map(edge => edge.file))].sort();
+const scopeEvidenceFiles = [...new Set([...scopeEdges, ...manualScopeEdges].flatMap(edge => [edge.host, ...(edge.through ? [edge.through] : [])]))].sort();
+const domainBasenames = {
+  "entry-navigation": ["AuthRevocationPanel", "BootstrapPendingPage", "CloudAccessGate", "CommandPalette", "CompanySettingsSidebar", "CompanySwitcher", "InviteAuthMethods", "Sidebar", "SidebarAccountMenu", "SidebarAgents", "SidebarProjects", "ThemeToggle", "Auth", "Companies", "Dashboard", "InstanceAccess", "InviteLanding", "ProfileSettings"],
+  tasks: ["AgentMultiSelect", "CommentThread", "InboxAgentPolicyControl", "IssueFiltersPopover", "IssueProperties", "IssuesList", "NewIssueDialog", "IssueDetail", "Issues", "ComposerRunSettingsPicker", "QuestionForm", "TaskChatComposer", "TaskChatProtocolCard", "TaskChatRichInput", "TaskChatRunnerActivityGroup"],
+  "agents-runs": ["AgentDetail", "Agents", "RunTranscriptView"],
+  management: ["AccountQuotaPanels", "AgentSetupPrompt", "BudgetPolicyCard", "ClaudeSubscriptionPanel", "CodexSubscriptionPanel", "ProviderQuotaCard", "RoutineActivityRow", "RoutineList", "SubscriptionCostCard", "ApprovalDetail", "Approvals", "Costs", "RoutineDetail", "Routines"],
+  "new-modules": ["MimouseBuildMatrix", "MimouseBuildObservations", "CompanySettings", "MimouseCoding", "MimouseCodingRepair", "MimouseFeedback", "MimouseNotifications", "MimouseWorkbuddy"],
+};
+function legacyDomain(file) {
+  if (routedRoutineFiles.includes(file)) return "management";
+  const domains = Object.entries(domainBasenames).filter(([, entries]) => matchesEntry(file, entries));
+  if (domains.length !== 1) throw Error(`Unclassified or ambiguous frozen path: ${file}`);
+  return domains[0][0];
+}
+function sourceInventory(root, requested) {
+  const files = [...new Set(requested)].sort(), hash = crypto.createHash("sha256"), missingFiles = [];
+  const evidence = files.map(file => {
+    const full = path.join(root, file);
+    if (!fs.existsSync(full) || !fs.statSync(full).isFile()) { missingFiles.push(file); return { file, sourceSha256: null }; }
+    const source = fs.readFileSync(full);
+    hash.update(file).update("\0").update(source).update("\0");
+    return { file, sourceSha256: sha256(source) };
+  });
+  return { requestedFiles: files, matchedFiles: files.length - missingFiles.length, missingFiles,
+    pathSetSha256: pathSetSha256(files), sourceSha256: hash.digest("hex"), evidence };
+}
+function walkEvidenceAst(node, visit) {
+  if (!node || typeof node !== "object") return;
+  visit(node);
+  if (node.type === "ImportDeclaration") return;
+  for (const [key, value] of Object.entries(node)) {
+    if (["loc", "start", "end", "extra", "comments", "tokens"].includes(key)) continue;
+    if (Array.isArray(value)) value.forEach(item => walkEvidenceAst(item, visit));
+    else if (value && typeof value === "object") walkEvidenceAst(value, visit);
+  }
+}
+function consumesEdge(source, edge, parse) {
+  const ast = parse(source, { sourceType: "module", plugins: ["typescript", "jsx"] });
+  const declaration = ast.program.body.find(node => node.type === "ImportDeclaration" && node.source.value === edge.importSource && node.importKind !== "type");
+  const binding = declaration?.specifiers.find(node => node.type === "ImportSpecifier" && node.imported.name === edge.symbol && node.importKind !== "type");
+  if (!binding) return false;
+  let consumed = false;
+  walkEvidenceAst(ast.program, node => {
+    if (edge.usage === "jsx" && node.type === "JSXOpeningElement" && node.name.type === "JSXIdentifier" && node.name.name === binding.local.name) consumed = true;
+    if (edge.usage === "call" && node.type === "CallExpression" && node.callee.type === "Identifier" && node.callee.name === binding.local.name) consumed = true;
+    if (edge.usage === "reference" && node.type === "Identifier" && node.name === binding.local.name) consumed = true;
+  });
+  return consumed;
+}
+function verifyScopeEdges(root, parse) {
+  return [...scopeEdges, ...manualScopeEdges].filter(edge => {
+    if (!fs.existsSync(path.join(root, edge.file)) || !fs.existsSync(path.join(root, edge.host))) return true;
+    const resolved = edge.importSource.startsWith("@/") ? `ui/src/${edge.importSource.slice(2)}`
+      : path.posix.normalize(`${path.posix.dirname(edge.host)}/${edge.importSource}`);
+    if (edge.through) {
+      if (resolved !== path.posix.dirname(edge.through) || !fs.existsSync(path.join(root, edge.through))) return true;
+      const barrel = parse(fs.readFileSync(path.join(root, edge.through), "utf8"), { sourceType: "module", plugins: ["typescript", "jsx"] });
+      if (!barrel.program.body.some(node => node.type === "ExportNamedDeclaration" && node.source
+        && path.posix.normalize(`${path.posix.dirname(edge.through)}/${node.source.value}.tsx`) === edge.file
+        && node.specifiers.some(specifier => specifier.exported?.name === edge.symbol && specifier.local?.name === edge.symbol))) return true;
+    } else if (`${resolved}${path.extname(edge.file)}` !== edge.file) return true;
+    return !consumesEdge(fs.readFileSync(path.join(root, edge.host), "utf8"), edge, parse);
+  });
+}
+function collectScopeDenominators(root, baseline) {
+  return Object.keys(domainBasenames).map(domain => ({ domain, ...sourceInventory(root, [
+    ...baseline.files.filter(file => legacyDomain(file) === domain),
+    ...scopeEdges.filter(edge => edge.domain === domain).map(edge => edge.file),
+  ]) }));
+}
+
 function isTranslationCall(node) {
   if (node.type !== "CallExpression") return false;
   const callee = node.callee;
@@ -265,9 +457,13 @@ function selectInventory(files) {
   const eligible = files.filter(file => /\.tsx$/.test(file) && !/(?:\.test\.|\.stories\.)/.test(file));
   const selected = [...new Set(eligible.filter(file => matchesEntry(file, names) || routedRoutineFiles.includes(file)
     || consumedUiFiles.includes(file) || routedCompanyFiles.includes(file) || buildObservationFiles.includes(file) || quotaFiles.includes(file)
-    || protocolDisplayFiles.includes(file)))].sort();
+    || protocolDisplayFiles.includes(file) || expandedScopeFiles.includes(file)))].sort();
   return {
     selected,
+    missingExpandedScopeFiles: expandedScopeFiles.filter(file => !selected.includes(file)),
+    legacySelected: selected.filter(file => matchesEntry(file, names) || routedRoutineFiles.includes(file)
+      || consumedUiFiles.includes(file) || routedCompanyFiles.includes(file) || buildObservationFiles.includes(file)
+      || quotaFiles.includes(file) || protocolDisplayFiles.includes(file)),
     missingRoutedFiles: routedRoutineFiles.filter(file => !selected.includes(file)),
     missingConsumedFiles: consumedUiFiles.filter(file => !selected.includes(file)),
     missingCompanyRouteFiles: routedCompanyFiles.filter(file => !selected.includes(file)),
@@ -280,7 +476,9 @@ function selectInventory(files) {
 module.exports = { collectCandidates, collectAudit, matchesEntry, selectInventory, routedRoutineFiles, consumedUiComponents, consumedUiFiles,
   routedCompanyPages, routedCompanyFiles, buildObservationComponents, buildObservationFiles, quotaComponents, quotaFiles, quotaRenderBoundary, browserMessageMethods,
   protocolDisplayComponents, protocolDisplayFiles, protocolThreadHosts, protocolRoute, protocolRenderBoundary,
-  manualProtocolSources, manualProtocolFiles, collectManualSourceEvidence };
+  manualProtocolSources, manualProtocolFiles, collectManualSourceEvidence,
+  baselineFile, baselineFileSha256, readBaseline, pathSetSha256, expandedScopeFiles, scopeEdges, manualScopeEdges, manualScopeFiles,
+  scopeEvidenceFiles, domainBasenames, legacyDomain, sourceInventory, consumesEdge, verifyScopeEdges, collectScopeDenominators };
 
 if (require.main === module) {
   const root = path.resolve(__dirname, "..");
@@ -307,8 +505,18 @@ if (require.main === module) {
     }
   }
   files(path.join(root, "ui/src"));
-  const { selected, missingRoutedFiles, missingConsumedFiles, missingCompanyRouteFiles, missingBuildObservationFiles, missingQuotaFiles, missingProtocolDisplayFiles, unmatchedBasenames } = selectInventory(all);
+  const { selected, legacySelected, missingExpandedScopeFiles, missingRoutedFiles, missingConsumedFiles, missingCompanyRouteFiles, missingBuildObservationFiles, missingQuotaFiles, missingProtocolDisplayFiles, unmatchedBasenames } = selectInventory(all);
   const { manualSourceEvidence, missingManualSourceFiles, manualSourceSha256 } = collectManualSourceEvidence(root);
+  const baseline = readBaseline(root);
+  const legacyScope = sourceInventory(root, baseline.files);
+  const legacyPathDrift = legacySelected.filter(file => !baseline.files.includes(file));
+  const expandedScope = sourceInventory(root, expandedScopeFiles);
+  const manualScope = sourceInventory(root, manualScopeFiles);
+  manualScope.method = "source-hash-only";
+  manualScope.evidence = manualScope.evidence.map(row => ({ ...row, method: "source-hash-only", classification: "needs_manual_review" }));
+  const hostEvidence = sourceInventory(root, scopeEvidenceFiles);
+  const invalidScopeEdges = verifyScopeEdges(root, parse);
+  const scopeDenominators = collectScopeDenominators(root, baseline);
   const candidates = [], dynamicCandidates = [], counts = [], hash = crypto.createHash("sha256");
   for (const relative of selected) {
     const source = fs.readFileSync(path.join(root, relative), "utf8");
@@ -318,9 +526,15 @@ if (require.main === module) {
     candidates.push(...rows.candidates); dynamicCandidates.push(...rows.dynamicCandidates);
   }
   const result = {
-    schemaVersion: 4, generatedAt: new Date().toISOString(), parserVersion,
+    schemaVersion: 5, generatedAt: new Date().toISOString(), parserVersion,
     method: "Bounded Babel AST inventory: JSX text/display attributes (including message and ariaLabel), direct/conditional/template literals, pushToast/toast display fields, setSecretMessage.title and direct window.confirm/window.prompt/window.alert first-argument messages. Dynamic display expressions are separate needs_manual_review locations, not untranslated strings.",
+    baseline, legacyScope, legacyPathDrift, expandedScope, manualScope, hostEvidence, invalidScopeEdges, scopeDenominators,
+    requestedExpandedScopeFiles: expandedScopeFiles, missingExpandedScopeFiles, scopeEdges, manualScopeEdges,
     limits: [
+      "Schema 5 freezes the prior 82-path schema-4 list and baseline JSON SHA. New exact high-frequency paths, evidence-only helpers and hosts have separate path-set/content hashes. Five-domain denominators count reviewed source paths, never completed translations or all reachable UI.",
+      "Scope changes are not translation progress: do not subtract old/new totals or treat literal/dynamic candidate totals as defect totals. Historical source SHA is retained; current legacy source SHA is recomputed independently.",
+      "Explicit host/import/JSX/call/reference checks are syntax evidence, not binding analysis or runtime reachability. Missing paths, hosts, re-export barrels or consumer edges fail closed. Evidence hosts never recursively enlarge the AST inventory.",
+      "Default chat-style TaskSidePanel artifacts are included; Classic conditional surfaces remain separately described, not inferred unreachable from names. Pure helper manualScope sources are hash-only and require provenance review; their returns are not AST candidates.",
       "Not a complete route/call graph, data-flow analysis, rendered-text count or translation coverage percentage.",
       "Schema 4 adds four exact protocol-display TSX files as a separate scope; earlier scopes and candidate meanings are unchanged. Expanded totals are not directly comparable with schema 3. Original sourceSha256 covers only AST-inventoried files; manualSourceSha256 is separate.",
       "The five manualSourceEvidence files (four TS helpers and one named-details TSX source) are source-hash-only, not AST candidate inventories. Helper return values, canonical matching/deduplication labels and provider/user provenance require manual review; zero automatic candidates is not translation proof. TaskChatProtocolActivityRow.tsx is not added to the scanned files.",
@@ -351,7 +565,7 @@ if (require.main === module) {
       protocolDisplayMatchedFiles: protocolDisplayFiles.length - missingProtocolDisplayFiles.length,
       protocolDisplayComponentHosts: protocolDisplayComponents, protocolThreadHosts, protocolRoute, protocolRenderBoundary,
       manualSourceMatchedFiles: manualProtocolFiles.length - missingManualSourceFiles.length,
-      previousScopeMatchedFiles: selected.filter(file => !protocolDisplayFiles.includes(file)).length,
+      previousScopeMatchedFiles: legacySelected.filter(file => !protocolDisplayFiles.includes(file)).length,
       browserMessages: { receiver: "window", methods: browserMessageMethods, messageArgumentIndex: 0 },
       routeSource: "ui/src/App.tsx", routePatterns: ["routines", "routines/:routineId", "routines/:routineId/:section"],
       routeSourceSha256: crypto.createHash("sha256").update(fs.readFileSync(path.join(root, "ui/src/App.tsx"))).digest("hex") },
@@ -359,7 +573,7 @@ if (require.main === module) {
   };
   fs.writeFileSync(path.resolve(outPath), JSON.stringify(result, null, 2) + "\n");
   console.log(JSON.stringify({ matchedFiles: result.matchedFiles, totalLiteralCandidates: result.totalLiteralCandidates, totalDynamicCandidates: result.totalDynamicCandidates,
-    sourceSha256: result.sourceSha256, manualSourceSha256, unmatchedBasenames, missingRoutedFiles, missingConsumedFiles, missingCompanyRouteFiles, missingBuildObservationFiles, missingQuotaFiles, missingProtocolDisplayFiles, missingManualSourceFiles,
+    sourceSha256: result.sourceSha256, manualSourceSha256, missingExpandedScopeFiles, missingScopeHosts: hostEvidence.missingFiles, invalidScopeEdges, legacyPathDrift, unmatchedBasenames, missingRoutedFiles, missingConsumedFiles, missingCompanyRouteFiles, missingBuildObservationFiles, missingQuotaFiles, missingProtocolDisplayFiles, missingManualSourceFiles,
     out: path.resolve(outPath) }, null, 2));
-  if (missingRoutedFiles.length || missingConsumedFiles.length || missingCompanyRouteFiles.length || missingBuildObservationFiles.length || missingQuotaFiles.length || missingProtocolDisplayFiles.length || missingManualSourceFiles.length || unmatchedBasenames.length) process.exitCode = 1;
+  if (legacyScope.missingFiles.length || legacyPathDrift.length || missingExpandedScopeFiles.length || manualScope.missingFiles.length || hostEvidence.missingFiles.length || invalidScopeEdges.length || missingRoutedFiles.length || missingConsumedFiles.length || missingCompanyRouteFiles.length || missingBuildObservationFiles.length || missingQuotaFiles.length || missingProtocolDisplayFiles.length || missingManualSourceFiles.length || unmatchedBasenames.length) process.exitCode = 1;
 }
