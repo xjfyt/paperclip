@@ -3061,7 +3061,9 @@ function resolveRepoManagedWorkspaceCommand(command: string, repoRoot: string) {
 
     const prefix = match.groups.prefix ?? "";
     const suffix = match.groups.suffix ?? "";
-    return `${prefix}${quoteShellArg(repoManagedPath)}${suffix}`;
+    // Git Bash accepts drive-qualified forward-slash paths. Backslashes are
+    // shell escapes at the nested sh/bash boundary on Windows.
+    return `${prefix}${quoteShellArg(process.platform === "win32" ? repoManagedPath.replaceAll("\\", "/") : repoManagedPath)}${suffix}`;
   }
 
   return command;

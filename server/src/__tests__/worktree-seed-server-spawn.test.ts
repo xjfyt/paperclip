@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { shellExecutable, shellEnvironment } from "@paperclipai/adapter-utils/test-fixtures/local-sandbox";
 import {
   ensureWorktreeSeeded,
   readWorktreeSeedManifest,
@@ -81,6 +82,7 @@ function verifiedSeedResult() {
 }
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
   if (originalConfig === undefined) delete process.env.PAPERCLIP_CONFIG;
   else process.env.PAPERCLIP_CONFIG = originalConfig;
   if (originalWorktreesDir === undefined) delete process.env.PAPERCLIP_WORKTREES_DIR;
@@ -144,9 +146,9 @@ describe("managed worktree seed source through the server spawn path", () => {
       expect(seedDatabase).not.toHaveBeenCalled();
       expect(inspectLegacyDatabase).not.toHaveBeenCalled();
       const provisionScript = fileURLToPath(new URL("../../../scripts/provision-worktree-runtime.sh", import.meta.url));
-      const provision = await execFileAsync("bash", [provisionScript], {
+      const provision = await execFileAsync(shellExecutable("bash"), [provisionScript.replaceAll("\\", "/")], {
         cwd,
-        env: { ...process.env, PAPERCLIP_WORKSPACE_CWD: cwd },
+        env: shellEnvironment({ ...process.env, PAPERCLIP_WORKSPACE_CWD: cwd }),
       });
       expect(provision.stderr).toContain("explicitly empty");
       expect(readWorktreeSeedManifest(configPath)).toBeNull();
@@ -159,6 +161,9 @@ describe("managed worktree seed source through the server spawn path", () => {
   });
 
   it("re-derives an ambient-instance manifest written before provisioning", async () => {
+    vi.stubEnv("SHELL", shellExecutable("bash"));
+    const shellEnv = shellEnvironment();
+    vi.stubEnv("PATH", shellEnv.PATH!);
     const tempRoot = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-server-seed-source-")));
     cleanup.push(tempRoot);
     const repoRoot = path.join(tempRoot, "repo");
@@ -169,6 +174,7 @@ describe("managed worktree seed source through the server spawn path", () => {
 
     await fs.mkdir(repoRoot, { recursive: true });
     await runGit(repoRoot, ["init", "-q"]);
+    await runGit(repoRoot, ["config", "core.autocrlf", "false"]);
     await runGit(repoRoot, ["config", "user.email", "paperclip@example.com"]);
     await runGit(repoRoot, ["config", "user.name", "Paperclip Test"]);
     await fs.mkdir(path.join(repoRoot, "scripts"), { recursive: true });
