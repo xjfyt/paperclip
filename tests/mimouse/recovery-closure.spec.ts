@@ -1,5 +1,5 @@
 import { test, expect, type APIRequestContext, type APIResponse } from "@playwright/test";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import {
   activityLog, agents, authSessions, companies, companyMemberships, companySecrets, executionWorkspaces,
@@ -198,4 +198,40 @@ test("compiled research history reads paused receipts without dispatch and rejec
   expect(await db.select().from(routineRuns).where(eq(routineRuns.companyId, companyId))).toEqual(before.receipts);
   expect(await db.select().from(activityLog).where(eq(activityLog.companyId, companyId))).toEqual(before.audits);
   expect((await db.select().from(routines).where(eq(routines.id, routine.id)))[0].status).toBe("paused");
+});
+
+
+test("compiled auth distinguishes two real sessions for one user without changing the public identity", async ({ playwright, request }) => {
+  const email = `${randomUUID()}@recovery-fixture.invalid`, password = `inert-fixture-${randomUUID()}`;
+  const first = await playwright.request.newContext({ baseURL: "http://127.0.0.1:3100", extraHTTPHeaders: { origin: "http://127.0.0.1:3100" } });
+  const second = await playwright.request.newContext({ baseURL: "http://127.0.0.1:3100", extraHTTPHeaders: { origin: "http://127.0.0.1:3100" } });
+  sessions.push(first, second);
+  await json(await first.post("/api/auth/sign-up/email", { data: { email, password, name: "Two-session fixture" } }));
+  await json(await second.post("/api/auth/sign-in/email", { data: { email, password } }));
+  const firstResponse = await first.get("/api/auth/get-session"), secondResponse = await second.get("/api/auth/get-session");
+  const firstIdentity = await json(firstResponse), secondIdentity = await json(secondResponse);
+  expect(firstIdentity.user.id).toBe(secondIdentity.user.id);
+  expect(firstIdentity.session.id).toBe(`paperclip:session:${firstIdentity.user.id}`);
+  expect(secondIdentity.session.id).toBe(firstIdentity.session.id);
+  const markers = [firstResponse, secondResponse].map(response => response.headers()["x-paperclip-session-scope"]);
+  for (const response of [firstResponse, secondResponse]) expect(response.headers()["cache-control"]).toBe("no-store");
+  for (const marker of markers) expect(marker).toMatch(/^[a-f0-9]{64}$/);
+  expect(new Set(markers).size).toBe(2);
+  const stored = await db.select({ id: authSessions.id, token: authSessions.token }).from(authSessions).where(eq(authSessions.userId, firstIdentity.user.id));
+  expect(stored).toHaveLength(2);
+  const expected = stored.map(row => createHash("sha256").update(JSON.stringify(["paperclip:session-scope:v1", firstIdentity.user.id, row.id])).digest("hex"));
+  expect(new Set(markers)).toEqual(new Set(expected));
+  // Compare as booleans so even assertion diagnostics do not print credentials.
+  expect(markers.every(marker => stored.every(row => !marker.includes(row.id) && !marker.includes(row.token)))).toBe(true);
+  for (const [index, http] of [first, second].entries()) {
+    const response = await http.get("/api/auth/get-session"); await json(response);
+    expect(response.headers()["x-paperclip-session-scope"]).toBe(markers[index]);
+  }
+  const anonymous = await request.get("/api/auth/get-session");
+  expect(anonymous.status()).toBe(401); expect(anonymous.headers()["x-paperclip-session-scope"]).toBeUndefined();
+  await json(await first.post("/api/auth/sign-out"));
+  const signedOut = await first.get("/api/auth/get-session");
+  expect(signedOut.status()).toBe(401); expect(signedOut.headers()["x-paperclip-session-scope"]).toBeUndefined();
+  const stillSignedIn = await second.get("/api/auth/get-session"); await json(stillSignedIn);
+  expect(stillSignedIn.headers()["x-paperclip-session-scope"]).toBe(markers[1]);
 });
