@@ -15,6 +15,13 @@ describe("idle cleanup inspection", () => {
     expect(await inspectIdleSpool(path.join(root, "absent"))).toBe("none");
     expect(await inspectIdleSpool(root)).toBe("none");
   });
+  it.each([inspectIdleSpool, inspectIdleQuotaRecovery])("distinguishes absent nested roots from a non-directory ancestor (%#)", async inspect => {
+    const file = path.join(root, "not-a-directory");
+    await fs.writeFile(file, "retain");
+    expect(await inspect(path.join(file, "missing", "spool"))).toBe("unknown");
+    expect(await inspect(path.join(root, "missing", "spool"))).toBe("none");
+    expect(await fs.readFile(file, "utf8")).toBe("retain");
+  });
   it.each(["receipt.json", "malformed.json", "partial.tmp", "write.probe", "unexpected"])("retains every spool entry: %s", async name => {
     await fs.writeFile(path.join(root, name), "not valid JSON");
     expect(await inspectIdleSpool(root)).toBe("present");

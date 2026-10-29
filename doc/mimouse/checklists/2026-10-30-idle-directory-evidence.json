@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "scope": "Idle local spool and credential recovery directory inspection",
+  "platform": "win32",
+  "command": "pnpm exec vitest run --project '@paperclipai/server' server/src/__tests__/idle-local-work.test.ts --maxWorkers=1 --reporter=json --outputFile=test-results/project-closure-20261029/idle-local-final.json",
+  "result": {
+    "passed": 20,
+    "skipped": 0,
+    "failed": 0
+  },
+  "baseline": {
+    "sha256": "780792b6629b8c1751095d3cca1ce134c3e8fe5cf7015e7b132b0fb34f9fd48a",
+    "path": "test-results/project-closure-20261029/idle-local-baseline.json",
+    "cause": "Native Windows ENOENT for a file/child path was incorrectly classified as an absent spool.",
+    "failed": 1
+  },
+  "evidence": {
+    "path": "test-results/project-closure-20261029/idle-local-final.json",
+    "sha256": "e4d0f166c26c15137c88e06816348c1a505e10dd6fb29f2f1653eba50a5d72c9"
+  },
+  "sources": [
+    {
+      "path": "server/src/services/idle-local-work.ts",
+      "sha256": "6c1e72cb11c25c2a8fff5eb448f228f9d4a5357b1a68043d8d3cbd224b7f8106"
+    },
+    {
+      "path": "server/src/__tests__/idle-local-work.test.ts",
+      "sha256": "90503c3ca427179c752f9c62fdd9d4452dc6cd8aa2b38c24569bcea9b329beac"
+    }
+  ],
+  "limits": [
+    "This proves local directory classification, not a production autosleep or remote lifecycle journey.",
+    "Parent inspection does not claim atomic protection against concurrent namespace mutation.",
+    "Raw test logs are ignored local artifacts and may not exist in another checkout."
+  ]
+}

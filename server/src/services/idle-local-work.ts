@@ -19,6 +19,24 @@ export function markIdleStartupComplete(options: { scheduledBackups: boolean }) 
   startupComplete = true;
 }
 
+async function classifyMissingDirectory(directory: string, error: unknown): Promise<IdleLocalWork> {
+  if ((error as NodeJS.ErrnoException).code !== "ENOENT") return "unknown";
+  // Windows also reports ENOENT for file/child. Prove the nearest existing
+  // parent is a directory before treating this as an absent recovery spool.
+  let parent = path.dirname(path.resolve(directory));
+  while (true) {
+    try {
+      const info = await fs.lstat(parent);
+      return info.isDirectory() && !info.isSymbolicLink() ? "none" : "unknown";
+    } catch (parentError) {
+      if ((parentError as NodeJS.ErrnoException).code !== "ENOENT") return "unknown";
+    }
+    const next = path.dirname(parent);
+    if (next === parent) return "unknown";
+    parent = next;
+  }
+}
+
 /** Any entry, including malformed JSON, a temp file or a failed probe, is
  * evidence to retain. Recovery readers intentionally skip some such files;
  * they cannot certify that stopping the process is safe. */
@@ -30,7 +48,7 @@ export async function inspectIdleSpool(directory: string): Promise<IdleLocalWork
     try { return (await dir.read()) === null ? "none" : "present"; }
     finally { await dir.close(); }
   } catch (error) {
-    return (error as NodeJS.ErrnoException).code === "ENOENT" ? "none" : "unknown";
+    return classifyMissingDirectory(directory, error);
   }
 }
 
@@ -52,7 +70,7 @@ export async function inspectIdleQuotaRecovery(directory: string): Promise<IdleL
       return "none";
     } finally { await dir.close(); }
   } catch (error) {
-    return (error as NodeJS.ErrnoException).code === "ENOENT" ? "none" : "unknown";
+    return classifyMissingDirectory(directory, error);
   }
 }
 
