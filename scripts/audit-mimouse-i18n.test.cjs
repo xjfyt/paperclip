@@ -11,6 +11,7 @@ const { collectCandidates, collectAudit, selectInventory, routedRoutineFiles, co
   manualProtocolSources, manualProtocolFiles, collectManualSourceEvidence,
   baselineFile, baselineFileSha256, readBaseline, pathSetSha256, expandedScopeFiles, scopeEdges, manualScopeEdges, manualScopeFiles,
   scopeEvidenceFiles, integratedDisplayHelperEdges, integratedDisplayHelperFiles, visibleRecoveryScopeEdges, visibleRecoveryScopeFiles, viewportErrorSourceEdge, visibleRecoveryRenderBoundary,
+  adapterConfigurationScopeEdges, adapterConfigurationDispatch,
   legacyDomain, sourceInventory, consumesEdge, verifyScopeEdges, collectScopeDenominators } = require("./audit-mimouse-i18n.cjs");
 const parserEntry = process.env.AUDIT_I18N_PARSER
   ? path.resolve(process.env.AUDIT_I18N_PARSER)
@@ -717,7 +718,7 @@ test("integrated display helpers preserve canonical sources and remain hash-only
   assert.ok(integratedDisplayHelperEdges.every(edge => edge.usage === "call"));
   const baseline = readBaseline(path.resolve(__dirname, ".."));
   const inventory = selectInventory([...baseline.files, ...expandedScopeFiles, ...manualScopeFiles, ...scopeEvidenceFiles]);
-  assert.equal(inventory.selected.length, 166);
+  assert.equal(inventory.selected.length, 168);
   assert.ok(manualScopeFiles.every(file => !inventory.selected.includes(file)));
   for (const host of ["BlockedReasonChip", "InteractionAudienceLine", "task-chat/RunnerGoalWidget"]) {
     const file = `ui/src/components/${host}.tsx`;
@@ -756,12 +757,12 @@ test("visible recovery adds six exact AST paths and a separate resize-error sour
     importSource: "@/hooks/useBrowserViewport", usage: "call" });
   const baseline = readBaseline(path.resolve(__dirname, ".."));
   const inventory = selectInventory([...baseline.files, ...expandedScopeFiles, ...files, ...files, viewportErrorSourceEdge.file]);
-  assert.equal(inventory.selected.length, 166);
+  assert.equal(inventory.selected.length, 168);
   for (const file of files) assert.equal(inventory.selected.filter(path => path === file).length, 1);
   assert.ok(!inventory.selected.includes(viewportErrorSourceEdge.file));
   assert.ok(!inventory.selected.includes("ui/src/components/Layout.tsx"), "an evidence host is not recursively inventoried");
   assert.deepEqual(collectScopeDenominators(path.resolve(__dirname, ".."), baseline).map(scope => [scope.domain, scope.matchedFiles]),
-    [["entry-navigation", 27], ["tasks", 75], ["agents-runs", 15], ["management", 37], ["new-modules", 12]]);
+    [["entry-navigation", 27], ["tasks", 75], ["agents-runs", 17], ["management", 37], ["new-modules", 12]]);
   assert.match(visibleRecoveryRenderBoundary, /conditional task side-panel tabs/);
   assert.match(visibleRecoveryRenderBoundary, /hash-only, not JSX coverage/);
 });
@@ -783,6 +784,61 @@ test("visible recovery missing files, host and resize producer usage fail closed
   assert.equal(result.status, 1);
   assert.ok(report.invalidScopeEdges.some(edge => edge.file === viewportErrorSourceEdge.file));
   assert.deepEqual(report.manualScope.missingFiles, []);
+});
+
+test("ordinary adapter scope proves the Codex registry mapping without inventing a direct JSX edge", () => {
+  assert.deepEqual(adapterConfigurationScopeEdges.map(edge => [edge.file, edge.symbol, edge.usage]), [
+    ["ui/src/adapters/claude-local/config-fields.tsx", "ClaudeLocalAdvancedFields", "jsx"],
+    ["ui/src/adapters/codex-local/config-fields.tsx", "CodexLocalConfigFields", "reference"],
+  ]);
+  const ast = file => parse(fs.readFileSync(path.join(__dirname, "..", file), "utf8"), { sourceType: "module", plugins: ["typescript", "jsx"] });
+  const moduleAst = ast(adapterConfigurationDispatch.moduleFile);
+  const imported = moduleAst.program.body.find(node => node.type === "ImportDeclaration" && node.source.value === "./config-fields")
+    ?.specifiers.find(node => node.type === "ImportSpecifier" && node.imported.name === "CodexLocalConfigFields");
+  assert.ok(imported);
+  const exported = moduleAst.program.body.find(node => node.type === "ExportNamedDeclaration"
+    && node.declaration?.type === "VariableDeclaration"
+    && node.declaration.declarations.some(row => row.id.name === "codexLocalUIAdapter"));
+  const object = exported?.declaration.declarations.find(row => row.id.name === "codexLocalUIAdapter")?.init;
+  assert.equal(object?.type, "ObjectExpression");
+  const property = name => object.properties.find(row => row.type === "ObjectProperty" && row.key.name === name)?.value;
+  assert.equal(property("type")?.value, "codex_local");
+  assert.equal(property("ConfigFields")?.name, imported.local.name);
+  const registry = ast(adapterConfigurationDispatch.registryFile);
+  assert.ok(registry.program.body.some(node => node.type === "ImportDeclaration" && node.source.value === "./codex-local"
+    && node.specifiers.some(row => row.type === "ImportSpecifier" && row.imported.name === "codexLocalUIAdapter")));
+  let registered = false;
+  walkAst(registry, node => {
+    if (node.type !== "ForOfStatement" || node.right.type !== "ArrayExpression"
+      || !node.right.elements.some(row => row?.type === "Identifier" && row.name === "codexLocalUIAdapter")) return;
+    const binding = node.left.declarations?.[0]?.id.name;
+    walkAst(node.body, child => {
+      if (child.type === "CallExpression" && child.callee.name === "registerUIAdapter" && child.arguments[0]?.name === binding) registered = true;
+    });
+  });
+  assert.equal(registered, true);
+  let lookup = false, dispatch = false, configuration = false;
+  walkAst(ast(adapterConfigurationDispatch.hostFile), node => {
+    if (node.type === "CallExpression" && node.callee.name === "getUIAdapter" && node.arguments[0]?.name === "adapterType") lookup = true;
+    if (node.type === "JSXOpeningElement" && node.name.type === "JSXMemberExpression"
+      && node.name.object.name === "uiAdapter" && node.name.property.name === "ConfigFields"
+      && node.attributes.some(row => row.name?.name === "section" && row.value?.expression?.name === "section")) dispatch = true;
+    if (node.type === "CallExpression" && node.callee.name === "renderAdapterFields" && node.arguments[0]?.value === "configuration") configuration = true;
+  });
+  assert.deepEqual({ lookup, dispatch, configuration }, { lookup: true, dispatch: true, configuration: true });
+  assert.match(adapterConfigurationDispatch.boundary, /external adapter override/);
+});
+
+test("ordinary adapter scope fails closed on missing paths or registry evidence and never invents recursive scope", t => {
+  for (const missing of [...adapterConfigurationScopeEdges.map(edge => edge.file), adapterConfigurationDispatch.moduleFile, adapterConfigurationDispatch.registryFile]) {
+    const { result, report } = cliFixture(t, missing);
+    assert.equal(result.status, 1, `${missing}: ${result.stderr}`);
+    assert.ok([...report.missingExpandedScopeFiles, ...report.hostEvidence.missingFiles].includes(missing));
+  }
+  const selected = selectInventory([...expandedScopeFiles, ...scopeEvidenceFiles, ...expandedScopeFiles]).selected;
+  assert.ok(!selected.includes(adapterConfigurationDispatch.moduleFile));
+  assert.ok(!selected.includes(adapterConfigurationDispatch.registryFile));
+  for (const { file } of adapterConfigurationScopeEdges) assert.equal(selected.filter(path => path === file).length, 1);
 });
 
 test("CLI emits independently hashed five-domain, frozen legacy, explicit expansion and manual denominators", t => {
@@ -809,6 +865,8 @@ test("CLI emits independently hashed five-domain, frozen legacy, explicit expans
   assert.deepEqual(report.visibleRecoveryScopeFiles, visibleRecoveryScopeFiles);
   assert.equal(report.viewportErrorSourceFile, viewportErrorSourceEdge.file);
   assert.equal(report.visibleRecoveryRenderBoundary, visibleRecoveryRenderBoundary);
+  assert.deepEqual(report.adapterConfigurationScopeEdges, adapterConfigurationScopeEdges);
+  assert.deepEqual(report.adapterConfigurationDispatch, adapterConfigurationDispatch);
   assert.equal(report.scope.unscannedTsxFiles.length + report.files.length, report.scope.eligibleTsxFiles);
   assert.ok(report.scope.unscannedTsxFiles.every(file => !report.files.some(row => row.file === file)));
   assert.deepEqual(report.scope.evidenceOnlyTsxFiles, scopeEvidenceFiles.filter(file => file.endsWith(".tsx") && !report.files.some(row => row.file === file)));

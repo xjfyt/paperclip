@@ -195,6 +195,17 @@ const visibleRecoveryScopeEdges = [
 const visibleRecoveryScopeFiles = visibleRecoveryScopeEdges.map(edge => edge.file).sort();
 const viewportErrorSourceEdge = evidenceEdge("tasks", "hooks/useBrowserViewport.ts", "components/task-side-panel/TaskBrowserPanel.tsx", "useBrowserViewport", "@/hooks/useBrowserViewport", "call");
 const visibleRecoveryRenderBoundary = "SidebarRecentTasks is mounted in the streamlined sidebar; AgentSecretAccessEditor in edit-mode secrets settings. TaskSkillPanel and TaskBrowserPanel are conditional task side-panel tabs; TaskBrowserFooter needs a browser without an access error and renders only running/idle sessions. Layout wraps its routed Outlet with RouteErrorBoundary. useBrowserViewport produces local resize guidance consumed by TaskBrowserPanel; its source is hash-only, not JSX coverage. These checks do not prove live browser/session availability, every branch, translation coverage, or preservation of runtime data.";
+const adapterConfigurationScopeEdges = [
+  evidenceEdge("agents-runs", "adapters/claude-local/config-fields.tsx", "components/AgentConfigForm.tsx", "ClaudeLocalAdvancedFields", "../adapters/claude-local/config-fields"),
+  // Codex is an object-property reference in its module, NOT direct host JSX.
+  evidenceEdge("agents-runs", "adapters/codex-local/config-fields.tsx", "adapters/codex-local/index.ts", "CodexLocalConfigFields", "./config-fields", "reference"),
+];
+const adapterConfigurationDispatch = {
+  registryFile: "ui/src/adapters/registry.ts",
+  moduleFile: "ui/src/adapters/codex-local/index.ts",
+  hostFile: "ui/src/components/AgentConfigForm.tsx",
+  boundary: "CLI checks exact named import/reference or JSX edges and hashes registry/module/host sources. Tests separately parse the codex_local ConfigFields mapping, built-in registration list and AgentConfigForm dynamic configuration dispatcher. This is bounded syntax evidence, not binding/data-flow analysis or proof an external adapter override cannot replace the built-in. Ordinary Claude advanced fields use direct JSX; no direct Codex JSX mount is claimed.",
+};
 const scopeEdges = [
   evidenceEdge("management", "pages/audit/AuditFeed.tsx", "pages/audit/AuditHub.tsx", "AuditFeed", "./AuditFeed"),
   evidenceEdge("management", "pages/audit/AuditRuns.tsx", "pages/audit/AuditHub.tsx", "AuditRuns", "./AuditRuns"),
@@ -283,6 +294,7 @@ const scopeEdges = [
   evidenceEdge("new-modules", "components/fast-responses/FastResponseSettings.tsx", "pages/CompanyConnections.tsx", "FastResponseSettingsSection", "../components/fast-responses/FastResponseSettings"),
   evidenceEdge("new-modules", "components/MimouseCodingProjects.tsx", "pages/MimouseCoding.tsx", "MimouseCodingProjects", "@/components/MimouseCodingProjects"),
   ...visibleRecoveryScopeEdges,
+  ...adapterConfigurationScopeEdges,
 ];
 const expandedScopeFiles = [...new Set(scopeEdges.map(edge => edge.file))].sort();
 // Post-integration display helpers: exact, verified calls only. This includes
@@ -337,7 +349,7 @@ const manualScopeEdges = [
   viewportErrorSourceEdge,
 ];
 const manualScopeFiles = [...new Set(manualScopeEdges.map(edge => edge.file))].sort();
-const scopeEvidenceFiles = [...new Set([...scopeEdges, ...manualScopeEdges].flatMap(edge => [edge.host, ...(edge.through ? [edge.through] : [])]))].sort();
+const scopeEvidenceFiles = [...new Set([...scopeEdges, ...manualScopeEdges].flatMap(edge => [edge.host, ...(edge.through ? [edge.through] : [])]).concat(adapterConfigurationDispatch.registryFile))].sort();
 const domainBasenames = {
   "entry-navigation": ["AuthRevocationPanel", "BootstrapPendingPage", "CloudAccessGate", "CommandPalette", "CompanySettingsSidebar", "CompanySwitcher", "InviteAuthMethods", "Sidebar", "SidebarAccountMenu", "SidebarAgents", "SidebarProjects", "ThemeToggle", "Auth", "Companies", "Dashboard", "InstanceAccess", "InviteLanding", "ProfileSettings"],
   tasks: ["AgentMultiSelect", "CommentThread", "InboxAgentPolicyControl", "IssueFiltersPopover", "IssueProperties", "IssuesList", "NewIssueDialog", "IssueDetail", "Issues", "ComposerRunSettingsPicker", "QuestionForm", "TaskChatComposer", "TaskChatProtocolCard", "TaskChatRichInput", "TaskChatRunnerActivityGroup"],
@@ -534,6 +546,7 @@ module.exports = { collectCandidates, collectAudit, matchesEntry, selectInventor
   manualProtocolSources, manualProtocolFiles, collectManualSourceEvidence,
   baselineFile, baselineFileSha256, readBaseline, pathSetSha256, expandedScopeFiles, scopeEdges, manualScopeEdges, manualScopeFiles,
   scopeEvidenceFiles, integratedDisplayHelperEdges, integratedDisplayHelperFiles, visibleRecoveryScopeEdges, visibleRecoveryScopeFiles, viewportErrorSourceEdge, visibleRecoveryRenderBoundary,
+  adapterConfigurationScopeEdges, adapterConfigurationDispatch,
   domainBasenames, legacyDomain, sourceInventory, consumesEdge, verifyScopeEdges, collectScopeDenominators };
 
 if (require.main === module) {
@@ -587,13 +600,14 @@ if (require.main === module) {
     baseline, legacyScope, legacyPathDrift, expandedScope, manualScope, hostEvidence, invalidScopeEdges, scopeDenominators,
     requestedExpandedScopeFiles: expandedScopeFiles, missingExpandedScopeFiles, scopeEdges, manualScopeEdges, integratedDisplayHelperFiles,
     visibleRecoveryScopeFiles, viewportErrorSourceFile: viewportErrorSourceEdge.file, visibleRecoveryRenderBoundary,
+    adapterConfigurationScopeEdges, adapterConfigurationDispatch,
     limits: [
       "Schema 5 freezes the prior 82-path schema-4 list and baseline JSON SHA. New exact high-frequency paths, evidence-only helpers and hosts have separate path-set/content hashes. Five-domain denominators count reviewed source paths, never completed translations or all reachable UI.",
       "Scope changes are not translation progress: do not subtract old/new totals or treat literal/dynamic candidate totals as defect totals. Historical source SHA is retained; current legacy source SHA is recomputed independently.",
       "Explicit host/import/JSX/call/reference checks are syntax evidence, not binding analysis or runtime reachability. Missing paths, hosts, re-export barrels or consumer edges fail closed. Evidence hosts never recursively enlarge the AST inventory.",
       "Default chat-style TaskSidePanel artifacts are included; Classic conditional surfaces remain separately described, not inferred unreachable from names. Pure helper manualScope sources are hash-only and require provenance review; their returns are not AST candidates.",
       "Post-integration manualScope retains the original nine sources and eleven display/provenance helpers (eight new helpers plus three changed display opt-ins), plus the exact useBrowserViewport local resize-error producer. Their calls are evidence-only, not returned-string candidates. Canonical labels, local-error provenance, unknown diagnostics and actor-provided values still require manual classification.",
-      "The visible-recovery slice explicitly expands the 160-path AST inventory to 166 paths; it does not improve a measured translation coverage percentage. Six files are deduplicated across domains and scope metadata. Scope expansion and added candidates must not be described as translation progress or new confirmed defects.",
+      "The visible-recovery slice adds six exact paths to the prior 160-path AST inventory; two ordinary Claude/Codex configuration files then bring it to 168. Paths are deduplicated across domains and metadata. This scope expansion is not a measured translation coverage improvement, translation progress or new confirmed defects; dynamic registry dispatch remains bounded syntax evidence.",
       "Not a complete route/call graph, data-flow analysis, rendered-text count or translation coverage percentage.",
       "scope.unscannedTsxFiles lists eligible source paths outside the bounded AST inventory; scope.evidenceOnlyTsxFiles identifies hash-only consumers among them. Neither list classifies untranslated copy or establishes runtime reachability.",
       "Schema 4 adds four exact protocol-display TSX files as a separate scope; earlier scopes and candidate meanings are unchanged. Expanded totals are not directly comparable with schema 3. Original sourceSha256 covers only AST-inventoried files; manualSourceSha256 is separate.",
