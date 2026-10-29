@@ -90,6 +90,13 @@ describe.each(Object.entries(agentChannelsMessages))("agent channel presentation
     expect(list.mock.calls).toEqual([["company-wire-id"], ["company-wire-id"]]);
     expect(container.querySelector('[role="alert"]')).toBeNull(); expect(container.textContent).toContain(messages.empty);
   });
+  it("retains a runtime string rejection without treating the query as empty", async () => {
+    list.mockRejectedValueOnce("Provider raw string /original-path"); await render();
+    await act(async () => { await i18n.changeLanguage(locale); });
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Provider raw string /original-path");
+    expect(container.textContent).toContain(messages.loadFailed); expect(container.textContent).not.toContain(messages.empty);
+    expect(list).toHaveBeenCalledExactlyOnceWith("company-wire-id");
+  });
   it("keeps stale connections visible when a refresh fails", async () => {
     list.mockResolvedValueOnce([{ ...endpoint, botLabel: null, providerAccountLabel: null }]); await render();
     list.mockRejectedValueOnce(new Error("Refresh failure"));

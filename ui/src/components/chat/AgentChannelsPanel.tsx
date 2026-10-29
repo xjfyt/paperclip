@@ -35,6 +35,10 @@ export function AgentChannelsPanel({
     queryFn: () => chatEndpointsApi.list(companyId),
     enabled: Boolean(companyId),
   });
+  // Capture the value before isError narrows TanStack's discriminated union.
+  // Preserve string rejections without widening the query's error type.
+  const queryError = query.error;
+  const errorMessage = queryError instanceof Error ? queryError.message : typeof queryError === "string" ? queryError : null;
   const endpoints = (query.data ?? []).filter(
     (endpoint) =>
       endpoint.assignedAgentId === agentId && endpoint.status !== "archived" && chatProviderVisible(endpoint.provider, enabled, githubEnabled),
@@ -58,7 +62,7 @@ export function AgentChannelsPanel({
       {query.isError && (
         <div role="alert" className="space-y-2 text-sm text-destructive">
           <p>{t("agentChannelsUi.loadFailed")}</p>
-          {query.error instanceof Error ? <p>{query.error.message}</p> : typeof query.error === "string" ? <p>{query.error}</p> : null}
+          {errorMessage !== null && <p>{errorMessage}</p>}
           <Button type="button" variant="outline" size="sm" disabled={query.isFetching} onClick={() => { void query.refetch(); }}>
             {query.isFetching ? t("common.loading") : t("common.retry")}
           </Button>
