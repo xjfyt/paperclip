@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import { Boxes, Folder, Link2, Paperclip, type LucideIcon } from "lucide-react";
 import { GithubIcon } from "@/components/icons/github-icon";
 import type { CompanySkillListItem } from "@paperclipai/shared";
@@ -76,19 +77,21 @@ function isFilesystemLikeLabel(value: string) {
   );
 }
 
-function displayLocalSourceLabel(label: string | null | undefined) {
+function displayLocalSourceLabel(label: string | null | undefined, display: boolean) {
   const trimmed = label?.trim();
-  if (!trimmed || isFilesystemLikeLabel(trimmed)) return "Local folder";
+  if (!trimmed || isFilesystemLikeLabel(trimmed)) return display ? t("agentSkillsUi.sourceLocal") : "Local folder";
   return trimmed;
 }
 
-function displayCatalogSourceLabel(label: string | null | undefined) {
+function displayCatalogSourceLabel(label: string | null | undefined, display: boolean) {
   const trimmed = label?.trim();
-  if (!trimmed || isFilesystemLikeLabel(trimmed)) return "Catalog";
+  if (!trimmed || isFilesystemLikeLabel(trimmed)) return display ? t("agentSkillsUi.sourceCatalog") : "Catalog";
   return trimmed;
 }
 
-export function buildAgentSkillSourceMeta(skill: SourceSkill): AgentSkillSourceMeta {
+/** Canonical callers retain English fallbacks; only UI callers opt into display text. */
+export function buildAgentSkillSourceMeta(skill: SourceSkill, options: { display?: boolean } = {}): AgentSkillSourceMeta {
+  const display = options.display === true;
   if (skill.sourceBadge === "github" || skill.sourceType === "github") {
     const repo = githubRepoLabel(skill.sourceLabel) ?? githubRepoLabel(skill.sourceLocator);
     return { icon: GithubIcon, label: repo ? `GitHub · ${repo}` : "GitHub" };
@@ -104,16 +107,16 @@ export function buildAgentSkillSourceMeta(skill: SourceSkill): AgentSkillSourceM
   }
 
   if (skill.sourceBadge === "paperclip") {
-    return { icon: Paperclip, label: skill.sourceLabel?.trim() || "Paperclip managed" };
+    return { icon: Paperclip, label: skill.sourceLabel?.trim() || (display ? t("agentSkillsUi.sourceManaged") : "Paperclip managed") };
   }
 
   if (skill.sourceBadge === "catalog" || skill.sourceType === "catalog") {
-    return { icon: Boxes, label: displayCatalogSourceLabel(skill.sourceLabel) };
+    return { icon: Boxes, label: displayCatalogSourceLabel(skill.sourceLabel, display) };
   }
 
   if (skill.sourceBadge === "local" || skill.sourceType === "local_path") {
-    return { icon: Folder, label: displayLocalSourceLabel(skill.sourceLabel) };
+    return { icon: Folder, label: displayLocalSourceLabel(skill.sourceLabel, display) };
   }
 
-  return { icon: Boxes, label: displayCatalogSourceLabel(skill.sourceLabel) };
+  return { icon: Boxes, label: displayCatalogSourceLabel(skill.sourceLabel, display) };
 }

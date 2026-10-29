@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import "../../i18n/agent-skills-test-resources";
 import { describe, expect, it, vi } from "vitest";
 import { createElement } from "react";
 import { createRoot } from "react-dom/client";

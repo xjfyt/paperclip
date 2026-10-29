@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "../../i18n";
 import { Link } from "@/lib/router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, CheckCircle2, ChevronDown, Loader2, Search, Store, X } from "lucide-react";
@@ -26,9 +27,6 @@ import { AgentSkillRow, type AgentSkillRowData } from "./AgentSkillRow";
 import { filterAgentSkills } from "./agent-skill-filter";
 import { buildAgentSkillSourceMeta } from "./agent-skill-source";
 import { AgentSkillReleasePicker, releaseShortLabel } from "./AgentSkillReleasePicker";
-
-const MATERIALIZATION_NOTE =
-  "Enabled skills are materialized into the stable Paperclip-managed prompt bundle on the agent's next run.";
 
 /** Company skill key of the Paperclip core skill that carries beta releases. */
 const PAPERCLIP_CORE_SKILL_KEY = "paperclipai/paperclip/paperclip";
@@ -59,6 +57,7 @@ function pinsFromEntries(entries: AgentDesiredSkillEntry[] | undefined): Record<
 }
 
 export function AgentSkillsTab({ agent, companyId }: { agent: Agent; companyId?: string }) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [skillDraft, setSkillDraft] = useState<string[]>([]);
   const [lastSavedSkills, setLastSavedSkills] = useState<string[]>([]);
@@ -74,17 +73,22 @@ export function AgentSkillsTab({ agent, companyId }: { agent: Agent; companyId?:
   // payload on every `isPending` flip (that was an infinite 422 retry storm).
   const failedSkillDraftRef = useRef<string[] | null>(null);
 
-  const { data: skillSnapshot, isLoading } = useQuery({
+  const skillsQuery = useQuery({
     queryKey: queryKeys.agents.skills(agent.id),
     queryFn: () => agentsApi.skills(agent.id, companyId),
     enabled: Boolean(companyId),
   });
 
-  const { data: companySkills } = useQuery({
+  const libraryQuery = useQuery({
     queryKey: queryKeys.companySkills.list(companyId ?? ""),
     queryFn: () => companySkillsApi.list(companyId!),
     enabled: Boolean(companyId),
   });
+
+  const skillSnapshot = skillsQuery.data;
+  const companySkills = libraryQuery.data;
+  const readsReady = Boolean(skillSnapshot && companySkills && !skillsQuery.isError && !libraryQuery.isError);
+  const isLoading = skillsQuery.isLoading || libraryQuery.isLoading;
 
   // Beta skills experimental flag — gates the per-agent release picker entirely.
   const { data: experimentalSettings } = useQuery({
@@ -170,7 +174,7 @@ export function AgentSkillsTab({ agent, companyId }: { agent: Agent; companyId?:
   }, [skillDraft, skillSnapshot]);
 
   useEffect(() => {
-    if (!skillSnapshot) return;
+    if (!skillSnapshot || !readsReady) return;
     if (skipNextSkillAutosaveRef.current) {
       skipNextSkillAutosaveRef.current = false;
       return;
@@ -205,6 +209,7 @@ export function AgentSkillsTab({ agent, companyId }: { agent: Agent; companyId?:
     return () => window.clearTimeout(timeout);
   }, [
     betaSkillsEnabled,
+    readsReady,
     skillDraft,
     skillSnapshot,
     syncSkills.isPending,
@@ -242,7 +247,7 @@ export function AgentSkillsTab({ agent, companyId }: { agent: Agent; companyId?:
         },
         summary: resolveSkillSummaryText(skill, { fallbackKey: true }),
         chip: skill.categories[0] ?? null,
-        sourceMeta: buildAgentSkillSourceMeta(skill),
+        sourceMeta: buildAgentSkillSourceMeta(skill, { display: true }),
         linkTo: `/skills/${skill.id}`,
         // search haystack (mirrors the store's discoveryMatchesSearch fields)
         slug: skill.slug,
@@ -251,7 +256,7 @@ export function AgentSkillsTab({ agent, companyId }: { agent: Agent; companyId?:
         description: skill.description,
         categories: skill.categories,
       })),
-    [companySkills, skillSnapshot],
+    [companySkills, skillSnapshot, t],
   );
 
   // Adapter-detected, user-installed / unmanaged skills → read-only rows.
@@ -283,8 +288,8 @@ export function AgentSkillsTab({ agent, companyId }: { agent: Agent; companyId?:
 
   // Desired keys that no longer exist in the library → actionable warnings.
   const staleDesiredKeys = useMemo(
-    () => skillDraft.filter((key) => !companySkillByKey.has(key)),
-    [companySkillByKey, skillDraft],
+    () => readsReady ? skillDraft.filter((key) => !companySkillByKey.has(key)) : [],
+    [companySkillByKey, skillDraft, readsReady],
   );
 
   const filteredEnabled = useMemo(() => filterAgentSkills(enabledRows, search), [enabledRows, search]);
@@ -294,15 +299,15 @@ export function AgentSkillsTab({ agent, companyId }: { agent: Agent; companyId?:
   const applicationLabel = useMemo(() => {
     switch (skillSnapshot?.mode) {
       case "persistent":
-        return "Kept in workspace";
+        return t("agentSkillsUi.persistent");
       case "ephemeral":
-        return "Applied on next run";
+        return t("agentSkillsUi.ephemeral");
       case "unsupported":
-        return "Tracked only";
+        return t("agentSkillsUi.unsupported");
       default:
         return null;
     }
-  }, [skillSnapshot?.mode]);
+  }, [skillSnapshot?.mode, t]);
 
   const unsupportedMessage = useMemo(() => {
     if (!unsupported) return null;
@@ -311,13 +316,13 @@ export function AgentSkillsTab({ agent, companyId }: { agent: Agent; companyId?:
       typeof agent.adapterConfig.agent === "string" &&
       agent.adapterConfig.agent === "custom"
     ) {
-      return "Paperclip cannot manage skills for custom ACP commands yet.";
+      return t("agentSkillsUi.customUnsupported");
     }
     if (agent.adapterType === "openclaw_gateway") {
-      return "Paperclip cannot manage OpenClaw skills here. Visit your OpenClaw instance to manage this agent's skills.";
+      return t("agentSkillsUi.openclawUnsupported");
     }
-    return "Paperclip cannot manage skills for this adapter yet. Manage them in the adapter directly.";
-  }, [agent.adapterConfig.agent, agent.adapterType, unsupported]);
+    return t("agentSkillsUi.adapterUnsupported");
+  }, [agent.adapterConfig.agent, agent.adapterType, unsupported, t]);
 
   const hasUnsavedChanges = !sameSkillSelection(skillDraft, lastSavedSkills);
 
@@ -351,9 +356,9 @@ export function AgentSkillsTab({ agent, companyId }: { agent: Agent; companyId?:
     const legacyPaperclipBlocked = agent.adapterType === "paperclip_runner"
       && variant === "available"
       && row.key === PAPERCLIP_CORE_SKILL_KEY;
-    const rowDisabled = unsupported || legacyPaperclipBlocked;
+    const rowDisabled = !readsReady || unsupported || legacyPaperclipBlocked;
     const rowDisabledReason = legacyPaperclipBlocked
-      ? "Paperclip Runner uses native semantic coordination and cannot attach the legacy Paperclip operational skill."
+      ? t("agentSkillsUi.nativeOnly")
       : unsupportedMessage;
     const showReleasePicker =
       releasePickerActive && variant === "enabled" && row.key === PAPERCLIP_CORE_SKILL_KEY;
@@ -400,7 +405,7 @@ export function AgentSkillsTab({ agent, companyId }: { agent: Agent; companyId?:
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-medium text-foreground">
-            {enabledRows.length} of {libraryRows.length} enabled
+            {readsReady ? t("agentSkillsUi.enabledCount", { enabled: enabledRows.length, total: libraryRows.length }) : null}
           </span>
           {applicationLabel ? (
             <Tooltip>
@@ -410,30 +415,30 @@ export function AgentSkillsTab({ agent, companyId }: { agent: Agent; companyId?:
                 </span>
               </TooltipTrigger>
               <TooltipContent side="bottom" className="max-w-xs">
-                {unsupported ? unsupportedMessage : MATERIALIZATION_NOTE}
+                {unsupported ? unsupportedMessage : t("agentSkillsUi.materialization")}
               </TooltipContent>
             </Tooltip>
           ) : null}
-          <SaveStatusChip
+          {readsReady && <SaveStatusChip
             pending={syncSkills.isPending}
             unsaved={hasUnsavedChanges}
             error={syncSkills.isError && hasUnsavedChanges}
-          />
+          />}
           <div className="ml-auto flex w-full flex-col items-stretch gap-2 sm:w-auto sm:flex-row sm:items-center">
             <div className="relative w-full sm:w-auto">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search skills"
+                placeholder={t("agentSkillsUi.search")}
                 className="h-8 w-full pl-8 sm:w-56"
-                aria-label="Search skills"
+                aria-label={t("agentSkillsUi.search")}
               />
             </div>
             <Button asChild variant="outline" size="sm" className="shrink-0">
               <Link to="/skills" className="no-underline">
                 <Store className="h-3.5 w-3.5" />
-                Browse skills store
+                {t("agentSkillsUi.browse")}
               </Link>
             </Button>
           </div>
@@ -441,10 +446,23 @@ export function AgentSkillsTab({ agent, companyId }: { agent: Agent; companyId?:
 
         {syncSkills.isError ? (
           <p className="text-xs text-destructive">
-            {syncSkills.error instanceof Error ? syncSkills.error.message : "Failed to update skills"}
+            {syncSkills.error instanceof Error ? syncSkills.error.message : t("agentSkillsUi.updateFailed")}
           </p>
         ) : null}
       </div>
+
+      {([
+        [skillsQuery, "snapshotFailed", "retrySnapshot"],
+        [libraryQuery, "libraryFailed", "retryLibrary"],
+      ] as const).map(([query, message, retry]) => query.isError ? (
+        <div key={message} role="alert" className="space-y-2 rounded-lg border border-destructive/30 p-3 text-sm text-destructive">
+          <p>{t(`agentSkillsUi.${message}`)}</p>
+          {query.error instanceof Error && <p>{query.error.message}</p>}
+          <Button type="button" size="sm" variant="outline" disabled={query.isFetching} onClick={() => void query.refetch()}>
+            {t(`agentSkillsUi.${query.isFetching ? "retrying" : retry}`)}
+          </Button>
+        </div>
+      ) : null)}
 
       {/* Unsupported adapter banner */}
       {unsupportedMessage ? (
@@ -462,7 +480,7 @@ export function AgentSkillsTab({ agent, companyId }: { agent: Agent; companyId?:
               className="flex items-center justify-between gap-3 border-b border-amber-300/40 bg-amber-50/60 px-3 py-2 text-xs text-amber-800 last:border-b-0 dark:border-amber-500/20 dark:bg-amber-950/20 dark:text-amber-200"
             >
               <span className="min-w-0 truncate">
-                <span className="font-medium">{key}</span> is enabled but missing from the organization library.
+                <span className="font-medium">{key}</span>{" "}{t("agentSkillsUi.missing")}
               </span>
               <button
                 type="button"
@@ -470,7 +488,7 @@ export function AgentSkillsTab({ agent, companyId }: { agent: Agent; companyId?:
                 className="inline-flex shrink-0 items-center gap-1 rounded-md border border-amber-400/50 px-2 py-0.5 font-medium transition-colors hover:bg-amber-100/60 dark:hover:bg-amber-900/30"
               >
                 <X className="h-3 w-3" />
-                Remove
+                {t("agentSkillsUi.remove")}
               </button>
             </div>
           ))}
@@ -479,30 +497,30 @@ export function AgentSkillsTab({ agent, companyId }: { agent: Agent; companyId?:
 
       {isLoading ? (
         <PageSkeleton variant="list" />
-      ) : libraryEmpty && detectedRows.length === 0 ? (
+      ) : !skillSnapshot || !companySkills ? null : readsReady && libraryEmpty && detectedRows.length === 0 ? (
         <EmptyLibraryCard />
       ) : (
         <div className="space-y-4">
-          <SkillSection title="Enabled on this agent" count={filteredEnabled.length}>
+          <SkillSection title={t("agentSkillsUi.enabled")} count={filteredEnabled.length}>
             {filteredEnabled.length > 0 ? (
               filteredEnabled.map((row) => renderRow(row, "enabled"))
             ) : (
-              <SectionEmpty>
-                {search ? "No enabled skills match your search." : "No skills enabled on this agent yet."}
+              readsReady && <SectionEmpty>
+                {search ? t("agentSkillsUi.noEnabledMatch") : t("agentSkillsUi.noEnabled")}
               </SectionEmpty>
             )}
           </SkillSection>
 
-          <SkillSection title="Available from the library" count={filteredAvailable.length}>
+          <SkillSection title={t("agentSkillsUi.available")} count={filteredAvailable.length}>
             {filteredAvailable.length > 0 ? (
               filteredAvailable.map((row) => renderRow(row, "available"))
             ) : (
-              <SectionEmpty>
+              readsReady && <SectionEmpty>
                 {search
-                  ? "No available skills match your search."
+                  ? t("agentSkillsUi.noAvailableMatch")
                   : libraryEmpty
-                    ? "Import skills into the organization library to enable them here."
-                    : "Every library skill is enabled on this agent."}
+                    ? t("agentSkillsUi.importHint")
+                    : t("agentSkillsUi.allEnabled")}
               </SectionEmpty>
             )}
           </SkillSection>
@@ -518,7 +536,7 @@ export function AgentSkillsTab({ agent, companyId }: { agent: Agent; companyId?:
                     )}
                   />
                   <span className="text-xs font-medium text-muted-foreground">
-                    Automatic and detected skills (read-only)
+                    {t("agentSkillsUi.detected")}
                   </span>
                   <span className="text-xs text-muted-foreground/70">{filteredDetected.length}</span>
                 </CollapsibleTrigger>
@@ -528,7 +546,7 @@ export function AgentSkillsTab({ agent, companyId }: { agent: Agent; companyId?:
                       <AgentSkillRow key={row.key} variant="readonly" data={row} />
                     ))
                   ) : (
-                    <SectionEmpty>No detected skills match your search.</SectionEmpty>
+                    <SectionEmpty>{t("agentSkillsUi.noDetectedMatch")}</SectionEmpty>
                   )}
                 </CollapsibleContent>
               </div>
@@ -536,7 +554,7 @@ export function AgentSkillsTab({ agent, companyId }: { agent: Agent; companyId?:
           ) : null}
 
           <div className="text-xs text-muted-foreground">
-            Adapter: {adapterLabels[agent.adapterType] ?? agent.adapterType}
+            {t("agentSkillsUi.adapter", { adapter: adapterLabels[agent.adapterType] ?? agent.adapterType })}
           </div>
         </div>
       )}
@@ -553,11 +571,12 @@ function SaveStatusChip({
   unsaved: boolean;
   error: boolean;
 }) {
+  const { t } = useTranslation();
   if (pending) {
     return (
       <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
         <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        Saving…
+        {t("agentSkillsUi.saving")}
       </span>
     );
   }
@@ -565,7 +584,7 @@ function SaveStatusChip({
     return (
       <span className="inline-flex items-center gap-1.5 text-xs text-destructive">
         <AlertCircle className="h-3.5 w-3.5" />
-        Couldn’t save
+        {t("agentSkillsUi.saveFailed")}
       </span>
     );
   }
@@ -573,14 +592,14 @@ function SaveStatusChip({
     return (
       <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
         <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        Saving soon…
+        {t("agentSkillsUi.savingSoon")}
       </span>
     );
   }
   return (
     <span className="inline-flex items-center gap-1.5 text-xs text-(--status-task-done)">
       <CheckCircle2 className="h-3.5 w-3.5" />
-      Saved
+      {t("agentSkillsUi.saved")}
     </span>
   );
 }
@@ -610,19 +629,20 @@ function SectionEmpty({ children }: { children: React.ReactNode }) {
 }
 
 function EmptyLibraryCard() {
+  const { t } = useTranslation();
   return (
     <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border px-6 py-10 text-center">
       <Store className="h-8 w-8 text-muted-foreground/60" />
       <div className="space-y-1">
-        <p className="text-sm font-medium text-foreground">No skills in the organization library</p>
+        <p className="text-sm font-medium text-foreground">{t("agentSkillsUi.empty")}</p>
         <p className="text-xs text-muted-foreground">
-          Install skills to the organization, then enable them on this agent.
+          {t("agentSkillsUi.installHint")}
         </p>
       </div>
       <Button asChild variant="outline" size="sm">
         <Link to="/skills" className="no-underline">
           <Store className="h-3.5 w-3.5" />
-          Browse skills store
+          {t("agentSkillsUi.browse")}
         </Link>
       </Button>
     </div>
