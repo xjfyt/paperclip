@@ -1120,8 +1120,11 @@ function publishPrivateWorktreeKey(target: string, bytes: Buffer) {
   const sameKey = () => {
     if (!readPrivateWorktreeKey(target).equals(bytes)) throw privateWorktreeKeyError();
   };
-  try { lstatSync(target); sameKey(); return; }
+  let targetExists = false;
+  try { lstatSync(target); targetExists = true; }
   catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+  // Once observed, a failed read is not authorization to publish another key.
+  if (targetExists) { sameKey(); return; }
   const temporary = `${target}.${randomUUID()}.tmp`;
   let created = false;
   let owned: { dev: bigint; ino: bigint } | undefined;

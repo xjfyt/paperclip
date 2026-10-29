@@ -1,0 +1,109 @@
+{
+  "schema": "mimouse.local-verification.v1",
+  "recordedAt": "2026-10-30T04:15:22.795450+08:00",
+  "platform": "native Windows x64, actual owned NTFS files/rename and DACL probes, no external credentials",
+  "problem": "A single ENOENT catch covered both the initial target lookup and the read of an already-observed target. A concurrent rename during reading was mistaken for initial absence and caused a new source key to be republished at the target path.",
+  "change": "Separate only the initial lstat catch. Once target presence was observed, every verification/read error aborts. Atomic link-based publication and same/different competing-winner checks for a genuinely new target are unchanged.",
+  "redBaseline": {
+    "description": "Added regression first ran against the old production branch with a real beforeOpen rename. The function returned instead of refusing the race. The 15 pending results are name-filtered tests, not platform skips.",
+    "command": "cd cli; node ../node_modules/vitest/vitest.mjs run src/__tests__/worktree-secrets-windows.test.ts -t \"does not recreate a target key\" --reporter=default --reporter=json --outputFile=../test-results/project-closure-20261029/worktree-observed-key-before-red.json",
+    "passed": 0,
+    "failed": 1,
+    "pending": 15,
+    "log": {
+      "path": "test-results/project-closure-20261029/worktree-observed-key-before-red.log",
+      "sha256": "5e1853e6f795124a7d97d0da46ebdc1f04f9aa10bbe22e82e0b27545e9075cb2"
+    },
+    "json": {
+      "path": "test-results/project-closure-20261029/worktree-observed-key-before-red.json",
+      "sha256": "a350e887c2cca95fc9f77e8bd0a2a0a8f92a6b687d58a1c46e14dd1aea8fc478"
+    }
+  },
+  "targeted": {
+    "command": "cd cli; node ../node_modules/vitest/vitest.mjs run src/__tests__/worktree-secrets-windows.test.ts -t \"does not recreate a target key\" --reporter=default --reporter=json --outputFile=../test-results/project-closure-20261029/worktree-observed-key-targeted-final.json",
+    "passed": 1,
+    "failed": 0,
+    "pending": 15,
+    "log": {
+      "path": "test-results/project-closure-20261029/worktree-observed-key-targeted-final.log",
+      "sha256": "74d017679b2e2d0aea09f0f9086a54a212a2f0137f394f3e8999179b0cbc2b9e"
+    },
+    "json": {
+      "path": "test-results/project-closure-20261029/worktree-observed-key-targeted-final.json",
+      "sha256": "b047b79cb7944994651e8cf38c841af941948eb2ab76ede6d5eea90970c10714"
+    }
+  },
+  "full": {
+    "command": "cd cli; node ../node_modules/vitest/vitest.mjs run src/__tests__/worktree-secrets-windows.test.ts --reporter=default --reporter=json --outputFile=../test-results/project-closure-20261029/worktree-observed-key-security-final.json",
+    "passed": 16,
+    "failed": 0,
+    "pending": 0,
+    "log": {
+      "path": "test-results/project-closure-20261029/worktree-observed-key-security-final.log",
+      "sha256": "d32f8f095b6cf7aacce51dc9ef4ea5bdf9f23024d32690cb6f3a38368ea74321"
+    },
+    "json": {
+      "path": "test-results/project-closure-20261029/worktree-observed-key-security-final.json",
+      "sha256": "4c69dc63afe1d2665d772eaf88308c1c624ad36f43ca35230c7775f9ee353986"
+    }
+  },
+  "newAssertions": [
+    "Existing-target read is gated at its actual native open, then the real file is renamed to an owned retained path. No file read or ACL probe is replaced with a synthetic result.",
+    "The operation rejects, no target is recreated, no key payload byte is written, and no existing ACL is repaired.",
+    "Exact original source and retained-target bytes and SDDL are unchanged; target directory SDDL is unchanged and contains only the retained key.",
+    "Full file retains first-byte DACL, broad existing path rejection, reparse rejection, exclusive-temp collisions/replacement and same/different publication winner regressions."
+  ],
+  "checks": [
+    {
+      "command": "pnpm --filter paperclipai exec tsc --noEmit",
+      "exitCode": 0,
+      "log": {
+        "path": "test-results/project-closure-20261029/worktree-observed-key-types-final.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "command": "git diff --check -- cli/src/commands/worktree.ts cli/src/__tests__/worktree-secrets-windows.test.ts",
+      "exitCode": 0
+    }
+  ],
+  "sources": [
+    {
+      "path": "cli/src/commands/worktree.ts",
+      "sha256": "13be6338f238ff1b30abeec09f39d809c09a254bb7759004b86c8db5f8ef2115"
+    },
+    {
+      "path": "cli/src/__tests__/worktree-secrets-windows.test.ts",
+      "sha256": "88ad52ce9b78beadaaea8a6745732a3fbfe59cdacc1808da31cee38d226019f7"
+    }
+  ],
+  "independentReadOnlyReview": {
+    "scope": [
+      "cli seeded-key Windows path",
+      "idle-local-work missing-path classification",
+      "session-workspace-cwd target normalization",
+      "pnpm-invocation native executable/Node argv handling"
+    ],
+    "runtimeRecheck": {
+      "command": "cd server; node ../node_modules/vitest/vitest.mjs run src/services/pnpm-invocation.test.ts src/services/session-workspace-cwd.test.ts src/__tests__/idle-local-work.test.ts --reporter=default --reporter=json --outputFile=../test-results/project-closure-20261029/independent-windows-path-review.json",
+      "passed": 28,
+      "failed": 0,
+      "pending": 0,
+      "log": {
+        "path": "test-results/project-closure-20261029/independent-windows-path-review.log",
+        "sha256": "42f4931d9109e666dae4c3ea4cc58e847792fdfa0754024b369bca77543a4abf"
+      },
+      "json": {
+        "path": "test-results/project-closure-20261029/independent-windows-path-review.json",
+        "sha256": "99c8d64ae4a86f6c1f000bee6688ce6324cc62239b232c46e425a2abc870db6f"
+      }
+    },
+    "result": "The later observed-key race was found while reviewing the analogous provider branch and is fixed/verified by this receipt. No additional confirmed new regressions were found in the other three reviewed changes."
+  },
+  "limits": [
+    "POSIX seeded-key branch is unchanged. Windows-specific security file has zero pending on this Windows host.",
+    "The separate provider master-key/health race fix and its regression results belong to the docs agent; this receipt does not claim its full suite ran here.",
+    "No broad process cleanup, real user secrets, database restore, dependency install or lockfile change occurred.",
+    "A root-agent full CLI run started before this change is historical input; final whole-package evidence must use the frozen source hashes recorded here."
+  ]
+}

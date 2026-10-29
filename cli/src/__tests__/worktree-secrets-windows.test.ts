@@ -124,6 +124,28 @@ describe.skipIf(process.platform !== "win32")("native Windows worktree seeded ke
     expect(fs.readFileSync(target(), "utf8")).toBe(payload); expect(sddl(target())).toBe(acl);
     expect(protectNewPrivatePath).not.toHaveBeenCalled();
   });
+  it("does not recreate a target key that disappears after its existence was observed", () => {
+    const request = input(false), source = request.sourceConfig.secrets.localEncrypted.keyFilePath;
+    const targetBytes = "original target key bytes";
+    seedPrivate(source, payload); seedPrivate(target(), targetBytes);
+    const sourceAcl = sddl(source), targetAcl = sddl(target()), directoryAcl = sddl(path.dirname(target()));
+    const retained = `${target()}.retained`;
+    let writes = 0;
+    hooks.beforeWrite = () => { writes++; };
+    hooks.beforeOpen = (file, flags) => {
+      if (file === target() && typeof flags === "number") {
+        hooks.beforeOpen = undefined;
+        fs.renameSync(file, retained);
+      }
+    };
+    expect(() => copySeededSecretsKey(request)).toThrow("verified private Windows");
+    expect(writes).toBe(0); expect(protectNewPrivatePath).not.toHaveBeenCalled();
+    expect(fs.existsSync(target())).toBe(false);
+    expect(fs.readFileSync(source, "utf8")).toBe(payload); expect(sddl(source)).toBe(sourceAcl);
+    expect(fs.readFileSync(retained, "utf8")).toBe(targetBytes); expect(sddl(retained)).toBe(targetAcl);
+    expect(sddl(path.dirname(target()))).toBe(directoryAcl);
+    expect(fs.readdirSync(path.dirname(target()))).toEqual(["master.key.retained"]);
+  });
   it("refuses a failed temporary protection before any write and removes only its empty temporary file", () => {
     let writes = 0; hooks.beforeWrite = () => { writes++; };
     vi.mocked(protectNewPrivatePath).mockImplementation(file => {
