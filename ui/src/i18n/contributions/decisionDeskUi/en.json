@@ -107,5 +107,8 @@
     "decide-now": "Decide now",
     "new-today": "New today",
     "earlier": "Earlier"
-  }
+  },
+  "historyError": "Could not load decision history.",
+  "historyRetry": "Try again",
+  "historyRetrying": "Trying…"
 }

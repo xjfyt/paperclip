@@ -125,3 +125,25 @@ it("keeps custom native date input values and open popover stable while display 
     expect(state.list).toHaveBeenCalledTimes(reads);
   }
 });
+
+it.each(["decided", "expired"] as const)("surfaces %s history read failure instead of claiming empty history", async status => {
+  state.history.mockRejectedValue(new Error("Raw history provider <b> diagnostic"));
+  await act(async () => root.render(<QueryClientProvider client={client}><WhatNeedsMe /></QueryClientProvider>)); await flush();
+  const curtain = [...host.querySelectorAll("button")].find(node => node.textContent?.includes(decisionDeskMessages.en[status]))!;
+  await act(async () => curtain.click()); await flush();
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain("Raw history provider <b> diagnostic");
+  expect(host.textContent).not.toContain(status === "decided" ? decisionDeskMessages.en.emptyDecided : decisionDeskMessages.en.emptyExpired);
+  const errorPanel = host.querySelector('[role="alert"]')!; const retry = errorPanel.querySelector("button")!; retry.focus();
+  for (const [locale, strings] of Object.entries(decisionDeskMessages)) {
+    await act(async () => { await i18n.changeLanguage(locale); });
+    expect(host.querySelector('[role="alert"]')).toBe(errorPanel); expect(errorPanel.textContent).toContain(strings.historyError);
+    expect(errorPanel.textContent).toContain("Raw history provider <b> diagnostic"); expect(errorPanel.querySelector("b")).toBeNull();
+    expect(retry.textContent).toBe(strings.historyRetry); expect(document.activeElement).toBe(retry); expect(state.history).toHaveBeenCalledTimes(1);
+  }
+  let resolve!: (rows: unknown[]) => void; state.history.mockImplementation(() => new Promise(yes => { resolve = yes; }));
+  await act(async () => { retry.click(); retry.click(); });
+  expect(state.history).toHaveBeenCalledTimes(2); expect(state.history).toHaveBeenLastCalledWith("c1", { status, limit: 51 });
+  await act(async () => resolve([])); await flush();
+  expect(host.querySelector('[role="alert"]')).toBeNull();
+  expect(host.textContent).toContain(status === "decided" ? decisionDeskMessages.ja.emptyDecided : decisionDeskMessages.ja.emptyExpired);
+});

@@ -107,5 +107,8 @@
     "decide-now": "今すぐ決定",
     "new-today": "今日の新着",
     "earlier": "以前"
-  }
+  },
+  "historyError": "決定履歴を読み込めませんでした。",
+  "historyRetry": "再試行",
+  "historyRetrying": "再試行中…"
 }

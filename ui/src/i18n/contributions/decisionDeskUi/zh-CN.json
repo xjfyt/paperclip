@@ -107,5 +107,8 @@
     "decide-now": "立即决策",
     "new-today": "今日新增",
     "earlier": "更早"
-  }
+  },
+  "historyError": "无法加载决策历史。",
+  "historyRetry": "重试",
+  "historyRetrying": "正在重试…"
 }

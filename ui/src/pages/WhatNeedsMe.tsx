@@ -42,6 +42,7 @@ import {
   type AttentionSortOrder,
 } from "../lib/attention";
 import { hasBlockingShortcutDialog, resolveAttentionQueueKeyAction } from "../lib/keyboardShortcuts";
+import { Button } from "../components/ui/button";
 import { PageSkeleton } from "../components/PageSkeleton";
 import { AttentionQueueRow } from "../components/AttentionQueueRow";
 import { DecisionsToolbar } from "../components/DecisionsToolbar";
@@ -179,12 +180,12 @@ export function WhatNeedsMe() {
 
   // Decision history — decided / expired decisions leave the open attention
   // feed (entryRule = open only), so we fetch them directly for the curtains.
-  const { data: decidedDecisions, isLoading: decidedDecisionsLoading } = useQuery({
+  const { data: decidedDecisions, isLoading: decidedDecisionsLoading, error: decidedDecisionsError, isFetching: decidedDecisionsFetching, refetch: refetchDecidedDecisions } = useQuery({
     queryKey: queryKeys.decisions.list(selectedCompanyId!, "decided"),
     queryFn: () => decisionsApi.list(selectedCompanyId!, { status: "decided", limit: DECISION_HISTORY_QUERY_LIMIT }),
     enabled: decisionHistoryQueryEnabled(selectedCompanyId, decidedOpen),
   });
-  const { data: expiredDecisions, isLoading: expiredDecisionsLoading } = useQuery({
+  const { data: expiredDecisions, isLoading: expiredDecisionsLoading, error: expiredDecisionsError, isFetching: expiredDecisionsFetching, refetch: refetchExpiredDecisions } = useQuery({
     queryKey: queryKeys.decisions.list(selectedCompanyId!, "expired"),
     queryFn: () => decisionsApi.list(selectedCompanyId!, { status: "expired", limit: DECISION_HISTORY_QUERY_LIMIT }),
     enabled: decisionHistoryQueryEnabled(selectedCompanyId, expiredOpen),
@@ -719,7 +720,9 @@ export function WhatNeedsMe() {
           open={decidedOpen}
           onToggle={() => setDecidedOpen((prev) => !prev)}
         >
-          {decidedDecisionsLoading ? (
+          {decidedDecisionsError ? (
+            <DecisionHistoryError error={decidedDecisionsError} retrying={decidedDecisionsFetching} onRetry={() => { void refetchDecidedDecisions({ cancelRefetch: false }); }} />
+          ) : decidedDecisionsLoading ? (
             <p className="text-xs text-muted-foreground">{t("decisionDeskUi.loadingDecided")}</p>
           ) : (decidedDecisions?.length ?? 0) > 0 ? (
             decidedDecisions!.slice(0, DECISION_HISTORY_VISIBLE_LIMIT).map((decision) => (
@@ -742,7 +745,9 @@ export function WhatNeedsMe() {
           open={expiredOpen}
           onToggle={() => setExpiredOpen((prev) => !prev)}
         >
-          {expiredDecisionsLoading ? (
+          {expiredDecisionsError ? (
+            <DecisionHistoryError error={expiredDecisionsError} retrying={expiredDecisionsFetching} onRetry={() => { void refetchExpiredDecisions({ cancelRefetch: false }); }} />
+          ) : expiredDecisionsLoading ? (
             <p className="text-xs text-muted-foreground">{t("decisionDeskUi.loadingExpired")}</p>
           ) : (expiredDecisions?.length ?? 0) > 0 ? (
             expiredDecisions!.slice(0, DECISION_HISTORY_VISIBLE_LIMIT).map((decision) => (
@@ -829,6 +834,19 @@ function ZeroState() {
         <Inbox className="h-4 w-4" />
         {t("decisionDeskUi.nothingNeedsYou")}
       </p>
+    </div>
+  );
+}
+
+function DecisionHistoryError({ error, retrying, onRetry }: { error: unknown; retrying: boolean; onRetry: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <div role="alert" className="space-y-2 text-sm">
+      <p className="text-destructive">{t("decisionDeskUi.historyError")}</p>
+      <p className="text-muted-foreground">{error instanceof Error ? error.message : t("decisionDeskUi.tryAgain")}</p>
+      <Button type="button" variant="outline" size="sm" disabled={retrying} onClick={onRetry}>
+        {t(retrying ? "decisionDeskUi.historyRetrying" : "decisionDeskUi.historyRetry")}
+      </Button>
     </div>
   );
 }

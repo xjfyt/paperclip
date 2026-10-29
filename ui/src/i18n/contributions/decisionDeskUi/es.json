@@ -107,5 +107,8 @@
     "decide-now": "Decidir ahora",
     "new-today": "Nuevas de hoy",
     "earlier": "Anteriores"
-  }
+  },
+  "historyError": "No se pudo cargar el historial de decisiones.",
+  "historyRetry": "Reintentar",
+  "historyRetrying": "Reintentando…"
 }
