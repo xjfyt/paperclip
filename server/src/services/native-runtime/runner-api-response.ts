@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdtemp, open, rm, type FileHandle } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { protectNewPrivatePath } from "@paperclipai/shared/private-filesystem-permissions";
 import { RUNNER_API_RESPONSE_MAX_BYTES, RUNNER_API_RESPONSE_DEADLINE_MS, RunnerApiResponseLimitError, RunnerApiResponseCleanupError } from "./runner-api-response-limits.js";
 
 export type RunnerApiResponseBody = Buffer | { path: string; byteSize: number; sha256: string };
@@ -66,6 +67,9 @@ export async function captureRunnerApiResponse(response: Response, inlineBytes: 
         if (!file && byteSize + chunk.length > inlineBytes) {
           await options.beforeSpill?.();
           directory = await mkdtemp(join(tmpdir(), "paperclip-api-response-"));
+          // Establish the private DACL before creating or writing response bytes.
+          // The new exclusive child inherits it on Windows; POSIX keeps 0600.
+          protectNewPrivatePath(directory);
           path = join(directory, "body");
           file = await open(path, "wx+", 0o600);
           for (const part of prefix) await file.writeFile(part);

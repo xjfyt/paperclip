@@ -1,7 +1,10 @@
 import { existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { chmod, writeFile, symlink, mkdir, open } from "node:fs/promises";
+import { writeFile, symlink, mkdir, open } from "node:fs/promises";
 import { join, dirname } from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { writeCliFixture } from "@paperclipai/adapter-utils/test-fixtures/native-cli";
 import { eq } from "drizzle-orm";
 import { assets, documents, heartbeatRuns, issues, projects, routineDocuments, routines, runnerApiResponseReservations } from "@paperclipai/db";
 import { beforeAll, afterAll, beforeEach, afterEach, describe, expect, it, vi } from "vitest";
@@ -34,7 +37,7 @@ describe("runner API against real HTTP routes", () => {
   it.skipIf(!process.env.PAPERCLIP_REQUIRE_RUNNER_API_INTEGRATION && !existsSync(defaultCapabilityRunnerdBinary())).each(["current", "legacy_http"])("runs runnerd → PRP → authority → actual authenticated HTTP (%s receipt)", async (receiptFormat) => {
     const fixture = await server.fixture();
     const provider = join(server.root, `scripted-api-provider-${receiptFormat}.mjs`);
-    await writeFile(provider, `#!${process.execPath}
+    await writeCliFixture(provider, `#!${process.execPath}
 import { createInterface } from 'node:readline';
 const send = value => process.stdout.write(JSON.stringify(value)+'\\n');
 let step = 0;
@@ -58,9 +61,8 @@ else if(m.method==='turn/start') {send({id:m.id,result:{turn:{id:'api-turn',stat
 else if(m.id!==undefined) send({id:m.id,result:{}});
 }
 `);
-    await chmod(provider, 0o700);
     const bundle = createRunnerdCodexTransport({
-      runnerBinary: defaultCapabilityRunnerdBinary(), codexCommand: provider, codexArgs: [],
+      runnerBinary: defaultCapabilityRunnerdBinary(), codexCommand: process.platform === "win32" ? `${provider}.exe` : provider, codexArgs: [],
       stateDirectory: join(server.root, `scripted-runner-${receiptFormat}`), lifecyclePolicy: { mode: "per_turn", idleTimeoutMs: null },
       prpIdentity: { runnerInstanceId: "api-test", environmentLeaseId: "api-test-lease", runId: fixture.runId, normalizedSessionId: "api-test-session", turnId: "api-test-turn", itemId: "api-test-item" },
       controlPlaneRegistration: prp => registerRunnerPrpAuthority({ companyId: fixture.companyId, runId: fixture.runId, authority: prp }),
@@ -477,7 +479,14 @@ else if(m.id!==undefined) send({id:m.id,result:{}});
     const path = join(server.root, "storage", objectKey);
     await mkdir(dirname(path), { recursive: true });
     const file = await open(path, "wx");
-    try { await file.write(Buffer.from("readable"), 0, 8, offsetBytes); }
+    try {
+      // An ordinary Windows write at 3 GiB materializes the intervening zeroes.
+      // Mark only this exclusive fixture file sparse before testing real ranges.
+      if (process.platform === "win32") {
+        await promisify(execFile)(join(process.env.SystemRoot ?? "C:\\Windows", "System32", "fsutil.exe"), ["sparse", "setflag", path], { windowsHide: true });
+      }
+      await file.write(Buffer.from("readable"), 0, 8, offsetBytes);
+    }
     finally { await file.close(); }
     const [asset] = await server.db.insert(assets).values({ companyId: fixture.companyId, provider: "local_disk", objectKey,
       contentType: "text/plain", byteSize: offsetBytes + 8, sha256: "sparse-fixture", createdByAgentId: fixture.agentId }).returning();
@@ -498,7 +507,14 @@ else if(m.id!==undefined) send({id:m.id,result:{}});
     await writeFile(outside, "must-not-upload");
     await symlink(outside, join(fixture.workspace, "escape.txt"));
     await expect(upload([{ path: "escape.txt" }])).rejects.toThrow();
-    await expect(upload([{ path: "sample.txt" }])).resolves.toMatchObject({ status: 201 });
+    if (process.platform === "win32") {
+      // Native Windows has no supported confined-open primitive here. Keep the
+      // real refusal and upload only an already authorized owned artifact.
+      await expect(upload([{ path: "sample.txt" }])).rejects.toThrow("platform with confined file opens");
+      await expect(upload([{ artifactId: fixture.artifactId }])).resolves.toMatchObject({ status: 201 });
+    } else {
+      await expect(upload([{ path: "sample.txt" }])).resolves.toMatchObject({ status: 201 });
+    }
     const download = await fixture.authority.execute({ tool: "call_api", callId: "download", arguments: { operationId: "GET /api/assets/{assetId}/content", pathParams: { assetId: fixture.binaryArtifactId } } }) as any;
     expect(download).toMatchObject({ status: 206, byteSize: 32000, artifact: { artifactId: fixture.binaryArtifactId, byteSize: 32000 } });
     expect((await fixture.snapshot()).assets).toEqual(expect.arrayContaining([expect.objectContaining({ id: download.artifact.artifactId, companyId: fixture.companyId, createdByAgentId: fixture.agentId })]));

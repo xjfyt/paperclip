@@ -1,0 +1,110 @@
+{
+  "schema": "mimouse.local-verification.v1",
+  "recordedAt": "2026-10-30T02:38:24.013562+08:00",
+  "platform": "native Windows x64, NTFS, Node 24.16.0, pnpm 9.15.4; real runnerd, native scripted provider processes, local HTTP routes, isolated embedded PostgreSQL",
+  "changes": [
+    "Before any API response spill bytes, protect the fresh empty temporary directory; exclusive child inherits its private Windows DACL and retains POSIX mode 0600.",
+    "Replace unlaunchable direct .mjs test commands with the existing fixed local native CLI fixture bridge on Windows; provider still executes the original Node script, real PRP and HTTP.",
+    "Mark only the test-owned exclusive 3 GiB file NTFS sparse before its offset write, checking fsutil exit status. Persisted byteSize and exact final eight-byte range assertions are unchanged.",
+    "Keep Windows confined workspace path uploads refused; prove that refusal and successful upload of an already authorized same-company artifact instead. Company, traversal, symlink, audit and download assertions remain."
+  ],
+  "verification": [
+    {
+      "label": "Complete integration: 29 pass, no skips; both current and legacy HTTP receipts execute real runnerd → PRP → authority → authenticated local HTTP.",
+      "passed": 29,
+      "failed": 0,
+      "pending": 0,
+      "command": "cd server; node ../node_modules/vitest/vitest.mjs run src/services/native-runtime/runner-api.integration.test.ts --reporter=default --reporter=json --outputFile=../test-results/project-audit-windows-closure/runner-api-final.json",
+      "log": {
+        "path": "test-results/project-audit-windows-closure/runner-api-final.log",
+        "sha256": "8f500a4136c5e6a9a029bd15f5588211b8d29535c9d6300798a84a05b428b3f7"
+      },
+      "json": {
+        "path": "test-results/project-audit-windows-closure/runner-api-final.json",
+        "sha256": "644ad9e04227ad26ce3d3de052bbfc0b51c22607c4bc39b9e101a57cee7be144"
+      }
+    },
+    {
+      "label": "Original 12 capture/limit/deadline/cleanup cases plus real empty-parent/file DACL inspection before first byte: 13 pass.",
+      "passed": 13,
+      "failed": 0,
+      "pending": 0,
+      "command": "cd server; node ../node_modules/vitest/vitest.mjs run src/services/native-runtime/runner-api-response.test.ts src/services/native-runtime/runner-api-response-private.test.ts --reporter=default --reporter=json --outputFile=../test-results/project-audit-windows-closure/runner-api-response-final.json",
+      "log": {
+        "path": "test-results/project-audit-windows-closure/runner-api-response-final.log",
+        "sha256": "978028af51994741004fc958f74b8fd5a57df319bd018d683eb77396b5789303"
+      },
+      "json": {
+        "path": "test-results/project-audit-windows-closure/runner-api-response-final.json",
+        "sha256": "f84e1164cf4d36bbcea7ff7673b8dd24811d3c0d28974182ccd141963af5cf6a"
+      }
+    },
+    {
+      "label": "Intentional red regression: remove only the new pre-byte private-directory guard in Vitest transform; actual NTFS permissions are wide and the same test fails false vs true. Workspace source is unchanged.",
+      "passed": 0,
+      "failed": 1,
+      "pending": 0,
+      "command": "cd server; node ../node_modules/vitest/vitest.mjs run src/services/native-runtime/runner-api-response-private.test.ts --config ../test-results/project-audit-windows-closure/runner-api-spill-before-fix.vitest.mjs --reporter=default --reporter=json --outputFile=../test-results/project-audit-windows-closure/runner-api-response-private-red.json",
+      "log": {
+        "path": "test-results/project-audit-windows-closure/runner-api-response-private-red.log",
+        "sha256": "04b0f980c24cc0af9dfc0082573e8520196d2defa1bb36f45437f47faeec2e7f"
+      },
+      "json": {
+        "path": "test-results/project-audit-windows-closure/runner-api-response-private-red.json",
+        "sha256": "aae81f0475c444e297a295a2a27ae31f43b8f29085fd7fa7e250ba493537b182"
+      }
+    }
+  ],
+  "history": [
+    {
+      "label": "Independent baseline: 26 pass / 3 fail. Two direct-script provider process launches fail transport settlement, and workspace path upload is correctly rejected on this platform. Original general-suite report also had three loaded-host timeouts; this baseline did not reproduce those timeouts.",
+      "passed": 26,
+      "failed": 3,
+      "pending": 0,
+      "command": "cd server; node ../node_modules/vitest/vitest.mjs run src/services/native-runtime/runner-api.integration.test.ts",
+      "log": {
+        "path": "test-results/project-audit-windows-closure/runner-api-before.log",
+        "sha256": "0a642654d9f6500514e391f17c57e8aa1c11a6631b0d1e07d4c2e3ebb1afe015"
+      },
+      "json": {
+        "path": "test-results/project-audit-windows-closure/runner-api-before.json",
+        "sha256": "7d43ff2cb5b1f5db45e536ebcc5f79b6815468f5713fd4d9ec28da56c1c1252a"
+      }
+    }
+  ],
+  "timingEvidence": {
+    "threeGiBRangeBeforeMs": 12807,
+    "threeGiBRangeAfterMs": 127.8753,
+    "nestedLocalTrustedServerAfterMs": 3974.5035,
+    "fixtureResetAfterMs": 6480.1605,
+    "testTimeoutsChanged": false
+  },
+  "typecheck": {
+    "command": "pnpm --filter @paperclipai/server exec tsc --noEmit",
+    "exitCode": 0,
+    "log": {
+      "path": "test-results/project-audit-windows-closure/runner-api-types-final.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "sources": [
+    {
+      "path": "server/src/services/native-runtime/runner-api-response.ts",
+      "sha256": "db6f8324e1d005c795c30ffafbec7f37f5a669175e3331dee5544196b4fe5af4"
+    },
+    {
+      "path": "server/src/services/native-runtime/runner-api-response-private.test.ts",
+      "sha256": "a828db70e01bd77448afd02effad6c3c8949b118e67a2aac8cfbcf96f22ad48f"
+    },
+    {
+      "path": "server/src/services/native-runtime/runner-api.integration.test.ts",
+      "sha256": "6075d7261824709bbd93e50caddbeb5459611df9c2e0a74ab2df04c1921714a8"
+    }
+  ],
+  "limits": [
+    "Confined local workspace uploads remain intentionally unsupported on native Windows; authorized artifact uploads are the supported alternative.",
+    "This runner transport/API integration does not qualify the separately guarded native session executor or prove Windows owned-process stop semantics.",
+    "No remote provider, external message, credential or real user database was used.",
+    "This is a local serialized suite result, not a claim about arbitrary concurrent host load or every supported operating system."
+  ]
+}

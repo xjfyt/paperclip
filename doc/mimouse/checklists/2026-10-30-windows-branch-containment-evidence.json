@@ -1,0 +1,89 @@
+{
+  "schema": "mimouse.local-verification.v1",
+  "recordedAt": "2026-10-30T02:31:24.799442+08:00",
+  "platform": "native Windows x64 / real Git for Windows / isolated embedded PostgreSQL",
+  "scope": "Heartbeat workspace branch containment integration; production authorization/source and stop-proof guards unchanged.",
+  "changes": [
+    "Short unique temp prefixes avoid Git for Windows worktree administrative path length failure; real managed company/project UUID layout remains.",
+    "Parse actual worktree registry entries and compare path.resolve paths; Git for Windows emits forward slashes.",
+    "Real Git forward-reconciliation polling remains bounded at 20s within the existing 30s case budget; prior 10s wait returned a still-running successful run under concurrent load."
+  ],
+  "command": "cd server; node ../node_modules/vitest/vitest.mjs run src/__tests__/heartbeat-workspace-branch-containment.test.ts --reporter=default --reporter=json --outputFile=../test-results/project-audit-windows-closure/branch-containment-final.json",
+  "verification": {
+    "label": "11/11 complete suite; zero new skips",
+    "passed": 11,
+    "failed": 0,
+    "pending": 0,
+    "log": {
+      "path": "test-results/project-audit-windows-closure/branch-containment-final.log",
+      "sha256": "9548bfd75fa44fb0ddb7b0b97158f674745c2cc5c81729532e19b10bd605ddfb"
+    },
+    "json": {
+      "path": "test-results/project-audit-windows-closure/branch-containment-final.json",
+      "sha256": "2e0907a44c9af4ea793a85522573dade28276160e81ad57324aae1251e48c04f"
+    }
+  },
+  "history": [
+    {
+      "label": "4 fixture setup failures: GIT_DIR too big; 7 passing cases",
+      "passed": 7,
+      "failed": 4,
+      "pending": 0,
+      "log": {
+        "path": "test-results/project-audit-windows-closure/branch-containment-before.log",
+        "sha256": "c6ae55c9f9225339c9945c25bbb2904b068ec29c834bae80a252c0bb05207882"
+      },
+      "json": {
+        "path": "test-results/project-audit-windows-closure/branch-containment-before.json",
+        "sha256": "b536ef5bcd7409e4ea4c24a1d8c70eec8db601f85485f17a37b38a6295cacd76"
+      }
+    },
+    {
+      "label": "A failed relative-path edit ran old loaded input again: four path failures plus one 10s running-state poll failure; retained, not final evidence",
+      "passed": 6,
+      "failed": 5,
+      "pending": 0,
+      "log": {
+        "path": "test-results/project-audit-windows-closure/branch-containment-old-input-repeat.log",
+        "sha256": "7111289312f1b38758dd6e06f3b1952447d6e8b18fa3749c00aa255fb7eb8842"
+      },
+      "json": {
+        "path": "test-results/project-audit-windows-closure/branch-containment-old-input-repeat.json",
+        "sha256": "749625034c9f077ba9a7018f85646d94b8896374e4e58a7b45e8141c82ee78b4"
+      }
+    },
+    {
+      "label": "Short prefix reached real retained-source behavior; 10 pass, 1 assertion failed solely because Git returned forward slashes",
+      "passed": 10,
+      "failed": 1,
+      "pending": 0,
+      "log": {
+        "path": "test-results/project-audit-windows-closure/branch-containment-path-assertion.log",
+        "sha256": "81309d627cbd2a031b93951dc746ad619c2e09e437af2ac4f8d2517acd2a3506"
+      },
+      "json": {
+        "path": "test-results/project-audit-windows-closure/branch-containment-path-assertion.json",
+        "sha256": "bfa7b2c65bf6463a53fd7c37f705e8d78192871b5d442ad358717218e7e6b0c9"
+      }
+    }
+  ],
+  "sources": [
+    {
+      "path": "server/src/__tests__/heartbeat-workspace-branch-containment.test.ts",
+      "sha256": "a217356e583434f85fdee3935d56a3b76be0a4e81abc951ac4fdfbcbc01e18dd"
+    }
+  ],
+  "limits": [
+    "This fixes test portability, not Git for Windows arbitrary long-path support.",
+    "Cross-company/project malformed fixtures deliberately trigger production refusals; expected negative-path logs are not failed test cases.",
+    "No external provider or real user state used."
+  ],
+  "typecheck": {
+    "command": "pnpm --filter @paperclipai/server exec tsc --noEmit",
+    "exitCode": 0,
+    "log": {
+      "path": "test-results/project-audit-windows-closure/server-download-branch-types-final.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  }
+}

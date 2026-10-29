@@ -114,5 +114,13 @@
     "Consumer destroy before and during reading is verified on real streams; the pre-pipeline HTTP res.destroyed guard is a source review change, not an independently exercised live HTTP disconnect test.",
     "No claim that arbitrary hostile writable ancestor races are solved by final-entry identity checks.",
     "No external provider, network credential, or real user database was used."
-  ]
+  ],
+  "typecheck": {
+    "command": "pnpm --filter @paperclipai/server exec tsc --noEmit",
+    "exitCode": 0,
+    "log": {
+      "path": "test-results/project-audit-windows-closure/server-download-branch-types-final.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  }
 }
