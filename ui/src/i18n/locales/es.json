@@ -5616,6 +5616,23 @@
     "attachImage": "Adjuntar imagen",
     "dropPasteImage": "o arrastra o pega una imagen en la nota"
   },
+  "taskThreadFeedbackUi": {
+    "you": "tú",
+    "addressedUser": "el usuario destinatario",
+    "addressedAgent": "el agente destinatario",
+    "creator": "el agente que lo creó",
+    "onlyAddressee": "Solo {{addressee}} puede responder",
+    "assignedBoard": "Asignado a {{addressee}} · solo el consejo",
+    "boardOnly": "Solo el consejo puede responder",
+    "addresseeOrBoard": "Solo {{addressee}} o el consejo pueden responder",
+    "exceptCreator": "Cualquiera excepto {{creator}} puede responder",
+    "anyone": "Cualquiera puede responder",
+    "audienceDenied": "No estás entre quienes pueden resolver esta tarjeta.",
+    "permissionDenied": "No tienes permiso para responder a esta tarjeta.",
+    "settled": "Esta solicitud ya no espera una decisión.",
+    "tryAgain": "Inténtalo de nuevo.",
+    "submitFailed": "No se pudo enviar. Inténtalo de nuevo."
+  },
   "taskThreadInteractionsUi": {
     "suggestedTasks": "Tareas sugeridas",
     "questions": "Preguntas",

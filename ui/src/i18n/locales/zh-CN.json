@@ -5616,6 +5616,23 @@
     "attachImage": "附加图片",
     "dropPasteImage": "也可将图片拖放或粘贴到备注中"
   },
+  "taskThreadFeedbackUi": {
+    "you": "你",
+    "addressedUser": "指定用户",
+    "addressedAgent": "指定智能体",
+    "creator": "创建此请求的智能体",
+    "onlyAddressee": "仅 {{addressee}} 可以回复",
+    "assignedBoard": "分配给 {{addressee}} · 仅董事会可回复",
+    "boardOnly": "仅董事会可以回复",
+    "addresseeOrBoard": "仅 {{addressee}} 或董事会可以回复",
+    "exceptCreator": "除 {{creator}} 外的任何人都可以回复",
+    "anyone": "任何人都可以回复",
+    "audienceDenied": "你不在此卡片允许处理的对象范围内。",
+    "permissionDenied": "你无权回复此卡片。",
+    "settled": "此请求已不再等待决定。",
+    "tryAgain": "请重试。",
+    "submitFailed": "无法提交。请重试。"
+  },
   "taskThreadInteractionsUi": {
     "suggestedTasks": "建议任务",
     "questions": "问题",

@@ -5616,6 +5616,23 @@
     "attachImage": "Attach image",
     "dropPasteImage": "or drop/paste an image into the note"
   },
+  "taskThreadFeedbackUi": {
+    "you": "you",
+    "addressedUser": "the addressed user",
+    "addressedAgent": "the addressed agent",
+    "creator": "the agent that created it",
+    "onlyAddressee": "Only {{addressee}} can respond",
+    "assignedBoard": "Assigned to {{addressee}} · board only",
+    "boardOnly": "Only the board can respond",
+    "addresseeOrBoard": "Only {{addressee}} or the board can respond",
+    "exceptCreator": "Anyone except {{creator}} can respond",
+    "anyone": "Anyone can respond",
+    "audienceDenied": "You are not in this card's resolver audience.",
+    "permissionDenied": "You do not have permission to respond to this card.",
+    "settled": "This request is no longer waiting for a decision.",
+    "tryAgain": "Try again.",
+    "submitFailed": "Couldn't submit. Try again."
+  },
   "taskThreadInteractionsUi": {
     "suggestedTasks": "Suggested tasks",
     "questions": "Questions",
