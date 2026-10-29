@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import "../i18n/optional-onboarding-test-resources";
+import "../i18n/onboarding-guidance-test-resources";
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";

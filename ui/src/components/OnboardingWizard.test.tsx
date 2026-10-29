@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
 
 import "../i18n/optional-onboarding-test-resources";
+import "../i18n/agent-configuration-test-resources";
+import { onboardingGuidanceMessages } from "../i18n/onboarding-guidance-test-resources";
+import { validateLocaleMessages } from "../i18n/locale-validation";
 import "../i18n/agent-setup-test-resources";
 import { LocalizedUiError } from "../lib/localized-ui-error";
 import * as localLoginModule from "./ai-connections/useLocalAiLogin";
@@ -982,6 +985,55 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
 
       return { root, clickByText };
     }
+
+    it.each(["en", "zh-CN", "es", "ja"] as const)("keeps probe evidence and onboarding drafts while guidance changes to %s", async locale => {
+      expect(validateLocaleMessages(onboardingGuidanceMessages[locale], onboardingGuidanceMessages.en)).toEqual([]);
+      // This intentionally equals a local English message. Provider evidence is
+      // still raw, not an English-text lookup into the translation catalogue.
+      const raw = onboardingGuidanceMessages.en.testFailed;
+      mockAgentsApi.testEnvironment.mockResolvedValue({ adapterType: "claude_local", status: "fail", checks: [{ code: "raw-code", level: "error", message: raw }], testedAt: "2026-01-02T03:04:00Z" });
+      const { root, clickByText } = await openConnectStep();
+      try {
+        await clickByText(text => isArcPrimary(text));
+        expect(mockAgentsApi.testEnvironment).toHaveBeenCalledTimes(1);
+        const payload = mockAgentsApi.testEnvironment.mock.calls[0];
+        const draft = window.localStorage.getItem(ONBOARDING_STORAGE_KEY);
+        const footer = [...document.body.querySelectorAll("button")].find(button => button.textContent?.trim() === "Connect")!;
+        footer.focus();
+        await act(async () => { await i18n.changeLanguage(locale); }); await flushReact();
+        expect(document.activeElement).toBe(footer);
+        expect(document.body.textContent).toContain(i18n.t("onboardingGuidanceUi.manualDebug"));
+        expect(document.body.textContent).toContain(i18n.t("onboardingGuidanceUi.blockedTest"));
+        expect(document.body.textContent).toContain(i18n.t("onboardingGuidanceUi.authBrowser"));
+        expect(document.body.textContent).toContain(i18n.t("onboardingGuidanceUi.noBrowserLogin"));
+        expect(document.body.textContent).toContain(i18n.t("onboardingGuidanceUi.prompt"));
+        expect(document.body.textContent).toContain(raw);
+        expect(document.body.textContent).toContain("Respond with hello.");
+        expect(document.body.textContent).toContain("--print - --output-format stream-json --verbose");
+        expect(window.localStorage.getItem(ONBOARDING_STORAGE_KEY)).toBe(draft);
+        expect(mockAgentsApi.testEnvironment).toHaveBeenCalledTimes(1);
+        expect(mockAgentsApi.testEnvironment.mock.calls[0]).toEqual(payload);
+        expect(mockAgentsApi.hire).not.toHaveBeenCalled(); expect(mockIssuesApi.create).not.toHaveBeenCalled();
+        await act(async () => { await i18n.changeLanguage(locale === "ja" ? "zh-CN" : "ja"); }); await flushReact();
+        expect(document.body.textContent).toContain(i18n.t("onboardingGuidanceUi.manualDebug"));
+        expect(document.body.textContent).toContain(raw); expect(mockAgentsApi.testEnvironment).toHaveBeenCalledTimes(1);
+      } finally { await act(async () => root.unmount()); await i18n.changeLanguage("en"); }
+    });
+
+    it.each(["en", "zh-CN", "es", "ja"].flatMap(locale => [false, true].map(raw => ({ locale, raw }))))("preserves probe error provenance in $locale (raw=$raw)", async ({ locale, raw }) => {
+      const key = "agentConfigurationUi.managedSandboxUnavailable";
+      const english = i18n.t(key, { lng: "en" });
+      mockAgentsApi.testEnvironment.mockRejectedValueOnce(raw ? new Error(english) : new LocalizedUiError(key, english));
+      const { root, clickByText } = await openConnectStep();
+      try {
+        await clickByText(text => isArcPrimary(text));
+        await act(async () => { await i18n.changeLanguage(locale); }); await flushReact();
+        expect(document.body.textContent).toContain(raw ? english : i18n.t(key));
+        await act(async () => { await i18n.changeLanguage(locale === "ja" ? "zh-CN" : "ja"); }); await flushReact();
+        expect(document.body.textContent).toContain(raw ? english : i18n.t(key));
+        expect(mockAgentsApi.testEnvironment).toHaveBeenCalledTimes(1); expect(mockAgentsApi.hire).not.toHaveBeenCalled();
+      } finally { await act(async () => root.unmount()); await i18n.changeLanguage("en"); }
+    });
 
     it("blocks the hire on a warn result that holds adapter_auth_missing, and shows the returned checks", async () => {
       mockAgentsApi.testEnvironment.mockResolvedValue({

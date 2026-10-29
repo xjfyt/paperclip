@@ -1,3 +1,4 @@
+import { Trans } from "react-i18next";
 import { LocalizedUiError, type LocalizedUiMessage } from "@/lib/localized-ui-error";
 import { useTranslation } from "@/i18n";
 import { LanguageSelector } from "./LanguageSelector";
@@ -321,8 +322,8 @@ const onboardingDraftStorage = {
   },
 };
 
-const INCOMPLETE_ONBOARDING_STATE_MESSAGE =
-  "Onboarding state is incomplete. Please restart onboarding and try again.";
+type OnboardingUiMessage = LocalizedUiMessage | { key: string; values: Record<string, string> };
+const INCOMPLETE_ONBOARDING_STATE_MESSAGE = { key: "onboardingGuidanceUi.incomplete" };
 
 /**
  * Thin gate in front of {@link OnboardingWizardInner}. The inner component's
@@ -572,8 +573,8 @@ function OnboardingWizardInner({
   const lastStep = useRef(step);
   useEffect(() => { lastStep.current = step; }, [step]);
   const [loading, setLoading] = useState(false);
-  const [errorMessage, setError] = useState<LocalizedUiMessage | null>(null);
-  const error = typeof errorMessage === "string" ? errorMessage : errorMessage ? t(errorMessage.key) : null;
+  const [errorMessage, setError] = useState<OnboardingUiMessage | null>(null);
+  const error = typeof errorMessage === "string" ? errorMessage : errorMessage ? t(errorMessage.key, "values" in errorMessage ? errorMessage.values : {}) : null;
   const [modelOpen, setModelOpen] = useState(false);
   const [modelSearch, setModelSearch] = useState("");
 
@@ -645,7 +646,8 @@ function OnboardingWizardInner({
   );
   const [adapterEnvResult, setAdapterEnvResult] =
     useState<AdapterEnvironmentTestResult | null>(null);
-  const [adapterEnvError, setAdapterEnvError] = useState<string | null>(null);
+  const [adapterEnvErrorMessage, setAdapterEnvError] = useState<LocalizedUiMessage | null>(null);
+  const adapterEnvError = typeof adapterEnvErrorMessage === "string" ? adapterEnvErrorMessage : adapterEnvErrorMessage ? t(adapterEnvErrorMessage.key) : null;
   const [adapterEnvLoading, setAdapterEnvLoading] = useState(false);
   const [forceUnsetAnthropicApiKey, setForceUnsetAnthropicApiKey] =
     useState(false);
@@ -1236,7 +1238,7 @@ function OnboardingWizardInner({
   */
   const connectCollapsed =
     connectPhase !== "idle" && connectPhase !== "unwindRow" && sourceSelected;
-  const connectProgress = adapterEnvLoading ? "Testing connection…" : loading ? "Connecting…" : null;
+  const connectProgress = adapterEnvLoading ? t("onboardingGuidanceUi.testing") : loading ? t("onboardingGuidanceUi.connecting") : null;
   const hasSavedSubscription = Boolean(savedSubscription || savedKeys.storedLogin.data ||
     (credentialMode !== "api" && managedBindingForStep()));
   const connectHasCard = credentialMode === "api" || connectStepNeedsLogin || connectStepHasNoSandbox || Boolean(connectProgress);
@@ -1731,7 +1733,7 @@ function OnboardingWizardInner({
     if (companyIdNow === companyIdAtStart || companyIdNow === returnedCompanyId) {
       return true;
     }
-    setError("Organization created, but onboarding switched to another organization.");
+    setError({ key: "onboardingGuidanceUi.companyChanged" });
     return false;
   }
 
@@ -1813,7 +1815,7 @@ function OnboardingWizardInner({
       // dashboard) so they land on the conversation the agent will start in.
       navigate(prefix ? `/${prefix}/issues/${issueRef}` : `/issues/${issueRef}`);
     } catch (err) {
-      if (isCurrent()) setError(err instanceof Error ? err.message : "Failed to launch first task");
+      if (isCurrent()) setError(err instanceof Error ? err.message : { key: "onboardingGuidanceUi.launchFailed" });
     } finally {
       if (isCurrent()) setLoading(false);
     }
@@ -1856,8 +1858,8 @@ function OnboardingWizardInner({
     } catch (err) {
       setError(
         err instanceof Error
-          ? `Could not store the API key: ${err.message}`
-          : "Could not store the API key.",
+          ? { key: "onboardingGuidanceUi.storeKeyDiagnostic", values: { diagnostic: err.message } }
+          : { key: "onboardingGuidanceUi.storeKeyFailed" },
       );
       return false;
     }
@@ -1936,7 +1938,7 @@ function OnboardingWizardInner({
   ): Promise<AdapterEnvironmentTestResult | null> {
     if (!createdCompanyId) {
       setAdapterEnvError(
-        "Create or select an organization before testing adapter environment."
+        { key: "onboardingGuidanceUi.selectCompany" }
       );
       return null;
     }
@@ -1972,7 +1974,7 @@ function OnboardingWizardInner({
       } catch {
         if (!isCurrent()) return null;
         setAdapterEnvError(
-          "Could not load environment settings to determine which environment to test in. Retry the test.",
+          { key: "onboardingGuidanceUi.settingsFailed" },
         );
         return null;
       }
@@ -2010,7 +2012,8 @@ function OnboardingWizardInner({
     } catch (err) {
       if (!isCurrent()) return null;
       setAdapterEnvError(
-        err instanceof Error ? err.message : "Adapter environment test failed"
+        err instanceof LocalizedUiError ? { key: err.translationKey }
+          : err instanceof Error ? err.message : { key: "onboardingGuidanceUi.testFailed" }
       );
       return null;
     } finally {
@@ -2063,13 +2066,13 @@ function OnboardingWizardInner({
       if (wizardAttemptRef.current !== attempt) return;
       if (!cached || !isCompanyCreationAccountCurrent(queryClient, origin)
         || !canCommitCreatedCompany(companyIdAtStart, company.id)) {
-        setError(t("optionalOnboarding.createdPending"));
+        setError({ key: "optionalOnboarding.createdPending" });
         return;
       }
       finishAtDashboard(company.id, company.issuePrefix);
     } catch (err) {
       if (wizardAttemptRef.current === attempt) {
-        setError(err instanceof Error ? err.message : "Failed to create organization");
+        setError(err instanceof Error ? err.message : { key: "onboardingGuidanceUi.createCompanyFailed" });
       }
     } finally {
       creatingCompanyRef.current = false;
@@ -2089,7 +2092,7 @@ function OnboardingWizardInner({
     if (adapterType === "paperclip_runner") {
       setAdapterType("claude_local");
       setModel("");
-      setError("Paperclip Runner is not available during onboarding. Choose a legacy adapter.");
+      setError({ key: "onboardingGuidanceUi.runnerUnavailable" });
       return;
     }
     if (createdAgentId) {
@@ -2108,7 +2111,7 @@ function OnboardingWizardInner({
         const selectedModelId = model.trim();
         if (!isValidOpenCodeModelId(selectedModelId)) {
           setError(
-            "OpenCode requires an explicit model in provider/model format."
+            { key: "onboardingGuidanceUi.openCodeModelRequired" }
           );
           return;
         }
@@ -2116,13 +2119,13 @@ function OnboardingWizardInner({
           setError(
             adapterModelsError instanceof Error
               ? adapterModelsError.message
-              : "Failed to load OpenCode models."
+              : { key: "onboardingGuidanceUi.openCodeFailed" }
           );
           return;
         }
         if (adapterModelsLoading || adapterModelsFetching) {
           setError(
-            "OpenCode models are still loading. Please wait and try again."
+            { key: "onboardingGuidanceUi.openCodeLoading" }
           );
           return;
         }
@@ -2130,8 +2133,8 @@ function OnboardingWizardInner({
         if (!discoveredModels.some((entry) => entry.id === selectedModelId)) {
           setError(
             discoveredModels.length === 0
-              ? "No OpenCode models discovered. Run `opencode models` and authenticate providers."
-              : `Configured OpenCode model is unavailable: ${selectedModelId}`
+              ? { key: "onboardingGuidanceUi.openCodeEmpty" }
+              : { key: "onboardingGuidanceUi.openCodeUnavailable", values: { model: selectedModelId } }
           );
           return;
         }
@@ -2217,8 +2220,8 @@ function OnboardingWizardInner({
         if (blocksAgentCreate(result)) {
           setError(
             result.status === "fail"
-              ? "The environment test failed. Fix the reported checks before you hire this agent."
-              : "No working authentication was found. Fix the reported checks before you hire this agent.",
+              ? { key: "onboardingGuidanceUi.blockedTest" }
+              : { key: "onboardingGuidanceUi.blockedAuth" },
           );
           return;
         }
@@ -2301,7 +2304,7 @@ function OnboardingWizardInner({
       if (!isCurrent()) return;
       setError(err instanceof LocalizedUiError
         ? { key: err.translationKey }
-        : err instanceof Error ? err.message : "Failed to create agent");
+        : err instanceof Error ? err.message : { key: "onboardingGuidanceUi.createAgentFailed" });
     } finally {
       if (hiringAgentRef.current === attempt) hiringAgentRef.current = null;
       if (isCurrent()) setLoading(false);
@@ -2350,14 +2353,14 @@ function OnboardingWizardInner({
       const result = await runAdapterEnvironmentTest(configWithUnset);
       if (result?.status === "fail") {
         setError(
-          "Retried with ANTHROPIC_API_KEY unset in adapter config, but the environment test is still failing."
+          { key: "onboardingGuidanceUi.unsetStillFailing" }
         );
       }
     } catch (err) {
       setError(
         err instanceof Error
           ? err.message
-          : "Failed to unset ANTHROPIC_API_KEY and retry."
+          : { key: "onboardingGuidanceUi.unsetFailed" }
       );
     } finally {
       setUnsetAnthropicLoading(false);
@@ -2447,7 +2450,7 @@ function OnboardingWizardInner({
   const stepHandoff = beatDelay(1) > 0;
   const heroRoomTarget = step === 1 || !arrived ? heroRoomMotion.closed : arrival && lastStep.current === entryStep ? heroRoomArrival : heroRoomMotion.open;
   const capsuleTarget = step === 1 || !arrived ? capsuleRoomExit : step === 3 && stepHandoff && lastStep.current === 1 ? capsuleRoomEnter : capsuleHeroMotion.animate;
-  const visibleError = error ?? (launchStateIncomplete ? INCOMPLETE_ONBOARDING_STATE_MESSAGE : null);
+  const visibleError = error ?? (launchStateIncomplete ? t(INCOMPLETE_ONBOARDING_STATE_MESSAGE.key) : null);
 
   return (
     <Dialog
@@ -2965,7 +2968,7 @@ function OnboardingWizardInner({
                     ) : hasSavedSubscription || localLogin.status === "ready" ? null : connectStepHasNoSandbox ? (
                       canUseLocalLogin && managedProvider ? (
                         <LocalProviderLoginInstructions adapterType={adapterType} login={{ ...localLogin, retry: () => { autoConnectStartedRef.current = false; setError(null); localLogin.retry(); } }} />
-                      ) : <p className="text-xs text-muted-foreground">This environment does not support browser sign-in. Choose another sign-in environment or connect with an API key.</p>
+                      ) : <p className="text-xs text-muted-foreground">{t("onboardingGuidanceUi.noBrowserLogin")}</p>
                     ) : null}
                   </motion.div>
 
@@ -3010,7 +3013,7 @@ function OnboardingWizardInner({
                             style={{ "--sc": "var(--status-task-done)" } as CSSProperties}
                           >
                             <Check className="size-3.5 shrink-0" />
-                            <span className="font-medium">Passed</span>
+                            <span className="font-medium">{t("onboardingGuidanceUi.passed")}</span>
                           </div>
                           {/* Show the checks on a pass too, so the target and the
                               auth signals stay visible before the hire. */}
@@ -3023,10 +3026,7 @@ function OnboardingWizardInner({
                       {shouldSuggestUnsetAnthropicApiKey && (
                         <div className="rounded-md border border-amber-300/60 bg-amber-50/40 px-2.5 py-2 space-y-2">
                           <p className="text-(length:--text-micro) text-amber-900/90 leading-relaxed">
-                            Claude failed while{" "}
-                            <span className="font-mono">ANTHROPIC_API_KEY</span>{" "}
-                            is set. You can clear it in this adapter config
-                            and retry the probe.
+                            <Trans i18nKey="onboardingGuidanceUi.unsetHint" components={[<span className="font-mono" />]} />
                           </p>
                           <Button
                             size="sm"
@@ -3038,15 +3038,15 @@ function OnboardingWizardInner({
                             onClick={() => void handleUnsetAnthropicApiKey()}
                           >
                             {unsetAnthropicLoading
-                              ? "Retrying..."
-                              : "Unset ANTHROPIC_API_KEY"}
+                              ? t("onboardingGuidanceUi.retrying")
+                              : t("onboardingGuidanceUi.unset")}
                           </Button>
                         </div>
                       )}
 
                       {adapterEnvResult && adapterEnvResult.status === "fail" && (
                         <div className="rounded-md border border-border/70 bg-muted/20 px-2.5 py-2 text-(length:--text-micro) space-y-1.5">
-                          <p className="font-medium">Manual debug</p>
+                          <p className="font-medium">{t("onboardingGuidanceUi.manualDebug")}</p>
                           <p className="text-muted-foreground font-mono break-all">
                             {adapterType === "cursor"
                               ? `${effectiveAdapterCommand} -p --mode ask --output-format json \"Respond with hello.\"`
@@ -3061,42 +3061,33 @@ function OnboardingWizardInner({
                               : `${effectiveAdapterCommand} --print - --output-format stream-json --verbose`}
                           </p>
                           <p className="text-muted-foreground">
-                            Prompt:{" "}
+                            {t("onboardingGuidanceUi.prompt")}{" "}
                             <span className="font-mono">Respond with hello.</span>
                           </p>
                           {adapterType === "claude_local" || adapterType === "codex_local" ? (
                             <p className="text-muted-foreground">
-                              If authentication fails, connect your subscription in the browser above or use an API key.
+                              {t("onboardingGuidanceUi.authBrowser")}
                             </p>
                           ) : adapterType === "cursor" ||
                           adapterType === "gemini_local" ||
                           adapterType === "kimi_local" ||
                           adapterType === "opencode_local" ? (
                             <p className="text-muted-foreground">
-                              If auth fails, set{" "}
-                              <span className="font-mono">
-                                {adapterType === "cursor"
-                                  ? "CURSOR_API_KEY"
-                                  : adapterType === "gemini_local"
-                                    ? "GEMINI_API_KEY"
-                                    : adapterType === "kimi_local"
-                                      ? "KIMI_MODEL_NAME + KIMI_MODEL_API_KEY"
-                                    : "OPENAI_API_KEY"}
-                              </span>{" "}
-                              in env or run{" "}
-                              <span className="font-mono">
-                                {adapterType === "cursor"
-                                  ? "agent login"
-                                  : adapterType === "gemini_local"
-                                      ? "gemini auth"
-                                      : adapterType === "kimi_local"
-                                        ? "kimi login"
-                                      : "opencode auth login"}
-                              </span>
-                              .
+                              <Trans
+                                i18nKey="onboardingGuidanceUi.authEnv"
+                                values={{
+                                  env: adapterType === "cursor" ? "CURSOR_API_KEY"
+                                    : adapterType === "gemini_local" ? "GEMINI_API_KEY"
+                                      : adapterType === "kimi_local" ? "KIMI_MODEL_NAME + KIMI_MODEL_API_KEY" : "OPENAI_API_KEY",
+                                  command: adapterType === "cursor" ? "agent login"
+                                    : adapterType === "gemini_local" ? "gemini auth"
+                                      : adapterType === "kimi_local" ? "kimi login" : "opencode auth login",
+                                }}
+                                components={[<span className="font-mono" />, <span className="font-mono" />]}
+                              />
                             </p>
                           ) : (
-                            <p className="text-muted-foreground">If login is required, connect the provider above and retry.</p>
+                            <p className="text-muted-foreground">{t("onboardingGuidanceUi.authRetry")}</p>
                           )}
                         </div>
                       )}
