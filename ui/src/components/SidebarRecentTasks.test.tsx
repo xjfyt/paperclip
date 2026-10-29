@@ -13,6 +13,12 @@ import {
   pruneRecentTasks,
 } from "@/lib/recent-tasks";
 import { queryKeys } from "@/lib/queryKeys";
+import { i18n } from "@/i18n";
+import { recentTaskActionsMessages } from "@/i18n/recent-task-actions-test-resources";
+import { validateLocaleMessages } from "@/i18n/locale-validation";
+
+const mockToast = vi.hoisted(() => ({ pushToast: vi.fn() }));
+vi.mock("@/context/ToastContext", () => ({ useOptionalToastActions: () => mockToast }));
 
 const mockAuthApi = vi.hoisted(() => ({ getSession: vi.fn() }));
 const mockAgentsApi = vi.hoisted(() => ({ wakeup: vi.fn() }));
@@ -59,7 +65,8 @@ describe("SidebarRecentTasks", () => {
   let container: HTMLDivElement;
   let root: Root;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await i18n.changeLanguage("en");
     window.localStorage.clear();
     Object.values(mockAgentsApi).forEach((mock) => mock.mockReset());
     Object.values(mockIssuesApi).forEach((mock) => mock.mockReset());
@@ -72,11 +79,12 @@ describe("SidebarRecentTasks", () => {
     });
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     act(() => root.unmount());
     container.remove();
     vi.clearAllMocks();
     vi.useRealTimers();
+    await i18n.changeLanguage("en");
   });
 
   async function render() {
@@ -101,7 +109,7 @@ describe("SidebarRecentTasks", () => {
 
   async function openActions(taskTitle: string) {
     const actions = container.querySelector<HTMLButtonElement>(
-      `button[aria-label="More actions for ${taskTitle}"]`,
+      `button[aria-label="${i18n.t("liveUi.moreActions", { name: taskTitle })}"]`,
     );
     await act(async () => {
       actions?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
@@ -562,4 +570,106 @@ describe("SidebarRecentTasks", () => {
       "company-1",
     )).toEqual([]);
   });
+
+  describe.each(Object.entries(recentTaskActionsMessages))("localized recent task actions (%s)", (locale, messages) => {
+    function seedTask() {
+      const issue = {
+        id: "issue-1", companyId: "company-1", title: "Task 原文 API_KEY", identifier: "PAP-1",
+        status: "in_review" as const, externalConversationState: "waiting" as const,
+        hiddenAt: null, updatedAt: new Date(1),
+      };
+      recordRecentTask(issue, "user-1");
+      mockIssuesApi.get.mockResolvedValue(issue);
+      return issue;
+    }
+
+    async function clickMenu(label: string) {
+      const item = menuItem(label);
+      expect(item).toBeDefined();
+      await act(async () => item!.click());
+    }
+
+    it("validates the resource shape and translated labels", () => {
+      expect(validateLocaleMessages(messages, recentTaskActionsMessages.en)).toEqual([]);
+      if (locale !== "en") for (const key of Object.keys(messages) as (keyof typeof messages)[]) {
+        expect(messages[key], key).not.toBe(recentTaskActionsMessages.en[key]);
+      }
+    });
+
+    it("updates the open menu and rename dialog without losing draft, focus, or cancel behavior", async () => {
+      const issue = seedTask();
+      await render();
+      await openActions(issue.title);
+      await act(async () => { await i18n.changeLanguage(locale); });
+      for (const label of [messages.rename, messages.archive, messages.pauseRestart]) expect(menuItem(label)).toBeDefined();
+      expect(container.textContent).toContain(messages.idle);
+      expect(container.textContent).toContain(issue.title);
+      await clickMenu(messages.rename);
+      const input = document.body.querySelector<HTMLInputElement>('input[aria-label]')!;
+      expect(input.getAttribute("aria-label")).toBe(messages.taskName);
+      expect(document.body.textContent).toContain(messages.renameTitle);
+      expect(document.body.textContent).toContain(messages.renameDescription);
+      await act(async () => { input.focus(); setInputValue(input, "Draft 原文 <alias>"); });
+      await act(async () => { await i18n.changeLanguage("en"); await i18n.changeLanguage(locale); });
+      expect(document.body.querySelector('input[aria-label]')).toBe(input);
+      expect(input.value).toBe("Draft 原文 <alias>");
+      expect(document.activeElement).toBe(input);
+      const cancel = [...document.body.querySelectorAll("button")].find(button => button.textContent === i18n.t("common.cancel"))!;
+      await act(async () => cancel.click());
+      expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+      expect(mockIssuesApi.update).not.toHaveBeenCalled();
+      await openActions(issue.title);
+      await clickMenu(messages.rename);
+      expect(document.body.querySelector<HTMLInputElement>('input[aria-label]')!.value).toBe(issue.title);
+    });
+
+    it("keeps failed rename drafts, disables repeated pending clicks, and preserves raw diagnostics", async () => {
+      const issue = seedTask();
+      await i18n.changeLanguage(locale);
+      await render();
+      await openActions(issue.title);
+      await clickMenu(messages.rename);
+      const input = document.body.querySelector<HTMLInputElement>('input[aria-label]')!;
+      await act(async () => setInputValue(input, "  New 原文 API_KEY  "));
+      let reject!: (error: unknown) => void;
+      mockIssuesApi.update.mockImplementationOnce(() => new Promise((_resolve, rejectPromise) => { reject = rejectPromise; }));
+      const save = document.body.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+      await act(async () => save.click());
+      expect(save.disabled).toBe(true);
+      expect(input.disabled).toBe(true);
+      expect(save.textContent).toBe(i18n.t("agentConfigurationUi.saving"));
+      await act(async () => { save.click(); save.click(); });
+      expect(mockIssuesApi.update).toHaveBeenCalledTimes(1);
+      expect(mockIssuesApi.update).toHaveBeenLastCalledWith(issue.id, { title: "New 原文 API_KEY" });
+      await act(async () => reject(new Error("Provider 原文 /api/tasks 409")));
+      expect(mockToast.pushToast).toHaveBeenLastCalledWith({ title: messages.renameFailed, body: "Provider 原文 /api/tasks 409", tone: "error" });
+      expect(input.value).toBe("  New 原文 API_KEY  ");
+      expect(save.disabled).toBe(false);
+      mockIssuesApi.update.mockRejectedValueOnce(null);
+      await act(async () => save.click());
+      expect(mockToast.pushToast).toHaveBeenLastCalledWith({ title: messages.renameFailed, body: messages.renameError, tone: "error" });
+      mockIssuesApi.update.mockResolvedValueOnce({ ...issue, title: "New 原文 API_KEY" });
+      await act(async () => save.click());
+      expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+      expect(mockToast.pushToast).toHaveBeenLastCalledWith({ title: messages.renamed, tone: "success" });
+    });
+
+    it("localizes archive failures and parent-pause feedback without mutating the parent hold", async () => {
+      const issue = seedTask();
+      await i18n.changeLanguage(locale);
+      await render();
+      mockIssuesApi.archiveFromInbox.mockRejectedValueOnce(null);
+      await openActions(issue.title);
+      await clickMenu(messages.archive);
+      expect(mockToast.pushToast).toHaveBeenLastCalledWith({ title: messages.archiveFailed, body: messages.archiveError, tone: "error" });
+      mockIssuesApi.getTreeControlState.mockResolvedValueOnce({ activePauseHold: { isRoot: false, holdId: "parent-hold" } });
+      await openActions(issue.title);
+      await clickMenu(messages.pauseRestart);
+      expect(mockToast.pushToast).toHaveBeenLastCalledWith({ title: messages.pauseFailed, body: messages.parentPause, tone: "error" });
+      expect(mockIssuesApi.releaseTreeHold).not.toHaveBeenCalled();
+      expect(mockIssuesApi.createTreeHold).not.toHaveBeenCalled();
+      expect(mockAgentsApi.wakeup).not.toHaveBeenCalled();
+    });
+  });
+
 });

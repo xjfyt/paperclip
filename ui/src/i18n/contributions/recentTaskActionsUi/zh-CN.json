@@ -1,0 +1,21 @@
+{
+  "rename": "重命名",
+  "archive": "归档",
+  "pauseRestart": "暂停/重新启动",
+  "renameTitle": "重命名任务",
+  "renameDescription": "为此任务选择一个简短、清晰的名称。",
+  "taskName": "任务名称",
+  "renamed": "任务已重命名",
+  "renameFailed": "任务重命名失败",
+  "renameError": "无法重命名此任务。",
+  "archived": "任务已从收件箱归档",
+  "archiveFailed": "任务归档失败",
+  "archiveError": "无法从收件箱归档此任务。",
+  "wakeSkipped": "已跳过唤醒负责人。",
+  "restarted": "任务已重新启动",
+  "parentPause": "此任务由父任务暂停。请从暂停的根任务重新启动。",
+  "paused": "任务已暂停",
+  "pauseFailed": "任务暂停状态更新失败",
+  "pauseError": "无法暂停或重新启动此任务。",
+  "idle": "空闲"
+}

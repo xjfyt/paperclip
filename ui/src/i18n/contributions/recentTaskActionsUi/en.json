@@ -1,0 +1,21 @@
+{
+  "rename": "Rename",
+  "archive": "Archive",
+  "pauseRestart": "Pause/Restart",
+  "renameTitle": "Rename task",
+  "renameDescription": "Choose a short, clear name for this task.",
+  "taskName": "Task name",
+  "renamed": "Task renamed",
+  "renameFailed": "Task rename failed",
+  "renameError": "Unable to rename this task.",
+  "archived": "Task archived from inbox",
+  "archiveFailed": "Task archive failed",
+  "archiveError": "Unable to archive this task from the inbox.",
+  "wakeSkipped": "The assignee wake was skipped.",
+  "restarted": "Task restarted",
+  "parentPause": "This task is paused by a parent task. Restart it from the pause root.",
+  "paused": "Task paused",
+  "pauseFailed": "Task pause update failed",
+  "pauseError": "Unable to pause or restart this task.",
+  "idle": "Idle"
+}

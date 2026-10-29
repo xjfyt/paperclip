@@ -130,5 +130,17 @@
   "changePrimaryFailed": "プライマリエージェントを変更できませんでした。",
   "createSecretOrganization": "シークレットを作成する組織を選択してください",
   "uploadImageOrganization": "画像をアップロードする組織を選択してください",
-  "detectModelOrganization": "モデルを検出する組織を選択してください"
+  "detectModelOrganization": "モデルを検出する組織を選択してください",
+  "secretAccessEnv": "環境変数",
+  "secretAccessApi": "API アクセス",
+  "secretAccessEmpty": "このエージェントにはまだシークレットが紐付けられていません。",
+  "secretAccessProposed": "アクセス権の提案",
+  "secretAccessProposedBy": "{{name}} による提案",
+  "secretAccessApiOnly": "API アクセス（環境変数なし）",
+  "secretAccessAlias": "アクセス別名",
+  "secretAccessRemove": "API アクセスを削除",
+  "secretAccessInvalidAlias": "無効な別名 — 英字、数字、_ を使用してください",
+  "secretAccessDuplicateAlias": "別名が重複しています",
+  "secretAccessAdd": "API アクセスを追加",
+  "secretAccessDescription": "実行に紐付いたエージェント API 経由で必要に応じて取得し、環境変数には書き込みません。エージェントは <0>{{path}}</0> を通じて別名で読み取ります。"
 }

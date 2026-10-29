@@ -130,5 +130,17 @@
   "changePrimaryFailed": "无法更改你的主 Agent。",
   "createSecretOrganization": "请选择组织后再创建密钥",
   "uploadImageOrganization": "请选择组织后再上传图片",
-  "detectModelOrganization": "请选择组织后再检测模型"
+  "detectModelOrganization": "请选择组织后再检测模型",
+  "secretAccessEnv": "环境变量",
+  "secretAccessApi": "API 访问",
+  "secretAccessEmpty": "此智能体尚未绑定任何密钥。",
+  "secretAccessProposed": "访问授权提案",
+  "secretAccessProposedBy": "由 {{name}} 提议",
+  "secretAccessApiOnly": "API 访问（无环境变量）",
+  "secretAccessAlias": "访问别名",
+  "secretAccessRemove": "移除 API 访问",
+  "secretAccessInvalidAlias": "别名无效 — 请使用字母、数字和 _",
+  "secretAccessDuplicateAlias": "别名重复",
+  "secretAccessAdd": "添加 API 访问",
+  "secretAccessDescription": "通过与运行绑定的智能体 API 按需获取，绝不写入环境变量。智能体通过 <0>{{path}}</0> 按别名读取密钥。"
 }

@@ -147,11 +147,11 @@ function RecentTasksList({
       if (storageKey) updateRecentTaskSnapshots(storageKey, companyId, [updated]);
       await refreshIssueQueries(renameEntry.id);
       setRenameEntry(null);
-      toastActions?.pushToast({ title: "Task renamed", tone: "success" });
+      toastActions?.pushToast({ title: t("recentTaskActionsUi.renamed"), tone: "success" });
     } catch (error) {
       toastActions?.pushToast({
-        title: "Task rename failed",
-        body: errorMessage(error, "Unable to rename this task."),
+        title: t("recentTaskActionsUi.renameFailed"),
+        body: errorMessage(error, t("recentTaskActionsUi.renameError")),
         tone: "error",
       });
     } finally {
@@ -167,11 +167,11 @@ function RecentTasksList({
       await queryClient.invalidateQueries({
         queryKey: queryKeys.sidebarBadges(companyId),
       });
-      toastActions?.pushToast({ title: "Task archived from inbox", tone: "success" });
+      toastActions?.pushToast({ title: t("recentTaskActionsUi.archived"), tone: "success" });
     } catch (error) {
       toastActions?.pushToast({
-        title: "Task archive failed",
-        body: errorMessage(error, "Unable to archive this task from the inbox."),
+        title: t("recentTaskActionsUi.archiveFailed"),
+        body: errorMessage(error, t("recentTaskActionsUi.archiveError")),
         tone: "error",
       });
     } finally {
@@ -201,13 +201,13 @@ function RecentTasksList({
             restartIssue.companyId,
           );
           if (!("id" in wakeResult)) {
-            throw new Error(wakeResult.message ?? "The assignee wake was skipped.");
+            throw new Error(wakeResult.message ?? t("recentTaskActionsUi.wakeSkipped"));
           }
         }
         setRestartWakeRetryPending(restartRetryStorageKey, entry.id, false);
-        toastActions?.pushToast({ title: "Task restarted", tone: "success" });
+        toastActions?.pushToast({ title: t("recentTaskActionsUi.restarted"), tone: "success" });
       } else if (state.activePauseHold) {
-        throw new Error("This task is paused by a parent task. Restart it from the pause root.");
+        throw new Error(t("recentTaskActionsUi.parentPause"));
       } else if (readRestartWakeRetryIssueIds(restartRetryStorageKey).has(entry.id)) {
         const restartIssue = await issuesApi.get(entry.id);
         if (restartIssue.assigneeAgentId) {
@@ -222,26 +222,26 @@ function RecentTasksList({
             restartIssue.companyId,
           );
           if (!("id" in wakeResult)) {
-            throw new Error(wakeResult.message ?? "The assignee wake was skipped.");
+            throw new Error(wakeResult.message ?? t("recentTaskActionsUi.wakeSkipped"));
           }
         }
         setRestartWakeRetryPending(restartRetryStorageKey, entry.id, false);
-        toastActions?.pushToast({ title: "Task restarted", tone: "success" });
+        toastActions?.pushToast({ title: t("recentTaskActionsUi.restarted"), tone: "success" });
       } else {
         await issuesApi.createTreeHold(entry.id, {
           mode: "pause",
           reason: "Paused from Recent Tasks.",
           releasePolicy: { strategy: "manual" },
         });
-        toastActions?.pushToast({ title: "Task paused", tone: "success" });
+        toastActions?.pushToast({ title: t("recentTaskActionsUi.paused"), tone: "success" });
       }
       await queryClient.invalidateQueries({
         queryKey: ["issues", "tree-control-state", entry.id],
       });
     } catch (error) {
       toastActions?.pushToast({
-        title: "Task pause update failed",
-        body: errorMessage(error, "Unable to pause or restart this task."),
+        title: t("recentTaskActionsUi.pauseFailed"),
+        body: errorMessage(error, t("recentTaskActionsUi.pauseError")),
         tone: "error",
       });
     } finally {
@@ -258,8 +258,8 @@ function RecentTasksList({
               to={`/issues/${entry.id}`}
               label={entry.title}
               trailing={entry.status === "in_review" && entry.externalConversationState === "waiting"
-                ? <span className="text-xs text-muted-foreground">Idle</span> : undefined}
-              trailingLabel={entry.status === "in_review" && entry.externalConversationState === "waiting" ? "Idle" : undefined}
+                ? <span className="text-xs text-muted-foreground">{t("recentTaskActionsUi.idle")}</span> : undefined}
+              trailingLabel={entry.status === "in_review" && entry.externalConversationState === "waiting" ? t("recentTaskActionsUi.idle") : undefined}
               className={rail ? undefined : "sidebar-action-link pointer-coarse:pr-8"}
               liveCount={liveIssueIds.has(entry.id) ? 1 : undefined}
             />
@@ -286,7 +286,7 @@ function RecentTasksList({
                     onSelect={() => beginRename(entry)}
                   >
                     <Pencil aria-hidden="true" />
-                    Rename
+                    {t("recentTaskActionsUi.rename")}
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     className={RECENT_TASK_MENU_ITEM_CLASS}
@@ -294,7 +294,7 @@ function RecentTasksList({
                     onSelect={() => void archiveTask(entry)}
                   >
                     <Archive aria-hidden="true" />
-                    Archive
+                    {t("recentTaskActionsUi.archive")}
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     className={RECENT_TASK_MENU_ITEM_CLASS}
@@ -302,7 +302,7 @@ function RecentTasksList({
                     onSelect={() => void toggleTaskPause(entry)}
                   >
                     <RefreshCw aria-hidden="true" />
-                    Pause/Restart
+                    {t("recentTaskActionsUi.pauseRestart")}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -320,12 +320,12 @@ function RecentTasksList({
         <DialogContent className="sm:max-w-md">
           <form className="grid gap-4" onSubmit={(event) => void submitRename(event)}>
             <DialogHeader>
-              <DialogTitle>Rename task</DialogTitle>
-              <DialogDescription>Choose a short, clear name for this task.</DialogDescription>
+              <DialogTitle>{t("recentTaskActionsUi.renameTitle")}</DialogTitle>
+              <DialogDescription>{t("recentTaskActionsUi.renameDescription")}</DialogDescription>
             </DialogHeader>
             <Input
               autoFocus
-              aria-label="Task name"
+              aria-label={t("recentTaskActionsUi.taskName")}
               value={renameValue}
               disabled={pendingAction === "rename"}
               onChange={(event) => setRenameValue(event.target.value)}
@@ -337,13 +337,13 @@ function RecentTasksList({
                 disabled={pendingAction === "rename"}
                 onClick={() => setRenameEntry(null)}
               >
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button
                 type="submit"
                 disabled={pendingAction === "rename" || !renameValue.trim()}
               >
-                {pendingAction === "rename" ? "Saving..." : "Save"}
+                {pendingAction === "rename" ? t("agentConfigurationUi.saving") : t("common.save")}
               </Button>
             </DialogFooter>
           </form>

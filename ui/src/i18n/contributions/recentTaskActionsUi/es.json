@@ -1,0 +1,21 @@
+{
+  "rename": "Cambiar nombre",
+  "archive": "Archivar",
+  "pauseRestart": "Pausar/Reiniciar",
+  "renameTitle": "Cambiar nombre de la tarea",
+  "renameDescription": "Elige un nombre breve y claro para esta tarea.",
+  "taskName": "Nombre de la tarea",
+  "renamed": "Nombre de la tarea actualizado",
+  "renameFailed": "No se pudo cambiar el nombre de la tarea",
+  "renameError": "No se puede cambiar el nombre de esta tarea.",
+  "archived": "Tarea archivada de la bandeja de entrada",
+  "archiveFailed": "No se pudo archivar la tarea",
+  "archiveError": "No se puede archivar esta tarea de la bandeja de entrada.",
+  "wakeSkipped": "Se omitió la activación del agente asignado.",
+  "restarted": "Tarea reiniciada",
+  "parentPause": "Esta tarea está pausada por una tarea superior. Reiníciala desde la tarea raíz de la pausa.",
+  "paused": "Tarea pausada",
+  "pauseFailed": "No se pudo actualizar la pausa de la tarea",
+  "pauseError": "No se puede pausar o reiniciar esta tarea.",
+  "idle": "Inactiva"
+}

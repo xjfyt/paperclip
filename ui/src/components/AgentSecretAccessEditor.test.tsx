@@ -1,5 +1,8 @@
 // @vitest-environment jsdom
 
+import { act, useState } from "react";
+import { i18n } from "@/i18n";
+import { agentConfigurationMessages } from "@/i18n/agent-configuration-test-resources";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -105,20 +108,22 @@ describe("AgentSecretAccessEditor component", () => {
   let container: HTMLDivElement;
   let root: Root | null = null;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await i18n.changeLanguage("en");
     container = document.createElement("div");
     document.body.appendChild(container);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     flushSync(() => root?.unmount());
     root = null;
     container.remove();
     vi.clearAllMocks();
+    await i18n.changeLanguage("en");
   });
 
   function render(node: React.ReactNode) {
-    root = createRoot(container);
+    root ??= createRoot(container);
     flushSync(() => root!.render(node));
   }
 
@@ -203,7 +208,8 @@ describe("AgentSecretAccessEditor component", () => {
     }
   });
 
-  it("renders pending binding proposals as Proposed rows with approve/reject", () => {
+  it.each(Object.entries(agentConfigurationMessages))("renders binding proposals with original data and actions (%s)", async (locale, messages) => {
+    await i18n.changeLanguage(locale);
     const approved: string[] = [];
     const rejected: string[] = [];
     const proposal = {
@@ -248,7 +254,9 @@ describe("AgentSecretAccessEditor component", () => {
       />,
     );
 
-    expect(container.textContent).toContain("Proposed access");
+    expect(container.textContent).toContain(messages.secretAccessProposed);
+    expect(container.textContent).toContain(messages.secretAccessProposedBy.replace("{{name}}", "ClaudeCoder"));
+    expect(container.textContent).toContain(proposal.justification);
     expect(container.textContent).toContain("STRIPE"); // alias + bound secret name
     expect(container.textContent).toContain("ClaudeCoder"); // proposer
 
@@ -264,4 +272,101 @@ describe("AgentSecretAccessEditor component", () => {
     flushSync(() => rejectButton.click());
     expect(rejected).toEqual(["prop-1"]);
   });
+
+  describe.each(Object.entries(agentConfigurationMessages))("localized secret access (%s)", (locale, messages) => {
+    function button(label: string) {
+      return [...container.querySelectorAll("button")].find(item => item.textContent?.trim() === label)!;
+    }
+    function setValue(input: HTMLInputElement, value: string) {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+      flushSync(() => input.dispatchEvent(new Event("input", { bubbles: true })));
+    }
+
+    it("localizes the empty state, add/remove controls and API help without changing paths", async () => {
+      const onChange = vi.fn();
+      render(<AgentSecretAccessEditor config={{}} secrets={secrets} onChange={onChange} />);
+      await act(async () => { await i18n.changeLanguage(locale); });
+      expect(container.textContent).toContain(messages.secretAccessEmpty);
+      expect(container.textContent).toContain(messages.secretAccessApiOnly);
+      expect(container.querySelector("code")?.textContent).toBe("GET /agents/me/secrets");
+      expect(container.textContent).toContain(messages.secretAccessDescription.replace(/<\/?0>/g, "").replace("{{path}}", "GET /agents/me/secrets"));
+      flushSync(() => { button(messages.secretAccessAdd).click(); button(messages.secretAccessAdd).click(); });
+      const aliases = container.querySelectorAll<HTMLInputElement>(`input[aria-label="${messages.secretAccessAlias}"]`);
+      expect(aliases).toHaveLength(2);
+      expect(onChange).not.toHaveBeenCalled();
+      setValue(aliases[0]!, "API_Original");
+      flushSync(() => container.querySelector<HTMLButtonElement>('[data-testid="pick-secret"]')!.click());
+      expect(onChange).toHaveBeenLastCalledWith({ API_Original: { type: "secret_ref", secretId: "s1", version: "latest" } });
+      const select = container.querySelector("select")!;
+      expect(select.getAttribute("aria-label")).toBe(i18n.t("environmentEditorUi.version"));
+      expect(select.value).toBe("latest");
+      expect(select.options[0]!.text).toBe(i18n.t("environmentEditorUi.latest"));
+      flushSync(() => container.querySelector<HTMLButtonElement>(`button[aria-label="${messages.secretAccessRemove}"]`)!.click());
+      expect(onChange).toHaveBeenLastCalledWith({});
+      expect(container.querySelectorAll('input[placeholder="ALIAS"]')).toHaveLength(1);
+    });
+
+    it("keeps incomplete drafts, localized validation and raw names through language changes and controlled cancel", async () => {
+      const onChange = vi.fn();
+      const original = { "access.Original_ALIAS": { type: "secret_ref", secretId: "s1", version: 1 } };
+      function ControlledEditor() {
+        const [config, setConfig] = useState<Record<string, unknown>>(original);
+        return <>
+          <AgentSecretAccessEditor config={config} secrets={[makeSecret("s1", "Secret 原文 <API_KEY>")]} onChange={next => {
+            onChange(next);
+            setConfig(Object.fromEntries(Object.entries(next).map(([alias, binding]) => [`access.${alias}`, binding])));
+          }} />
+          <button onClick={() => setConfig(original)}>cancel-draft</button>
+        </>;
+      }
+      render(<ControlledEditor />);
+      const input = container.querySelector<HTMLInputElement>('input[placeholder="ALIAS"]')!;
+      input.focus();
+      setValue(input, "1 invalid");
+      await act(async () => { await i18n.changeLanguage(locale); });
+      expect(container.querySelector('input[placeholder="ALIAS"]')).toBe(input);
+      expect(document.activeElement).toBe(input);
+      expect(input.value).toBe("1 invalid");
+      expect(container.textContent).toContain(messages.secretAccessInvalidAlias);
+      expect(onChange).toHaveBeenLastCalledWith({});
+      setValue(input, "DUPLICATE");
+      flushSync(() => button(messages.secretAccessAdd).click());
+      const second = container.querySelectorAll<HTMLInputElement>('input[placeholder="ALIAS"]')[1]!;
+      setValue(second, "DUPLICATE");
+      expect(container.textContent).toContain(messages.secretAccessDuplicateAlias);
+      flushSync(() => button("cancel-draft").click());
+      await act(async () => {});
+      expect(container.querySelectorAll('input[placeholder="ALIAS"]')).toHaveLength(1);
+      expect(container.querySelector<HTMLInputElement>('input[placeholder="ALIAS"]')!.value).toBe("Original_ALIAS");
+      expect(container.textContent).toContain("Secret 原文 <API_KEY>");
+      expect(container.textContent).toContain("access.Original_ALIAS");
+      expect(container.textContent).toContain(messages.secretAccessApi);
+      expect(container.querySelector("API_KEY")).toBeNull();
+    });
+
+    it("preserves existing binding values and keeps disabled controls inert", async () => {
+      const onChange = vi.fn();
+      render(<AgentSecretAccessEditor config={{
+        env: { ENV_Original: { type: "secret_ref", secretId: "s1" } },
+        "access.Alias_Original": { type: "secret_ref", secretId: "s1", version: 1 },
+      }} secrets={secrets} onChange={onChange} disabled />);
+      await act(async () => { await i18n.changeLanguage(locale); });
+      expect(container.textContent).toContain(messages.secretAccessEnv);
+      expect(container.textContent).toContain(messages.secretAccessApi);
+      expect(container.textContent).toContain("STRIPE_KEY");
+      expect(container.textContent).toContain("env.ENV_Original");
+      expect(container.textContent).toContain("access.Alias_Original");
+      const input = container.querySelector("input")!;
+      expect(input.value).toBe("Alias_Original");
+      expect(input.disabled).toBe(true);
+      expect(container.querySelector("select")!.value).toBe("1");
+      const add = button(messages.secretAccessAdd);
+      const remove = container.querySelector<HTMLButtonElement>(`button[aria-label="${messages.secretAccessRemove}"]`)!;
+      expect(add.disabled).toBe(true); expect(remove.disabled).toBe(true);
+      flushSync(() => { add.click(); remove.click(); });
+      expect(container.querySelectorAll("input")).toHaveLength(1);
+      expect(onChange).not.toHaveBeenCalled();
+    });
+  });
+
 });

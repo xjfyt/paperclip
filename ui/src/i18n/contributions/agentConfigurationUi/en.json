@@ -130,5 +130,17 @@
   "changePrimaryFailed": "Couldn't change your primary agent.",
   "createSecretOrganization": "Select an organization to create secrets",
   "uploadImageOrganization": "Select an organization to upload images",
-  "detectModelOrganization": "Select an organization to detect the model"
+  "detectModelOrganization": "Select an organization to detect the model",
+  "secretAccessEnv": "Env var",
+  "secretAccessApi": "API access",
+  "secretAccessEmpty": "No secrets are bound to this agent yet.",
+  "secretAccessProposed": "Proposed access",
+  "secretAccessProposedBy": "proposed by {{name}}",
+  "secretAccessApiOnly": "API access (no env var)",
+  "secretAccessAlias": "Access alias",
+  "secretAccessRemove": "Remove API access",
+  "secretAccessInvalidAlias": "Invalid alias — use letters, digits and _",
+  "secretAccessDuplicateAlias": "Duplicate alias",
+  "secretAccessAdd": "Add API access",
+  "secretAccessDescription": "Fetched on demand via the run-bound agent API. Never written to the environment. The agent reads them by alias through <0>{{path}}</0>."
 }

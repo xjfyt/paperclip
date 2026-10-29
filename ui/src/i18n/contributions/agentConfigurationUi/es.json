@@ -130,5 +130,17 @@
   "changePrimaryFailed": "No se pudo cambiar tu agente principal.",
   "createSecretOrganization": "Selecciona una organización para crear secretos",
   "uploadImageOrganization": "Selecciona una organización para subir imágenes",
-  "detectModelOrganization": "Selecciona una organización para detectar el modelo"
+  "detectModelOrganization": "Selecciona una organización para detectar el modelo",
+  "secretAccessEnv": "Variable de entorno",
+  "secretAccessApi": "Acceso por API",
+  "secretAccessEmpty": "Este agente aún no tiene secretos vinculados.",
+  "secretAccessProposed": "Acceso propuesto",
+  "secretAccessProposedBy": "propuesto por {{name}}",
+  "secretAccessApiOnly": "Acceso por API (sin variable de entorno)",
+  "secretAccessAlias": "Alias de acceso",
+  "secretAccessRemove": "Eliminar acceso por API",
+  "secretAccessInvalidAlias": "Alias no válido: usa letras, dígitos y _",
+  "secretAccessDuplicateAlias": "Alias duplicado",
+  "secretAccessAdd": "Añadir acceso por API",
+  "secretAccessDescription": "Se obtienen bajo demanda mediante la API del agente vinculada a la ejecución. Nunca se escriben en el entorno. El agente los lee por alias mediante <0>{{path}}</0>."
 }
