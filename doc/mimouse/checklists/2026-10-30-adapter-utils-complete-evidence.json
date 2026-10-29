@@ -1,0 +1,54 @@
+{
+  "schema": "mimouse.local-verification.v1",
+  "recordedAt": "2026-10-30T03:17:41.1494599+08:00",
+  "scope": "Complete adapter-utils project on native Windows; source frozen for this run",
+  "command": "pnpm exec vitest run --project '@paperclipai/adapter-utils' --maxWorkers=1 --reporter=json --outputFile=test-results/project-closure-20261029/adapter-complete-final6.json",
+  "result": {
+    "skipped": 51,
+    "files": 78,
+    "failed": 0,
+    "passed": 1711
+  },
+  "notes": [
+    "Skips retain platform/provider conditions and are not live provider proof.",
+    "Regression evidence for the callback delivery race is recorded separately; final6 contains the latest callback implementation and all 78 tests.",
+    "Windows tar uses an owned working directory to avoid bsdtar -C long-path failure; archive layout and source names are unchanged.",
+    "Engine race fixtures await registered callbacks/stream closure, with explicit Windows budgets for real ACL subprocesses."
+  ],
+  "inputs": [
+    {
+      "path": "packages/adapter-utils/src/sandbox-managed-runtime.ts",
+      "sha256": "d68d2cad90916d34efa29e4f07a63e4e9666da46b7e8eb9673df3dffb6842d4c"
+    },
+    {
+      "path": "packages/adapter-utils/src/tar-long-path.test.ts",
+      "sha256": "4def65bac1b6848440be73d046b662bfdfc14ad09e0744ea1aba991d17618388"
+    },
+    {
+      "path": "packages/adapter-utils/src/acpx-engine/execute.test.ts",
+      "sha256": "037c789ce3586ff7bec2c518f39f3c27aa07da6572ded96a9b5ccecad5695178"
+    },
+    {
+      "path": "packages/adapter-utils/src/execution-target-stdin-race.test.ts",
+      "sha256": "9aede7d96095a71a8ed9cf5236f961bbc71d3f5e5ebed461e914ab453692fa72"
+    },
+    {
+      "path": "packages/adapter-utils/src/sandbox-callback-bridge.ts",
+      "sha256": "38cdf46ca68977374ee8467d77232f59e33cd7263c96c9dff05d5bb7e3d2125a"
+    },
+    {
+      "path": "packages/adapter-utils/src/sandbox-callback-bridge.test.ts",
+      "sha256": "255cab30c84193f7e3614aace63115f9da26d7f941496c732e5dbccba9aa4287"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "test-results/project-closure-20261029/adapter-complete-final6.json",
+      "sha256": "8e22ca4891be3629b2abcd5abc308ee0aeba00936734f6b1141584087eeed079"
+    },
+    {
+      "path": "test-results/project-closure-20261029/adapter-complete-final6.log",
+      "sha256": "71b40b5fa0c0362c01b55553f0553ab601aab1106daaaa4b0f641d312174ca62"
+    }
+  ]
+}

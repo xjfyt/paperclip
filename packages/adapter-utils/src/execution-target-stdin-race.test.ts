@@ -1500,7 +1500,11 @@ fs.promises.lstat = async (candidate, ...args) => {
     // finish this fast with no warning. T14 (below) proves the forged event
     // alone gives no such shortcut when no genuine acknowledgement ever
     // follows it.
-    expect(elapsedMs).toBeLessThan(1_000);
+    // Windows includes two real file-backed Git Bash control writes. Stay
+    // below the 3 s no-ack budget (proved by T14), without imposing POSIX
+    // process creation latency on that fixture. The zero-warning check still
+    // requires a genuine shutdown acknowledgement.
+    expect(elapsedMs).toBeLessThan(process.platform === "win32" ? 2_500 : 1_000);
     expect(warnedCount).toBe(0);
   }, 10_000);
 

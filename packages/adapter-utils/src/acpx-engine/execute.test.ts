@@ -4472,7 +4472,7 @@ describe("ACPX engine remote session-lifecycle re-staging (PR 3: stage once / re
     expect(ensureInputs[1]?.resumeSessionId).toBe(first.sessionId);
   });
 
-  it("test_acp_resume_incompatible_fingerprint_stages_fresh", async () => {
+  it("test_acp_resume_incompatible_fingerprint_stages_fresh", { timeout: process.platform === "win32" ? 40_000 : 5_000 }, async () => {
     const { stateDir, localCwd, remoteCwd, executionTarget } = await setupRemoteSandbox();
     const ensureInputs: Array<Record<string, unknown>> = [];
     const execute = createAcpxEngineExecutor({
@@ -4504,7 +4504,7 @@ describe("ACPX engine remote session-lifecycle re-staging (PR 3: stage once / re
     expect(ensureInputs[1]?.resumeSessionId).toBeUndefined();
   });
 
-  it("test_warm_handle_scoped_per_fingerprint_no_cross_session_credential_reuse", async () => {
+  it("test_warm_handle_scoped_per_fingerprint_no_cross_session_credential_reuse", { timeout: process.platform === "win32" ? 40_000 : 5_000 }, async () => {
     const { root, stateDir, localCwd, executionTarget } = await setupRemoteSandbox();
     const ensureInputs: Array<Record<string, unknown>> = [];
     // Two managed homes, one per session, each carrying a distinct credential
@@ -4556,7 +4556,7 @@ describe("ACPX engine remote session-lifecycle re-staging (PR 3: stage once / re
     await expect(fs.readFile(path.join(bHome, "auth.json"), "utf8")).resolves.toContain("SECRET-B");
   });
 
-  it("test_acp_failed_turn_evicts_staged_runtime_so_resume_restages", async () => {
+  it("test_acp_failed_turn_evicts_staged_runtime_so_resume_restages", { timeout: process.platform === "win32" ? 40_000 : 5_000 }, async () => {
     const { stateDir, localCwd, executionTarget } = await setupRemoteSandbox();
     const ensureInputs: Array<Record<string, unknown>> = [];
     const execute = createAcpxEngineExecutor({
@@ -4594,7 +4594,7 @@ describe("ACPX engine remote session-lifecycle re-staging (PR 3: stage once / re
   // that shares company/agent/task/fingerprint (hence sessionKey) with a prior
   // run but carries NO sessionParams starts a new ACP session — it must NOT
   // inherit the prior session's staged workspace + managed home.
-  it("test_acp_reuse_requires_compatible_resume_not_just_session_key", async () => {
+  it("test_acp_reuse_requires_compatible_resume_not_just_session_key", { timeout: process.platform === "win32" ? 40_000 : 5_000 }, async () => {
     const { stateDir, localCwd, remoteCwd, executionTarget } = await setupRemoteSandbox();
     const ensureInputs: Array<Record<string, unknown>> = [];
     let seamCalls = 0;
@@ -4708,7 +4708,7 @@ describe("ACPX engine remote session-lifecycle re-staging (PR 3: stage once / re
     expect(disposeCalls).toBe(1);
   });
 
-  it("test_idle_staged_runtime_cleanup_waits_for_active_turn_release", async () => {
+  it("test_idle_staged_runtime_cleanup_waits_for_active_turn_release", { timeout: process.platform === "win32" ? 40_000 : 5_000 }, async () => {
     const { stateDir, localCwd, executionTarget } = await setupRemoteSandbox();
     const events: string[] = [];
     let currentNow = 0;
@@ -5237,7 +5237,7 @@ describe("ACPX engine sandbox-start spans (opt-in root + child parenting)", () =
     expect(String(runSpan.attributes["paperclip.task.run.run_id"])).not.toContain("run-");
   });
 
-  it("test_sandbox_startup_parents_to_task_run", async () => {
+  it("test_sandbox_startup_parents_to_task_run", { timeout: process.platform === "win32" ? 40_000 : 5_000 }, async () => {
     const root = await makeTempRoot();
     const stateDir = path.join(root, "state");
     const localCwd = path.join(root, "worktree");
@@ -7188,6 +7188,8 @@ describe("ACPX engine sandbox bridge run-disposition seam (fail-closed)", () => 
     let lossReason: string | null = null;
     let completionOrdered = false;
     let lossListener: ((reason: string) => void) | null = null;
+    let resolveLossRegistration!: () => void;
+    const lossRegistered = new Promise<void>((resolve) => { resolveLossRegistration = resolve; });
     const readDisposition = () => ({ failed: lossOrdered, lossReason });
     const markOrderlyCompletion = vi.fn(() => {
       if (completionOrdered || lossOrdered) return;
@@ -7199,6 +7201,7 @@ describe("ACPX engine sandbox bridge run-disposition seam (fail-closed)", () => 
     });
     const onLoss = vi.fn((listener: (reason: string) => void) => {
       lossListener = listener;
+      resolveLossRegistration();
       return () => {
         if (lossListener === listener) lossListener = null;
       };
@@ -7221,6 +7224,7 @@ describe("ACPX engine sandbox bridge run-disposition seam (fail-closed)", () => 
       markOrderlyCompletion,
       settleRunDisposition,
       onLoss,
+      lossRegistered,
       readDisposition,
       // Record the first ordered loss. A loss ordered after a completion, or a
       // second loss, is a no-op — the same rule the real transport applies.
@@ -7605,7 +7609,7 @@ describe("ACPX engine sandbox bridge run-disposition seam (fail-closed)", () => 
     expect(result.errorCode).not.toBe("acpx_handshake_timeout");
   }, 10000);
 
-  it("aborts an in-flight turn and fails the run when the duplex channel latches a loss mid-turn", async () => {
+  it("aborts an in-flight turn and fails the run when the duplex channel latches a loss mid-turn", { timeout: process.platform === "win32" ? 20_000 : 5_000 }, async () => {
     const sandbox = await setupRemoteSandbox();
     const fake = createFakeBridgeHandle();
     const cancelReasons: (string | undefined)[] = [];
@@ -7618,7 +7622,7 @@ describe("ACPX engine sandbox bridge run-disposition seam (fail-closed)", () => 
     // Wait until the turn registers its loss listener, then latch the loss —
     // the same order a real mid-turn channel death follows: the turn starts,
     // then later the channel is lost.
-    await vi.waitFor(() => expect(fake.onLoss).toHaveBeenCalled());
+    await fake.lossRegistered;
     fake.emitLoss("provider_exit");
 
     const result = await resultPromise;
@@ -7633,9 +7637,9 @@ describe("ACPX engine sandbox bridge run-disposition seam (fail-closed)", () => 
     // raw provider text.
     expect(result.errorMessage).toContain("provider_exit");
     expect(result.resultJson).toMatchObject({ status: "failed" });
-  }, 5000);
+  });
 
-  it("bounds the wait with a deadline when a latched loss cancel gets no agent cooperation", async () => {
+  it("bounds the wait with a deadline when a latched loss cancel gets no agent cooperation", { timeout: process.platform === "win32" ? 20_000 : 5_000 }, async () => {
     const sandbox = await setupRemoteSandbox();
     const fake = createFakeBridgeHandle();
     const cancelReasons: (string | undefined)[] = [];
@@ -7653,7 +7657,7 @@ describe("ACPX engine sandbox bridge run-disposition seam (fail-closed)", () => 
       // short enough to run fast without waiting 60 real seconds.
       duplexLossCancelDeadlineMs: 25,
     });
-    await vi.waitFor(() => expect(fake.onLoss).toHaveBeenCalled());
+    await fake.lossRegistered;
     fake.emitLoss("provider_exit");
 
     const result = await resultPromise;
@@ -7671,9 +7675,9 @@ describe("ACPX engine sandbox bridge run-disposition seam (fail-closed)", () => 
     // raw provider text.
     expect(result.errorMessage).toContain("provider_exit");
     expect(result.resultJson).toMatchObject({ status: "failed" });
-  }, 5000);
+  });
 
-  it("awaits stream closure and the event drain before finalizing a duplex loss deadline", async () => {
+  it("awaits stream closure and the event drain before finalizing a duplex loss deadline", { timeout: process.platform === "win32" ? 20_000 : 5_000 }, async () => {
     const sandbox = await setupRemoteSandbox();
     const fake = createFakeBridgeHandle();
     let endEvents: (() => void) | null = null;
@@ -7685,6 +7689,8 @@ describe("ACPX engine sandbox bridge run-disposition seam (fail-closed)", () => 
       releaseCloseStream = resolve;
     });
     let closeStreamCalls = 0;
+    let signalCloseStream!: () => void;
+    const closeStreamEntered = new Promise<void>((resolve) => { signalCloseStream = resolve; });
     // `closeStream()` stays pending on a gate the test controls, and only
     // ends the event drain once the test releases that gate. If the run
     // finalizes before the gate opens, the seam did not wait for the close
@@ -7703,6 +7709,7 @@ describe("ACPX engine sandbox bridge run-disposition seam (fail-closed)", () => 
         cancel: async () => {},
         closeStream: async () => {
           closeStreamCalls += 1;
+          signalCloseStream();
           await closeStreamGate;
           endEvents?.();
         },
@@ -7714,10 +7721,11 @@ describe("ACPX engine sandbox bridge run-disposition seam (fail-closed)", () => 
     const resultPromise = runRemote(fake.handle, runtime, sandbox, {
       duplexLossCancelDeadlineMs: 25,
     });
-    await vi.waitFor(() => expect(fake.onLoss).toHaveBeenCalled());
+    await fake.lossRegistered;
     fake.emitLoss("provider_exit");
 
-    await vi.waitFor(() => expect(closeStreamCalls).toBe(1));
+    await closeStreamEntered;
+    expect(closeStreamCalls).toBe(1);
     // The close call has not resolved yet, so the run must still be pending.
     let settled = false;
     void resultPromise.then(() => {
@@ -7730,7 +7738,7 @@ describe("ACPX engine sandbox bridge run-disposition seam (fail-closed)", () => 
     const result = await resultPromise;
 
     expect(result.errorCode).toBe("duplex_channel_lost");
-  }, 5000);
+  });
 
   it("does not abort or fail an already-completed run when the duplex channel loses after an orderly completion", async () => {
     const sandbox = await setupRemoteSandbox();

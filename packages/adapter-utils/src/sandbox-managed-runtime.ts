@@ -848,8 +848,9 @@ async function persistDurableSeedArchive(input: {
   }
 }
 
-async function execTar(args: string[]): Promise<void> {
+async function execTar(args: string[], cwd?: string): Promise<void> {
   await execFile("tar", args, {
+    ...(cwd ? { cwd: process.platform === "win32" ? path.toNamespacedPath(cwd) : cwd } : {}),
     env: {
       ...process.env,
       COPYFILE_DISABLE: "1",
@@ -879,8 +880,13 @@ export async function createTarballFromDirectory(input: {
     try {
       for await (const entry of await fs.opendir(input.localDir)) await file.writeFile(`${entry.name}\0`);
     } finally { await file.close(); }
+    // Windows bsdtar cannot chdir to a >260-character -C path, even with
+    // a namespace prefix. Node can start it in that directory; relative -C
+    // then preserves the archive layout without shortening the source path.
+    const nativeCwd = process.platform === "win32" ? path.resolve(input.localDir) : undefined;
     await execTar(["-c", "--no-xattrs", ...(input.followSymlinks ? ["-h"] : []),
-      "-f", input.archivePath, "-C", input.localDir, ...excludeArgs, "--null", "-T", list]);
+      "-f", nativeCwd ? path.resolve(input.archivePath) : input.archivePath,
+      "-C", nativeCwd ? "." : input.localDir, ...excludeArgs, "--null", "-T", list], nativeCwd);
   });
 }
 
@@ -889,7 +895,9 @@ async function extractTarballToDirectory(input: {
   localDir: string;
 }): Promise<void> {
   await fs.mkdir(input.localDir, { recursive: true });
-  await execTar(["-xf", input.archivePath, "-C", input.localDir]);
+  const nativeCwd = process.platform === "win32" ? path.resolve(input.localDir) : undefined;
+  await execTar(["-xf", nativeCwd ? path.resolve(input.archivePath) : input.archivePath,
+    "-C", nativeCwd ? "." : input.localDir], nativeCwd);
 }
 
 async function* walkDirectory(root: string, relative = "", childrenFirst = false): AsyncGenerator<string> {
