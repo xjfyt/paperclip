@@ -1,11 +1,30 @@
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { hasPrivatePermissions } from "@paperclipai/shared/private-filesystem-permissions";
+const instructionWrites = vi.hoisted(() => ({
+  beforeWrite: null as null | ((file: unknown) => Promise<void>),
+  beforeProtect: null as null | ((directory: string) => void),
+}));
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs/promises")>();
+  return { ...actual, writeFile: async (...args: Parameters<typeof actual.writeFile>) => {
+    await instructionWrites.beforeWrite?.(args[0]);
+    return actual.writeFile(...args);
+  } };
+});
+vi.mock("@paperclipai/shared/private-filesystem-permissions", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@paperclipai/shared/private-filesystem-permissions")>();
+  return { ...actual, protectNewPrivatePath: (directory: string) => {
+    instructionWrites.beforeProtect?.(directory);
+    actual.protectNewPrivatePath(directory);
+  } };
+});
 import { nativeSystemInstructions } from "../../../packages/paperclip-runner/src/backends/runtime-context.js";
 import type { NativeExecutionInput } from "../vendor/paperclip-runner/index.js";
 import { randomUUID } from "node:crypto";
-import { access, mkdtemp, writeFile, rm, readFile } from "node:fs/promises";
+import { access, mkdtemp, writeFile, rm, readFile, readdir, stat } from "node:fs/promises";
 import { eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { agents, companies, companyMemberships, connectionGrants, createDb, heartbeatRuns, issues, toolApplications, toolCatalogEntries, toolConnections, toolPolicies, toolProfileBindings, toolActionRequests } from "@paperclipai/db";
 import { createToolGatewayService } from "../services/tool-gateway.js";
 import { toolDiscoveryScheduler } from "../services/tool-discovery-scheduler.js";
@@ -18,6 +37,7 @@ import { execute as executeProcess } from "../adapters/process/execute.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 const support = await getEmbeddedPostgresTestSupport();
 const paragraph = "Use the release handbook before changing a deployment. Cite the relevant release checklist.";
+afterEach(() => { instructionWrites.beforeWrite = null; instructionWrites.beforeProtect = null; });
 async function createRunFixture(db: ReturnType<typeof createDb>) {
   const company = await db.insert(companies).values({
     name: `Gateway ${randomUUID()}`,
@@ -152,15 +172,47 @@ async function createRemoteMcpToolFixture(db: ReturnType<typeof createDb>, compa
     expect(() => parseNativeRuntimeContext({ ...runtimeContext, connectionInstructions: { ...snapshot, text: "forged" } })).toThrow();
     expect(parseNativeRuntimeContext(nativeRuntimeContextFixture()).connectionInstructions).toBeUndefined();
     const captured: string[] = [];
+    let privateBeforeWrite = false;
+    instructionWrites.beforeWrite = async (file) => {
+      if (typeof file !== "string" || !file.endsWith("instructions.json")) return;
+      const directory = dirname(file);
+      expect(await readdir(directory)).toEqual([]);
+      privateBeforeWrite = hasPrivatePermissions(directory, (await stat(directory)).mode);
+      expect(privateBeforeWrite).toBe(true);
+    };
     const result = await executeProcess({ runId: f.run.id, agent: { ...f.agent, adapterType: "process" }, runtime: { sessionId: null, sessionParams: null, sessionDisplayId: null, taskKey: null }, context,
       config: { command: process.execPath, args: ["-e", "const fs=require('node:fs');const file=process.env.PAPERCLIP_CONNECTION_INSTRUCTIONS_FILE;console.log(JSON.stringify({file,mode:fs.statSync(file).mode&511,snapshot:JSON.parse(fs.readFileSync(file,'utf8'))}))"], env: { PAPERCLIP_CONNECTION_INSTRUCTIONS_FILE: "/forged" } },
       onLog: async (_stream, text) => { captured.push(text); },
     });
     expect(result.exitCode).toBe(0);
     const received = JSON.parse(captured.join("").trim());
+    expect(privateBeforeWrite).toBe(true);
     expect(received.snapshot).toEqual(snapshot);
-    expect(received.mode).toBe(0o600);
+    if (process.platform !== "win32") expect(received.mode).toBe(0o600);
     await expect(access(received.file)).rejects.toThrow();
+  });
+
+  it("cleans the empty owned directory without spawning when privacy protection fails", async () => {
+    const f = await fixture();
+    let directory: string | undefined;
+    let spawned = false;
+    instructionWrites.beforeProtect = (ownedDirectory) => {
+      directory = ownedDirectory;
+      throw new Error("fixture privacy protection unavailable");
+    };
+    const result = await executeProcess({
+      runId: f.run.id, agent: { ...f.agent, adapterType: "process" },
+      runtime: { sessionId: null, sessionParams: null, sessionDisplayId: null, taskKey: null },
+      context: { connectionInstructions: { text: paragraph } },
+      config: { command: process.execPath, args: ["-e", "process.exit(99)"] },
+      onLog: async () => {}, onSpawn: async () => { spawned = true; },
+    });
+    expect(result.exitCode).toBe(1);
+    expect(result.errorMessage).toBe("fixture privacy protection unavailable");
+    expect(result.executionRecovery).toMatchObject({ kind: "bootstrap", providerWorkStarted: false });
+    expect(spawned).toBe(false);
+    expect(directory).toBeDefined();
+    await expect(access(directory!)).rejects.toThrow();
   });
 
   it("backfills existing template connections without replacing custom text or opt-outs", async () => {

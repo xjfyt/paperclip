@@ -1,6 +1,7 @@
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { protectNewPrivatePath } from "@paperclipai/shared/private-filesystem-permissions";
 import type { AdapterExecutionContext, AdapterExecutionResult } from "../types.js";
 import {
   asString,
@@ -91,6 +92,7 @@ async function executeProcess(ctx: AdapterExecutionContext): Promise<AdapterExec
   try {
     if (typeof instructions.text === "string" && instructions.text) {
       instructionsDirectory = await mkdtemp(join(tmpdir(), "paperclip-connection-instructions-"));
+      protectNewPrivatePath(instructionsDirectory);
       const instructionsFile = join(instructionsDirectory, "instructions.json");
       await writeFile(instructionsFile, JSON.stringify(instructions), { mode: 0o600 });
       env.PAPERCLIP_CONNECTION_INSTRUCTIONS_FILE = instructionsFile;

@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
 import fs from "node:fs/promises";
 import os from "node:os";
-import path from "node:path";
-import { runChildProcess } from "@paperclipai/adapter-utils/server-utils";
+import { fixturePath as path, sandboxPath, shellExecutable, shellArgs, shellEnvironment } from "@paperclipai/adapter-utils/test-fixtures/local-sandbox";
+import { runPosixSandboxProcess as runChildProcess } from "@paperclipai/adapter-utils/test-fixtures/portable-cli";
+import { writeCliFixture } from "@paperclipai/adapter-utils/test-fixtures/native-cli";
+import { installIsolatedHostFixture } from "@paperclipai/adapter-utils/test-fixtures/isolated-host";
+installIsolatedHostFixture();
 import { resetClaudeCliCapabilitiesCacheForTests, testEnvironment } from "@paperclipai/adapter-claude-local/server";
 
 const ORIGINAL_ANTHROPIC = process.env.ANTHROPIC_API_KEY;
@@ -60,8 +63,7 @@ if (argv.includes("--effort")) {
 console.log(JSON.stringify({ type: "assistant", message: { content: [{ type: "text", text: "hello" }] } }));
 console.log(JSON.stringify({ type: "result", result: "hello", usage: { input_tokens: 1, cache_read_input_tokens: 0, output_tokens: 1 } }));
 `;
-  await fs.writeFile(commandPath, script, "utf8");
-  await fs.chmod(commandPath, 0o755);
+  await writeCliFixture(commandPath, script);
 }
 
 function createLocalSandboxRunner() {
@@ -78,13 +80,16 @@ function createLocalSandboxRunner() {
       onSpawn?: (meta: { pid: number; startedAt: string }) => Promise<void>;
     }) => {
       counter += 1;
+      if (input.args?.some((arg) => arg.includes("npm install -g @anthropic-ai/claude-code"))) {
+        throw new Error("Sandbox fixture did not discover its preinstalled offline Claude CLI");
+      }
       return runChildProcess(
         `claude-envtest-sandbox-${counter}`,
-        input.command,
-        input.args ?? [],
+        shellExecutable(input.command),
+        shellArgs(input.args),
         {
           cwd: input.cwd ?? process.cwd(),
-          env: input.env ?? {},
+          env: shellEnvironment(input.env),
           stdin: input.stdin,
           timeoutSec: Math.max(1, Math.ceil((input.timeoutMs ?? 30_000) / 1000)),
           graceSec: 5,
@@ -378,7 +383,7 @@ describe("claude_local environment diagnostics", () => {
     await fs.writeFile(path.join(sourceConfigDir, "CLAUDE.md"), "seed instructions", "utf8");
     await fs.writeFile(path.join(sourceConfigDir, "credentials.json"), JSON.stringify({ token: "local" }), "utf8");
     await fs.writeFile(path.join(remoteHome, ".claude", ".credentials.json"), JSON.stringify({ token: "remote" }), "utf8");
-    await fs.writeFile(commandPath, `#!/usr/bin/env node
+    await writeCliFixture(commandPath, `#!/usr/bin/env node
 const fs = require("fs");
 const path = require("path");
 const configDir = process.env.CLAUDE_CONFIG_DIR || "";
@@ -402,8 +407,7 @@ if (fs.readFileSync(path.join(configDir, "CLAUDE.md"), "utf8") !== "seed instruc
 }
 console.log(JSON.stringify({ type: "assistant", message: { content: [{ type: "text", text: "hello" }] } }));
 console.log(JSON.stringify({ type: "result", result: "hello", usage: { input_tokens: 1, cache_read_input_tokens: 0, output_tokens: 1 } }));
-`, "utf8");
-    await fs.chmod(commandPath, 0o755);
+`);
 
     process.env.CLAUDE_CONFIG_DIR = sourceConfigDir;
     process.env.PAPERCLIP_HOME = path.join(root, "paperclip-home");
@@ -415,21 +419,21 @@ console.log(JSON.stringify({ type: "result", result: "hello", usage: { input_tok
         adapterType: "claude_local",
         config: {
           engine: "cli",
-          command: commandPath,
-          env: { HOME: remoteHome },
+          command: sandboxPath(commandPath),
+          env: { HOME: sandboxPath(remoteHome) },
         },
         executionTarget: {
           kind: "remote",
           transport: "sandbox",
           providerKey: "daytona",
-          remoteCwd: remoteWorkspace,
+          remoteCwd: sandboxPath(remoteWorkspace),
           runner: createLocalSandboxRunner(),
         },
         environmentName: "QA Daytona",
       });
 
-      expect(result.checks.some((check) => check.code === "claude_managed_config_dir")).toBe(true);
-      expect(result.checks.some((check) => check.code === "claude_hello_probe_passed")).toBe(true);
+      expect(result.checks.some((check) => check.code === "claude_managed_config_dir"), JSON.stringify(result.checks.map(({ code, message }) => ({ code, message })))).toBe(true);
+      expect(result.checks.map(({ code, level, message }) => ({ code, level, message }))).toEqual(expect.arrayContaining([expect.objectContaining({ code: "claude_hello_probe_passed" })]));
       expect(result.checks.some((check) => check.code === "claude_hello_probe_failed")).toBe(false);
     } finally {
       await fs.rm(root, { recursive: true, force: true });
@@ -451,21 +455,21 @@ console.log(JSON.stringify({ type: "result", result: "hello", usage: { input_tok
         adapterType: "claude_local",
         config: {
           engine: "cli",
-          command: commandPath,
-          cwd: workspace,
+          command: sandboxPath(commandPath),
+          cwd: sandboxPath(workspace),
           effort: "low",
         },
         executionTarget: {
           kind: "remote",
           transport: "sandbox",
           providerKey: "daytona",
-          remoteCwd: remoteWorkspace,
+          remoteCwd: sandboxPath(remoteWorkspace),
           runner: createLocalSandboxRunner(),
         },
         environmentName: "QA Daytona",
       });
 
-      expect(result.checks.some((check) => check.code === "claude_effort_flag_unsupported")).toBe(true);
+      expect(result.checks.some(({ code }) => code === "claude_effort_flag_unsupported"), JSON.stringify(result.checks.map(({ code, message }) => ({ code, message })))).toBe(true);
       expect(result.checks.some((check) => check.code === "claude_hello_probe_passed")).toBe(true);
     } finally {
       await fs.rm(root, { recursive: true, force: true });
