@@ -147,3 +147,22 @@ it.each(["decided", "expired"] as const)("surfaces %s history read failure inste
   expect(host.querySelector('[role="alert"]')).toBeNull();
   expect(host.textContent).toContain(status === "decided" ? decisionDeskMessages.ja.emptyDecided : decisionDeskMessages.ja.emptyExpired);
 });
+
+it("keeps late history in its original company's cache without borrowing it for a new company's empty view", async () => {
+  let resolve!: (rows: unknown[]) => void;
+  state.history.mockImplementationOnce(() => new Promise(yes => { resolve = yes; })).mockResolvedValue([]);
+  const draw = async () => { await act(async () => root.render(<QueryClientProvider client={client}><WhatNeedsMe /></QueryClientProvider>)); await flush(); };
+  await draw();
+  await act(async () => [...host.querySelectorAll("button")].find(node => node.textContent?.includes(decisionDeskMessages.en.decided))!.click()); await flush();
+  expect(host.textContent).toContain(decisionDeskMessages.en.loadingDecided);
+  expect(host.textContent).not.toContain(decisionDeskMessages.en.emptyDecided);
+  state.companyId = "c2"; await draw();
+  expect(host.textContent).toContain(decisionDeskMessages.en.emptyDecided);
+  const oldRows = [{ id: "c1-private-history", title: "Old company private history" }];
+  await act(async () => resolve(oldRows)); await flush();
+  expect(client.getQueryData(queryKeys.decisions.list("c1", "decided"))).toEqual(oldRows);
+  expect(client.getQueryData(queryKeys.decisions.list("c2", "decided"))).toEqual([]);
+  expect(host.textContent).toContain(decisionDeskMessages.en.emptyDecided);
+  expect(host.textContent).not.toContain("Old company private history");
+  expect(state.history.mock.calls.map(call => call[0])).toEqual(["c1", "c2"]);
+});
