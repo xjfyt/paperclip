@@ -1,3 +1,5 @@
+import { t } from "../../i18n";
+
 export type AuditSection = "activity" | "runs" | "costs" | "budgets" | "timeline";
 
 export const AUDIT_SECTIONS: ReadonlyArray<{
@@ -11,6 +13,11 @@ export const AUDIT_SECTIONS: ReadonlyArray<{
   { value: "budgets", label: "Budgets", href: "/activity/budgets" },
   { value: "timeline", label: "Timeline", href: "/activity/timeline" },
 ];
+
+/** Explicit UI projection; canonical section labels and all route values stay stable. */
+export function auditDisplaySections() {
+  return AUDIT_SECTIONS.map(section => ({ ...section, label: t(`auditNavigationUi.${section.value}`) }));
+}
 
 export interface AuditLinkScope {
   mode?: "all" | "agents";

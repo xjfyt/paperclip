@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n";
 import { useCallback, useEffect } from "react";
 import { History } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
@@ -12,13 +13,15 @@ import { AuditFeed, type AuditFeedMode } from "./AuditFeed";
 import { AuditRuns } from "./AuditRuns";
 import { RoutineAuditActivity } from "./RoutineAuditActivity";
 import {
-  AUDIT_SECTIONS,
+  auditDisplaySections,
   auditScopeFromSearchParams,
   auditSectionHref,
   type AuditSection,
 } from "./audit-navigation";
 
 export function AuditHub({ section }: { section: AuditSection }) {
+  const { t } = useTranslation();
+  const sections = auditDisplaySections();
   const navigate = useNavigate();
   const { selectedCompanyId } = useCompany();
   const { setBreadcrumbs } = useBreadcrumbs();
@@ -40,12 +43,12 @@ export function AuditHub({ section }: { section: AuditSection }) {
   ].includes(actionParam ?? "") ? actionParam! : "__all";
 
   useEffect(() => {
-    const current = AUDIT_SECTIONS.find((candidate) => candidate.value === section);
+    const current = auditDisplaySections().find((candidate) => candidate.value === section);
     setBreadcrumbs([
-      { label: "Audit", href: section === "activity" ? undefined : "/activity" },
+      { label: t("auditNavigationUi.title"), href: section === "activity" ? undefined : "/activity" },
       ...(section === "activity" || !current ? [] : [{ label: current.label }]),
     ]);
-  }, [section, setBreadcrumbs]);
+  }, [section, setBreadcrumbs, t]);
 
   const handleModeChange = useCallback(
     (next: AuditFeedMode) => {
@@ -78,13 +81,13 @@ export function AuditHub({ section }: { section: AuditSection }) {
   );
 
   if (!selectedCompanyId) {
-    return <EmptyState icon={History} message="Select an organization to view Audit." />;
+    return <EmptyState icon={History} message={t("auditNavigationUi.selectOrganization")} />;
   }
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-semibold tracking-tight text-foreground">Audit</h1>
+        <h1 className="text-3xl font-semibold tracking-tight text-foreground">{t("auditNavigationUi.title")}</h1>
       </div>
 
       <Tabs
@@ -94,7 +97,7 @@ export function AuditHub({ section }: { section: AuditSection }) {
           navigate(auditSectionHref(next, scope));
         }}
       >
-        <PageTabBar items={AUDIT_SECTIONS} value={section} align="start" />
+        <PageTabBar items={sections} value={section} align="start" />
       </Tabs>
 
       {section === "activity" && routineId ? (

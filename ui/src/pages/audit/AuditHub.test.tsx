@@ -1,5 +1,9 @@
 // @vitest-environment jsdom
 
+import { i18n, auditNavigationMessages } from "../../i18n/audit-navigation-test-resources";
+import { validateLocaleMessages } from "../../i18n/locale-validation";
+import { act } from "react";
+import { AUDIT_SECTIONS } from "./audit-navigation";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -82,10 +86,11 @@ describe("AuditHub", () => {
     document.body.appendChild(container);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     flushSync(() => root?.unmount());
     container.remove();
     vi.clearAllMocks();
+    await i18n.changeLanguage("en");
   });
 
   function render(section: "activity" | "runs" | "costs" | "budgets" | "timeline") {
@@ -169,4 +174,23 @@ describe("AuditHub", () => {
       "/activity/runs?entityType=routine&entityId=routine-1",
     );
   });
+  it.each(["en", "zh-CN", "es", "ja"] as const)("translates live navigation without replacing scope or focused tabs in %s", async locale => {
+    expect(validateLocaleMessages(auditNavigationMessages[locale], auditNavigationMessages.en)).toEqual([]);
+    currentSearch = "mode=agents&agentId=agent-original&runId=run-original&action=tool_";
+    render("activity");
+    const tabs = [...container.querySelectorAll<HTMLElement>('[role="tab"]')];
+    await act(async () => tabs[0]!.focus());
+    await act(async () => { await i18n.changeLanguage(locale); });
+    expect(document.activeElement).toBe(tabs[0]);
+    expect(container.querySelector("h1")?.textContent).toBe(i18n.t("auditNavigationUi.title"));
+    expect(tabs.map(tab => tab.textContent)).toEqual(AUDIT_SECTIONS.map(item => i18n.t(`auditNavigationUi.${item.value}`)));
+    expect(AUDIT_SECTIONS.map(item => item.label)).toEqual(["Activity", "Runs", "Costs", "Budgets", "Timeline"]);
+    const feed = container.querySelector<HTMLElement>('[data-testid="audit-feed"]')!;
+    expect(feed.dataset.agent).toBe("agent-original"); expect(feed.dataset.run).toBe("run-original"); expect(feed.dataset.action).toBe("tool_");
+    expect(setSearchParamsMock).not.toHaveBeenCalled(); expect(navigateMock).not.toHaveBeenCalled();
+    await act(async () => { tabs[1]!.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 })); tabs[1]!.click(); });
+    expect(navigateMock).toHaveBeenCalledWith("/activity/runs?mode=agents&agentId=agent-original&runId=run-original");
+    expect(setBreadcrumbsMock).toHaveBeenLastCalledWith([{ label: i18n.t("auditNavigationUi.title"), href: undefined }]);
+  });
+
 });
