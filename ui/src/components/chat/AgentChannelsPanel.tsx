@@ -1,3 +1,4 @@
+import { useTranslation } from "@/i18n";
 import { useQuery } from "@tanstack/react-query";
 import { ExternalLink, MessageSquarePlus } from "lucide-react";
 import { chatEndpointsApi, type ChatProvider } from "@/api/chatEndpoints";
@@ -18,6 +19,8 @@ const providerNames: Record<ChatProvider, string> = {
   agentmail: "AgentMail",
 };
 
+const endpointStatusKeys: Record<string, string> = { draft: "statuses.draft", verifying: "agentChannelsUi.verifying", active: "statuses.active", paused: "statuses.paused", attention: "agentChannelsUi.attention", revoked: "agentChannelsUi.revoked" };
+
 export function AgentChannelsPanel({
   companyId,
   agentId,
@@ -25,6 +28,7 @@ export function AgentChannelsPanel({
   companyId: string;
   agentId: string;
 }) {
+  const { t } = useTranslation();
   const { enabled, githubEnabled } = useChatConnectorsEnabled();
   const query = useQuery({
     queryKey: queryKeys.chatEndpoints.list(companyId),
@@ -39,28 +43,37 @@ export function AgentChannelsPanel({
     <section className="max-w-3xl space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold">Channels</h2>
+          <h2 className="text-lg font-semibold">{t("agentChannelsUi.title")}</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Chat and email identities connected to this agent.
+            {t("agentChannelsUi.description")}
           </p>
         </div>
         <Button asChild size="sm">
           <Link to={`/apps?chatAgentId=${encodeURIComponent(agentId)}`}>
             <MessageSquarePlus />
-            Connect a channel
+            {t("agentChannelsUi.connect")}
           </Link>
         </Button>
       </div>
+      {query.isError && (
+        <div role="alert" className="space-y-2 text-sm text-destructive">
+          <p>{t("agentChannelsUi.loadFailed")}</p>
+          {query.error instanceof Error ? <p>{query.error.message}</p> : typeof query.error === "string" ? <p>{query.error}</p> : null}
+          <Button type="button" variant="outline" size="sm" disabled={query.isFetching} onClick={() => { void query.refetch(); }}>
+            {query.isFetching ? t("common.loading") : t("common.retry")}
+          </Button>
+        </div>
+      )}
       {query.isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading channels…</p>
-      ) : endpoints.length === 0 ? (
+        <p className="text-sm text-muted-foreground">{t("agentChannelsUi.loading")}</p>
+      ) : query.isError && endpoints.length === 0 ? null : endpoints.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border p-5">
-          <p className="text-sm font-medium">No channels connected</p>
+          <p className="text-sm font-medium">{t("agentChannelsUi.empty")}</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            {enabled || githubEnabled ? "Connect an agent identity from Connectors." : "Connect AgentMail from Connectors."}
+            {t(enabled || githubEnabled ? "agentChannelsUi.connectIdentity" : "agentChannelsUi.connectAgentMail")}
           </p>
           <Button asChild className="mt-3" variant="outline" size="sm">
-            <Link to="/apps">Open Connectors</Link>
+            <Link to="/apps">{t("agentChannelsUi.openConnectors")}</Link>
           </Button>
         </div>
       ) : (
@@ -72,18 +85,18 @@ export function AgentChannelsPanel({
             >
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold">
-                  {providerNames[endpoint.provider]}
+                  {providerNames[endpoint.provider] ?? endpoint.provider}
                 </p>
                 <p className="truncate text-xs text-muted-foreground">
                   {endpoint.botLabel ??
                     endpoint.providerAccountLabel ??
-                    "Provider identity"}
+                    t("agentChannelsUi.providerIdentity")}
                 </p>
               </div>
-              <StatusBadge status={endpoint.status} />
+              <StatusBadge status={endpoint.status} label={Object.hasOwn(endpointStatusKeys, endpoint.status) ? t(endpointStatusKeys[endpoint.status]) : endpoint.status} />
               <Button asChild size="sm" variant="outline">
                 <Link to={`/apps/chat/${endpoint.id}/settings`}>
-                  Open connection <ExternalLink />
+                  {t("agentChannelsUi.openConnection")} <ExternalLink />
                 </Link>
               </Button>
             </div>

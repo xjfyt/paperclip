@@ -1,0 +1,16 @@
+{
+  "title": "频道",
+  "description": "连接到此 Agent 的聊天和邮件身份。",
+  "connect": "连接频道",
+  "loading": "正在加载频道…",
+  "empty": "尚未连接频道",
+  "connectIdentity": "从连接器中连接 Agent 身份。",
+  "connectAgentMail": "从连接器中连接 AgentMail。",
+  "openConnectors": "打开连接器",
+  "providerIdentity": "提供商身份",
+  "openConnection": "打开连接",
+  "loadFailed": "无法加载频道。",
+  "verifying": "正在验证",
+  "attention": "需要处理",
+  "revoked": "已撤销"
+}

@@ -1,0 +1,16 @@
+{
+  "title": "Channels",
+  "description": "Chat and email identities connected to this agent.",
+  "connect": "Connect a channel",
+  "loading": "Loading channels…",
+  "empty": "No channels connected",
+  "connectIdentity": "Connect an agent identity from Connectors.",
+  "connectAgentMail": "Connect AgentMail from Connectors.",
+  "openConnectors": "Open Connectors",
+  "providerIdentity": "Provider identity",
+  "openConnection": "Open connection",
+  "loadFailed": "Could not load channels.",
+  "verifying": "Verifying",
+  "attention": "Needs attention",
+  "revoked": "Revoked"
+}

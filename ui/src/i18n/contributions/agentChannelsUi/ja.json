@@ -1,0 +1,16 @@
+{
+  "title": "チャンネル",
+  "description": "このエージェントに接続されているチャットとメールのアカウント。",
+  "connect": "チャンネルを接続",
+  "loading": "チャンネルを読み込み中…",
+  "empty": "接続されたチャンネルはありません",
+  "connectIdentity": "コネクターからエージェントのアカウントを接続してください。",
+  "connectAgentMail": "コネクターから AgentMail を接続してください。",
+  "openConnectors": "コネクターを開く",
+  "providerIdentity": "プロバイダーのアカウント",
+  "openConnection": "接続を開く",
+  "loadFailed": "チャンネルを読み込めませんでした。",
+  "verifying": "検証中",
+  "attention": "対応が必要",
+  "revoked": "取り消し済み"
+}

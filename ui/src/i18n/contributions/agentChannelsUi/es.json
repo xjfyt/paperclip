@@ -1,0 +1,16 @@
+{
+  "title": "Canales",
+  "description": "Identidades de chat y correo conectadas a este agente.",
+  "connect": "Conectar un canal",
+  "loading": "Cargando canales…",
+  "empty": "No hay canales conectados",
+  "connectIdentity": "Conecta una identidad de agente desde Conectores.",
+  "connectAgentMail": "Conecta AgentMail desde Conectores.",
+  "openConnectors": "Abrir Conectores",
+  "providerIdentity": "Identidad del proveedor",
+  "openConnection": "Abrir conexión",
+  "loadFailed": "No se pudieron cargar los canales.",
+  "verifying": "Verificando",
+  "attention": "Requiere atención",
+  "revoked": "Revocado"
+}
