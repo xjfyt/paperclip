@@ -3,6 +3,28 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { hasPrivatePermissions } from "./private-filesystem-permissions.js";
+
+// Build hostile archive metadata directly. Host filesystems need not support
+// every sandbox-authored name (Windows forbids '>'), and tar transformation
+// flags differ between GNU, macOS bsdtar and Windows bsdtar.
+function hostileTarMember(name: string, target?: string): Buffer {
+  const header = Buffer.alloc(512);
+  header.write(name, 0, 100);
+  header.write("0000644\0", 100);
+  header.write("0000000\0", 108);
+  header.write("0000000\0", 116);
+  header.write("00000000000\0", 124);
+  header.write("00000000000\0", 136);
+  header.fill(32, 148, 156);
+  header.write(target === undefined ? "0" : "2", 156);
+  if (target !== undefined) header.write(target, 157, 100);
+  header.write("ustar\0", 257);
+  header.write("00", 263);
+  const checksum = header.reduce((sum, byte) => sum + byte, 0);
+  header.write(`${checksum.toString(8).padStart(6, "0")}\0 `, 148);
+  return Buffer.concat([header, Buffer.alloc(1024)]);
+}
 
 const mockCreate = vi.hoisted(() => vi.fn());
 const mockGet = vi.hoisted(() => vi.fn());
@@ -5466,7 +5488,7 @@ describe("daytona native file-sync hooks", () => {
     expect(capturedTarListing).toContain("alias.txt");
   });
 
-  it("syncOut reads all file mappings via one downloadFiles batch, writes each to its host target, and returns per-operation counts", async () => {
+  it("syncOut reads all file mappings via one downloadFiles batch, writes each to its host target, and returns per-operation counts", { timeout: 30_000 }, async () => {
     const hostDir = await makeHostDir();
     const sandbox = createMockSandbox();
     // The download reads sandbox-side snapshots (reserved temp names), which are
@@ -5475,6 +5497,11 @@ describe("daytona native file-sync hooks", () => {
     sandbox.fs.downloadFiles.mockImplementation(async (requests: Array<{ source: string; destination?: string }>) => {
       return Promise.all(
         requests.map(async (req, index) => {
+          if (process.platform === "win32") {
+            expect((await fs.stat(req.destination!)).size).toBe(0);
+            expect(hasPrivatePermissions(req.destination!, (await fs.stat(req.destination!)).mode)).toBe(true);
+            expect(hasPrivatePermissions(path.dirname(req.destination!), (await fs.stat(path.dirname(req.destination!))).mode)).toBe(true);
+          }
           await fs.writeFile(req.destination!, payloadsInOrder[index]);
           return { source: req.source, result: req.destination };
         }),
@@ -5517,7 +5544,7 @@ describe("daytona native file-sync hooks", () => {
     expect(await fs.readFile(resultTarget, "utf8")).toBe("result-bytes");
     expect(await fs.readFile(secretTarget, "utf8")).toBe("secret-bytes");
     // Secret lands 0600 on the host target.
-    expect((await fs.stat(secretTarget)).mode & 0o777).toBe(0o600);
+    expect(hasPrivatePermissions(secretTarget, (await fs.stat(secretTarget)).mode)).toBe(true);
 
     expect(result).toEqual({
       operations: [
@@ -5554,7 +5581,7 @@ describe("daytona native file-sync hooks", () => {
     });
   });
 
-  it("syncOut snapshot guard re-checks the resolved source is a non-symlink regular file immediately before copying (validation→copy TOCTOU)", async () => {
+  it("syncOut snapshot guard re-checks the resolved source is a non-symlink regular file immediately before copying (validation→copy TOCTOU)", { timeout: 30_000 }, async () => {
     const hostDir = await makeHostDir();
     const sandbox = createMockSandbox();
     sandbox.fs.downloadFiles.mockImplementation(async (requests: Array<{ source: string; destination?: string }>) => {
@@ -5597,7 +5624,7 @@ describe("daytona native file-sync hooks", () => {
     expect(copyIdx).toBeGreaterThan(noFollowIdx);
   });
 
-  it("syncOut fails loud when any per-file download reports an error, and leaves no target file", async () => {
+  it("syncOut fails loud when any per-file download reports an error, and leaves no target file", { timeout: 30_000 }, async () => {
     const hostDir = await makeHostDir();
     const sandbox = createMockSandbox();
     // Requests read snapshots (index-aligned with mappings); the second mapping
@@ -5755,20 +5782,7 @@ describe("daytona native file-sync hooks", () => {
       return Promise.all(
         requests.map(async (req) => {
           // Craft a tar containing a traversal member `../escape.txt`.
-          const staging = await fs.mkdtemp(path.join(os.tmpdir(), "daytona-evil-"));
-          tempDirs.push(staging);
-          await fs.mkdir(path.join(staging, "sub"), { recursive: true });
-          await fs.writeFile(path.join(staging, "sub", "escape.txt"), "escape");
-          // GNU spells member-name rewriting --transform; bsdtar (macOS) spells it -s.
-          const gnuTar = execFileSync("tar", ["--version"]).toString().includes("GNU tar");
-          execFileSync("tar", [
-            "-cf",
-            req.destination!,
-            "-C",
-            path.join(staging, "sub"),
-            ...(gnuTar ? ["--transform", "s,^,../,"] : ["-s", ",^,../,"]),
-            "escape.txt",
-          ]);
+          await fs.writeFile(req.destination!, hostileTarMember("../escape.txt"));
           return { source: req.source, result: req.destination };
         }),
       );
@@ -5846,11 +5860,7 @@ describe("daytona native file-sync hooks", () => {
           // lists as "evil -> decoy -> ../../outside.txt"; splitting at the
           // first delimiter would validate "decoy -> ../../outside.txt" (which
           // normalizes in-tree) while tar extracts the real escaping link.
-          const staging = await fs.mkdtemp(path.join(os.tmpdir(), "daytona-evil-"));
-          tempDirs.push(staging);
-          await fs.mkdir(path.join(staging, "sub"), { recursive: true });
-          await fs.symlink("../../outside.txt", path.join(staging, "sub", "evil -> decoy"));
-          execFileSync("tar", ["-cf", req.destination!, "-C", path.join(staging, "sub"), "evil -> decoy"]);
+          await fs.writeFile(req.destination!, hostileTarMember("evil -> decoy", "../../outside.txt"));
           return { source: req.source, result: req.destination };
         }),
       );
@@ -5877,7 +5887,7 @@ describe("daytona native file-sync hooks", () => {
     await expect(fs.stat(restored)).rejects.toThrow();
   });
 
-  it("round-trips a directory (syncIn then syncOut) preserving contents, a 0600 file, and a preserved symlink", async () => {
+  it("round-trips a directory (syncIn then syncOut) preserving contents, a 0600 file, and a preserved symlink", { timeout: 30_000 }, async () => {
     const hostRoot = await makeHostDir();
     const source = path.join(hostRoot, "src");
     await fs.mkdir(path.join(source, "nested"), { recursive: true });
@@ -5940,11 +5950,11 @@ describe("daytona native file-sync hooks", () => {
 
     expect(await fs.readFile(path.join(restored, "nested", "data.txt"), "utf8")).toBe("hello world");
     expect(await fs.readFile(path.join(restored, "secret"), "utf8")).toBe("top-secret");
-    expect((await fs.stat(path.join(restored, "secret"))).mode & 0o777).toBe(0o600);
+    expect(hasPrivatePermissions(path.join(restored, "secret"), (await fs.stat(path.join(restored, "secret"))).mode)).toBe(true);
     const linkStat = await fs.lstat(path.join(restored, "shortcut"));
     expect(linkStat.isSymbolicLink()).toBe(true);
-    expect(await fs.readlink(path.join(restored, "shortcut"))).toBe("nested/data.txt");
-    expect(await fs.readlink(path.join(restored, ".claude", "skills", "demo"))).toBe("../../nested");
+    expect((await fs.readlink(path.join(restored, "shortcut"))).replaceAll("\\", "/")).toBe("nested/data.txt");
+    expect((await fs.readlink(path.join(restored, ".claude", "skills", "demo"))).replaceAll("\\", "/")).toBe("../../nested");
     expect(await fs.readFile(path.join(restored, ".claude", "skills", "demo", "data.txt"), "utf8")).toBe("hello world");
   });
 
@@ -6245,7 +6255,7 @@ describe("daytona native file-sync hooks", () => {
     expect(new Set(destinations).size).toBe(destinations.length);
   });
 
-  it("runs two concurrent outbound syncOut calls that both reach downloadFiles before either opens", async () => {
+  it("runs two concurrent outbound syncOut calls that both reach downloadFiles before either opens", { timeout: 30_000 }, async () => {
     const hostDir = await makeHostDir();
     const targetA = path.join(hostDir, "a.txt");
     const targetB = path.join(hostDir, "b.txt");

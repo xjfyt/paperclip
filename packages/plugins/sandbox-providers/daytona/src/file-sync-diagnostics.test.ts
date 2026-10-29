@@ -86,6 +86,7 @@ it.each(["file_finalize", "archive_validate", "archive_extract"] as const)("iden
     fs: {
       downloadFiles: async (requests: Array<{ source: string; destination: string }>) => {
         for (const request of requests) {
+          if (step === "file_finalize") await fs.rm(request.destination, { force: true });
           if (step === "archive_validate") await fs.writeFile(request.destination, "invalid private archive");
           if (step === "archive_extract") await fs.copyFile(archive, request.destination);
         }

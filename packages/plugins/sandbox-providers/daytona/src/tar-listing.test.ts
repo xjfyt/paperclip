@@ -3,12 +3,22 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
 
+const fixtureCommand = vi.hoisted(() => ({ script: null as string | null }));
+vi.mock("node:child_process", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:child_process")>();
+  return { ...actual, spawn: ((command: string, args: readonly string[], options: import("node:child_process").SpawnOptions) => {
+    if (command === "tar" && fixtureCommand.script) return actual.spawn(process.execPath, [fixtureCommand.script, ...args], options);
+    return actual.spawn(command, args, options);
+  }) as typeof actual.spawn };
+});
+
 vi.mock("./plugin.js", () => ({ getPluginTracer: () => undefined }));
 import { environmentSyncErrorData, withEnvironmentSyncErrorCapture, withEnvironmentSyncTransferStep, readEnvironmentSyncErrorDiagnostic } from "@paperclipai/plugin-sdk";
 import { assertTarballEntriesConfined } from "./file-sync.js";
 
 const temporaryDirectories: string[] = [];
 afterEach(async () => {
+  fixtureCommand.script = null;
   vi.unstubAllEnvs();
   await Promise.all(temporaryDirectories.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
 });
@@ -22,7 +32,7 @@ async function temporaryDirectory() {
 // Empty USTAR members are sufficient to exercise the real host tar listing.
 // Repeating a member is valid tar and avoids creating 145,000 host files just
 // to reproduce the archive metadata buffer limit.
-function tarHeader(name: string, prefix = "", target?: string): Buffer {
+function tarHeader(name: string, prefix = "", target?: string, typeFlag?: "0" | "1" | "2"): Buffer {
   const header = Buffer.alloc(512);
   header.write(name, 0, 100);
   header.write("0000644\0", 100);
@@ -31,7 +41,7 @@ function tarHeader(name: string, prefix = "", target?: string): Buffer {
   header.write("00000000000\0", 124);
   header.write("00000000000\0", 136);
   header.fill(32, 148, 156);
-  header.write(target === undefined ? "0" : "2", 156);
+  header.write(typeFlag ?? (target === undefined ? "0" : "2"), 156);
   if (target !== undefined) header.write(target, 157, 100);
   header.write("ustar\0", 257);
   header.write("00", 263);
@@ -64,12 +74,55 @@ it.each([false, true])("validates every member beyond 32 MiB of real tar names (
   }
 }, 30_000);
 
+it.runIf(process.platform === "win32").each([
+  { name: "..\\outside.txt" },
+  { name: "C:relative.txt" },
+  { name: "C:/absolute.txt" },
+  { name: "file.txt:alternate-stream" },
+  { name: ".. /outside.txt" },
+  { name: "nested./outside.txt" },
+  { name: "NUL" },
+  { name: "nested/COM1.txt" },
+  { name: "link", target: "..\\outside.txt" },
+  { name: "link", target: "C:\\outside.txt" },
+  { name: "link", target: "file.txt:alternate-stream" },
+  { name: "link", target: ".. /outside.txt" },
+  { name: "link", target: "NUL" },
+])("rejects Windows-specific member/link syntax before extraction: $name $target", async ({ name, target }) => {
+  const root = await temporaryDirectory();
+  const archive = path.join(root, "unsafe-windows-path.tar");
+  const sentinel = path.join(root, "outside.txt");
+  await fs.writeFile(sentinel, "preserve outside bytes");
+  const before = await fs.stat(sentinel);
+  await fs.writeFile(archive, Buffer.concat([tarHeader(name, "", target), Buffer.alloc(1024)]));
+  await expect(assertTarballEntriesConfined(archive)).rejects.toThrow(/unsafe Windows path|escapes the extraction dir/);
+  expect(await fs.readFile(sentinel, "utf8")).toBe("preserve outside bytes");
+  expect((await fs.stat(sentinel)).mtimeMs).toBe(before.mtimeMs);
+  expect((await fs.readdir(root)).sort()).toEqual(["outside.txt", "unsafe-windows-path.tar"]);
+});
+
+it.runIf(process.platform === "win32")("keeps ordinary Windows-compatible members and confined relative links admissible", async () => {
+  const archive = path.join(await temporaryDirectory(), "safe-windows-paths.tar");
+  await fs.writeFile(archive, Buffer.concat([
+    tarHeader("nested/file name.txt"), tarHeader("nested/link", "", "../safe.txt"), Buffer.alloc(1024),
+  ]));
+  await expect(assertTarballEntriesConfined(archive)).resolves.toBeUndefined();
+});
+
+it("anchors hardlink targets at the archive root and rejects nested parent traversal", async () => {
+  const archive = path.join(await temporaryDirectory(), "unsafe-hardlink.tar");
+  await fs.writeFile(archive, Buffer.concat([tarHeader("nested/hardlink", "", "../outside.txt", "1"), Buffer.alloc(1024)]));
+  await expect(assertTarballEntriesConfined(archive)).rejects.toThrow(/link whose target escapes/);
+});
+
 async function fakeTar(script: string) {
   const directory = await temporaryDirectory();
   const pidFile = path.join(directory, "pid");
-  await fs.writeFile(path.join(directory, "tar"), `#!${process.execPath}\n` +
+  const executable = path.join(directory, process.platform === "win32" ? "tar-fixture.cjs" : "tar");
+  await fs.writeFile(executable, `#!${process.execPath}\n` +
     `require("node:fs").appendFileSync(${JSON.stringify(pidFile)}, String(process.pid) + "\\n");\n${script}\n`, { mode: 0o755 });
   vi.stubEnv("PATH", `${directory}${path.delimiter}${process.env.PATH}`);
+  if (process.platform === "win32") fixtureCommand.script = executable;
   return async () => {
     const pids = (await fs.readFile(pidFile, "utf8")).trim().split("\n").map(Number);
     for (const pid of pids) expect(() => process.kill(pid, 0)).toThrow();

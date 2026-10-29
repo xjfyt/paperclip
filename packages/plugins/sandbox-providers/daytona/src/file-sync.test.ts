@@ -1,8 +1,8 @@
-import { promises as fs } from "node:fs";
 import os from "node:os";
-import path from "node:path";
 import crypto from "node:crypto";
-import { spawnSync } from "node:child_process";
+import { promises as fs } from "node:fs";
+import { fixtureMkdtemp, fixturePath as path, spawnSync, gnuTarCandidates } from "./test-fixtures/local-posix.js";
+import { hasPrivatePermissions } from "./private-filesystem-permissions.js";
 import zlib from "node:zlib";
 import { Transform } from "node:stream";
 import { afterEach, describe, expect, it } from "vitest";
@@ -66,7 +66,7 @@ describe("daytona file-sync inbound scratch cleanup", () => {
   });
 
   it("removes the reserved scratch tar when a directory extraction fails", async () => {
-    const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-daytona-scratch-"));
+    const rootDir = await fixtureMkdtemp(path.join(os.tmpdir(), "paperclip-daytona-scratch-"));
     cleanupDirs.push(rootDir);
     const sourceDir = path.join(rootDir, "referenced-project");
     await fs.mkdir(sourceDir, { recursive: true });
@@ -120,7 +120,7 @@ describe("daytona file-sync inbound scratch cleanup", () => {
   });
 
   it("does not sweep scratch on the happy path (extract removes it)", async () => {
-    const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-daytona-scratch-"));
+    const rootDir = await fixtureMkdtemp(path.join(os.tmpdir(), "paperclip-daytona-scratch-"));
     cleanupDirs.push(rootDir);
     const sourceDir = path.join(rootDir, "referenced-project");
     await fs.mkdir(sourceDir, { recursive: true });
@@ -159,7 +159,7 @@ describe("daytona file-sync inbound scratch cleanup", () => {
   });
 
   it("writes an inbound file mapping to a sandbox path outside the workspace root", async () => {
-    const hostDir = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-daytona-outside-root-"));
+    const hostDir = await fixtureMkdtemp(path.join(os.tmpdir(), "paperclip-daytona-outside-root-"));
     cleanupDirs.push(hostDir);
     const sourcePath = path.join(hostDir, "source.txt");
     await fs.writeFile(sourcePath, "payload");
@@ -293,13 +293,13 @@ function createRealExecSandbox(input?: {
 
 // Daytona uses GNU tar. macOS contributors can install gnu-tar; the usual
 // Linux CI path runs this directly without extra dependencies.
-const gnuTar = ["gtar", "tar"].map((candidate) => {
-  const resolved = spawnSync("/bin/sh", ["-c", 'command -v "$1"', "sh", candidate], { encoding: "utf8" }).stdout.trim();
+const gnuTar = gnuTarCandidates.map((candidate) => {
+  const resolved = process.platform === "win32" ? candidate : spawnSync("/bin/sh", ["-c", 'command -v "$1"', "sh", candidate], { encoding: "utf8" }).stdout?.trim();
   return resolved && spawnSync(resolved, ["--version"], { encoding: "utf8" }).stdout?.includes("GNU tar") ? resolved : null;
 }).find(Boolean);
 
-it.skipIf(!gnuTar)("extracts interleaved read-only skill directories with GNU tar and preserves their modes", async () => {
-  const root = await fs.mkdtemp("/tmp/paperclip-daytona-readonly-");
+it.skipIf(!gnuTar || process.platform === "win32")("extracts interleaved read-only skill directories with GNU tar and preserves their modes (POSIX filesystem required)", async () => {
+  const root = await fixtureMkdtemp("/tmp/paperclip-daytona-readonly-");
   const source = path.join(root, "source");
   const remoteDir = path.join(root, "remote");
   const target = path.join(remoteDir, "skill");
@@ -357,7 +357,7 @@ it.skipIf(!gnuTar)("extracts interleaved read-only skill directories with GNU ta
 }, 30_000);
 
 it.skipIf(!gnuTar)("uploads gzip directory archives and preserves content, executable modes, and symlinks", async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-daytona-gzip-dir-"));
+  const root = await fixtureMkdtemp(path.join(os.tmpdir(), "paperclip-daytona-gzip-dir-"));
   const source = path.join(root, "source");
   const remoteDir = path.join(root, "remote");
   const target = path.join(remoteDir, "target");
@@ -393,15 +393,15 @@ it.skipIf(!gnuTar)("uploads gzip directory archives and preserves content, execu
     expect(uploadedArchiveBytes).toBeDefined();
     expect(uploadedArchiveBytes!.subarray(0, 2)).toEqual(Buffer.from([0x1f, 0x8b]));
     expect(await fs.readFile(path.join(target, "bin", "tool.sh"), "utf8")).toBe("#!/bin/sh\necho ok\n");
-    expect((await fs.stat(path.join(target, "bin", "tool.sh"))).mode & 0o777).toBe(0o755);
-    expect(await fs.readlink(path.join(target, "tool-link"))).toBe("bin/tool.sh");
+    if (process.platform !== "win32") expect((await fs.stat(path.join(target, "bin", "tool.sh"))).mode & 0o777).toBe(0o755);
+    expect((await fs.readlink(path.join(target, "tool-link"))).replaceAll("\\", "/")).toBe("bin/tool.sh");
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
 }, 30_000);
 
 it.skipIf(!gnuTar)("uploads and extracts a gzip empty directory archive", async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-daytona-gzip-empty-"));
+  const root = await fixtureMkdtemp(path.join(os.tmpdir(), "paperclip-daytona-gzip-empty-"));
   const source = path.join(root, "source");
   const remoteDir = path.join(root, "remote");
   const target = path.join(remoteDir, "target");
@@ -450,7 +450,7 @@ describe("daytona file-sync inbound zstd transport compression", () => {
   });
 
   const mkTempDir = async (prefix: string): Promise<string> => {
-    const dir = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
+    const dir = await fixtureMkdtemp(path.join(os.tmpdir(), prefix));
     cleanupDirs.push(dir);
     return dir;
   };
@@ -1015,6 +1015,8 @@ describe("daytona file-sync inbound zstd transport compression", () => {
       let capturedDir = "";
       let capturedDirMode = -1;
       let capturedFileMode = -1;
+      let capturedPrivateDirectory = false;
+      let capturedPrivateFile = false;
       const sandbox = {
         process: {
           executeCommand: async (command: string) => ({
@@ -1031,6 +1033,8 @@ describe("daytona file-sync inbound zstd transport compression", () => {
             capturedDir = path.dirname(zstdUpload.source);
             capturedDirMode = (await fs.stat(capturedDir)).mode & 0o777;
             capturedFileMode = (await fs.stat(zstdUpload.source)).mode & 0o777;
+            capturedPrivateDirectory = hasPrivatePermissions(capturedDir, capturedDirMode);
+            capturedPrivateFile = hasPrivatePermissions(zstdUpload.source, capturedFileMode);
             throw new Error("simulated upload failure");
           },
           setFilePermissions: async () => undefined,
@@ -1045,8 +1049,12 @@ describe("daytona file-sync inbound zstd transport compression", () => {
         performSyncIn({ sandbox: sandbox as never, operations, remoteDir: "/workspace", timeoutSeconds: 30 }),
       ).rejects.toThrow(/simulated upload failure/);
 
-      expect(capturedDirMode).toBe(0o700);
-      expect(capturedFileMode).toBe(0o600);
+      expect(capturedPrivateDirectory).toBe(true);
+      expect(capturedPrivateFile).toBe(true);
+      if (process.platform !== "win32") {
+        expect(capturedDirMode).toBe(0o700);
+        expect(capturedFileMode).toBe(0o600);
+      }
       // The private directory (not only the file) is removed after the upload fails.
       await expect(fs.stat(capturedDir)).rejects.toThrow();
     });
@@ -1089,8 +1097,11 @@ describe.skipIf(!gnuTar)("automatic unsafe workspace export recovery", () => {
   afterEach(async () => {
     await Promise.all(cleanupDirs.splice(0).map((root) => fs.rm(root, { recursive: true, force: true })));
   });
-  it.each(["/usr/bin/pnpm", "../../outside.txt", "ambiguous", "ambiguous-target"])("preserves files and safe links when a link is unsafe: %s", async (target) => {
-    const root = await fs.mkdtemp("/tmp/paperclip-export-recovery-");
+  // NTFS forbids '>' in filenames. These two real filesystem recovery journeys
+  // require POSIX; hostile host archive admission remains covered by USTAR bytes.
+  for (const target of ["/usr/bin/pnpm", "../../outside.txt", "ambiguous", "ambiguous-target"]) {
+  it.skipIf(process.platform === "win32" && (target === "ambiguous" || target === "ambiguous-target"))(`preserves files and safe links when a link is unsafe: ${target}`, async () => {
+    const root = await fixtureMkdtemp("/tmp/paperclip-export-recovery-");
     cleanupDirs.push(root);
     const remoteDir = path.join(root, "remote");
     const output = path.join(root, "output");
@@ -1122,19 +1133,20 @@ describe.skipIf(!gnuTar)("automatic unsafe workspace export recovery", () => {
     expect(downloads).toHaveBeenCalledTimes(2);
     expect(recovery).toHaveBeenCalledOnce();
     expect(await fs.readFile(path.join(output, "nested", "--safe [file].txt"), "utf8")).toBe("saved work");
-    expect((await fs.stat(path.join(output, "nested", "--safe [file].txt"))).mode & 0o777).toBe(0o600);
+    expect(hasPrivatePermissions(path.join(output, "nested", "--safe [file].txt"), (await fs.stat(path.join(output, "nested", "--safe [file].txt"))).mode)).toBe(true);
     expect(await fs.readFile(path.join(output, "hard-link"), "utf8")).toBe("saved work");
     await expect(fs.lstat(path.join(output, "nested", linkName))).rejects.toMatchObject({ code: "ENOENT" });
-    expect(await fs.readlink(path.join(output, "safe-link"))).toBe("nested/--safe [file].txt");
+    expect((await fs.readlink(path.join(output, "safe-link"))).replaceAll("\\", "/")).toBe("nested/--safe [file].txt");
     expect(await fs.readdir(path.join(output, "empty"))).toEqual([]);
     await expect(fs.stat(path.join(output, "cache", "ignored.txt"))).rejects.toMatchObject({ code: "ENOENT" });
     expect(await fs.readFile(path.join(root, "outside.txt"), "utf8")).toBe("private bytes");
     expect((await fs.lstat(path.join(remoteDir, "nested", linkName))).isSymbolicLink()).toBe(true);
     expect((await fs.readdir(remoteDir)).filter((name) => name.startsWith(".paperclip-upload"))).toEqual([]);
-  });
+  }, 30_000);
+  }
 
   it("finishes an export containing only unsafe links with an empty directory", async () => {
-    const root = await fs.mkdtemp("/tmp/paperclip-export-empty-");
+    const root = await fixtureMkdtemp("/tmp/paperclip-export-empty-");
     cleanupDirs.push(root);
     const remoteDir = path.join(root, "remote");
     const output = path.join(root, "output");
@@ -1155,5 +1167,5 @@ describe.skipIf(!gnuTar)("automatic unsafe workspace export recovery", () => {
       operations: [{ operationId: "empty", files: [{ sourcePath: remoteDir, targetPath: output, kind: "directory" }] }],
     });
     expect(await fs.readdir(output)).toEqual([]);
-  });
+  }, 30_000);
 });

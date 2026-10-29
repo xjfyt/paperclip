@@ -13,7 +13,7 @@ export default defineConfig({
     },
   },
   test: {
-    include: [path.join(dirname, "src/**/*.test.ts")],
+    include: [path.join(dirname, "src/**/*.test.ts").split(path.sep).join("/")],
     environment: "node",
   },
 });

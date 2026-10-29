@@ -16,6 +16,7 @@ import type {
 } from "@paperclipai/plugin-sdk";
 import { recordEnvironmentSyncError, withEnvironmentSyncTransferStep } from "@paperclipai/plugin-sdk";
 import { getPluginTracer } from "./plugin.js";
+import { hasPrivatePermissions, protectNewPrivatePath } from "./private-filesystem-permissions.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -145,6 +146,7 @@ export function assertConfinedSandboxPath(remoteDir: string, candidate: string, 
 async function withHostTempDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-daytona-sync-"));
   try {
+    protectNewPrivatePath(dir);
     return await fn(dir);
   } finally {
     await fs.rm(dir, { recursive: true, force: true }).catch(() => undefined);
@@ -253,6 +255,13 @@ export function splitLinkEntryOnce(field: string, delimiter: string): { name: st
  */
 class UnsafeOutboundArchiveError extends Error {}
 
+function unsafeWindowsArchivePath(value: string): boolean {
+  if (/[\\:<>"|?*\x00-\x1f\x7f]/.test(value)) return true;
+  return value.split("/").some(part => part !== "." && part !== ".." && (
+    /[ .]$/.test(part) || /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(part)
+  ));
+}
+
 function assertTarListingLineConfined(line: string): void {
   if (line.trim().length === 0) return;
   const parsed = parseTarVerboseListingLine(line);
@@ -273,12 +282,23 @@ function assertTarListingLineConfined(line: string): void {
     name = split.name;
     linkTarget = split.target;
   }
+  // A POSIX filename can encode a Windows separator, drive or alternate data
+  // stream. Windows tar interprets these on extraction even though posix.join
+  // treats them as ordinary characters. Refuse them rather than unescaping a
+  // locale/tool-dependent listing into a different host path.
+  if (process.platform === "win32") {
+    if (unsafeWindowsArchivePath(name)) throw new UnsafeOutboundArchiveError("Daytona syncOut refusing a tarball member with an unsafe Windows path.");
+    if (linkTarget !== null && unsafeWindowsArchivePath(linkTarget)) throw new UnsafeOutboundArchiveError("Daytona syncOut refusing tarball link whose target escapes the extraction dir or has an unsafe Windows path.");
+  }
   const cleanName = name.replace(/\/+$/, "");
   if (cleanName.length > 0 && posixPathEscapes(cleanName)) {
     throw new UnsafeOutboundArchiveError(`Daytona syncOut refusing tarball member that escapes the extraction dir: ${name}`);
   }
   if (linkTarget !== null) {
-    const resolved = path.posix.join(path.posix.dirname(cleanName), linkTarget);
+    // Tar hardlink names are anchored at the archive root; symlink targets
+    // are relative to the link's parent. Using the latter rule for both can
+    // admit `nested/hardlink link to ../outside` as if it remained in-tree.
+    const resolved = typeFlag === "h" ? linkTarget : path.posix.join(path.posix.dirname(cleanName), linkTarget);
     if (path.posix.isAbsolute(linkTarget) || posixPathEscapes(resolved)) {
       throw new UnsafeOutboundArchiveError(
         `Daytona syncOut refusing tarball link whose target escapes the extraction dir: ${name} -> ${linkTarget}`,
@@ -307,7 +327,9 @@ export async function assertTarballEntriesConfined(
   // every entry before extraction. Keep bytes until a full line to preserve
   // UTF-8 characters split across pipe chunks.
   const child = spawn("tar", ["-tvf", archivePath], {
-    env: { ...process.env, COPYFILE_DISABLE: "1" },
+    // The confinement parser consumes tar's metadata columns. Pin their
+    // language so a host locale cannot change month/day tokenization.
+    env: { ...process.env, COPYFILE_DISABLE: "1", LC_ALL: "C", LANG: "C" },
     stdio: ["ignore", "pipe", "pipe"],
   });
   let spawnError: Error | undefined;
@@ -321,7 +343,10 @@ export async function assertTarballEntriesConfined(
     if (++entries > TAR_LISTING_MAX_ENTRIES) {
       throw recordEnvironmentSyncError(new Error("Daytona syncOut tar listing entry limit exceeded (250000)"), { transferFailureKind: "listing_entry_limit" });
     }
-    try { assertTarListingLineConfined(line.toString("utf8")); }
+    // Windows bsdtar frames records with CRLF. Remove only that framing byte;
+    // the archive member itself is still validated by the same strict parser.
+    const record = process.platform === "win32" && line.at(-1) === 13 ? line.subarray(0, -1) : line;
+    try { assertTarListingLineConfined(record.toString("utf8")); }
     catch (error) {
       if (error instanceof UnsafeOutboundArchiveError) recordEnvironmentSyncError(error, { transferFailureKind: "unsafe_archive" });
       throw error;
@@ -385,11 +410,93 @@ export async function assertTarballEntriesConfined(
   }
 }
 
+type StagedHostEntry = { relative: string; kind: "directory" | "file" | "symlink" };
+
+async function readPrivateWindowsStage(root: string): Promise<StagedHostEntry[]> {
+  const entries: StagedHostEntry[] = [];
+  const walk = async (directory: string): Promise<void> => {
+    for (const name of (await fs.readdir(directory)).sort()) {
+      const full = path.join(directory, name);
+      const stat = await fs.lstat(full);
+      const relative = path.relative(root, full);
+      if (stat.isSymbolicLink()) {
+        const target = await fs.readlink(full);
+        const resolved = path.relative(root, path.resolve(path.dirname(full), target));
+        if (path.isAbsolute(target) || path.isAbsolute(resolved) || resolved === ".." || resolved.startsWith(`..${path.sep}`)) throw new UnsafeOutboundArchiveError("Daytona staged link escapes its private extraction tree.");
+        entries.push({ relative, kind: "symlink" });
+      } else {
+        if ((!stat.isDirectory() && !stat.isFile()) || !hasPrivatePermissions(full, stat.mode)) throw new Error("Daytona extracted payload did not preserve a private Windows ACL.");
+        entries.push({ relative, kind: stat.isDirectory() ? "directory" : "file" });
+        if (stat.isDirectory()) await walk(full);
+      }
+    }
+  };
+  await walk(root);
+  return entries;
+}
+
+async function verifyWindowsInstallPath(root: string, entry: StagedHostEntry): Promise<void> {
+  const parts = entry.relative.split(path.sep);
+  let current = root;
+  for (let index = -1; index < parts.length; index++) {
+    if (index >= 0) current = path.join(current, parts[index]);
+    let info;
+    try { info = await fs.lstat(current); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return; throw error; }
+    const directoryExpected = index < parts.length - 1 || entry.kind === "directory";
+    if (info.isSymbolicLink() || (directoryExpected ? !info.isDirectory() : !info.isFile())) {
+      throw new Error("Daytona host install refuses an existing link or incompatible destination path.");
+    }
+  }
+}
+
+async function installPrivateWindowsStage(stage: string, target: string, entries: StagedHostEntry[]): Promise<void> {
+  // Validate every destination before moving the first payload. Existing normal
+  // workspace directories keep their ACL; they are not credential containers.
+  for (const entry of entries) await verifyWindowsInstallPath(target, entry);
+  const ensureDirectory = async (directory: string): Promise<void> => {
+    try {
+      await fs.mkdir(directory, { mode: 0o700 });
+      protectNewPrivatePath(directory);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      const info = await fs.lstat(directory);
+      if (!info.isDirectory() || info.isSymbolicLink()) throw new Error("Daytona host install refuses an existing link or incompatible destination path.");
+    }
+  };
+  await ensureDirectory(target);
+  for (const entry of entries.filter(entry => entry.kind === "directory")) {
+    await verifyWindowsInstallPath(target, entry);
+    await ensureDirectory(path.join(target, entry.relative));
+  }
+  for (const entry of entries.filter(entry => entry.kind !== "directory")) {
+    await verifyWindowsInstallPath(target, entry);
+    const source = path.join(stage, entry.relative);
+    const info = await fs.lstat(source);
+    if (entry.kind === "file" && (!info.isFile() || !hasPrivatePermissions(source, info.mode))) throw new Error("Daytona staged file no longer has a private Windows ACL.");
+    if (entry.kind === "symlink" && !info.isSymbolicLink()) throw new Error("Daytona staged link changed before installation.");
+    // Same-volume rename retains the payload's protected ACL even when the
+    // existing workspace parent intentionally grants access to trusted groups.
+    await fs.rename(source, path.join(target, entry.relative));
+  }
+}
+
 async function extractHostTarball(input: { archivePath: string; localDir: string }): Promise<void> {
   // The archive is sandbox-authored and untrusted: validate every member (and
   // link target) is confined before letting host-side tar write a single byte.
   await withEnvironmentSyncTransferStep("archive_validate", () => assertTarballEntriesConfined(input.archivePath));
   await withEnvironmentSyncTransferStep("archive_extract", async () => {
+    if (process.platform === "win32") {
+      await fs.mkdir(path.dirname(input.localDir), { recursive: true });
+      const stage = await fs.mkdtemp(path.join(path.dirname(input.localDir), ".paperclip-extract-"));
+      try {
+        protectNewPrivatePath(stage);
+        await execFileAsync("tar", ["--no-acls", "--no-xattrs", "-xf", input.archivePath, "-C", stage], { env: { ...process.env, COPYFILE_DISABLE: "1" }, maxBuffer: 32 * 1024 * 1024 });
+        const entries = await readPrivateWindowsStage(stage);
+        await installPrivateWindowsStage(stage, input.localDir, entries);
+      } finally { await fs.rm(stage, { recursive: true, force: true }); }
+      return;
+    }
     await fs.mkdir(input.localDir, { recursive: true });
     await execFileAsync("tar", ["-xf", input.archivePath, "-C", input.localDir], {
       env: { ...process.env, COPYFILE_DISABLE: "1" },
@@ -497,6 +604,7 @@ async function compressFileToHostTemp(sourcePath: string): Promise<{ dir: string
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-daytona-zstd-"));
   const tempPath = path.join(dir, "artifact.zst");
   try {
+    protectNewPrivatePath(dir);
     await pipeline(
       createReadStream(sourcePath),
       zlib.createZstdCompress({ params: { [zlib.constants.ZSTD_c_compressionLevel]: ZSTD_COMPRESSION_LEVEL } }),
@@ -1165,18 +1273,19 @@ async function syncOutFileMappings(input: {
   });
 
   const requests: FileDownloadRequest[] = [];
-  const finalize: { temp: string; target: string; source: string; snapshot: string; mode?: number }[] = [];
+  const finalize: { temp: string; stage?: string; target: string; source: string; snapshot: string; mode?: number }[] = [];
   mappings.forEach((mapping, index) => {
     const dir = path.dirname(mapping.targetPath);
     // Stream each snapshot into a reserved host temp sibling, then atomic-rename
     // onto the host targetPath so an interrupted download never truncates it.
-    const temp = path.join(dir, scratchName());
+    const stage = process.platform === "win32" ? path.join(dir, scratchName()) : undefined;
+    const temp = stage ? path.join(stage, scratchName()) : path.join(dir, scratchName());
     requests.push({ source: snapshots[index], destination: temp });
-    finalize.push({ temp, target: mapping.targetPath, source: mapping.sourcePath, snapshot: snapshots[index], mode: mapping.mode });
+    finalize.push({ temp, stage, target: mapping.targetPath, source: mapping.sourcePath, snapshot: snapshots[index], mode: mapping.mode });
   });
 
   const cleanup = async (): Promise<void> => {
-    await Promise.all(finalize.map((entry) => fs.rm(entry.temp, { force: true }).catch(() => undefined)));
+    await Promise.all(finalize.map((entry) => fs.rm(entry.stage ?? entry.temp, { recursive: Boolean(entry.stage), force: true }).catch(() => undefined)));
     await removeSandboxScratch(sandbox, snapshots, timeoutSeconds);
   };
 
@@ -1185,6 +1294,12 @@ async function syncOutFileMappings(input: {
   try {
     for (const entry of finalize) {
       await fs.mkdir(path.dirname(entry.target), { recursive: true });
+      if (entry.stage) {
+        await fs.mkdir(entry.stage, { mode: 0o700 });
+        protectNewPrivatePath(entry.stage);
+        const file = await fs.open(entry.temp, "wx", 0o600);
+        try { protectNewPrivatePath(entry.temp); } finally { await file.close(); }
+      }
     }
   } catch (error) {
     recordEnvironmentSyncError(error, { transferStep: "file_finalize" });
@@ -1238,8 +1353,11 @@ async function syncOutFileMappings(input: {
       if (typeof entry.mode === "number") {
         await fs.chmod(entry.temp, entry.mode);
       }
-      bytesTransferred += (await fs.stat(entry.temp)).size;
+      const stat = await fs.lstat(entry.temp);
+      if (entry.stage && (!stat.isFile() || !hasPrivatePermissions(entry.temp, stat.mode))) throw new Error("Daytona download did not preserve a private Windows file ACL.");
+      bytesTransferred += stat.size;
       await fs.rename(entry.temp, entry.target);
+      if (entry.stage) await fs.rm(entry.stage, { recursive: true, force: true });
     }
   } catch (error) {
     recordEnvironmentSyncError(error, { transferStep: "file_finalize" });

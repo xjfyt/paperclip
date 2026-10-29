@@ -46,6 +46,36 @@ pnpm typecheck
 
 These commands assume the repo root has already been installed once so the local `@paperclipai/plugin-sdk` workspace package is available to the compiler during development.
 
+## Native Windows host transfers
+
+The host and remote sandbox use different filesystem contracts. Remote commands
+still require the provider's POSIX environment. On a native Windows host, private
+download and compression staging directories receive a protected owner-only NTFS
+ACL before any payload is written. File downloads keep that ACL through atomic
+promotion. Directory archives are first extracted into a new private directory
+on the destination volume, with archive ACL/xattr restoration disabled. The
+complete staged tree and destination paths are checked before installing the
+first member. Incoming files retain their private ACL through atomic promotion;
+existing ordinary workspace directories keep their own ACL and untouched files.
+Existing host symlink/junction parents are refused. Unavailable ACL inspection or
+a non-private staged file fails closed. POSIX mode bits alone do not prove NTFS
+privacy. Windows-incompatible member/link syntax (including backslashes, drives,
+alternate data streams, reserved device names and trailing-dot/space aliases)
+is refused before extraction. Tar hardlink targets are anchored at the archive
+root, while symlink targets are relative to the link's parent.
+
+The Node-only `src/private-filesystem-permissions.ts` is a controlled copy of
+`packages/shared/src/private-filesystem-permissions.ts`. Its test checks exact
+source equality, so security fixes must update both copies. This preserves the
+plugin's standalone dependency graph.
+
+Local POSIX sandbox tests use Git Bash on Windows. Tests requiring POSIX directory
+mode enforcement or filenames containing `>` require a real POSIX filesystem;
+their platform skips do not constitute a passed remote journey. Host malicious
+archive admission is tested separately with raw USTAR bytes. Root workspace
+typechecking does not include this independently installed package, and mocked
+provider tests do not prove live Daytona credentials or the installed npm package.
+
 ## Package layout
 
 - `src/manifest.ts` declares the sandbox-provider driver metadata
