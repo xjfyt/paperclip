@@ -1,8 +1,15 @@
 import {
   chmodSync,
+  closeSync,
+  constants,
   copyFileSync,
   existsSync,
+  fstatSync,
+  fsyncSync,
+  linkSync,
+  lstatSync,
   mkdirSync,
+  openSync,
   promises as fsPromises,
   readdirSync,
   readFileSync,
@@ -11,8 +18,10 @@ import {
   rmSync,
   statSync,
   symlinkSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
+import { hasPrivatePermissions, protectNewPrivatePath } from "@paperclipai/shared/private-filesystem-permissions";
 import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
@@ -1054,6 +1063,98 @@ function resolveSourceConnectionString(config: PaperclipConfig, envEntries: Reco
   return `postgres://paperclip:paperclip@127.0.0.1:${port}/paperclip`;
 }
 
+function privateWorktreeKeyError() {
+  return new Error("Worktree secrets require verified private Windows files and directories; existing keys and ACLs are never repaired or replaced.");
+}
+
+function assertUnlinkedKeyParents(file: string) {
+  for (let directory = path.dirname(file); ; directory = path.dirname(directory)) {
+    try {
+      const stat = lstatSync(directory);
+      if (!stat.isDirectory() || stat.isSymbolicLink()) throw privateWorktreeKeyError();
+    } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+    if (path.dirname(directory) === directory) break;
+  }
+}
+
+function assertPrivateKeyDirectory(directory: string) {
+  assertUnlinkedKeyParents(path.join(directory, "key"));
+  const stat = lstatSync(directory, { bigint: true });
+  if (!stat.isDirectory() || stat.isSymbolicLink() || !hasPrivatePermissions(directory, Number(stat.mode))) throw privateWorktreeKeyError();
+  return stat;
+}
+
+function readPrivateWorktreeKey(file: string): Buffer {
+  assertPrivateKeyDirectory(path.dirname(file));
+  const entry = lstatSync(file, { bigint: true });
+  if (!entry.isFile() || entry.isSymbolicLink() || !hasPrivatePermissions(file, Number(entry.mode))) throw privateWorktreeKeyError();
+  const descriptor = openSync(file, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try {
+    const opened = fstatSync(descriptor, { bigint: true });
+    if (!opened.isFile() || opened.dev !== entry.dev || opened.ino !== entry.ino) throw privateWorktreeKeyError();
+    const bytes = readFileSync(descriptor);
+    const after = fstatSync(descriptor, { bigint: true });
+    const named = lstatSync(file, { bigint: true });
+    for (const stat of [after, named]) {
+      if (!stat.isFile() || stat.isSymbolicLink() || stat.dev !== opened.dev || stat.ino !== opened.ino
+        || stat.size !== opened.size || stat.mtimeNs !== opened.mtimeNs || stat.ctimeNs !== opened.ctimeNs) throw privateWorktreeKeyError();
+    }
+    return bytes;
+  } finally { closeSync(descriptor); }
+}
+
+function publishPrivateWorktreeKey(target: string, bytes: Buffer) {
+  const directory = path.dirname(target);
+  assertUnlinkedKeyParents(target);
+  const missing: string[] = [];
+  for (let candidate = directory; ; candidate = path.dirname(candidate)) {
+    try { lstatSync(candidate); break; }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+    missing.push(candidate);
+  }
+  for (const candidate of missing.reverse()) {
+    mkdirSync(candidate, { mode: 0o700 });
+    protectNewPrivatePath(candidate); // exclusively created and still empty
+  }
+  const parent = assertPrivateKeyDirectory(directory);
+  const sameKey = () => {
+    if (!readPrivateWorktreeKey(target).equals(bytes)) throw privateWorktreeKeyError();
+  };
+  try { lstatSync(target); sameKey(); return; }
+  catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+  const temporary = `${target}.${randomUUID()}.tmp`;
+  let created = false;
+  let owned: { dev: bigint; ino: bigint } | undefined;
+  const ownsTemporaryEntry = () => {
+    const entry = lstatSync(temporary, { bigint: true });
+    return owned !== undefined && entry.isFile() && !entry.isSymbolicLink() && entry.dev === owned.dev && entry.ino === owned.ino;
+  };
+  try {
+    const descriptor = openSync(temporary, "wx", 0o600);
+    created = true;
+    try {
+      owned = fstatSync(descriptor, { bigint: true });
+      protectNewPrivatePath(temporary); // first payload byte follows verified DACL
+      if (!ownsTemporaryEntry() || fstatSync(descriptor, { bigint: true }).size !== 0n) throw privateWorktreeKeyError();
+      writeFileSync(descriptor, bytes);
+      fsyncSync(descriptor);
+    } finally { closeSync(descriptor); }
+    if (!readPrivateWorktreeKey(temporary).equals(bytes)) throw privateWorktreeKeyError();
+    const current = assertPrivateKeyDirectory(directory);
+    if (current.dev !== parent.dev || current.ino !== parent.ino) throw privateWorktreeKeyError();
+    try { linkSync(temporary, target); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
+    sameKey(); // a concurrent publisher may win, but a different key never does
+  } finally {
+    if (created) {
+      try {
+        if (!ownsTemporaryEntry()) throw privateWorktreeKeyError();
+        unlinkSync(temporary);
+      } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+    }
+  }
+}
+
 export function copySeededSecretsKey(input: {
   sourceConfigPath: string;
   sourceConfig: PaperclipConfig;
@@ -1062,6 +1163,21 @@ export function copySeededSecretsKey(input: {
 }): void {
   if (input.sourceConfig.secrets.provider !== "local_encrypted") {
     return;
+  }
+
+  if (process.platform === "win32") {
+    try {
+      const allowProcessEnvFallback = isCurrentSourceConfigPath(input.sourceConfigPath);
+      const inline = nonEmpty(input.sourceEnvEntries.PAPERCLIP_SECRETS_MASTER_KEY)
+        ?? (allowProcessEnvFallback ? nonEmpty(process.env.PAPERCLIP_SECRETS_MASTER_KEY) : null);
+      const override = nonEmpty(input.sourceEnvEntries.PAPERCLIP_SECRETS_MASTER_KEY_FILE)
+        ?? (allowProcessEnvFallback ? nonEmpty(process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE) : null);
+      const bytes = inline ? Buffer.from(inline, "utf8") : readPrivateWorktreeKey(resolveRuntimeLikePath(
+        override ?? input.sourceConfig.secrets.localEncrypted.keyFilePath, input.sourceConfigPath,
+      ));
+      publishPrivateWorktreeKey(path.resolve(input.targetKeyFilePath), bytes);
+      return;
+    } catch { throw privateWorktreeKeyError(); }
   }
 
   mkdirSync(path.dirname(input.targetKeyFilePath), { recursive: true });

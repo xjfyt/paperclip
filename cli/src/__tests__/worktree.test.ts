@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import os from "node:os";
+import { protectNewPrivatePath } from "@paperclipai/shared/private-filesystem-permissions";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -1424,6 +1425,9 @@ describe("worktree helpers", () => {
       const sourceKeyPath = path.join(tempRoot, "source", "secrets", "master.key");
       const targetKeyPath = path.join(tempRoot, "target", "secrets", "master.key");
       fs.mkdirSync(path.dirname(sourceKeyPath), { recursive: true });
+      protectNewPrivatePath(path.dirname(sourceKeyPath));
+      fs.writeFileSync(sourceKeyPath, "", { mode: 0o600 });
+      protectNewPrivatePath(sourceKeyPath);
       fs.writeFileSync(sourceKeyPath, "source-master-key", "utf8");
 
       const sourceConfig = buildSourceConfig();
@@ -1450,7 +1454,7 @@ describe("worktree helpers", () => {
       }
       fs.rmSync(tempRoot, { recursive: true, force: true });
     }
-  });
+  }, process.platform === "win32" ? 20_000 : 5_000);
 
   it("writes the source inline secrets master key into the seeded worktree instance", () => {
     const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "paperclip-worktree-secrets-"));
@@ -1471,7 +1475,7 @@ describe("worktree helpers", () => {
     } finally {
       fs.rmSync(tempRoot, { recursive: true, force: true });
     }
-  });
+  }, process.platform === "win32" ? 20_000 : 5_000);
 
   it("creates an explicitly empty worktree without inherited signing secrets or deferred copying", async () => {
     const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "paperclip-worktree-empty-"));
@@ -1620,6 +1624,9 @@ describe("worktree helpers", () => {
       sourceConfig.secrets.localEncrypted.keyFilePath = sourceKeyPath;
 
       fs.writeFileSync(sourceConfigPath, `${JSON.stringify(sourceConfig, null, 2)}\n`, "utf8");
+      protectNewPrivatePath(path.dirname(sourceKeyPath));
+      fs.writeFileSync(sourceKeyPath, "", { mode: 0o600 });
+      protectNewPrivatePath(sourceKeyPath);
       fs.writeFileSync(sourceKeyPath, "source-master-key", "utf8");
 
       process.chdir(worktreeRoot);
@@ -1808,6 +1815,9 @@ describe("worktree helpers", () => {
 
       fs.writeFileSync(sourceConfigPath, JSON.stringify(sourceConfig, null, 2) + "\n", "utf8");
       fs.writeFileSync(sourceEnvPath, "", "utf8");
+      protectNewPrivatePath(path.dirname(sourceKeyPath));
+      fs.writeFileSync(sourceKeyPath, "", { mode: 0o600 });
+      protectNewPrivatePath(sourceKeyPath);
       fs.writeFileSync(sourceKeyPath, "source-master-key", "utf8");
 
       process.chdir(worktreeRoot);
@@ -2182,6 +2192,9 @@ describe("worktree helpers", () => {
       await seedValidWorktreeSource(sourceDb.connectionString);
       fs.writeFileSync(currentPaths.configPath, JSON.stringify(currentConfig, null, 2), "utf8");
       fs.writeFileSync(sourcePaths.configPath, JSON.stringify(sourceConfig, null, 2), "utf8");
+      protectNewPrivatePath(path.dirname(sourcePaths.secretsKeyFilePath));
+      fs.writeFileSync(sourcePaths.secretsKeyFilePath, "", { mode: 0o600 });
+      protectNewPrivatePath(sourcePaths.secretsKeyFilePath);
       fs.writeFileSync(sourcePaths.secretsKeyFilePath, "source-secret", "utf8");
       const worktreeSentinelPath = path.join(repoRoot, "user-worktree-file.txt");
       fs.writeFileSync(worktreeSentinelPath, "preserve me", "utf8");
