@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, realpath, rm, writeFile, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -25,10 +25,18 @@ describe("Grok runner company credentials", () => {
   it("uses only an explicitly selected API key and strips subscription payloads and homes", async () => {
     expect(await prepareGrokRunnerCredentials({ companyId: "test-company", remote: true, environment: { XAI_API_KEY: "selected", GROK_HOME: "/host", PAPERCLIP_ACPX_GROK_AUTH_JSON_SECRET: "stale" } })).toEqual({ environment: { XAI_API_KEY: "selected" }, home: null });
   });
-  it("reads the controller-selected managed connection privately", async () => {
+  it(process.platform === "win32"
+    ? "refuses unverifiable controller credential reads even when the execution target is remote"
+    : "reads the controller-selected managed connection privately", async () => {
     const root = await home(); companyHome.mockReturnValue(join(root, "unused"));
     await writeFile(join(root, "auth.json"), '{"private":"fixture"}', { mode: 0o600 });
-    const value = await prepareGrokRunnerCredentials({ companyId: "test-company", remote: true, managedHome: root, environment: { GROK_HOME: "/untrusted", XAI_API_KEY: "" } });
+    const preparing = prepareGrokRunnerCredentials({ companyId: "test-company", remote: true, managedHome: root, environment: { GROK_HOME: "/untrusted", XAI_API_KEY: "" } });
+    if (process.platform === "win32") {
+      await expect(preparing).rejects.toThrow("Grok subscription login is unavailable");
+      expect(await readFile(join(root, "auth.json"), "utf8")).toBe('{"private":"fixture"}');
+      return;
+    }
+    const value = await preparing;
     expect(value).toEqual({ home: root, environment: { PAPERCLIP_ACPX_GROK_AUTH_JSON_SECRET: '{"private":"fixture"}' } });
   });
 });
