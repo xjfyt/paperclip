@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "verifiedAt": "2026-10-30T02:27:02.2449516+08:00",
+  "platform": "win32",
+  "scope": "Native session executor and resume, plus empty runtime context cleanup",
+  "command": "pnpm exec vitest run server/src/services/native-runtime/native-session-executor.test.ts server/src/services/native-runtime/native-session-resume.test.ts --reporter=json --outputFile=test-results/project-closure-20261029/native-complete-final.json",
+  "result": {
+    "files": 2,
+    "passed": 731,
+    "failed": 0,
+    "skipped": 0
+  },
+  "report": {
+    "path": "test-results/project-closure-20261029/native-complete-final.json",
+    "sha256": "7bc0a747347bf75663c3028378b9c52d63b8aa6b1fc09cea466c250de8e3f74f"
+  },
+  "additional": {
+    "command": "pnpm exec vitest run src/drivers/runtime-context-empty-cleanup.test.ts --reporter dot",
+    "cwd": "packages/paperclip-runner",
+    "passed": 2,
+    "failed": 0,
+    "log": "test-results/project-closure-20261029/native-empty-skills-fixed.log",
+    "sha256": "ea9832d5f7ab5ee276965ee9a283bfa110da48e421a1bcc7a499cbbe5d23ba3b"
+  },
+  "sourceFiles": [
+    {
+      "path": "server/src/services/native-runtime/native-session-executor.ts",
+      "sha256": "d1670f44a21cda152bb2f181a82b2e3f42bb070e1a7326f8e1910975c751af37"
+    },
+    {
+      "path": "server/src/services/native-runtime/native-session-executor.test.ts",
+      "sha256": "64bee87a0ad7cb3d9149a717f1030e5ee0f8c1352dd702a6e280fdb6faec19ef"
+    },
+    {
+      "path": "server/src/services/native-runtime/native-session-resume.test.ts",
+      "sha256": "03d0167e978fd5571a9538d5b0f9213d44ef1c57da5f7f8dbdb54ff1700ed022"
+    },
+    {
+      "path": "packages/paperclip-runner/src/drivers/runtime-context-materializer.ts",
+      "sha256": "b45dcb0caa15b6a59c2ef1e1c2b634beea1de6520eb70e12d1f1f208929aad38"
+    },
+    {
+      "path": "packages/paperclip-runner/src/drivers/runtime-context-empty-cleanup.test.ts",
+      "sha256": "5acd7d637c292b1891ba697083714e22b83e2531494ae0d3423c6dd3d022261f"
+    },
+    {
+      "path": "packages/adapter-utils/src/test-fixtures/local-sandbox.ts",
+      "sha256": "b617e41843bc565f3ff3995357cff44105ef085a661507d25b7911467e96c76d"
+    },
+    {
+      "path": "packages/adapter-utils/src/test-fixtures/native-cli.ts",
+      "sha256": "03105e5517667c1b5193d5d07138674aad1bc9c4c89d81aaf31f3b9fce4bb13a"
+    }
+  ],
+  "limits": [
+    "Provider CLI bytes are controlled offline fixtures; no live provider account was exercised.",
+    "Windows retained-process cleanup and confined local Grok credential import remain fail-closed where native ownership/path proof is unavailable. Passing negative tests does not establish support.",
+    "Real Windows PostgreSQL and runner protocol are exercised by the resume integration. POSIX-only success branches require a separate POSIX run.",
+    "Raw logs remain ignored local files; the report hash is a receipt, not an uploaded artifact."
+  ],
+  "previousAttempts": [
+    "native-full-fixed1.json: 651 passed, 30 failed",
+    "native-full-fixed2.json: 680 passed, 1 failed; idle expiry clock race subsequently fixed"
+  ]
+}

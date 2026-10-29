@@ -138,6 +138,10 @@ async function protectStagedTree(root: string): Promise<void> {
 }
 
 async function unprotectMaterializedTree(root: string): Promise<void> {
+  const entry = await lstat(root, { bigint: true });
+  if (!entry.isDirectory() || entry.isSymbolicLink()) {
+    throw new Error("materialized runtime context root must be a directory without links");
+  }
   const rootHandle = await open(
     root,
     constants.O_RDONLY
@@ -145,10 +149,14 @@ async function unprotectMaterializedTree(root: string): Promise<void> {
       | (constants.O_DIRECTORY ?? 0),
   );
   try {
-    const opened = await rootHandle.stat();
-    if (!opened.isDirectory()) {
+    const opened = await rootHandle.stat({ bigint: true });
+    if (!opened.isDirectory() || opened.dev !== entry.dev || opened.ino !== entry.ino) {
       throw new Error("materialized runtime context root must be a directory");
     }
+    // A launch with no skills publishes an empty, unsealed directory. There
+    // are no child permissions to restore, and Windows rejects fchmod on a
+    // directory handle. Keep the nonempty sealed-tree checks below intact.
+    if (process.platform === "win32" && (await readdir(root)).length === 0) return;
     // Restore directory mutation before descending so every child can be
     // unlinked. Handles plus O_NOFOLLOW keep cleanup inside the sealed tree.
     await rootHandle.chmod(0o700);

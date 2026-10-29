@@ -20,10 +20,13 @@ import {
   truncate,
   writeFile,
 } from "node:fs/promises";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
+import { once } from "node:events";
 import { tmpdir } from "node:os";
 import { inspect } from "node:util";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
+import { protectNewPrivatePath } from "@paperclipai/shared/private-filesystem-permissions";
+import { sandboxPath, shellExecutable, shellScript, shellEnvironment } from "@paperclipai/adapter-utils/test-fixtures/local-sandbox";
 import {
   heartbeatRuns,
   heartbeatRunEvents,
@@ -593,7 +596,12 @@ describe("remote controller restart adoption", () => {
     const root = await mkdtemp(join(tmpdir(), "remote-generation-"));
     const proc = join(root, "proc");
     const markerPath = join(root, "runner-process.identity");
-    const pid = process.pid;
+    // Keep a real POSIX shell alive. Git Bash PIDs differ from native Windows
+    // process IDs, so Node's process.pid is not a valid kill(1) probe there.
+    const liveShell = spawn(shellExecutable("sh"), ["-c", 'printf "%s\\n" "$$"; read -r done'], { env: shellEnvironment() });
+    const [pidBytes] = await once(liveShell.stdout, "data");
+    const pid = Number(String(pidBytes).trim());
+    expect(Number.isSafeInteger(pid) && pid > 0).toBe(true);
     const marker = `nonce\n${pid}\n2026-09-19T10:00:00.000Z\nrunner\nlinux:abcd-1234:100\n`;
     const stat = (ticks: number) => `${pid} (runner (child)) ${["S", ...Array(18).fill("0"), ticks].join(" ")}\n`;
     const { target, execute } = fixture();
@@ -613,10 +621,10 @@ describe("remote controller restart adoption", () => {
         // Run the actual ownership shell against controlled Linux proc files.
         // kill -0 still checks a real live PID; only its generation changes.
         const args = [...request.args];
-        args[1] = args[1].replaceAll("/proc/", `${proc}/`);
-        args[3] = markerPath;
+        args[1] = args[1].replaceAll("/proc/", `${proc.replaceAll("\\", "/")}/`);
+        args[3] = shellScript(sandboxPath(markerPath));
         let exitCode = 0;
-        try { execFileSync("sh", args, { stdio: "pipe" }); } catch { exitCode = 4; }
+        try { execFileSync(shellExecutable("sh"), args, { stdio: "pipe", env: shellEnvironment() }); } catch { exitCode = 4; }
         return { stdout: "", stderr: "", exitCode, timedOut: false };
       });
       const adopted = await verifyRemoteRunnerReattachment({ claim, target: target as never, identity, runId: "run", normalizedSessionId: "session" });
@@ -626,7 +634,12 @@ describe("remote controller restart adoption", () => {
       expect(await adopted.isAlive()).toBe(false);
       await expect(verifyRemoteRunnerReattachment({ claim, target: target as never, identity, runId: "run", normalizedSessionId: "session" }))
         .rejects.toThrow("runner_remote_process_identity_unavailable");
-    } finally { await rm(root, { recursive: true, force: true }); }
+    } finally {
+      const closed = once(liveShell, "close");
+      liveShell.stdin.end("done\n");
+      await closed;
+      await rm(root, { recursive: true, force: true });
+    }
   });
   it("rejects a stale process marker", async () => {
     const { execute, target } = fixture();
@@ -664,16 +677,27 @@ describe("remote runner launch fingerprint compatibility", () => {
       await mkdir(join(root, "sys/kernel/random"), { recursive: true });
       await writeFile(join(root, "stat"), `123 (runner) ${["S", ...Array(18).fill("0"), 1234].join(" ")}\n`);
       if (hasBootIdentity) await writeFile(join(root, "sys/kernel/random/boot_id"), "abcd-1234\n");
+      const fixtureRoot = root.replaceAll("\\", "/");
       const script = REMOTE_RUNNER_CHILD_LAUNCH_SCRIPT
-        .replaceAll('"/proc/"+process.argv[1]+"/stat"', JSON.stringify(`${root}/stat`))
-        .replaceAll("/proc/sys/kernel/random/boot_id", `${root}/sys/kernel/random/boot_id`);
+        .replaceAll('"/proc/"+process.argv[1]+"/stat"', JSON.stringify(`${fixtureRoot}/stat`))
+        .replaceAll("/proc/sys/kernel/random/boot_id", `${fixtureRoot}/sys/kernel/random/boot_id`);
       // Node is part of the remote runtime contract; awk is not required.
       const bin = join(root, "bin");
       await mkdir(bin);
-      await symlink(process.execPath, join(bin, "node"));
-      for (const name of ["mkdir", "chmod", "date", "mv"]) await symlink(execFileSync("sh", ["-c", `command -v ${name}`], { encoding: "utf8" }).trim(), join(bin, name));
+      const suffix = process.platform === "win32" ? ".exe" : "";
+      await symlink(process.execPath, join(bin, `node${suffix}`));
+      for (const name of ["mkdir", "chmod", "date", "mv"]) {
+        if (process.platform === "win32") {
+          // An exe symlink in bin would search there for MSYS runtime DLLs.
+          // Execute the real absolute tool while keeping awk out of PATH.
+          const executable = join(dirname(shellExecutable("sh")), `${name}.exe`).replaceAll("\\", "/").replaceAll("'", "'\\''");
+          await writeFile(join(bin, name), `#!/bin/sh\nexec '${executable}' "$@"\n`, { mode: 0o755 });
+        } else {
+          await symlink(execFileSync("sh", ["-c", `command -v ${name}`], { encoding: "utf8" }).trim(), join(bin, name));
+        }
+      }
       const marker = join(root, "identity");
-      const result = execFileSync("/bin/sh", ["-c", script, "launch", marker, "nonce", "runner", join(root, "diagnostics"), "/bin/sh", "-c", "printf launched"], { env: { ...process.env, PATH: bin }, encoding: "utf8" });
+      const result = execFileSync(shellExecutable("sh"), ["-c", script, "launch", marker.replaceAll("\\", "/"), "nonce", "runner", `${fixtureRoot}/diagnostics`, shellExecutable("sh").replaceAll("\\", "/"), "-c", "printf launched"], { env: { ...process.env, PATH: bin }, encoding: "utf8" });
       expect(result).toBe("launched");
       const lines = (await readFile(marker, "utf8")).split("\n");
       expect(lines[4]).toBe(hasBootIdentity ? "linux:abcd-1234:1234" : "");
@@ -2500,10 +2524,11 @@ describe("remote preinstalled executable discovery", () => {
       for (let pass = 0; pass < 2; pass++) {
         execFileSync("sh", [
           "-c",
-          buildRemoteCodexLauncherCommand(source, target),
-        ]);
+          shellScript(buildRemoteCodexLauncherCommand(sandboxPath(source), sandboxPath(target))),
+        ], { env: shellEnvironment() });
         expect(
-          execFileSync(target, ["--version", "argument with 'quotes'"], {
+          execFileSync(shellExecutable("sh"), [shellScript(sandboxPath(target)), "--version", "argument with 'quotes'"], {
+            env: shellEnvironment(),
             encoding: "utf8",
           }),
         ).toBe("codex-cli 0.160.0\n--version\nargument with 'quotes'\n");
@@ -3737,6 +3762,12 @@ describe("retained native cleanup activation", () => {
         source.map(([file]) => readFile(join(quarantine, file), "utf8")),
       );
       if (canonicalSource) {
+        // Windows cannot rename a directory containing SQLite's open handles.
+        // Its maintenance path refuses process-group proof before DB reads.
+        if (process.platform === "win32") {
+          providerHomeDatabase.close();
+          providerHomeDatabase = undefined;
+        }
         await rename(quarantine, root);
         quarantine = root;
         if (mode === "canonical_existing_quarantine")
@@ -3962,7 +3993,7 @@ describe("retained native cleanup activation", () => {
           ),
         ).toMatchObject({
           phase: "staged",
-          stagingName: input.stateDirectory.split("/").at(-1),
+          stagingName: basename(input.stateDirectory),
         });
         const epoch = {
           schema: "paperclip.native_cleanup_runner_epoch.v1",
@@ -4020,10 +4051,24 @@ describe("retained native cleanup activation", () => {
         ).toBe("settled");
         return 1;
       });
+      const coordinatorBeforeCleanup = structuredClone(coordinator);
       const pendingOutcome = reconcileRetainedNativeSessionCleanup(
         db as unknown as Db,
         { companyId: run.companyId, runId: run.id },
       );
+      // Windows cannot prove POSIX process-group absence. Exercise its real
+      // fail-closed path with the same evidence instead of simulating Linux.
+      if (process.platform === "win32") {
+        expect(await pendingOutcome).toEqual({ status: "not_eligible", runId: run.id });
+        expect(state.cleanup).not.toHaveBeenCalled();
+        expect(state.retireCleanup).not.toHaveBeenCalled();
+        expect(coordinator).toEqual(coordinatorBeforeCleanup);
+        expect(await Promise.all(source.map(([file]) => readFile(join(quarantine, file), "utf8")))).toEqual(original);
+        if (preservedHomeBytes) {
+          expect(await Promise.all(preservedHomeFiles.map(file => readFile(join(quarantine, "codex-home", file))))).toEqual(preservedHomeBytes);
+        }
+        return;
+      }
       if (
         [
           "canonical_claim_commit_stalled",
@@ -4092,6 +4137,7 @@ describe("retained native cleanup activation", () => {
         }
       }
       if (mode === "settled") {
+        expect(state.cleanup.mock.calls.length, JSON.stringify(outcome)).toBeGreaterThan(0);
         const cleanupEnvironment = state.cleanup.mock.calls[0]![0].environment;
         expect(cleanupEnvironment).toEqual(
           buildNativeProviderEnvironment(
@@ -4476,6 +4522,11 @@ describe("stopped native conversation physical cleanup", () => {
       await writeFile(join(root, `runner/${provider}-provider-state.json`), JSON.stringify(providerState));
       if (mode === "symlink") { await rename(runnerPath, join(base, "external")); await symlink(join(base, "external"), runnerPath); }
       const proof = await verifyStoppedNativeSessionForContinuation(db, run);
+      if (process.platform === "win32") {
+        expect(proof).toBeNull();
+        expect(await readFile(join(root, `runner/${provider}-provider-state.json`), "utf8")).toBe(JSON.stringify(providerState));
+        return;
+      }
       if (["stopped", "changed_state", "changed_pid", "replacement", "normalized_session_receipt"].includes(mode)) {
         expect(proof).not.toBeNull();
         if (mode === "changed_state") await writeFile(runnerPath, "{}");
@@ -6739,7 +6790,7 @@ describe("native warm session supervision", () => {
     const db = tables.createDb(database.connectionString);
     const companyId = randomUUID(), agentId = randomUUID(), userId = randomUUID(), environmentId = randomUUID(), issueId = randomUUID();
     const { resolveManagedInstructionsRoot } = await import("../agent-instructions.js");
-    const canonical = resolveManagedInstructionsRoot({ id: agentId, companyId, name: "Warm remote", adapterConfig: {} }), remoteCwd = join(home, "remote");
+    const canonical = resolveManagedInstructionsRoot({ id: agentId, companyId, name: "Warm remote", adapterConfig: {} }), remoteCwd = sandboxPath(join(home, "remote"));
     let currentLease = "", failCleanup = false, failProbe = false, closed = false;
     const commands: Array<{ leaseId: string; command: string }> = [];
     const commandRunner = (leaseId: string): import("@paperclipai/adapter-utils/command-managed-runtime").CommandManagedRuntimeRunner => ({ execute: async input => {
@@ -6759,7 +6810,13 @@ describe("native warm session supervision", () => {
         Object.assign(env, { PAPERCLIP_TEST_STDIN: input.stdin });
         args[1] = `printf '%s' "$PAPERCLIP_TEST_STDIN" | (${args[1]})`;
       }
-      const result = await executeCommand(input.command, args, { cwd: input.cwd, env, timeout: input.timeoutMs, maxBuffer: 32 * 1024 * 1024 });
+      if (process.platform === "win32" && args[1]?.includes("Invalid agent directory root")) {
+        // MSYS converts the remote argument to C:/..., while the real Windows
+        // Node probe requires its canonical native spelling. Adapt only this
+        // fixture's path argument; retain the actual probe and all its checks.
+        args[1] = args[1].replace("node -e '", 'node -e \'process.argv[1]=require("node:path").resolve(process.argv[1]);');
+      }
+      const result = await executeCommand(shellExecutable(input.command), args.map(shellScript), { cwd: input.cwd, env: shellEnvironment(env), timeout: input.timeoutMs, maxBuffer: 32 * 1024 * 1024 });
       return { exitCode: 0, signal: null, timedOut: false, ...result, pid: null, startedAt: new Date().toISOString() };
     } });
     let copies = agentInstructionWorkingCopyService(db);
@@ -6887,7 +6944,7 @@ describe("native warm session supervision", () => {
         expect(current.runtimeContext.instructions.workingCopy?.rootPath).toBe(originalRoot);
         await executePaperclipNativeSession({ db, execution: current, runnerInstanceId: environmentId, runnerExecutionTarget: target, instructionWorkingCopy: capability() });
         if (prior) expect(state.execute.mock.calls.at(-1)?.[0].existingSession).toBe(session);
-        expect(closed).toBe(false);
+        expect(closed, JSON.stringify({ turn, closeCalls: session.close.mock.calls })).toBe(false);
         await release?.(); expect(closed).toBe(false);
         prior = current;
       }
@@ -8004,6 +8061,8 @@ describe("native warm session supervision", () => {
   });
 
   it("reuses one session across distinct governed runs and closes it after idle expiry", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
     const close = vi.fn(async () => undefined);
     const sharedSession = { close };
     const base = {
@@ -8064,6 +8123,7 @@ describe("native warm session supervision", () => {
       runnerInstanceId: "runner",
     });
     expect(close).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1_001);
     await vi.waitFor(
       () =>
         expect(close).toHaveBeenCalledWith({
@@ -8071,6 +8131,10 @@ describe("native warm session supervision", () => {
         }),
       { timeout: 2_000 },
     );
+    } finally {
+      await closeIdleWarmNativeSessionsForRestart();
+      vi.useRealTimers();
+    }
   });
 
   it("does not offer a quarantined warm session to the next run", async () => {
@@ -8344,6 +8408,9 @@ describe("native warm session supervision", () => {
           return result;
         });
 
+      // Advance idle expiry only after both ownership checks have completed;
+      // filesystem latency must not expire the owner between the two turns.
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
       try {
         await executePaperclipNativeSession({
           db: leaseDb(first),
@@ -8367,7 +8434,7 @@ describe("native warm session supervision", () => {
             await readdir(stateBase, { recursive: true })
           ).find(
             (path) =>
-              path.includes("paperclip-runner/sessions/") &&
+              path.replaceAll("\\", "/").includes("paperclip-runner/sessions/") &&
               path.endsWith(".json"),
           );
           expect(checkpointFile).toBeDefined();
@@ -8474,6 +8541,7 @@ describe("native warm session supervision", () => {
           });
         } else {
           expect(firstClose).not.toHaveBeenCalled();
+          await vi.advanceTimersByTimeAsync(501);
           await vi.waitFor(
             () =>
               expect(firstClose).toHaveBeenCalledWith({
@@ -8486,6 +8554,8 @@ describe("native warm session supervision", () => {
           if (managedGitHub) expect(githubAccess.stop).toHaveBeenCalledOnce();
         }
       } finally {
+        await closeIdleWarmNativeSessionsForRestart();
+        vi.useRealTimers();
         if (previousStateDirectory === undefined) {
           delete process.env.PAPERCLIP_RUNNER_STATE_DIR;
         } else {
@@ -9640,6 +9710,7 @@ describe("runnerd provider runtime wiring", () => {
     process.env.PAPERCLIP_HOME = privateRoot;
     const managedHome = join(privateRoot, "company-login");
     await mkdir(managedHome, { mode: 0o700 });
+    protectNewPrivatePath(managedHome);
     await writeFile(join(managedHome, "auth.json"), "fixture-old-login", { mode: 0o600 });
     const grokExecution = { ...execution,
       provider: { kind: "acpx", agent: "grok", model: "grok-4.7", permissionMode: "deny-all" },
@@ -9649,6 +9720,16 @@ describe("runnerd provider runtime wiring", () => {
       kind: "test", openSession: async () => ({ close: vi.fn(async () => undefined) }),
     } as never);
     try {
+      if (process.platform === "win32") {
+        // The native credential reader requires descriptor-confined opens,
+        // which Windows currently cannot provide. Keep that gate closed.
+        await expect(createRunnerdBackend({ db: leaseDb(grokExecution), execution: grokExecution,
+          runnerInstanceId: "grok-cleanup", managedAiCredentialHome: managedHome }))
+          .rejects.toThrow("Grok subscription login is unavailable");
+        expect(grokCopyBack).not.toHaveBeenCalled();
+        expect(await readFile(join(managedHome, "auth.json"), "utf8")).toBe("fixture-old-login");
+        return;
+      }
       const backend = await createRunnerdBackend({ db: leaseDb(grokExecution), execution: grokExecution,
         runnerInstanceId: "grok-cleanup", managedAiCredentialHome: managedHome });
       state.createBackend.mock.calls.at(-1)![1].codexTransportFactory!();
@@ -11080,7 +11161,7 @@ describe("runnerd provider runtime wiring", () => {
             ? scopedRoot
             : join(
                 quarantineRoot,
-                `${scopedRoot.split("/").at(-1)}.identity_indeterminate.1`,
+                `${basename(scopedRoot)}.identity_indeterminate.1`,
               );
         if (candidate !== scopedRoot) await rename(scopedRoot, candidate);
         const writeCandidate = async (root: string) => {
@@ -12665,7 +12746,8 @@ describe("runnerd provider runtime wiring", () => {
       expect(remoteExecute.mock.calls.some(([command]) => command.args?.[1]?.includes("install -d"))).toBe(false);
       expect(syncIn).not.toHaveBeenCalled();
       const claimCommand = remoteExecute.mock.calls.find(([command]) => command.args?.[2] === "paperclip-runner-claim-unstarted-session")![0];
-      expect((await lstat(sessionRoot)).mode & 0o777).toBe(0o700);
+      if (process.platform !== "win32") expect((await lstat(sessionRoot)).mode & 0o777).toBe(0o700);
+      else expect((await lstat(sessionRoot)).isDirectory()).toBe(true);
       // The exact same claim cannot silently reopen an existing partial root.
       expect(() => execFileSync("sh", claimCommand.args!, { stdio: "pipe" })).toThrow();
       // Authority rotation prepares history before Codex's resume path writes
@@ -12778,7 +12860,7 @@ describe("runnerd provider runtime wiring", () => {
       execution,
       runnerInstanceId: "runner-image-runtime",
       onLog,
-      ...(image === "retained-explicit" ? { runnerRemoteBinaryPath: controllerArtifact } : {}),
+      ...((image === "retained-explicit" || process.platform === "win32" && needsReplacement) ? { runnerRemoteBinaryPath: controllerArtifact } : {}),
       runnerIngressAuthorized: true,
       runnerExecutionTarget: {
         kind: "remote",
@@ -13087,15 +13169,10 @@ describe("runnerd provider runtime wiring", () => {
       onSpawn,
     });
 
-    expect(state.createBackend).toHaveBeenCalledWith(
-      acpxExecution,
-      expect.objectContaining({
-        acpxRuntimeDirectory: expect.stringContaining(
-          "/runtime/paperclip-runner/acpx",
-        ),
-        acpxDynamicToolHandler: expect.any(Function),
-      }),
-    );
+    expect(state.createBackend.mock.calls[0]![0]).toEqual(acpxExecution);
+    const backendOptions = state.createBackend.mock.calls[0]![1];
+    expect(backendOptions.acpxRuntimeDirectory).toContain(join("runtime", "paperclip-runner", "acpx"));
+    expect((backendOptions as Record<string, unknown>).acpxDynamicToolHandler).toEqual(expect.any(Function));
     state.createTransport.mockClear();
     state.createBackend.mock.calls[0]![1].codexTransportFactory!();
     expect(state.createTransport).toHaveBeenCalledWith(

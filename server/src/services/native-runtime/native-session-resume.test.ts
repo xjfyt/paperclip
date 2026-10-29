@@ -11,7 +11,8 @@ import {
 } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { delimiter, join, resolve } from "node:path";
+import { writeCliFixture } from "@paperclipai/adapter-utils/test-fixtures/native-cli";
 import { eq, sql } from "drizzle-orm";
 import {
   agents,
@@ -71,6 +72,12 @@ import {
   selectNativeSessionResumeRun,
 } from "./native-session-resume.js";
 import { nativeRuntimeContextFixture } from "./runtime-context.test-fixture.js";
+
+const fixtureCodex = vi.hoisted(() => ({ command: null as string | null }));
+vi.mock("../../../../packages/paperclip-runner/src/drivers/codex/codex-command.js", async (importOriginal) => {
+  const actual = await importOriginal<{ resolveCodexCommand: (...args: unknown[]) => string }>();
+  return { ...actual, resolveCodexCommand: (...args: unknown[]) => fixtureCodex.command ?? actual.resolveCodexCommand(...args) };
+});
 
 const companyId = "10000000-0000-4000-8000-000000000001";
 const issueId = "20000000-0000-4000-8000-000000000002";
@@ -754,11 +761,14 @@ const recoveryFakeCodex = resolve(
       // rotation, prior-owner DB checks and archive/replacement are real.
       const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
       const command = join(bin, "codex");
-      await writeFile(
+      await writeCliFixture(
         command,
-        `#!/bin/sh\nexec ${quote(process.execPath)} ${quote(recoveryFakeCodex)} "$CODEX_HOME/fake-state.json" 16\n`,
+        `#!/bin/sh\nexec ${quote(process.execPath.replaceAll("\\", "/"))} ${quote(recoveryFakeCodex.replaceAll("\\", "/"))} "$CODEX_HOME/fake-state.json" 16\n`,
       );
       await chmod(command, 0o700);
+      // Pin only the synthetic provider boundary. The resolver otherwise
+      // prefers an installed Codex over PATH, which can reach a real account.
+      fixtureCodex.command = process.platform === "win32" ? `${command}.exe` : command;
       await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
       const address = server.address();
       if (!address || typeof address === "string")
@@ -792,7 +802,7 @@ const recoveryFakeCodex = resolve(
       expect(() => parseNativeExecutionInput(firstExecution)).not.toThrow();
       const runnerInstanceId = randomUUID();
       const environment = {
-        PATH: `${bin}:${process.env.PATH ?? "/usr/bin:/bin"}`,
+        PATH: `${bin}${delimiter}${process.env.PATH ?? "/usr/bin:/bin"}`,
         HOME: sourceHome,
         CODEX_HOME: sourceHome,
       };
@@ -1230,6 +1240,7 @@ const recoveryFakeCodex = resolve(
       runnerPrpWebSocketInternals.resetForTests();
       server.closeAllConnections();
       await new Promise<void>((done) => server.close(() => done()));
+      fixtureCodex.command = null;
       if (previousStateBase === undefined)
         delete process.env.PAPERCLIP_RUNNER_STATE_DIR;
       else process.env.PAPERCLIP_RUNNER_STATE_DIR = previousStateBase;

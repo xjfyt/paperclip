@@ -674,8 +674,14 @@ function readBoundedNativeFile(
   maxBytes: number,
   errorCode: string,
 ): Buffer {
+  // O_NOFOLLOW is unavailable on Windows. Check the directory entry as well
+  // as the opened handle, using bigint IDs so NTFS file IDs stay exact.
+  const entry = lstatSync(path, { bigint: true });
+  if (!entry.isFile() || entry.isSymbolicLink()) throw new Error(errorCode);
   const descriptor = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
   try {
+    const opened = fstatSync(descriptor, { bigint: true });
+    if (entry.dev !== opened.dev || entry.ino !== opened.ino) throw new Error(errorCode);
     const before = fstatSync(descriptor);
     if (!before.isFile() || before.size > maxBytes) throw new Error(errorCode);
     const output = Buffer.allocUnsafe(before.size);
@@ -692,7 +698,12 @@ function readBoundedNativeFile(
       offset += bytesRead;
     }
     const after = fstatSync(descriptor);
+    const finalEntry = lstatSync(path, { bigint: true });
     if (
+      !finalEntry.isFile() || finalEntry.isSymbolicLink() ||
+      finalEntry.dev !== opened.dev || finalEntry.ino !== opened.ino ||
+      finalEntry.size !== opened.size || finalEntry.mtimeNs !== opened.mtimeNs ||
+      finalEntry.ctimeNs !== opened.ctimeNs ||
       offset !== before.size ||
       after.size !== before.size ||
       after.mtimeMs !== before.mtimeMs ||
