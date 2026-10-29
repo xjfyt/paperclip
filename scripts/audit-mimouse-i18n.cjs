@@ -182,6 +182,19 @@ const evidenceEdge = (domain, file, host, symbol, importSource, usage = "jsx", t
   domain, file: `ui/src/${file}`, host: `ui/src/${host}`, symbol, importSource, usage,
   ...(through ? { through: `ui/src/${through}` } : {}),
 });
+// Next bounded slice: six actual UI consumers omitted by the 160-path report.
+// Exact hosts provide syntax evidence only; this is not recursive discovery.
+const visibleRecoveryScopeEdges = [
+  evidenceEdge("entry-navigation", "components/SidebarRecentTasks.tsx", "components/Sidebar.tsx", "SidebarRecentTasks", "./SidebarRecentTasks"),
+  evidenceEdge("entry-navigation", "components/RouteErrorBoundary.tsx", "components/Layout.tsx", "RouteErrorBoundary", "./RouteErrorBoundary"),
+  evidenceEdge("agents-runs", "components/AgentSecretAccessEditor.tsx", "components/AgentConfigForm.tsx", "AgentSecretAccessEditor", "./AgentSecretAccessEditor"),
+  evidenceEdge("tasks", "components/task-side-panel/TaskSkillPanel.tsx", "components/task-side-panel/TaskSidePanel.tsx", "TaskSkillPanel", "./TaskSkillPanel"),
+  evidenceEdge("tasks", "components/task-side-panel/TaskBrowserPanel.tsx", "components/task-side-panel/TaskSidePanel.tsx", "TaskBrowserPanel", "./TaskBrowserPanel"),
+  evidenceEdge("tasks", "components/task-side-panel/TaskBrowserFooter.tsx", "components/task-side-panel/TaskBrowserPanel.tsx", "TaskBrowserFooter", "./TaskBrowserFooter"),
+];
+const visibleRecoveryScopeFiles = visibleRecoveryScopeEdges.map(edge => edge.file).sort();
+const viewportErrorSourceEdge = evidenceEdge("tasks", "hooks/useBrowserViewport.ts", "components/task-side-panel/TaskBrowserPanel.tsx", "useBrowserViewport", "@/hooks/useBrowserViewport", "call");
+const visibleRecoveryRenderBoundary = "SidebarRecentTasks is mounted in the streamlined sidebar; AgentSecretAccessEditor in edit-mode secrets settings. TaskSkillPanel and TaskBrowserPanel are conditional task side-panel tabs; TaskBrowserFooter needs a browser without an access error and renders only running/idle sessions. Layout wraps its routed Outlet with RouteErrorBoundary. useBrowserViewport produces local resize guidance consumed by TaskBrowserPanel; its source is hash-only, not JSX coverage. These checks do not prove live browser/session availability, every branch, translation coverage, or preservation of runtime data.";
 const scopeEdges = [
   evidenceEdge("management", "pages/audit/AuditFeed.tsx", "pages/audit/AuditHub.tsx", "AuditFeed", "./AuditFeed"),
   evidenceEdge("management", "pages/audit/AuditRuns.tsx", "pages/audit/AuditHub.tsx", "AuditRuns", "./AuditRuns"),
@@ -269,6 +282,7 @@ const scopeEdges = [
   evidenceEdge("new-modules", "components/decision-models/DecisionModelSettings.tsx", "pages/CompanySettings.tsx", "DecisionModelSettingsSection", "../components/decision-models/DecisionModelSettings"),
   evidenceEdge("new-modules", "components/fast-responses/FastResponseSettings.tsx", "pages/CompanyConnections.tsx", "FastResponseSettingsSection", "../components/fast-responses/FastResponseSettings"),
   evidenceEdge("new-modules", "components/MimouseCodingProjects.tsx", "pages/MimouseCoding.tsx", "MimouseCodingProjects", "@/components/MimouseCodingProjects"),
+  ...visibleRecoveryScopeEdges,
 ];
 const expandedScopeFiles = [...new Set(scopeEdges.map(edge => edge.file))].sort();
 // Post-integration display helpers: exact, verified calls only. This includes
@@ -320,6 +334,7 @@ const manualScopeEdges = [
   evidenceEdge("tasks", "lib/task-side-panel-state.ts", "components/task-side-panel/TaskSidePanel.tsx", "taskPanelArtifactsTab", "@/lib/task-side-panel-state", "call"),
   evidenceEdge("management", "pages/audit/audit-navigation.ts", "pages/audit/AuditHub.tsx", "auditDisplaySections", "./audit-navigation", "call"),
   ...integratedDisplayHelperEdges,
+  viewportErrorSourceEdge,
 ];
 const manualScopeFiles = [...new Set(manualScopeEdges.map(edge => edge.file))].sort();
 const scopeEvidenceFiles = [...new Set([...scopeEdges, ...manualScopeEdges].flatMap(edge => [edge.host, ...(edge.through ? [edge.through] : [])]))].sort();
@@ -518,7 +533,8 @@ module.exports = { collectCandidates, collectAudit, matchesEntry, selectInventor
   protocolDisplayComponents, protocolDisplayFiles, protocolThreadHosts, protocolRoute, protocolRenderBoundary,
   manualProtocolSources, manualProtocolFiles, collectManualSourceEvidence,
   baselineFile, baselineFileSha256, readBaseline, pathSetSha256, expandedScopeFiles, scopeEdges, manualScopeEdges, manualScopeFiles,
-  scopeEvidenceFiles, integratedDisplayHelperEdges, integratedDisplayHelperFiles, domainBasenames, legacyDomain, sourceInventory, consumesEdge, verifyScopeEdges, collectScopeDenominators };
+  scopeEvidenceFiles, integratedDisplayHelperEdges, integratedDisplayHelperFiles, visibleRecoveryScopeEdges, visibleRecoveryScopeFiles, viewportErrorSourceEdge, visibleRecoveryRenderBoundary,
+  domainBasenames, legacyDomain, sourceInventory, consumesEdge, verifyScopeEdges, collectScopeDenominators };
 
 if (require.main === module) {
   const root = path.resolve(__dirname, "..");
@@ -570,12 +586,14 @@ if (require.main === module) {
     method: "Bounded Babel AST inventory: JSX text/display attributes (including message and ariaLabel), direct/conditional/template literals, pushToast/toast display fields, setSecretMessage.title and direct window.confirm/window.prompt/window.alert first-argument messages. Dynamic display expressions are separate needs_manual_review locations, not untranslated strings.",
     baseline, legacyScope, legacyPathDrift, expandedScope, manualScope, hostEvidence, invalidScopeEdges, scopeDenominators,
     requestedExpandedScopeFiles: expandedScopeFiles, missingExpandedScopeFiles, scopeEdges, manualScopeEdges, integratedDisplayHelperFiles,
+    visibleRecoveryScopeFiles, viewportErrorSourceFile: viewportErrorSourceEdge.file, visibleRecoveryRenderBoundary,
     limits: [
       "Schema 5 freezes the prior 82-path schema-4 list and baseline JSON SHA. New exact high-frequency paths, evidence-only helpers and hosts have separate path-set/content hashes. Five-domain denominators count reviewed source paths, never completed translations or all reachable UI.",
       "Scope changes are not translation progress: do not subtract old/new totals or treat literal/dynamic candidate totals as defect totals. Historical source SHA is retained; current legacy source SHA is recomputed independently.",
       "Explicit host/import/JSX/call/reference checks are syntax evidence, not binding analysis or runtime reachability. Missing paths, hosts, re-export barrels or consumer edges fail closed. Evidence hosts never recursively enlarge the AST inventory.",
       "Default chat-style TaskSidePanel artifacts are included; Classic conditional surfaces remain separately described, not inferred unreachable from names. Pure helper manualScope sources are hash-only and require provenance review; their returns are not AST candidates.",
-      "Post-integration manualScope retains the original nine sources and adds eleven exact display/provenance helpers (eight new helpers plus three changed display opt-ins). Their explicit consumers are evidence-only unless already selected; this does not enlarge the 160-path AST denominator. Canonical labels, local-error provenance, unknown diagnostics and actor-provided values still require manual classification.",
+      "Post-integration manualScope retains the original nine sources and eleven display/provenance helpers (eight new helpers plus three changed display opt-ins), plus the exact useBrowserViewport local resize-error producer. Their calls are evidence-only, not returned-string candidates. Canonical labels, local-error provenance, unknown diagnostics and actor-provided values still require manual classification.",
+      "The visible-recovery slice explicitly expands the 160-path AST inventory to 166 paths; it does not improve a measured translation coverage percentage. Six files are deduplicated across domains and scope metadata. Scope expansion and added candidates must not be described as translation progress or new confirmed defects.",
       "Not a complete route/call graph, data-flow analysis, rendered-text count or translation coverage percentage.",
       "scope.unscannedTsxFiles lists eligible source paths outside the bounded AST inventory; scope.evidenceOnlyTsxFiles identifies hash-only consumers among them. Neither list classifies untranslated copy or establishes runtime reachability.",
       "Schema 4 adds four exact protocol-display TSX files as a separate scope; earlier scopes and candidate meanings are unchanged. Expanded totals are not directly comparable with schema 3. Original sourceSha256 covers only AST-inventoried files; manualSourceSha256 is separate.",

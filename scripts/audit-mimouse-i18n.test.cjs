@@ -10,7 +10,8 @@ const { collectCandidates, collectAudit, selectInventory, routedRoutineFiles, co
   protocolDisplayComponents, protocolDisplayFiles, protocolThreadHosts, protocolRoute, protocolRenderBoundary,
   manualProtocolSources, manualProtocolFiles, collectManualSourceEvidence,
   baselineFile, baselineFileSha256, readBaseline, pathSetSha256, expandedScopeFiles, scopeEdges, manualScopeEdges, manualScopeFiles,
-  scopeEvidenceFiles, integratedDisplayHelperEdges, integratedDisplayHelperFiles, legacyDomain, sourceInventory, consumesEdge, verifyScopeEdges, collectScopeDenominators } = require("./audit-mimouse-i18n.cjs");
+  scopeEvidenceFiles, integratedDisplayHelperEdges, integratedDisplayHelperFiles, visibleRecoveryScopeEdges, visibleRecoveryScopeFiles, viewportErrorSourceEdge, visibleRecoveryRenderBoundary,
+  legacyDomain, sourceInventory, consumesEdge, verifyScopeEdges, collectScopeDenominators } = require("./audit-mimouse-i18n.cjs");
 const parserEntry = process.env.AUDIT_I18N_PARSER
   ? path.resolve(process.env.AUDIT_I18N_PARSER)
   : path.resolve(__dirname, "../node_modules/.pnpm/@babel+parser@7.29.8/node_modules/@babel/parser/lib/index.js");
@@ -711,12 +712,12 @@ test("integrated display helpers preserve canonical sources and remain hash-only
     "i18n/task-interaction-feedback-display.ts", "lib/agent-configuration-errors.ts", "lib/credential-access-notice.ts",
     "lib/system-notice-humanizer.ts", "pages/agent-skills/agent-skill-source.ts"].map(file => `ui/src/${file}`).sort();
   assert.deepEqual(integratedDisplayHelperFiles, integrated);
-  assert.deepEqual(manualScopeFiles, [...original, ...integrated].sort());
+  assert.deepEqual(manualScopeFiles, [...original, ...integrated, "ui/src/hooks/useBrowserViewport.ts"].sort());
   assert.equal(integratedDisplayHelperEdges.length, 30);
   assert.ok(integratedDisplayHelperEdges.every(edge => edge.usage === "call"));
   const baseline = readBaseline(path.resolve(__dirname, ".."));
   const inventory = selectInventory([...baseline.files, ...expandedScopeFiles, ...manualScopeFiles, ...scopeEvidenceFiles]);
-  assert.equal(inventory.selected.length, 160);
+  assert.equal(inventory.selected.length, 166);
   assert.ok(manualScopeFiles.every(file => !inventory.selected.includes(file)));
   for (const host of ["BlockedReasonChip", "InteractionAudienceLine", "task-chat/RunnerGoalWidget"]) {
     const file = `ui/src/components/${host}.tsx`;
@@ -743,6 +744,47 @@ test("split named imports verify each exact value binding without accepting type
   assert.equal(consumesEdge(`import { attentionDetailDisplay as Details } from "./wrong-source"; Details(item);`, edge, parse), false);
 });
 
+test("visible recovery adds six exact AST paths and a separate resize-error source without double counting", () => {
+  const files = ["AgentSecretAccessEditor", "RouteErrorBoundary", "SidebarRecentTasks",
+    "task-side-panel/TaskBrowserFooter", "task-side-panel/TaskBrowserPanel", "task-side-panel/TaskSkillPanel"]
+    .map(name => `ui/src/components/${name}.tsx`).sort();
+  assert.deepEqual(visibleRecoveryScopeFiles, files);
+  assert.equal(visibleRecoveryScopeEdges.length, 6);
+  assert.ok(visibleRecoveryScopeEdges.every(edge => edge.usage === "jsx"));
+  assert.deepEqual(viewportErrorSourceEdge, { domain: "tasks", file: "ui/src/hooks/useBrowserViewport.ts",
+    host: "ui/src/components/task-side-panel/TaskBrowserPanel.tsx", symbol: "useBrowserViewport",
+    importSource: "@/hooks/useBrowserViewport", usage: "call" });
+  const baseline = readBaseline(path.resolve(__dirname, ".."));
+  const inventory = selectInventory([...baseline.files, ...expandedScopeFiles, ...files, ...files, viewportErrorSourceEdge.file]);
+  assert.equal(inventory.selected.length, 166);
+  for (const file of files) assert.equal(inventory.selected.filter(path => path === file).length, 1);
+  assert.ok(!inventory.selected.includes(viewportErrorSourceEdge.file));
+  assert.ok(!inventory.selected.includes("ui/src/components/Layout.tsx"), "an evidence host is not recursively inventoried");
+  assert.deepEqual(collectScopeDenominators(path.resolve(__dirname, ".."), baseline).map(scope => [scope.domain, scope.matchedFiles]),
+    [["entry-navigation", 27], ["tasks", 75], ["agents-runs", 15], ["management", 37], ["new-modules", 12]]);
+  assert.match(visibleRecoveryRenderBoundary, /conditional task side-panel tabs/);
+  assert.match(visibleRecoveryRenderBoundary, /hash-only, not JSX coverage/);
+});
+
+test("visible recovery missing files, host and resize producer usage fail closed", t => {
+  for (const missing of [...visibleRecoveryScopeFiles, viewportErrorSourceEdge.file, "ui/src/components/Layout.tsx"]) {
+    const { result, report } = cliFixture(t, missing);
+    assert.equal(result.status, 1, `${missing}: ${result.stderr}`);
+    assert.ok([...report.missingExpandedScopeFiles, ...report.manualScope.missingFiles, ...report.hostEvidence.missingFiles].includes(missing));
+    assert.ok(report.invalidScopeEdges.some(edge => [edge.file, edge.host].includes(missing)));
+  }
+  const fixture = cliFixture(t);
+  const file = viewportErrorSourceEdge.host;
+  const source = fs.readFileSync(path.join(fixture.root, file), "utf8");
+  const alias = source.match(/import \{ useBrowserViewport as (Imported\d+) \}/)?.[1];
+  assert.ok(alias);
+  fixture.write(file, source.replace(`${alias}()`, "null"));
+  const { result, report } = fixture.run();
+  assert.equal(result.status, 1);
+  assert.ok(report.invalidScopeEdges.some(edge => edge.file === viewportErrorSourceEdge.file));
+  assert.deepEqual(report.manualScope.missingFiles, []);
+});
+
 test("CLI emits independently hashed five-domain, frozen legacy, explicit expansion and manual denominators", t => {
   const { report, result, root } = cliFixture(t);
   assert.equal(result.status, 0, result.stderr);
@@ -764,6 +806,9 @@ test("CLI emits independently hashed five-domain, frozen legacy, explicit expans
   }
   assert.deepEqual(report.manualScope.requestedFiles, manualScopeFiles);
   assert.deepEqual(report.integratedDisplayHelperFiles, integratedDisplayHelperFiles);
+  assert.deepEqual(report.visibleRecoveryScopeFiles, visibleRecoveryScopeFiles);
+  assert.equal(report.viewportErrorSourceFile, viewportErrorSourceEdge.file);
+  assert.equal(report.visibleRecoveryRenderBoundary, visibleRecoveryRenderBoundary);
   assert.equal(report.scope.unscannedTsxFiles.length + report.files.length, report.scope.eligibleTsxFiles);
   assert.ok(report.scope.unscannedTsxFiles.every(file => !report.files.some(row => row.file === file)));
   assert.deepEqual(report.scope.evidenceOnlyTsxFiles, scopeEvidenceFiles.filter(file => file.endsWith(".tsx") && !report.files.some(row => row.file === file)));
