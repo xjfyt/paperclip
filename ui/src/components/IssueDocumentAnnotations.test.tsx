@@ -5,14 +5,24 @@ import { useState } from "react";
 import { createRoot as createReactRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type {
+  AuthSession,
   DocumentAnnotationThreadWithComments,
   IssueDocument,
 } from "@paperclipai/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { queryKeys } from "@/lib/queryKeys";
 import {
   DocumentAnnotationsCountChip,
   IssueDocumentAnnotations,
 } from "./IssueDocumentAnnotations";
+
+const mockAuthApi = vi.hoisted(() => ({ getSession: vi.fn<() => Promise<AuthSession | null>>() }));
+vi.mock("@/api/auth", () => ({ authApi: mockAuthApi }));
+const annotationSession: AuthSession = {
+  session: { id: "paperclip:session:user-1", userId: "user-1", scopeKey: "a".repeat(64) },
+  user: { id: "user-1", name: "Board user", email: "board@example.test", image: null },
+  sentryDsn: null,
+};
 
 const mockAnnotationsApi = vi.hoisted(() => {
   const api = {
@@ -339,6 +349,9 @@ describe("IssueDocumentAnnotations", () => {
     container = document.createElement("div");
     document.body.appendChild(container);
     vi.clearAllMocks();
+    // This isolated host has no app-level auth gate/cache. Supply its real
+    // session-query contract rather than let Node fetch a relative browser URL.
+    mockAuthApi.getSession.mockReset().mockResolvedValue(annotationSession);
   });
 
   afterEach(async () => {
@@ -983,6 +996,65 @@ describe("IssueDocumentAnnotations", () => {
     await act(async () => reopenButton!.click());
     await flush();
     expect(mockAnnotationsApi.updateStatus).toHaveBeenCalledWith("issue-1", "plan", "resolved-1", "open");
+  });
+
+  it.each(["authenticated", "local_trusted"] as const)("blocks an unknown auth cache, then permits a fresh %s response without replay", async mode => {
+    let respond!: (session: AuthSession | null) => void;
+    mockAuthApi.getSession.mockReturnValueOnce(new Promise(resolve => { respond = resolve; }));
+    mockAnnotationsApi.list.mockResolvedValue([]);
+    mockAnnotationsApi.create.mockResolvedValue(makeThread({ id: "created-after-auth" }));
+    const root = createRoot(container), queryClient = makeQueryClient();
+    await act(() => root.render(<QueryClientProvider client={queryClient}><Harness doc={makeDoc()} initialPanelOpen /></QueryClientProvider>));
+    await waitFor(() => expect(mockAuthApi.getSession).toHaveBeenCalledTimes(1));
+    expect(queryClient.getQueryData(queryKeys.auth.session)).toBeUndefined();
+    await act(() => (container.querySelector('[data-testid="mock-annotation-selection"]') as HTMLButtonElement).click());
+    const composer = container.querySelector('[data-testid="document-annotation-composer"]') as HTMLTextAreaElement;
+    await act(() => setTextareaValue(composer, "Keep while auth is pending"));
+    const submit = () => [...container.querySelectorAll("button")].find(button => button.textContent === "Comment")!;
+    await act(() => submit().click());
+    expect(mockAnnotationsApi.create).not.toHaveBeenCalled();
+    expect(composer.value).toBe("Keep while auth is pending");
+    const resolved = mode === "authenticated" ? annotationSession : null;
+    await act(() => respond(resolved));
+    await waitFor(() => expect(queryClient.getQueryData(queryKeys.auth.session)).toEqual(resolved));
+    await flush();
+    expect(mockAnnotationsApi.create).not.toHaveBeenCalled();
+    await act(() => submit().click());
+    await waitFor(() => expect(mockAnnotationsApi.create).toHaveBeenCalledExactlyOnceWith("issue-1", "plan", {
+      baseRevisionId: "rev-4", baseRevisionNumber: 4, selector: mockPendingAnchor.selector, body: "Keep while auth is pending",
+    }));
+  });
+
+  it("keeps an unavailable auth response unknown instead of authorizing annotation writes", async () => {
+    mockAuthApi.getSession.mockRejectedValue(new Error("Auth response unavailable"));
+    mockAnnotationsApi.list.mockResolvedValue([]);
+    const root = createRoot(container), queryClient = makeQueryClient();
+    await act(() => root.render(<QueryClientProvider client={queryClient}><Harness doc={makeDoc()} initialPanelOpen /></QueryClientProvider>));
+    await waitFor(() => expect(queryClient.getQueryState(queryKeys.auth.session)?.status).toBe("error"));
+    expect(queryClient.getQueryData(queryKeys.auth.session)).toBeUndefined();
+    await act(() => (container.querySelector('[data-testid="mock-annotation-selection"]') as HTMLButtonElement).click());
+    const composer = container.querySelector('[data-testid="document-annotation-composer"]') as HTMLTextAreaElement;
+    await act(() => setTextareaValue(composer, "Keep while auth is unavailable"));
+    await act(() => dispatchSubmitShortcut(composer));
+    expect(mockAnnotationsApi.create).not.toHaveBeenCalled();
+    expect(composer.value).toBe("Keep while auth is unavailable");
+  });
+
+  it("rejects a stale host submit before a same-user scope marker change commits", async () => {
+    mockAnnotationsApi.list.mockResolvedValue([]);
+    const root = createRoot(container), queryClient = makeQueryClient();
+    await act(() => root.render(<QueryClientProvider client={queryClient}><Harness doc={makeDoc()} initialPanelOpen /></QueryClientProvider>));
+    await waitFor(() => expect(queryClient.getQueryData(queryKeys.auth.session)).toEqual(annotationSession));
+    await act(() => (container.querySelector('[data-testid="mock-annotation-selection"]') as HTMLButtonElement).click());
+    const composer = container.querySelector('[data-testid="document-annotation-composer"]') as HTMLTextAreaElement;
+    await act(() => setTextareaValue(composer, "Old session draft"));
+    const submit = [...container.querySelectorAll("button")].find(button => button.textContent === "Comment")!;
+    await act(() => {
+      queryClient.setQueryData(queryKeys.auth.session, { ...annotationSession, session: { ...annotationSession.session, scopeKey: "b".repeat(64) } });
+      submit.click();
+    });
+    expect(mockAnnotationsApi.create).not.toHaveBeenCalled();
+    expect(composer.value).toBe("Old session draft");
   });
 
   it("renders the mobile annotation panel through the sheet path", async () => {
