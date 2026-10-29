@@ -1,0 +1,49 @@
+{
+  "add": "Add",
+  "closeAdd": "Close Add menu",
+  "files": "Files and images",
+  "privateTask": "Private task",
+  "goal": "Goal",
+  "keepPursuing": "Keep pursuing",
+  "plan": "Plan mode",
+  "planDetail": "Plan before acting",
+  "ask": "Ask mode",
+  "askDetail": "Answer without changes",
+  "auto": "Auto mode",
+  "removeMode": "Remove {{mode}}",
+  "privacyExplanation": "Only you and people you share with can read this task",
+  "removePrivate": "Remove private task",
+  "private": "Private",
+  "worktrees": "Worktrees",
+  "searchWorktrees": "Search worktrees...",
+  "noMatchingWorktrees": "No matching worktrees.",
+  "selectWorktree": "Select worktree",
+  "loadingWorktrees": "Loading existing worktrees…",
+  "loadFailed": "Couldn't load worktrees.",
+  "noWorktrees": "No existing worktrees yet. Choose New worktree to start one.",
+  "reuse": "Reuse a worktree",
+  "otherOptions": "Other options",
+  "existingWorkspace": "Existing workspace",
+  "modes": {
+    "isolated_workspace": {
+      "label": "New worktree",
+      "description": "Start in an isolated checkout."
+    },
+    "shared_workspace": {
+      "label": "Project workspace",
+      "description": "Use the project's shared checkout."
+    },
+    "operator_branch": {
+      "label": "New branch",
+      "description": "Create a branch in the project workspace."
+    },
+    "agent_default": {
+      "label": "Agent default",
+      "description": "Let the agent choose its workspace."
+    },
+    "inherit": {
+      "label": "Project default",
+      "description": "Use the project's worktree settings."
+    }
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "add": "添加",
+  "closeAdd": "关闭添加菜单",
+  "files": "文件和图片",
+  "privateTask": "私密任务",
+  "goal": "目标",
+  "keepPursuing": "持续推进",
+  "plan": "规划模式",
+  "planDetail": "先规划再执行",
+  "ask": "问答模式",
+  "askDetail": "仅回答，不做修改",
+  "auto": "自动模式",
+  "removeMode": "移除{{mode}}",
+  "privacyExplanation": "只有你和获得分享的人可以查看此任务",
+  "removePrivate": "取消私密任务",
+  "private": "私密",
+  "worktrees": "工作树",
+  "searchWorktrees": "搜索工作树...",
+  "noMatchingWorktrees": "没有匹配的工作树。",
+  "selectWorktree": "选择工作树",
+  "loadingWorktrees": "正在加载已有工作树…",
+  "loadFailed": "无法加载工作树。",
+  "noWorktrees": "还没有工作树。选择“新建工作树”来创建。",
+  "reuse": "复用工作树",
+  "otherOptions": "其他选项",
+  "existingWorkspace": "已有工作区",
+  "modes": {
+    "isolated_workspace": {
+      "label": "新建工作树",
+      "description": "在隔离的检出目录中开始。"
+    },
+    "shared_workspace": {
+      "label": "项目工作区",
+      "description": "使用项目的共享检出目录。"
+    },
+    "operator_branch": {
+      "label": "新建分支",
+      "description": "在项目工作区中创建分支。"
+    },
+    "agent_default": {
+      "label": "智能体默认设置",
+      "description": "让智能体选择工作区。"
+    },
+    "inherit": {
+      "label": "项目默认设置",
+      "description": "使用项目的工作树设置。"
+    }
+  }
+}

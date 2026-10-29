@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import "@/i18n/task-thread-composer-test-resources";
+import "@/i18n/searchable-select-test-resources";
 import "@/i18n/task-thread-chrome-test-resources";
 import "@/i18n/task-thread-interactions-test-resources";
 

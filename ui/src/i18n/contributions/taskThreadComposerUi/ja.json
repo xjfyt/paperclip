@@ -1,0 +1,49 @@
+{
+  "add": "追加",
+  "closeAdd": "追加メニューを閉じる",
+  "files": "ファイルと画像",
+  "privateTask": "非公開タスク",
+  "goal": "目標",
+  "keepPursuing": "継続して取り組む",
+  "plan": "計画モード",
+  "planDetail": "実行前に計画する",
+  "ask": "質問モード",
+  "askDetail": "変更せずに回答する",
+  "auto": "自動モード",
+  "removeMode": "{{mode}}を解除",
+  "privacyExplanation": "このタスクはあなたと共有相手のみが閲覧できます",
+  "removePrivate": "非公開設定を解除",
+  "private": "非公開",
+  "worktrees": "ワークツリー",
+  "searchWorktrees": "ワークツリーを検索...",
+  "noMatchingWorktrees": "一致するワークツリーはありません。",
+  "selectWorktree": "ワークツリーを選択",
+  "loadingWorktrees": "既存のワークツリーを読み込み中…",
+  "loadFailed": "ワークツリーを読み込めませんでした。",
+  "noWorktrees": "ワークツリーはまだありません。「新しいワークツリー」を選択して作成してください。",
+  "reuse": "ワークツリーを再利用",
+  "otherOptions": "その他のオプション",
+  "existingWorkspace": "既存のワークスペース",
+  "modes": {
+    "isolated_workspace": {
+      "label": "新しいワークツリー",
+      "description": "独立したチェックアウトで開始します。"
+    },
+    "shared_workspace": {
+      "label": "プロジェクトのワークスペース",
+      "description": "プロジェクトの共有チェックアウトを使用します。"
+    },
+    "operator_branch": {
+      "label": "新しいブランチ",
+      "description": "プロジェクトのワークスペースにブランチを作成します。"
+    },
+    "agent_default": {
+      "label": "エージェントのデフォルト",
+      "description": "エージェントにワークスペースを選択させます。"
+    },
+    "inherit": {
+      "label": "プロジェクトのデフォルト",
+      "description": "プロジェクトのワークツリー設定を使用します。"
+    }
+  }
+}

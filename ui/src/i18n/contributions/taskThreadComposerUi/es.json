@@ -1,0 +1,49 @@
+{
+  "add": "Añadir",
+  "closeAdd": "Cerrar menú Añadir",
+  "files": "Archivos e imágenes",
+  "privateTask": "Tarea privada",
+  "goal": "Objetivo",
+  "keepPursuing": "Seguir persiguiendo",
+  "plan": "Modo de planificación",
+  "planDetail": "Planificar antes de actuar",
+  "ask": "Modo de consulta",
+  "askDetail": "Responder sin hacer cambios",
+  "auto": "Modo automático",
+  "removeMode": "Quitar {{mode}}",
+  "privacyExplanation": "Solo tú y las personas con quienes la compartas pueden leer esta tarea",
+  "removePrivate": "Quitar tarea privada",
+  "private": "Privada",
+  "worktrees": "Árboles de trabajo",
+  "searchWorktrees": "Buscar árboles de trabajo...",
+  "noMatchingWorktrees": "No hay árboles de trabajo coincidentes.",
+  "selectWorktree": "Seleccionar árbol de trabajo",
+  "loadingWorktrees": "Cargando árboles de trabajo existentes…",
+  "loadFailed": "No se pudieron cargar los árboles de trabajo.",
+  "noWorktrees": "Aún no hay árboles de trabajo. Elige Nuevo árbol de trabajo para crear uno.",
+  "reuse": "Reutilizar un árbol de trabajo",
+  "otherOptions": "Otras opciones",
+  "existingWorkspace": "Espacio de trabajo existente",
+  "modes": {
+    "isolated_workspace": {
+      "label": "Nuevo árbol de trabajo",
+      "description": "Empezar en una copia de trabajo aislada."
+    },
+    "shared_workspace": {
+      "label": "Espacio de trabajo del proyecto",
+      "description": "Usar la copia de trabajo compartida del proyecto."
+    },
+    "operator_branch": {
+      "label": "Nueva rama",
+      "description": "Crear una rama en el espacio de trabajo del proyecto."
+    },
+    "agent_default": {
+      "label": "Predeterminado del agente",
+      "description": "Dejar que el agente elija su espacio de trabajo."
+    },
+    "inherit": {
+      "label": "Predeterminado del proyecto",
+      "description": "Usar la configuración de árboles de trabajo del proyecto."
+    }
+  }
+}
