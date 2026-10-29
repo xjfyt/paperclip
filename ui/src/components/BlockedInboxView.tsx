@@ -1,3 +1,5 @@
+import { t, useTranslation, formatNumber } from "../i18n";
+import { blockedVariantDisplay, stoppedAgeDisplay } from "../i18n/blocked-inbox-display";
 import { AgentIdentity } from "@/components/AgentIdentity";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -11,7 +13,6 @@ import { resolveInboxIssueBlockerAttention } from "../lib/inbox-live-descendants
 import {
   blockedRowMatchesSearch,
   buildBlockedInboxRows,
-  formatStoppedAge,
   groupBlockedInboxRows,
   sortBlockedInboxRows,
   type BlockedInboxGroupBy,
@@ -67,6 +68,7 @@ export function BlockedInboxView({
   showUpdatedColumn,
   presentation = "legacy",
 }: BlockedInboxViewProps) {
+  useTranslation();
   const [collapsedVariants, setCollapsedVariants] = useState<Set<string>>(() => new Set());
 
   const {
@@ -149,7 +151,7 @@ export function BlockedInboxView({
 
   if (error) {
     const message =
-      error instanceof Error ? error.message : "Couldn't load the Blocked tab.";
+      error instanceof Error ? error.message : t("blockedInboxUi.loadError");
     return (
       <div
         data-testid="blocked-inbox-error"
@@ -159,9 +161,9 @@ export function BlockedInboxView({
         <div className="flex items-start gap-2">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <div className="flex-1 space-y-1">
-            <p className="text-sm font-medium">Couldn't load the Blocked tab.</p>
+            <p className="text-sm font-medium">{t("blockedInboxUi.loadError")}</p>
             <p className="text-xs opacity-80">
-              Other Inbox tabs still work. {message}
+              {t("blockedInboxUi.otherTabs", { message })}
             </p>
           </div>
           <Button
@@ -172,7 +174,7 @@ export function BlockedInboxView({
             onClick={() => void refetch()}
             disabled={isFetching}
           >
-            {isFetching ? "Trying…" : "Try again"}
+            {isFetching ? t("blockedInboxUi.trying") : t("blockedInboxUi.retry")}
           </Button>
         </div>
       </div>
@@ -189,9 +191,9 @@ export function BlockedInboxView({
           <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
         </span>
         <div className="space-y-1">
-          <p className="text-sm font-medium text-foreground">No work is stopped.</p>
+          <p className="text-sm font-medium text-foreground">{t("blockedInboxUi.empty")}</p>
           <p className="text-xs text-muted-foreground">
-            Tasks that need a decision, recovery, or external action will appear here.
+            {t("blockedInboxUi.emptyHint")}
           </p>
         </div>
       </Card>
@@ -205,7 +207,7 @@ export function BlockedInboxView({
           data-testid="blocked-inbox-no-search-results"
           className="block border-border/70 bg-card/40 px-4 py-6 text-center text-sm text-muted-foreground"
         >
-          No stopped items match your search.
+          {t("blockedInboxUi.noMatch")}
         </Card>
       </div>
     );
@@ -237,7 +239,7 @@ export function BlockedInboxView({
               <div key={group.variant} data-testid={`blocked-inbox-group-${group.variant}`}>
                 <div className={presentation === "task" ? "rounded-lg px-3 sm:pl-0 sm:pr-4" : "px-3 sm:px-4"}>
                   <IssueGroupHeader
-                    label={`${group.label} · ${group.rows.length}`}
+                    label={`${blockedVariantDisplay(group.variant)} · ${formatNumber(group.rows.length)}`}
                     collapsible
                     collapsed={isCollapsed}
                     onToggle={() => toggleVariant(group.variant)}
@@ -314,8 +316,9 @@ function BlockedInboxRow({
   showUpdatedColumn,
   presentation,
 }: BlockedInboxRowProps) {
+  useTranslation();
   const { label: ownerName, isAgent } = resolveOwnerName(row, agentNameById, userLabelById);
-  const stoppedAge = formatStoppedAge(row.attention.stoppedSinceAt);
+  const stoppedAge = stoppedAgeDisplay(row.attention.stoppedSinceAt);
   const blockerAttention = resolveInboxIssueBlockerAttention(row.issue, {
     isLive: liveIssueIds.has(row.issue.id),
     loadedSubtreeLiveCount: subtreeLiveCounts.get(row.issue.id) ?? 0,

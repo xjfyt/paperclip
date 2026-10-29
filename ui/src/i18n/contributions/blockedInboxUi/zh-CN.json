@@ -1,0 +1,27 @@
+{
+  "loadError": "无法加载“受阻”标签页。",
+  "otherTabs": "收件箱的其他标签页仍可使用。{{message}}",
+  "trying": "正在重试…",
+  "retry": "重试",
+  "empty": "没有停滞的工作。",
+  "emptyHint": "需要决策、恢复或外部操作的任务将显示在这里。",
+  "noMatch": "没有符合搜索条件的停滞事项。",
+  "reason": "原因：{{reason}}，严重程度：{{severity}}",
+  "stopped": "已停滞",
+  "justNow": "刚刚停滞",
+  "stoppedAt": "{{time}}停滞",
+  "variant": {
+    "needs_decision": "需要决策",
+    "stalled": "阻塞链停滞",
+    "needs_attention": "需要关注",
+    "recovery_required": "需要恢复",
+    "external_wait": "等待外部操作",
+    "owner_paused": "负责人已暂停"
+  },
+  "severity": {
+    "critical": "紧急",
+    "high": "高",
+    "medium": "中",
+    "low": "低"
+  }
+}

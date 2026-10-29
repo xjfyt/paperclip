@@ -1,0 +1,27 @@
+{
+  "loadError": "「ブロック中」タブを読み込めませんでした。",
+  "otherTabs": "受信トレイの他のタブは引き続き使用できます。{{message}}",
+  "trying": "再試行中…",
+  "retry": "再試行",
+  "empty": "停止中の作業はありません。",
+  "emptyHint": "決定、復旧、または外部操作が必要なタスクがここに表示されます。",
+  "noMatch": "検索条件に一致する停止中の項目はありません。",
+  "reason": "理由：{{reason}}、重大度：{{severity}}",
+  "stopped": "停止中",
+  "justNow": "たった今停止",
+  "stoppedAt": "{{time}}停止",
+  "variant": {
+    "needs_decision": "決定が必要",
+    "stalled": "ブロック連鎖が停滞",
+    "needs_attention": "対応が必要",
+    "recovery_required": "復旧が必要",
+    "external_wait": "外部対応待ち",
+    "owner_paused": "担当者が一時停止中"
+  },
+  "severity": {
+    "critical": "緊急",
+    "high": "高",
+    "medium": "中",
+    "low": "低"
+  }
+}

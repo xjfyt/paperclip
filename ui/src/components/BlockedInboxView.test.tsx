@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import "../i18n/blocked-inbox-test-resources";
 
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";

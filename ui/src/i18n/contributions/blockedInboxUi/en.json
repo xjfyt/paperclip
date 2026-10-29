@@ -1,0 +1,27 @@
+{
+  "loadError": "Couldn't load the Blocked tab.",
+  "otherTabs": "Other Inbox tabs still work. {{message}}",
+  "trying": "Trying…",
+  "retry": "Try again",
+  "empty": "No work is stopped.",
+  "emptyHint": "Tasks that need a decision, recovery, or external action will appear here.",
+  "noMatch": "No stopped items match your search.",
+  "reason": "Reason: {{reason}}, severity {{severity}}",
+  "stopped": "stopped",
+  "justNow": "stopped just now",
+  "stoppedAt": "stopped {{time}}",
+  "variant": {
+    "needs_decision": "Needs decision",
+    "stalled": "Blocked chain stalled",
+    "needs_attention": "Needs attention",
+    "recovery_required": "Recovery required",
+    "external_wait": "External wait",
+    "owner_paused": "Owner paused"
+  },
+  "severity": {
+    "critical": "critical",
+    "high": "high",
+    "medium": "medium",
+    "low": "low"
+  }
+}

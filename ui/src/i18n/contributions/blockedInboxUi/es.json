@@ -1,0 +1,27 @@
+{
+  "loadError": "No se pudo cargar la pestaña Bloqueados.",
+  "otherTabs": "Las demás pestañas de la bandeja de entrada siguen funcionando. {{message}}",
+  "trying": "Reintentando…",
+  "retry": "Reintentar",
+  "empty": "No hay trabajo detenido.",
+  "emptyHint": "Aquí aparecerán las tareas que necesiten una decisión, recuperación o acción externa.",
+  "noMatch": "Ningún elemento detenido coincide con tu búsqueda.",
+  "reason": "Motivo: {{reason}}, gravedad {{severity}}",
+  "stopped": "detenido",
+  "justNow": "recién detenido",
+  "stoppedAt": "detenido {{time}}",
+  "variant": {
+    "needs_decision": "Necesita una decisión",
+    "stalled": "Cadena de bloqueo estancada",
+    "needs_attention": "Necesita atención",
+    "recovery_required": "Requiere recuperación",
+    "external_wait": "Espera externa",
+    "owner_paused": "Responsable en pausa"
+  },
+  "severity": {
+    "critical": "crítica",
+    "high": "alta",
+    "medium": "media",
+    "low": "baja"
+  }
+}
