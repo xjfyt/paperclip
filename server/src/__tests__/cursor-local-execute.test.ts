@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import fs from "node:fs/promises";
 import os from "node:os";
-import path from "node:path";
-import { runChildProcess } from "@paperclipai/adapter-utils/server-utils";
+import { fixturePath as path, sandboxPath, shellExecutable, shellArgs, shellEnvironment, shellScript } from "@paperclipai/adapter-utils/test-fixtures/local-sandbox";
+import { runPosixSandboxProcess as runChildProcess } from "@paperclipai/adapter-utils/test-fixtures/portable-cli";
+import { writeCliFixture } from "@paperclipai/adapter-utils/test-fixtures/native-cli";
+import { installIsolatedHostFixture } from "@paperclipai/adapter-utils/test-fixtures/isolated-host";
+installIsolatedHostFixture();
 import { execute } from "@paperclipai/adapter-cursor-local/server";
 
 // These fixtures verify command discovery, environment and real CLI execution.
@@ -50,8 +53,7 @@ console.log(JSON.stringify({
   result: "ok",
 }));
 `;
-  await fs.writeFile(commandPath, script, "utf8");
-  await fs.chmod(commandPath, 0o755);
+  await writeCliFixture(commandPath.replace(/\.exe$/, ""), script);
 }
 
 async function writeFakeSandboxCursorAgent(commandPath: string, capturePath: string): Promise<void> {
@@ -83,8 +85,7 @@ console.log(JSON.stringify({
 }));
 `;
   await fs.mkdir(path.dirname(commandPath), { recursive: true });
-  await fs.writeFile(commandPath, script, "utf8");
-  await fs.chmod(commandPath, 0o755);
+  await writeCliFixture(commandPath, script);
 }
 
 function createLocalSandboxRunner() {
@@ -106,9 +107,20 @@ function createLocalSandboxRunner() {
       if (input.args?.some(arg => arg.includes("curl https://cursor.com/install"))) {
         throw new Error("Sandbox fixture did not discover its preinstalled Cursor CLI");
       }
-      return await runChildProcess(`cursor-sandbox-execute-${counter}`, input.command, input.args ?? [], {
+      const env = shellEnvironment(input.env);
+      // The fake provider's POSIX PATH intentionally excludes the host PATH.
+      // Its installed Node script still needs the known fixture interpreter.
+      if (process.platform === "win32") {
+        const msysDirectory = (file: string) => {
+          const directory = path.dirname(file).replaceAll("\\", "/");
+          return `/${directory[0]!.toLowerCase()}${directory.slice(2)}`;
+        };
+        if (input.env?.PATH) env.PATH = `${shellScript(input.env.PATH)}:${msysDirectory(shellExecutable("bash"))}`;
+        env.PATH += `:${msysDirectory(process.execPath)}`;
+      }
+      return await runChildProcess(`cursor-sandbox-execute-${counter}`, shellExecutable(input.command), shellArgs(input.args), {
         cwd: input.cwd ?? process.cwd(),
-        env: input.env ?? {},
+        env,
         stdin: input.stdin,
         timeoutSec: Math.max(1, Math.ceil((input.timeoutMs ?? 30_000) / 1000)),
         graceSec: 5,
@@ -138,7 +150,7 @@ describe("cursor execute", () => {
   it("injects paperclip env vars and prompt note by default", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-cursor-execute-"));
     const workspace = path.join(root, "workspace");
-    const commandPath = path.join(root, "agent");
+    const commandPath = path.join(root, process.platform === "win32" ? "agent.exe" : "agent");
     const capturePath = path.join(root, "capture.json");
     await fs.mkdir(workspace, { recursive: true });
     await writeFakeCursorCommand(commandPath);
@@ -213,7 +225,7 @@ describe("cursor execute", () => {
   it("passes --mode when explicitly configured", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-cursor-execute-mode-"));
     const workspace = path.join(root, "workspace");
-    const commandPath = path.join(root, "agent");
+    const commandPath = path.join(root, process.platform === "win32" ? "agent.exe" : "agent");
     const capturePath = path.join(root, "capture.json");
     await fs.mkdir(workspace, { recursive: true });
     await writeFakeCursorCommand(commandPath);
@@ -273,7 +285,7 @@ describe("cursor execute", () => {
     const processHome = path.join(root, "process-home");
     const configuredHome = path.join(root, "configured-home");
     const workspace = path.join(root, "workspace");
-    const commandPath = path.join(root, "agent");
+    const commandPath = path.join(root, process.platform === "win32" ? "agent.exe" : "agent");
     const runtimeSkillsRoot = path.join(root, "runtime-skills");
     await fs.mkdir(workspace, { recursive: true });
     await writeFakeCursorCommand(commandPath);
@@ -356,7 +368,7 @@ describe("cursor execute", () => {
     await writeFakeSandboxCursorAgent(cursorAgentPath, capturePath);
 
     const previousHome = process.env.HOME;
-    process.env.HOME = homeDir;
+    process.env.HOME = sandboxPath(homeDir);
 
     try {
       const result = await execute({
@@ -377,13 +389,13 @@ describe("cursor execute", () => {
         executionTarget: {
           kind: "remote",
           transport: "sandbox",
-          remoteCwd: remoteWorkspace,
+          remoteCwd: sandboxPath(remoteWorkspace),
           runner: createLocalSandboxRunner(),
           timeoutMs: 30_000,
         },
         config: {
           command: "agent",
-          cwd: workspace,
+          cwd: sandboxPath(workspace),
           promptTemplate: "Follow the paperclip heartbeat.",
         },
         context: {},
@@ -398,8 +410,9 @@ describe("cursor execute", () => {
         prompt: string;
         path: string;
       };
-      expect(capture.command).toBe(cursorAgentPath);
-      expect(capture.path.split(":")[0]).toBe(path.join(homeDir, ".local", "bin"));
+      expect(await fs.realpath(capture.command)).toBe(await fs.realpath(cursorAgentPath));
+      expect(await fs.realpath(capture.path.split(process.platform === "win32" ? ";" : ":")[0]!))
+        .toBe(await fs.realpath(path.join(homeDir, ".local", "bin")));
       expect(capture.prompt).toContain("Follow the paperclip heartbeat.");
     } finally {
       if (previousHome === undefined) delete process.env.HOME;
@@ -422,7 +435,7 @@ describe("cursor execute", () => {
     await writeFakeSandboxCursorAgent(customCommandPath, capturePath);
 
     const previousHome = process.env.HOME;
-    process.env.HOME = homeDir;
+    process.env.HOME = sandboxPath(homeDir);
 
     try {
       const result = await execute({
@@ -443,13 +456,13 @@ describe("cursor execute", () => {
         executionTarget: {
           kind: "remote",
           transport: "sandbox",
-          remoteCwd: remoteWorkspace,
+          remoteCwd: sandboxPath(remoteWorkspace),
           runner: createLocalSandboxRunner(),
           timeoutMs: 30_000,
         },
         config: {
-          command: customCommandPath,
-          cwd: workspace,
+          command: sandboxPath(customCommandPath),
+          cwd: sandboxPath(workspace),
           promptTemplate: "Follow the paperclip heartbeat.",
         },
         context: {},
@@ -459,7 +472,7 @@ describe("cursor execute", () => {
 
       expect(result.exitCode).toBe(0);
       const capture = JSON.parse(await fs.readFile(capturePath, "utf8")) as { command: string };
-      expect(capture.command).toBe(customCommandPath);
+      expect(await fs.realpath(capture.command)).toBe(await fs.realpath(customCommandPath));
     } finally {
       if (previousHome === undefined) delete process.env.HOME;
       else process.env.HOME = previousHome;

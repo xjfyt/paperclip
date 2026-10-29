@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { chmodSync, linkSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 const hooks = vi.hoisted(() => ({ mkdir: undefined as undefined | ((path: string) => void), rename: undefined as undefined | ((source: string, destination: string) => void), open: undefined as undefined | ((path: string) => void), read: undefined as undefined | ((path: string, bytes: number) => void) }));
 vi.mock("node:fs/promises", async (original) => {
   const fs = await original<typeof import("node:fs/promises")>();
@@ -30,6 +30,9 @@ async function fixture() {
   writeFileSync(join(directory, "provider-pack/provider-pack.json"), JSON.stringify({ schema: "paperclip-runner/remote-provider-pack/v1", digest: `sha256:${hash(canonical(payload))}`, payload }));
   const manifest = await createRemotePiCompanionManifest(directory, source); const bytes = JSON.stringify(manifest); writeFileSync(join(directory, "companion.json"), bytes); return { root, directory, serverRoot, sha256: hash(bytes), manifest, source };
 }
+// Import ownership, modes and signal draining are supported only by POSIX
+// controllers. Keep the real journeys there; Windows exercises refusal below.
+describe.skipIf(process.platform === "win32")("POSIX controller companion lifecycle", () => {
 it("imports the release-generated closure and resolves target bytes without environment overrides", async () => {
   const f = await fixture(); const result = await importRemotePiCompanion(f); expect(result.status).toBe("imported_verified");
   expect(result.runnerBinary).toBe(join(f.serverRoot, "remote-companions/linux-x64/bin/paperclip-runnerd"));
@@ -160,4 +163,38 @@ it("rejects read-only directory modes before claiming a staging or output path",
     await expect(importRemotePiCompanion({...f, checkCancelled(){}})).rejects.toThrow("owner read/write/search");
     expect(() => readdirSync(join(f.serverRoot, "remote-companions"))).toThrow();
   } finally { chmodSync(dir, 0o755); }
+});
+});
+
+it.runIf(process.platform === "win32").each([false, true])("Windows refuses companion import before filesystem mutation (existing cache: %s)", async (existingCache) => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "paperclip-companion-platform-")));
+  roots.push(root);
+  const serverRoot = join(root, "server");
+  const directory = join(root, "release");
+  mkdirSync(serverRoot);
+  mkdirSync(directory);
+  const packageBytes = '{"name":"@paperclipai/server"}';
+  writeFileSync(join(serverRoot, "package.json"), packageBytes);
+  writeFileSync(join(directory, "foreign-release"), "preserve release bytes");
+  const cache = join(serverRoot, "remote-companions");
+  if (existingCache) {
+    mkdirSync(join(cache, "linux-x64"), { recursive: true });
+    writeFileSync(join(cache, "linux-x64", "foreign"), "preserve existing cache");
+  }
+  const operations: string[] = [];
+  hooks.mkdir = () => operations.push("mkdir");
+  hooks.rename = () => operations.push("rename");
+  hooks.open = () => operations.push("open");
+  await expect(importRemotePiCompanion({ directory, serverRoot, sha256: "a".repeat(64) }))
+    .rejects.toThrow("companion import supports macOS and Linux controllers");
+  expect(operations).toEqual([]);
+  expect(readdirSync(directory)).toEqual(["foreign-release"]);
+  expect(readFileSync(join(directory, "foreign-release"), "utf8")).toBe("preserve release bytes");
+  expect(readFileSync(join(serverRoot, "package.json"), "utf8")).toBe(packageBytes);
+  expect(readdirSync(serverRoot).sort()).toEqual(existingCache ? ["package.json", "remote-companions"] : ["package.json"]);
+  if (existingCache) {
+    expect(readdirSync(cache)).toEqual(["linux-x64"]);
+    expect(readdirSync(join(cache, "linux-x64"))).toEqual(["foreign"]);
+    expect(readFileSync(join(cache, "linux-x64", "foreign"), "utf8")).toBe("preserve existing cache");
+  }
 });
