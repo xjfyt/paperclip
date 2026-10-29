@@ -1,9 +1,9 @@
 {
   "emptyDecisions": "此时段没有决策请求。<0>配置决策模型</0>以运行测试。",
-  "emptyFast": "此时段没有快速回复。<0>配置快速回复</0>以运行测试。",
-  "emptyFastDisabled": "此时段没有快速回复。<0>启用实验性快速回复</0>以运行测试。",
+  "emptyFast": "此时段没有快速响应。<0>配置快速响应</0>以运行测试。",
+  "emptyFastDisabled": "此时段没有快速响应。<0>启用实验性快速响应</0>以运行测试。",
   "privacy": "近期请求。输入内容不会保留。",
-  "fastResponses": "快速回复",
+  "fastResponses": "快速响应",
   "decisions": "决策请求",
   "setupTest": "配置测试",
   "services": "Paperclip 服务",
@@ -50,6 +50,6 @@
     "estimated": "估算",
     "reported": "已报告"
   },
-  "loadingFast": "正在加载快速回复…",
-  "failedFast": "无法加载快速回复。"
+  "loadingFast": "正在加载快速响应…",
+  "failedFast": "无法加载快速响应。"
 }
