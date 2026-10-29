@@ -1,0 +1,148 @@
+{
+  "schema": "mimouse.remaining-server-recheck.v1",
+  "recordedAt": "2026-10-29T22:51:32.850Z",
+  "kind": "COMPLETE_UNFILTERED_FILES",
+  "status": "PASS_AT_DECLARED_INPUT",
+  "platform": "Windows native x64 / Node v24.16.0 / Vitest 5.0.3",
+  "command": [
+    "C:\\Users\\xjfyt\\AppData\\Local\\nvm4w\\nodejs\\node.exe",
+    "C:\\Users\\xjfyt\\Desktop\\Code\\paperclip\\node_modules\\.pnpm\\vitest@5.0.3_@opentelemetry+api@1.9.1_@types+node@24.13.3_jsdom@30.0.1_@noble+hashes@2.4.0__v_wr5mxfuu6kgge6st623q4v5egm\\node_modules\\vitest\\vitest.mjs",
+    "run",
+    "--project",
+    "@paperclipai/server",
+    "server/src/__tests__/browser-use-connection.test.ts",
+    "server/src/__tests__/fast-responses.test.ts",
+    "server/src/__tests__/ai-legacy-compatibility.test.ts",
+    "server/src/__tests__/public-mcp.test.ts",
+    "server/src/__tests__/railway-connection.test.ts",
+    "--maxWorkers=1",
+    "--reporter=default",
+    "--reporter=json",
+    "--outputFile=C:\\Users\\xjfyt\\Desktop\\Code\\paperclip\\test-results\\project-closure-20261029\\remaining-server-complete-final.json"
+  ],
+  "exitCode": 0,
+  "totals": {
+    "files": 5,
+    "vitestDescribeSuites": 12,
+    "passed": 147,
+    "failed": 0,
+    "skipped": 0,
+    "runtimeReportedSeconds": 360.11,
+    "frameworkDiagnosticLines": 0
+  },
+  "files": [
+    {
+      "path": "server/src/__tests__/ai-legacy-compatibility.test.ts",
+      "status": "passed",
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "server/src/__tests__/browser-use-connection.test.ts",
+      "status": "passed",
+      "passed": 27,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "server/src/__tests__/fast-responses.test.ts",
+      "status": "passed",
+      "passed": 25,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "server/src/__tests__/public-mcp.test.ts",
+      "status": "passed",
+      "passed": 82,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "server/src/__tests__/railway-connection.test.ts",
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0
+    }
+  ],
+  "inputs": {
+    "beforeCount": 11466,
+    "afterCount": 11467,
+    "changed": [
+      {
+        "path": "doc/mimouse/checklists/2026-10-30-project-closure.md",
+        "before": "10547ebc5e6c42843b1706d53f4d88ae8a3ef22213a84fcaeb7ad016a76b40b3",
+        "after": "d16e883d8606b50b3343a06ef103a95b8311519924c35902d8cdc027373b7823"
+      },
+      {
+        "path": "doc/mimouse/checklists/README.md",
+        "before": "9869d64c559aad37ed697ae19e7d73d0e0bd6a65693b2c1ebb21582a28269b9f",
+        "after": "898471fa492b300356622491425c65ab1bbf9bb46c0172dad439e4847d476aef"
+      },
+      {
+        "path": "docs/05-maintenance/01-verification.md",
+        "before": "7854dbdf9e198529692e30cbd34c5bcc70302f35124bd606af016b4798f528b7",
+        "after": "e4be71d9b75058a6e635f4359aa807bb2609b73604e58f813c666202a33e552d"
+      },
+      {
+        "path": "doc/mimouse/checklists/2026-10-30-static-build-final-evidence.json",
+        "before": null,
+        "after": "d8a23beac29809a35fcf88fc77e34561ff64e63be06a257ba6152786b4aa04eb"
+      }
+    ],
+    "before": {
+      "path": "test-results/project-closure-20261029/remaining-server-complete-final-before.json",
+      "sha256": "ccd114d4d5ec2596712a5e42044bd3f02a01a02d7fa05d392df8beed1063e6b5"
+    },
+    "after": {
+      "path": "test-results/project-closure-20261029/remaining-server-complete-final-after.json",
+      "sha256": "d94851ba1d90175a1b5fc3dad10c17cd30943bef96a665dbce1fa0a0ef843199"
+    },
+    "boundary": "Git-visible raw source/config/tests/docs bytes; ignored installed dependencies and generated output excluded. Final build ran concurrently for the initial 50 seconds. Shared and DB workspace exports resolve to source; this is not a frozen binary-image claim."
+  },
+  "evidence": [
+    {
+      "path": "test-results/project-closure-20261029/remaining-server-complete-final.json",
+      "sha256": "268562fe923825783cdfbf4f042f0d96344848fcef52aa1bced4af9e3279b5ba"
+    },
+    {
+      "path": "test-results/project-closure-20261029/remaining-server-complete-final.log",
+      "sha256": "0cde86d7bebcb6595b58b03d7342b7352ef7939b1a222d82090f4c6944fb67c5"
+    },
+    {
+      "path": "test-results/project-closure-20261029/remaining-server-complete-final.exit",
+      "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
+    },
+    {
+      "path": "test-results/project-closure-20261029/remaining-server-complete-final-invocation.json",
+      "sha256": "74ebc40181b3416908920ac01f04ac4c09f32156a0997630e88a8210ad280339"
+    }
+  ],
+  "priorFailures": {
+    "logs": [
+      {
+        "path": "test-results/project-closure-20261029/general-frozen-shard-0.log",
+        "sha256": "939ec3ac822ef5fadb5abef5d927a436b17fd9b49c4af19b5a5072bac1ba9578"
+      },
+      {
+        "path": "test-results/project-closure-20261029/general-frozen-shard-1.log",
+        "sha256": "45c58e93a677c8bcad09fdbbcd35da348adfbc2ac2c0cb570486bfd42c4728bd"
+      },
+      {
+        "path": "test-results/project-closure-20261029/general-frozen-shard-2.log",
+        "sha256": "d34d0e69ac26ef05138bc0493356378958c85ae8c31f9b11875ba4e4cf58bec9"
+      },
+      {
+        "path": "test-results/project-closure-20261029/general-frozen-shard-3.log",
+        "sha256": "31d4e168b267f82e3bb06f2e27e879b32a949dc2540a3328dc857ff55ed37137"
+      }
+    ],
+    "classification": "Browser Use 17, AI legacy 1, Public MCP 1, Railway 1 previously hit the original 15-second deadline. Fast Responses stream previously returned skipped instead of succeeded; this was a state assertion failure, not a framework timeout. No implementation, assertion, or deadline change was made in these five files for this recheck. Exact earlier triggers remain unconfirmed; later pass does not establish a historical cause."
+  },
+  "limitations": [
+    "Controlled provider fixtures are not real external-account authentication or billing proof.",
+    "Application diagnostic logs remain intact; zero framework diagnostics does not mean all negative-path application WARN records are absent."
+  ]
+}
