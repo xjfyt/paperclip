@@ -20,8 +20,9 @@ import { approvalsApi } from "../api/approvals";
 import { issuesApi } from "../api/issues";
 import { useToastActions } from "../context/ToastContext";
 import { queryKeys } from "../lib/queryKeys";
-import { describeAttentionResolverAudience, type InteractionAudienceDescription } from "../lib/interaction-audience";
-import { interactionResolutionErrorMessage } from "../lib/interaction-resolution-error";
+import type { InteractionAudienceDescription } from "../lib/interaction-audience";
+import { displayAttentionResolverAudience } from "../i18n/interaction-audience-display";
+import { taskInteractionError } from "../i18n/task-interaction-feedback-display";
 import {
   attentionDetailImages,
   attentionImageUrl,
@@ -163,7 +164,7 @@ export const AttentionQueueRow = memo(function AttentionQueueRow({
   // Accept/Reject before anything fetches the interaction, so the audience
   // travels with the feed item; null for every non-interaction source and for a
   // feed built before the metadata existed (PAP-17287).
-  const audience = describeAttentionResolverAudience(item);
+  const audience = displayAttentionResolverAudience(item, { currentUserId });
   const showOpen = !inline && !!href;
   const showRestore = isHidden && !!onRestore;
   // An expanded inline row hands its footer to the resolver, which owns the
@@ -526,7 +527,7 @@ function CompactDecisionActions({
       // the real responder instead of asking for a retry that will fail again.
       pushToast({
         title: t(`attentionRowUi.error.${action}`),
-        body: interactionResolutionErrorMessage(error, audience),
+        body: taskInteractionError(error, audience ?? { isOpen: true, shortSummary: "" }),
         tone: "error",
       });
     },

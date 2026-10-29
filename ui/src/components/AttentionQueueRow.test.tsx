@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import "../i18n/attention-row-test-resources";
+import "../i18n/interaction-audience-test-resources";
 
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
@@ -982,8 +983,8 @@ describe("AttentionQueueRow", () => {
     });
 
     const feedback = document.body.textContent ?? "";
-    expect(feedback).toContain("This issue-thread interaction is human-only.");
-    expect(feedback).toContain("Only the board can respond.");
+    expect(feedback).toContain("This issue-thread interaction is human-only");
+    expect(feedback).toContain("Only the board can respond");
     expect(feedback).not.toMatch(/try again/i);
   });
 

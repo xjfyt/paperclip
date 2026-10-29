@@ -5,14 +5,18 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AttentionItem } from "@paperclipai/shared";
 import { AttentionQueueRow } from "./AttentionQueueRow";
+import { interactionAudienceMessages } from "../i18n/interaction-audience-test-resources";
+import { taskThreadFeedbackMessages } from "../i18n/task-thread-feedback-test-resources";
+import { ApiError } from "../api/client";
 import { attentionRowMessages, i18n } from "../i18n/attention-row-test-resources";
 import { decisionDeskMessages } from "../i18n/decision-desk-test-resources";
 import { validateLocaleMessages } from "../i18n/locale-validation";
 import { attentionDetailDisplay } from "../i18n/attention-row-display";
 import { formatNumber } from "../lib/utils";
-const state = vi.hoisted(() => ({ approve: vi.fn(), reject: vi.fn(), revise: vi.fn(), snooze: vi.fn() }));
+const state = vi.hoisted(() => ({ approve: vi.fn(), reject: vi.fn(), revise: vi.fn(), snooze: vi.fn(), accept: vi.fn(), toast: vi.fn() }));
 vi.mock("../api/approvals", () => ({ approvalsApi: { approve: state.approve, reject: state.reject, requestRevision: state.revise } }));
-vi.mock("../context/ToastContext", () => ({ useToastActions: () => ({ pushToast: vi.fn() }) }));
+vi.mock("../context/ToastContext", () => ({ useToastActions: () => ({ pushToast: state.toast }) }));
+vi.mock("../api/issues", () => ({ issuesApi: { acceptInteraction: state.accept } }));
 vi.mock("@/lib/router", async () => {
   const { forwardRef } = await import("react");
   return { Link: forwardRef<HTMLAnchorElement, React.AnchorHTMLAttributes<HTMLAnchorElement> & { to: string }>(({ children, to, ...props }, ref) => <a {...props} ref={ref} href={to}>{children}</a>) };
@@ -84,4 +88,23 @@ it("preserves focused snooze submenu items and the custom datetime draft on hot 
   const apply = [...document.querySelectorAll("button")].find(node => node.textContent === attentionRowMessages.ja.snoozeUntil)!;
   await act(async () => apply.click());
   expect(state.snooze).toHaveBeenCalledExactlyOnceWith(item, new Date("2026-11-01T09:30").toISOString());
+});
+
+it("hot-translates the actual collapsed audience and denial guidance without rewriting custom verbs or provider reason", async () => {
+  const next = { ...item, sourceKind: "issue_thread_interaction", subject: { ...item.subject, id: "interaction1", kind: "interaction", metadata: { kind: "request_confirmation", issueId: "issue1" } }, decisionVerbs: [{ id: "accept", label: "Raw accept Ω", description: "Raw verb hint" }], resolverAudience: { requestedResolverPolicy: "human_only", effectiveResolverPolicy: "human_only", effectiveResolverPolicySource: "requested", resolverPolicyProvenance: "inherited", addresseeAgentId: "agent1", addresseeName: "Raw agent <b>", createdByAgentId: "creator", createdByAgentName: "Raw creator" } } as AttentionItem;
+  await render(false, next); const audience = host.querySelector('[data-testid="interaction-audience"]')!;
+  for (const [locale, strings] of Object.entries(taskThreadFeedbackMessages)) {
+    await language(locale);
+    expect(host.querySelector('[data-testid="interaction-audience"]')).toBe(audience);
+    expect(audience.textContent).toContain(strings.assignedBoard.replace("{{addressee}}", "Raw agent <b>"));
+    expect(audience.getAttribute("title")).toContain(interactionAudienceMessages[locale as keyof typeof interactionAudienceMessages].assignedBoard.replace("{{addressee}}", "Raw agent <b>"));
+    expect(audience.getAttribute("data-audience-policy")).toBe("human_only");
+    expect(host.textContent).toContain("Raw accept Ω"); expect(host.querySelector("b")).toBeNull(); expect(state.accept).not.toHaveBeenCalled();
+  }
+  const raw = "Raw provider <b> diagnostic";
+  state.accept.mockRejectedValue(new ApiError(raw, 403, { error: raw, code: "interaction_human_only" }));
+  await act(async () => [...host.querySelectorAll("button")].find(node => node.textContent === "Raw accept Ω")!.click());
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
+  expect(state.accept).toHaveBeenCalledExactlyOnceWith("issue1", "interaction1");
+  expect(state.toast).toHaveBeenCalledWith(expect.objectContaining({ body: raw + " " + taskThreadFeedbackMessages.ja.assignedBoard.replace("{{addressee}}", "Raw agent <b>"), tone: "error" }));
 });
