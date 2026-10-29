@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import "@/i18n/task-thread-queue-test-resources";
 
 import { act, type ComponentProps } from "react";
 import { flushSync } from "react-dom";
