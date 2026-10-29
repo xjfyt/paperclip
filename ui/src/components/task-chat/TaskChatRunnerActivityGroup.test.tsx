@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import "@/i18n/task-thread-run-state-test-resources";
 import "@/i18n/task-thread-activity-test-resources";
 import "@/i18n/tool-activity-test-resources";
 import { act } from "react";

@@ -1,0 +1,16 @@
+{
+  "thinking": "Thinking",
+  "thought": "Thought",
+  "tokenUsage": "Token usage",
+  "contextUsage": "{{used}}/{{size}} ctx",
+  "seconds": "{{seconds}}s",
+  "minutes": "{{minutes}}m",
+  "minutesSeconds": "{{minutes}}m {{seconds}}s",
+  "stopped": "Stopped",
+  "worked": "Worked",
+  "stoppedAfter": "Stopped after {{duration}}",
+  "workedFor": "Worked for {{duration}}",
+  "workingFor": "Working for {{duration}}",
+  "continued": "Continued after steering · {{status}}",
+  "activityUnavailable": "Live runner activity is temporarily unavailable. Retrying…"
+}

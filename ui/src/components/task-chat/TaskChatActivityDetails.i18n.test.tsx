@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import "@/i18n/task-thread-run-state-test-resources";
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";

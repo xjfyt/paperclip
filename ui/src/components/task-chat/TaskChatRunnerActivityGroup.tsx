@@ -1,4 +1,4 @@
-import { useTranslation } from "@/i18n";
+import { useTranslation, formatNumber, t as displayText } from "@/i18n";
 import { useId, useState } from "react";
 import { completedActivitySummary } from "./completed-activity-summary";
 import {
@@ -54,7 +54,7 @@ function presentation(item: Activity, active: boolean) {
     const running = active && Boolean(item.streaming);
     return {
       icon: Brain,
-      label: running ? "Thinking" : "Thought",
+      label: displayText(running ? "taskThreadRunStateUi.thinking" : "taskThreadRunStateUi.thought"),
       target: item.lines
         .filter((line) => line.trim())
         .at(-1)
@@ -85,10 +85,10 @@ function presentation(item: Activity, active: boolean) {
   const { used, size, inputTokens, outputTokens, costUsd } = item.usage;
   const usage = [
     size > 0
-      ? `${used.toLocaleString()}/${size.toLocaleString()} ctx`
+      ? displayText("taskThreadRunStateUi.contextUsage", { used: formatNumber(used), size: formatNumber(size) })
       : undefined,
     inputTokens != null || outputTokens != null
-      ? `↑${(inputTokens ?? 0).toLocaleString()} ↓${(outputTokens ?? 0).toLocaleString()}`
+      ? `↑${formatNumber(inputTokens ?? 0)} ↓${formatNumber(outputTokens ?? 0)}`
       : undefined,
     costUsd != null ? `$${costUsd.toFixed(4)}` : undefined,
   ]
@@ -96,7 +96,7 @@ function presentation(item: Activity, active: boolean) {
     .join(" · ");
   return {
     icon: Gauge,
-    label: item.label ?? "Token usage",
+    label: item.label ?? displayText("taskThreadRunStateUi.tokenUsage"),
     target: usage || item.detail,
     mono: false,
     running: false,
@@ -110,6 +110,7 @@ function ActivityContent({
   item: Activity;
   active: boolean;
 }) {
+  useTranslation();
   const row = presentation(item, active);
   if (!row) return null;
   const Icon = row.icon;
@@ -234,7 +235,7 @@ function ActivityDetails({ item }: { item: Activity }) {
       {item.decision ? <p>{t("taskProtocolInspectorUi.permissionDecision", { decision: item.decision })}</p> : null}
       {item.diff ? (
         <p className="break-all font-mono">
-          {item.diff.path} · +{item.diff.added} −{item.diff.removed}
+          {item.diff.path} · +{formatNumber(item.diff.added)} −{formatNumber(item.diff.removed)}
         </p>
       ) : null}
     </>

@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import { useTranslation, formatNumber, t as displayText } from "@/i18n";
 import type { ExecutionProjection } from "@paperclipai/shared";
 import { useSecondTick } from "@/hooks/useSecondTick";
 import { cn } from "@/lib/utils";
@@ -46,10 +47,10 @@ function currentActivityStatusItems(
 function formatCompactDuration(ms: number | null): string | null {
   if (ms == null || !Number.isFinite(ms)) return null;
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-  if (totalSeconds < 60) return `${totalSeconds}s`;
+  if (totalSeconds < 60) return displayText("taskThreadRunStateUi.seconds", { seconds: formatNumber(totalSeconds) });
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
-  return seconds === 0 ? `${minutes}m` : `${minutes}m ${seconds}s`;
+  return displayText(seconds === 0 ? "taskThreadRunStateUi.minutes" : "taskThreadRunStateUi.minutesSeconds", { minutes: formatNumber(minutes), seconds: formatNumber(seconds) });
 }
 
 function terminalStatusFailed(status: string): boolean {
@@ -72,6 +73,7 @@ function RunnerTurnStatus({
   finishedAtMs?: number | null;
   continuedAfterSteering?: boolean;
 }) {
+  const { t } = useTranslation();
   const terminal = isTerminalRunStatus(status);
   useSecondTick(!terminal && startedAtMs != null);
   const elapsedMs =
@@ -84,14 +86,13 @@ function RunnerTurnStatus({
   const elapsed = formatCompactDuration(elapsedMs);
 
   const failed = terminalStatusFailed(status);
-  const label = terminal ? (failed ? "Stopped" : "Worked") : "Working";
   const semanticLabel = terminal
     ? elapsed
-      ? `${label} ${failed ? "after" : "for"} ${elapsed}`
-      : label
-    : `${label} for ${elapsed ?? "0s"}`;
+      ? t(failed ? "taskThreadRunStateUi.stoppedAfter" : "taskThreadRunStateUi.workedFor", { duration: elapsed })
+      : t(failed ? "taskThreadRunStateUi.stopped" : "taskThreadRunStateUi.worked")
+    : t("taskThreadRunStateUi.workingFor", { duration: elapsed ?? formatCompactDuration(0) });
   const visibleLabel = continuedAfterSteering
-    ? `Continued after steering · ${semanticLabel}`
+    ? t("taskThreadRunStateUi.continued", { status: semanticLabel })
     : semanticLabel;
 
   return (
@@ -108,9 +109,10 @@ function RunnerTurnStatus({
 }
 
 function RunnerCurrentActivityTail({ status }: { status: string }) {
+  const { t } = useTranslation();
   if (isTerminalRunStatus(status)) return null;
   return <div className="mt-2 flex min-h-8 min-w-0 items-center gap-2 px-1 py-1 text-xs text-muted-foreground" data-testid="task-chat-current-activity" data-turn-position="tail">
-    <span className="shimmer-text shimmer-text-muted" aria-live="polite" data-testid="task-chat-current-activity-label">Thinking</span>
+    <span className="shimmer-text shimmer-text-muted" aria-live="polite" data-testid="task-chat-current-activity-label">{t("taskThreadRunStateUi.thinking")}</span>
   </div>;
 }
 
@@ -148,6 +150,7 @@ export function TaskChatRunnerTurn({
     decision: TaskChatRuntimeRequestDecision,
   ) => void | Promise<void>;
 }) {
+  const { t } = useTranslation();
   const terminal = isTerminalRunStatus(status);
   const yielded = items.some(
     (item) =>
@@ -230,7 +233,7 @@ export function TaskChatRunnerTurn({
           role="status"
           data-testid="task-chat-activity-unavailable"
         >
-          Live runner activity is temporarily unavailable. Retrying…
+          {t("taskThreadRunStateUi.activityUnavailable")}
         </div>
       ) : null}
       {timelineRows.length > 0 ? (

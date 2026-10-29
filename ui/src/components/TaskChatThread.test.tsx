@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import "@/i18n/task-thread-run-state-test-resources";
 import { taskThreadContextMessages } from "@/i18n/task-thread-context-test-resources";
 import "@/i18n/task-thread-interactions-test-resources";
 import "@/i18n/task-thread-composer-test-resources";

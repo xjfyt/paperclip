@@ -1,0 +1,16 @@
+{
+  "thinking": "Pensando",
+  "thought": "Pensamiento completado",
+  "tokenUsage": "Uso de tokens",
+  "contextUsage": "{{used}}/{{size}} de contexto",
+  "seconds": "{{seconds}} s",
+  "minutes": "{{minutes}} min",
+  "minutesSeconds": "{{minutes}} min {{seconds}} s",
+  "stopped": "Detenido",
+  "worked": "Trabajo realizado",
+  "stoppedAfter": "Se detuvo tras {{duration}}",
+  "workedFor": "Trabajó durante {{duration}}",
+  "workingFor": "Trabajando desde hace {{duration}}",
+  "continued": "Continuó tras la orientación · {{status}}",
+  "activityUnavailable": "La actividad en vivo del ejecutor no está disponible temporalmente. Reintentando…"
+}

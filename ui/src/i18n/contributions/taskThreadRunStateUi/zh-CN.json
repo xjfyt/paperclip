@@ -1,0 +1,16 @@
+{
+  "thinking": "思考中",
+  "thought": "已思考",
+  "tokenUsage": "令牌用量",
+  "contextUsage": "上下文 {{used}}/{{size}}",
+  "seconds": "{{seconds}}秒",
+  "minutes": "{{minutes}}分",
+  "minutesSeconds": "{{minutes}}分{{seconds}}秒",
+  "stopped": "已停止",
+  "worked": "已工作",
+  "stoppedAfter": "运行 {{duration}} 后停止",
+  "workedFor": "已工作 {{duration}}",
+  "workingFor": "已工作 {{duration}}，仍在进行",
+  "continued": "引导后继续 · {{status}}",
+  "activityUnavailable": "暂时无法获取执行器实时活动，正在重试…"
+}

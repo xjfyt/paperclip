@@ -1,0 +1,16 @@
+{
+  "thinking": "思考中",
+  "thought": "思考完了",
+  "tokenUsage": "トークン使用量",
+  "contextUsage": "コンテキスト {{used}}/{{size}}",
+  "seconds": "{{seconds}}秒",
+  "minutes": "{{minutes}}分",
+  "minutesSeconds": "{{minutes}}分{{seconds}}秒",
+  "stopped": "停止済み",
+  "worked": "作業済み",
+  "stoppedAfter": "{{duration}}後に停止",
+  "workedFor": "{{duration}}間作業しました",
+  "workingFor": "{{duration}}間作業中",
+  "continued": "追加指示後に継続 · {{status}}",
+  "activityUnavailable": "実行エンジンのリアルタイム活動を一時的に取得できません。再試行中…"
+}
