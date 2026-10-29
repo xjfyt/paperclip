@@ -1,3 +1,5 @@
+import { protectNewPrivatePath } from "@paperclipai/shared/private-filesystem-permissions";
+import { expectPrivatePath } from "./__test-fixtures__/private-permissions.js";
 import { chmod, lstat, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -34,6 +36,7 @@ describe("device-login credential export", () => {
 
   async function makeInstanceRoot(): Promise<string> {
     const dir = await mkdtemp(path.join(os.tmpdir(), "paperclip-codex-proof-"));
+    protectNewPrivatePath(dir);
     cleanupDirs.push(dir);
     return dir;
   }
@@ -88,8 +91,8 @@ describe("device-login credential export", () => {
       log: noopLog,
     });
     const root = resolveProofHomeRoot(env, COMPANY);
-    expect((await stat(root)).mode & 0o777).toBe(0o700);
-    expect((await stat(proofHome)).mode & 0o777).toBe(0o700);
+    await expectPrivatePath(root, 0o700);
+    await expectPrivatePath(proofHome, 0o700);
   });
 
   it("export_seeds_empty_proof_home_with_mode_0600", async () => {
@@ -105,7 +108,7 @@ describe("device-login credential export", () => {
     });
     expect(outcome).toBe("seeded");
     const authPath = path.join(proofHome, "auth.json");
-    expect((await stat(authPath)).mode & 0o777).toBe(0o600);
+    await expectPrivatePath(authPath, 0o600);
     const written = JSON.parse(await readFile(authPath, "utf8"));
     expect(written.tokens.account_id).toBe(ACCOUNT);
   });
@@ -193,7 +196,7 @@ describe("device-login credential export", () => {
     expect(written.tokens.refresh_token).toContain("new");
   });
 
-  it("export_keeps_home_on_older_or_different_identity", async () => {
+  it("export_keeps_home_on_older_or_different_identity", { timeout: process.platform === "win32" ? 40_000 : 5_000 }, async () => {
     const home = await makeInstanceRoot();
     const env = envFor(home);
     const proofHome = deriveProofHome({ env, companyId: COMPANY, runId: RUN });

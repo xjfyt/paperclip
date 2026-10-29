@@ -1,6 +1,8 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { protectNewPrivatePath } from "@paperclipai/shared/private-filesystem-permissions";
+import { ensurePrivateCredentialDirectory } from "@paperclipai/adapter-utils/private-credential-paths";
 import { toAccountHandle } from "@paperclipai/shared";
 import {
   ensureCodexAuthCacheEntryDirExclusive,
@@ -84,6 +86,7 @@ export async function checkStagedCredentialReadiness(
   }
   const scratchHome = await mkdtemp(path.join(os.tmpdir(), "paperclip-login-readiness-"));
   try {
+    protectNewPrivatePath(scratchHome);
     await mkdir(scratchHome, { recursive: true, mode: READINESS_HOME_DIR_MODE });
     await writeFile(path.join(scratchHome, AUTH_FILE_NAME), authBytes, {
       mode: READINESS_AUTH_FILE_MODE,
@@ -286,7 +289,8 @@ export async function promoteDeviceLoginCredential(
   //     timeout) must not fail the promotion.
   const companyHome = resolveManagedCodexHomeDir(env, companyId);
   try {
-    await mkdir(companyHome, { recursive: true, mode: PRIVATE_DIR_MODE });
+    if (process.platform === "win32") await ensurePrivateCredentialDirectory(companyHome);
+    else await mkdir(companyHome, { recursive: true, mode: PRIVATE_DIR_MODE });
     const companyHomeAuthPath = path.join(companyHome, AUTH_FILE_NAME);
     await writeCredentialSeedOrNewer({
       sourceBytes: authBytes,

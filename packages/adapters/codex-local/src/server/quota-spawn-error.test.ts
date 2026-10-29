@@ -233,6 +233,13 @@ describe("CodexRpcClient spawn failures", () => {
         process.stdout.write(JSON.stringify({ id: request.id, result }) + "\\n");
       });
     `], { stdio: ["pipe", "pipe", "pipe"] });
+    // Windows terminates a process on SIGTERM even when JS installs a handler.
+    // Suppress only that first signal to model the stubborn child; escalation
+    // must still kill this real process and close its actual streams.
+    const realKill = child.kill.bind(child);
+    const killSpy = process.platform === "win32"
+      ? vi.spyOn(child, "kill").mockImplementation((signal) => signal === "SIGTERM" ? true : realKill(signal))
+      : null;
     mockSpawn.mockReturnValue(child);
     try {
       const result = await fetchCodexRpcQuota();
@@ -241,8 +248,14 @@ describe("CodexRpcClient spawn failures", () => {
       expect(child.stdin.destroyed).toBe(true);
       expect(child.stdout.destroyed).toBe(true);
       expect(child.stderr.destroyed).toBe(true);
+      if (killSpy) expect(killSpy.mock.calls).toEqual([["SIGTERM"], ["SIGKILL"]]);
     } finally {
-      if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+      killSpy?.mockRestore();
+      if (child.exitCode === null && child.signalCode === null) {
+        const closed = new Promise<void>((resolve) => child.once("close", () => resolve()));
+        child.kill("SIGKILL");
+        await closed;
+      }
     }
   });
 

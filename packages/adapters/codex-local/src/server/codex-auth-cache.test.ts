@@ -1,7 +1,10 @@
+import { protectNewPrivatePath } from "@paperclipai/shared/private-filesystem-permissions";
+import { expectPrivatePath } from "./__test-fixtures__/private-permissions.js";
 import { chmod, lstat, mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import * as mergeLocks from "@paperclipai/adapter-utils/workspace-restore-merge";
 
 import {
   assertAccountHomeCacheDirStillValid,
@@ -29,6 +32,7 @@ describe("codex auth cache store", () => {
   const cleanupDirs: string[] = [];
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     while (cleanupDirs.length > 0) {
       const dir = cleanupDirs.pop();
       if (!dir) continue;
@@ -39,6 +43,7 @@ describe("codex auth cache store", () => {
 
   async function makeInstanceRoot(): Promise<string> {
     const dir = await mkdtemp(path.join(os.tmpdir(), "paperclip-codex-cache-"));
+    protectNewPrivatePath(dir);
     cleanupDirs.push(dir);
     return dir;
   }
@@ -179,8 +184,8 @@ describe("codex auth cache store", () => {
       const entryPath = await ensureCodexAuthCacheEntryDir(env, "acct-priv", "company-a");
       const entryDir = path.dirname(entryPath);
       const cacheDir = resolveCodexAuthCacheDir(env, "company-a");
-      expect((await lstat(entryDir)).mode & 0o777).toBe(0o700);
-      expect((await lstat(cacheDir)).mode & 0o777).toBe(0o700);
+      await expectPrivatePath(entryDir, 0o700);
+      await expectPrivatePath(cacheDir, 0o700);
     });
 
     it("the cache root fails closed (lstat) when it is a symlink or a non-directory", async () => {
@@ -245,7 +250,7 @@ describe("codex auth cache store", () => {
       expect(finalHost).toContain("cache");
     });
 
-    it("vend keeps the shared-home credential when the cache copy is older or a tie", async () => {
+    it("vend keeps the shared-home credential when the cache copy is older or a tie", { timeout: process.platform === "win32" ? 40_000 : 5_000 }, async () => {
       for (const cacheRefresh of [OLDER, NEWER]) {
         const hostRefresh = cacheRefresh === OLDER ? NEWER : NEWER; // host newer or tie
         const { env, sharedHomeAuthPath } = await stageHostAndCache({
@@ -389,15 +394,17 @@ describe("codex auth cache store", () => {
         releaseFirstCaller = resolve;
       });
 
+      const entered = deferredSignal(), secondAttempt = observeSecondLockAttempt();
       const firstCall = withCodexAccountHomePromotionLock(env, "company-shared", async () => {
         events.push("first-enter");
+        entered.resolve();
         await firstCallerGate;
         events.push("first-exit");
         return "first";
       });
       // Give the first caller a chance to acquire the lock and enter its
       // callback before the second caller starts racing for the same lock.
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      await entered.promise;
       const secondCall = withCodexAccountHomePromotionLock(env, "company-shared", async () => {
         events.push("second-enter");
         events.push("second-exit");
@@ -406,7 +413,8 @@ describe("codex auth cache store", () => {
       // The second caller must stay blocked on the lock while the first
       // caller still holds it: it must never log `second-enter` before the
       // first caller's `first-exit`.
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      await secondAttempt.promise;
+      await new Promise(resolve => setImmediate(resolve));
       expect(events).toEqual(["first-enter"]);
 
       releaseFirstCaller();
@@ -427,12 +435,14 @@ describe("codex auth cache store", () => {
         releaseCompanyA = resolve;
       });
 
+      const entered = deferredSignal();
       const companyACall = withCodexAccountHomePromotionLock(env, "company-a", async () => {
         events.push("a-enter");
+        entered.resolve();
         await companyAGate;
         events.push("a-exit");
       });
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      await entered.promise;
       const companyBCall = withCodexAccountHomePromotionLock(env, "company-b", async () => {
         events.push("b-enter");
         events.push("b-exit");
@@ -463,7 +473,7 @@ describe("codex auth cache store", () => {
         releaseFirstCaller = resolve;
       });
 
-      const entered = deferredSignal();
+      const entered = deferredSignal(), secondAttempt = observeSecondLockAttempt();
       const firstCall = withAccountHomeSecretMutationLock(env, "company-shared", async () => {
         events.push("first-enter");
         entered.resolve();
@@ -480,7 +490,8 @@ describe("codex auth cache store", () => {
       // The second caller must stay blocked on the lock while the first
       // caller still holds it: it must never log `second-enter` before the
       // first caller's `first-exit`.
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      await secondAttempt.promise;
+      await new Promise(resolve => setImmediate(resolve));
       expect(events).toEqual(["first-enter"]);
 
       releaseFirstCaller();
@@ -612,4 +623,14 @@ function deferredSignal() {
   let resolve!: () => void;
   const promise = new Promise<void>(done => { resolve = done; });
   return { promise, resolve };
+}
+
+function observeSecondLockAttempt() {
+  const attempted = deferredSignal(), original = mergeLocks.withDirectoryMergeLock;
+  let calls = 0;
+  vi.spyOn(mergeLocks, "withDirectoryMergeLock").mockImplementation(((...args: Parameters<typeof original>) => {
+    if (++calls === 2) attempted.resolve();
+    return original(...args);
+  }) as typeof original);
+  return attempted;
 }

@@ -3,7 +3,10 @@ import os from "node:os";
 import path from "node:path";
 import type { AdapterExecutionContext } from "@paperclipai/adapter-utils";
 import { resolvePaperclipInstanceRootForAdapter } from "@paperclipai/adapter-utils/server-utils";
+import { ensurePrivateCredentialDirectory } from "@paperclipai/adapter-utils/private-credential-paths";
+import { protectNewPrivatePath } from "@paperclipai/shared/private-filesystem-permissions";
 import { isCodexAuthCachePath, readSubscriptionAccountId } from "./codex-auth-cache.js";
+import { assertExistingPrivateAuthFile } from "./codex-auth-seed-write.js";
 
 const TRUTHY_ENV_RE = /^(1|true|yes|on)$/i;
 const COPIED_SHARED_FILES = ["config.json", "config.toml", "instructions.md"] as const;
@@ -194,7 +197,47 @@ async function codexHomeHasMatchingApiKeyAuth(home: string, apiKey: string): Pro
 }
 
 async function ensureParentDir(target: string): Promise<void> {
-  await fs.mkdir(path.dirname(target), { recursive: true });
+  if (process.platform === "win32") await ensurePrivateCredentialDirectory(path.dirname(target));
+  else await fs.mkdir(path.dirname(target), { recursive: true });
+}
+
+async function writePrivateFile(target: string, bytes: string | Buffer, mode = 0o600): Promise<void> {
+  if (process.platform !== "win32") {
+    await fs.writeFile(target, bytes, { mode });
+    await fs.chmod(target, mode);
+    return;
+  }
+  await assertExistingPrivateAuthFile(target);
+  const existing = await fs.lstat(target, { bigint: true }).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  });
+  // Keep a newly-created file empty until its DACL is protected. An existing
+  // file is opened without truncation and its identity is checked first.
+  const handle = await fs.open(target, existing ? "r+" : "wx", mode);
+  try {
+    if (!existing) protectNewPrivatePath(target);
+    const opened = await handle.stat({ bigint: true });
+    const current = await fs.lstat(target, { bigint: true });
+    if (!opened.isFile() || current.isSymbolicLink() || current.dev !== opened.dev || current.ino !== opened.ino
+        || existing && (existing.dev !== opened.dev || existing.ino !== opened.ino)) {
+      throw Object.assign(new Error("Credential file changed while opening."), { code: "EACCES" });
+    }
+    await handle.truncate(0);
+    await handle.writeFile(bytes);
+  } finally { await handle.close(); }
+}
+
+/** Only for new descendants of the just-created, protected staged-home root.
+ * NTFS inherits that root's owner-only DACL before a byte is written. Avoid a
+ * PowerShell process per skill file; persistent host paths use the checks above.
+ * Exclusive creation refuses an existing file or planted link in the stage.
+ */
+async function writeStagedFile(target: string, bytes: Buffer, mode: number): Promise<void> {
+  if (process.platform !== "win32") return writePrivateFile(target, bytes, mode);
+  const handle = await fs.open(target, "wx", mode);
+  try { await handle.writeFile(bytes); }
+  finally { await handle.close(); }
 }
 
 async function isExpectedSymlink(target: string, source: string): Promise<boolean> {
@@ -237,6 +280,7 @@ export async function ensureSymlink(target: string, source: string): Promise<voi
     // a Paperclip-written stale copy and warrants operator inspection rather
     // than silent removal.
     if (existing.isDirectory()) return;
+    await assertExistingPrivateAuthFile(target);
     await fs.unlink(target);
     await createExpectedSymlink(target, source);
     return;
@@ -250,9 +294,10 @@ export async function ensureSymlink(target: string, source: string): Promise<voi
 
 async function ensureCopiedFile(target: string, source: string): Promise<void> {
   const existing = await fs.lstat(target).catch(() => null);
-  if (existing) return;
+  if (existing) { await assertExistingPrivateAuthFile(target); return; }
   await ensureParentDir(target);
-  await fs.copyFile(source, target);
+  if (process.platform === "win32") await writePrivateFile(target, await fs.readFile(source));
+  else await fs.copyFile(source, target);
 }
 
 function tomlString(value: string): string {
@@ -329,7 +374,9 @@ export async function writeManagedCodexMcpConfig(input: {
   gateways: ManagedCodexMcpGateway[];
 }): Promise<{ configPath: string; warnings: string[] }> {
   const configPath = path.join(input.codexHome, "config.toml");
-  await fs.mkdir(input.codexHome, { recursive: true });
+  if (process.platform === "win32") await ensurePrivateCredentialDirectory(input.codexHome);
+  else await fs.mkdir(input.codexHome, { recursive: true });
+  await assertExistingPrivateAuthFile(configPath);
   const existing = await fs.readFile(configPath, "utf8").catch((error) => {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return "";
     throw error;
@@ -343,8 +390,7 @@ export async function writeManagedCodexMcpConfig(input: {
   const next = input.gateways.length > 0
     ? `${unmanagedConfig}${unmanagedConfig ? "\n\n" : ""}${block}\n`
     : `${unmanagedConfig}${unmanagedConfig ? "\n" : ""}`;
-  await fs.writeFile(configPath, next, { mode: 0o600 });
-  await fs.chmod(configPath, 0o600);
+  await writePrivateFile(configPath, next);
   return { configPath, warnings };
 }
 
@@ -355,10 +401,17 @@ export async function writeManagedCodexMcpConfig(input: {
  * environment variable and only reads credentials from `$CODEX_HOME/auth.json`.
  */
 export async function writeApiKeyAuthJson(home: string, apiKey: string): Promise<void> {
-  await fs.mkdir(home, { recursive: true });
+  if (process.platform === "win32") await ensurePrivateCredentialDirectory(home);
+  else await fs.mkdir(home, { recursive: true });
   const target = path.join(home, "auth.json");
+  const existing = await fs.lstat(target).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  });
+  if (!existing?.isSymbolicLink()) await assertExistingPrivateAuthFile(target);
   await fs.rm(target, { force: true });
-  await fs.writeFile(target, JSON.stringify({ OPENAI_API_KEY: apiKey }), { mode: 0o600 });
+  if (process.platform === "win32") await writePrivateFile(target, JSON.stringify({ OPENAI_API_KEY: apiKey }));
+  else await fs.writeFile(target, JSON.stringify({ OPENAI_API_KEY: apiKey }), { mode: 0o600 });
 }
 
 export interface StageCodexHomeForSyncOptions {
@@ -440,8 +493,7 @@ async function stageContainedSubtree(
     } else if (entryStat.isFile()) {
       const bytes = await fs.readFile(resolved);
       const mode = entryStat.mode & 0o111 ? 0o700 : 0o600;
-      await fs.writeFile(entryTarget, bytes, { mode });
-      await fs.chmod(entryTarget, mode);
+      await writeStagedFile(entryTarget, bytes, mode);
     }
     // Other types (sockets, devices) are silently skipped.
   }
@@ -502,8 +554,7 @@ async function stageDirectorySecure(
     } else if (entryStat.isFile()) {
       const bytes = await fs.readFile(resolved);
       const mode = entryStat.mode & 0o111 ? 0o700 : 0o600;
-      await fs.writeFile(entryTarget, bytes, { mode });
-      await fs.chmod(entryTarget, mode);
+      await writeStagedFile(entryTarget, bytes, mode);
     }
     // Other types (sockets, devices) are silently skipped.
   }
@@ -548,9 +599,7 @@ async function stageCodexHomeEntry(
   // managed MCP `Authorization = "Bearer …"` header (and the source writer
   // persists it 0600), so a per-file credential allowlist would silently
   // downgrade it to 0644 in a world-readable tmpdir.
-  await fs.writeFile(target, bytes, { mode: 0o600 });
-  // Explicit chmod so the mode is 0600 regardless of the process umask.
-  await fs.chmod(target, 0o600);
+  await writeStagedFile(target, bytes, 0o600);
 }
 
 /**
@@ -583,6 +632,7 @@ export async function stageCodexHomeForSync(
     path.join(os.tmpdir(), `paperclip-codex-home-sync-${runIdPart ? `${runIdPart}-` : ""}`),
   );
   try {
+    protectNewPrivatePath(stagedHome);
     for (const entry of CODEX_SYNC_ALLOWLIST) {
       await stageCodexHomeEntry(effectiveCodexHome, stagedHome, entry);
     }
@@ -629,7 +679,8 @@ export async function seedManagedCodexHome(
   // in below, so a bound run gets the same config a per-agent home gets.
   const credentialStoreEntry = isCodexAuthCachePath(env, targetHome);
 
-  await fs.mkdir(targetHome, { recursive: true });
+  if (process.platform === "win32") await ensurePrivateCredentialDirectory(targetHome);
+  else await fs.mkdir(targetHome, { recursive: true });
 
   // A regular-file auth.json in the target home is one of two very different
   // things. The device-login promotion writes the company credential as a
@@ -664,6 +715,7 @@ export async function seedManagedCodexHome(
     const authPath = path.join(targetHome, "auth.json");
     const existing = await fs.lstat(authPath).catch(() => null);
     if (existing && !existing.isSymbolicLink()) {
+      await assertExistingPrivateAuthFile(authPath);
       const targetBytes = await fs.readFile(authPath).catch(() => null);
       const targetIdentity = targetBytes ? readSubscriptionAccountId(targetBytes) : null;
       if (targetIdentity) {

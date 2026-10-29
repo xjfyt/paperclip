@@ -6,7 +6,9 @@ import { resolvePaperclipInstanceRootForAdapter } from "@paperclipai/adapter-uti
 import { withDirectoryMergeLock } from "@paperclipai/adapter-utils/workspace-restore-merge";
 import { toAccountHandle } from "@paperclipai/shared";
 import { USE_SOURCE_EXIT, decideCodexAuthMerge } from "./codex-auth-merge-decision.js";
-import { writeCredentialSeedOrNewer } from "./codex-auth-seed-write.js";
+import { assertExistingPrivateAuthFile, writeCredentialSeedOrNewer } from "./codex-auth-seed-write.js";
+import { ensurePrivateCredentialDirectory } from "@paperclipai/adapter-utils/private-credential-paths";
+import { protectNewPrivatePath } from "@paperclipai/shared/private-filesystem-permissions";
 
 // The identity-keyed host credential store keeps one usable subscription
 // credential per identity (`account_id`) in a SEPARATE host tree, outside the
@@ -188,9 +190,11 @@ async function ensurePrivateDir(dir: string): Promise<void> {
     if (existing.isSymbolicLink() || !existing.isDirectory()) {
       throw new Error("codex auth cache: cache path is a symlink or a non-directory");
     }
+    if (process.platform === "win32") await ensurePrivateCredentialDirectory(dir);
     return;
   }
-  await mkdir(dir, { recursive: true, mode: PRIVATE_DIR_MODE });
+  if (process.platform === "win32") await ensurePrivateCredentialDirectory(dir);
+  else await mkdir(dir, { recursive: true, mode: PRIVATE_DIR_MODE });
 }
 
 /**
@@ -468,7 +472,9 @@ export async function writeCodexAuthCacheEntry(input: {
     destinationPath: input.cacheEntryPath,
     seedIfDestAbsent: true,
     log: input.log,
-    writtenLine: "[paperclip] Codex auth cache: wrote the per-identity cache slot at mode 0600.",
+    writtenLine: process.platform === "win32"
+      ? "[paperclip] Codex auth cache: wrote the per-identity cache slot with a private Windows ACL."
+      : "[paperclip] Codex auth cache: wrote the per-identity cache slot at mode 0600.",
     keptLine:
       "[paperclip] Codex auth cache: kept the cache slot (source is not a strictly-newer same-identity subscription credential).",
     tempPrefix: "auth.json.cache-source",
@@ -503,6 +509,7 @@ export async function selectVendCredential(
   log: (line: string) => void | Promise<void>,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<VendCodexAuthOutcome> {
+  await assertExistingPrivateAuthFile(sharedHomeAuthPath);
   const hostBytes = await readFile(sharedHomeAuthPath).catch((error: NodeJS.ErrnoException) => {
     if (error.code === "ENOENT") return null;
     throw error;
@@ -522,7 +529,10 @@ export async function selectVendCredential(
   }
 
   const hostDir = path.dirname(sharedHomeAuthPath);
+  if (process.platform === "win32") await ensurePrivateCredentialDirectory(hostDir);
   return withDirectoryMergeLock(hostDir, async () => {
+    await assertExistingPrivateAuthFile(sharedHomeAuthPath);
+    await assertExistingPrivateAuthFile(cacheEntryPath);
     // Read the cached bytes under the lock, then stage exactly those bytes into a
     // private (0600) temp next to the host target. The predicate reads the temp,
     // so the vend installs exactly the bytes the predicate approved. This closes
@@ -543,6 +553,7 @@ export async function selectVendCredential(
     );
     const handle = await open(stagedTempPath, "wx", 0o600);
     try {
+      protectNewPrivatePath(stagedTempPath);
       await handle.writeFile(cacheBytes);
       await handle.close();
       // Default-mode predicate: install the cache copy only when it is strictly
@@ -554,7 +565,9 @@ export async function selectVendCredential(
       if (decision === USE_SOURCE_EXIT) {
         await rename(stagedTempPath, sharedHomeAuthPath);
         await log(
-          "[paperclip] Codex auth cache: refreshed the host credential with a strictly-newer cached copy of the same identity at mode 0600.",
+          process.platform === "win32"
+            ? "[paperclip] Codex auth cache: refreshed the host credential with a strictly-newer cached copy of the same identity with a private Windows ACL."
+            : "[paperclip] Codex auth cache: refreshed the host credential with a strictly-newer cached copy of the same identity at mode 0600.",
         );
         return "vended";
       }

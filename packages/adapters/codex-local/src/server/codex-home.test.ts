@@ -1,3 +1,6 @@
+import { protectNewPrivatePath } from "@paperclipai/shared/private-filesystem-permissions";
+import { hasPrivatePermissions } from "@paperclipai/shared/private-filesystem-permissions";
+import { expectPrivatePath } from "./__test-fixtures__/private-permissions.js";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -40,6 +43,7 @@ describe("codex managed home", () => {
 
   it("treats a concurrently-created expected auth symlink as success", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-home-"));
+    protectNewPrivatePath(root);
     const sharedCodexHome = path.join(root, "shared-codex-home");
     const paperclipHome = path.join(root, "paperclip-home");
     const managedCodexHome = path.join(
@@ -86,6 +90,7 @@ describe("codex managed home", () => {
 
   it("still throws on EEXIST when a raced-in auth symlink points elsewhere", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-home-"));
+    protectNewPrivatePath(root);
     const sharedCodexHome = path.join(root, "shared-codex-home");
     const paperclipHome = path.join(root, "paperclip-home");
     const managedCodexHome = path.join(
@@ -140,6 +145,7 @@ describe("codex managed home", () => {
   // unlinking the stale copy and creating a symlink to the live source.
   it("replaces a stale regular-file auth.json with a symlink to the live source (#5028)", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-home-"));
+    protectNewPrivatePath(root);
     try {
       const sharedCodexHome = path.join(root, "shared-codex-home");
       const paperclipHome = path.join(root, "paperclip-home");
@@ -186,6 +192,7 @@ describe("codex managed home", () => {
   // ensureSymlink directly to prove the unlink-and-recreate path itself.
   it("ensureSymlink: unlinks a stale regular file and recreates the symlink", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-ensure-symlink-"));
+    protectNewPrivatePath(root);
     try {
       const source = path.join(root, "live-source.json");
       const target = path.join(root, "stale-target.json");
@@ -206,6 +213,7 @@ describe("codex managed home", () => {
   // this path as operator-owned, not a stale Paperclip copy.
   it("ensureSymlink: leaves an unexpected directory in place instead of throwing", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-ensure-symlink-dir-"));
+    protectNewPrivatePath(root);
     try {
       const source = path.join(root, "live-source.json");
       const target = path.join(root, "unexpected-dir");
@@ -270,6 +278,7 @@ describe("isManagedCodexHomePath", () => {
 describe("codexHomeHasUsableAuth", () => {
   it("is true for credential-bearing auth.json and false when missing", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-auth-"));
+    protectNewPrivatePath(root);
     try {
       expect(await codexHomeHasUsableAuth(root)).toBe(false);
       await fs.writeFile(path.join(root, "auth.json"), "{}", "utf8");
@@ -289,6 +298,7 @@ describe("codexHomeHasUsableAuth", () => {
 
   it("recognizes the Codex 0.143 AuthDotJson subscription shape", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-auth-modern-"));
+    protectNewPrivatePath(root);
     try {
       await fs.writeFile(
         path.join(root, "auth.json"),
@@ -312,6 +322,7 @@ describe("codexHomeHasUsableAuth", () => {
 
   it("treats subscription auth without account_id or token material as unusable", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-auth-modern-invalid-"));
+    protectNewPrivatePath(root);
     try {
       await fs.writeFile(
         path.join(root, "auth.json"),
@@ -345,6 +356,7 @@ describe("codexHomeHasUsableAuth", () => {
 
   it("is false for a dangling auth.json symlink", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-auth-dangling-"));
+    protectNewPrivatePath(root);
     try {
       await fs.symlink(path.join(root, "missing-source.json"), path.join(root, "auth.json"));
       expect(await codexHomeHasUsableAuth(root)).toBe(false);
@@ -357,6 +369,7 @@ describe("codexHomeHasUsableAuth", () => {
 describe("seedManagedCodexHome", () => {
   it("symlinks auth.json from the shared source into an explicit per-agent home", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-seed-"));
+    protectNewPrivatePath(root);
     try {
       const sharedCodexHome = path.join(root, "shared-codex-home");
       const agentHome = path.join(
@@ -386,6 +399,7 @@ describe("seedManagedCodexHome", () => {
 
   it("writes an API-key auth.json into the home when an apiKey is supplied", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-seed-apikey-"));
+    protectNewPrivatePath(root);
     try {
       const agentHome = path.join(root, "agent-home");
       const emptyShared = path.join(root, "empty-shared");
@@ -426,6 +440,7 @@ describe("seedManagedCodexHome", () => {
 
   it("keeps a promoted subscription auth.json when the shared source has no auth", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-seed-promoted-"));
+    protectNewPrivatePath(root);
     try {
       const companyHome = path.join(root, "company-home");
       const emptyShared = path.join(root, "empty-shared");
@@ -446,6 +461,7 @@ describe("seedManagedCodexHome", () => {
 
   it("keeps a promoted subscription auth.json whose identity differs from the shared source", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-seed-foreign-"));
+    protectNewPrivatePath(root);
     try {
       const companyHome = path.join(root, "company-home");
       const sharedCodexHome = path.join(root, "shared-codex-home");
@@ -471,6 +487,7 @@ describe("seedManagedCodexHome", () => {
 
   it("still replaces a same-identity stale regular copy with the shared symlink once the source is strictly fresher (#5028)", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-seed-stale-"));
+    protectNewPrivatePath(root);
     try {
       const companyHome = path.join(root, "company-home");
       const sharedCodexHome = path.join(root, "shared-codex-home");
@@ -502,6 +519,7 @@ describe("seedManagedCodexHome", () => {
     // symlink here would sign the company back in with that failing credential
     // right after the login that replaced it.
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-seed-newer-"));
+    protectNewPrivatePath(root);
     try {
       const companyHome = path.join(root, "company-home");
       const sharedCodexHome = path.join(root, "shared-codex-home");
@@ -539,6 +557,7 @@ describe("seedManagedCodexHome", () => {
     ];
     for (const { source, target } of cases) {
       const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-seed-tie-"));
+    protectNewPrivatePath(root);
       try {
         const companyHome = path.join(root, "company-home");
         const sharedCodexHome = path.join(root, "shared-codex-home");
@@ -565,6 +584,7 @@ describe("seedManagedCodexHome", () => {
 
   it("keeps the usable target when the shared source exists but cannot be read", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-seed-src-err-"));
+    protectNewPrivatePath(root);
     try {
       const companyHome = path.join(root, "company-home");
       const sharedCodexHome = path.join(root, "shared-codex-home");
@@ -595,6 +615,7 @@ describe("seedManagedCodexHome", () => {
     // source must NOT trigger the #5028 heal here, or the bound account is
     // silently swapped for the host login.
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-seed-store-"));
+    protectNewPrivatePath(root);
     try {
       const sharedCodexHome = path.join(root, "shared-codex-home");
       const entryHome = path.join(
@@ -631,6 +652,7 @@ describe("seedManagedCodexHome", () => {
 
   it("refuses an API-key rewrite of a credential-store entry's auth.json", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-seed-store-apikey-"));
+    protectNewPrivatePath(root);
     try {
       const sharedCodexHome = path.join(root, "shared-codex-home");
       const entryHome = path.join(
@@ -660,6 +682,7 @@ describe("seedManagedCodexHome", () => {
 
   it("still removes an apikey-mode auth.json so the chatgpt-mode symlink is restored", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-seed-apikey-residue-"));
+    protectNewPrivatePath(root);
     try {
       const companyHome = path.join(root, "company-home");
       const sharedCodexHome = path.join(root, "shared-codex-home");
@@ -688,6 +711,7 @@ describe("seedManagedCodexHome", () => {
 describe("reconcileManagedCodexHome", () => {
   async function makeFixture() {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-reconcile-"));
+    protectNewPrivatePath(root);
     const sharedCodexHome = path.join(root, "shared-codex-home");
     const paperclipHome = path.join(root, "paperclip-home");
     const agentHome = path.join(
@@ -870,6 +894,7 @@ describe("reconcileManagedCodexHome", () => {
 describe("evaluateCodexCredentialReadiness", () => {
   async function makeFixture() {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-readiness-"));
+    protectNewPrivatePath(root);
     const sharedCodexHome = path.join(root, "shared-codex-home");
     const paperclipHome = path.join(root, "paperclip-home");
     const companyRoot = path.join(
@@ -993,6 +1018,7 @@ describe("evaluateCodexCredentialReadiness", () => {
 
   it("replaces the managed MCP block and clears stale servers for an empty runtime set", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-mcp-config-"));
+    protectNewPrivatePath(root);
     try {
       const alphaHome = path.join(root, "agent-alpha");
       const zeroHome = path.join(root, "agent-zero");
@@ -1035,6 +1061,7 @@ describe("evaluateCodexCredentialReadiness", () => {
 
   it("restricts permissions on an existing managed MCP config", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-mcp-config-"));
+    protectNewPrivatePath(root);
     try {
       const configPath = path.join(root, "config.toml");
       await fs.writeFile(configPath, "model = \"gpt-5\"\n", { mode: 0o644 });
@@ -1045,7 +1072,7 @@ describe("evaluateCodexCredentialReadiness", () => {
         gateways: [],
       });
 
-      expect((await fs.stat(configPath)).mode & 0o777).toBe(0o600);
+      await expectPrivatePath(configPath, 0o600);
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }
@@ -1097,6 +1124,7 @@ describe("stageCodexHomeForSync", () => {
 
   it("stages exactly the allowlist, derefs auth.json to bytes, and excludes decoys", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-stage-"));
+    protectNewPrivatePath(root);
     let staged: string | null = null;
     try {
       const { home, authBytes, skillBytes } = await buildFakeHome(root);
@@ -1128,15 +1156,45 @@ describe("stageCodexHomeForSync", () => {
     }
   });
 
+  it.runIf(process.platform === "win32")("inherits a private DACL for every empty staging file before any bytes are written", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-stage-inheritance-"));
+    protectNewPrivatePath(root);
+    let staged: string | null = null;
+    try {
+      const { home, authBytes } = await buildFakeHome(root);
+      const open = fs.open.bind(fs), observed: string[] = [];
+      vi.spyOn(fs, "open").mockImplementation(async (...args) => {
+        const handle = await open(...args);
+        try {
+          const file = String(args[0]);
+          if (file.includes("paperclip-codex-home-sync-run-acl-before-write-") && args[1] === "wx") {
+            expect(await fs.readFile(file)).toHaveLength(0);
+            expect(hasPrivatePermissions(file, Number((await handle.stat()).mode))).toBe(true);
+            observed.push(file);
+          }
+          return handle;
+        } catch (error) { await handle.close(); throw error; }
+      });
+      staged = await stageCodexHomeForSync(home, { runId: "run-acl-before-write" });
+      await expectPrivatePath(staged, 0o700);
+      expect(observed).toHaveLength(5); // four allowlisted files + the skill file
+      expect(await fs.readFile(path.join(staged, "auth.json"), "utf8")).toBe(authBytes);
+    } finally {
+      vi.restoreAllMocks();
+      if (staged) await fs.rm(staged, { recursive: true, force: true });
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
   // C1 — staged credential file must be mode 0600 (not the world-readable default).
   it("writes the staged auth.json with mode 0600", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-stage-mode-"));
+    protectNewPrivatePath(root);
     let staged: string | null = null;
     try {
       const { home } = await buildFakeHome(root);
       staged = await stageCodexHomeForSync(home, { runId: "run-mode" });
-      const mode = (await fs.stat(path.join(staged, "auth.json"))).mode & 0o777;
-      expect(mode).toBe(0o600);
+      await expectPrivatePath(path.join(staged, "auth.json"), 0o600);
     } finally {
       if (staged) await fs.rm(staged, { recursive: true, force: true });
       await fs.rm(root, { recursive: true, force: true });
@@ -1147,6 +1205,7 @@ describe("stageCodexHomeForSync", () => {
   // secret-bearing; the staged copy must be 0600, not the world-readable default.
   it("writes the staged config.toml (managed MCP bearer header) with mode 0600", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-stage-toml-mode-"));
+    protectNewPrivatePath(root);
     let staged: string | null = null;
     try {
       const home = path.join(root, "codex-home");
@@ -1159,8 +1218,7 @@ describe("stageCodexHomeForSync", () => {
         { mode: 0o600 },
       );
       staged = await stageCodexHomeForSync(home, { runId: "run-toml-mode" });
-      const mode = (await fs.stat(path.join(staged, "config.toml"))).mode & 0o777;
-      expect(mode).toBe(0o600);
+      await expectPrivatePath(path.join(staged, "config.toml"), 0o600);
     } finally {
       if (staged) await fs.rm(staged, { recursive: true, force: true });
       await fs.rm(root, { recursive: true, force: true });
@@ -1171,13 +1229,13 @@ describe("stageCodexHomeForSync", () => {
   // one (config.json, instructions.md — not just credentials) is staged 0600.
   it("writes every staged regular file with mode 0600", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-stage-all-mode-"));
+    protectNewPrivatePath(root);
     let staged: string | null = null;
     try {
       const { home } = await buildFakeHome(root);
       staged = await stageCodexHomeForSync(home, { runId: "run-all-mode" });
       for (const entry of ["auth.json", "config.toml", "config.json", "instructions.md"]) {
-        const mode = (await fs.stat(path.join(staged, entry))).mode & 0o777;
-        expect(mode, `${entry} should be staged 0600`).toBe(0o600);
+        await expectPrivatePath(path.join(staged, entry), 0o600);
       }
     } finally {
       if (staged) await fs.rm(staged, { recursive: true, force: true });
@@ -1188,12 +1246,12 @@ describe("stageCodexHomeForSync", () => {
   // C2 — staged dir must be 0700 (mkdtemp guarantees this on POSIX).
   it("creates the staged dir with mode 0700", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-stage-dir-"));
+    protectNewPrivatePath(root);
     let staged: string | null = null;
     try {
       const { home } = await buildFakeHome(root);
       staged = await stageCodexHomeForSync(home, { runId: "run-dir" });
-      const mode = (await fs.stat(staged)).mode & 0o777;
-      expect(mode).toBe(0o700);
+      await expectPrivatePath(staged, 0o700);
     } finally {
       if (staged) await fs.rm(staged, { recursive: true, force: true });
       await fs.rm(root, { recursive: true, force: true });
@@ -1202,6 +1260,7 @@ describe("stageCodexHomeForSync", () => {
 
   it("skips absent optional entries without throwing", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-stage-absent-"));
+    protectNewPrivatePath(root);
     let staged: string | null = null;
     try {
       // Keyring-credential mode: no auth.json, no config.json.
@@ -1220,6 +1279,7 @@ describe("stageCodexHomeForSync", () => {
 
   it("treats a dangling auth.json symlink as absent (skips it, no throw)", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-stage-dangling-"));
+    protectNewPrivatePath(root);
     let staged: string | null = null;
     try {
       const home = path.join(root, "codex-home");
@@ -1239,6 +1299,7 @@ describe("stageCodexHomeForSync", () => {
   // AND remove the temp dir it created (cleanup on the error path).
   it("fails closed and removes the temp dir on an unexpected I/O error", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-stage-fail-"));
+    protectNewPrivatePath(root);
     try {
       const { home } = await buildFakeHome(root);
 
@@ -1268,6 +1329,7 @@ describe("stageCodexHomeForSync", () => {
   // all resulting files land 0600 inside the 0700 staged dir.
   it("skips circular skill symlinks (ELOOP) without throwing", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-stage-circular-"));
+    protectNewPrivatePath(root);
     let staged: string | null = null;
     try {
       const home = path.join(root, "codex-home");
@@ -1293,6 +1355,7 @@ describe("stageCodexHomeForSync", () => {
   // Skill staging retains executable permission with owner-only access.
   it("retains skill executable bits without group or world permissions", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-stage-skill-mode-"));
+    protectNewPrivatePath(root);
     let staged: string | null = null;
     try {
       const home = path.join(root, "codex-home");
@@ -1304,8 +1367,7 @@ describe("stageCodexHomeForSync", () => {
 
       staged = await stageCodexHomeForSync(home, { runId: "run-skill-mode" });
       for (const rel of ["my-skill/SKILL.md", "my-skill/run.sh"]) {
-        const mode = (await fs.stat(path.join(staged, "skills", rel))).mode & 0o777;
-        expect(mode, `skills/${rel} mode`).toBe(rel.endsWith(".sh") ? 0o700 : 0o600);
+        await expectPrivatePath(path.join(staged, "skills", rel), rel.endsWith(".sh") ? 0o700 : 0o600);
       }
     } finally {
       if (staged) await fs.rm(staged, { recursive: true, force: true });
@@ -1320,6 +1382,7 @@ describe("stageCodexHomeForSync", () => {
   // real content and skipping the self-referential link.
   it("does not infinitely traverse an ancestor directory link (back -> .) inside a skill", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-stage-cycle-"));
+    protectNewPrivatePath(root);
     let staged: string | null = null;
     try {
       const home = path.join(root, "codex-home");
@@ -1350,6 +1413,7 @@ describe("stageCodexHomeForSync", () => {
   // could smuggle host secrets past CODEX_SYNC_ALLOWLIST.
   it("does not stage a nested skill symlink that escapes the skill root", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-stage-escape-"));
+    protectNewPrivatePath(root);
     let staged: string | null = null;
     try {
       const home = path.join(root, "codex-home");
@@ -1388,6 +1452,7 @@ describe("stageCodexHomeForSync", () => {
   // (`sessions/`, `*.sqlite`, …) would be dragged into the staged skills asset.
   it("skips a top-level skills entry that resolves to an ancestor of skills/", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-stage-ancestor-"));
+    protectNewPrivatePath(root);
     let staged: string | null = null;
     try {
       const home = path.join(root, "codex-home");

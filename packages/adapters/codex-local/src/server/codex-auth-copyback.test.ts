@@ -1,3 +1,5 @@
+import { protectNewPrivatePath } from "@paperclipai/shared/private-filesystem-permissions";
+import { expectPrivatePath, setUnsafeFixtureDirectory } from "./__test-fixtures__/private-permissions.js";
 import { chmod, lstat, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -58,6 +60,7 @@ describe("copyBackCodexAuth", () => {
 
   async function makeHostDir(): Promise<string> {
     const dir = await mkdtemp(path.join(os.tmpdir(), "paperclip-codex-copyback-"));
+    protectNewPrivatePath(dir);
     cleanupDirs.push(dir);
     return dir;
   }
@@ -73,6 +76,7 @@ describe("copyBackCodexAuth", () => {
     outcome: Awaited<ReturnType<typeof copyBackCodexAuth>>;
     finalHostAuth: string;
     finalHostMode: number;
+    finalHostPath: string;
     logs: string[];
     leftoverEntries: string[];
   }> {
@@ -97,7 +101,7 @@ describe("copyBackCodexAuth", () => {
     const finalHostAuth = await readFile(hostAuthPath, "utf8");
     const finalHostMode = (await lstat(hostAuthPath)).mode & 0o777;
     const leftoverEntries = (await readdir(hostDir)).filter((name) => name !== "auth.json");
-    return { outcome, finalHostAuth, finalHostMode, logs, leftoverEntries };
+    return { outcome, finalHostAuth, finalHostMode, finalHostPath: hostAuthPath, logs, leftoverEntries };
   }
 
   it("installs a strictly-newer same-account sandbox auth onto the host at 0600", async () => {
@@ -116,7 +120,7 @@ describe("copyBackCodexAuth", () => {
 
     expect(result.outcome).toBe("copied");
     expect(result.finalHostAuth).toBe(sandboxAuth);
-    expect(result.finalHostMode).toBe(0o600);
+    await expectPrivatePath(result.finalHostPath, 0o600);
     // Temp staging file must be gone once the swap completes.
     expect(result.leftoverEntries).toEqual([]);
     // Never leak token bytes in log output.
@@ -151,12 +155,12 @@ describe("copyBackCodexAuth", () => {
       const result = await runCopyBack({ sandboxAuth: entry.sandboxAuth, hostAuth: entry.hostAuth });
       expect(result.outcome, entry.name).toBe("kept-host");
       expect(result.finalHostAuth, entry.name).toBe(entry.hostAuth);
-      expect(result.finalHostMode, entry.name).toBe(0o600);
+      await expectPrivatePath(result.finalHostPath, 0o600);
       expect(result.leftoverEntries, entry.name).toEqual([]);
     }
   });
 
-  it("keeps the host auth on identity mismatch, kind mismatch, apikey, and unusable sandbox auth", async () => {
+  it("keeps the host auth on identity mismatch, kind mismatch, apikey, and unusable sandbox auth", { timeout: process.platform === "win32" ? 40_000 : 5_000 }, async () => {
     const hostAuth = subscriptionAuth({ accountId: "acct-host", lastRefresh: OLDER, marker: "host-keep" });
     const cases: { name: string; sandboxAuth: string; hostAuth: string }[] = [
       {
@@ -198,7 +202,7 @@ describe("copyBackCodexAuth", () => {
       const result = await runCopyBack({ sandboxAuth: entry.sandboxAuth, hostAuth: entry.hostAuth });
       expect(result.outcome, entry.name).toBe("kept-host");
       expect(result.finalHostAuth, entry.name).toBe(entry.hostAuth);
-      expect(result.finalHostMode, entry.name).toBe(0o600);
+      await expectPrivatePath(result.finalHostPath, 0o600);
       expect(result.leftoverEntries, entry.name).toEqual([]);
     }
   });
@@ -232,7 +236,8 @@ describe("copyBackCodexAuth", () => {
     await writeFile(hostAuthPath, hostAuth, { mode: 0o600 });
     const before = await stat(hostAuthPath);
 
-    await chmod(hostDir, 0o500); // r-x: readable/traversable, not writable
+    if (process.platform === "win32") setUnsafeFixtureDirectory(hostDir, true);
+    else await chmod(hostDir, 0o500); // POSIX r-x; Windows uses an actual disallowed DACL grant
     try {
       const sandboxAuth = subscriptionAuth({ accountId: "acct-same", lastRefresh: NEWER, marker: "sandbox-newer" });
       await expect(
@@ -243,12 +248,13 @@ describe("copyBackCodexAuth", () => {
         }),
       ).rejects.toThrow();
     } finally {
-      await chmod(hostDir, 0o700);
+      if (process.platform === "win32") setUnsafeFixtureDirectory(hostDir, false);
+      else await chmod(hostDir, 0o700);
     }
 
     const after = await stat(hostAuthPath);
     expect(await readFile(hostAuthPath, "utf8")).toBe(hostAuth);
-    expect(after.mode & 0o777).toBe(0o600);
+    await expectPrivatePath(hostAuthPath, 0o600);
     expect(after.mtimeMs).toBe(before.mtimeMs);
     expect((await readdir(hostDir)).filter((name) => name !== "auth.json")).toEqual([]);
   });
@@ -272,7 +278,7 @@ describe("copyBackCodexAuth", () => {
 
     expect(result.outcome).toBe("kept-host");
     expect(result.finalHostAuth).toBe(hostAuth);
-    expect(result.finalHostMode).toBe(0o600);
+    await expectPrivatePath(result.finalHostPath, 0o600);
     // No staging temp is ever created on the ENOENT path.
     expect(result.leftoverEntries).toEqual([]);
     expect(result.logs.join("\n")).toContain("no sandbox credential to copy back");
@@ -364,6 +370,7 @@ describe("copyBackCodexAuth identity-keyed cache write", () => {
     sharedHome: string;
   }> {
     const home = await mkdtemp(path.join(os.tmpdir(), "paperclip-codex-copyback-cache-"));
+    protectNewPrivatePath(home);
     cleanupDirs.push(home);
     const env: NodeJS.ProcessEnv = {
       PAPERCLIP_HOME: home,
@@ -525,19 +532,20 @@ describe("copyBackCodexAuth identity-keyed cache write", () => {
     expect(combined).not.toContain("id-token");
   });
 
-  it("a read-only cache directory does not fail the copy-back: the successful host result is kept and no partial slot remains", async () => {
+  it("an unsafe or unwritable cache directory keeps the successful host result and leaves no partial slot", async () => {
     const { env, sharedHomeAuthPath } = await makeEnv();
     const sandboxAuth = subscriptionAuth({ accountId: "acct-x", lastRefresh: NEWER, marker: "sandbox" });
     const hostAuth = subscriptionAuth({ accountId: "acct-x", lastRefresh: OLDER, marker: "host" });
     await writeFile(sharedHomeAuthPath, hostAuth, { mode: 0o600 });
 
-    // Pre-create the entry directory, then make it read-only so the cache-slot
-    // temp create fails. The host overwrite runs first and must stay intact. The
+    // POSIX denies writes; Windows gives this fixture an actual broad DACL so
+    // the private-path guard refuses it. The host overwrite must stay intact. The
     // additive cache write is best-effort, so its failure must not throw.
     const entryPath = await ensureCodexAuthCacheEntryDir(env, "acct-x", COMPANY_ID);
     const slotDir = path.dirname(entryPath);
     const logs: string[] = [];
-    await chmod(slotDir, 0o500);
+    if (process.platform === "win32") setUnsafeFixtureDirectory(slotDir, true);
+    else await chmod(slotDir, 0o500);
     let outcome: string;
     try {
       outcome = await copyBackCodexAuth({
@@ -550,7 +558,8 @@ describe("copyBackCodexAuth identity-keyed cache write", () => {
         env,
       });
     } finally {
-      await chmod(slotDir, 0o700);
+      if (process.platform === "win32") setUnsafeFixtureDirectory(slotDir, false);
+      else await chmod(slotDir, 0o700);
     }
 
     // The host copy-back succeeded and its result is returned unchanged.
@@ -576,7 +585,8 @@ describe("copyBackCodexAuth identity-keyed cache write", () => {
     // then make it read-only so the slot temp create fails with EACCES.
     const entryPath = await ensureCodexAuthCacheEntryDir(env, "acct-x", COMPANY_ID);
     const slotDir = path.dirname(entryPath);
-    await chmod(slotDir, 0o500);
+    if (process.platform === "win32") setUnsafeFixtureDirectory(slotDir, true);
+    else await chmod(slotDir, 0o500);
 
     // The logger rejects for the cache-failure diagnostic line only. The host
     // copy-back already installed the sandbox credential on disk, so this
@@ -601,7 +611,8 @@ describe("copyBackCodexAuth identity-keyed cache write", () => {
         return undefined;
       });
     } finally {
-      await chmod(slotDir, 0o700);
+      if (process.platform === "win32") setUnsafeFixtureDirectory(slotDir, false);
+      else await chmod(slotDir, 0o700);
     }
 
     // The rejecting cache-failure log never surfaces as a thrown error.

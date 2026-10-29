@@ -1,7 +1,10 @@
+import { hasPrivatePermissions } from "@paperclipai/shared/private-filesystem-permissions";
+import { installIsolatedHostFixture } from "@paperclipai/adapter-utils/test-fixtures/isolated-host";
+installIsolatedHostFixture();
 import { execFile as execFileCallback } from "node:child_process";
 import { lstat, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
-import path from "node:path";
+import { fixturePath as path, sandboxPath, shellArgs, shellEnvironment, shellExecutable } from "@paperclipai/adapter-utils/test-fixtures/local-sandbox";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
@@ -55,13 +58,14 @@ describe("codex home auth merge on sandbox asset extract", () => {
     writtenPaths: string[];
     finalAuth: string;
     finalMode: number;
+    privateAuth: boolean;
     combinedOutput: string;
   }> {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-codex-auth-merge-"));
     cleanupDirs.push(rootDir);
 
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     const localHomeDir = path.join(rootDir, "local-codex-home");
     const remoteHomeDir = path.join(remoteWorkspaceDir, ".paperclip-runtime", "codex", "home");
     await mkdir(localWorkspaceDir, { recursive: true });
@@ -101,9 +105,9 @@ describe("codex home auth merge on sandbox asset extract", () => {
       },
       run: async (command) => {
         commands.push(command);
-        const result = await execFile("sh", ["-c", command], {
+        const result = await execFile(shellExecutable("sh"), shellArgs(["-c", command]), {
           maxBuffer: 32 * 1024 * 1024,
-          env: { ...process.env, HOME: imageHomeDir },
+          env: shellEnvironment({ HOME: imageHomeDir }),
         });
         outputs.push(result.stdout, result.stderr);
       },
@@ -161,6 +165,7 @@ describe("codex home auth merge on sandbox asset extract", () => {
       writtenPaths,
       finalAuth: await readFile(finalAuthPath, "utf8"),
       finalMode: (await lstat(finalAuthPath)).mode & 0o777,
+      privateAuth: hasPrivatePermissions(finalAuthPath, (await lstat(finalAuthPath)).mode),
       combinedOutput: outputs.join("\n"),
     };
   }
@@ -180,7 +185,8 @@ describe("codex home auth merge on sandbox asset extract", () => {
     const result = await runCodexHomeAssetExtract({ sandboxAuth, hostAuth });
 
     expect(result.finalAuth).toBe(sandboxAuth);
-    expect(result.finalMode).toBe(0o600);
+    if (process.platform !== "win32") expect(result.finalMode).toBe(0o600);
+    expect(result.privateAuth).toBe(true);
     expect(result.combinedOutput).not.toContain("SENTINEL");
     expect(result.commandText).not.toContain("SENTINEL");
     expect(result.commandText).toContain("codex-auth-merge-extract.sh");
@@ -207,7 +213,8 @@ describe("codex home auth merge on sandbox asset extract", () => {
     const result = await runCodexHomeAssetExtract({ sandboxAuth, hostAuth });
 
     expect(result.finalAuth).toBe(hostAuth);
-    expect(result.finalMode).toBe(0o600);
+    if (process.platform !== "win32") expect(result.finalMode).toBe(0o600);
+    expect(result.privateAuth).toBe(true);
   });
 
   it("installs host auth on identity mismatch, auth-mode mismatch, apikey mode, and unusable sandbox auth", async () => {
@@ -263,7 +270,8 @@ describe("codex home auth merge on sandbox asset extract", () => {
         hostAuth: entry.hostAuth,
       });
       expect(result.finalAuth, entry.name).toBe(entry.hostAuth);
-      expect(result.finalMode, entry.name).toBe(0o600);
+      if (process.platform !== "win32") expect(result.finalMode, entry.name).toBe(0o600);
+      expect(result.privateAuth, entry.name).toBe(true);
     }
   });
 
@@ -344,7 +352,8 @@ describe("codex home auth merge on sandbox asset extract", () => {
         hostAuth: entry.hostAuth,
       });
       expect(result.finalAuth, entry.name).toBe(entry.hostAuth);
-      expect(result.finalMode, entry.name).toBe(0o600);
+      if (process.platform !== "win32") expect(result.finalMode, entry.name).toBe(0o600);
+      expect(result.privateAuth, entry.name).toBe(true);
     }
   });
 
@@ -383,7 +392,8 @@ describe("codex home auth merge on sandbox asset extract", () => {
       });
       expect(result.finalAuth, entry.name).toBe(entry.hostAuth);
       expect(result.finalAuth, entry.name).not.toBe(sandboxAuth);
-      expect(result.finalMode, entry.name).toBe(0o600);
+      if (process.platform !== "win32") expect(result.finalMode, entry.name).toBe(0o600);
+      expect(result.privateAuth, entry.name).toBe(true);
       expect(result.combinedOutput, entry.name).not.toContain("SENTINEL");
       expect(result.commandText, entry.name).not.toContain("SENTINEL");
     }
@@ -400,7 +410,8 @@ describe("codex home auth merge on sandbox asset extract", () => {
     });
 
     expect(result.finalAuth).toBe(imageAuth);
-    expect(result.finalMode).toBe(0o600);
+    if (process.platform !== "win32") expect(result.finalMode).toBe(0o600);
+    expect(result.privateAuth).toBe(true);
   });
 
   it("prefers shipped host auth over the image's own login", async () => {
@@ -451,7 +462,7 @@ describe("codex home auth merge on sandbox asset extract", () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-codex-native-route-"));
     cleanupDirs.push(rootDir);
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     const localHomeDir = path.join(rootDir, "local-codex-home");
     const remoteHomeDir = path.join(remoteWorkspaceDir, ".paperclip-runtime", "codex", "home");
     await mkdir(localWorkspaceDir, { recursive: true });
@@ -495,7 +506,7 @@ describe("codex home auth merge on sandbox asset extract", () => {
       },
       run: async (command) => {
         directRuns.push(command);
-        await execFile("sh", ["-c", command], { maxBuffer: 32 * 1024 * 1024 });
+        await execFile(shellExecutable("sh"), shellArgs(["-c", command]), { maxBuffer: 32 * 1024 * 1024 });
       },
     };
     client.syncIn = async (operations) => {
@@ -508,7 +519,7 @@ describe("codex home auth merge on sandbox asset extract", () => {
           if (mapping.mode != null) await lstat(mapping.targetPath);
         }
         for (const command of operation.postUploadCommands ?? []) {
-          await execFile("sh", ["-c", command.command], { maxBuffer: 32 * 1024 * 1024 });
+          await execFile(shellExecutable("sh"), shellArgs(["-c", command.command]), { maxBuffer: 32 * 1024 * 1024, env: shellEnvironment() });
         }
       }
       return { operations: [] };
@@ -565,7 +576,9 @@ describe("codex home auth merge on sandbox asset extract", () => {
     // C6: newer host credential won, installed atomically at mode 0600.
     const finalAuthPath = path.join(remoteHomeDir, "auth.json");
     expect(await readFile(finalAuthPath, "utf8")).toBe(hostAuth);
-    expect((await lstat(finalAuthPath)).mode & 0o777).toBe(0o600);
+    const info = await lstat(finalAuthPath);
+    expect(hasPrivatePermissions(finalAuthPath, info.mode)).toBe(true);
+    if (process.platform !== "win32") expect(info.mode & 0o777).toBe(0o600);
   });
 });
 

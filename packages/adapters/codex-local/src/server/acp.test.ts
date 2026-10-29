@@ -1,10 +1,14 @@
+import { installIsolatedHostFixture } from "@paperclipai/adapter-utils/test-fixtures/isolated-host";
+// Register outer cleanup before this file registers its own resource hooks.
+installIsolatedHostFixture();
 import fs from "node:fs/promises";
+import { hasPrivatePermissions } from "@paperclipai/shared/private-filesystem-permissions";
 import { randomUUID } from "node:crypto";
 import os from "node:os";
-import path from "node:path";
+import { fixturePath as path, sandboxPath, shellExecutable, shellArgs, shellEnvironment, cleanupLocalSandboxProcesses } from "@paperclipai/adapter-utils/test-fixtures/local-sandbox";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AdapterExecutionContext, AdapterInvocationMeta } from "@paperclipai/adapter-utils";
-import { runChildProcess } from "@paperclipai/adapter-utils/server-utils";
+import { runPosixSandboxProcess as runChildProcess } from "@paperclipai/adapter-utils/test-fixtures/portable-cli";
 
 // Every test in this file needs a real teardown, so the mock below delegates
 // to the actual factory by default. Only the wiring test further down reads
@@ -48,10 +52,10 @@ function createLocalSandboxRunner() {
       onLog?: (stream: "stdout" | "stderr", chunk: string) => Promise<void>;
     }) => {
       counter += 1;
-      const command = input.command === "bash" ? "/bin/bash" : input.command;
-      return await runChildProcess(`codex-acp-sandbox-run-${counter}`, command, input.args ?? [], {
+      const command = shellExecutable(input.command);
+      return await runChildProcess(`codex-acp-sandbox-run-${counter}`, command, shellArgs(input.args), {
         cwd: input.cwd ?? process.cwd(),
-        env: input.env ?? {},
+        env: shellEnvironment(input.env),
         stdin: input.stdin,
         timeoutSec: Math.max(1, Math.ceil((input.timeoutMs ?? 30_000) / 1000)),
         graceSec: 5,
@@ -130,6 +134,7 @@ function setNodeVersion(version: string): void {
 }
 
 afterEach(async () => {
+  await cleanupLocalSandboxProcesses(tempRoots);
   setNodeVersion(originalNodeVersion);
   if (originalPaperclipHome === undefined) delete process.env.PAPERCLIP_HOME;
   else process.env.PAPERCLIP_HOME = originalPaperclipHome;
@@ -860,7 +865,7 @@ describe("codex_local ACP lane", () => {
   it("creates the ACP session on the in-sandbox workspace cwd for runner-backed remote runs", async () => {
     const root = await makeTempRoot("paperclip-codex-acp-remote-cwd-");
     const localCwd = path.join(root, "worktree");
-    const remoteCwd = path.join(root, "remote-workspace");
+    const remoteCwd = sandboxPath(path.join(root, "remote-workspace"));
     await fs.mkdir(localCwd, { recursive: true });
     await fs.mkdir(remoteCwd, { recursive: true });
     await fs.writeFile(path.join(localCwd, "hello.txt"), "hi", "utf8");
@@ -913,7 +918,7 @@ describe("codex_local ACP lane", () => {
   it("seeds the managed Codex home into the sandbox and repoints CODEX_HOME to the in-sandbox path", async () => {
     const root = await makeTempRoot("paperclip-codex-acp-home-seed-");
     const localCwd = path.join(root, "worktree");
-    const remoteCwd = path.join(root, "remote-workspace");
+    const remoteCwd = sandboxPath(path.join(root, "remote-workspace"));
     const sourceHome = path.join(root, "codex-home");
     // A separate shared host home with no auth.json so the teardown copy-back is
     // a benign no-op here (this test asserts the inbound seed + remap only).
@@ -981,7 +986,7 @@ describe("codex_local ACP lane", () => {
   it("copies a strictly-newer sandbox Codex auth back to the shared host on teardown", async () => {
     const root = await makeTempRoot("paperclip-codex-acp-copyback-newer-");
     const localCwd = path.join(root, "worktree");
-    const remoteCwd = path.join(root, "remote-workspace");
+    const remoteCwd = sandboxPath(path.join(root, "remote-workspace"));
     const sourceHome = path.join(root, "codex-home");
     const sharedHostHome = path.join(root, "shared-codex-home");
     await fs.mkdir(localCwd, { recursive: true });
@@ -1037,15 +1042,17 @@ describe("codex_local ACP lane", () => {
     const hostAuth = JSON.parse(await fs.readFile(path.join(sharedHostHome, "auth.json"), "utf8"));
     expect(hostAuth.last_refresh).toBe(NEWER_REFRESH);
     expect(hostAuth.tokens.refresh_token).toBe("ref-sandbox-newer");
-    // Mode preserved at 0600 by the atomic same-directory rename.
-    const mode = (await fs.stat(path.join(sharedHostHome, "auth.json"))).mode & 0o777;
-    expect(mode).toBe(0o600);
+    // The atomic rename preserves private access on both POSIX and NTFS.
+    const authPath = path.join(sharedHostHome, "auth.json");
+    const mode = (await fs.stat(authPath)).mode;
+    expect(hasPrivatePermissions(authPath, mode)).toBe(true);
+    if (process.platform !== "win32") expect(mode & 0o777).toBe(0o600);
   });
 
   it("does not copy an API-key run's sandbox auth into the shared subscription home", async () => {
     const root = await makeTempRoot("paperclip-codex-acp-key-copyback-");
     const localCwd = path.join(root, "worktree");
-    const remoteCwd = path.join(root, "remote-workspace");
+    const remoteCwd = sandboxPath(path.join(root, "remote-workspace"));
     const keyHome = path.join(root, "api-key-home");
     const sharedHostHome = path.join(root, "shared-codex-home");
     await Promise.all([localCwd, remoteCwd, keyHome, sharedHostHome].map((dir) => fs.mkdir(dir, { recursive: true })));
@@ -1093,7 +1100,7 @@ describe("codex_local ACP lane", () => {
   it("keeps the shared host Codex auth when the sandbox copy is not strictly newer", async () => {
     const root = await makeTempRoot("paperclip-codex-acp-copyback-older-");
     const localCwd = path.join(root, "worktree");
-    const remoteCwd = path.join(root, "remote-workspace");
+    const remoteCwd = sandboxPath(path.join(root, "remote-workspace"));
     const sourceHome = path.join(root, "codex-home");
     const sharedHostHome = path.join(root, "shared-codex-home");
     await fs.mkdir(localCwd, { recursive: true });
@@ -1158,7 +1165,7 @@ describe("codex_local ACP lane", () => {
     const runId = `run-keep-staged-home-${randomUUID()}`;
     const root = await makeTempRoot("paperclip-codex-acp-keep-staged-");
     const localCwd = path.join(root, "worktree");
-    const remoteCwd = path.join(root, "remote-workspace");
+    const remoteCwd = sandboxPath(path.join(root, "remote-workspace"));
     const sourceHome = path.join(root, "codex-home");
     const sharedHostHome = path.join(root, "shared-codex-home");
     await fs.mkdir(localCwd, { recursive: true });
@@ -1236,7 +1243,7 @@ describe("codex_local ACP lane", () => {
     const runId = `run-drop-staged-home-${randomUUID()}`;
     const root = await makeTempRoot("paperclip-codex-acp-drop-staged-");
     const localCwd = path.join(root, "worktree");
-    const remoteCwd = path.join(root, "remote-workspace");
+    const remoteCwd = sandboxPath(path.join(root, "remote-workspace"));
     const sourceHome = path.join(root, "codex-home");
     const sharedHostHome = path.join(root, "shared-codex-home");
     await fs.mkdir(localCwd, { recursive: true });
@@ -1311,7 +1318,7 @@ describe("codex_local ACP lane", () => {
     mockCreateWorkspaceRestoreTeardown.mockClear();
     const root = await makeTempRoot("paperclip-codex-acp-teardown-wiring-");
     const localCwd = path.join(root, "worktree");
-    const remoteCwd = path.join(root, "remote-workspace");
+    const remoteCwd = sandboxPath(path.join(root, "remote-workspace"));
     await fs.mkdir(localCwd, { recursive: true });
     await fs.mkdir(remoteCwd, { recursive: true });
 

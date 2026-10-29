@@ -1,3 +1,5 @@
+import { protectNewPrivatePath } from "@paperclipai/shared/private-filesystem-permissions";
+import { expectPrivatePath } from "./__test-fixtures__/private-permissions.js";
 import { lstat, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -122,6 +124,7 @@ describe("codex execute — outbound auth copy-back restore contribution", () =>
     const rootDir = await mkdtemp(
       path.join(os.tmpdir(), "paperclip-codex-copyback-e2e-"),
     );
+    protectNewPrivatePath(rootDir);
     cleanupDirs.push(rootDir);
     const workspaceDir = path.join(rootDir, "workspace");
     // The shared host home is what `resolveSharedCodexHomeDir` returns
@@ -186,6 +189,7 @@ describe("codex execute — outbound auth copy-back restore contribution", () =>
       commandArgs,
       finalHostAuth: await readFile(hostAuthPath, "utf8"),
       finalHostMode: (await lstat(hostAuthPath)).mode & 0o777,
+      finalHostPath: hostAuthPath,
       executionResult,
     };
   }
@@ -268,10 +272,10 @@ describe("codex execute — outbound auth copy-back restore contribution", () =>
     const result = await runTeardown({ sandboxAuth, hostAuth });
 
     expect(result.finalHostAuth).toBe(sandboxAuth);
-    expect(result.finalHostMode).toBe(0o600);
+    await expectPrivatePath(result.finalHostPath, 0o600);
   });
 
-  it("keeps the host auth.json when the sandbox copy is a tie or older on teardown", async () => {
+  it("keeps the host auth.json when the sandbox copy is a tie or older on teardown", { timeout: process.platform === "win32" ? 40_000 : 5_000 }, async () => {
     const cases = [
       {
         name: "tie",
@@ -288,7 +292,7 @@ describe("codex execute — outbound auth copy-back restore contribution", () =>
     for (const entry of cases) {
       const result = await runTeardown({ sandboxAuth: entry.sandboxAuth, hostAuth: entry.hostAuth });
       expect(result.finalHostAuth, entry.name).toBe(entry.hostAuth);
-      expect(result.finalHostMode, entry.name).toBe(0o600);
+      await expectPrivatePath(result.finalHostPath, 0o600);
     }
   });
 

@@ -139,7 +139,17 @@ describe("codex inactivity monitor (integration: real subprocess)", () => {
         expect(monitorFired, "monitor should fire when codex goes silent").toBe(true);
         // Process was killed by our signal, not by hitting timeoutSec.
         expect(proc.timedOut).toBe(false);
-        expect(["SIGTERM", "SIGKILL"]).toContain(proc.signal);
+        if (process.platform === "win32") {
+          // process.kill(pid) uses TerminateProcess on Windows. Node reports
+          // its exit code, rather than a POSIX signal, for this external kill.
+          expect(proc.signal).toBeNull();
+          expect(proc.exitCode).toBe(1);
+        } else {
+          expect(["SIGTERM", "SIGKILL"]).toContain(proc.signal);
+        }
+        const stoppedTarget = killTarget as { pid: number | null } | null;
+        expect(stoppedTarget?.pid).toBeGreaterThan(0);
+        expect(() => process.kill(stoppedTarget!.pid!, 0)).toThrow();
         expect(["SIGTERM", "SIGKILL"]).toContain(terminationSignal);
         // The errorMessage shape mirrors the AdapterExecutionResult that
         // execute.ts will produce for this case.

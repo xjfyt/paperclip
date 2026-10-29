@@ -2,6 +2,9 @@ import { mkdir, open, rename, rm } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { withDirectoryMergeLock } from "@paperclipai/adapter-utils/workspace-restore-merge";
+import { ensurePrivateCredentialDirectory } from "@paperclipai/adapter-utils/private-credential-paths";
+import { protectNewPrivatePath } from "@paperclipai/shared/private-filesystem-permissions";
+import { assertExistingPrivateAuthFile } from "./codex-auth-seed-write.js";
 import {
   isCodexAuthCacheEnabled,
   readSubscriptionAccountId,
@@ -99,10 +102,12 @@ export async function copyBackCodexAuth(input: CopyBackCodexAuthInput): Promise<
   }
 
   const hostDir = path.dirname(hostAuthPath);
-  await mkdir(hostDir, { recursive: true });
+  if (process.platform === "win32") await ensurePrivateCredentialDirectory(hostDir);
+  else await mkdir(hostDir, { recursive: true });
   const hostOutcome = await withDirectoryMergeLock(
     hostDir,
     async () => {
+      await assertExistingPrivateAuthFile(hostAuthPath);
       // Stage on the same filesystem as the host target so both the predicate read
       // and the final rename stay device-local (rename across devices is not
       // atomic and would fail with EXDEV).
@@ -111,6 +116,7 @@ export async function copyBackCodexAuth(input: CopyBackCodexAuthInput): Promise<
       // already exists, so we never write through a pre-existing symlink.
       const handle = await open(stagedTempPath, "wx", 0o600);
       try {
+        protectNewPrivatePath(stagedTempPath);
         await handle.writeFile(sandboxAuthBytes);
         await handle.close();
 
@@ -121,7 +127,9 @@ export async function copyBackCodexAuth(input: CopyBackCodexAuthInput): Promise<
           // Atomic same-directory swap; rename preserves the temp's 0600 mode.
           await rename(stagedTempPath, hostAuthPath);
           await log(
-            "[paperclip] Codex auth copy-back: sandbox credential is strictly newer for the same subscription identity; installed to the host at mode 0600.",
+            process.platform === "win32"
+              ? "[paperclip] Codex auth copy-back: sandbox credential is strictly newer for the same subscription identity; installed to the host with a private Windows ACL."
+              : "[paperclip] Codex auth copy-back: sandbox credential is strictly newer for the same subscription identity; installed to the host at mode 0600.",
           );
           return "copied";
         }

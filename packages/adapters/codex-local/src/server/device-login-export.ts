@@ -1,4 +1,5 @@
 import { chmod, lstat, mkdir, rm } from "node:fs/promises";
+import { ensurePrivateCredentialDirectory } from "@paperclipai/adapter-utils/private-credential-paths";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { resolvePaperclipInstanceRootForAdapter } from "@paperclipai/adapter-utils/server-utils";
@@ -169,11 +170,15 @@ async function ensurePrivateDir(dir: string): Promise<void> {
     if (existing.isSymbolicLink() || !existing.isDirectory()) {
       throw new Error("device-login export: the proof-home path is a symlink or a non-directory");
     }
-    await chmod(dir, PRIVATE_DIR_MODE);
+    if (process.platform === "win32") await ensurePrivateCredentialDirectory(dir);
+    else await chmod(dir, PRIVATE_DIR_MODE);
     return;
   }
-  await mkdir(dir, { mode: PRIVATE_DIR_MODE });
-  await chmod(dir, PRIVATE_DIR_MODE);
+  if (process.platform === "win32") await ensurePrivateCredentialDirectory(dir);
+  else {
+    await mkdir(dir, { mode: PRIVATE_DIR_MODE });
+    await chmod(dir, PRIVATE_DIR_MODE);
+  }
 }
 
 /**

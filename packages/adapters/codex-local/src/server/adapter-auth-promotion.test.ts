@@ -1,3 +1,5 @@
+import { installIsolatedHostFixture } from "@paperclipai/adapter-utils/test-fixtures/isolated-host";
+installIsolatedHostFixture();
 import { chmod, lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -428,7 +430,7 @@ describe("device-login credential promotion", () => {
     expect(homeAuth.tokens.refresh_token).toContain("keep");
   });
 
-  it("a strictly-newer same-account login replaces a symlinked company auth.json without writing its target", async () => {
+  it("preserves the host target when promoting over a company auth symlink", async () => {
     // The company home often symlinks auth.json at the host login (the shared
     // source seeding does exactly that). The refresh must swap the symlink for
     // a regular file holding the login credential — atomically, at the link
@@ -453,9 +455,14 @@ describe("device-login credential promotion", () => {
     });
 
     const stat = await lstat(companyHomeAuthPath(env, COMPANY_A));
-    expect(stat.isSymbolicLink()).toBe(false);
+    expect(stat.isSymbolicLink()).toBe(process.platform === "win32");
     const homeAuth = JSON.parse(await readFile(companyHomeAuthPath(env, COMPANY_A), "utf8"));
-    expect(homeAuth.tokens.refresh_token).toContain("fresh");
+    // Windows refuses an existing credential link. Its best-effort company
+    // fallback must preserve it; the durable identity-specific home still gets
+    // the login. POSIX keeps the historical atomic link replacement behavior.
+    expect(homeAuth.tokens.refresh_token).toContain(process.platform === "win32" ? "host" : "fresh");
+    const accountAuth = JSON.parse(await readFile(resolveCodexAuthCacheEntryPath(env, ACCOUNT, COMPANY_A), "utf8"));
+    expect(accountAuth.tokens.refresh_token).toContain("fresh");
     // The symlink target — standing in for the host's ~/.codex/auth.json — was
     // never written.
     expect(await readFile(hostAuthPath, "utf8")).toBe(hostBytes.toString("utf8"));

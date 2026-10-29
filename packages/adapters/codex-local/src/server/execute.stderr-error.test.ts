@@ -1,4 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { installIsolatedHostFixture } from "@paperclipai/adapter-utils/test-fixtures/isolated-host";
+installIsolatedHostFixture();
+const fixtureHome = vi.hoisted(() => ({ path: "" }));
 
 const YOLO_WARNING = "YOLO mode is enabled. All tool calls will be automatically approved.";
 
@@ -9,7 +15,6 @@ const {
   readPaperclipRuntimeSkillEntries,
   resolveAdapterExecutionTargetCommandForLogs,
   runAdapterExecutionTargetProcess,
-  tempCodexHome,
 } = vi.hoisted(() => ({
   ensureAdapterExecutionTargetCommandResolvable: vi.fn(async () => undefined),
   ensureAdapterExecutionTargetRuntimeCommandInstalled: vi.fn(async () => undefined),
@@ -17,7 +22,6 @@ const {
   readPaperclipRuntimeSkillEntries: vi.fn(async () => []),
   resolveAdapterExecutionTargetCommandForLogs: vi.fn(async () => "codex"),
   runAdapterExecutionTargetProcess: vi.fn(),
-  tempCodexHome: "/tmp/paperclip-codex-stderr-error-test-home",
 }));
 
 vi.mock("./acp.js", () => ({
@@ -58,13 +62,13 @@ vi.mock("./codex-home.js", async () => {
       managed: true,
       authMode: "api",
       ready: true,
-      effectiveHome: tempCodexHome,
-      sharedSourceHome: tempCodexHome,
+      effectiveHome: fixtureHome.path,
+      sharedSourceHome: fixtureHome.path,
     })),
     isManagedCodexHomePath: vi.fn(() => true),
-    prepareManagedCodexHome: vi.fn(async () => ({ status: "seeded", home: tempCodexHome })),
-    resolveManagedCodexHomeDir: vi.fn(() => tempCodexHome),
-    seedManagedCodexHome: vi.fn(async () => ({ status: "seeded", home: tempCodexHome })),
+    prepareManagedCodexHome: vi.fn(async () => ({ status: "seeded", home: fixtureHome.path })),
+    resolveManagedCodexHomeDir: vi.fn(() => fixtureHome.path),
+    seedManagedCodexHome: vi.fn(async () => ({ status: "seeded", home: fixtureHome.path })),
   };
 });
 
@@ -117,7 +121,9 @@ function buildContext(config: Record<string, unknown> = {}) {
 }
 
 describe("codex_local stderr fallback error derivation", () => {
-  beforeEach(() => {
+  afterEach(async () => { if (fixtureHome.path) await fs.rm(fixtureHome.path, { recursive: true, force: true }); });
+  beforeEach(async () => {
+    fixtureHome.path = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-stderr-home-"));
     vi.clearAllMocks();
   });
 
