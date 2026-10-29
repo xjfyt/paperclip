@@ -1,15 +1,16 @@
-import { mkdtemp, readFile, rm, symlink, utimes, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rename, rm, symlink, utimes, writeFile } from "node:fs/promises";
+import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { gzipSync } from "node:zlib";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { sql } from "drizzle-orm";
 import { createDb, ensurePostgresDatabase, getEmbeddedPostgresTestSupport, runDatabaseBackup, runDatabaseRestore, startEmbeddedPostgresTestDatabase } from "@paperclipai/db";
 import { clearIdleBackupWakeRequired, idleBackupWakeMarker, markIdleBackupWakeRequired, verifyIdleDatabaseBackup } from "../services/idle-database-backup.js";
 
 let directory: string;
 beforeEach(async () => { directory = await mkdtemp(path.join(os.tmpdir(), "idle-backup-")); });
-afterEach(async () => { await rm(directory, { recursive: true, force: true }); });
+afterEach(async () => { vi.restoreAllMocks(); await rm(directory, { recursive: true, force: true }); });
 
 describe("idle database backup persistence", () => {
   it("keeps a restart marker until a fresh valid backup is complete", async () => {
@@ -46,6 +47,67 @@ describe("idle database backup persistence", () => {
     await symlink(target, idleBackupWakeMarker(directory));
     await expect(markIdleBackupWakeRequired(directory)).rejects.toThrow();
     expect(await readFile(target)).toEqual(gzipSync("SELECT 1;"));
+  });
+
+  it("never changes an existing read-only archive to acquire Windows flush rights", async () => {
+    const archive = path.join(directory, "readonly.sql.gz");
+    const bytes = gzipSync("SELECT 'readonly';");
+    await markIdleBackupWakeRequired(directory);
+    await writeFile(archive, bytes);
+    await chmod(archive, 0o444);
+    if (process.platform === "win32") {
+      // This gate authorizes compute stop only after flushing. The ordinary
+      // restore/read path still reads the archive; this gate cannot invent a
+      // writable handle or silently change an existing backup's permissions.
+      await expect(verifyIdleDatabaseBackup(archive)).rejects.toMatchObject({ code: "EPERM" });
+    } else await verifyIdleDatabaseBackup(archive);
+    expect(await readFile(archive)).toEqual(bytes);
+    expect((await fs.stat(archive)).mode & 0o777).toBe(0o444);
+    expect(await readFile(idleBackupWakeMarker(directory), "utf8")).toContain("restarts");
+  });
+
+  it("retains the wake marker and archive when a file flush reports a genuine I/O failure", async () => {
+    const archive = path.join(directory, "flush.sql.gz");
+    const bytes = gzipSync("SELECT 'keep';");
+    await markIdleBackupWakeRequired(directory);
+    await writeFile(archive, bytes);
+    const failure = Object.assign(new Error("synthetic file flush failure"), { code: "EIO" });
+    const open = fs.open.bind(fs);
+    vi.spyOn(fs, "open").mockImplementation(async (...args) => {
+      const handle = await open(...args);
+      if (args[0] === archive) handle.sync = async () => { throw failure; };
+      return handle;
+    });
+    await expect(verifyIdleDatabaseBackup(archive)).rejects.toBe(failure);
+    expect(await readFile(archive)).toEqual(bytes);
+    expect(await readFile(idleBackupWakeMarker(directory), "utf8")).toContain("restarts");
+  });
+
+  it("rejects a pathname replaced by a symlink after reading/flushing without touching its new target", async () => {
+    const archive = path.join(directory, "race.sql.gz");
+    const outside = path.join(directory, "outside.sql.gz");
+    const originalBytes = gzipSync("SELECT 'original';");
+    const outsideBytes = gzipSync("SELECT 'outside';");
+    await markIdleBackupWakeRequired(directory);
+    await writeFile(archive, originalBytes);
+    await writeFile(outside, outsideBytes);
+    const open = fs.open.bind(fs);
+    vi.spyOn(fs, "open").mockImplementation(async (...args) => {
+      const handle = await open(...args);
+      if (args[0] === archive) {
+        const sync = handle.sync.bind(handle);
+        handle.sync = async () => {
+          await sync();
+          await rename(archive, `${archive}.original`);
+          await symlink(outside, archive);
+        };
+      }
+      return handle;
+    });
+    await expect(verifyIdleDatabaseBackup(archive)).rejects.toThrow(/path or contents changed/);
+    expect(await readFile(outside)).toEqual(outsideBytes);
+    expect(await readFile(`${archive}.original`)).toEqual(originalBytes);
+    expect(await readFile(idleBackupWakeMarker(directory), "utf8")).toContain("restarts");
   });
 });
 

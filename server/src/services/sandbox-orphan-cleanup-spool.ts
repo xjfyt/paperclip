@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { idleOrphanSpoolPath, registerIdleSpoolDirectory } from "./idle-local-work.js";
+import { syncDirectory } from "../utils/sync-directory.js";
 
 /**
  * One orphan pending-cleanup record. The acquire builds it when the conditional
@@ -110,26 +111,18 @@ function isDeferredOrphanCleanupRecord(value: unknown): value is DeferredOrphanC
 async function writeFileDurable(absPath: string, data: string): Promise<void> {
   tempFileCounter += 1;
   const tempPath = `${absPath}.${process.pid}.${tempFileCounter}.tmp`;
-  const handle = await fs.open(tempPath, "w");
   try {
-    await handle.writeFile(data, "utf8");
-    await handle.sync();
-  } finally {
-    await handle.close();
-  }
-  try {
+    const handle = await fs.open(tempPath, "w");
+    try {
+      await handle.writeFile(data, "utf8");
+      await handle.sync();
+    } finally { await handle.close(); }
     await fs.rename(tempPath, absPath);
-  } catch (error) {
-    // The rename failed, so drop the temp file. Do not leave it behind, or a
-    // later load reads a half-published record.
-    await fs.rm(tempPath, { force: true }).catch(() => undefined);
-    throw error;
-  }
-  const dirHandle = await fs.open(path.dirname(absPath), "r");
-  try {
-    await dirHandle.sync();
+    await syncDirectory(path.dirname(absPath));
   } finally {
-    await dirHandle.close();
+    // Neither a failed byte write/flush nor a failed rename may leave a partial
+    // temp behind. On success rename already consumed this exact owned path.
+    await fs.rm(tempPath, { force: true }).catch(() => undefined);
   }
 }
 

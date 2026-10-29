@@ -1,7 +1,8 @@
 import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createSandboxOrphanCleanupSpool,
   type DeferredOrphanCleanupRecord,
@@ -29,6 +30,7 @@ describe("createSandboxOrphanCleanupSpool", () => {
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     await rm(dir, { recursive: true, force: true }).catch(() => undefined);
   });
 
@@ -89,5 +91,35 @@ describe("createSandboxOrphanCleanupSpool", () => {
   it("returns an empty list when the spool directory does not exist", async () => {
     const spool = createSandboxOrphanCleanupSpool(path.join(dir, "missing"));
     expect(await spool.load()).toEqual([]);
+  });
+
+  it.each(["write", "flush"] as const)("retains the previous durable record and removes partial temp after a %s failure", async (phase) => {
+    const spool = createSandboxOrphanCleanupSpool(dir);
+    const original = buildRecord();
+    expect(await spool.append(original)).toBe(true);
+    const open = fs.open.bind(fs);
+    vi.spyOn(fs, "open").mockImplementation(async (...args) => {
+      const handle = await open(...args);
+      if (String(args[0]).endsWith(".tmp")) {
+        const failure = Object.assign(new Error("synthetic storage failure"), { code: phase === "write" ? "ENOSPC" : "EIO" });
+        if (phase === "write") handle.writeFile = async () => { throw failure; };
+        else handle.sync = async () => { throw failure; };
+      }
+      return handle;
+    });
+    expect(await spool.append({ ...original, metadata: { replacement: true } })).toBe(false);
+    expect(await spool.load()).toEqual([original]);
+    expect((await readdir(dir)).filter(name => name.endsWith(".tmp"))).toEqual([]);
+  });
+
+  it("does not suppress a genuine directory I/O failure after publishing the record", async () => {
+    const spool = createSandboxOrphanCleanupSpool(dir);
+    const open = fs.open.bind(fs);
+    vi.spyOn(fs, "open").mockImplementation(async (...args) => {
+      if (args[0] === dir) throw Object.assign(new Error("synthetic directory storage failure"), { code: "EIO" });
+      return open(...args);
+    });
+    expect(await spool.append(buildRecord())).toBe(false);
+    expect(await spool.load()).toEqual([buildRecord()]);
   });
 });
