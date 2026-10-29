@@ -1,3 +1,4 @@
+import { codingCreateSchema as createSchema, codingReviewSchema as reviewSchema, codingConfirmSchema as confirmSchema, codingEvidenceSchema as evidenceSchema, codingArtifactsSchema as artifactsSchema } from "./mimouse-api-schemas.js";
 import { codingListQuerySchema, listCodingDeliveries } from "../services/mimouse-coding/delivery-list.js";
 import { mimouseBuildObservationRoutes } from "./mimouse-build-observations.js";
 import { saveCodingGoalSchema } from "@paperclipai/shared";
@@ -19,12 +20,6 @@ import { canActorReadIssuePrivacy } from "../services/authorization.js";
 import { codingService, verifyLocalCodingHead } from "../services/mimouse-coding/service.js";
 import { gitlabOrigin, GitLabError } from "../services/mimouse-coding/gitlab.js";
 import { logActivity, publishActivity, type ActivityPublication } from "../services/activity-log.js";
-const sha = z.string().regex(/^[a-f0-9]{40}$/);
-const createSchema = z.object({ issueId: z.string().uuid(), workspaceId: z.string().uuid(), gitlabOrigin: z.string().url(), projectId: z.number().int().positive(), secretRef: z.string().uuid(), baseSha: sha, headSha: sha, targetBranch: z.string().min(1).max(200) }).strict();
-const reviewSchema = z.object({ headSha: sha, baseSha: sha, digest: z.string().regex(/^[a-f0-9]{64}$/), confirm: z.literal(true) }).strict();
-const confirmSchema = z.object({ headSha: sha, confirm: z.literal(true), title: z.string().min(1).max(200).optional() }).strict();
-const evidenceSchema = z.object({ headSha: sha, checks: z.array(z.object({ commitSha: sha, command: z.string().min(1).max(2000), exitCode: z.number().int().nullable(), startedAt: z.string().datetime(), finishedAt: z.string().datetime(), logRef: z.string().min(1).max(2000), status: z.enum(["passed", "failed", "blocked", "not_run"]) }).strict()).max(100) }).strict();
-const artifactsSchema = z.object({ headSha: sha, version: z.string().min(1).max(100), artifacts: z.array(z.object({ path: z.string().min(1).max(1000), platform: z.enum(["windows", "macos", "linux"]), arch: z.enum(["x86_64", "arm64"]), buildJob: z.string().min(1).max(200) }).strict()).min(1).max(30) }).strict();
 export function mimouseCodingRoutes(db: Db, deps: { service?: ReturnType<typeof codingService> } = {}) {
   const router = Router(); router.use(mimouseBuildObservationRoutes(db)); const service = deps.service ?? codingService(db); const root = "/companies/:companyId/coding";
   function admin(req: Request) {

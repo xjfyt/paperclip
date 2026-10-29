@@ -1,6 +1,17 @@
 # 二开接口导航
 
+> 维护提示：新增或变更二开接口时同步运行时 Zod 校验、`server/src/routes/mimouse-openapi.ts` 与 OpenAPI 精确路由覆盖测试。本文为当前接口导航，历史测试收据不代表当前外部供应商已验收。
+> 最后验证：2026-10-30；本地接口契约与认证边界复核，外部集成的真实验收状态仍以各专题证据为准。
+
 以下均以已有 `/api` 为前缀，继续适用上游认证、CSRF、公司权限与错误中间件。UUID/固定 SHA/枚举由入口校验。不要把服务器秘密、令牌、Webhook 或原始供应商错误下发前端。
+
+## 生成接口目录
+
+运行中的 `GET /api/openapi.json` 包含本仓 19 个二开路由文件的实际操作，覆盖能力凭据、成本预览与运行路由、设置权限、认证撤销、通知、编码交付与构建观察、反馈来源、数据预览、研究、固定评估与受控恢复、私有提示词及应用、WorkBuddy。请求体优先复用处理器/服务使用的共享 Zod 实例；编码、通知与 WorkBuddy 的局部请求校验共用 `mimouse-api-schemas.ts`。
+
+OpenAPI 的 `security` 区分 Board session、Board key 和有效 run-bound Agent JWT。`x-paperclip-authorization` 补充浏览器会话、实例管理员与执行归属限制；公司成员状态、任务隐私、审批、部署开关和固定版本等动态条件仍由服务端复核。JSON Schema 只表达结构，不能代替 Zod 跨字段校验或实际授权。尚无稳定响应校验器的结果保持未限定结构，不能据接口存在推断供应商已连接、实际执行成功或完整 Windows 支持。
+
+回归入口：`pnpm exec vitest run --project @paperclipai/server server/src/__tests__/openapi-routes.test.ts`。覆盖检查展开已有 `root`/`path` 常量和固定历史循环，拒绝不能解析的新动态路径；新增路由不能通过加入排除名单完成登记。
 
 ## 认证
 
@@ -59,7 +70,7 @@
 - POST `/:id/sync`：读取对应提交的 MR/CI，新 MR SHA 使审阅失效。
 - POST `/:id/artifacts`：headSha、version、artifacts（相对 path/platform/arch/buildJob）；服务端实际哈希，只记 unknown 签名/not_run 测试，不上传。
 
-具体 request schema 以 routes 源码为权威；未接入上游自动 OpenAPI 生成的条目不可冒充已在原接口目录发布。详见 [编码交付](coding.md)。
+具体 request schema 以运行时共用的 Zod 校验为权威；生成 OpenAPI 同步描述请求结构与会话边界，不代表 GitLab 实际发布或跨平台构建已验收。详见 [编码交付](coding.md)。
 
 ## 设置引导权限
 
@@ -76,7 +87,7 @@ GET `/companies/:companyId/setup-capabilities`：当前登录board的只读能�
 
 幂等身份为company/sourceKind/sourceInstance/externalId；原始导入的内容摘要仅内部保存，重试相同内容返回原记录，改变内容409。并发由唯一索引仲裁，不能覆盖先前证据。只保存经过确定性脱敏的文本；已知凭据/邮箱/电话和URL用户信息、query/fragment被去除。规则不能保证检测任意形式秘密；导入方仍须预先审核，不在sourceInstance/externalId/traceId等标识字段放凭据或客户隐私。导入API及错误日志整段隐去请求体。
 
-当前没有外部URL抓取、附件下载、客户回复、Langfuse/企微授权、自动建任务或Agent派发。外部文本是数据，绝不形成平台权限。该接口与上游Paperclip产品反馈导出无调用关系，不向其反馈站发送公司客户内容。后续人审转任务与UI、可信连接器另行接入。
+人工导入接口不抓取外部 URL、不下载附件、不回复客户、不自动建任务或派发 Agent。另有受控 [Langfuse 拉取](langfuse.md) 与企微长连接入站接口；配置、部署开关和实际连通验收分开管理，导入记录的 sourceKind 本身不能证明连接器已启用。外部文本是数据，绝不形成平台权限。该接口与上游 Paperclip 产品反馈导出无调用关系，不向其反馈站发送公司客户内容。下文的人审转任务需独立确认，仍不授予自动执行权限。
 
 ### 人工确认反馈转任务
 

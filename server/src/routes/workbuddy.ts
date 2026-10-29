@@ -1,5 +1,5 @@
+import { workbuddyCreateSchema as createSchema, workbuddyPromptSchema as promptSchema, workbuddyAgentsSchema } from "./mimouse-api-schemas.js";
 import { Router, type Request } from "express";
-import { z } from "zod";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { companies, agents, mimouseWorkbuddyJobs as jobs, mimouseWorkbuddyConnections as connections, type Db } from "@paperclipai/db";
 import { assertBoard, assertCompanyAccess, getActorInfo } from "./authz.js";
@@ -8,8 +8,6 @@ import { validate } from "../middleware/validate.js";
 import { workbuddyService } from "../services/workbuddy/service.js";
 import { WorkBuddyProtocolError } from "../services/workbuddy/protocol.js";
 import { logActivity } from "../services/activity-log.js";
-const createSchema = z.object({ connectionId: z.string().uuid(), requestKey: z.string().uuid(), prompt: z.string().min(1).max(20000), confirmRemoteExecution: z.literal(true) }).strict();
-const promptSchema = z.object({ requestKey: z.string().uuid(), prompt: z.string().min(1).max(20000), confirmRemoteExecution: z.literal(true) }).strict();
 export function workbuddyRoutes(db: Db) {
   const router = Router(); const service = workbuddyService(db); const root = "/companies/:companyId/integrations/workbuddy";
   function actor(req: Request) {
@@ -54,7 +52,7 @@ export function workbuddyRoutes(db: Db) {
     const { companyId, userId } = actor(req); const result = await safe(() => service.disconnect(companyId, String(req.params.id), userId));
     await audit(req, "workbuddy.disconnected", String(req.params.id)); res.json(result);
   });
-  router.post(`${root}/connections/:id/agents`, validate(z.object({ confirm: z.literal(true), agentIds: z.array(z.string().uuid()).max(30) }).strict()), async (req, res) => {
+  router.post(`${root}/connections/:id/agents`, validate(workbuddyAgentsSchema), async (req, res) => {
     const { companyId, userId } = actor(req); const id = String(req.params.id); const ids = [...new Set(req.body.agentIds as string[])];
     const [connection] = await db.select().from(connections).where(and(eq(connections.companyId, companyId), eq(connections.id, id), eq(connections.ownerUserId, userId)));
     if (!connection) throw forbidden("Connection owner required");

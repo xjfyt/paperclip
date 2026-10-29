@@ -1,3 +1,4 @@
+import { notificationEndpointSchema as endpointSchema, notificationSubscriptionSchema as subscriptionSchema, notificationEnabledSchema as enabledSchema, notificationTestSchema as testSchema, notificationRevisionSchema as revisionSchema, notificationToggleSchema as toggleSchema, notificationReviewSchema as reviewSchema, notificationRetrySchema } from "./mimouse-api-schemas.js";
 import { notificationDispatchContent } from "../services/mimouse-notifications/digest.js";
 import { notificationPolicyUpdateSchema, updateNotificationPolicy } from "../services/mimouse-notifications/policy.js";
 import { notificationReconciliation } from "../services/mimouse-notifications/reconciliation.js";
@@ -15,12 +16,6 @@ import { conflict, forbidden, notFound, unprocessable } from "../errors.js";
 import { validate } from "../middleware/validate.js";
 import { logActivity, publishActivity, type ActivityPublication } from "../services/activity-log.js";
 import { CONNECTED_NOTIFICATION_EVENTS, NOTIFICATION_TOPIC } from "../services/mimouse-notifications/outbox.js";
-const kinds = ["wecom_webhook", "feishu_webhook", "dingtalk_webhook_legacy", "dingtalk_app", "wechat_official_account"] as const;
-const configSchema = z.object({ brand: z.enum(["feishu", "lark"]).optional(), target: z.string().max(500).optional(), robotCode: z.string().max(200).optional(), templateId: z.string().max(200).optional(), templateData: z.record(z.string(), z.object({ value: z.string().max(1000) }).strict()).optional() }).strict();
-const endpointSchema = z.object({ name: z.string().min(1).max(120), kind: z.enum(kinds), config: configSchema, secretRef: z.string().uuid(), secretVersion: z.number().int().positive() }).strict();
-const subscriptionSchema = z.object({ endpointId: z.string().uuid(), eventType: z.enum(CONNECTED_NOTIFICATION_EVENTS), locale: z.enum(["en", "zh-CN", "es", "ja"]) }).strict();
-const enabledSchema = z.object({ enabled: z.boolean() }).strict();
-const testSchema = z.object({ expectedVersion: z.number().int().positive().default(1), requestId: z.string().uuid(), confirm: z.literal(true), title: z.string().min(1).max(120), text: z.string().min(1).max(1000) }).strict();
 function companyAdmin(req: Request, companyId: string) {
   assertBoard(req); assertCompanyAccess(req, companyId);
   if (req.actor.source === "local_implicit" || req.actor.isInstanceAdmin) return;
@@ -74,7 +69,6 @@ export function mimouseNotificationRoutes(db: Db) {
     const companyId = String(req.params.companyId); companyAdmin(req, companyId);
     res.json(await configuration.history(companyId, String(req.params.id)));
   });
-  const revisionSchema = endpointSchema.extend({ expectedVersion: z.number().int().positive() });
   router.post(`${path}/endpoints/:id/revisions`, validate(revisionSchema), async (req, res) => {
     const companyId = String(req.params.companyId); companyAdmin(req, companyId);
     const { expectedVersion, ...input } = revisionSchema.parse(req.body); const actor = getActorInfo(req);
@@ -82,7 +76,6 @@ export function mimouseNotificationRoutes(db: Db) {
     await logActivity(db, { companyId, actorType: actor.actorType, actorId: actor.actorId, action: "notification.endpoint.revised", entityType: "notification_endpoint", entityId: endpoint.id, details: { previousVersion: expectedVersion, configVersion: endpoint.configVersion, enabled: false } });
     res.json({ id: endpoint.id, configVersion: endpoint.configVersion, enabled: false, configurationValid: true, liveVerified: false });
   });
-  const toggleSchema = enabledSchema.extend({ expectedVersion: z.number().int().positive().default(1) });
   router.patch(`${path}/endpoints/:id`, validate(toggleSchema), async (req, res) => {
     const companyId = String(req.params.companyId); companyAdmin(req, companyId); await loadEndpoint(companyId, String(req.params.id));
     const input = toggleSchema.parse(req.body);
@@ -118,7 +111,6 @@ export function mimouseNotificationRoutes(db: Db) {
     const companyId = String(req.params.companyId); companyAdmin(req, companyId);
     res.json(await reconciliation.history(companyId, String(req.params.id)));
   });
-  const reviewSchema = z.object({ requestId: z.string().uuid(), confirm: z.literal(true), outcome: z.enum(["accepted", "not_accepted", "unknown"]), evidence: z.string().trim().min(1).max(1000), expectedState: z.enum(["accepted", "rejected", "indeterminate"]), expectedAttempt: z.number().int().min(0) }).strict();
   router.post(`${path}/deliveries/:id/reviews`, validate(reviewSchema), async (req, res) => {
     const companyId = String(req.params.companyId); companyAdmin(req, companyId); const actor = getActorInfo(req);
     const row = await reconciliation.record(companyId, String(req.params.id), reviewSchema.parse(req.body), actor.actorId);
@@ -137,7 +129,7 @@ export function mimouseNotificationRoutes(db: Db) {
       templateData: snapshot.kind === "wechat_official_account" ? snapshot.templateData ?? null : null,
       configVersion: snapshot.configVersion ?? null, target: typeof snapshot.target === "string" ? snapshot.target : null, secretVersion: snapshot.secretVersion, locale: snapshot.locale });
   });
-  router.post(`${path}/deliveries/:id/retry`, validate(z.object({ requestId: z.string().uuid(), confirmReviewedOutcome: z.literal(true), acceptDuplicateRisk: z.literal(true) }).strict()), async (req, res) => {
+  router.post(`${path}/deliveries/:id/retry`, validate(notificationRetrySchema), async (req, res) => {
     const companyId = String(req.params.companyId); companyAdmin(req, companyId);
     const [original] = await db.select().from(deliveries).where(and(eq(deliveries.companyId, companyId), eq(deliveries.id, String(req.params.id))));
     if (!original) throw notFound("Delivery not found");

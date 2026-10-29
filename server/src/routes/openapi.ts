@@ -1,4 +1,5 @@
 import { updateFastResponseSchema } from "@paperclipai/shared";
+import { mimouseOpenApiOperations, mimouseOpenApiByOperation, mimouseOpenApiSecurity } from "./mimouse-openapi.js";
 import { slackRegistrationSchema, slackSetupActionSchema, slackInstallAuthorizationSchema, slackRegistrationStateSchema, slackAppConfigurationSchema, slackAvatarStateSchema, slackAccountStateSchema } from "@paperclipai/shared";
 import { experimentalApiMetadata } from "./experimental-api-metadata.js";
 import {
@@ -1844,6 +1845,12 @@ function applyDocumentFixups(document: any): any {
       }
 
       const key = operationKey(method, path);
+      const mimouseOperation = mimouseOpenApiByOperation.get(key);
+      if (mimouseOperation) {
+        const contract = mimouseOpenApiSecurity(mimouseOperation);
+        operation.security = contract.security;
+        operation["x-paperclip-authorization"] = contract.authorization;
+      }
       if (authLevel !== "public") {
         const responses = (operation.responses ??= {}) as Record<
           string,
@@ -12210,6 +12217,28 @@ for (const [method, path, body] of experimentalApiPaths) {
 }
 
 // ─── Spec builder ─────────────────────────────────────────────────────────────
+
+// Fork routes share their runtime request schemas. An unknown response stays
+// unspecified here rather than inventing provider proof or a stable DTO.
+for (const operation of mimouseOpenApiOperations) {
+  registry.registerPath({
+    method: operation.method, path: operation.path, tags: operation.tags,
+    summary: operation.summary, description: operation.description,
+    request: {
+      params: operation.params,
+      ...(operation.query ? { query: operation.query } : {}),
+      ...(operation.body ? { body: { ...jsonBody(operation.body), required: !operation.bodyOptional } } : {}),
+    },
+    responses: {
+      ...Object.fromEntries(operation.success.map(status => [status, operation.redirect
+        ? { description: "Redirect to the authorized company's WorkBuddy settings", headers: { Location: { schema: { type: "string" } } } }
+        : r.ok(z.unknown())])),
+      400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 404: r.notFound,
+      409: r.conflict, 422: r.unprocessable,
+      ...(operation.path.endsWith("/pull") ? { 429: r.tooManyRequests, 502: { description: "Bounded provider read failed" } } : {}),
+    },
+  });
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function buildOpenApiDocument(): any {

@@ -7,11 +7,31 @@ import { describe, expect, it } from "vitest";
 import { COMPANY_IMPORT_TRANSFERS_ROUTE_PATH } from "@paperclipai/shared/company-import-transfer";
 import { errorHandler } from "../middleware/index.js";
 import { buildOpenApiSpec, openApiRoutes } from "../routes/openapi.js";
+import { mimouseOpenApiOperations } from "../routes/mimouse-openapi.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROUTES_DIR = path.resolve(__dirname, "../routes");
 
 const apiPrefixes: Record<string, string> = {
+  "capability-evidence.ts": "/api",
+  "cost-routing-preview.ts": "/api",
+  "mimouse-access.ts": "/api",
+  "mimouse-auth-revocations.ts": "/api",
+  "mimouse-build-observations.ts": "/api",
+  "mimouse-coding.ts": "/api",
+  "mimouse-cost-routing.ts": "/api",
+  "mimouse-evaluation-restore.ts": "/api",
+  "mimouse-evaluation.ts": "/api",
+  "mimouse-feedback.ts": "/api",
+  "mimouse-langfuse.ts": "/api",
+  "mimouse-notifications.ts": "/api",
+  "mimouse-operations.ts": "/api",
+  "mimouse-prompt-applications.ts": "/api",
+  "mimouse-prompt-registry.ts": "/api",
+  "mimouse-research-routines.ts": "/api",
+  "mimouse-research.ts": "/api",
+  "mimouse-wecom.ts": "/api",
+  "workbuddy.ts": "/api",
   "pipelines.ts": "/api",
   "cases.ts": "/api",
   "smoke-lab.ts": "/api",
@@ -100,6 +120,47 @@ const HTTP_METHODS = new Set([
   "trace",
 ]);
 const explicitOpenApiCoverageExclusions = new Set<string>();
+const mimouseRouteFiles = new Set([
+  "capability-evidence.ts", "cost-routing-preview.ts", "mimouse-access.ts",
+  "mimouse-auth-revocations.ts", "mimouse-build-observations.ts", "mimouse-coding.ts",
+  "mimouse-cost-routing.ts", "mimouse-evaluation-restore.ts", "mimouse-evaluation.ts",
+  "mimouse-feedback.ts", "mimouse-langfuse.ts", "mimouse-notifications.ts",
+  "mimouse-operations.ts", "mimouse-prompt-applications.ts", "mimouse-prompt-registry.ts",
+  "mimouse-research-routines.ts", "mimouse-research.ts", "mimouse-wecom.ts", "workbuddy.ts",
+]);
+
+// These fork routers use local root/path constants and a fixed history loop.
+// Parse those forms without executing handlers; an unresolvable route fails
+// coverage rather than silently disappearing behind a permissive regex.
+function loadMimouseRouteLiterals(source: string, file: string) {
+  const bindings = new Map<string, string[]>();
+  for (const match of source.matchAll(/\b(root|path)\s*=\s*["']([^"']+)["']/g)) {
+    if (bindings.has(match[1])) throw new Error(`Ambiguous route constant in ${file}: ${match[1]}`);
+    bindings.set(match[1], [match[2]]);
+  }
+  // Fixed string loops are supported explicitly; new dynamic expressions fail.
+  for (const match of source.matchAll(/for\s*\(\s*const\s+(\w+)\s+of\s+\[([^\]]*)\]\s+as\s+const\s*\)/g)) {
+    const literals = [...match[2].matchAll(/["']([^"']+)["']/g)].map(item => item[1]);
+    if (!literals.length || match[2].replace(/["'][^"']+["']/g, "").replace(/[\s,]/g, "")) throw new Error(`Unsupported route loop in ${file}`);
+    bindings.set(match[1], literals);
+  }
+  const routes: Array<{ method: string; path: string }> = [];
+  for (const match of source.matchAll(/router\.(get|post|put|patch|delete)\(\s*/g)) {
+    const rest = source.slice(match.index! + match[0].length);
+    const literal = /^(?:"([^"]+)"|'([^']+)'|`([^`]+)`)\s*,/.exec(rest);
+    const identifier = /^(root|path)\s*,/.exec(rest);
+    let paths = literal ? [literal[1] ?? literal[2] ?? literal[3]] : identifier ? bindings.get(identifier[1]) : undefined;
+    if (!paths) throw new Error(`Unresolved route expression in ${file}: ${rest.slice(0, 80)}`);
+    for (const interpolation of new Set(paths.flatMap(value => [...value.matchAll(/\$\{([^}]+)\}/g)].map(item => item[1])))) {
+      const values = bindings.get(interpolation);
+      if (!values) throw new Error(`Unresolved route expression in ${file}: ${interpolation}`);
+      paths = paths.flatMap(value => values.map(item => value.split('${' + interpolation + '}').join(item)));
+    }
+    if (paths.some(value => value.includes("${"))) throw new Error(`Unresolved route expression in ${file}`);
+    for (const routePath of paths) routes.push({ method: match[1].toUpperCase(), path: routePath });
+  }
+  return routes;
+}
 
 const explicitOpenApiOperationCoverageExclusions = new Set([
   // Inspection uses its own versioned Cloud-permit/managed-run protocol,
@@ -212,6 +273,13 @@ function loadActualRoutes() {
       continue;
     }
 
+    if (mimouseRouteFiles.has(file)) {
+      for (const route of loadMimouseRouteLiterals(source, file)) {
+        routes.add(`${route.method} ${normalizeExpressPath(resolveMountedPath(file, prefix, route.path))}`);
+      }
+      continue;
+    }
+
     for (const match of source.matchAll(ROUTE_LITERAL_PATTERN)) {
       const method = match[1].toUpperCase();
       const routePath = match[2];
@@ -295,6 +363,76 @@ function loadSpecRoutes() {
 }
 
 describe("openapi routes", () => {
+  it("expands fork root constants and fixed history loops and rejects unknown dynamic routes", () => {
+    expect(loadMimouseRouteLiterals('const root="/companies/:companyId/prompts"; router.get(root, handler); for (const kind of ["revisions", "receipts"] as const) router.get(`${root}/:promptId/${kind}`, handler);', "fixture.ts"))
+      .toEqual([
+        { method: "GET", path: "/companies/:companyId/prompts" },
+        { method: "GET", path: "/companies/:companyId/prompts/:promptId/revisions" },
+        { method: "GET", path: "/companies/:companyId/prompts/:promptId/receipts" },
+      ]);
+    expect(() => loadMimouseRouteLiterals('router.post(resolveAtRuntime(), handler)', "fixture.ts")).toThrow("Unresolved route expression");
+    expect(() => loadMimouseRouteLiterals('router.get(`${root}/${unknown}`, handler)', "fixture.ts")).toThrow("Unresolved route expression");
+  });
+  it("publishes every fork operation once with its real path, request schemas and unconstrained response DTO", () => {
+    const spec = buildOpenApiSpec() as any;
+    const keys = mimouseOpenApiOperations.map(operation => `${operation.method} ${operation.path}`);
+    expect(new Set(keys).size).toBe(keys.length);
+    for (const contract of mimouseOpenApiOperations) {
+      expect(contract.path).not.toContain("${");
+      const operation = spec.paths[contract.path][contract.method];
+      for (const name of [...contract.path.matchAll(/\{([^}]+)\}/g)].map(match => match[1])) {
+        expect(operation.parameters).toContainEqual(expect.objectContaining({ name, in: "path", required: true,
+          schema: name === "userId" ? { type: "string" } : { type: "string", format: "uuid" } }));
+      }
+      if (contract.body) expect(operation.requestBody).toMatchObject({ required: !contract.bodyOptional, content: { "application/json": { schema: expect.any(Object) } } });
+      else expect(operation.requestBody).toBeUndefined();
+      if (!contract.redirect) for (const code of contract.success) expect(operation.responses[String(code)].content["application/json"].schema).toEqual({});
+    }
+  });
+  it("keeps fork session confirmations, administrator revocations and run reports separate in generated security", () => {
+    const spec = buildOpenApiSpec() as any;
+    const operation = (path: string, method = "post") => spec.paths[path][method];
+    expect(operation("/api/companies/{companyId}/notifications/endpoints").security).toEqual([{ BoardSessionAuth: [] }, { BoardApiKeyAuth: [] }]);
+    for (const path of [
+      "/api/companies/{companyId}/coding/{id}/review",
+      "/api/companies/{companyId}/coding/{id}/repair-settings",
+      "/api/companies/{companyId}/feedback-inbox/{id}/promote",
+      "/api/companies/{companyId}/prompt-registry/{promptId}/tests/{testId}/execute",
+      "/api/companies/{companyId}/skill-evaluations/restores",
+      "/api/companies/{companyId}/runtime-cost-routing/policies/{id}/approve",
+    ]) {
+      expect(operation(path).security).toEqual([{ BoardSessionAuth: [] }]);
+      expect(operation(path)["x-paperclip-authorization"]).toMatchObject({ actor: "board", sessionBound: true });
+    }
+    expect(operation("/api/admin/users/{userId}/auth-revocations")["x-paperclip-authorization"]).toEqual({ actor: "board", sessionBound: true, instanceAdmin: true });
+    expect(operation("/api/companies/{companyId}/research-routines/{routineId}/reports").security).toEqual([{ AgentRunAuth: [] }]);
+    expect(operation("/api/companies/{companyId}/research-routines/{routineId}/reports")["x-paperclip-authorization"]).toEqual({ actor: "agent", heartbeatBound: true, taskBound: true });
+    expect(operation("/api/companies/{companyId}/integrations/workbuddy/jobs").security).toEqual([{ BoardSessionAuth: [] }, { BoardApiKeyAuth: [] }, { AgentRunAuth: [] }]);
+    expect(operation("/api/companies/{companyId}/feedback-wecom/connections")["x-paperclip-authorization"]).toMatchObject({ actor: "board", instanceAdmin: true });
+  });
+  it("describes fork confirmation bodies, pagination and actual accepted/redirect status codes", () => {
+    const spec = buildOpenApiSpec() as any;
+    const notifications = "/api/companies/{companyId}/notifications";
+    const retry = spec.paths[`${notifications}/deliveries/{id}/retry`].post;
+    expect(retry.requestBody.content["application/json"].schema).toMatchObject({ additionalProperties: false,
+      required: ["requestId", "confirmReviewedOutcome", "acceptDuplicateRisk"],
+      properties: { confirmReviewedOutcome: { type: "boolean", enum: [true] }, acceptDuplicateRisk: { type: "boolean", enum: [true] } } });
+    expect(retry.responses["202"]).toBeDefined();
+    expect(retry.responses["200"]).toBeUndefined();
+    expect(spec.paths[`${notifications}/endpoints`].post.responses["201"]).toBeDefined();
+    const feedback = spec.paths["/api/companies/{companyId}/feedback-inbox"];
+    expect(feedback.post.responses["200"]).toBeDefined();
+    expect(feedback.post.responses["201"]).toBeDefined();
+    expect(feedback.get.parameters).toContainEqual(expect.objectContaining({ name: "limit", in: "query", required: false,
+      schema: expect.objectContaining({ type: "integer", minimum: 1, maximum: 100 }) }));
+    const routing = spec.paths["/api/companies/{companyId}/runtime-cost-routing/requests/{requestId}"].get;
+    expect(routing.parameters).toContainEqual(expect.objectContaining({ name: "action", in: "query", required: true,
+      schema: { type: "string", enum: ["prepare", "approve", "disable", "create_task", "run"] } }));
+    const callback = spec.paths["/api/companies/{companyId}/integrations/workbuddy/callback"].get;
+    expect(callback.security).toEqual([{ BoardSessionAuth: [] }]);
+    expect(callback.responses["302"].headers.Location).toBeDefined();
+    expect(callback.responses["200"]).toBeUndefined();
+  });
   it("documents only writable agent update fields and lifecycle status requests", () => {
     const document = buildOpenApiSpec() as any;
     const properties = document.paths["/api/agents/{id}"].patch.requestBody.content["application/json"].schema.properties;
