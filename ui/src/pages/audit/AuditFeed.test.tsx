@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
 
 import { flushSync } from "react-dom";
-import { useState, type ReactNode } from "react";
+import { act as reactAct, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/api/client";
 import { AuditFeed } from "./AuditFeed";
+import { i18n, auditFeedMessages } from "../../i18n/audit-feed-test-resources";
+import { validateLocaleMessages } from "../../i18n/locale-validation";
 
 const listAgentActionsMock = vi.hoisted(() => vi.fn());
 const exportCsvMock = vi.hoisted(() => vi.fn());
@@ -98,11 +100,12 @@ describe("AuditFeed", () => {
     });
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     flushSync(() => root?.unmount());
     container.remove();
     vi.restoreAllMocks();
     vi.clearAllMocks();
+    await i18n.changeLanguage("en");
   });
 
   async function render(
@@ -615,4 +618,30 @@ describe("AuditFeed", () => {
     expect(revokeUrl).toHaveBeenCalledWith("blob:mock");
     expect(pushToastMock).toHaveBeenCalledWith(expect.objectContaining({ tone: "success" }));
   });
+  it.each(["en", "zh-CN", "es", "ja"] as const)("retains dates, focus, URLs and export identity through %s", async locale => {
+    expect(validateLocaleMessages(auditFeedMessages[locale], auditFeedMessages.en)).toEqual([]);
+    listAgentActionsMock.mockResolvedValue({ items: [record({ entity: { issue: { id: "issue-1", identifier: "PAP-1", title: "Activity" }, comment: { excerpt: "Export failed" }, document: null } })], nextCursor: null, accessTier: "full" });
+    let reject!: (reason: unknown) => void;
+    exportCsvMock.mockReturnValue(new Promise((_resolve, fail) => { reject = fail; }));
+    await render({ actionDomain: "tool_" });
+    const date = container.querySelector<HTMLInputElement>('input[type="date"]')!;
+    await reactAct(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(date, "2026-01-02"); date.dispatchEvent(new Event("input", { bubbles: true })); }); await flushReact();
+    date.focus(); const reads = listAgentActionsMock.mock.calls.length;
+    await reactAct(async () => { await i18n.changeLanguage(locale); }); await flushReact();
+    expect(document.activeElement).toBe(date); expect(container.querySelector('input[type="date"]')).toBe(date); expect(date.value).toBe("2026-01-02");
+    expect(date.getAttribute("aria-label")).toBe(i18n.t("auditFeedUi.fromDate"));
+    expect(container.querySelector('a[href="/issues/PAP-1"]')?.textContent).toBe("PAP-1 · Activity");
+    expect(container.textContent).toContain("Export failed"); expect(container.textContent).toContain("issue.comment_added");
+    expect(container.textContent).toContain(i18n.t("auditFeedUi.immutable"));
+    expect(listAgentActionsMock).toHaveBeenCalledTimes(reads);
+    await clickButton(i18n.t("auditFeedUi.exportCsv")); await flushReact();
+    expect(exportCsvMock).toHaveBeenCalledExactlyOnceWith("company-1", expect.objectContaining({ actorScope: "all", action: "tool_", from: "2026-01-02T00:00:00.000Z" }));
+    const nextLocale = locale === "ja" ? "zh-CN" : "ja";
+    await reactAct(async () => { await i18n.changeLanguage(nextLocale); }); await flushReact();
+    expect(container.textContent).toContain(i18n.t("auditFeedUi.exporting"));
+    await reactAct(async () => reject(new Error(auditFeedMessages.en.exportFailure))); await flushReact();
+    expect(pushToastMock).toHaveBeenLastCalledWith({ title: i18n.t("auditFeedUi.exportFailed"), body: auditFeedMessages.en.exportFailure, tone: "error" });
+    expect(exportCsvMock).toHaveBeenCalledTimes(1); expect(listAgentActionsMock).toHaveBeenCalledTimes(reads);
+  });
+
 });

@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 
-import type { ReactNode } from "react";
+import { act, type ReactNode } from "react";
+import { i18n, auditRunsMessages } from "../../i18n/audit-runs-test-resources";
+import { validateLocaleMessages } from "../../i18n/locale-validation";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -100,10 +102,11 @@ describe("AuditRuns", () => {
     listRoutineRunsMock.mockResolvedValue([routineRun()]);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     flushSync(() => root?.unmount());
     container.remove();
     vi.clearAllMocks();
+    await i18n.changeLanguage("en");
   });
 
   async function render(routineId?: string) {
@@ -151,4 +154,25 @@ describe("AuditRuns", () => {
     expect(container.textContent).toContain("Daily forecast");
     expect(container.querySelector('a[href="/issues/TES-42"]')).toBeTruthy();
   });
+  it.each(["en", "zh-CN", "es", "ja"] as const)("keeps run filter identity, focus and raw evidence across %s", async locale => {
+    expect(validateLocaleMessages(auditRunsMessages[locale], auditRunsMessages.en)).toEqual([]);
+    currentSearch = "agentId=agent-1&runStatus=succeeded&keep=raw";
+    listRunsMock.mockResolvedValue([run({ resultJson: { summary: "Runs <raw> 原文" } })]);
+    await render();
+    const filter = container.querySelector<HTMLElement>('[role="combobox"]')!; filter.focus();
+    const reads = [listRunsMock.mock.calls.length, listAgentsMock.mock.calls.length];
+    await act(async () => { await i18n.changeLanguage(locale); }); await flushReact();
+    expect(document.activeElement).toBe(filter); expect(container.querySelector('[role="combobox"]')).toBe(filter);
+    expect(container.querySelector("h2")?.textContent).toBe(i18n.t("auditRunsUi.runs"));
+    expect(container.textContent).toContain(i18n.t("auditRunsUi.status"));
+    expect(container.textContent).toContain("Runs <raw> 原文"); expect(container.textContent).toContain("Fable");
+    expect(container.querySelector('a[href="/agents/agent-1/runs/run-12345678"]')).not.toBeNull();
+    expect([listRunsMock.mock.calls.length, listAgentsMock.mock.calls.length]).toEqual(reads);
+    expect(setSearchParamsMock).not.toHaveBeenCalled();
+    const clear = [...container.querySelectorAll("button")].find(el => el.textContent === i18n.t("auditRunsUi.clear"))!;
+    await act(async () => clear.click());
+    const [update, options] = setSearchParamsMock.mock.calls[0]!;
+    expect(update(new URLSearchParams(currentSearch)).toString()).toBe("keep=raw"); expect(options).toEqual({ replace: true });
+  });
+
 });
