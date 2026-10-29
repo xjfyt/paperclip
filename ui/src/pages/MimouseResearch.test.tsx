@@ -8,6 +8,7 @@ import { MimouseResearch } from "./MimouseResearch";
 const calls = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), session: vi.fn(), breadcrumbs: vi.fn(), companyId: "company-a", search: new URLSearchParams(), setSearch: vi.fn() }));
 vi.mock("@/components/mimouse-research/ResearchRoutinePanel", () => ({ ResearchRoutinePanel: () => null }));
 vi.mock("@/api/client", () => ({ api: { get: calls.get, post: calls.post } }));
+vi.mock("@/api/research-private", () => ({ researchPrivateGet: (...args: unknown[]) => calls.get(...args) }));
 vi.mock("@/api/auth", () => ({ authApi: { getSession: calls.session } }));
 vi.mock("@/context/CompanyContext", () => ({ useCompany: () => ({ selectedCompanyId: calls.companyId }) }));
 vi.mock("@/context/BreadcrumbContext", () => ({ useBreadcrumbs: () => ({ setBreadcrumbs: calls.breadcrumbs }) }));
@@ -84,4 +85,16 @@ it("hides import and evidence when administrator access is denied", async () => 
 it("drops in-memory research drafts when switching companies", async () => {
   await mount(); await field("title", "Private company A draft"); calls.companyId = "company-b"; calls.search = new URLSearchParams(); await mount();
   expect([...host.querySelectorAll("input")].some(input => input.value === "Private company A draft")).toBe(false); expect(calls.post).not.toHaveBeenCalled();
+});
+
+it("rejects an old create before commit when only the real-session marker changes", async () => {
+  const value = { user: { id: "owner-a" }, session: { id: "paperclip:session:owner-a", userId: "owner-a", scopeKey: "a".repeat(64) } };
+  calls.session.mockResolvedValue(value); await mount(); await click(button(i18n.t("operationsUi.example")));
+  const form = host.querySelector("form")!;
+  await act(async () => {
+    client.setQueryData(["auth", "session"], { ...value, session: { ...value.session, scopeKey: "b".repeat(64) } });
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  }); await flush();
+  expect(calls.post).not.toHaveBeenCalled();
+  expect(host.querySelector("form")).not.toBe(form);
 });

@@ -12,8 +12,8 @@ afterEach(() => {
 
 describe("authApi.getSession", () => {
   const session = { session: { id: "paperclip:session:user", userId: "user" }, user: { id: "user", name: null, email: null, image: null }, sentryDsn: null };
-  it.each([false, true])("adds the opaque header after parsing the legacy JSON (nested=%s)", async nested => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(nested ? { data: session } : session, {
+  it.each(["direct", "nested", "double-nested"])("adds the opaque header after parsing the legacy JSON (%s)", async shape => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(shape === "direct" ? session : { data: shape === "nested" ? session : { data: session } }, {
       headers: { "X-Paperclip-Session-Scope": "a".repeat(64) },
     })));
     await expect(authApi.getSession()).resolves.toEqual({ ...session, session: { ...session.session, scopeKey: "a".repeat(64) } });

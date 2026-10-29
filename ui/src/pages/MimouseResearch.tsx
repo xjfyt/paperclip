@@ -1,8 +1,11 @@
+import { useAuthSessionFence } from "@/hooks/useAuthSessionFence";
+import { authSessionScopeKey } from "@/lib/auth-session-scope";
 import { ResearchRoutinePanel } from "@/components/mimouse-research/ResearchRoutinePanel";
 import { ResearchProvenance } from "@/components/mimouse-research/ResearchProvenance";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { researchCandidateSchema, researchPromotionSchema, type ResearchCandidate, type ResearchCandidateInput, type ResearchPromotionInput, type ResearchPromotionReceipt } from "@paperclipai/shared";
+import { researchPrivateGet } from "@/api/research-private";
 import { api } from "@/api/client";
 import { authApi } from "@/api/auth";
 import { queryKeys } from "@/lib/queryKeys";
@@ -15,9 +18,10 @@ import { Input } from "@/components/ui/input";
 type Page = { items: { id: string; companyId: string; title: string; product: string; sourceCount: number; evidenceHash: string; createdAt: string }[]; nextBeforeId: string | null };
 type PromotionStatus = { recorded: boolean; receipt: ResearchPromotionReceipt | null };
 const area = "min-h-24 w-full rounded-md border border-border bg-background p-3 text-sm";
-function useActive() { const ref = useRef(true); useEffect(() => { ref.current = true; return () => { ref.current = false; }; }, []); return ref; }
+function useActive() { const auth = useAuthSessionFence(), ref = useRef(true); useEffect(() => { ref.current = true; return () => { ref.current = false; }; }, []); return { get current() { return ref.current && auth.isCurrent(); } }; }
 function freshDraft() { return { requestId: crypto.randomUUID() as string, title: "", product: "", currentState: "", proposedState: "", recommendation: "", sources: "[]" }; }
 export function MimouseResearch() {
+  const auth = useAuthSessionFence();
   const { t } = useTranslation(), { selectedCompanyId } = useCompany(), { setBreadcrumbs } = useBreadcrumbs();
   const session = useQuery({ queryKey: queryKeys.auth.session, queryFn: () => authApi.getSession(), retry: false });
   useEffect(() => setBreadcrumbs([{ label: t("researchUi.pageTitle") }]), [setBreadcrumbs, t]);
@@ -25,26 +29,26 @@ export function MimouseResearch() {
   if (session.isPending) return <p>{t("common.loading")}</p>;
   if (session.isError) return <p role="alert">{t("researchUi.readError")}</p>;
   const userId = session.data?.user?.id ?? session.data?.session?.userId ?? "local-board";
-  const sessionId = session.data?.session?.id ?? "no-session";
-  return <ResearchCompany key={`${selectedCompanyId}:${userId}:${sessionId}`} companyId={selectedCompanyId} userId={userId} sessionId={sessionId} />;
+  const sessionId = authSessionScopeKey(session.data) ?? "no-session";
+  return <ResearchCompany key={JSON.stringify([selectedCompanyId, userId, sessionId, auth.key])} companyId={selectedCompanyId} userId={userId} sessionId={sessionId} />;
 }
 function ResearchCompany({ companyId, userId, sessionId }: { companyId: string; userId: string; sessionId: string }) {
   const { t } = useTranslation(), active = useActive(), client = useQueryClient(), [search, setSearch] = useSearchParams();
   const [draft, setDraft] = useState(freshDraft), [invalid, setInvalid] = useState(false), [notice, setNotice] = useState(""), [beforeId, setBeforeId] = useState<string>();
-  const selected = search.get("candidate"), root = `/companies/${companyId}/research-candidates`, key = ["mimouse-research", companyId, userId];
-  const list = useQuery({ queryKey: [...key, "list", beforeId], queryFn: () => api.get<Page>(root + (beforeId ? `?beforeId=${encodeURIComponent(beforeId)}` : "")), retry: false });
+  const selected = search.get("candidate"), root = `/companies/${companyId}/research-candidates`, key = ["mimouse-research", companyId, userId, sessionId];
+  const list = useQuery({ queryKey: [...key, "list", beforeId], queryFn: ({ signal }) => researchPrivateGet<Page>(root + (beforeId ? `?beforeId=${encodeURIComponent(beforeId)}` : ""), signal), retry: false });
   function choose(id: string | null) { setSearch(current => { const next = new URLSearchParams(current); if (id) next.set("candidate", id); else next.delete("candidate"); return next; }, { replace: true }); }
   function edit(next: typeof draft) { setDraft(next); setInvalid(false); setNotice(""); if (selected) choose(null); }
-  const create = useMutation({ mutationFn: (payload: ResearchCandidateInput) => api.post<{ item: ResearchCandidate; duplicate: boolean }>(root, payload),
-    onSuccess: result => { void client.invalidateQueries({ queryKey: key }); if (active.current) { choose(result.item.id); setNotice(result.duplicate ? "duplicate" : "created"); } },
-    onError: () => { void client.invalidateQueries({ queryKey: key }); } });
+  const create = useMutation({ mutationFn: (payload: ResearchCandidateInput) => { if (!active.current) throw new Error("Session changed"); return api.post<{ item: ResearchCandidate; duplicate: boolean }>(root, payload); },
+    onSuccess: result => { if (!active.current) return; void client.invalidateQueries({ queryKey: key }); if (active.current) { choose(result.item.id); setNotice(result.duplicate ? "duplicate" : "created"); } },
+    onError: () => { if (!active.current) return; void client.invalidateQueries({ queryKey: key }); } });
   if (list.isPending) return <p>{t("common.loading")}</p>;
   if (list.isError) return <div><p role="alert">{t("researchUi.readError")}</p><Button onClick={() => { void list.refetch(); }}>{t("operationsUi.retryRead")}</Button></div>;
   return <div className="space-y-6">
     <p className="text-sm text-muted-foreground">{t("researchUi.boundary")}</p>
-    {userId !== "local-board" && <ResearchRoutinePanel key={`${companyId}:${userId}:${sessionId}`} companyId={companyId} userId={userId} sessionId={sessionId} />}
+    {userId !== "local-board" && <ResearchRoutinePanel key={`${companyId}:${userId}:${sessionId}`} companyId={companyId} userId={userId} sessionId={sessionId} isSessionCurrent={() => active.current} />}
     <form className="space-y-3 rounded-lg border border-border p-4" onSubmit={event => {
-      event.preventDefault(); if (create.isPending) return; setInvalid(false); setNotice("");
+      event.preventDefault(); if (!active.current || create.isPending) return; setInvalid(false); setNotice("");
       try { const result = researchCandidateSchema.safeParse({ ...draft, sources: JSON.parse(draft.sources) }); if (!result.success) { setInvalid(true); return; } create.mutate(result.data); } catch { setInvalid(true); }
     }}>
       <h2 className="font-medium">{t("researchUi.createTitle")}</h2>
@@ -64,11 +68,11 @@ function ResearchCompany({ companyId, userId, sessionId }: { companyId: string; 
       {list.data.items.length ? list.data.items.map(row => <Button key={row.id} variant="outline" className="h-auto whitespace-normal" onClick={() => choose(row.id)}>{row.title} · {row.product}</Button>) : <p>{t("researchUi.empty")}</p>}
       <div className="flex gap-2">{beforeId && <Button variant="outline" onClick={() => setBeforeId(undefined)}>{t("feedbackUi.latest")}</Button>}{list.data.nextBeforeId && <Button variant="outline" onClick={() => setBeforeId(list.data.nextBeforeId!)}>{t("feedbackUi.older")}</Button>}</div>
     </section>
-    {selected && <ResearchDetail key={`${companyId}:${userId}:${selected}`} companyId={companyId} userId={userId} id={selected} />}
+    {selected && <ResearchDetail key={`${companyId}:${userId}:${selected}`} companyId={companyId} userId={userId} sessionId={sessionId} id={selected} />}
   </div>;
 }
-function ResearchDetail({ companyId, userId, id }: { companyId: string; userId: string; id: string }) {
-  const { t } = useTranslation(), query = useQuery({ queryKey: ["mimouse-research", companyId, userId, id], queryFn: () => api.get<ResearchCandidate>(`/companies/${companyId}/research-candidates/${encodeURIComponent(id)}`), retry: false });
+function ResearchDetail({ companyId, userId, sessionId, id }: { companyId: string; userId: string; sessionId: string; id: string }) {
+  const { t } = useTranslation(), query = useQuery({ queryKey: ["mimouse-research", companyId, userId, sessionId, id], queryFn: ({ signal }) => researchPrivateGet<ResearchCandidate>(`/companies/${companyId}/research-candidates/${encodeURIComponent(id)}`, signal), retry: false });
   if (query.isPending) return <p>{t("common.loading")}</p>;
   if (query.isError || query.data.companyId !== companyId || query.data.id !== id || !["manual_import", "agent_report"].includes(query.data.evidence.evidenceMode)) return <p role="alert">{t("researchUi.readError")}</p>;
   const item = query.data;
@@ -82,16 +86,16 @@ function ResearchDetail({ companyId, userId, id }: { companyId: string; userId: 
       {source.gap && <pre className="whitespace-pre-wrap break-words text-sm">{JSON.stringify({ product: source.product, gap: source.gap, suggestion: source.suggestion }, null, 2)}</pre>}
     </div>)}
     {item.evidence.redacted && <p className="text-xs">{t("researchUi.redacted")}</p>}
-    <ResearchReview key={item.evidenceHash} companyId={companyId} userId={userId} item={item} />
+    <ResearchReview key={item.evidenceHash} companyId={companyId} userId={userId} sessionId={sessionId} item={item} />
   </section>;
 }
-function ResearchReview({ companyId, userId, item }: { companyId: string; userId: string; item: ResearchCandidate }) {
-  const { t } = useTranslation(), active = useActive(), client = useQueryClient(), root = `/companies/${companyId}/research-candidates/${item.id}`, key = ["mimouse-research", companyId, userId, item.id, "promotion"];
-  const status = useQuery({ queryKey: key, queryFn: () => api.get<PromotionStatus>(root + "/promotion"), enabled: userId !== "local-board", retry: false });
+function ResearchReview({ companyId, userId, sessionId, item }: { companyId: string; userId: string; sessionId: string; item: ResearchCandidate }) {
+  const { t } = useTranslation(), active = useActive(), client = useQueryClient(), root = `/companies/${companyId}/research-candidates/${item.id}`, key = ["mimouse-research", companyId, userId, sessionId, item.id, "promotion"];
+  const status = useQuery({ queryKey: key, queryFn: ({ signal }) => researchPrivateGet<PromotionStatus>(root + "/promotion", signal), enabled: userId !== "local-board", retry: false });
   const [draft, setDraft] = useState({ title: item.evidence.title, scope: "", expectedBenefit: "", acceptanceCriteria: "", dependencyIssueIds: "" });
   const [confirmed, setConfirmed] = useState(false), [invalid, setInvalid] = useState(false), [attempt, setAttempt] = useState<ResearchPromotionInput | null>(null), [receipt, setReceipt] = useState<ResearchPromotionReceipt | null>(null);
-  const promote = useMutation({ mutationFn: (payload: ResearchPromotionInput) => api.post<ResearchPromotionReceipt>(root + "/promote", payload),
-    onSuccess: value => { void client.invalidateQueries({ queryKey: key }); if (active.current) setReceipt(value); }, onError: () => { void client.invalidateQueries({ queryKey: key }); } });
+  const promote = useMutation({ mutationFn: (payload: ResearchPromotionInput) => { if (!active.current) throw new Error("Session changed"); return api.post<ResearchPromotionReceipt>(root + "/promote", payload); },
+    onSuccess: value => { if (!active.current) return; void client.invalidateQueries({ queryKey: key }); if (active.current) setReceipt(value); }, onError: () => { if (!active.current) return; void client.invalidateQueries({ queryKey: key }); } });
   if (userId === "local-board") return <p>{t("feedbackUi.sessionRequired")}</p>;
   const recorded = receipt ?? status.data?.receipt;
   if (recorded) return <div><p role="status">{t("feedbackUi.confirmed")}</p><Link className="underline" to={`/issues/${recorded.issueId}`}>{t("feedbackUi.openTask")}</Link><p className="break-all font-mono text-xs">{recorded.requestId}</p></div>;
@@ -99,7 +103,7 @@ function ResearchReview({ companyId, userId, item }: { companyId: string; userId
   if (status.isError) return <div><p role="alert">{t("researchUi.readError")}</p><Button onClick={() => { void status.refetch(); }}>{t("operationsUi.retryRead")}</Button></div>;
   if (status.data.recorded) return <p>{t("feedbackUi.alreadyConfirmed")}</p>;
   return <form className="space-y-3 border-t border-border pt-4" onSubmit={event => {
-    event.preventDefault(); if (promote.isPending) return; if (attempt) { promote.mutate(attempt); return; } if (!confirmed) return;
+    event.preventDefault(); if (!active.current || promote.isPending) return; if (attempt) { promote.mutate(attempt); return; } if (!confirmed) return;
     const lines = (text: string) => text.split("\n").map(value => value.trim()).filter(Boolean);
     const parsed = researchPromotionSchema.safeParse({ ...draft, requestId: crypto.randomUUID(), confirm: true, expectedEvidenceHash: item.evidenceHash, acceptanceCriteria: lines(draft.acceptanceCriteria), dependencyIssueIds: lines(draft.dependencyIssueIds) });
     if (!parsed.success) { setInvalid(true); return; } setAttempt(parsed.data); promote.mutate(parsed.data);

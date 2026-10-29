@@ -1,3 +1,5 @@
+import { useAuthSessionFence } from "@/hooks/useAuthSessionFence";
+import { authSessionScopeKey } from "@/lib/auth-session-scope";
 import { MimouseFeedbackRunLog, MimouseFeedbackRunLogSource, isRunLogCandidate } from "@/components/MimouseFeedbackRunLog";
 import { MimouseFeedbackVerification } from "@/components/MimouseFeedbackVerification";
 import { MimouseFeedbackEvidence } from "@/components/MimouseFeedbackEvidence";
@@ -18,9 +20,10 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 type PromotionStatus = { recorded: boolean; receipt: FeedbackPromotionReceipt | null };
 const textAreaClass = "min-h-24 w-full rounded-md border border-border bg-background p-3 text-sm";
-function useActive() { const active = useRef(true); useLayoutEffect(() => { active.current = true; return () => { active.current = false; }; }, []); return active; }
+function useActive() { const auth = useAuthSessionFence(), active = useRef(true); useLayoutEffect(() => { active.current = true; return () => { active.current = false; }; }, []); return { get current() { return active.current && auth.isCurrent(); } }; }
 function blankImport() { return { sourceKind: "manual" as FeedbackImportInput["sourceKind"], sourceInstance: "manual-ui", externalId: crypto.randomUUID() as string, title: "", text: "", product: "", softwareVersion: "", commitSha: "", traceId: "", occurredAt: new Date().toISOString() }; }
 export function MimouseFeedback() {
+  const auth = useAuthSessionFence();
   const { t } = useTranslation(), { setBreadcrumbs } = useBreadcrumbs(), { selectedCompanyId } = useCompany();
   const session = useQuery({ queryKey: queryKeys.auth.session, queryFn: () => authApi.getSession(), retry: false });
   useEffect(() => { setBreadcrumbs([{ label: t("feedbackUi.pageTitle") }]); }, [setBreadcrumbs, t]);
@@ -28,8 +31,8 @@ export function MimouseFeedback() {
   if (session.isPending || session.isFetching) return <p>{t("common.loading")}</p>;
   if (session.isError) return <p role="alert">{t("feedbackUi.readError")}</p>;
   const userId = session.data?.user?.id ?? session.data?.session?.userId ?? "local-board";
-  const sessionId = session.data?.session?.id ?? "";
-  return <FeedbackCompany key={JSON.stringify([selectedCompanyId, userId, sessionId])} companyId={selectedCompanyId} userId={userId} sessionId={sessionId} privateSessionReady={!session.isFetching} />;
+  const sessionId = authSessionScopeKey(session.data) ?? "";
+  return <FeedbackCompany key={JSON.stringify([selectedCompanyId, userId, sessionId, auth.key])} companyId={selectedCompanyId} userId={userId} sessionId={sessionId} privateSessionReady={!session.isFetching} />;
 }
 function FeedbackCompany({ companyId, userId, sessionId, privateSessionReady }: { companyId: string; userId: string; sessionId: string; privateSessionReady: boolean }) {
   const { t } = useTranslation(), client = useQueryClient(), active = useActive();
@@ -38,7 +41,7 @@ function FeedbackCompany({ companyId, userId, sessionId, privateSessionReady }: 
   function setForm(value: ReturnType<typeof blankImport>) { importAttempt.current++; setFormDraft(value); setNotice(""); mutation.reset(); }
   const root = `/companies/${companyId}/feedback-inbox`, key = ["mimouse-feedback", companyId, userId, sessionId];
   const query = useQuery({ queryKey: [...key, "list", beforeId], gcTime: 0, staleTime: 0, queryFn: ({ signal }) => privateFeedbackGet<FeedbackInboxPage>(`${root}${beforeId ? `?beforeId=${encodeURIComponent(beforeId)}` : ""}`, signal), retry: false });
-  const mutation = useMutation({ mutationFn: ({ input }: { input: FeedbackImportInput; attempt: number }) => api.post<{ item: FeedbackInboxItem; duplicate: boolean }>(root, input),
+  const mutation = useMutation({ mutationFn: ({ input }: { input: FeedbackImportInput; attempt: number }) => { if (!active.current) throw new Error("Session changed"); return api.post<{ item: FeedbackInboxItem; duplicate: boolean }>(root, input); },
     onSuccess: (result, variables) => { if (!active.current || variables.attempt !== importAttempt.current) return; void client.invalidateQueries({ queryKey: key }); setSelectedId(result.item.id); setNotice(result.duplicate ? "duplicate" : "imported"); },
     onSettled: () => { importBusy.current = false; } });
   if (query.isPending || query.isFetching) return <p>{t("common.loading")}</p>;
@@ -49,8 +52,8 @@ function FeedbackCompany({ companyId, userId, sessionId, privateSessionReady }: 
     <p className="text-sm text-muted-foreground">{t("feedbackUi.boundary")}</p>
     <details className="rounded-lg border border-border p-4"><summary className="cursor-pointer font-medium">{t("langfuseUi.title")}</summary><div className="pt-4"><MimouseLangfusePanel companyId={companyId} onImported={() => { void client.invalidateQueries({ queryKey: key }); }} /></div></details>
     <details className="rounded-lg border border-border p-4"><summary className="cursor-pointer font-medium">{t("wecomUi.title")}</summary><div className="pt-4"><MimouseWecomPanel companyId={companyId} userId={userId} sessionId={privateSessionReady ? sessionId : ""} /></div></details>
-    <MimouseFeedbackRunLog companyId={companyId} userId={userId} sessionId={sessionId} onImported={result => { if (!active.current) return; setSelectedId(result.item.id); setNotice(result.duplicate ? "duplicate" : "imported"); void client.invalidateQueries({ queryKey: key }); }} />
-    <form className="space-y-3 rounded-lg border border-border p-4" onSubmit={event => { event.preventDefault(); if (importBusy.current) return; importBusy.current = true; setNotice(""); mutation.mutate({ input: { ...form, commitSha: form.commitSha || null, traceId: form.traceId || null }, attempt: ++importAttempt.current }); }}>
+    <MimouseFeedbackRunLog companyId={companyId} userId={userId} sessionId={sessionId} isSessionCurrent={() => active.current} onImported={result => { if (!active.current) return; setSelectedId(result.item.id); setNotice(result.duplicate ? "duplicate" : "imported"); void client.invalidateQueries({ queryKey: key }); }} />
+    <form className="space-y-3 rounded-lg border border-border p-4" onSubmit={event => { event.preventDefault(); if (!active.current || importBusy.current) return; importBusy.current = true; setNotice(""); mutation.mutate({ input: { ...form, commitSha: form.commitSha || null, traceId: form.traceId || null }, attempt: ++importAttempt.current }); }}>
       <h2 className="font-medium">{t("feedbackUi.importTitle")}</h2>
       <fieldset disabled={mutation.isPending} className="space-y-3">
         <label className="block space-y-1"><span>{t("feedbackUi.sourceKind")}</span><select className="w-full rounded-md border border-border bg-background p-2 text-sm" value={form.sourceKind} onChange={event => setForm({ ...form, sourceKind: event.target.value as FeedbackImportInput["sourceKind"] })}>{["manual", "application_log", "langfuse", "wecom_smart_bot"].map(value => <option key={value} value={value}>{t(`feedbackUi.source_${value}`)}</option>)}</select></label>
@@ -71,6 +74,7 @@ function FeedbackCompany({ companyId, userId, sessionId, privateSessionReady }: 
   </div>;
 }
 function FeedbackDetail({ companyId, userId, sessionId, id, onSelect }: { companyId: string; userId: string; sessionId: string; id: string; onSelect: (id: string) => void }) {
+  const active = useActive();
   const { t } = useTranslation(), root = `/companies/${companyId}/feedback-inbox/${id}`, key = ["mimouse-feedback", companyId, userId, sessionId, id];
   const source = useQuery({ queryKey: [...key, "item"], gcTime: 0, staleTime: 0, queryFn: ({ signal }) => privateFeedbackGet<FeedbackInboxItem>(root, signal), retry: false });
   const candidates = useQuery({ queryKey: [...key, "candidates"], gcTime: 0, staleTime: 0, queryFn: ({ signal }) => privateFeedbackGet<{ items: FeedbackInboxItem[]; hasMore: boolean; autoMerged: false }>(`${root}/candidates`, signal), retry: false });
@@ -80,7 +84,7 @@ function FeedbackDetail({ companyId, userId, sessionId, id, onSelect }: { compan
     <h2 className="font-medium">{isRunLogCandidate(source.data) ? t("feedbackRunLogUi.title") : source.data.title}</h2><p className="break-all font-mono text-xs">{source.data.id}</p>
     <p className="text-sm">{t(source.data.ingestionMode === "provider_fetch" ? "feedbackUi.providerFetched" : source.data.ingestionMode === "provider_push" ? "feedbackUi.providerPushed" : "feedbackUi.manualOnly")}</p>
     {source.data.sourceUrl && <p className="break-all text-xs">{t("feedbackUi.sourceUrl")}: {source.data.sourceUrl}</p>}
-    {isRunLogCandidate(source.data) ? <MimouseFeedbackRunLogSource companyId={companyId} userId={userId} sessionId={sessionId} item={source.data} /> : <pre className="whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-sm">{source.data.text}</pre>}
+    {isRunLogCandidate(source.data) ? <MimouseFeedbackRunLogSource companyId={companyId} userId={userId} sessionId={sessionId} item={source.data} isSessionCurrent={() => active.current} /> : <pre className="whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-sm">{source.data.text}</pre>}
     <h3 className="font-medium">{t("feedbackUi.candidates")}</h3><p className="text-xs text-muted-foreground">{t("feedbackUi.candidateBoundary")}</p>
     {candidates.isPending || candidates.isFetching ? <p>{t("common.loading")}</p> : candidates.isError ? <p role="alert">{t("feedbackUi.readError")}</p> : candidates.data.items.length ? candidates.data.items.map(item => <Button key={item.id} variant="outline" className="h-auto whitespace-normal" onClick={() => onSelect(item.id)}>{isRunLogCandidate(item) ? t("feedbackRunLogUi.title") : item.title} · {item.sourceInstance}</Button>) : <p>{t("feedbackUi.noCandidates")}</p>}
     {!candidates.isError && !candidates.isFetching && candidates.data?.hasMore && <p>{t("feedbackUi.moreCandidates")}</p>}
@@ -94,9 +98,9 @@ function FeedbackReview({ companyId, userId, sessionId, item }: { companyId: str
   const status = useQuery({ queryKey: key, gcTime: 0, staleTime: 0, queryFn: ({ signal }) => privateFeedbackGet<PromotionStatus>(`${root}/promotion`, signal), enabled: userId !== "local-board", retry: false });
   const [draft, setDraft] = useState({ title: isRunLogCandidate(item) ? t("feedbackRunLogUi.title") : item.title, reproduction: "", expectedBehavior: "", fixProposal: "", acceptanceCriteria: "" });
   const [confirmed, setConfirmed] = useState(false), [attempt, setAttempt] = useState<FeedbackPromotionInput | null>(null), [receipt, setReceipt] = useState<FeedbackPromotionReceipt | null>(null);
-  const mutation = useMutation({ mutationFn: (payload: FeedbackPromotionInput) => api.post<FeedbackPromotionReceipt>(`${root}/promote`, payload),
-    onSuccess: result => { void client.invalidateQueries({ queryKey: key }); if (active.current) setReceipt(result); },
-    onError: () => { void client.invalidateQueries({ queryKey: key }); } });
+  const mutation = useMutation({ mutationFn: (payload: FeedbackPromotionInput) => { if (!active.current) throw new Error("Session changed"); return api.post<FeedbackPromotionReceipt>(`${root}/promote`, payload); },
+    onSuccess: result => { if (!active.current) return; void client.invalidateQueries({ queryKey: key }); if (active.current) setReceipt(result); },
+    onError: () => { if (!active.current) return; void client.invalidateQueries({ queryKey: key }); } });
   useEffect(() => { if (status.isFetching || status.isError) setConfirmed(false); if (status.isError) setReceipt(null); }, [status.isFetching, status.isError]);
   if (userId === "local-board") return <p>{t("feedbackUi.sessionRequired")}</p>;
   if (status.isError) return <p role="alert">{t("feedbackUi.readError")}</p>;
@@ -105,7 +109,7 @@ function FeedbackReview({ companyId, userId, sessionId, item }: { companyId: str
   if (recorded) return <div className="space-y-2"><p role="status">{t("feedbackUi.confirmed")}</p><Link className="text-sm underline" to={`/issues/${recorded.issueId}`}>{t("feedbackUi.openTask")}</Link><p className="break-all font-mono text-xs">{recorded.requestId}</p><MimouseFeedbackVerification companyId={companyId} userId={userId} sessionId={sessionId} id={item.id} /></div>;
   if (status.data.recorded) return <div className="space-y-2"><p>{t("feedbackUi.alreadyConfirmed")}</p><MimouseFeedbackVerification companyId={companyId} userId={userId} sessionId={sessionId} id={item.id} /></div>;
   return <form className="space-y-3 border-t border-border pt-4" onSubmit={event => {
-    event.preventDefault(); if (mutation.isPending) return;
+    event.preventDefault(); if (!active.current || mutation.isPending) return;
     if (attempt) { mutation.mutate(attempt); return; }
     if (!confirmed) return;
     const payload: FeedbackPromotionInput = { ...draft, requestId: crypto.randomUUID(), confirm: true, acceptanceCriteria: draft.acceptanceCriteria.split("\n").map(value => value.trim()).filter(Boolean) };

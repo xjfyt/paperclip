@@ -189,3 +189,25 @@ it("does not let an old manual import overwrite newer input or duplicate same-ti
   expect(host.textContent).not.toContain(i18n.t("feedbackUi.imported"));
   expect(host.querySelectorAll("form")).toHaveLength(1);
 });
+
+it("uses an opaque marker despite an unchanged public ID and rejects an old form before commit", async () => {
+  const session = (scopeKey: string) => ({ user: { id: "owner-a" }, session: { id: "paperclip:session:owner-a", userId: "owner-a", scopeKey } });
+  calls.session.mockResolvedValue(session("a".repeat(64)));
+  await mount(); const form = host.querySelector("form")!;
+  await setField(form, "title", "OLD_PRIVATE_DRAFT");
+  await act(async () => {
+    client.setQueryData(queryKeys.auth.session, session("b".repeat(64)));
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  }); await flush();
+  expect(calls.post).not.toHaveBeenCalled();
+  expect(host.querySelector('[data-testid="wecom-panel"]')?.getAttribute("data-session")).toBe("b".repeat(64));
+  expect([...host.querySelectorAll("input")].some(input => input.value === "OLD_PRIVATE_DRAFT")).toBe(false);
+});
+it("does not retire private drafts when a normal cache refresh keeps the scope marker", async () => {
+  const value = { user: { id: "owner-a" }, session: { id: "paperclip:session:owner-a", userId: "owner-a", scopeKey: "a".repeat(64) } };
+  calls.session.mockResolvedValue(value); await mount(); const form = host.querySelector("form")!;
+  await setField(form, "title", "KEEP_DRAFT");
+  await act(async () => { client.setQueryData(queryKeys.auth.session, { ...value, user: { ...value.user, name: "Updated profile" } }); });
+  expect(host.querySelector("form")).toBe(form);
+  expect([...host.querySelectorAll("input")].some(input => input.value === "KEEP_DRAFT")).toBe(true);
+});

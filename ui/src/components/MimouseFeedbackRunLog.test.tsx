@@ -1,9 +1,13 @@
 // @vitest-environment jsdom
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useAuthSessionFence } from "@/hooks/useAuthSessionFence";
+import { queryKeys } from "@/lib/queryKeys";
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { i18n, runLogMessages } from "@/i18n/feedback-run-log-test-resources";
 import { MimouseFeedbackRunLog, MimouseFeedbackRunLogSource } from "./MimouseFeedbackRunLog";
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const calls = vi.hoisted(() => ({ post: vi.fn(), get: vi.fn(), imported: vi.fn() }));
 vi.mock("@/api/client", () => ({ api: { post: calls.post } }));
 vi.mock("@/api/private-feedback", () => ({ privateFeedbackGet: calls.get }));
@@ -59,4 +63,22 @@ it("checks source access explicitly and fences old identity receipts", async () 
   await act(async () => root.render(<MimouseFeedbackRunLogSource companyId="company-a" userId="two" sessionId="two" item={item} />)); expect(signal.aborted).toBe(true);
   await act(async () => resolve({ reference })); await flush(); expect(host.textContent).not.toContain(i18n.t("feedbackRunLogUi.sourceVerified"));
   calls.get.mockRejectedValue(new Error("PRIVATE_ORIGINAL_ERROR")); await click(button("verifySource")); expect(host.textContent).toContain(i18n.t("feedbackRunLogUi.sourceUnavailable")); expect(host.textContent).not.toContain("PRIVATE_ORIGINAL_ERROR");
+});
+
+it.each(["click", "late receipt"])("uses the real auth-cache fence before React commits a marker change (%s)", async mode => {
+  const client = new QueryClient();
+  const session = (scopeKey: string) => ({ user: { id: "user-a" }, session: { id: "paperclip:session:user-a", userId: "user-a", scopeKey } });
+  client.setQueryData(queryKeys.auth.session, session("a".repeat(64)));
+  function Host() { const fence = useAuthSessionFence(); return <MimouseFeedbackRunLog companyId="company-a" userId="user-a" sessionId="paperclip:session:user-a" isSessionCurrent={fence.isCurrent} onImported={calls.imported} />; }
+  await act(async () => root.render(<QueryClientProvider client={client}><Host /></QueryClientProvider>)); await select(); await confirm();
+  const submit = button("import");
+  let resolve!: (value: unknown) => void;
+  if (mode === "late receipt") { calls.post.mockReturnValue(new Promise(done => { resolve = done; })); await click(button("import")); }
+  const before = calls.post.mock.calls.length;
+  await act(async () => {
+    client.setQueryData(queryKeys.auth.session, session("b".repeat(64)));
+    if (mode === "click") submit.click(); else { resolve(receipt); await Promise.resolve(); }
+  }); await flush();
+  expect(calls.post).toHaveBeenCalledTimes(before); expect(calls.imported).not.toHaveBeenCalled();
+  await act(async () => root.render(null)); client.clear();
 });

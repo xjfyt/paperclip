@@ -181,7 +181,8 @@ export const authApi = {
       if (res.status === 401) return null;
       throw extractAuthError(payload as AuthErrorBody, res.status);
     }
-    const session = toSession(payload);
+    const session = toSession(payload) ?? (payload && typeof payload === "object"
+      ? toSession((payload as Record<string, unknown>).data) : null);
     const scopeKey = res.headers.get("X-Paperclip-Session-Scope");
     return session && scopeKey && /^[a-f0-9]{64}$/.test(scopeKey)
       ? { ...session, session: { ...session.session, scopeKey } }

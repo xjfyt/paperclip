@@ -1,3 +1,4 @@
+import { authSessionScopeKey } from "@/lib/auth-session-scope";
 import { MimouseCodingProjects } from "@/components/MimouseCodingProjects";
 import type { MimouseCodingListPagination, MimouseCodingProjectSummary } from "@paperclipai/shared/mimouse-coding-summary";
 import { MimouseCodingGoal } from "@/components/MimouseCodingGoal";
@@ -31,7 +32,7 @@ export function MimouseCoding() {
   if (session.isPending || session.isFetching) return <p>{t("common.loading")}</p>;
   if (session.isError) return <p role="alert">{t("coding.error")}</p>;
   const userId = session.data?.user?.id ?? session.data?.session?.userId ?? "local-board";
-  const sessionId = session.data?.session?.id ?? "local-board";
+  const sessionId = authSessionScopeKey(session.data) ?? "local-board";
   const authEpoch = session.dataUpdatedAt;
   return <CodingCompany companyId={selectedCompanyId} userId={userId} sessionId={sessionId} authEpoch={authEpoch} key={`${selectedCompanyId}:${userId}:${sessionId}:${authEpoch}:${pageSearch.toString()}`} />;
 }

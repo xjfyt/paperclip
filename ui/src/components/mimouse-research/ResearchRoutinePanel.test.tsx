@@ -1,10 +1,13 @@
 // @vitest-environment jsdom
+import { useAuthSessionFence } from "@/hooks/useAuthSessionFence";
+import { queryKeys } from "@/lib/queryKeys";
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { i18n } from "@/i18n";
 import { ResearchRoutinePanel } from "./ResearchRoutinePanel";
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const calls = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn(), list: vi.fn(), create: vi.fn() }));
 vi.mock("@/api/client", () => ({ api: { put: calls.put } }));
 vi.mock("@/api/research-private", () => ({ researchPrivateGet: calls.get }));
@@ -77,4 +80,17 @@ it.each(["company", "user", "session"])("does not bind a late create after a %s 
   await act(async () => finish({ id: "old-routine", status: "paused" })); await flush();
   expect(calls.put).not.toHaveBeenCalled();
   expect((host.querySelector('input:not([type="checkbox"])') as HTMLInputElement).value).toBe("New draft");
+});
+
+it("does not bind a late create under another real session with the same public ID", async () => {
+  const session = (scopeKey: string) => ({ user: { id: "owner" }, session: { id: "paperclip:session:owner", userId: "owner", scopeKey } });
+  client.setQueryDefaults(queryKeys.auth.session, { gcTime: Infinity });
+  client.setQueryData(queryKeys.auth.session, session("a".repeat(64)));
+  function Host() { const auth = useAuthSessionFence(); return <ResearchRoutinePanel companyId="company" userId="owner" sessionId="paperclip:session:owner" isSessionCurrent={auth.isCurrent} />; }
+  let finish!: (value: { id: string; status: string }) => void;
+  calls.create.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+  await act(async () => root.render(<QueryClientProvider client={client}><Host /></QueryClientProvider>)); await flush();
+  await setProduct("Old private draft"); await click("Create paused research routine");
+  await act(async () => { client.setQueryData(queryKeys.auth.session, session("b".repeat(64))); finish({ id: "old-routine", status: "paused" }); }); await flush();
+  expect(calls.put).not.toHaveBeenCalled();
 });

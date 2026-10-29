@@ -1,3 +1,4 @@
+import { authSessionScopeKey } from "@/lib/auth-session-scope";
 import { MimouseEvaluationFeedback } from "./MimouseEvaluationFeedback";
 import { MimouseEvaluationRestore } from "./MimouseEvaluationRestore";
 import { useEffect, useRef, useState } from "react";
@@ -23,7 +24,7 @@ export function MimouseEvaluation() {
   if (session.isPending || session.isFetching) return <p>{t("common.loading")}</p>;
   if (session.isError) return <p role="alert">{t("evaluationUi.readError")}</p>;
   const userId = session.data?.user?.id ?? session.data?.session?.userId ?? "local-board";
-  const sessionId = session.data?.session?.id ?? "";
+  const sessionId = authSessionScopeKey(session.data) ?? "";
   return <EvaluationCompany key={JSON.stringify([selectedCompanyId, userId, sessionId])} companyId={selectedCompanyId} userId={userId} sessionId={sessionId} />;
 }
 function EvaluationCompany({ companyId, userId, sessionId }: { companyId: string; userId: string; sessionId: string }) {

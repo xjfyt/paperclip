@@ -8,13 +8,13 @@ import { useTranslation } from "@/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-type Scope = { companyId: string; userId: string; sessionId: string };
+type Scope = { companyId: string; userId: string; sessionId: string; isSessionCurrent?: () => boolean };
 type Props = Scope & { onImported: (receipt: FeedbackRunLogImportReceipt) => void };
 export function isRunLogCandidate(item: FeedbackInboxItem) { return item.sourceKind === "application_log" && item.sourceInstance === RUN_LOG_SOURCE_INSTANCE; }
-function useAttemptScope() {
+function useAttemptScope(isSessionCurrent = () => true) {
   const alive = useRef(false), attempt = useRef(0), controller = useRef(new AbortController());
   useLayoutEffect(() => { alive.current = true; if (controller.current.signal.aborted) controller.current = new AbortController(); return () => { alive.current = false; attempt.current++; controller.current.abort(); }; }, []);
-  return { attempt, controller, current: (value: number) => alive.current && attempt.current === value };
+  return { attempt, controller, current: (value: number) => alive.current && isSessionCurrent() && attempt.current === value };
 }
 export function MimouseFeedbackRunLog(props: Props) {
   return <Launcher key={JSON.stringify([props.companyId, props.userId, props.sessionId])} {...props} />;
@@ -36,8 +36,8 @@ function Reference({ reference }: { reference: FeedbackRunLogReference }) {
     <p>{t("feedbackRunLogUi.unknownVersion")}</p><p>{t("feedbackRunLogUi.notReproduced")}</p>
   </div>;
 }
-function ImportReference({ companyId, onImported, onClose }: Props & { onClose: () => void }) {
-  const { t } = useTranslation(), scope = useAttemptScope(), busy = useRef(false);
+function ImportReference({ companyId, onImported, onClose, isSessionCurrent }: Props & { onClose: () => void }) {
+  const { t } = useTranslation(), scope = useAttemptScope(isSessionCurrent), busy = useRef(false);
   const [runId, setRunId] = useState(""), [eventSeq, setEventSeq] = useState("");
   const [preview, setPreview] = useState<FeedbackRunLogPreview | null>(null), [confirmed, setConfirmed] = useState(false);
   const [pending, setPending] = useState(false), [error, setError] = useState<"previewError" | "importError" | null>(null);
@@ -48,7 +48,7 @@ function ImportReference({ companyId, onImported, onClose }: Props & { onClose: 
     if (kind === "run") setRunId(value); else setEventSeq(value);
   }
   async function readPreview() {
-    if (busy.current) return;
+    if (!scope.current(scope.attempt.current) || busy.current) return;
     const selection = feedbackRunLogSelectionSchema.safeParse({ runId, eventSeq: Number(eventSeq) });
     if (!selection.success) { setError("previewError"); return; }
     const attempt = ++scope.attempt.current; busy.current = true; setPending(true); setPreview(null); setConfirmed(false); setFrozen(null); setError(null);
@@ -59,7 +59,7 @@ function ImportReference({ companyId, onImported, onClose }: Props & { onClose: 
     finally { if (scope.current(attempt)) { busy.current = false; setPending(false); } }
   }
   async function importReference() {
-    if (busy.current || (!frozen && (!preview || !confirmed))) return;
+    if (!scope.current(scope.attempt.current) || busy.current || (!frozen && (!preview || !confirmed))) return;
     const payload: FeedbackRunLogImport = frozen ?? { runId: preview!.reference.runId, eventSeq: preview!.reference.eventSeq, previewDigest: preview!.previewDigest, confirm: true };
     const attempt = ++scope.attempt.current; busy.current = true; setPending(true); setFrozen(payload); setError(null);
     try {
@@ -82,14 +82,14 @@ function ImportReference({ companyId, onImported, onClose }: Props & { onClose: 
 export function MimouseFeedbackRunLogSource(props: Scope & { item: FeedbackInboxItem }) {
   return <Source key={JSON.stringify([props.companyId, props.userId, props.sessionId, props.item.id])} {...props} />;
 }
-function Source({ companyId, userId, sessionId, item }: Scope & { item: FeedbackInboxItem }) {
-  const { t } = useTranslation(), scope = useAttemptScope(), busy = useRef(false);
+function Source({ companyId, userId, sessionId, item, isSessionCurrent }: Scope & { item: FeedbackInboxItem }) {
+  const { t } = useTranslation(), scope = useAttemptScope(isSessionCurrent), busy = useRef(false);
   const [status, setStatus] = useState<"sourceVerified" | "sourceUnavailable" | null>(null), [pending, setPending] = useState(false);
   let reference: FeedbackRunLogReference | null = null;
   try { reference = feedbackRunLogReferenceSchema.parse(JSON.parse(item.text)); } catch { /* Unsupported internal snapshots are not interpreted as user prose. */ }
   return <div className="space-y-3"><p>{t("feedbackRunLogUi.boundary")}</p>{reference && <Reference reference={reference} />}
     <Button type="button" variant="outline" disabled={pending || userId === "local-board" || !sessionId} onClick={async () => {
-      if (busy.current) return;
+      if (!scope.current(scope.attempt.current) || busy.current) return;
       const attempt = ++scope.attempt.current; busy.current = true; setPending(true); setStatus(null);
       try { await privateFeedbackGet(`/companies/${companyId}/feedback-inbox/${item.id}/run-log-source`, scope.controller.current.signal); if (scope.current(attempt)) setStatus("sourceVerified"); }
       catch { if (scope.current(attempt)) setStatus("sourceUnavailable"); }

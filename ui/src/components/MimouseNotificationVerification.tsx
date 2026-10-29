@@ -1,3 +1,4 @@
+import { authSessionScopeKey } from "@/lib/auth-session-scope";
 import { useEffect, useRef, useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { appendNotificationEvidenceSchema, notificationEvidenceReceiptInputSchema, notificationEvidenceCategories,
@@ -29,7 +30,7 @@ export function MimouseNotificationVerification({ companyId, endpointId, onClose
   const health = useQuery({ queryKey: queryKeys.health, queryFn: healthApi.get, enabled: session.isSuccess && !userId, retry: false });
   if (session.isError) return <p role="alert">{t("notificationVerification.readError")}</p>;
   if (session.isPending || session.isFetching || (!userId && health.isPending)) return <p role="status">{t("common.loading")}</p>;
-  const identity = userId ? `${userId}:${session.data?.session?.id ?? "session"}` : health.isSuccess && health.data.deploymentMode === "local_trusted" ? "local-board" : null;
+  const identity = userId ? `${userId}:${authSessionScopeKey(session.data) ?? "session"}` : health.isSuccess && health.data.deploymentMode === "local_trusted" ? "local-board" : null;
   if (!identity) return <p role="alert">{t("notificationVerification.readError")}</p>;
   return <Verification key={`${companyId}:${endpointId}:${identity}:${session.dataUpdatedAt}`} companyId={companyId} endpointId={endpointId} identity={identity} authEpoch={session.dataUpdatedAt} onClose={onClose} />;
 }

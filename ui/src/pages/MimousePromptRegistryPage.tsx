@@ -1,3 +1,4 @@
+import { authSessionScopeKey } from "@/lib/auth-session-scope";
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { authApi } from "@/api/auth";
@@ -14,7 +15,7 @@ export function MimousePromptRegistryPage() {
   useEffect(() => { setBreadcrumbs([{ label: t("promptRegistryUi.title") }]); }, [setBreadcrumbs, t]);
   if (!selectedCompanyId) return <p>{t("feedbackUi.chooseCompany")}</p>;
   if (session.isPending) return <p role="status">{t("common.loading")}</p>;
-  const userId = session.data?.user?.id, sessionId = session.data?.session?.id;
+  const userId = session.data?.user?.id, sessionId = authSessionScopeKey(session.data);
   if (session.isError || !userId || !sessionId) return <p role="alert">{t("promptRegistryUi.denied")}</p>;
   return <>
     {session.isFetching && <p role="status">{t("common.loading")}</p>}

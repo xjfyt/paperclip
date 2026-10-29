@@ -1,3 +1,4 @@
+import { useAuthSessionFence } from "./useAuthSessionFence";
 import { t, useTranslation } from "@/i18n";
 import { useOptionalCompany } from "@/context/CompanyContext";
 import { useCommittedResourceScope } from "./useCommittedResourceScope";
@@ -23,9 +24,11 @@ export function useDocumentAnnotationMutations(options: MutationOptions) {
   useTranslation();
   const queryClient = useQueryClient();
   const company = useOptionalCompany();
+  const auth = useAuthSessionFence();
   const [error, setError] = useState<{ scope: string; message: string; isCurrent: () => boolean } | null>(null);
-  const scope = JSON.stringify([company?.selectedCompanyId, options.target, options.baseRevisionId, options.pendingAnchor?.selector]);
-  const isCurrent = useCommittedResourceScope(scope);
+  const scope = JSON.stringify([auth.key, company?.selectedCompanyId, options.target, options.baseRevisionId, options.pendingAnchor?.selector]);
+  const isResourceCurrent = useCommittedResourceScope(scope);
+  const isCurrent = () => isResourceCurrent() && auth.isCurrent();
   const { data: session } = useQuery({ queryKey: queryKeys.auth.session, queryFn: () => authApi.getSession(), staleTime: 5 * 60_000 });
   const currentUser = {
     id: session?.user?.id ?? null,
@@ -40,18 +43,19 @@ export function useDocumentAnnotationMutations(options: MutationOptions) {
   // Capture before mutate: React Query may replace observer options while an
   // async onMutate is awaiting cancellation. The request and cache must retain
   // the clicked target even when a different document commits meanwhile.
-  const snapshot = () => ({ options, queryKey, isCurrent, scope, user: currentUser });
+  const snapshot = () => ({ options, queryKey, isCurrent, isAuthCurrent: auth.isCurrent, scope, user: currentUser });
   type Snapshot = ReturnType<typeof snapshot>;
   const clearError = (source: Snapshot) => { if (source.isCurrent()) setError(null); };
   const fail = (source: Snapshot, error: unknown, fallback: string) => {
     if (source.isCurrent()) setError({ scope: source.scope, message: messageFor(error, t(fallback)), isCurrent: source.isCurrent });
   };
-  const invalidate = (source: Snapshot) => queryClient.invalidateQueries({
+  const invalidate = (source: Snapshot) => source.isAuthCurrent() ? queryClient.invalidateQueries({
     predicate: query => source.queryKey.slice(0, 4).every((part, index) => query.queryKey[index] === part),
-  });
+  }) : Promise.resolve();
 
   const createThread = useMutation({
     mutationFn: async ({ body, source }: { body: string; source: Snapshot }) => {
+      if (!source.isAuthCurrent()) throw new Error("Session changed");
       const captured = source.options;
       if (!captured.pendingAnchor) throw new Error("No selection to anchor to.");
       if (!captured.baseRevisionId) throw new Error("Document has no revision yet.");
@@ -64,6 +68,7 @@ export function useDocumentAnnotationMutations(options: MutationOptions) {
       if (!source.options.pendingAnchor || !source.options.baseRevisionId) return undefined;
       clearError(source);
       await queryClient.cancelQueries({ queryKey: source.queryKey });
+      if (!source.isAuthCurrent()) return undefined;
       const previous = queryClient.getQueryData<DocumentAnnotationThreadWithComments[]>(source.queryKey);
       const optimistic = buildOptimisticThread(body, source.options, source.user);
       queryClient.setQueryData<DocumentAnnotationThreadWithComments[]>(source.queryKey, current => [...(current ?? []), optimistic]);
@@ -71,10 +76,11 @@ export function useDocumentAnnotationMutations(options: MutationOptions) {
       return { previous, optimisticId: optimistic.id };
     },
     onError: (error, { source }, context) => {
-      if (context) queryClient.setQueryData(source.queryKey, context.previous ?? []);
+      if (context && source.isAuthCurrent()) queryClient.setQueryData(source.queryKey, context.previous ?? []);
       fail(source, error, "annotationUi.createFailed");
     },
     onSuccess: (thread, { source, body }, context) => {
+      if (!source.isAuthCurrent()) return;
       queryClient.setQueryData<DocumentAnnotationThreadWithComments[]>(source.queryKey, current =>
         (current ?? []).map(entry => entry.id === context?.optimisticId ? thread : entry));
       if (!source.isCurrent()) return;
@@ -83,9 +89,10 @@ export function useDocumentAnnotationMutations(options: MutationOptions) {
     onSettled: (_data, _error, { source }) => invalidate(source),
   });
   const addReply = useMutation({
-    mutationFn: ({ threadId, body, source }: { threadId: string; body: string; source: Snapshot }) => documentAnnotationsApi.addCommentForTarget(source.options.target, threadId, { body }),
+    mutationFn: ({ threadId, body, source }: { threadId: string; body: string; source: Snapshot }) => { if (!source.isAuthCurrent()) throw new Error("Session changed"); return documentAnnotationsApi.addCommentForTarget(source.options.target, threadId, { body }); },
     onMutate: async ({ threadId, body, source }) => {
       clearError(source); await queryClient.cancelQueries({ queryKey: source.queryKey });
+      if (!source.isAuthCurrent()) return undefined;
       const previous = queryClient.getQueryData<DocumentAnnotationThreadWithComments[]>(source.queryKey);
       const optimistic = buildOptimisticComment(body, threadId, source.options.target, source.user.id);
       queryClient.setQueryData<DocumentAnnotationThreadWithComments[]>(source.queryKey, current => (current ?? []).map(thread =>
@@ -93,7 +100,7 @@ export function useDocumentAnnotationMutations(options: MutationOptions) {
       return { previous };
     },
     onError: (error, { source }, context) => {
-      if (context) queryClient.setQueryData(source.queryKey, context.previous ?? []);
+      if (context && source.isAuthCurrent()) queryClient.setQueryData(source.queryKey, context.previous ?? []);
       fail(source, error, "annotationUi.replyFailed");
     },
     onSuccess: (_comment, { source, threadId }) => {
@@ -103,24 +110,25 @@ export function useDocumentAnnotationMutations(options: MutationOptions) {
     onSettled: (_data, _error, { source }) => invalidate(source),
   });
   const updateStatus = useMutation({
-    mutationFn: ({ threadId, status, source }: { threadId: string; status: DocumentAnnotationThreadStatus; source: Snapshot }) => documentAnnotationsApi.updateStatusForTarget(source.options.target, threadId, status),
+    mutationFn: ({ threadId, status, source }: { threadId: string; status: DocumentAnnotationThreadStatus; source: Snapshot }) => { if (!source.isAuthCurrent()) throw new Error("Session changed"); return documentAnnotationsApi.updateStatusForTarget(source.options.target, threadId, status); },
     onMutate: async ({ threadId, status, source }) => {
       clearError(source); await queryClient.cancelQueries({ queryKey: source.queryKey });
+      if (!source.isAuthCurrent()) return undefined;
       const previous = queryClient.getQueryData<DocumentAnnotationThreadWithComments[]>(source.queryKey);
       queryClient.setQueryData<DocumentAnnotationThreadWithComments[]>(source.queryKey, current => (current ?? []).map(thread => thread.id === threadId ? { ...thread, status } : thread));
       return { previous };
     },
     onError: (error, { source }, context) => {
-      if (context) queryClient.setQueryData(source.queryKey, context.previous ?? []);
+      if (context && source.isAuthCurrent()) queryClient.setQueryData(source.queryKey, context.previous ?? []);
       fail(source, error, "annotationUi.statusFailed");
     },
     onSuccess: (_data, { source }) => clearError(source),
     onSettled: (_data, _error, { source }) => invalidate(source),
   });
   return {
-    createThread: { ...createThread, isPending: createThread.isPending && createThread.variables?.source.scope === scope && createThread.variables.source.isCurrent(), mutate: (body: string) => createThread.mutate({ body, source: snapshot() }) },
-    addReply: { ...addReply, isPending: addReply.isPending && addReply.variables?.source.scope === scope && addReply.variables.source.isCurrent(), mutate: (variables: { threadId: string; body: string }) => addReply.mutate({ ...variables, source: snapshot() }) },
-    updateStatus: { ...updateStatus, isPending: updateStatus.isPending && updateStatus.variables?.source.scope === scope && updateStatus.variables.source.isCurrent(), mutate: (variables: { threadId: string; status: DocumentAnnotationThreadStatus }) => updateStatus.mutate({ ...variables, source: snapshot() }) },
+    createThread: { ...createThread, isPending: createThread.isPending && createThread.variables?.source.scope === scope && createThread.variables.source.isCurrent(), mutate: (body: string) => { if (auth.isCurrent()) createThread.mutate({ body, source: snapshot() }); } },
+    addReply: { ...addReply, isPending: addReply.isPending && addReply.variables?.source.scope === scope && addReply.variables.source.isCurrent(), mutate: (variables: { threadId: string; body: string }) => { if (auth.isCurrent()) addReply.mutate({ ...variables, source: snapshot() }); } },
+    updateStatus: { ...updateStatus, isPending: updateStatus.isPending && updateStatus.variables?.source.scope === scope && updateStatus.variables.source.isCurrent(), mutate: (variables: { threadId: string; status: DocumentAnnotationThreadStatus }) => { if (auth.isCurrent()) updateStatus.mutate({ ...variables, source: snapshot() }); } },
     mutationError: error?.scope === scope && error.isCurrent() ? error.message : null, currentUser,
   };
 }

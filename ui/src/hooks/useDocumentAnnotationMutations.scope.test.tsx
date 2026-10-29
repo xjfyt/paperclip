@@ -64,3 +64,21 @@ it("ignores a previous target's late mutation error", async () => {
     expect(host.textContent).toBe("no error");
   } finally { await act(async () => root.unmount()); client.clear(); update.mockRestore(); }
 });
+
+it("never dispatches a queued annotation under a replacement real session with the same public ID", async () => {
+  const root = createRoot(document.createElement("div")), client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } });
+  const session = (scopeKey: string) => ({ user: { id: "owner" }, session: { id: "paperclip:session:owner", userId: "owner", scopeKey } });
+  client.setQueryData(queryKeys.auth.session, session("a".repeat(64)));
+  let current!: ReturnType<typeof useDocumentAnnotationMutations>, resume!: () => void;
+  const cancel = vi.spyOn(client, "cancelQueries").mockReturnValueOnce(new Promise<void>(resolve => { resume = resolve; }));
+  const create = vi.spyOn(documentAnnotationsApi, "createForTarget").mockResolvedValue({ id: "old" } as DocumentAnnotationThreadWithComments);
+  const callback = vi.fn();
+  function Host() { current = useDocumentAnnotationMutations({ target: first, baseRevisionId: "revision", baseRevisionNumber: 1, pendingAnchor: anchor, onFocusThread: callback, onThreadCreated: callback }); return null; }
+  try {
+    await act(async () => root.render(<QueryClientProvider client={client}><Host /></QueryClientProvider>));
+    await act(async () => current.createThread.mutate("private old body"));
+    await act(async () => { client.setQueryData(queryKeys.auth.session, session("b".repeat(64))); resume(); await new Promise(resolve => setTimeout(resolve, 10)); });
+    expect(create).not.toHaveBeenCalled(); expect(callback).not.toHaveBeenCalled();
+    expect(client.getQueryData(queryKeys.issues.documentAnnotations(first.issueId, first.documentKey, "all"))).toBeUndefined();
+  } finally { await act(async () => root.unmount()); client.clear(); cancel.mockRestore(); create.mockRestore(); }
+});

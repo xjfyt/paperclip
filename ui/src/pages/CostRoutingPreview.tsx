@@ -1,3 +1,4 @@
+import { authSessionScopeKey } from "@/lib/auth-session-scope";
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { authApi } from "@/api/auth";
@@ -20,11 +21,11 @@ export function CostRoutingPreview() {
   if (!selectedCompanyId) return <p>{t("costRoutingPreview.chooseCompany")}</p>;
   if (session.isError) return <p role="alert">{t("costRoutingPreview.error")}</p>;
   if (!session.isSuccess || session.isFetching) return <p role="status">{t("costRoutingPreview.loading")}</p>;
-  const identity = userId ? `${userId}:${session.data?.session?.id ?? "session"}`
+  const identity = userId ? `${userId}:${authSessionScopeKey(session.data) ?? "session"}`
     : health.isSuccess && !health.isFetching && health.data.deploymentMode === "local_trusted" ? "local-board" : null;
   if (!identity) return <p role="alert">{t("costRoutingPreview.error")}</p>;
   return <div className="space-y-6"><CompanyPolicy key={`${selectedCompanyId}:${identity}`} companyId={selectedCompanyId} identity={identity} />
-    {userId && session.data?.session?.id && <RuntimeCostRouting companyId={selectedCompanyId} companyPrefix={selectedCompany?.id === selectedCompanyId ? selectedCompany.issuePrefix : null} userId={userId} sessionId={session.data.session.id} authEpoch={session.dataUpdatedAt} />}
+    {userId && authSessionScopeKey(session.data) && <RuntimeCostRouting companyId={selectedCompanyId} companyPrefix={selectedCompany?.id === selectedCompanyId ? selectedCompany.issuePrefix : null} userId={userId} sessionId={authSessionScopeKey(session.data)!} authEpoch={session.dataUpdatedAt} />}
   </div>;
 }
 function CompanyPolicy({ companyId, identity }: { companyId: string; identity: string }) {

@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import { queryKeys } from "@/lib/queryKeys";
+import { useAuthSessionFence } from "./useAuthSessionFence";
 import { useRunRetryBoundary } from "./useRunRetryBoundary";
 import { useDecisionActionBoundary } from "./useDecisionActionBoundary";
 vi.mock("@/lib/router", () => ({ useLocation: () => ({ key: "route", pathname: "/same", search: "", hash: "" }) }));
@@ -11,7 +12,8 @@ const session = (marker?: string) => ({ user: { id: "owner" }, session: { id: "p
 const target = { companyId: "company", runId: "run" };
 function useRetry() { const boundary = useRunRetryBoundary("company"); return { begin: () => boundary.begin(target), isCurrent: boundary.isCurrent }; }
 function useDecision() { const boundary = useDecisionActionBoundary("company", "target"); return { begin: () => boundary.begin(target), isCurrent: boundary.isCurrent }; }
-describe.each([["retry", useRetry], ["decision", useDecision]] as const)("%s auth cache fence", (_name, useBoundary) => {
+function usePrivate() { const fence = useAuthSessionFence(); return { begin: () => fence.isCurrent() ? fence.isCurrent : null, isCurrent: (receipt: (() => boolean) | undefined) => Boolean(receipt?.()) }; }
+describe.each([["retry", useRetry], ["decision", useDecision], ["private", usePrivate]] as const)("%s auth cache fence", (_name, useBoundary) => {
   it.each(["marker", "clear", "remove"])("retires old callbacks synchronously for %s even before commit", async change => {
     const client = new QueryClient(), root = createRoot(document.createElement("div"));
     let current!: ReturnType<typeof useBoundary>;

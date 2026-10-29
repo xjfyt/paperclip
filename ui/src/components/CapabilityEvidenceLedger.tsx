@@ -1,3 +1,4 @@
+import { authSessionScopeKey } from "@/lib/auth-session-scope";
 import { useEffect, useState } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { evaluateCapabilityEvidence, type AppendCapabilityEvidence } from "@paperclipai/shared/capability-evidence";
@@ -17,7 +18,7 @@ export function CapabilityEvidenceLedger({ companyId, adapterType }: { companyId
   // A null authenticated session is not a local-board identity. Gate all reads
   // until identity settles; session revalidation unmounts pending confirmation.
   if (!session.isSuccess || session.isFetching) return <p role="status">{t("capabilityEvidence.loading")}</p>;
-  const identity = userId ? `${userId}:${session.data?.session?.id ?? "session"}`
+  const identity = userId ? `${userId}:${authSessionScopeKey(session.data) ?? "session"}`
     : health.isSuccess && health.data.deploymentMode === "local_trusted" ? "local-board" : null;
   if (!identity) return <p role="alert">{t("capabilityEvidence.loadError")}</p>;
   return <Ledger key={`${companyId}:${adapterType}:${identity}`} companyId={companyId} adapterType={adapterType} identity={identity} />;
