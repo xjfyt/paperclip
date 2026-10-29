@@ -2,7 +2,7 @@
 
 ## 2026-10-29 重建候选：当前证据与未完成检查
 
-记录截至 **2026-10-29 06:29 UTC**。本次从远端 `mimouse` 的 `e2bab5dcec32b09fa5aba852774a1039b12c9997` 重建，当前核对源码为 `358bd7a8cee36ec0999d305c50b2d3992dc5b990`。前一环境的未推送 `c5af04fa690622ad5e51c230b24691c8edf25787` 源码/日志没有找回；本批是逐片重新实现与验证，**不是找回旧工作树**。旧852/914项定向结果以及下方10月27日的类型、API、全UI和浏览器记录均为历史，不证明本批通过。
+记录截至 **2026-10-29 07:03 UTC**。本次从远端 `mimouse` 的 `e2bab5dcec32b09fa5aba852774a1039b12c9997` 重建，当前核对源码为 `0d1105e6069265a45431ef562861afa7e57ebedf`。前一环境的未推送 `c5af04fa690622ad5e51c230b24691c8edf25787` 源码/日志没有找回；本批是逐片重新实现与验证，**不是找回旧工作树**。旧环境852/914等历史数字/结果以及下方10月27日的类型、API、全UI和浏览器记录均为历史，不证明本批通过。
 
 ### 本批实际代码范围
 
@@ -24,28 +24,33 @@
 - `42feae2`修正实际菜单同尺寸重选的双resize派发：鼠标/键盘12项基线红测，移除重复item回调后仍允许同值重选一次，67项邻接通过（`/tmp/browser-resize-baseline.log`、`/tmp/browser-resize-fixed.log`）。这是组件交互证明，不是本机Chromium已运行。
 - `5ff27dc`补Panel/viewport本地错误四语、保留原始`browser.error`；语言切换不更换iframe/重启轮询或租约，撤权后旧请求不能恢复iframe。最终相关8文件102项通过（`/tmp/browser-panel-final.log`）。
 
-`1757a7b`/`358bd7a`将审计扩至166个AST文件、21个manual helper、另5个协议source、54个host、130条边；[当前报告](checklists/2026-10-29-i18n-final-audit.json)为711个literal候选、3382个dynamic位置，780个eligible TSX中614个未扫描（其中5个仅作证据）。7279个四语键、候选数及范围扩展都不是全仓翻译完成率。此前160/20/51/123与49项审计测试是05:29检查点的历史口径，不冒充当前分母。
+### 普通适配器配置补译已合入
+
+`1484a0d`已补普通Claude/Codex两份配置显示中的沙箱/搜索/fast、Chrome/权限/最大轮次及本地help；`7020665`合成7294键。仅改显示层，保留共享help常量、默认权限、安全警告语义、模型ID、配置payload；没有调用真实Agent。两文件176/176定向回归通过（原有132项＋新增44项，不是新增176项），覆盖组件与真实表单宿主（`/tmp/agent-runtime-fields-regression.log`），覆盖四语、热切/焦点/草稿、禁用、警告与原始诊断。此前明确的这两处本地代码缺口已补，不再列为待实现；真实CLI及浏览器环境仍另验。
+
+`defa7eb`/`0d1105e`将审计扩至168个AST文件、21个manual helper、另5个协议source、56个host、132条边；[当前报告](checklists/2026-10-29-i18n-final-audit.json)为787个literal候选、3390个dynamic位置，780个eligible TSX中612个未扫描（其中5个仅作证据）。Claude为真实JSX消费，Codex为模块引用/注册表/动态分发的有界语法证据，不虚构直接JSX宿主或完整调用图。7294键、候选数与范围扩展都不是全仓翻译完成率；此前160/166文件等均为各自历史口径。
 
 ### 可核验检查表
 
 | 检查 | 当前结果 | 证据与边界 |
 |---|---|---|
-| 标准完整 server 构建 | **通过** | `/tmp/rebuild-server-final-20261029.log`，05:20:44 UTC退出0；实际`server/dist/build-info.json`印章为`8b590bf8f1e0c8752d98dd4c02fd32bab8214d12`。包含runner/eval准备、类型检查/emit和资源阶段；Rust既有7条warning保留。核对该印章到`358bd7a`的server/packages/cli/external-adapters差异为0。 |
+| 标准完整 server 构建 | **通过** | `/tmp/rebuild-server-final-20261029.log`，05:20:44 UTC退出0；实际`server/dist/build-info.json`印章为`8b590bf8f1e0c8752d98dd4c02fd32bab8214d12`。包含runner/eval准备、类型检查/emit和资源阶段；Rust既有7条warning保留。核对该印章到`0d1105e`的server/packages/cli/external-adapters差异为0。 |
 | 首次 server 构建 | **失败后修复** | `/tmp/rebuild-server-standard-20261029.log`的7条research测试类型错误由`024c288`按真实任务归属字段修复，随后标准完整构建重新通过；不是删除断言或放宽产品类型。 |
-| 当前完整 UI 类型 | **通过** | `358bd7a`完整类型阶段通过，日志`/tmp/paperclip-integrated-final-checks-20261029.log`；其后正常进入标准UI构建。该组合shell最后因错写token命令退出254，不是类型失败。05:26:55通过保留为此前检查点。 |
-| 当前标准 UI 构建 | **通过** | 同一中央日志，Vite标准构建13.61秒通过；既有动态导入/大chunk等提示保留。不能将整个组合shell称退出0；末尾命令拼写错误另列。 |
-| 当前i18n/资源/token门禁 | **51项审计与正确门禁通过** | 中央审计51/51、零失败/跳过/todo；组合shell末尾误写不存在的`test:token-gates`，06:05:20 UTC整体exit254。另行正确`pnpm check:token-gates`于06:07:13 UTC exit0，1379文件、四项gate及palette/cliplab同步通过，日志`/tmp/paperclip-integrated-token-gates-20261029.log`。保留错误命令，不伪称原命令全绿。 |
-| 358bd7a完整 UI 严格聚合 | **914文件/92批/12896项通过** | 06:26:23 UTC严格聚合passed，10个新manifest全部sourceUnchanged=true；源码SHA-256 `57f5d2a6accd9544f7749e0f0aa982ccd0ad8de8d227655fb177837db16d9aa7`，runtime-trees-v2输入`b58af7a122b0b8971ba1e6793a8e4d106e5bea5e6fff3dd2b585b17f447c3d84`。证据`test-results/mimouse-ui/aggregate-2026-10-29T06-26-23-061Z-9Tz21t/aggregate.json`，监督日志`/tmp/ui-final-rerun-supervisor-20261029.log`。这是同输入完整覆盖聚合，不是假称单次无中断运行；不复用首轮失败分片。 |
-| 编译 server 入口完整164项 API | **164/164通过** | 新标记隔离库，`/tmp/mimouse-compiled-final-20261029.log`，1.3分钟，05:25:27 UTC退出0。这是05:25本次重建的实际运行；后端到`358bd7a`无差异，因此仅沿用后端证据，不冒称新UI复跑API；编译入口仍有workspace TS依赖与源码fixtures，不是all-dist安装。 |
-| 新认证 recovery API smoke（4项） | **4/4通过** | `/tmp/recovery-compiled-final-20261029.log`，18秒，05:23:44 UTC退出0。独立新HOME、authenticated/private/static UI、真实BetterAuth cookie/session与编译注册路由；包含同用户两个真实session的header隔离。入口`pnpm test:mimouse:recovery-api`检查stamp/后端差异/UI产物。后端到`358bd7a`无差异，仅沿用后端证据；DB合成数据，workspace包仍TS，不是all-dist安装、新UI浏览器或真实Casdoor。 |
+| 当前完整 UI 类型 | **通过** | 普通配置补译/7294键整合后，`/tmp/paperclip-runtime-fields-final-checks-20261029.log`完整类型、构建、正确门禁串行整体exit0（06:33:23 UTC）；后续0d1105e仅调整审计脚本/报告，不更改UI产品源码。 |
+| 当前标准 UI 构建 | **通过** | 同一日志标准Vite构建11.90秒，组合命令exit0；保留动态导入/大chunk/plugin timing等提示。本轮不是套用358bd7a的13.61秒结果。 |
+| 当前i18n/资源/token门禁 | **53项审计与正确门禁通过** | 中央审计`/tmp/paperclip-final-adapter-audit-20261029.log`53/53，零失败/跳过/todo，06:40:43 UTC exit0；正确token/palette/cliplab门禁在06:33:23整链通过。上一阶段曾误写test:token-gates而整体254、随后正确补验通过，只保留为历史，不抹除也不转嫁当前命令。 |
+| 当前7294键完整 UI 严格聚合 | **915文件/92批/12940项通过** | 06:59:42 UTC严格聚合passed，10个manifest均sourceUnchanged=true；逐个核验manifest/report哈希、92批唯一覆盖、915文件、12940断言全passed，失败/skip/todo为0。源码SHA-256 `fc75b878a0c6711453725723d576f4e4b6ec29febcfb66a3f262621148e22b23`，runtime-trees-v2输入`002e5e6141f4dce05b1561ee2d066823a3723ea50c4474e5967aa7bbe19077a4`。证据`test-results/mimouse-ui/aggregate-2026-10-29T06-59-42-686Z-t9Kb9o/aggregate.json`，监督`/tmp/ui-final-7294-supervisor-20261029.log`。这是新输入完整覆盖聚合，不是单次不中断运行；不沿用下行358bd7a结果。 |
+| 上一358bd7a完整 UI 严格聚合 | **914文件/92批/12896项通过** | 06:26:23 UTC严格聚合passed，10个新manifest全部sourceUnchanged=true；源码SHA-256 `57f5d2a6accd9544f7749e0f0aa982ccd0ad8de8d227655fb177837db16d9aa7`，runtime-trees-v2输入`b58af7a122b0b8971ba1e6793a8e4d106e5bea5e6fff3dd2b585b17f447c3d84`。证据`test-results/mimouse-ui/aggregate-2026-10-29T06-26-23-061Z-9Tz21t/aggregate.json`，监督日志`/tmp/ui-final-rerun-supervisor-20261029.log`。这是同输入完整覆盖聚合，不是假称单次无中断运行；不复用首轮失败分片。 |
+| 编译 server 入口完整164项 API | **164/164通过** | 新标记隔离库，`/tmp/mimouse-compiled-final-20261029.log`，1.3分钟，05:25:27 UTC退出0。这是05:25本次重建的实际运行；后端到`0d1105e`无差异，因此仅沿用后端证据，不冒称新UI复跑API；编译入口仍有workspace TS依赖与源码fixtures，不是all-dist安装。 |
+| 新认证 recovery API smoke（4项） | **4/4通过** | `/tmp/recovery-compiled-final-20261029.log`，18秒，05:23:44 UTC退出0。独立新HOME、authenticated/private/static UI、真实BetterAuth cookie/session与编译注册路由；包含同用户两个真实session的header隔离。入口`pnpm test:mimouse:recovery-api`检查stamp/后端差异/UI产物。后端到`0d1105e`无差异，仅沿用后端证据；DB合成数据，workspace包仍TS，不是all-dist安装、新UI浏览器或真实Casdoor。 |
 | 依赖安装与lockfile | **本地一次非冻结重试成功；锁文件未提交** | 冻结安装因server的`paperclip-eval-kernel` workspace声明缺少lock importer条目失败；依[仓库锁文件政策](../DEVELOPING.md#dependency-lockfile-policy)仅本地一次`--no-frozen-lockfile`重试成功。提交锁文件由bot负责；这不是独立安装包验证，不修改依赖/补丁或把网络/权限失败泛化重试。 |
 | 根级全工作区检查/独立安装 | **未取得本批整体结果** | 分包server/UI类型构建与MiMouse API不等于根`pnpm -r typecheck`、`pnpm test:run`、`pnpm build`整体通过；本批独立all-dist安装与既有数据升级恢复尚待专门验收。 |
 | 本批实际浏览器、OS输入法及跨平台 | **环境blocked；未完成浏览器验收** | Chromium在IPC socket阶段受限，独立浏览器不可达执行机回环，官方headless-shell下载不是有效ZIP；未打开应用页面、没有截图，不是page failure。合法兼容尝试结束且临时实例正常停止；详见[环境记录与复验](checklists/BROWSER-ENVIRONMENT-20261029.md)。OS输入法/六平台仍需用户环境。 |
-| 阶段推送与远端 CI | **当前代码已推送；资源CI成功** | 06:08 UTC核对远端`mimouse`为`358bd7a8cee36ec0999d305c50b2d3992dc5b990`（[提交](https://github.com/xjfyt/paperclip/commit/358bd7a8cee36ec0999d305c50b2d3992dc5b990)）；[该SHA资源CI](https://github.com/xjfyt/paperclip/actions/runs/40827338157/job/123293288349)已completed/success，仅证明resources检查，不是完整CI/全UI/浏览器通过。本次文档随后单独提交/推送。 |
+| 阶段推送与远端 CI | **当前候选已推送；资源CI成功** | 06:42 UTC核对远端`mimouse`为`0d1105e6069265a45431ef562861afa7e57ebedf`（[提交](https://github.com/xjfyt/paperclip/commit/0d1105e6069265a45431ef562861afa7e57ebedf)）；[该SHA资源CI](https://github.com/xjfyt/paperclip/actions/runs/40830723132/job/123304070781)completed/success，仅resources，不是完整CI或浏览器验收。本次文档随后单独提交/推送。 |
 
-当前358bd7a源码与本次完整UI证据已持久保全；保全不替代远端SHA、CI或独立安装验证。
+上一358bd7a源码与其完整UI证据已持久保全；保全不替代远端SHA、CI或独立安装验证。
 
-另有已确认的普通Claude/Codex适配器运行设置文案缺口（沙箱/搜索/fast、Chrome/权限/最大轮次与本地help）在独立切片准备，尚未计入本次358bd7a通过范围；后续合入必须重新验证新的输入，不能迁移12896项结论。日志路径是当前执行环境的证据定位，不是用户机器上保证存在的文件。用户复验步骤及尚需提供的合同见[用户验收](USER-ACCEPTANCE.md#2026-10-29-重建候选验收入口)与[剩余项](REMAINING.md#2026-10-29-当前阻塞与明确代码边界)。当前只能宣称358bd7a的上述有界检查通过，**不能宣称全计划完成、全仓全类检查通过或生产就绪**。
+当前已确认的本地补译、三组fixture与双resize缺口已闭合，并取得当前新输入完整UI通过；四项外部合同的代码缺口、真实浏览器/供应商及根级全工作区/独立安装边界保持。日志路径是当前执行环境的证据定位，不是用户机器上保证存在的文件。用户复验步骤及尚需提供的合同见[用户验收](USER-ACCEPTANCE.md#2026-10-29-重建候选验收入口)与[剩余项](REMAINING.md#2026-10-29-当前阻塞与明确代码边界)。当前仅按上述实际输入和各阶段证据宣称通过，**不能宣称全计划完成、全仓全类检查通过或生产就绪**。
 
 ## 历史记录（以下均按原日期与冻结输入解读）
 
