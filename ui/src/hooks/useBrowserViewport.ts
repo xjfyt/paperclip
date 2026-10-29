@@ -1,3 +1,4 @@
+import { useTranslation } from "@/i18n";
 import {
   useCallback,
   useEffect,
@@ -44,12 +45,14 @@ export function useBrowserViewport({
   active: boolean;
   frameRef: RefObject<HTMLIFrameElement | null>;
 }) {
+  const { t } = useTranslation();
   const [viewerId] = useState(() => crypto.randomUUID());
   const [state, setState] = useState<BrowserUseViewportState>({
     preset: "fit",
   });
   const stateRef = useRef(state);
-  const [error, setError] = useState<string | null>(null);
+  // Keep the failure key local; translating it must not restart the viewport lease.
+  const [error, setError] = useState<"resizeFailed" | null>(null);
   const [resizing, setResizing] = useState(false);
   const version = useRef(0);
   // Includes release operations, so hiding/reopening cannot race an old resize.
@@ -133,9 +136,7 @@ export function useBrowserViewport({
                 paused = true;
                 desiredMode = stateRef.current.preset;
                 pending = null;
-                setError(
-                  "Browser size could not be changed. Choose a size in Browser options to try again.",
-                );
+                setError("resizeFailed");
               }
             } finally {
               if (revision === version.current) version.current++;
@@ -246,7 +247,7 @@ export function useBrowserViewport({
 
   return {
     state,
-    error,
+    error: error ? t("taskBrowserPanelUi.resizeFailed") : null,
     resizing,
     viewerId,
     version,

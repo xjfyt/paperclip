@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import "@/i18n/task-browser-panel-test-resources";
 import { act, useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

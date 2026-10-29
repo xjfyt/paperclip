@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import "@/i18n/task-recovery-controls-test-resources";
+import "@/i18n/task-browser-panel-test-resources";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
