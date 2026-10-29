@@ -1,0 +1,157 @@
+{
+  "schema": "mimouse.local-verification.v1",
+  "recordedAt": "2026-10-30T05:24:54.642389+08:00",
+  "platform": "native Windows x64, real NTFS files, current-process PID/start identity, worker-thread loopback owner probes and .NET FileStream sharing handles",
+  "originalFailure": {
+    "source": "CLI complete-final5, worktree custom-parent postgres sibling case",
+    "cause": "EPERM at first owner temporary-file rename. This occurs before its heartbeat starts; the original handle owner was not captured. Do not attribute the historical event to antivirus or this process's own heartbeat without evidence.",
+    "receipt": {
+      "path": "test-results/project-closure-20261029/cli-complete-final5.json",
+      "sha256": "fcc094a1515f6835403541e4a5e3e99d0b898d7a9e50c6e2af70825d2151f8a0"
+    }
+  },
+  "protocol": "Exclusive lock directory -> complete primary/backup owner records -> worker heartbeat with token ownership probe -> records updated with probe port -> critical section -> verified release. Stale/heartbeat/acquisition intervals are retained.",
+  "changes": [
+    "Windows rename retries only EPERM/EACCES/EBUSY, with a one-second retry window for the same complete prepared file; no target unlink, fallback payload, or port-assertion changes.",
+    "A lock-dir identity and owned file identity ledger span acquisition/publication/release. Temp creation is wx; every retry checks original non-reparse dir/temp and requires target absent for initial publication or matching the recorded target inode for rewrite.",
+    "Failure cleanup removes only observed matching entries and then an empty original directory, preserving unknown/replaced entries and replacement lock directories. Unexpected cleanup errors remain visible as AggregateError rather than being swallowed.",
+    "Only mkdir EEXIST means lock contention. A publication temporary-file collision cannot accidentally enter stale-lock recovery.",
+    "Windows process identity runs the fixed SystemRoot PowerShell executable with a ten-second deadline. A live PID with unavailable identity is retained, rather than being treated as proven PID reuse."
+  ],
+  "verification": {
+    "command": "cd packages/shared; node ../../node_modules/vitest/vitest.mjs run src/worktree-port-registry.test.ts src/worktree-port-registry-windows.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=../../test-results/project-closure-20261029/registry-sharing-frozen.json",
+    "files": 2,
+    "passed": 15,
+    "failed": 0,
+    "pending": 0,
+    "log": {
+      "path": "test-results/project-closure-20261029/registry-sharing-frozen.log",
+      "sha256": "c7bacfecb529d27c151b35e0f92f8aa11517f3417c7015cf90d1fe0db15bb2de"
+    },
+    "json": {
+      "path": "test-results/project-closure-20261029/registry-sharing-frozen.json",
+      "sha256": "9863ef5eb4cbb7298b11eb8b5510650dfc3c68e17c091e83f44557069b8d90b9"
+    }
+  },
+  "newWindowsCoverage": [
+    "Real source-file handle omitting FILE_SHARE_DELETE causes actual rename EPERM/EBUSY; release is gated on the actual error. Both sync and async critical sections receive complete matching owner copies.",
+    "A permanently held handle exceeds the retry window and never enters the critical section.",
+    "Actual temporary inode replacement, actual lock-dir replacement and exclusive-temp collision preserve the competing bytes/paths and refuse entry.",
+    "Actual first/rewrite target replacement after a real sharing failure is observed and refused without overwriting the competing target.",
+    "Controlled native powershell.exe impersonator in both CWD and PATH is not run by the fixed-path implementation. Existing native CLI fixture bridge compiles fixed local no-network code into owned temporary paths.",
+    "A real live PID, closed probe and unavailable OS identity executable keep original owner bytes and lock inode unchanged until the existing acquisition deadline rejects."
+  ],
+  "redProofs": [
+    {
+      "scope": "Original owner rename behavior with actual held .NET sharing handle; 2 expected failures, zero unhandled/framework markers. Earlier cleanup can mask the original rename error; the fixture generates no synthetic filesystem exception.",
+      "command": "cd packages/shared; node ../../node_modules/vitest/vitest.mjs run src/worktree-port-registry-windows.test.ts --reporter=default --reporter=json --outputFile=../../test-results/project-closure-20261029/registry-sharing-real-before-red.json",
+      "files": 1,
+      "passed": 0,
+      "failed": 2,
+      "pending": 0,
+      "log": {
+        "path": "test-results/project-closure-20261029/registry-sharing-real-before-red.log",
+        "sha256": "5335c882394ecc0311a81906dbdc2a0f782642c5f94fb3cf610215d286f4222d"
+      },
+      "json": {
+        "path": "test-results/project-closure-20261029/registry-sharing-real-before-red.json",
+        "sha256": "084b059bd61d44317b5b7f15437346753686f3a4dda59a501b9e68b3097d5305"
+      }
+    },
+    {
+      "scope": "Transform only removes target-identity guard; first/rewrite target substitution no longer rejects. 8 pending are name-filtered.",
+      "command": "cd packages/shared; node ../../node_modules/vitest/vitest.mjs run --config ../../test-results/project-closure-20261029/registry-target-before.vitest.mjs src/worktree-port-registry-windows.test.ts -t \"refuses a foreign target installed\" --reporter=default --reporter=json --outputFile=../../test-results/project-closure-20261029/registry-target-before-red.json",
+      "files": 1,
+      "passed": 0,
+      "failed": 2,
+      "pending": 8,
+      "log": {
+        "path": "test-results/project-closure-20261029/registry-target-before-red.log",
+        "sha256": "6b8af637e0e0f458dddec8f2963a8c3d55e7d290b37c7ab4f25a1f22a61e08b7"
+      },
+      "json": {
+        "path": "test-results/project-closure-20261029/registry-target-before-red.json",
+        "sha256": "3d56f48f04f93de154501157949be68387ad13717421fd56522c668e811e52df"
+      }
+    },
+    {
+      "scope": "Transform only restores PATH executable lookup; real impersonator writes its marker and execution is explicitly diagnosed. 9 pending are name-filtered.",
+      "command": "cd packages/shared; node ../../node_modules/vitest/vitest.mjs run --config ../../test-results/project-closure-20261029/registry-path-before.vitest.mjs src/worktree-port-registry-windows.test.ts -t \"never executes a CWD or PATH\" --reporter=default --reporter=json --outputFile=../../test-results/project-closure-20261029/registry-path-before-red.json",
+      "files": 1,
+      "passed": 0,
+      "failed": 1,
+      "pending": 9,
+      "log": {
+        "path": "test-results/project-closure-20261029/registry-path-before-red.log",
+        "sha256": "eb4afdccd014aedd8499c33a00999a267c8c3bd119a1841825e1d6534763cae2"
+      },
+      "json": {
+        "path": "test-results/project-closure-20261029/registry-path-before-red.json",
+        "sha256": "2d098f75add3fc74654ad2becc913ab4d4667ada21afac3486ec74bab90f5c44"
+      }
+    },
+    {
+      "scope": "Transform only restores null-as-mismatch reclamation; original live-owner lock is reclaimed and new identity acquisition fails rather than retaining it to the existing wait deadline. 9 pending are name-filtered.",
+      "command": "cd packages/shared; node ../../node_modules/vitest/vitest.mjs run --config ../../test-results/project-closure-20261029/registry-unknown-before.vitest.mjs src/worktree-port-registry-windows.test.ts -t \"retains a live owner\" --reporter=default --reporter=json --outputFile=../../test-results/project-closure-20261029/registry-unknown-before-red.json",
+      "files": 1,
+      "passed": 0,
+      "failed": 1,
+      "pending": 9,
+      "log": {
+        "path": "test-results/project-closure-20261029/registry-unknown-before-red.log",
+        "sha256": "fbcf7c0445e73fa8dbbf60082df77a3e95f28cdf17b58f12e0dd954a5b8f3cd7"
+      },
+      "json": {
+        "path": "test-results/project-closure-20261029/registry-unknown-before-red.json",
+        "sha256": "8b7a8ef1802dd6b9a1a38657e98be40c7968cf01bb24608a0940afa8d8ade77b"
+      }
+    }
+  ],
+  "intermediateHarnessFailures": [
+    {
+      "receipt": {
+        "path": "test-results/project-closure-20261029/registry-sharing-before-red.json",
+        "sha256": "9ff69d66773fab23b7bb382de6c93ca8d885aa588589b3416b0a95fd3e46f4e2"
+      },
+      "classification": "First fixture draft had a worker-source escaping syntax error: 2 failed + 2 unhandled. Not production red evidence. Corrected String.raw worker and fulfilled-exit tracking; no source change was used to hide it."
+    },
+    {
+      "receipt": {
+        "path": "test-results/project-closure-20261029/registry-sharing-targeted-first.json",
+        "sha256": "26517dacd1bd105f54ac0222f2ca869203c410ffdedfd2b8fc1ddc3a3e5b9b54"
+      },
+      "classification": "First retry fixture only released on EPERM; the real native error also appears as EBUSY, so the handle unintentionally stayed open. Corrected the release gate to the actual EPERM/EACCES/EBUSY family; final permanent-held case remains explicit negative coverage."
+    }
+  ],
+  "checks": [
+    {
+      "command": "pnpm --filter @paperclipai/shared exec tsc --noEmit",
+      "exitCode": 0,
+      "log": {
+        "path": "test-results/project-closure-20261029/registry-sharing-types-frozen.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "command": "git diff --check -- packages/shared/src/worktree-port-registry.ts packages/shared/src/worktree-port-registry-windows.test.ts",
+      "exitCode": 0
+    }
+  ],
+  "sources": [
+    {
+      "path": "packages/shared/src/worktree-port-registry.ts",
+      "sha256": "ac233aa1a743569f4c0b36517d15c706e68818f66e08504732712be8de103b4d"
+    },
+    {
+      "path": "packages/shared/src/worktree-port-registry-windows.test.ts",
+      "sha256": "f2b8a7d4f2024d0d757f10c0d76ac6fb7afbab7c1cc04d41ada8a284d2c55b22"
+    }
+  ],
+  "limits": [
+    "Identity checks are observations around path-based filesystem operations, not descriptor-atomic security against all same-directory TOCTOU interleavings.",
+    "Unknown/replaced entries are retained by immediate owned cleanup; existing stale-lock reclamation semantics outside this operation remain separate.",
+    "The original historical EPERM handle ownership is unknown. The controlled sharing-handle reproduction proves a real Windows failure class and the bounded recovery, not the historical reader identity.",
+    "The separate CLI observed ACL false has not been reproduced and its ten-second inspector deadline is unchanged; root-agent diagnostics are reported separately.",
+    "CLI complete-final6 and repo-wide checks are separate receipts, not implied by this 15-case protocol suite. No user files/credentials, dependency install, lockfile modification or external service calls occurred."
+  ]
+}

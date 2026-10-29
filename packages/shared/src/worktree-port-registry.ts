@@ -28,7 +28,14 @@ type RegistryLockOwner = {
   token: string;
 };
 
+type RegistryEntryIdentity = { dev: bigint; ino: bigint };
+type RegistryLockOwnership = {
+  directory: RegistryEntryIdentity;
+  entries: Map<string, RegistryEntryIdentity>;
+};
+
 type RegistryLockLease = {
+  ownership: RegistryLockOwnership;
   token: string;
   worker: Worker;
   control: Int32Array;
@@ -160,16 +167,77 @@ function readRegistryLockOwner(lockPath: string): RegistryLockOwner | null {
   return null;
 }
 
-function writeRegistryLockOwner(lockPath: string, owner: RegistryLockOwner): void {
+function sameRegistryEntry(file: string, expected: RegistryEntryIdentity, directory: boolean): boolean {
+  try {
+    const current = fs.lstatSync(file, { bigint: true });
+    return !current.isSymbolicLink() && (directory ? current.isDirectory() : current.isFile())
+      && current.dev === expected.dev && current.ino === expected.ino;
+  } catch { return false; }
+}
+
+function publishRegistryOwnerFile(lockPath: string, temporary: string, target: string, ownership: RegistryLockOwnership): void {
+  const identity = ownership.entries.get(temporary)!;
+  const previousTarget = ownership.entries.get(target);
+  const targetIsOwnedOrAbsent = () => {
+    if (previousTarget) return sameRegistryEntry(target, previousTarget, false);
+    try { fs.lstatSync(target); return false; }
+    catch (error) { return (error as NodeJS.ErrnoException).code === "ENOENT"; }
+  };
+  const deadline = Date.now() + 1_000;
+  while (true) {
+    if (!sameRegistryEntry(lockPath, ownership.directory, true) || !sameRegistryEntry(temporary, identity, false)) {
+      throw new Error("Worktree port reservation lock identity changed during owner publication");
+    }
+    if (!targetIsOwnedOrAbsent()) throw new Error("Worktree port reservation owner target identity changed during publication");
+    try {
+      fs.renameSync(temporary, target);
+      ownership.entries.delete(temporary);
+      ownership.entries.set(target, identity);
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (process.platform !== "win32" || !["EPERM", "EACCES", "EBUSY"].includes(code ?? "") || Date.now() >= deadline) throw error;
+      // NTFS readers which omit FILE_SHARE_DELETE can temporarily deny an
+      // atomic rename. Retry the same complete, identity-checked file only;
+      // never delete the destination or recalculate owner/payload bytes.
+      Atomics.wait(sleepSyncBuffer, 0, 0, Math.min(25, deadline - Date.now()));
+    }
+  }
+}
+
+function writeRegistryLockOwner(lockPath: string, owner: RegistryLockOwner, ownership: RegistryLockOwnership): void {
   const contents = `${JSON.stringify(owner)}\n`;
   for (const ownerFile of [
     WORKTREE_PORT_REGISTRY_LOCK_OWNER_FILE,
     WORKTREE_PORT_REGISTRY_LOCK_OWNER_BACKUP_FILE,
   ]) {
+    if (!sameRegistryEntry(lockPath, ownership.directory, true)) throw new Error("Worktree port reservation lock identity changed before owner write");
     const ownerPath = path.join(lockPath, ownerFile);
     const temporaryPath = `${ownerPath}.${owner.token}.tmp`;
-    fs.writeFileSync(temporaryPath, contents, { mode: 0o600 });
-    fs.renameSync(temporaryPath, ownerPath);
+    const descriptor = fs.openSync(temporaryPath, "wx", 0o600);
+    try {
+      const identity = fs.fstatSync(descriptor, { bigint: true });
+      ownership.entries.set(temporaryPath, identity);
+      fs.writeFileSync(descriptor, contents);
+    } finally { fs.closeSync(descriptor); }
+    publishRegistryOwnerFile(lockPath, temporaryPath, ownerPath, ownership);
+  }
+}
+
+function removeOwnedRegistryLock(lockPath: string, ownership: RegistryLockOwnership): void {
+  if (!sameRegistryEntry(lockPath, ownership.directory, true)) return;
+  const entries = fs.readdirSync(lockPath).map(name => path.join(lockPath, name));
+  // Retain any unexpected/replaced entry. Recursive cleanup would delete a
+  // foreign temporary file even if the outer lock directory stayed the same.
+  if (entries.some(file => !ownership.entries.has(file) || !sameRegistryEntry(file, ownership.entries.get(file)!, false))) return;
+  for (const file of entries) {
+    if (!sameRegistryEntry(lockPath, ownership.directory, true) || !sameRegistryEntry(file, ownership.entries.get(file)!, false)) return;
+    fs.unlinkSync(file);
+  }
+  if (!sameRegistryEntry(lockPath, ownership.directory, true)) return;
+  try { fs.rmdirSync(lockPath); }
+  catch (error) {
+    if (!["ENOTEMPTY", "EEXIST"].includes((error as NodeJS.ErrnoException).code ?? "")) throw error;
   }
 }
 
@@ -201,12 +269,13 @@ function readProcessIdentity(pid: number): string | null {
 
   try {
     if (process.platform === "win32") {
-      const ticks = execFileSync("powershell.exe", [
+      const powershell = path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+      const ticks = execFileSync(powershell, [
         "-NoProfile",
         "-NonInteractive",
         "-Command",
         `(Get-Process -Id ${pid}).StartTime.ToUniversalTime().Ticks`,
-      ], { encoding: "utf8", windowsHide: true }).trim();
+      ], { encoding: "utf8", windowsHide: true, timeout: 10_000 }).trim();
       return ticks ? `win32:${ticks}` : null;
     }
     const startedAt = execFileSync("ps", ["-o", "lstart=", "-p", String(pid)], {
@@ -244,7 +313,8 @@ function removeStaleRegistryLock(lockPath: string): boolean {
     if (owner && isProcessAlive(owner.pid)) {
       if (probeRegistryLockOwner(owner)) return false;
       const currentIdentity = readProcessIdentity(owner.pid);
-      if (owner.processIdentity === currentIdentity) return false;
+      // A live PID with an unavailable identity is not proof of PID reuse.
+      if (currentIdentity === null || owner.processIdentity === currentIdentity) return false;
     }
     const currentOwner = readRegistryLockOwner(lockPath);
     if (owner ? currentOwner?.token !== owner.token : currentOwner !== null) return false;
@@ -257,7 +327,7 @@ function removeStaleRegistryLock(lockPath: string): boolean {
   }
 }
 
-function startRegistryLockHeartbeat(lockPath: string, token: string): RegistryLockLease {
+function startRegistryLockHeartbeat(lockPath: string, token: string, ownership: RegistryLockOwnership): RegistryLockLease {
   const control = new Int32Array(new SharedArrayBuffer(12));
   const worker = new Worker(REGISTRY_LOCK_HEARTBEAT_SOURCE, {
     eval: true,
@@ -284,7 +354,7 @@ function startRegistryLockHeartbeat(lockPath: string, token: string): RegistryLo
     void worker.terminate();
     throw new Error(`Failed to start worktree port reservation lock probe at ${lockPath}`);
   }
-  return { token, worker, control, probePort };
+  return { token, worker, control, probePort, ownership };
 }
 
 function stopRegistryLockHeartbeat(lease: RegistryLockLease): void {
@@ -298,49 +368,43 @@ function stopRegistryLockHeartbeat(lease: RegistryLockLease): void {
 }
 
 function acquireRegistryLock(lockPath: string, deadline: number): RegistryLockLease | null {
-  try {
-    fs.mkdirSync(lockPath);
-    const token = `${process.pid}-${randomUUID()}`;
-    let lease: RegistryLockLease | null = null;
-    try {
-      const processIdentity = readProcessIdentity(process.pid);
-      if (!processIdentity) {
-        throw new Error("Cannot determine worktree port reservation lock owner identity");
-      }
-      const owner: RegistryLockOwner = {
-        version: 1,
-        pid: process.pid,
-        processIdentity,
-        probePort: 1,
-        token,
-      };
-      writeRegistryLockOwner(lockPath, owner);
-      lease = startRegistryLockHeartbeat(lockPath, token);
-      writeRegistryLockOwner(lockPath, { ...owner, probePort: lease.probePort });
-      return lease;
-    } catch (error) {
-      if (lease) stopRegistryLockHeartbeat(lease);
-      fs.rmSync(lockPath, { recursive: true, force: true });
-      throw error;
-    }
-  } catch (error) {
+  try { fs.mkdirSync(lockPath); }
+  catch (error) {
     const code = error instanceof Error && "code" in error ? error.code : null;
     if (code !== "EEXIST") throw error;
     if (removeStaleRegistryLock(lockPath)) return null;
-    if (Date.now() >= deadline) {
-      throw new Error(`Timed out waiting for worktree port reservation lock at ${lockPath}`);
-    }
+    if (Date.now() >= deadline) throw new Error(`Timed out waiting for worktree port reservation lock at ${lockPath}`);
     return null;
+  }
+  const directory = fs.lstatSync(lockPath, { bigint: true });
+  if (!directory.isDirectory() || directory.isSymbolicLink()) throw new Error("Worktree port reservation lock is not a directory");
+  const ownership: RegistryLockOwnership = { directory, entries: new Map() };
+  const token = `${process.pid}-${randomUUID()}`;
+  let lease: RegistryLockLease | null = null;
+  try {
+    const processIdentity = readProcessIdentity(process.pid);
+    if (!processIdentity) throw new Error("Cannot determine worktree port reservation lock owner identity");
+    const owner: RegistryLockOwner = { version: 1, pid: process.pid, processIdentity, probePort: 1, token };
+    writeRegistryLockOwner(lockPath, owner, ownership);
+    lease = startRegistryLockHeartbeat(lockPath, token, ownership);
+    writeRegistryLockOwner(lockPath, { ...owner, probePort: lease.probePort }, ownership);
+    return lease;
+  } catch (error) {
+    if (lease) stopRegistryLockHeartbeat(lease);
+    try { removeOwnedRegistryLock(lockPath, ownership); }
+    catch (cleanupError) {
+      throw new AggregateError([error, cleanupError], "Worktree port reservation lock publication and owned cleanup failed");
+    }
+    throw error;
   }
 }
 
 function releaseRegistryLock(lockPath: string, lease: RegistryLockLease): void {
   stopRegistryLockHeartbeat(lease);
+  if (!sameRegistryEntry(lockPath, lease.ownership.directory, true)) return;
   const owner = readRegistryLockOwner(lockPath);
-  if (owner?.token !== lease.token) {
-    return;
-  }
-  fs.rmSync(lockPath, { recursive: true, force: true });
+  if (owner?.token !== lease.token) return;
+  removeOwnedRegistryLock(lockPath, lease.ownership);
 }
 
 export function withWorktreePortRegistryLockSync<T>(homeDir: string, run: () => T): T {
