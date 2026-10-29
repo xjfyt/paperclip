@@ -1,0 +1,113 @@
+# 文档编写规范
+
+> **维护提示** — 文档目录、命名、事实源、维护字段或验证要求变化时更新
+> **最后验证** — 2026-10-29（参考 MiWork 规范并对照本仓约定）
+
+本规范采用 MiWork 文档的编号、当前事实、维护元数据和证据分层标准，适配 Paperclip 的 TypeScript monorepo。代码及贡献流程仍遵循 [AGENTS.md](../AGENTS.md)；新计划继续放在 `doc/plans/`，不套用 MiWork 的产品架构或发布授权规则。
+
+## 一、范围与事实源
+
+规范约束根 `README.md`、本页、[文档导航](README.md)及新增的 `docs/NN-topic/` 中文正式文档。现有 `doc/` 合同、英文站点页、历史计划和证据保留原路径，按主题逐步维护；新增规范不表示它们已全部转换格式。
+
+| 内容 | 事实源与处理方式 |
+|---|---|
+| 实际实现、参数、开关、数据结构 | 当前源码、配置与 schema；发现和产品合同冲突时记录并修复，不能静默改变合同 |
+| V1 产品要求 | [SPEC-implementation](../doc/SPEC-implementation.md)，其角色优先于长期 [SPEC](../doc/SPEC.md) |
+| 二开模块支持范围 | `doc/mimouse/` 对应稳定主题合同；当前编号页负责导航，不复制第二份合同 |
+| 尚未实现与尚未验收 | [REMAINING](../doc/mimouse/REMAINING.md)区分代码、合同、环境及人工验收前提 |
+| 一次验证结论 | 对应提交/输入摘要、命令、时间、日志和证据；不得由历史结果推断新树通过 |
+| 历史设计与计划 | `doc/plans/YYYY-MM-DD-topic.md`，解释当时意图；不覆盖当前合同 |
+
+正式文档写当前行为；实施过程、旧提交、失败重跑和某日环境限制放在日期证据中。上游通用行为与本仓二开差异分别注明，不把上游公开发行包写成本仓二开安装包。
+
+## 二、目录和文件命名
+
+新增正式主题采用两位编号和英文 kebab-case，编号表达阅读顺序。
+
+```text
+docs/
+  README.md
+  00-doc-rules.md
+  01-overview/
+    01-introduction.md
+    02-architecture.md
+  02-getting-started/
+    01-development.md
+    02-first-company.md
+    03-deployment.md
+  03-config/
+    01-configuration.md
+  04-modules/
+    01-integration-boundaries.md
+  05-maintenance/
+    01-verification.md
+    02-documentation-validation.md
+    03-troubleshooting.md
+    04-backup-upgrade.md
+```
+
+1. 普通模块索引用 `00-overview.md` 或 `01-overview.md`；`README.md` 用于仓库、文档总索引与专用归档索引。
+2. 稳定主题名不含临时状态、提交 SHA 或版本号；日期计划和版本发行记录保留各自约定。
+3. 不为符合新目录一次性移动全部既有文档；移动前确认调用方、测试夹具及全部回链。
+4. 不新增 `docs/wiki/` 或 `docs/superpowers/` 等平行事实源。
+
+## 三、标题与维护信息
+
+一个文件只保留一个 H1；编号正式文档使用以下标题格式，不跳级：
+
+| 层级 | 格式 |
+|---|---|
+| H1 | `# 文档标题` |
+| H2 | `## 一、主题` |
+| H3 | `### 1、子主题` |
+| H4 | `####（1）细项` |
+| H5 | `##### ①、细项` |
+
+正式文档在 H1 后提供维护信息；行为和架构页必须列出对应代码，纯索引及规范可省略代码字段。
+
+```markdown
+# 文档标题
+
+> **对应代码** — `server/src/...`、`ui/src/...`
+> **维护提示** — 参数、权限、状态或执行入口变化时更新
+> **最后验证** — YYYY-MM-DD（说明本次核对范围）
+```
+
+“最后验证”区分文档与源码核对、可执行测试、真实租户验收等范围；填写日期不会自动升级功能验证等级。章节先解释目的，再用表格、步骤和带语言标记的代码块展开。代码、字段、命令和路径用行内代码。
+
+## 四、当前状态与验证证据
+
+状态用于传达准确边界，不能用一项通过覆盖另一项未运行。
+
+| 对象 | 状态与要求 |
+|---|---|
+| 设计与计划 | `CURRENT` 当前有效、`DRAFT` 草案、`SUPERSEDED` 已替代、`ARCHIVED` 历史归档；注明对应当前合同 |
+| 单次检查 | `PASS`、`FAIL`、`BLOCKED`、`NOT_RUN`；环境或证据不足注明 `INCONCLUSIVE`，跳过另记 `SKIPPED` |
+| 验证层级 | 延续二开现有 C1–C4，见[验证规范](05-maintenance/01-verification.md)；层级不替代测试结论 |
+
+新验证记录至少包含：时间与时区、完整 SHA 和未提交差异、实际输入摘要、OS/架构/工具版本、命令/范围、退出码、通过/失败/跳过数、证据位置与剩余边界。缺少证据时保留未知，不补造历史回执。
+
+真实浏览器、真实模型/供应商、跨平台运行、最终发行包和线上部署分别留证；APIRequestContext、jsdom、静态断言或一台 Linux 构建不能替代这些验收。不要在规范或总导航复制不断变化的测试总数。
+
+## 五、链接与敏感信息
+
+仓库内 Markdown 使用相对链接并尽量指向具体索引文件；重命名同步修复引用。外部来源记录来源、适用范围和核对日期，不复制难以维护的大段第三方说明。
+
+凭据、Cookie、私钥、真实业务正文和原始用户日志不得写入文档或提交。测试环境使用合成数据；生产账号、外发通知、收费执行、签名与发布依据相应授权和模块合同执行。证据只保留可核对的脱敏引用和摘要。
+
+## 六、代码变更触发表
+
+按触达路径检查文档；行为变化更新正文，纯实现重构只更新必要路径和核对范围。
+
+| 改动 | 同步核对 |
+|---|---|
+| 工具链、启动、构建、配置默认值 | `package.json`、`.nvmrc`、[开发入门](02-getting-started/01-development.md)、相关 `doc/DEVELOPING.md` 段落 |
+| schema、迁移与秘密 | `packages/db`、shared 契约、`doc/DATABASE.md` 及二开模块部署合同 |
+| API、权限、公司边界、状态 | shared/server/UI 消费方、`doc/mimouse/api.md`、对应功能合同与有意义的回归 |
+| Agent 适配器或连接器 | `packages/adapters/AUTHORING.md`、连接器 Playbook、适配器 README 与能力证据 |
+| UI、文案、语言 | `DESIGN.md`、`doc/mimouse/i18n_remaining.md`，UI token 门禁与对应宿主检查 |
+| 功能完成或延期 | 对应合同、`REMAINING.md`、用户验收与逐项追踪；保持实现和验收分开 |
+| 验证方式与证据 | [验证规范](05-maintenance/01-verification.md)、对应日期记录；不删除或改写既有失败事实 |
+| 文档路径或导航 | [文档导航](README.md)、入链、出链及站点 `docs.json` 的适用导航 |
+
+修改本规范适用的中文入口文档后运行 `pnpm docs:check`；该检查范围不包含全部上游页面。具体维护步骤、检查范围与人工边界见[文档维护与验证](05-maintenance/02-documentation-validation.md)。

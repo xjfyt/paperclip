@@ -1,0 +1,98 @@
+{
+  "recordedOn": "2026-10-30",
+  "platform": "native Windows, disposable loopback PostgreSQL",
+  "scope": "Private prompt retry/queue/worker lock ordering and test synchronization to the real stop gate. No real provider process, external network or real credentials.",
+  "results": {
+    "redBaseline": {
+      "failed": 4,
+      "passed": 0,
+      "nameFiltered": 28,
+      "actualPostgreSQLCode": "40P01",
+      "phases": [
+        "queue",
+        "early_binding",
+        "claim",
+        "prepare"
+      ],
+      "method": "Remove only new worker/early/queue context locks in Vitest transform; no working-tree source reverted"
+    },
+    "initialFull": {
+      "passed": 31,
+      "failed": 1,
+      "failure": "Original routing application approval legitimately refused unconfirmed stop readiness; terminal rows alone do not certify cleanup. Exact initial observation cause was not proven."
+    },
+    "unsynchronizedObservationReruns": {
+      "fullSuitePasses": [
+        32,
+        32
+      ],
+      "note": "Retained as diagnostics; retries alone are not the closure fix."
+    },
+    "synchronizedRoutingCaseRuns": [
+      {
+        "passed": 1,
+        "failed": 0,
+        "nameFiltered": 31
+      },
+      {
+        "passed": 1,
+        "failed": 0,
+        "nameFiltered": 31
+      }
+    ],
+    "finalFull": {
+      "passed": 32,
+      "failed": 0,
+      "skipped": 0,
+      "startedLocal": "2026-10-30 01:17:02 +08:00",
+      "durationSeconds": 94.57,
+      "inputBoundary": "Started after workspace-restore-merge readonly fix at 01:13:28 +08:00"
+    },
+    "serverTypecheckExitCode": 0
+  },
+  "productionChanges": [
+    "Company SHARE before issue/intent locks in early binding, claim and prepare; scope claim/prepare row reads to trusted binding company and issue, then retain full revalidation",
+    "Company SHARE before completed-result transaction issue/intent/FK work",
+    "Company SHARE at privateTestId queue transaction entry only; existing company UPDATE before intent harness fix and cancelled reconciliation retained"
+  ],
+  "realAssertions": [
+    "Actual pending_wake duplicate request snapshot delayed across the real queue/worker lock",
+    "PostgreSQL pg_stat_activity verifies real competing lock wait",
+    "Five phases complete with one issue, one wake, one child execution and issue done",
+    "Routing test awaits real agentExecutionsHaveStopped with 20-second bound before approval; approval still rechecks production gate",
+    "Fixture confirms PID file absent and owned PostgreSQL PID exited during teardown"
+  ],
+  "inputs": {
+    "server/src/services/mimouse-private-prompt-tests/execution.ts": "983bf335b3a77a025b790e69a7903b4569e204212567dc3bd439b002218e8cda",
+    "server/src/services/mimouse-private-prompt-tests/service.ts": "c4f66f3bb37b93eaf3cdcbfc882ba8083eb800e18840a5662e9513e80b90ebed",
+    "server/src/services/heartbeat/queue.ts": "a262a53ba3cb3f97732437fa5c4d1849e142204bb4d113de35f45f2b148169bd",
+    "server/src/services/mimouse-private-prompt-tests/integration.test.ts": "0bb90706c7a6fcf6403ddad36a4f027fe846b950fa6876f3094ab7d83c9b6b71",
+    "packages/adapter-utils/src/workspace-restore-merge.ts": "28f568ad6c272b02cb9148faef7841782bffbeb919120d88dd4bb2bed56c12fa"
+  },
+  "logs": {
+    "test-results/project-audit-windows-closure/private-worker-lock-red.log": "a9fc8ff3e6491d11fd30e5102104946d7020f67f89b9db3cf4688d99b9032553",
+    "test-results/project-audit-windows-closure/private-worker-lock-red.json": "907f15d847c5ac6e23cbb10f3024af8c5f7a20182b7b8119dee5067261b0098e",
+    "test-results/project-audit-windows-closure/private-worker-lock-before-fix.vitest.mjs": "9316e9962be91608238fbc7c128fac8c8ef30a0fed06f58de1bc0c390c4f3aa0",
+    "test-results/project-audit-windows-closure/private-worker-lock-final.log": "52efccbf4ac380f64dcf9356bd56dcd70be4d28cef4ee1edee0fd3d4ce989fda",
+    "test-results/project-audit-windows-closure/private-worker-lock-final.json": "27fcf1e88b9231498c17e9ddea65d5516b0df1abb96c739abc1044dbe87d6ce7",
+    "test-results/project-audit-windows-closure/private-worker-lock-diagnostic.log": "f20005feb2b9429edb070c3c0c0a16b0e9de702466437f8b6d59ab9c81c555db",
+    "test-results/project-audit-windows-closure/private-worker-lock-diagnostic.json": "f92d726c5d9769a221901f597ab6cc24ff1faab61f894f7215d86756f48f4d2a",
+    "test-results/project-audit-windows-closure/private-worker-lock-stop-preflight.log": "3e54e739e72b0a6d2572e7aa6c2c24bfa6b20ea205fa6ed0882efd8f549a7499",
+    "test-results/project-audit-windows-closure/private-stop-sync-case1.log": "fda92b31f42a7110c6c89f730c21c987c0654f39dededb6a80d0c75ec868957b",
+    "test-results/project-audit-windows-closure/private-stop-sync-case1.json": "334e374a583be3428b7ad9cf70dfccc9d1afefc0c0b7d497fc206204d74ee7aa",
+    "test-results/project-audit-windows-closure/private-stop-sync-case2.log": "50e43c423375320983d9d2f0a653d6ca63efabf6358b48ae7b04e41bd2149ff2",
+    "test-results/project-audit-windows-closure/private-stop-sync-case2.json": "480965e91c636ea9dcd47cad350113d75a1fa0cff1d5efcb8aaadb05c84e7ce8",
+    "test-results/project-audit-windows-closure/private-worker-lock-closure.log": "9b222878991fc45366ed71a7934fa944916a37d64c7f644e315c2a8cff95091d",
+    "test-results/project-audit-windows-closure/private-worker-lock-closure.json": "f7bb2fe97f5c72f0fbefb69c29225f9a48e4e855586dd74a4edd596d503f56eb",
+    "test-results/project-audit-windows-closure/private-worker-lock-typecheck-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "commands": {
+    "final": "cd server; node ../node_modules/vitest/vitest.mjs run src/services/mimouse-private-prompt-tests/integration.test.ts --reporter=default --reporter=json --outputFile=../test-results/project-audit-windows-closure/private-worker-lock-closure.json",
+    "red": "cd server; node ../node_modules/vitest/vitest.mjs run src/services/mimouse-private-prompt-tests/integration.test.ts --config ../test-results/project-audit-windows-closure/private-worker-lock-before-fix.vitest.mjs -t \"orders stale harness retries.*(queue|early_binding|claim|prepare)\"",
+    "case": "cd server; node ../node_modules/vitest/vitest.mjs run src/services/mimouse-private-prompt-tests/integration.test.ts -t \"produces own-agent routing proof\""
+  },
+  "limitations": [
+    "Scheduling proxies pause real Drizzle operations; no SQL, rows, authorization or provider-boundary result is mocked",
+    "Application-level no-network Node process fixture is used; actual paid provider execution remains outside this evidence"
+  ]
+}

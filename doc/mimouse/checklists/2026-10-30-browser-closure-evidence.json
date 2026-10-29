@@ -1,0 +1,337 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-30",
+  "recordedAt": "2026-10-29T16:30:10.839Z",
+  "head": "5ccd4ef014d1dc4101327985fde8cd6203b44dec",
+  "workingTree": "uncommitted audit changes",
+  "runtime": {
+    "os": "win32",
+    "node": "v24.16.0",
+    "browser": "Microsoft Edge 156.0.4314.50",
+    "server": "compiled entry with workspace TypeScript dependencies",
+    "database": "fixture-owned bundled PostgreSQL, connected through explicit external DATABASE_URL"
+  },
+  "results": {
+    "completeMiMouseApiAndFourLocales": {
+      "startTime": "2026-10-29T16:05:41.188Z",
+      "duration": 279237.91099999996,
+      "expected": 159,
+      "skipped": 10,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "authenticatedRecovery": {
+      "startTime": "2026-10-29T16:20:32.670Z",
+      "duration": 112595.859,
+      "expected": 4,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "staticUiDashboardEditorMermaid": {
+      "startTime": "2026-10-29T16:14:49.926Z",
+      "duration": 57647.966,
+      "expected": 3,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "lifecycleGuards": {
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0
+    },
+    "qoderAdapterWindowsContracts": {
+      "passed": 4,
+      "failed": 0,
+      "skipped": 13
+    }
+  },
+  "commands": [
+    {
+      "command": "pnpm test:mimouse:api i18n.spec.ts",
+      "mode": "local_trusted",
+      "compiled": true
+    },
+    {
+      "command": "pnpm exec playwright test --config tests/mimouse/playwright.config.ts recovery-closure.spec.ts",
+      "mode": "authenticated",
+      "compiled": true
+    },
+    {
+      "command": "pnpm exec playwright test --config tests/mimouse/playwright.config.ts static-ui-smoke.spec.ts",
+      "mode": "local_trusted",
+      "compiled": true
+    },
+    {
+      "command": "node --test tests/mimouse/fixture-lifecycle.test.mjs"
+    },
+    {
+      "command": "node --test external-adapters/qoder-cn/test/adapter.test.mjs"
+    }
+  ],
+  "inputs": {
+    "uiReferencedAssetsSha256": "153518e2de35170bc8b0b52d677bb1dfc6d1d82055a4276e968e79b3456b79cc",
+    "uiIndexSha256": "ad815b3f2502bb81ca16c6cc1e74e57fc4064daf18a2e5ad181b7c8d56653642",
+    "files": [
+      {
+        "file": "external-adapters/qoder-cn/index.mjs",
+        "sha256": "377fb5a993c0e18f3106a3696842a22cdea0d20d446ea9fd6840b53224d1bc7a"
+      },
+      {
+        "file": "tests/mimouse/api.spec.ts",
+        "sha256": "abf5d9f421916bc328c19a82ff3a001fb678b6a92c7de4bf205a40196415c925"
+      },
+      {
+        "file": "tests/mimouse/artifacts.spec.ts",
+        "sha256": "3bb2b8558c5e36d78b9258c5f8eba3b3ea34637c8ce5b0d2568a91ac2bc33b39"
+      },
+      {
+        "file": "tests/mimouse/auth-revocations.spec.ts",
+        "sha256": "fc9610aa6a09539f6b9b7084dd3931c68dd0bfd6d29b58111c9a6f59ab17fc74"
+      },
+      {
+        "file": "tests/mimouse/budget-notification.spec.ts",
+        "sha256": "b4e15a9575ac27a17170e77b3c9c7690f70122aa1810fed1ca3f735731a999ba"
+      },
+      {
+        "file": "tests/mimouse/capability-evidence.spec.ts",
+        "sha256": "e405f1053f9f29a75a64e606d6919cddbe3eb5f43e9a649858237f9458ed7ba5"
+      },
+      {
+        "file": "tests/mimouse/coding-diff.spec.ts",
+        "sha256": "ef1ee3e4ed22eb03e58a58d0c30767957f188fd31e7f8cf1e028ce85db91f342"
+      },
+      {
+        "file": "tests/mimouse/coding-goal.spec.ts",
+        "sha256": "dbb96d059769f55825f46617904c3f530ab8e4c28969f608f409cfbb666fcbac"
+      },
+      {
+        "file": "tests/mimouse/coding-poll.spec.ts",
+        "sha256": "88e64720c7011886e8fdcfe5a59b32c6cda74cb97e6e32d9cf6492e0deb7780e"
+      },
+      {
+        "file": "tests/mimouse/coding-repair.spec.ts",
+        "sha256": "d79548c3b86575b0eea155b22317880db940c594e03b3eed883d11f537f240f2"
+      },
+      {
+        "file": "tests/mimouse/coding.spec.ts",
+        "sha256": "52b900408787f1af405a6eed329b3f4c1bcc3da5bec3c566b9bb14eaf64d5f81"
+      },
+      {
+        "file": "tests/mimouse/cost-routing.spec.ts",
+        "sha256": "ae82fc63b3532c6b118882d9a0cf9d91e245ab606577ada4d0be5934b6d6b135"
+      },
+      {
+        "file": "tests/mimouse/evaluation-restore.spec.ts",
+        "sha256": "358231c62ff649a2faa5e862f0db598c5305b8c160d01ccd87ef228b3c5e1949"
+      },
+      {
+        "file": "tests/mimouse/evaluation.spec.ts",
+        "sha256": "e4987fa60aa9d078226e8a2110d3a4681d94f4ae3497c7d53b7ce2debcbcb95f"
+      },
+      {
+        "file": "tests/mimouse/feedback-evidence.spec.ts",
+        "sha256": "66774e8ca89b73f4dbfe92b2641ec0997aaa68a74109cfad03a78e8f418723aa"
+      },
+      {
+        "file": "tests/mimouse/feedback-inbox.spec.ts",
+        "sha256": "fb2f7fc255a103cba66b1da7bd494748d74d4bf48bce5dc94dc9749e50657d15"
+      },
+      {
+        "file": "tests/mimouse/feedback-promotion.spec.ts",
+        "sha256": "aa00ec97cf0faaba21d92d8b6536314cbec7e554e9f8fcf080b7728171c922a2"
+      },
+      {
+        "file": "tests/mimouse/feedback-verification.spec.ts",
+        "sha256": "cce1a868d51353cf2d34a796244d25173c45c9037ec5a68e30d32446a9d01569"
+      },
+      {
+        "file": "tests/mimouse/fixture-lifecycle.mjs",
+        "sha256": "90e0db95927a61465bc34ce2747b64cc4aad9ef6e231150b8681cb420c50c1c4"
+      },
+      {
+        "file": "tests/mimouse/fixture-server.mjs",
+        "sha256": "d0e217bea67b5c47243c3028a39157a1e7e91867159c3eea6c57ac4ff6b56177"
+      },
+      {
+        "file": "tests/mimouse/global-setup.mjs",
+        "sha256": "87eb03709637148eedefb8aef37dc928cb31a6443c102039fee5e312b94235e5"
+      },
+      {
+        "file": "tests/mimouse/i18n.spec.ts",
+        "sha256": "8c59405946b5cd3e929406a95cb44ff72da430df944dd2522bc836f40a093deb"
+      },
+      {
+        "file": "tests/mimouse/langfuse.spec.ts",
+        "sha256": "4c66f4766ea1b1d9bcf0b4c3a4765022fae049240a4d9f05279a004db0040d26"
+      },
+      {
+        "file": "tests/mimouse/notification-policy.spec.ts",
+        "sha256": "8224515cea0d180f6ed72f839820e3d3224aa8662c35fbed430af7fe4c2a9b60"
+      },
+      {
+        "file": "tests/mimouse/notification-reviews.spec.ts",
+        "sha256": "4d263783e797906dd758f8b009acb722bde6588d6dc5a4fe99b5c9fecd7996c0"
+      },
+      {
+        "file": "tests/mimouse/notification-revisions.spec.ts",
+        "sha256": "a0b238d2a40a5174cc11051bd83fd9cbee6eff5b9ef261d797324bc6fe009550"
+      },
+      {
+        "file": "tests/mimouse/notification-tokens.spec.ts",
+        "sha256": "13fa1ad2b73c4432776fed513ba891edb51165b427905293d71ab4c239c7ab11"
+      },
+      {
+        "file": "tests/mimouse/notification-verification.spec.ts",
+        "sha256": "622494c0f623c5f825b9ec9fa7b1e39ca08330fd803e7bbd63d4a9bd0060f432"
+      },
+      {
+        "file": "tests/mimouse/operations-preview.spec.ts",
+        "sha256": "8d76c6eb31222f90668e692685f5da27dca0f1cf4485795a74a56c02350d7bbe"
+      },
+      {
+        "file": "tests/mimouse/outbox.spec.ts",
+        "sha256": "88b87504d061483222b46b867a61c5d08e6a37090603ffe45921aaf8f04547f9"
+      },
+      {
+        "file": "tests/mimouse/playwright.config.ts",
+        "sha256": "4be936855318c464005e5a1fdacdb4479b69c2c80e1335bfddaa121037c49fda"
+      },
+      {
+        "file": "tests/mimouse/prompt-registry.spec.ts",
+        "sha256": "bdc2087870ff2b49b2d7719d8f8e6f289bfa95cc581b35217f69a6ecf6c1f58c"
+      },
+      {
+        "file": "tests/mimouse/qoder-runtime.spec.ts",
+        "sha256": "b32dedb4c91d4857658a00fb4422c9b94b67ce66f4402ceb85e465901ed1ab0e"
+      },
+      {
+        "file": "tests/mimouse/recovery-closure.spec.ts",
+        "sha256": "2a6780decd7451b655c4898c1df52012f0d175f6b2b8bb9fd4faaf89892a2979"
+      },
+      {
+        "file": "tests/mimouse/research-candidates.spec.ts",
+        "sha256": "f6704ad494774d717105d08a0c475b7dd7883a308bad9dbb4770057a97a5f6c2"
+      },
+      {
+        "file": "tests/mimouse/research-operations-pagination.spec.ts",
+        "sha256": "94af2136b2b65418e1f1f9b0e1ec0b4b4fd8f94b0e96f787d3231a27b4fd30c7"
+      },
+      {
+        "file": "tests/mimouse/research-routines.spec.ts",
+        "sha256": "b122d5f1aa8b0cc6eb7f380705dfd9679f3531be95b61abd280c0369cb776494"
+      },
+      {
+        "file": "tests/mimouse/research-scheduled-loop.spec.ts",
+        "sha256": "e056a765841e09f618e5b539bfa876c90fa6388f533b9368d6eb6f7a7b9297de"
+      },
+      {
+        "file": "tests/mimouse/static-ui-smoke.spec.ts",
+        "sha256": "667c38e22aea86666178ce0f0ef6cfc636e2b4e3d4b6264451792c8f3e5a2060"
+      },
+      {
+        "file": "tests/mimouse/wecom-inbound.spec.ts",
+        "sha256": "9a768353b17ac54726b417500835202d9a485684b0aada00fe14d074a7db53ed"
+      },
+      {
+        "file": "tests/mimouse/workbuddy.spec.ts",
+        "sha256": "3a61d30a8baa60a81c446db58c9265f5430f97b9804120da9457600ee7a6b3f4"
+      }
+    ]
+  },
+  "logs": [
+    {
+      "file": "test-results/project-audit-windows-closure/compiled-final.log",
+      "sha256": "c63264ec3cc131ea399da5526503cd7a373d82c368c42c10745aefbdcf79e846"
+    },
+    {
+      "file": "test-results/project-audit-windows-closure/auth-frozen.log",
+      "sha256": "9ee8de85225519c0387ab369e6b941e959479013b178a979e743fe7206d3748e"
+    },
+    {
+      "file": "test-results/project-audit-windows-closure/static-browser.log",
+      "sha256": "348c66d8cb29266bdb2a8e3a9d4ab2b4162ff65cfbb0949fe56dc209142879da"
+    },
+    {
+      "file": "test-results/project-audit-windows-closure/lifecycle-guards-final.log",
+      "sha256": "aa896bd1acac20809589a8289aedbde4f5a28c343a0f86b147ae2cb848775040"
+    },
+    {
+      "file": "test-results/project-audit-windows-closure/qoder-adapter.log",
+      "sha256": "953a4fdc634ca4b1d78df3c0b4fa62e56d7fb6d7fc9795eabbf0db5d77d830fa"
+    }
+  ],
+  "supersededAttemptLogs": [
+    {
+      "file": "test-results/project-audit-windows-closure/lifecycle-smoke.log",
+      "sha256": "fe512ca6c43a93cfd93419f317fcf106f11043fc8b5975161190f22423323c63",
+      "includedInFinalGate": false
+    },
+    {
+      "file": "test-results/project-audit-windows-closure/compiled-full.log",
+      "sha256": "45eeddba6aff2b0cd919a4cf4751a4729d90547081f4f62c9b6e810e554ea1ef",
+      "includedInFinalGate": false
+    },
+    {
+      "file": "test-results/project-audit-windows-closure/compiled-full2.log",
+      "sha256": "d82ffd9ae3e9f5615678b4032817ad669085b41f36f6e5c5913fb55e371f1c1c",
+      "includedInFinalGate": false
+    },
+    {
+      "file": "test-results/project-audit-windows-closure/auth-browser.log",
+      "sha256": "db5a7c1d16024d7ba406d8cb106944012e8bc4374dac1f4050c0f707613b3054",
+      "includedInFinalGate": false
+    },
+    {
+      "file": "test-results/project-audit-windows-closure/auth-final.log",
+      "sha256": "290232d46f13f3814fa912169935a76b2f5346c7106b853b8faebac646ad14b7",
+      "includedInFinalGate": false
+    }
+  ],
+  "screenshots": [
+    {
+      "file": "doc/mimouse/checklists/assets/project-audit-20261030/dashboard-charts.png",
+      "bytes": 83584,
+      "sha256": "96a857a5a5ffdcee8b5761a0986ac52f3b622944f0c59dc0a44f121cbf49900a"
+    },
+    {
+      "file": "doc/mimouse/checklists/assets/project-audit-20261030/markdown-mermaid.png",
+      "bytes": 111099,
+      "sha256": "fb2e609df01107a75588422511a1547bbf8ce669f7c86d6c792cb8472bd4c963"
+    },
+    {
+      "file": "doc/mimouse/checklists/assets/project-audit-20261030/rich-editor-draft.png",
+      "bytes": 110850,
+      "sha256": "3bb907249887e96e5e536df60dd60db663a285cd5b1b0d6ebe383bf91bfc42e8"
+    },
+    {
+      "file": "doc/mimouse/checklists/assets/project-audit-20261030/tasks-en.png",
+      "bytes": 49152,
+      "sha256": "17684d37faada4af2f0991fe00f6c0de9586201f288d761afa7f0460c353bc7f"
+    },
+    {
+      "file": "doc/mimouse/checklists/assets/project-audit-20261030/tasks-es.png",
+      "bytes": 52658,
+      "sha256": "6fccbe73a968f54dab19d285efe79f16fa13e07dc058b9ddb534800bc2691e83"
+    },
+    {
+      "file": "doc/mimouse/checklists/assets/project-audit-20261030/tasks-ja.png",
+      "bytes": 39679,
+      "sha256": "93bd1582aad21d919d8ed7e8f68ba76e16618141e99c9d5a6bec8d7bc139e4f3"
+    },
+    {
+      "file": "doc/mimouse/checklists/assets/project-audit-20261030/tasks-zh-CN.png",
+      "bytes": 39347,
+      "sha256": "c28cedbc5b8ef1d746b00c407bee28aaa6428bd1d627e16d8f6616ea258a66ab"
+    }
+  ],
+  "cleanup": {
+    "http": "public StartedServer.shutdown via owned IPC child",
+    "postgres": "marker, canonical directory, PID and live data_directory verified before pg_ctl fast stop",
+    "manualTerminationRequired": false,
+    "pidExited": true,
+    "pidFileRemovedNormally": true,
+    "fixturePortsReleased": true
+  }
+}

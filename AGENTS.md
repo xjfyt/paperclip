@@ -20,6 +20,14 @@ Before making changes, read in this order:
 `doc/SPEC.md` is long-horizon product context.
 `doc/SPEC-implementation.md` is the concrete V1 build contract.
 
+For fork documentation, use `docs/README.md` as the Chinese entry point and
+follow `docs/00-doc-rules.md`. Current capability boundaries and dated validation
+evidence are separate; historical test totals never qualify a new checkout.
+The numbered documents cover architecture, first use, deployment, configuration,
+integration boundaries, verification, troubleshooting, and backup/upgrade.
+Run `pnpm docs:check` after changing these maintained Chinese documents; its
+declared scope is limited and does not qualify all retained upstream docs.
+
 When adding or changing an Apps catalog connection, also follow
 `doc/connections/CONNECTOR-PLAYBOOK.md`. It is the canonical connection
 authoring runbook for provider research, supported transport/auth patterns,
@@ -43,7 +51,8 @@ submission.
 
 ## 4. Dev Setup (Auto DB)
 
-Use embedded PGlite in dev by leaving `DATABASE_URL` unset.
+Use embedded PostgreSQL in dev by leaving `DATABASE_URL` unset. The default
+database lives at `~/.paperclip/instances/default/db/`, not `data/pglite`.
 
 ```sh
 pnpm install
@@ -62,12 +71,15 @@ curl http://localhost:3100/api/health
 curl http://localhost:3100/api/companies
 ```
 
-Reset local dev DB:
+For a fresh, isolated dev database, choose a new data directory:
 
 ```sh
-rm -rf data/pglite
-pnpm dev
+pnpm dev --data-dir ./tmp/paperclip-dev-fresh
 ```
+
+Stop that instance with `pnpm dev:stop --data-dir ./tmp/paperclip-dev-fresh`.
+See `doc/DATABASE.md` before resetting existing data; database backups do not
+include uploads, workspaces, or the secrets master key.
 
 ## 5. Core Engineering Rules
 

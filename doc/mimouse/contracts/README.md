@@ -1,5 +1,11 @@
 # 集成合同 v1
 
+> **对应代码** — `packages/shared/src/`、`server/src/routes/`、`server/src/services/mimouse-coding/`、`server/src/services/mimouse-operations/`
+> **维护提示** — 公司边界、版本/幂等、秘密、外部合同或功能支持范围变化时同步模块事实源。
+> **最后验证** — 2026-10-29（现有合同入口与待提供边界核对，非外部联调回执）
+
+四项尚未闭合的外部合同使用[联调交接清单](integration-handoff.md)收集接口与验收要求。清单不代表合同已提供，也不改变当前 blocked/dry-run 状态。
+
 - 上游 AdapterExecutionContext/Result 是唯一执行合同，不扩展核心 run 状态枚举。
 - API 使用公司权限检查；匿名能力查询仅返回登录方式，不返回秘密。
 - 本地化仅注册 en、zh-CN、es、ja。领域资源是唯一编辑源，生成 JSON 键与占位符必须严格一致；原 app.noCompanies 保留。

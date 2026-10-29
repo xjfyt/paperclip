@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-29T15:33:43.267Z",
+  "timeZone": "Asia/Shanghai",
+  "head": "5ccd4ef014d1dc4101327985fde8cd6203b44dec",
+  "treeState": "uncommitted audit changes; HEAD build stamp does not attest a clean tree",
+  "environment": {
+    "os": "win32",
+    "node": "v24.16.0",
+    "pnpm": "9.15.4",
+    "browser": "Microsoft Edge 156.0.4314.50"
+  },
+  "initialCompiledApiAndBrowser": {
+    "status": "failed",
+    "passed": 156,
+    "failed": 12,
+    "failureGroups": {
+      "longPathRestoreFixture": 11,
+      "qoderWindowsQueued": 1
+    },
+    "notFinalInputCoverage": true
+  },
+  "windowsScopeRecheck": {
+    "startTime": "2026-10-29T15:25:55.361Z",
+    "duration": 68025.954,
+    "expected": 6,
+    "skipped": 10,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "finalAuditApiAndBrowser": {
+    "startTime": "2026-10-29T15:31:26.449Z",
+    "duration": 70199.477,
+    "expected": 11,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "scope": [
+    "isolated local PG and marked temporary HOME",
+    "compiled server with workspace TS imports, not all-dist",
+    "synthetic companies and unassigned browser tasks",
+    "no real provider, model, notification or business write"
+  ],
+  "logs": [
+    {
+      "file": "test-results/project-audit/ui-build.log",
+      "sha256": "9b47bcfc590270a2372a44235c082cb925f073f8141972823007cfd512381f1e",
+      "persistedInGit": false
+    },
+    {
+      "file": "test-results/project-audit/ui-harness-tests.log",
+      "sha256": "116725af50f26052b2eff31f91c56131f04abbe6284ff22503593ad7756747f9",
+      "persistedInGit": false
+    },
+    {
+      "file": "test-results/project-audit/server-build.log",
+      "sha256": "52c25a0d61e8ba9272f74cc0ddacefa0fd836b831a3e819f7e60154c841e9d53",
+      "persistedInGit": false
+    },
+    {
+      "file": "test-results/project-audit/server-build-lf.log",
+      "sha256": "e4e9755c00aa76b2791fdc167a71b5cdb993c04ef0776043d9de4c06beddeea4",
+      "persistedInGit": false
+    },
+    {
+      "file": "test-results/project-audit/server-build-esm-fixed.log",
+      "sha256": "e2804b58a0cf3d3d5dfc4ebfadee9cd836dfcd39950d310350471c524410a926",
+      "persistedInGit": false
+    },
+    {
+      "file": "test-results/project-audit/browser-source.log",
+      "sha256": "6466cf517d9f343d7e2831e5d0ab03f8b1d404c5c08d042bb2d3eb18b421fa4c",
+      "persistedInGit": false
+    },
+    {
+      "file": "test-results/project-audit/compiled-api-browser.log",
+      "sha256": "a712052e989a14b788961887176ca293de53c9e1bdd9ab699c0996c5215337c7",
+      "persistedInGit": false
+    },
+    {
+      "file": "test-results/project-audit/windows-targeted.log",
+      "sha256": "c27a273f248a5eaf7296543d80ebdccd72ba3357fa48d1e69e2fb9b2badc5adb",
+      "persistedInGit": false
+    },
+    {
+      "file": "test-results/project-audit/final-api-browser.log",
+      "sha256": "46d6a955ebc05e5a8c940f35537983ff22380b59d0286a50177319ac4300f1a0",
+      "persistedInGit": false
+    },
+    {
+      "file": "test-results/project-audit/final-cleanup.log",
+      "sha256": "4447f5b6541629cb070ba87eff1207f6b84e0919d43daf68ebed2b08928cce70",
+      "persistedInGit": false
+    }
+  ],
+  "screenshots": [
+    {
+      "file": "doc/mimouse/checklists/assets/project-audit-20261029/tasks-en.png",
+      "bytes": 49182,
+      "sha256": "f1cece2b87c2f4584a4c737d160bcda1133051659ed8d465f82ea2e382beed04"
+    },
+    {
+      "file": "doc/mimouse/checklists/assets/project-audit-20261029/tasks-es.png",
+      "bytes": 52525,
+      "sha256": "684bc70abe1592bac36fd05b7d4cff26a13648bee13cb6ebba5d5bcfd0bfa69b"
+    },
+    {
+      "file": "doc/mimouse/checklists/assets/project-audit-20261029/tasks-ja.png",
+      "bytes": 39674,
+      "sha256": "98b08925b9fb9c9a445f03d29ec2bd8587eb943533bdd61ca0e3e745f4dfbe75"
+    },
+    {
+      "file": "doc/mimouse/checklists/assets/project-audit-20261029/tasks-zh-CN.png",
+      "bytes": 39489,
+      "sha256": "88a6573c715362e7d653509e37d5b5b946a695d1d554d7266bdeeedc7f41d5a3"
+    }
+  ],
+  "knownRemaining": [
+    "10 POSIX restore success/recovery cases skipped on Windows; negative Windows guard and ACL passed",
+    "Qoder Windows success remains unqualified; initial full suite failed",
+    "Windows Playwright PG io_worker orphan reproduced and precisely cleaned; final ports released",
+    "real external C3/C4, legacy upgrade/restore, all-dist and six-target release not verified"
+  ]
+}

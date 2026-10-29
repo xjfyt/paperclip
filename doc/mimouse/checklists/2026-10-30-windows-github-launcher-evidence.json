@@ -1,0 +1,62 @@
+{
+  "recordedOn": "2026-10-30",
+  "platform": "native Windows",
+  "scope": "GitHub launcher local execution and POSIX-provider fixture portability; no real GitHub requests or credentials",
+  "commands": {
+    "regression": "node node_modules/vitest/vitest.mjs run packages/adapter-utils/src/github-launcher.test.ts packages/adapter-utils/src/github-launcher-environment.test.ts packages/adapter-utils/src/execution-target.test.ts --maxWorkers=1 --pool=forks --reporter=json --outputFile=test-results/project-audit-windows-closure/github-launcher-final.json",
+    "typecheck": "pnpm --filter @paperclipai/adapter-utils typecheck"
+  },
+  "results": {
+    "beforeTwoFiles": {
+      "passed": 4,
+      "failed": 26,
+      "skipped": 1
+    },
+    "finalThreeFiles": {
+      "passed": 47,
+      "failed": 0,
+      "skipped": 1
+    },
+    "finalTwoLauncherFiles": {
+      "passed": 31,
+      "failed": 0,
+      "skipped": 1
+    },
+    "skipReason": "Existing Linux inotify directory-mutation oracle; native Windows CLI contract is explicitly tested",
+    "typecheckExitCode": 0
+  },
+  "nativeAssertions": [
+    "real installed git.exe discovered via PATH/PATHEXT",
+    "controller-written git.cmd invokes trusted Node",
+    "controller-owned launcher validated canonical runtime path, PATH priority, realpath and exact source before direct Node execution",
+    "gh.exe fixture is a real child process executing its sibling script through the real Node interpreter",
+    "13 argument values preserved including quotes, empty string, trailing slash, percent expansion text and cmd metacharacters",
+    "child numeric exit status 23 preserved",
+    "host GH_TOKEN removed",
+    "modified launcher source rejected"
+  ],
+  "fixturePrerequisites": [
+    "Windows .NET Framework csc.exe; compile fixed local no-network source into unique test temporary directory",
+    "Git Bash sh.exe for POSIX provider fixture; no WSL prerequisite",
+    "installed native Git executable"
+  ],
+  "inputs": {
+    "packages/adapter-utils/src/github-launcher.ts": "ab875cf8cbab7a86ac9f78337c2ec388f17976a7bdddda7b6586ad92d4be8601",
+    "packages/adapter-utils/src/execution-target.ts": "dfad116dd1b58593b724290cfc61d9fb0f1021b485e5cd9f0949cb01073687a3",
+    "packages/adapter-utils/src/github-launcher.test.ts": "e4a2e3b4449263bc70f7151cc7901cb3901bdc6aed73340b139a3cf81c7bf4c0",
+    "packages/adapter-utils/src/github-launcher-environment.test.ts": "095bc99f6e921cf49ed9ca7bccfb09f24dcd80308c19f90a18f4032eb236496c",
+    "packages/adapter-utils/src/test-fixtures/native-cli.ts": "4cb867987c1b7cb3d4e6f9bd1248b9ea9a98e13f41868f851bdb629028b6378d",
+    "packages/adapter-utils/src/test-fixtures/local-sandbox.ts": "906fae67a69bc35dc4e960e0c1e4f8829ba9eefcb33faa5266a7de55bbaadfe8"
+  },
+  "logs": {
+    "test-results/project-audit-windows-closure/github-launcher-before.log": "9a650dc6fe41dc780cfccfe2c6ec850a1a1fc0ec736710a8796dbe135587bebd",
+    "test-results/project-audit-windows-closure/github-launcher-before.json": "d2f40e2f62ada50de7a7f17f7273d96e25449d741b403a5983b2bdffac48a8ef",
+    "test-results/project-audit-windows-closure/github-launcher-final.log": "c300655b55ecf833963d86169b33b3b6685d36f89ca2e494c8857ccc46f2348f",
+    "test-results/project-audit-windows-closure/github-launcher-final.json": "d563749325ddd74d6bd8ca10cbc2f9ed851fcf8a185d3141439189855b14e8f4",
+    "test-results/project-audit-windows-closure/github-launcher-typecheck-final.log": "44d5feaeb452fddf0d53efee74fad18f75de1eeb83fe7020ea9ea8aad20944fb"
+  },
+  "limitations": [
+    "No real GitHub OAuth, provider credentials, token minting, remote SSH host or external sandbox acceptance",
+    "General third-party batch command quoting is unchanged; safe direct Node handling is limited to validated controller-owned managed GitHub launchers"
+  ]
+}

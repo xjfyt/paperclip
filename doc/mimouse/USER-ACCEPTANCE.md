@@ -1,5 +1,11 @@
 # MiMouse 用户拉取与手工验收指南
 
+> **对应代码** — `ui/src/pages/`、`tests/mimouse/`、`external-adapters/`
+> **维护提示** — 用户入口、前提、权限、步骤、oracle 或当前验证索引变化时更新。
+> **最后验证** — 2026-10-29（手测入口和前提核对；步骤不是默认通过报告）
+
+> **2026-10-29 本机复验** — 最新执行范围、失败与跳过看[项目审计](checklists/2026-10-29-project-audit.md)和[Windows 验证记录](checklists/2026-10-29-project-audit-verification.md)。已有 Windows Edge 四语关键路径证据；全站/真实输入法/外部账号仍须逐项验收，受控技能整树恢复保持 POSIX-only。四项尚缺实现的外部集成按[联调交接清单](contracts/integration-handoff.md)准备，不要求在未接执行器前测试“上传/业务写入成功”。
+
 ## 2026-10-29 重建候选验收入口
 
 本次从远端e2bab5dc重建，当前候选0d1105e（7294键）已包含普通Claude/Codex配置补译；前一环境c5af04fa未找回。06:42 UTC已阶段推送并核对远端完整SHA`0d1105e6069265a45431ef562861afa7e57ebedf`（[提交](https://github.com/xjfyt/paperclip/commit/0d1105e6069265a45431ef562861afa7e57ebedf)）；[该SHA资源CI](https://github.com/xjfyt/paperclip/actions/runs/40830723132/job/123304070781)成功（非完整CI），后续文档提交另验，拉取后先确认完整SHA。176项定向（原有132＋新增44）、完整类型/构建/正确门禁与53项审计通过，新915文件/92批/12940项于06:59:42 UTC严格聚合通过，失败/skip/todo为0。上一358bd7a的914文件/92批/12896项通过不迁移到当前输入。实际浏览器[环境blocked、未打开页面且无截图](checklists/BROWSER-ENVIRONMENT-20261029.md)，不是应用失败。终态见[验证表](VERIFICATION.md#2026-10-29-重建候选当前证据与未完成检查)；旧环境852/914等历史数字/结果不冒充本次证据。
