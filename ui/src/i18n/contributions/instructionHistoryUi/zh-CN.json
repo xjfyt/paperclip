@@ -1,0 +1,21 @@
+{
+  "history": "历史记录",
+  "loading": "正在读取修订记录…",
+  "historyFailed": "无法读取指令历史记录。请重试读取。",
+  "diffFailed": "无法读取修订对比。请重试读取。",
+  "restoreFailed": "无法恢复修订。",
+  "retryHistory": "重试读取历史记录",
+  "retryDiff": "重试读取对比",
+  "retrying": "正在重试…",
+  "current": "当前",
+  "older": "更早的修订",
+  "selected": "已选修订",
+  "changes": "从已选修订到当前的变更",
+  "removed": "删除：",
+  "added": "新增：",
+  "unchanged": "内容无变更。",
+  "restore": "恢复为新修订",
+  "restoring": "正在恢复…",
+  "saveFirst": "恢复前请先保存或取消编辑。",
+  "empty": "暂无修订记录。"
+}

@@ -1,0 +1,21 @@
+{
+  "history": "Historial",
+  "loading": "Cargando revisiones…",
+  "historyFailed": "No se pudo cargar el historial de instrucciones. Reintenta la lectura.",
+  "diffFailed": "No se pudo cargar la comparación de revisiones. Reintenta la lectura.",
+  "restoreFailed": "No se pudo restaurar la revisión.",
+  "retryHistory": "Reintentar historial",
+  "retryDiff": "Reintentar comparación",
+  "retrying": "Reintentando…",
+  "current": "Actual",
+  "older": "Revisiones anteriores",
+  "selected": "Revisión seleccionada",
+  "changes": "Cambios de la revisión seleccionada a la actual",
+  "removed": "Eliminado:",
+  "added": "Añadido:",
+  "unchanged": "Sin cambios de contenido.",
+  "restore": "Restaurar como nueva revisión",
+  "restoring": "Restaurando…",
+  "saveFirst": "Guarda o cancela tus cambios antes de restaurar.",
+  "empty": "No hay revisiones disponibles."
+}

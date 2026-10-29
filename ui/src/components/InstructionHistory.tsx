@@ -1,3 +1,4 @@
+import { useTranslation, formatDate } from "../i18n";
 import { useState } from "react";
 import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
 import type { AgentInstructionsFileDetail } from "@paperclipai/shared";
@@ -19,10 +20,13 @@ export function InstructionHistory({
   disabled: boolean;
   onRestored: (file: AgentInstructionsFileDetail) => void;
 }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
-  const [selected, setSelected] = useState<string | null>(null);
+  const resource = JSON.stringify([companyId, agentId, path]);
+  const [selection, setSelection] = useState<{ resource: string; id: string } | null>(null);
+  const selected = selection?.resource === resource ? selection.id : null;
   const history = useInfiniteQuery({
-    queryKey: ["instruction-history", agentId, path, currentRevisionId],
+    queryKey: ["instruction-history", companyId, agentId, path, currentRevisionId],
     queryFn: ({ pageParam }) =>
       agentsApi.instructionHistory(agentId, path, companyId, pageParam),
     initialPageParam: undefined as string | undefined,
@@ -30,7 +34,7 @@ export function InstructionHistory({
     enabled: open,
   });
   const diff = useQuery({
-    queryKey: ["instruction-diff", agentId, path, selected, currentRevisionId],
+    queryKey: ["instruction-diff", companyId, agentId, path, selected, currentRevisionId],
     queryFn: () =>
       agentsApi.instructionDiff(
         agentId,
@@ -49,11 +53,10 @@ export function InstructionHistory({
         companyId,
       ),
     onSuccess: (file) => {
-      setSelected(null);
+      setSelection(null);
       onRestored(file);
     },
   });
-  const error = history.error ?? diff.error ?? restore.error;
   return (
     <div className="space-y-3">
       <Button
@@ -63,17 +66,33 @@ export function InstructionHistory({
         aria-expanded={open}
         onClick={() => setOpen(!open)}
       >
-        History
+        {t("instructionHistoryUi.history")}
       </Button>
       {open && (
         <div className="space-y-3">
           {history.isLoading && (
-            <p className="text-sm text-muted-foreground">Loading revisions…</p>
+            <p className="text-sm text-muted-foreground">{t("instructionHistoryUi.loading")}</p>
           )}
-          {error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error.message}
-            </p>
+          {([
+            [history, "historyFailed", "retryHistory", () => history.isFetchNextPageError ? history.fetchNextPage() : history.refetch()],
+            [diff, "diffFailed", "retryDiff", () => diff.refetch()],
+          ] as const).map(([query, message, retry, refetch]) => query.isError ? (
+            <div key={message} role="alert" className="space-y-2 text-sm text-destructive">
+              <p>{t(`instructionHistoryUi.${message}`)}</p>
+              {query.error instanceof Error && <p>{query.error.message}</p>}
+              <Button type="button" size="sm" variant="outline" disabled={query.isFetching} onClick={() => void refetch()}>
+                {t(`instructionHistoryUi.${query.isFetching ? "retrying" : retry}`)}
+              </Button>
+            </div>
+          ) : null)}
+          {restore.isError && (
+            <div role="alert" className="text-sm text-destructive">
+              <p>{t("instructionHistoryUi.restoreFailed")}</p>
+              {restore.error instanceof Error && <p>{restore.error.message}</p>}
+            </div>
+          )}
+          {history.isSuccess && history.data.pages.every(page => page.revisions.length === 0) && (
+            <p className="text-sm text-muted-foreground">{t("instructionHistoryUi.empty")}</p>
           )}
           {history.data?.pages
             .flatMap((page) => page.revisions)
@@ -83,14 +102,14 @@ export function InstructionHistory({
                   type="button"
                   size="sm"
                   variant={selected === revision.id ? "secondary" : "ghost"}
-                  onClick={() => setSelected(revision.id)}
+                  onClick={() => setSelection({ resource, id: revision.id })}
                 >
                   <span className="font-mono">{revision.id.slice(0, 8)}</span>
                 </Button>
                 <span className="text-sm text-muted-foreground">
                   {revision.source} ·{" "}
-                  {new Date(revision.createdAt).toLocaleString()}
-                  {revision.id === currentRevisionId ? " · Current" : ""}
+                  {formatDate(new Date(revision.createdAt), { dateStyle: "medium", timeStyle: "short" })}
+                  {revision.id === currentRevisionId ? ` · ${t("instructionHistoryUi.current")}` : ""}
                 </span>
               </div>
             ))}
@@ -101,39 +120,39 @@ export function InstructionHistory({
               disabled={history.isFetchingNextPage}
               onClick={() => void history.fetchNextPage()}
             >
-              Older revisions
+              {t("instructionHistoryUi.older")}
             </Button>
           )}
           {diff.data && (
             <>
-              <p className="text-sm text-muted-foreground">Selected revision</p>
+              <p className="text-sm text-muted-foreground">{t("instructionHistoryUi.selected")}</p>
               <pre className="whitespace-pre-wrap break-words rounded-md border border-border p-3 font-mono text-sm">
                 {diff.data.from.content}
               </pre>
               <p className="text-sm text-muted-foreground">
-                Changes from selected revision to current
+                {t("instructionHistoryUi.changes")}
               </p>
               <pre className="whitespace-pre-wrap break-words rounded-md border border-border p-3 font-mono text-sm">
-                {diff.data.removed && `Removed:\n${diff.data.removed}\n`}
-                {diff.data.added && `Added:\n${diff.data.added}`}
+                {diff.data.removed && `${t("instructionHistoryUi.removed")}\n${diff.data.removed}\n`}
+                {diff.data.added && `${t("instructionHistoryUi.added")}\n${diff.data.added}`}
                 {!diff.data.removed &&
                   !diff.data.added &&
-                  "No content changes."}
+                  t("instructionHistoryUi.unchanged")}
               </pre>
               <Button
                 type="button"
                 disabled={
                   disabled ||
-                  restore.isPending ||
+                  restore.isPending || history.isError || diff.isError || diff.isFetching ||
                   selected === currentRevisionId
                 }
                 onClick={() => restore.mutate()}
               >
-                Restore as new revision
+                {t(`instructionHistoryUi.${restore.isPending ? "restoring" : "restore"}`)}
               </Button>
               {disabled && (
                 <p className="text-sm text-muted-foreground">
-                  Save or cancel your edits before restoring.
+                  {t("instructionHistoryUi.saveFirst")}
                 </p>
               )}
             </>

@@ -1,0 +1,21 @@
+{
+  "history": "History",
+  "loading": "Loading revisions…",
+  "historyFailed": "Could not load instruction history. Retry to read it again.",
+  "diffFailed": "Could not load the revision comparison. Retry to read it again.",
+  "restoreFailed": "Could not restore the revision.",
+  "retryHistory": "Retry history",
+  "retryDiff": "Retry comparison",
+  "retrying": "Retrying…",
+  "current": "Current",
+  "older": "Older revisions",
+  "selected": "Selected revision",
+  "changes": "Changes from selected revision to current",
+  "removed": "Removed:",
+  "added": "Added:",
+  "unchanged": "No content changes.",
+  "restore": "Restore as new revision",
+  "restoring": "Restoring…",
+  "saveFirst": "Save or cancel your edits before restoring.",
+  "empty": "No revisions available."
+}
