@@ -6,6 +6,7 @@ import {
   afterAll,
   afterEach,
   beforeAll,
+  beforeEach,
   describe,
   expect,
   it,
@@ -816,11 +817,89 @@ async function createRemoteToolFixture(
   };
 }
 
+// Vitest timing out a callback does not cancel its SQL transactions. Keep the
+// exact body and its children alive until teardown releases their fixture gates
+// and joins them, before mocks or database rows can change underneath them.
+function ownedToolAccessCase() {
+  const work = new Set<Promise<unknown>>();
+  const gates = new Set<() => void>();
+  const databases = new Set<ReturnType<typeof createDb>>();
+  const restorations: Array<() => void> = [];
+  let closing = false;
+  let cleanup: Promise<void> | null = null;
+  let cleanupFinished = false;
+  let cleanupFailed = false;
+  let cleanupFailure: unknown;
+  return {
+    track<T>(promise: Promise<T>): Promise<T> {
+      work.add(promise);
+      // A child can reject before its body reaches the intended assertion.
+      // Track it immediately without changing the promise that body awaits.
+      void promise.then(() => undefined, () => undefined);
+      return promise;
+    },
+    ownDb(database: ReturnType<typeof createDb>) {
+      databases.add(database);
+      return database;
+    },
+    restoreAfterDrain(restore: () => void) { restorations.push(restore); },
+    gate() {
+      let open!: () => void;
+      const wait = new Promise<void>(resolve => { open = resolve; });
+      const release = () => { gates.delete(release); open(); };
+      gates.add(release);
+      // An unfinished callback may register its next gate after test timeout.
+      if (closing) release();
+      return { wait, release };
+    },
+    async close() {
+      // Preserve the first failure without waiting another 25s for every
+      // refused successor. Only actual completion permits later cleanup.
+      if (cleanupFailed && !cleanupFinished) throw cleanupFailure;
+      closing = true;
+      for (const release of [...gates]) release();
+      cleanup ??= (async () => {
+        let observed: number;
+        do {
+          observed = work.size;
+          await Promise.allSettled([...work]);
+        } while (work.size !== observed);
+        const closed = await Promise.allSettled([...databases].map(database => database.$client.end({ timeout: 0 })));
+        const failure = closed.find(result => result.status === "rejected");
+        if (failure?.status === "rejected") throw failure.reason;
+        for (const restore of restorations) restore();
+        cleanupFinished = true;
+      })();
+      let deadline!: ReturnType<typeof setTimeout>;
+      try {
+        // Keep below the existing 30s hook budget; do not raise case budgets.
+        await Promise.race([cleanup, new Promise<never>((_resolve, reject) => {
+          deadline = setTimeout(() => reject(Error("Owned tool-access work did not drain within 25000ms; refusing cleanup and another case")), 25_000);
+        })]);
+      } catch (error) { cleanupFailed = true; cleanupFailure = error; throw error; }
+      finally { clearTimeout(deadline); }
+    },
+  };
+}
+
 describeEmbeddedPostgres("tool access service", () => {
   let db!: ReturnType<typeof createDb>;
   let tempDb: Awaited<
     ReturnType<typeof startEmbeddedPostgresTestDatabase>
   > | null = null;
+  let activeOwnedCase: ReturnType<typeof ownedToolAccessCase> | null = null;
+
+  function runOwnedCase(body: (owned: ReturnType<typeof ownedToolAccessCase>) => Promise<void>) {
+    if (activeOwnedCase) throw Error("Previous owned tool-access case has not drained");
+    const owned = ownedToolAccessCase();
+    activeOwnedCase = owned;
+    // Register synchronously at callback entry, before the first body await.
+    return owned.track(Promise.resolve().then(() => body(owned)));
+  }
+
+  beforeEach(() => {
+    if (activeOwnedCase) throw Error("Previous owned tool-access case has not drained; refusing another case");
+  });
 
   beforeAll(async () => {
     const externalDatabaseUrl =
@@ -838,6 +917,10 @@ describeEmbeddedPostgres("tool access service", () => {
   }, 20_000);
 
   afterEach(async () => {
+    if (activeOwnedCase) {
+      await activeOwnedCase.close();
+      activeOwnedCase = null;
+    }
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
     await db.delete(toolOauthStates);
@@ -872,6 +955,11 @@ describeEmbeddedPostgres("tool access service", () => {
   });
 
   afterAll(async () => {
+    if (activeOwnedCase) {
+      await activeOwnedCase.close();
+      activeOwnedCase = null;
+    }
+    await db?.$client.end({ timeout: 0 });
     await tempDb?.cleanup();
   });
 
@@ -1012,34 +1100,28 @@ describeEmbeddedPostgres("tool access service", () => {
     );
   });
 
-  it("serializes exchange-token minting behind responsible-user membership revocation", async () => {
+  it("serializes exchange-token minting behind responsible-user membership revocation", () => runOwnedCase(async owned => {
     const company = await createCompany(db);
     const agent = await createAgent(db, company.id);
     const { run } = await createIssueAndRun(db, company.id, agent.id);
     const { connection } = await createBrokerConnection(db, company.id);
     await allowConnectionForAgent(db, company.id, agent.id, connection.id);
-    const mintDb = createDb(tempDb!.connectionString, { maxConnections: 1 });
-    const revocationDb = createDb(tempDb!.connectionString, {
+    const mintDb = owned.ownDb(createDb(tempDb!.connectionString, { maxConnections: 1 }));
+    const revocationDb = owned.ownDb(createDb(tempDb!.connectionString, {
       maxConnections: 1,
-    });
+    }));
     const service = createTestToolAccessService(mintDb);
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockRejectedValue(
         new Error("membership revocation must win before token exchange"),
       );
-    let releaseRevocation!: () => void;
-    const revocationMayCommit = new Promise<void>((resolve) => {
-      releaseRevocation = resolve;
-    });
-    let membershipLocked!: () => void;
-    const membershipIsLocked = new Promise<void>((resolve) => {
-      membershipLocked = resolve;
-    });
+    const { release: releaseRevocation, wait: revocationMayCommit } = owned.gate();
+    const { release: membershipLocked, wait: membershipIsLocked } = owned.gate();
     let revocation: Promise<void> | null = null;
 
     try {
-      revocation = revocationDb.transaction(async (tx) => {
+      revocation = owned.track(revocationDb.transaction(async (tx) => {
         await tx
           .select({ id: companyMemberships.id })
           .from(companyMemberships)
@@ -1063,10 +1145,10 @@ describeEmbeddedPostgres("tool access service", () => {
               eq(companyMemberships.principalId, "user-for-run"),
             ),
           );
-      });
+      }));
 
       await membershipIsLocked;
-      const mint = service
+      const mint = owned.track(service
         .mintConnectionTokenForAgent({
           connectionId: connection.id,
           companyId: company.id,
@@ -1077,7 +1159,7 @@ describeEmbeddedPostgres("tool access service", () => {
         .then(
           (value) => ({ value, error: null }),
           (error: unknown) => ({ value: null, error }),
-        );
+        ));
 
       expect(await waitForBlockedMembershipUpdate()).toBe(true);
       expect(fetchMock).not.toHaveBeenCalled();
@@ -1111,10 +1193,8 @@ describeEmbeddedPostgres("tool access service", () => {
     } finally {
       releaseRevocation();
       await revocation?.catch(() => undefined);
-      await mintDb.$client.end({ timeout: 0 }).catch(() => undefined);
-      await revocationDb.$client.end({ timeout: 0 }).catch(() => undefined);
     }
-  }, 15_000);
+  }), 15_000);
 
   it("denies token minting with an actionable error when the requesting agent has no install", async () => {
     const company = await createCompany(db);
@@ -1616,7 +1696,7 @@ describeEmbeddedPostgres("tool access service", () => {
     expect(response.body.error).toContain("need access to this connection");
   });
 
-  it("serializes delegation creation behind membership removal so reauthorization cannot revive stale consent", async () => {
+  it("serializes delegation creation behind membership removal so reauthorization cannot revive stale consent", () => runOwnedCase(async owned => {
     const company = await createCompany(db);
     const agent = await createAgent(db, company.id);
     await grantBoardUser(db, company.id, "alice", [], "member");
@@ -1633,19 +1713,13 @@ describeEmbeddedPostgres("tool access service", () => {
       })
       .returning()
       .then((rows) => rows[0]!);
-    const serviceDb = createDb(tempDb!.connectionString, { maxConnections: 1 });
+    const serviceDb = owned.ownDb(createDb(tempDb!.connectionString, { maxConnections: 1 }));
     const service = createTestToolAccessService(serviceDb);
-    const removalDb = createDb(tempDb!.connectionString, { maxConnections: 1 });
-    let releaseRemoval!: () => void;
-    const removalMayCommit = new Promise<void>((resolve) => {
-      releaseRemoval = resolve;
-    });
-    let membershipLocked!: () => void;
-    const membershipIsLocked = new Promise<void>((resolve) => {
-      membershipLocked = resolve;
-    });
+    const removalDb = owned.ownDb(createDb(tempDb!.connectionString, { maxConnections: 1 }));
+    const { release: releaseRemoval, wait: removalMayCommit } = owned.gate();
+    const { release: membershipLocked, wait: membershipIsLocked } = owned.gate();
 
-    const removal = removalDb.transaction(async (tx) => {
+    const removal = owned.track(removalDb.transaction(async (tx) => {
       await tx.execute(sql`
         SELECT "id"
         FROM "company_memberships"
@@ -1672,11 +1746,11 @@ describeEmbeddedPostgres("tool access service", () => {
           AND "principal_type" = 'user'
           AND "principal_id" = 'alice'
       `);
-    });
+    }));
 
     await membershipIsLocked;
     let creationSettled = false;
-    const creation = service
+    const creation = owned.track(service
       .createConnectionGrantDelegation(
         connection.id,
         grant.id,
@@ -1689,7 +1763,7 @@ describeEmbeddedPostgres("tool access service", () => {
       )
       .finally(() => {
         creationSettled = true;
-      });
+      }));
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(creationSettled).toBe(false);
     releaseRemoval();
@@ -1721,7 +1795,7 @@ describeEmbeddedPostgres("tool access service", () => {
         .from(connectionGrantDelegations)
         .where(eq(connectionGrantDelegations.grantId, grant.id)),
     ).toHaveLength(0);
-  });
+  }));
 
   it("uses the responsible user's personal grant for autonomous token minting", async () => {
     const company = await createCompany(db);
@@ -1876,7 +1950,7 @@ describeEmbeddedPostgres("tool access service", () => {
 
   it.each(["suspend", "archive", "remove"] as const)(
     "keeps an organization audience fail-closed when empty replacement races with member %s",
-    async (cleanupKind) => {
+    (cleanupKind) => runOwnedCase(async owned => {
       const company = await createCompany(db);
       await grantBoardUser(db, company.id, "owner", [], "owner");
       await grantBoardUser(db, company.id, "previous-user", [], "member");
@@ -1915,34 +1989,22 @@ describeEmbeddedPostgres("tool access service", () => {
         subjectId: "previous-user",
       });
 
-      const firstReplacementDb = createDb(tempDb!.connectionString, {
+      const firstReplacementDb = owned.ownDb(createDb(tempDb!.connectionString, {
         maxConnections: 1,
-      });
-      const replacementDb = createDb(tempDb!.connectionString, {
+      }));
+      const replacementDb = owned.ownDb(createDb(tempDb!.connectionString, {
         maxConnections: 1,
-      });
-      const cleanupDb = createDb(tempDb!.connectionString, {
+      }));
+      const cleanupDb = owned.ownDb(createDb(tempDb!.connectionString, {
         maxConnections: 1,
-      });
+      }));
       const replacementService = createTestToolAccessService(replacementDb);
-      let releaseFirstReplacement!: () => void;
-      const firstReplacementMayCommit = new Promise<void>((resolve) => {
-        releaseFirstReplacement = resolve;
-      });
-      let firstReplacementStaged!: () => void;
-      const firstReplacementIsStaged = new Promise<void>((resolve) => {
-        firstReplacementStaged = resolve;
-      });
-      let releaseCleanup!: () => void;
-      const cleanupMayFinish = new Promise<void>((resolve) => {
-        releaseCleanup = resolve;
-      });
-      let membershipLocked!: () => void;
-      const membershipIsLocked = new Promise<void>((resolve) => {
-        membershipLocked = resolve;
-      });
+      const { release: releaseFirstReplacement, wait: firstReplacementMayCommit } = owned.gate();
+      const { release: firstReplacementStaged, wait: firstReplacementIsStaged } = owned.gate();
+      const { release: releaseCleanup, wait: cleanupMayFinish } = owned.gate();
+      const { release: membershipLocked, wait: membershipIsLocked } = owned.gate();
 
-      const firstReplacement = firstReplacementDb.transaction(async (tx) => {
+      const firstReplacement = owned.track(firstReplacementDb.transaction(async (tx) => {
         const service = createTestToolAccessService(
           tx as unknown as ReturnType<typeof createDb>,
         );
@@ -1951,10 +2013,10 @@ describeEmbeddedPostgres("tool access service", () => {
         ]);
         firstReplacementStaged();
         await firstReplacementMayCommit;
-      });
+      }));
       await firstReplacementIsStaged;
 
-      const cleanup = cleanupDb.transaction(async (tx) => {
+      const cleanup = owned.track(cleanupDb.transaction(async (tx) => {
         await tx
           .select({ id: companyMemberships.id })
           .from(companyMemberships)
@@ -1978,14 +2040,14 @@ describeEmbeddedPostgres("tool access service", () => {
         } else {
           await access.setUserCompanyAccess("departing-user", []);
         }
-      });
+      }));
 
       // The first replacement still owns the departing member lock, so this
       // gives cleanup time to queue for that lock before the empty replacement
       // queues for the grant lock.
       await new Promise((resolve) => setTimeout(resolve, 50));
       let replacementSettled = false;
-      const replacement = replacementService
+      const replacement = owned.track(replacementService
         .replaceConnectionGrantMembers(connection.id, grant.id, [])
         .then(
           (value) => ({ value, error: null }),
@@ -1993,7 +2055,7 @@ describeEmbeddedPostgres("tool access service", () => {
         )
         .finally(() => {
           replacementSettled = true;
-        });
+        }));
       await new Promise((resolve) => setTimeout(resolve, 50));
       expect(replacementSettled).toBe(false);
 
@@ -2044,7 +2106,7 @@ describeEmbeddedPostgres("tool access service", () => {
         grantId: grant.id,
       });
       expect(fetchMock).not.toHaveBeenCalled();
-    },
+    }),
   );
 
   it("returns daily connection usage buckets", async () => {
@@ -7505,13 +7567,13 @@ describeEmbeddedPostgres("tool access service", () => {
     expect(await db.select().from(toolConnections).where(eq(toolConnections.companyId, company.id))).toEqual([]);
   });
 
-  it("completes brokered Gmail OAuth with a single database connection", async () => {
+  it("completes brokered Gmail OAuth with a single database connection", () => runOwnedCase(async owned => {
     const company = await createCompany(db);
     const userId = `gmail-member-${randomUUID()}`;
     await grantBoardUser(db, company.id, userId, []);
-    const callbackDb = createDb(tempDb!.connectionString, {
+    const callbackDb = owned.ownDb(createDb(tempDb!.connectionString, {
       maxConnections: 1,
-    });
+    }));
     const connector = fakeGmailConnector(company.id, userId);
     const service = createTestToolAccessService(callbackDb, {
       paperclipCloudConnector: connector,
@@ -7546,11 +7608,11 @@ describeEmbeddedPostgres("tool access service", () => {
       )!;
 
       const completed = await Promise.race([
-        service.completePaperclipCloudConnectorCallback({
+        owned.track(service.completePaperclipCloudConnectorCallback({
           state,
           claimId: "gmail-claim",
           actor,
-        }),
+        })),
         new Promise<never>((_resolve, reject) => {
           deadline = setTimeout(() => {
             void callbackDb.$client
@@ -7590,9 +7652,8 @@ describeEmbeddedPostgres("tool access service", () => {
       expect(connector.revoke).not.toHaveBeenCalled();
     } finally {
       if (deadline) clearTimeout(deadline);
-      await callbackDb.$client.end({ timeout: 0 }).catch(() => undefined);
     }
-  }, 15_000);
+  }), 15_000);
 
   it("reports GitHub reauthorization for the viewer without borrowing another user's grant", async () => {
     const company = await createCompany(db);
@@ -7653,7 +7714,7 @@ describeEmbeddedPostgres("tool access service", () => {
 
   it.each(["none", "event", "same-time-refresh", "one-conflict"])(
     "binds a managed GitHub identity and protects refresh from concurrent access changes (%s)",
-    async (concurrentChange) => {
+    (concurrentChange) => runOwnedCase(async () => {
       const company = await createCompany(db);
       const userId = `github-manager-${randomUUID()}`;
       await grantBoardUser(db, company.id, userId, [], "owner");
@@ -7916,10 +7977,10 @@ describeEmbeddedPostgres("tool access service", () => {
       } finally {
         githubDefinition.ownershipAvailability = previousOwnershipAvailability;
       }
-    },
+    }),
   );
 
-  it("replaces an archived dedicated GitHub identity with an explicitly selected personal identity", async () => {
+  it("replaces an archived dedicated GitHub identity with an explicitly selected personal identity", () => runOwnedCase(async () => {
     const company = await createCompany(db);
     const userId = `github-personal-revival-${randomUUID()}`;
     await grantBoardUser(db, company.id, userId, [], "owner");
@@ -8078,9 +8139,9 @@ describeEmbeddedPostgres("tool access service", () => {
     } finally {
       githubDefinition.ownershipAvailability = previousOwnershipAvailability;
     }
-  });
+  }));
 
-  it("routes a managed Drive callback into the personal vault, filtered catalog, and provider-specific activity", async () => {
+  it("routes a managed Drive callback into the personal vault, filtered catalog, and provider-specific activity", () => runOwnedCase(async () => {
     const company = await createCompany(db);
     const userId = `drive-member-${randomUUID()}`;
     await grantBoardUser(db, company.id, userId, [], "owner");
@@ -8298,9 +8359,9 @@ describeEmbeddedPostgres("tool access service", () => {
     } finally {
       driveDefinition.ownershipAvailability = previousOwnershipAvailability;
     }
-  });
+  }));
 
-  it("routes a managed Drive callback into the shared organization vault when selected", async () => {
+  it("routes a managed Drive callback into the shared organization vault when selected", () => runOwnedCase(async () => {
     const company = await createCompany(db);
     const userId = `shared-drive-member-${randomUUID()}`;
     await grantBoardUser(db, company.id, userId, [], "owner");
@@ -8431,9 +8492,9 @@ describeEmbeddedPostgres("tool access service", () => {
     } finally {
       driveDefinition.ownershipAvailability = previousOwnershipAvailability;
     }
-  });
+  }));
 
-  it("activates allowed Drive write actions without approval defaults after a managed callback", async () => {
+  it("activates allowed Drive write actions without approval defaults after a managed callback", () => runOwnedCase(async () => {
     const company = await createCompany(db);
     const userId = `drive-write-member-${randomUUID()}`;
     await grantBoardUser(db, company.id, userId, [], "owner");
@@ -8667,9 +8728,9 @@ describeEmbeddedPostgres("tool access service", () => {
     } finally {
       driveDefinition.ownershipAvailability = previousOwnershipAvailability;
     }
-  });
+  }));
 
-  it("keeps a managed draft retryable when default finalization fails", async () => {
+  it("keeps a managed draft retryable when default finalization fails", () => runOwnedCase(async () => {
     const company = await createCompany(db);
     const userId = `drive-finalize-failure-${randomUUID()}`;
     await grantBoardUser(db, company.id, userId, [], "owner");
@@ -8907,9 +8968,9 @@ describeEmbeddedPostgres("tool access service", () => {
     } finally {
       driveDefinition.ownershipAvailability = previousOwnershipAvailability;
     }
-  });
+  }));
 
-  it("rebuilds managed defaults when a removed connection is revived with its archived profile retained", async () => {
+  it("rebuilds managed defaults when a removed connection is revived with its archived profile retained", () => runOwnedCase(async () => {
     const company = await createCompany(db);
     const userId = `drive-revival-${randomUUID()}`;
     await grantBoardUser(db, company.id, userId, [], "owner");
@@ -9081,9 +9142,9 @@ describeEmbeddedPostgres("tool access service", () => {
     } finally {
       driveDefinition.ownershipAvailability = previousOwnershipAvailability;
     }
-  });
+  }));
 
-  it("keeps brokered OAuth state retryable until credentials are durably stored", async () => {
+  it("keeps brokered OAuth state retryable until credentials are durably stored", () => runOwnedCase(async () => {
     const company = await createCompany(db);
     const userId = `gmail-retry-${randomUUID()}`;
     await grantBoardUser(db, company.id, userId, []);
@@ -9161,16 +9222,16 @@ describeEmbeddedPostgres("tool access service", () => {
     } finally {
       gmailDefinition.ownershipAvailability = previousOwnershipAvailability;
     }
-  });
+  }));
 
-  it("serializes brokered Gmail OAuth completion behind membership revocation", async () => {
+  it("serializes brokered Gmail OAuth completion behind membership revocation", () => runOwnedCase(async owned => {
     const company = await createCompany(db);
     const userId = `gmail-member-${randomUUID()}`;
     await grantBoardUser(db, company.id, userId, []);
-    const callbackDb = createDb(tempDb!.connectionString, {
+    const callbackDb = owned.ownDb(createDb(tempDb!.connectionString, {
       maxConnections: 1,
-    });
-    const removalDb = createDb(tempDb!.connectionString, { maxConnections: 1 });
+    }));
+    const removalDb = owned.ownDb(createDb(tempDb!.connectionString, { maxConnections: 1 }));
     const service = createTestToolAccessService(callbackDb, {
       paperclipCloudConnector: fakeGmailConnector(company.id, userId),
     });
@@ -9181,14 +9242,9 @@ describeEmbeddedPostgres("tool access service", () => {
       ...previousOwnershipAvailability,
       platform_shared: true,
     };
-    let releaseRemoval!: () => void;
-    const removalMayCommit = new Promise<void>((resolve) => {
-      releaseRemoval = resolve;
-    });
-    let membershipLocked!: () => void;
-    const membershipIsLocked = new Promise<void>((resolve) => {
-      membershipLocked = resolve;
-    });
+    owned.restoreAfterDrain(() => { gmailDefinition.ownershipAvailability = previousOwnershipAvailability; });
+    const { release: releaseRemoval, wait: removalMayCommit } = owned.gate();
+    const { release: membershipLocked, wait: membershipIsLocked } = owned.gate();
     let removal: Promise<void> | null = null;
     mockToolsList([]);
 
@@ -9224,7 +9280,7 @@ describeEmbeddedPostgres("tool access service", () => {
         .from(connectionGrants)
         .where(eq(connectionGrants.connectionId, connected.connectionId));
 
-      removal = removalDb.transaction(async (tx) => {
+      removal = owned.track(removalDb.transaction(async (tx) => {
         await tx
           .select({ id: companyMemberships.id })
           .from(companyMemberships)
@@ -9251,10 +9307,10 @@ describeEmbeddedPostgres("tool access service", () => {
               eq(companyMemberships.principalId, userId),
             ),
           );
-      });
+      }));
 
       await membershipIsLocked;
-      const completion = service
+      const completion = owned.track(service
         .completePaperclipCloudConnectorCallback({
           state,
           claimId: "gmail-claim",
@@ -9263,7 +9319,7 @@ describeEmbeddedPostgres("tool access service", () => {
         .then(
           (value) => ({ value, error: null }),
           (error: unknown) => ({ value: null, error }),
-        );
+        ));
 
       expect(await waitForBlockedMembershipUpdate()).toBe(true);
       releaseRemoval();
@@ -9295,13 +9351,10 @@ describeEmbeddedPostgres("tool access service", () => {
           .where(eq(connectionGrants.connectionId, connected.connectionId)),
       ).resolves.toEqual(beforeGrants);
     } finally {
-      gmailDefinition.ownershipAvailability = previousOwnershipAvailability;
       releaseRemoval();
       await removal?.catch(() => undefined);
-      await callbackDb.$client.end({ timeout: 0 }).catch(() => undefined);
-      await removalDb.$client.end({ timeout: 0 }).catch(() => undefined);
     }
-  }, 15_000);
+  }), 15_000);
 
   it("synchronizes shared OAuth credentials to the organization grant used by gateway calls", async () => {
     vi.stubEnv("PAPERCLIP_TOOL_OAUTH_SLACK_CLIENT_ID", "slack-client-id");
@@ -11096,7 +11149,7 @@ describeEmbeddedPostgres("tool access service", () => {
     });
   });
 
-  it("uses Airtable DCR when both DCR and CIMD are advertised", async () => {
+  it("uses Airtable DCR when both DCR and CIMD are advertised", () => runOwnedCase(async () => {
     vi.stubEnv("PAPERCLIP_PUBLIC_URL", "https://paperclip.example");
     vi.stubEnv("PAPERCLIP_TOOL_OAUTH_AIRTABLE_CLIENT_ID", "");
     vi.stubEnv("PAPERCLIP_TOOL_OAUTH_AIRTABLE_CLIENT_SECRET", "");
@@ -11168,9 +11221,9 @@ describeEmbeddedPostgres("tool access service", () => {
     } finally {
       restoreMethod();
     }
-  });
+  }));
 
-  it("rebinds an Airtable CIMD client through DCR when the curated method opts in", async () => {
+  it("rebinds an Airtable CIMD client through DCR when the curated method opts in", () => runOwnedCase(async () => {
     vi.stubEnv("PAPERCLIP_PUBLIC_URL", "https://paperclip.example");
     vi.stubEnv("PAPERCLIP_TOOL_OAUTH_AIRTABLE_CLIENT_ID", "");
     vi.stubEnv("PAPERCLIP_TOOL_OAUTH_AIRTABLE_CLIENT_SECRET", "");
@@ -11240,9 +11293,9 @@ describeEmbeddedPostgres("tool access service", () => {
       if (originalRegistration === undefined) delete airtableMethod.oauthClientRegistration;
       else airtableMethod.oauthClientRegistration = originalRegistration;
     }
-  });
+  }));
 
-  it("does not fall back to Airtable CIMD when DCR is required but unavailable", async () => {
+  it("does not fall back to Airtable CIMD when DCR is required but unavailable", () => runOwnedCase(async () => {
     vi.stubEnv("PAPERCLIP_PUBLIC_URL", "https://paperclip.example");
     vi.stubEnv("PAPERCLIP_TOOL_OAUTH_AIRTABLE_CLIENT_ID", "");
     vi.stubEnv("PAPERCLIP_TOOL_OAUTH_AIRTABLE_CLIENT_SECRET", "");
@@ -11292,7 +11345,7 @@ describeEmbeddedPostgres("tool access service", () => {
     } finally {
       restoreMethod();
     }
-  });
+  }));
 
   it("registers Linear against its MCP authorization server instead of the pinned console endpoints", async () => {
     vi.stubEnv("PAPERCLIP_PUBLIC_URL", "https://paperclip.example");
@@ -16418,7 +16471,7 @@ describeEmbeddedPostgres("tool access service", () => {
     expect(JSON.stringify(connected)).not.toContain("github-actions-test-token");
   });
 
-  it("connects gallery apps and finishes access profiles, bindings, and ask-first policies", async () => {
+  it("connects gallery apps and finishes access profiles, bindings, and ask-first policies", () => runOwnedCase(async () => {
     const company = await createCompany(db);
     const service = createTestToolAccessService(db);
     const fetchMock = mockToolsList([
@@ -16784,9 +16837,9 @@ describeEmbeddedPostgres("tool access service", () => {
       company.id,
     );
     expect(attentionAfterReview.apps).toEqual([]);
-  });
+  }));
 
-  it("enables newly discovered tools after setup while preserving tools explicitly turned off", async () => {
+  it("enables newly discovered tools after setup while preserving tools explicitly turned off", () => runOwnedCase(async () => {
     const company = await createCompany(db);
     const service = createTestToolAccessService(db);
     const fetchMock = mockToolsList([
@@ -16873,9 +16926,9 @@ describeEmbeddedPostgres("tool access service", () => {
         expect.objectContaining({ catalogEntryId: updateEntry.id }),
       ]),
     );
-  });
+  }));
 
-  it("restores every action as Allowed when a removed app connection is connected again", async () => {
+  it("restores every action as Allowed when a removed app connection is connected again", () => runOwnedCase(async () => {
     const company = await createCompany(db);
     const agent = await createAgent(db, company.id);
     const service = createTestToolAccessService(db);
@@ -17020,7 +17073,7 @@ describeEmbeddedPostgres("tool access service", () => {
         reasonCode: "allow_profile",
       });
     }
-  });
+  }));
 
   it("resolves Notion reads as allowed, mutations as ask-first, and denies cross-company use", async () => {
     const company = await createCompany(db);
@@ -17171,7 +17224,7 @@ describeEmbeddedPostgres("tool access service", () => {
     });
   });
 
-  it("rolls back gallery app finish when a later write fails after clearing profile state", async () => {
+  it("rolls back gallery app finish when a later write fails after clearing profile state", () => runOwnedCase(async () => {
     const company = await createCompany(db);
     const service = createTestToolAccessService(db);
     mockToolsList([
@@ -17298,9 +17351,9 @@ describeEmbeddedPostgres("tool access service", () => {
     expect(policiesAfter.map((policy) => policy.id).sort()).toEqual(
       policiesBefore.map((policy) => policy.id).sort(),
     );
-  });
+  }));
 
-  it("reconnects a gallery app by rotating the existing credential in place (PAP-10859)", async () => {
+  it("reconnects a gallery app by rotating the existing credential in place (PAP-10859)", () => runOwnedCase(async () => {
     const company = await createCompany(db);
     const service = createTestToolAccessService(db);
     const fetchMock = mockToolsList([
@@ -17506,9 +17559,9 @@ describeEmbeddedPostgres("tool access service", () => {
         selectors: { catalogEntryId: updateEntry.id },
       }),
     ]);
-  });
+  }));
 
-  it("reconnects a personal key on the existing user grant without creating an organization credential", async () => {
+  it("reconnects a personal key on the existing user grant without creating an organization credential", () => runOwnedCase(async () => {
     const company = await createCompany(db);
     const service = createTestToolAccessService(db);
     const userId = `personal-key-${randomUUID()}`;
@@ -17651,7 +17704,7 @@ describeEmbeddedPostgres("tool access service", () => {
     expect(
       revivedGrants.grants.some((grant) => grant.kind === "organization"),
     ).toBe(false);
-  });
+  }));
 
   it("stops and restarts local stdio runtime slots through the board service", async () => {
     const company = await createCompany(db);

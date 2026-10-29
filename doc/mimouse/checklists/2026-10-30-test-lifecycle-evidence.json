@@ -1,0 +1,269 @@
+{
+  "schema": "mimouse.local-verification.v1",
+  "recordedAt": "2026-10-29T23:14:08.098Z",
+  "status": "Complete for the three named database test files. Separate private-integration owner expansion remains in progress and is not included.",
+  "inputs": [
+    {
+      "path": "server/src/__tests__/ai-connections.test.ts",
+      "sha256": "cd29d8a7b729042f65953aea2d8fec810af5b8547665a2c656baf2c72e8b4177"
+    },
+    {
+      "path": "server/src/__tests__/generic-mcp-connection.test.ts",
+      "sha256": "f0d07b380590dadcc2d7d212338f12978d18bffb958a6330d3ed24efb37398b6"
+    },
+    {
+      "path": "server/src/__tests__/tool-access-service.test.ts",
+      "sha256": "1ddc6800f9a2715e4f87877b74441f50395c4753b6e9b9b8b3e2f4c68fd7cb04"
+    }
+  ],
+  "helperInputs": [
+    {
+      "path": "server/src/__tests__/helpers/owned-case-work.ts",
+      "sha256": "1641e4b2668b1f41b10451ddc0e6fbf0111c4cf5dbd3ff42c2db2c81b3bebc00"
+    },
+    {
+      "path": "server/src/__tests__/helpers/owned-case-work.test.ts",
+      "sha256": "5e2847b118c3123b21e1c3c6d673629b697cab155d0ac5dc73fab892d75206bf"
+    }
+  ],
+  "hashBoundary": "Raw workspace SHA256; focused proof snapshots precede the additional catalog-owner coverage, which is covered by the later complete ToolAccess file. No normalized-Git or whole-repository frozen-input claim.",
+  "changes": [
+    "Selected raw bodies are registered before setup awaits; late fixture gates release during closing, actual children and clients drain before mocks or rows are changed.",
+    "Cleanup failure blocks successor admission and is memoized so refused cases do not each wait another full deadline; only actual cleanup completion can permit later teardown.",
+    "ToolAccess additionally owns 17 catalog-mutation case groups; AI additionally owns its managed-home write observer. Ordinary cases were not mechanically rewritten. Business assertions are retained; the specific platform budget exceptions are listed below."
+  ],
+  "fixtureBudgetExceptions": {
+    "aiRecovery": "Twelve recovery scenarios use Windows 45000ms / POSIX 15000ms, covering repeated real NTFS ACL inspections, journal replay and persistence failure recovery. This replaces the earlier shared 15000ms fixture limit; other AI case deadlines remain unchanged.",
+    "mcpVault": "Four Fireflies/real-vault scenarios use Windows 45000ms / POSIX 15000ms because real NTFS vault reads invoke the OS ACL inspector.",
+    "mcpSinglePool": "Single-pool callback deadlock diagnostic: inner deadline Windows 20000ms / POSIX 5000ms; outer case Windows 45000ms / POSIX 15000ms. These are finite test fixture bounds, not changed production provider or authentication deadlines.",
+    "unchanged": "ToolAccess case deadlines and existing 30000ms hooks remain unchanged. Owned cleanup uses its smaller 25000ms bound. Other individual test deadlines are retained."
+  },
+  "completeVerification": [
+    {
+      "runKind": "complete_business_suite",
+      "result": {
+        "files": 1,
+        "passed": 76,
+        "failed": 0,
+        "skipped": 0,
+        "exitCode": 0
+      },
+      "selectedFiles": [
+        "server/src/__tests__/generic-mcp-connection.test.ts"
+      ],
+      "selectedFilesAndHelperStable": true,
+      "unrelatedRepositoryChangedPaths": 3,
+      "boundary": "Before/after snapshots contain unrelated tests/docs edits; this is a selected-input proof, not a whole-repository frozen run.",
+      "invocation": {
+        "path": "test-results/project-closure-20261029/generic-mcp-owned-complete-final-invocation.json",
+        "sha256": "ce2b7bdd89e7ce3b73f147f7371703e151a7ca4d0c7f2e8391ef2adccbb196d6"
+      },
+      "json": {
+        "path": "test-results/project-closure-20261029/generic-mcp-owned-complete-final.json",
+        "sha256": "c2e6ca0e4ea16d99a3c588b0f0f65eb3b8f4bca6795f2caa375ccc03e91c46e1"
+      },
+      "log": {
+        "path": "test-results/project-closure-20261029/generic-mcp-owned-complete-final.log",
+        "sha256": "3c6dd08e2c9c70b55b1ee5da34f1ab05d84c7422032f6430a8c34cc9608f9a1b"
+      },
+      "before": {
+        "path": "test-results/project-closure-20261029/generic-mcp-owned-complete-final-before.json",
+        "sha256": "f9d5aff85fe7e55262d6b438c5ff37746a4e11177155e2b1748ea5c2992c8277"
+      },
+      "after": {
+        "path": "test-results/project-closure-20261029/generic-mcp-owned-complete-final-after.json",
+        "sha256": "d16c2b8f59a6291b3472c7329f2f3b8bde174c1c594666ebc11b9a19f31605ce"
+      }
+    },
+    {
+      "runKind": "complete_business_suite",
+      "result": {
+        "files": 2,
+        "passed": 534,
+        "failed": 0,
+        "skipped": 0,
+        "exitCode": 0
+      },
+      "selectedFiles": [
+        "server/src/__tests__/ai-connections.test.ts",
+        "server/src/__tests__/tool-access-service.test.ts"
+      ],
+      "selectedFilesAndHelperStable": true,
+      "unrelatedRepositoryChangedPaths": 2,
+      "boundary": "Before/after snapshots contain unrelated tests/docs edits; this is a selected-input proof, not a whole-repository frozen run.",
+      "invocation": {
+        "path": "test-results/project-closure-20261029/ai-tool-owned-complete-final-invocation.json",
+        "sha256": "3bf8f089152fa4948d71c3ed9f07b58281125cdbaa2ff27562f6faff99158ed3"
+      },
+      "json": {
+        "path": "test-results/project-closure-20261029/ai-tool-owned-complete-final.json",
+        "sha256": "6f5c235f0651fb2f0c181bf0e96220b61513dab3d3402450a8948b22da3838be"
+      },
+      "log": {
+        "path": "test-results/project-closure-20261029/ai-tool-owned-complete-final.log",
+        "sha256": "94006cb7c143a71ee90cee2cc8657856ae8a86efb771fb5bf74256522742ffd5"
+      },
+      "before": {
+        "path": "test-results/project-closure-20261029/ai-tool-owned-complete-final-before.json",
+        "sha256": "d368e613bb804809899b63e743cc554b4d66bb039ce7ed970f42dc8a11d4f6f7"
+      },
+      "after": {
+        "path": "test-results/project-closure-20261029/ai-tool-owned-complete-final-after.json",
+        "sha256": "4989354690a8429afdec00839ee96d27bc5d213a3a141370b257daadc549084e"
+      }
+    }
+  ],
+  "helperBehavior": {
+    "runKind": "isolated_helper_behavior",
+    "passed": 4,
+    "failed": 0,
+    "skipped": 0,
+    "json": {
+      "path": "test-results/project-closure-20261029/owned-case-work-final.json",
+      "sha256": "efd064d149e8c1b7647b935035055d1379845a8651267101822c0c8eb560a2c2"
+    },
+    "log": {
+      "path": "test-results/project-closure-20261029/owned-case-work-final.log",
+      "sha256": "aa6357e94a86ef47d3996c5975660dae8505d6d4c6962efc04aae910b5059fda"
+    },
+    "scope": "Four real-Promise gate tests; no PostgreSQL/provider started."
+  },
+  "focusedProof": [
+    {
+      "runKind": "intentional_fault_negative_control",
+      "accepted": true,
+      "result": {
+        "passed": 1,
+        "expectedFailed": 1,
+        "unexpectedFailed": 0,
+        "nameFiltered": 420
+      },
+      "expectedFailure": "Forced callback rejection plus observed body-not-joined-before-cleanup error.",
+      "realGateReached": true,
+      "bodyClosedBeforeDiagnosticSafety": false,
+      "unchangedBusinessSuccessor": "passed",
+      "safetyBoundary": "Old control records the native ordering defect before diagnostic release/join; safety cleanup does not count as correct old teardown.",
+      "input": {
+        "path": "test-results/project-closure-20261029/fixture-lifecycle-tool-before-input.json",
+        "sha256": "05ed8b00911f756e23ac88917875642723236a34d235abeb43755e240f9e55f5"
+      },
+      "json": {
+        "path": "test-results/project-closure-20261029/fixture-lifecycle-tool-before.json",
+        "sha256": "6ad97e005616e49c30eb6bf9faf7eaad36be327a0a6e1f6057e21f88e43b1598"
+      },
+      "log": {
+        "path": "test-results/project-closure-20261029/fixture-lifecycle-tool-before.log",
+        "sha256": "3866b6673861019e996ae1c2f670d039ed4d43f8c104f9f71cc3a66c79d6e738"
+      },
+      "verification": {
+        "path": "test-results/project-closure-20261029/fixture-lifecycle-tool-before-input-verification.json",
+        "sha256": "bd3c3cadd4e0b392ad412e6ba4563929f78d73049487b4fe6b108440e7b03071"
+      },
+      "ownedExit": {
+        "capturedGenerations": 10,
+        "survivors": 0,
+        "pidFileExists": false
+      },
+      "unhandledErrors": 0,
+      "frameworkWarnings": 0
+    },
+    {
+      "runKind": "intentional_fault_lifecycle_proof",
+      "accepted": true,
+      "result": {
+        "passed": 1,
+        "expectedFailed": 1,
+        "unexpectedFailed": 0,
+        "nameFiltered": 420
+      },
+      "expectedFailure": "Only the forced callback rejection.",
+      "realGateReached": true,
+      "bodyClosedBeforeDiagnosticSafety": true,
+      "unchangedBusinessSuccessor": "passed",
+      "safetyBoundary": "Old control records the native ordering defect before diagnostic release/join; safety cleanup does not count as correct old teardown.",
+      "input": {
+        "path": "test-results/project-closure-20261029/fixture-lifecycle-tool-after-input.json",
+        "sha256": "3ac6b32e395873a29235840522a872fc5b6a63e265ce1f9e3e317ef74cfa6a70"
+      },
+      "json": {
+        "path": "test-results/project-closure-20261029/fixture-lifecycle-tool-after.json",
+        "sha256": "69e63228e46e9fee85fc74876226b597aa68ea48764eeb1fe7914c994b40a163"
+      },
+      "log": {
+        "path": "test-results/project-closure-20261029/fixture-lifecycle-tool-after.log",
+        "sha256": "131afd8d2d4a52153b584e9ea434a5153f0ad0de8387c79d8ac7b9e36dbb2d1d"
+      },
+      "verification": {
+        "path": "test-results/project-closure-20261029/fixture-lifecycle-tool-after-input-verification.json",
+        "sha256": "698a381b70fe782701e532f7ddfdb086a85678c660047a027bf937a2f0170f42"
+      },
+      "ownedExit": {
+        "capturedGenerations": 10,
+        "survivors": 0,
+        "pidFileExists": false
+      },
+      "unhandledErrors": 0,
+      "frameworkWarnings": 0
+    }
+  ],
+  "checks": {
+    "syntax": {
+      "exitCode": 0,
+      "warnings": 0,
+      "log": {
+        "path": "test-results/project-closure-20261029/test-lifecycle-syntax-expanded-final.log",
+        "sha256": "d6b797566b683e37d114f930d00f67798afd275ebed3976b4827baac7ac8c022"
+      }
+    },
+    "helperStrictTypes": {
+      "exitCode": 0,
+      "log": {
+        "path": "test-results/project-closure-20261029/test-lifecycle-helper-types.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "serverTypesCurrentSelectedFiles": {
+      "command": [
+        "pnpm",
+        "exec",
+        "tsc",
+        "--noEmit"
+      ],
+      "cwd": "server",
+      "exitCode": 0,
+      "exitEvidence": "Observed functions exec/write_stdin session 5462 completed with exit_code 0; this records the completed command and does not claim another compiler run.",
+      "log": {
+        "path": "test-results/project-closure-20261029/private-owner-expanded-types.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "selectedFileHashes": [
+        {
+          "path": "server/src/__tests__/ai-connections.test.ts",
+          "sha256": "cd29d8a7b729042f65953aea2d8fec810af5b8547665a2c656baf2c72e8b4177"
+        },
+        {
+          "path": "server/src/__tests__/generic-mcp-connection.test.ts",
+          "sha256": "f0d07b380590dadcc2d7d212338f12978d18bffb958a6330d3ed24efb37398b6"
+        },
+        {
+          "path": "server/src/__tests__/tool-access-service.test.ts",
+          "sha256": "1ddc6800f9a2715e4f87877b74441f50395c4753b6e9b9b8b3e2f4c68fd7cb04"
+        }
+      ],
+      "boundary": "Ran after the AI managed-home observer and ToolAccess 17 catalog-owner additions. These three files were already frozen and remain byte-identical; the separate private file later received only CRLF normalization."
+    },
+    "earlierServerTypes": {
+      "exitCode": 0,
+      "log": {
+        "path": "test-results/project-closure-20261029/server-fixture-lifecycle-types-final.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "whitespace": "git diff --check passed for selected files."
+  },
+  "boundaries": [
+    "Intentional diagnostic failures are expected faults, not unresolved formal business test failures. Their counts must not be added to complete-suite pass counts.",
+    "This establishes the explicitly selected ownership boundaries and complete normal business files; it does not claim every arbitrary timeout in every ordinary test is externally cancellable.",
+    "Private timeout controls, the superseded 15s/10s child-deadline diagnostic, and new private-owner input are tracked separately. No paid provider, real external account, production guard change or process kill was used."
+  ]
+}

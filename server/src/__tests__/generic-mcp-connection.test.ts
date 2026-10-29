@@ -6,7 +6,8 @@ import { Writable } from "node:stream";
 import express from "express";
 import pino from "pino";
 import request from "supertest";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { ownedCaseWorkScope } from "./helpers/owned-case-work.js";
 
 vi.mock("node:dns/promises", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:dns/promises")>();
@@ -345,6 +346,17 @@ function createRouteApp(
 describeEmbeddedPostgres("generic remote MCP connections", () => {
   let db!: ReturnType<typeof createDb>;
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
+  const vaultJourneys = ownedCaseWorkScope();
+  const vaultJourneyTimeout = process.platform === "win32" ? 45_000 : 15_000;
+  function drainedVaultJourney<Args extends unknown[]>(body: (...args: Args) => Promise<void>) {
+    return (...args: Args) => vaultJourneys.run(() => body(...args));
+  }
+  const trackVault = <T>(promise: Promise<T>) => vaultJourneys.current().track(promise);
+  function ownVaultDb(database: ReturnType<typeof createDb>) {
+    vaultJourneys.current().finally(() => database.$client.end({ timeout: 0 }));
+    return database;
+  }
+  beforeEach(() => vaultJourneys.assertIdle());
 
   beforeAll(async () => {
     tempDb = await startEmbeddedPostgresTestDatabase("paperclip-generic-mcp-");
@@ -352,6 +364,9 @@ describeEmbeddedPostgres("generic remote MCP connections", () => {
   }, 20_000);
 
   afterEach(async () => {
+    // Timeouts do not cancel the body. Its real OAuth requests and vaulted-key
+    // reads must settle before restoring fetch/catalog mocks or deleting rows.
+    await vaultJourneys.drain();
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
     await db.delete(toolCallEvents);
@@ -382,6 +397,8 @@ describeEmbeddedPostgres("generic remote MCP connections", () => {
   });
 
   afterAll(async () => {
+    await vaultJourneys.drain();
+    await db?.$client.end({ timeout: 0 });
     await tempDb?.cleanup();
   });
 
@@ -403,7 +420,7 @@ describeEmbeddedPostgres("generic remote MCP connections", () => {
     return false;
   }
 
-  it.each(["mcp-oauth", "mcp-api-key"])("connects Fireflies through %s with vaulted credentials and its stable meeting tools", async (methodKey) => {
+  it.each(["mcp-oauth", "mcp-api-key"])("connects Fireflies through %s with vaulted credentials and its stable meeting tools", drainedVaultJourney(async (methodKey: string) => {
     // Keep the real catalog method and governance identity; redirect only its
     // transport URL to the deterministic protocol fixture.
     const method = APP_DEFINITIONS.find((app) => app.slug === "fireflies")!.methods.find((entry) => entry.key === methodKey)!;
@@ -483,7 +500,7 @@ describeEmbeddedPostgres("generic remote MCP connections", () => {
     } finally {
       method.defaults!.serverUrl = originalUrl;
     }
-  });
+  }), vaultJourneyTimeout);
 
   it("discovers every tool for a public unknown endpoint without activating the draft", async () => {
     installMcpOAuthFixture({ auth: "public" });
@@ -889,7 +906,7 @@ describeEmbeddedPostgres("generic remote MCP connections", () => {
     }
   }
 
-  it.each(["organization", "user"] as const)("keeps a real %s MCP connection usable across offline-access token expiry and rotation", async (grantKind) => {
+  it.each(["organization", "user"] as const)("keeps a real %s MCP connection usable across offline-access token expiry and rotation", drainedVaultJourney(async (grantKind: "organization" | "user") => {
     const fixture = await startOAuthRefreshFixture();
     try {
       const company = await createCompany(db);
@@ -935,12 +952,12 @@ describeEmbeddedPostgres("generic remote MCP connections", () => {
       const state = await service.getConnection(connectionId, company.id);
       expect(JSON.stringify(state)).not.toMatch(/fixture-(access|refresh)-/);
     } finally { await fixture.close(); }
-  });
+  }), vaultJourneyTimeout);
 
   it.each([
     { challengeScope: false, resourceScopes: ["mcp:read"], requestedScopes: undefined },
     { challengeScope: false, resourceScopes: [], requestedScopes: ["mcp:read"] },
-  ])("adds only offline access to generic discovery scopes ($resourceScopes)", async (options) => {
+  ])("adds only offline access to generic discovery scopes ($resourceScopes)", drainedVaultJourney(async (options: { challengeScope: boolean; resourceScopes: string[]; requestedScopes: string[] | undefined }) => {
     const fixture = await startOAuthRefreshFixture(options);
     try {
       const company = await createCompany(db);
@@ -971,12 +988,12 @@ describeEmbeddedPostgres("generic remote MCP connections", () => {
       const reconnect = await service.startOAuth(company.id, connected.connectionId, { redirectUri: input.redirectUri, actor });
       expect(new URL(reconnect.authorizationUrl).searchParams.get("scope")).toBe("mcp:read offline_access");
     } finally { await fixture.close(); }
-  });
+  }));
 
   it.each([
     { supportsOfflineAccess: false },
     { grantTypes: ["authorization_code"] },
-  ])("does not request offline access when the authorization server does not support refresh ($supportsOfflineAccess, $grantTypes)", async (options) => {
+  ])("does not request offline access when the authorization server does not support refresh ($supportsOfflineAccess, $grantTypes)", drainedVaultJourney(async (options: { supportsOfflineAccess?: boolean; grantTypes?: string[] }) => {
     const fixture = await startOAuthRefreshFixture(options);
     try {
       const company = await createCompany(db);
@@ -1000,7 +1017,7 @@ describeEmbeddedPostgres("generic remote MCP connections", () => {
       expect(completed.connection.credentialSecretRefs.some((ref) => ref.configPath === "oauth.access_token")).toBe(true);
       expect(completed.connection.credentialSecretRefs.some((ref) => ref.configPath === "oauth.refresh_token")).toBe(false);
     } finally { await fixture.close(); }
-  });
+  }));
 
   it.each([
     { name: "different authorization endpoint", authorizationUrl: `${ISSUER}/other-authorize`, tokenUrl: `${ISSUER}/token`, issuer: ISSUER, offline: false },
@@ -1042,7 +1059,7 @@ describeEmbeddedPostgres("generic remote MCP connections", () => {
     expect(url.searchParams.get("prompt")).toBe(candidate.offline ? "consent" : null);
   });
 
-  it("discovers offline refresh support when reconnecting a legacy connection with cached endpoints", async () => {
+  it("discovers offline refresh support when reconnecting a legacy connection with cached endpoints", drainedVaultJourney(async () => {
     const fixture = await startOAuthRefreshFixture();
     try {
       const company = await createCompany(db);
@@ -1062,7 +1079,7 @@ describeEmbeddedPostgres("generic remote MCP connections", () => {
       expect(url.searchParams.get("prompt")).toBe("consent");
       expect(fixture.events.filter((event) => event.kind === "registration")).toHaveLength(1);
     } finally { await fixture.close(); }
-  });
+  }));
 
   it("discovers OAuth for a personal URL connection before its user grant exists", async () => {
     const fixture = installMcpOAuthFixture({ auth: "oauth" });
@@ -1143,7 +1160,7 @@ describeEmbeddedPostgres("generic remote MCP connections", () => {
     expect(resumed.auth).toMatchObject({ kind: "oauth" });
   });
 
-  it("creates one personal grant when two public URL setup retries probe concurrently", async () => {
+  it("creates one personal grant when two public URL setup retries probe concurrently", drainedVaultJourney(async () => {
     const fixture = installMcpOAuthFixture({ auth: "public" });
     const company = await createCompany(db);
     const service = toolAccessService(db);
@@ -1160,8 +1177,7 @@ describeEmbeddedPostgres("generic remote MCP connections", () => {
     await db.delete(toolAccessAuditEvents).where(eq(toolAccessAuditEvents.connectionId, first.connectionId));
     fixture.fetchMock.mockRestore();
     let probes = 0;
-    let release!: () => void;
-    const bothProbed = new Promise<void>((resolve) => { release = resolve; });
+    const { resolve: release, promise: bothProbed } = vaultJourneys.current().signal();
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
       probes += 1;
       if (probes === 2) release();
@@ -1183,9 +1199,9 @@ describeEmbeddedPostgres("generic remote MCP connections", () => {
       eq(toolAccessAuditEvents.connectionId, first.connectionId),
       eq(toolAccessAuditEvents.action, "connection_grant.created"),
     ))).resolves.toHaveLength(1);
-  });
+  }));
 
-  it("keeps a successful personal setup when the grant-creating retry later fails", async () => {
+  it("keeps a successful personal setup when the grant-creating retry later fails", drainedVaultJourney(async () => {
     const fixture = installMcpOAuthFixture({ auth: "public" });
     const company = await createCompany(db);
     const service = toolAccessService(db);
@@ -1200,10 +1216,8 @@ describeEmbeddedPostgres("generic remote MCP connections", () => {
     await db.update(toolApplications).set({ status: "archived", archivedAt: new Date() }).where(eq(toolApplications.id, first.application.id));
     fixture.fetchMock.mockRestore();
     let calls = 0;
-    let catalogStarted!: () => void;
-    const catalogPending = new Promise<void>((resolve) => { catalogStarted = resolve; });
-    let failCatalog!: () => void;
-    const releaseCatalog = new Promise<void>((resolve) => { failCatalog = resolve; });
+    const { resolve: catalogStarted, promise: catalogPending } = vaultJourneys.current().signal();
+    const { resolve: failCatalog, promise: releaseCatalog } = vaultJourneys.current().signal();
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
       calls += 1;
       if (calls === 2) {
@@ -1214,9 +1228,9 @@ describeEmbeddedPostgres("generic remote MCP connections", () => {
       }
       return jsonResponse({ jsonrpc: "2.0", id: "paperclip-catalog-refresh", result: { tools: FIXTURE_TOOLS } });
     });
-    const failure = service.connectGalleryApp(company.id, {
+    const failure = trackVault(service.connectGalleryApp(company.id, {
       link: MCP_URL, name: "Personal retry rollback", grantKind: "user",
-    }, actor).then(() => null, (error: unknown) => error);
+    }, actor).then(() => null, (error: unknown) => error));
     await Promise.race([catalogPending, failure.then((error) => { throw error ?? new Error("Retry finished before the catalog probe"); })]);
     try {
       const successfulRetry = await service.connectGalleryApp(company.id, retryInput, actor);
@@ -1231,7 +1245,7 @@ describeEmbeddedPostgres("generic remote MCP connections", () => {
     const [application] = await db.select().from(toolApplications).where(eq(toolApplications.id, first.application.id));
     expect(application.status).toBe("draft");
     await expect(service.checkHealth(first.connectionId, actor)).resolves.toMatchObject({ connection: { healthStatus: "ok" } });
-  });
+  }));
 
   it("rolls back partial catalog and profile writes without removing the established public identity", async () => {
     const fixture = installMcpOAuthFixture({ auth: "public" });
@@ -1276,7 +1290,7 @@ describeEmbeddedPostgres("generic remote MCP connections", () => {
     await expect(db.select().from(toolProfileBindings).where(eq(toolProfileBindings.companyId, company.id))).resolves.toHaveLength(1);
   });
 
-  it("creates an empty user grant after a personal public URL probe succeeds", async () => {
+  it("creates an empty user grant after a personal public URL probe succeeds", drainedVaultJourney(async () => {
     // Use a real loopback MCP server here: neither fetch nor the transport is mocked.
     const receivedMethods: string[] = [];
     const mcpServer = createServer(async (req, res) => {
@@ -1337,14 +1351,15 @@ describeEmbeddedPostgres("generic remote MCP connections", () => {
         mcpServer.closeAllConnections();
       });
     }
-  });
+  }));
 
-  it("completes organization OAuth with a single database connection", async () => {
+  it("completes organization OAuth with a single database connection", drainedVaultJourney(async () => {
     const fixture = installMcpOAuthFixture({ auth: "oauth" });
     const company = await createCompany(db);
-    const callbackDb = createDb(tempDb!.connectionString, { maxConnections: 1 });
+    const callbackDb = ownVaultDb(createDb(tempDb!.connectionString, { maxConnections: 1 }));
     const service = toolAccessService(callbackDb);
     let deadline: ReturnType<typeof setTimeout> | null = null;
+    let completing: ReturnType<typeof service.completeOAuthCallback> | undefined;
 
     try {
       await callbackDb.execute(sql`select pg_backend_pid()`);
@@ -1359,28 +1374,31 @@ describeEmbeddedPostgres("generic remote MCP connections", () => {
       const authorizationUrl = new URL(start.authorizationUrl);
       const code = fixture.issueAuthorizationCode(start.authorizationUrl);
 
-      const completed = await Promise.race([
-        service.completeOAuthCallback({
+      completing = trackVault(service.completeOAuthCallback({
           state: authorizationUrl.searchParams.get("state")!,
           code,
           iss: ISSUER,
           redirectUri: REDIRECT_URI,
           actor: { actorType: "user", actorId: "board-user" },
-        }),
+        }));
+      const completed = await Promise.race([
+        completing,
         new Promise<never>((_resolve, reject) => {
+          // Real NTFS vault reads invoke the OS ACL inspector. Keep a finite
+          // deadlock bound without treating their cost as a five-second SLA.
           deadline = setTimeout(() => {
-            void callbackDb.$client.end({ timeout: 0 })
-              .finally(() => reject(new Error("OAuth callback self-deadlocked with maxConnections=1")));
-          }, 5_000);
+            const fail = () => reject(new Error("OAuth callback exceeded its single-connection deadline"));
+            void callbackDb.$client.end({ timeout: 0 }).then(fail, fail);
+          }, process.platform === "win32" ? 20_000 : 5_000);
         }),
       ]);
 
       expect(completed.connection).toMatchObject({ status: "active", enabled: true });
     } finally {
       if (deadline) clearTimeout(deadline);
-      await callbackDb.$client.end({ timeout: 0 }).catch(() => undefined);
+      await Promise.allSettled([completing]);
     }
-  }, 15_000);
+  }), vaultJourneyTimeout);
 
   it("rejects organization OAuth completion after the initiating user loses write access", async () => {
     const fixture = installMcpOAuthFixture({ auth: "oauth" });
@@ -1423,21 +1441,15 @@ describeEmbeddedPostgres("generic remote MCP connections", () => {
     expect(connection!.credentialSecretRefs.some((ref) => ref.configPath === "oauth.refresh_token")).toBe(false);
   });
 
-  it("serializes organization OAuth completion behind membership revocation", async () => {
+  it("serializes organization OAuth completion behind membership revocation", drainedVaultJourney(async () => {
     const fixture = installMcpOAuthFixture({ auth: "oauth" });
     const company = await createCompany(db);
-    const callbackDb = createDb(tempDb!.connectionString, { maxConnections: 1 });
-    const removalDb = createDb(tempDb!.connectionString, { maxConnections: 1 });
+    const callbackDb = ownVaultDb(createDb(tempDb!.connectionString, { maxConnections: 1 }));
+    const removalDb = ownVaultDb(createDb(tempDb!.connectionString, { maxConnections: 1 }));
     const service = toolAccessService(callbackDb);
     const actor = { actorType: "user" as const, actorId: "board-user" };
-    let releaseRemoval!: () => void;
-    const removalMayCommit = new Promise<void>((resolve) => {
-      releaseRemoval = resolve;
-    });
-    let membershipLocked!: () => void;
-    const membershipIsLocked = new Promise<void>((resolve) => {
-      membershipLocked = resolve;
-    });
+    const { resolve: releaseRemoval, promise: removalMayCommit } = vaultJourneys.current().signal();
+    const { resolve: membershipLocked, promise: membershipIsLocked } = vaultJourneys.current().signal();
 
     const connected = await service.connectGalleryApp(company.id, {
       link: MCP_URL,
@@ -1457,7 +1469,7 @@ describeEmbeddedPostgres("generic remote MCP connections", () => {
       eq(connectionGrants.connectionId, connected.connectionId),
     ));
 
-    const removal = removalDb.transaction(async (tx) => {
+    const removal = trackVault(removalDb.transaction(async (tx) => {
       await tx.select({ id: companyMemberships.id }).from(companyMemberships).where(and(
         eq(companyMemberships.companyId, company.id),
         eq(companyMemberships.principalType, "user"),
@@ -1473,10 +1485,10 @@ describeEmbeddedPostgres("generic remote MCP connections", () => {
         eq(companyMemberships.principalType, "user"),
         eq(companyMemberships.principalId, "board-user"),
       ));
-    });
+    }));
 
     await membershipIsLocked;
-    const completion = service.completeOAuthCallback({
+    const completion = trackVault(service.completeOAuthCallback({
       state: authorizationUrl.searchParams.get("state")!,
       code,
       iss: ISSUER,
@@ -1485,7 +1497,7 @@ describeEmbeddedPostgres("generic remote MCP connections", () => {
     }).then(
       (value) => ({ value, error: null }),
       (error: unknown) => ({ value: null, error }),
-    );
+    ));
 
     try {
       expect(await waitForBlockedMembershipUpdate()).toBe(true);
@@ -1517,10 +1529,8 @@ describeEmbeddedPostgres("generic remote MCP connections", () => {
     } finally {
       releaseRemoval();
       await removal.catch(() => undefined);
-      await callbackDb.$client.end({ timeout: 0 }).catch(() => undefined);
-      await removalDb.$client.end({ timeout: 0 }).catch(() => undefined);
     }
-  }, 15_000);
+  }), 15_000);
 
   it("discovers a pathful issuer through the OIDC suffix form too", async () => {
     installMcpOAuthFixture({ auth: "oauth", wellKnownStyle: "oidc-suffix" });
@@ -2182,7 +2192,7 @@ describeEmbeddedPostgres("generic remote MCP connections", () => {
       await expect(db.select().from(toolOauthStates)).resolves.toHaveLength(0);
     });
 
-    it("lets only one of two simultaneous callbacks exchange a code", async () => {
+    it("lets only one of two simultaneous callbacks exchange a code", drainedVaultJourney(async () => {
       const fixture = installMcpOAuthFixture({ auth: "oauth" });
       const company = await createCompany(db);
       const service = toolAccessService(db);
@@ -2197,20 +2207,15 @@ describeEmbeddedPostgres("generic remote MCP connections", () => {
       // serialize the two callbacks and prove nothing. With two connections both
       // callbacks can read a live state row before either deletes it, so the
       // atomic `DELETE … RETURNING` is what picks the winner.
-      const otherDb = createDb(tempDb!.connectionString);
+      const otherDb = ownVaultDb(createDb(tempDb!.connectionString));
       const otherService = toolAccessService(otherDb);
-      let settled: PromiseSettledResult<unknown>[];
-      try {
-        // Connect before racing: paying TCP and startup latency inside the race
-        // would just hand the first callback an uncontested head start.
-        await otherDb.select().from(companies).limit(1);
-        settled = await Promise.allSettled([
-          service.completeOAuthCallback({ state, code, iss: ISSUER, redirectUri: REDIRECT_URI, actor }),
-          otherService.completeOAuthCallback({ state, code, iss: ISSUER, redirectUri: REDIRECT_URI, actor }),
-        ]);
-      } finally {
-        await otherDb.$client.end({ timeout: 5 });
-      }
+      // Connect before racing: paying TCP and startup latency inside the race
+      // would just hand the first callback an uncontested head start.
+      await otherDb.select().from(companies).limit(1);
+      const settled = await Promise.allSettled([
+        service.completeOAuthCallback({ state, code, iss: ISSUER, redirectUri: REDIRECT_URI, actor }),
+        otherService.completeOAuthCallback({ state, code, iss: ISSUER, redirectUri: REDIRECT_URI, actor }),
+      ]);
 
       expect(settled.filter((entry) => entry.status === "fulfilled")).toHaveLength(1);
       // The loser never reached the token endpoint at all.
@@ -2220,7 +2225,7 @@ describeEmbeddedPostgres("generic remote MCP connections", () => {
         status: 400,
         message: "OAuth state was not found or has already been used",
       });
-    });
+    }));
   });
 
   it("accepts an iss that differs only by a trailing slash", async () => {
