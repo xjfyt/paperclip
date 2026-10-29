@@ -858,6 +858,20 @@ async function loadAppliedMigrations(
   if (columnNames.has("hash")) {
     const rows = await sql.unsafe<{ hash: string }[]>(`SELECT hash FROM ${qualifiedTable} ORDER BY id`);
     const hashesToMigrationFiles = await mapHashesToMigrationFiles(availableMigrations);
+    const unresolvedHashes = new Set(rows.map((row) => row.hash).filter((hash) => !hashesToMigrationFiles.has(hash)));
+    if (unresolvedHashes.size > 0) {
+      // Historical Windows checkouts could execute CRLF SQL and record its
+      // exact bytes. Do not reinterpret that receipt as canonical LF history,
+      // repair it from schema guesses, or replay already executed data SQL.
+      for (const migrationFile of availableMigrations) {
+        const content = await readMigrationFileContent(migrationFile);
+        if (!content.includes("\n") || content.includes("\r")) continue;
+        const crlfHash = createHash("sha256").update(content.replaceAll("\n", "\r\n")).digest("hex");
+        if (unresolvedHashes.has(crlfHash)) {
+          throw new Error(`Migration line-ending mismatch: ${migrationFile} has an exact legacy CRLF receipt but the current SQL is LF. Migration is blocked without changing history or replaying SQL. Preserve the original files and journal, back up the database, and inspect an isolated restore before upgrading.`);
+        }
+      }
+    }
     const appliedFromHashes = rows
       .map((row) => hashesToMigrationFiles.get(row.hash))
       .filter((name): name is string => Boolean(name));

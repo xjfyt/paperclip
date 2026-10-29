@@ -95,7 +95,11 @@ try {
       pending = [0, 1, 2].map(() => capture(tx.unsafe("select pg_sleep(30)")));
       started.resolve(row.pid);
       const errors = await Promise.all(pending);
-      assert.ok(errors.every((error) => ["57P01", "CONNECTION_CLOSED"].includes(error.code)));
+      // Windows may reset the loopback socket before PostgreSQL's termination
+      // frame is delivered. Every query must still reject, then the pool must
+      // serve the fresh query below; an OS reset is not successful execution.
+      const closedCodes = ["57P01", "CONNECTION_CLOSED", ...(process.platform === "win32" ? ["ECONNRESET"] : [])];
+      assert.ok(errors.every((error) => closedCodes.includes(error.code)), JSON.stringify(errors.map(error => ({ code: error.code, message: error.message }))));
     };
     const reserved = mode === "reserve-queue" ? await sql.reserve() : null;
     const task = reserved ? work(reserved) : capture(sql.begin(work));

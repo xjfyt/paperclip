@@ -207,7 +207,7 @@ describe("isUsableTemplate", () => {
     const template = path.join(root, "template");
     writeCluster(template);
     const link = path.join(root, "link");
-    fs.symlinkSync(template, link, "dir");
+    fs.symlinkSync(template, link, process.platform === "win32" ? "junction" : "dir");
     expect(isUsableTemplate(template)).toBe(true);
     expect(isUsableTemplate(link)).toBe(false);
   });
