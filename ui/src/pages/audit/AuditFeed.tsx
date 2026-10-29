@@ -202,7 +202,7 @@ function AuditRow({
   userProfileMap: Map<string, CompanyUserProfile>;
 }) {
   const { t } = useTranslation();
-  const verb = formatActivityVerb(record.action, record.details, { agentMap, userProfileMap });
+  const verb = formatActivityVerb(record.action, record.details, { agentMap, userProfileMap, display: true });
   const responsible = record.responsibleUserId ? userProfileMap.get(record.responsibleUserId) : null;
   // Suppress the "on behalf of" chip when the human actor *is* the responsible user.
   const showOnBehalf = Boolean(

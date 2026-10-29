@@ -1,0 +1,31 @@
+import { afterEach, expect, it } from "vitest";
+import type { Agent } from "@paperclipai/shared";
+import { i18n, auditEventMessages } from "../i18n/audit-event-test-resources";
+import { validateLocaleMessages } from "../i18n/locale-validation";
+import { formatActivityVerb } from "./activity-format";
+const locales = ["en", "zh-CN", "es", "ja"] as const;
+afterEach(async () => { await i18n.changeLanguage("en"); });
+it.each(locales)("keeps canonical event text stable while opting into display in %s", async locale => {
+  await i18n.changeLanguage(locale);
+  expect(validateLocaleMessages(auditEventMessages[locale], auditEventMessages.en)).toEqual([]);
+  expect(formatActivityVerb("issue.comment_added")).toBe("commented on");
+  expect(formatActivityVerb("issue.comment_added", null, { display: true })).toBe(i18n.t("auditEventUi.actions.issue_comment_added"));
+  expect(formatActivityVerb("unknown.raw_action", null, { display: true })).toBe("unknown.raw_action");
+  expect(formatActivityVerb("commented on", null, { display: true })).toBe("commented on");
+  const details = { status: "in_review", externalConversationState: "waiting", _previous: { status: "custom_raw_state" } };
+  expect(formatActivityVerb("issue.updated", details)).toBe("changed status from custom raw state to idle on");
+  expect(formatActivityVerb("issue.updated", details, { display: true })).toBe(i18n.t("auditEventUi.statusFrom", { from: "custom_raw_state", to: i18n.t("issueActivityUi.status.idle") }));
+  expect(details._previous.status).toBe("custom_raw_state");
+});
+it.each(locales)("keeps raw tool names and participant names distinct from fallback chrome in %s", async locale => {
+  await i18n.changeLanguage(locale);
+  const details = { tool: "an app action", source: "test" };
+  expect(formatActivityVerb("tool_gateway.call_completed", details, { display: true })).toBe(i18n.t("auditEventUi.toolTested", { tool: "an app action" }));
+  expect(formatActivityVerb("tool_gateway.call_completed", null, { display: true })).toBe(i18n.t("auditEventUi.toolUsed", { tool: i18n.t("auditEventUi.appAction") }));
+  const agentMap = new Map([["raw-agent", { id: "raw-agent", name: "agent" } as Agent]]);
+  const relation = { addedParticipants: [{ type: "agent", agentId: "raw-agent" }], removedParticipants: [] };
+  const named = i18n.t("issueActivityUi.relations.reviewerAddedNamed", { name: "agent" });
+  expect(formatActivityVerb("issue.reviewers_updated", relation, { agentMap, display: true })).toBe(i18n.t("auditEventUi.to", { verb: named }));
+  expect(formatActivityVerb("issue.reviewers_updated", relation, { agentMap })).toBe("added reviewer agent to");
+  expect(formatActivityVerb("issue.thread_interaction_accepted", { interactionKind: "suggest_tasks" }, { display: true })).toBe(i18n.t("auditEventUi.on", { verb: i18n.t("issueActivityUi.outcomes.accepted.suggest_tasks") }));
+});

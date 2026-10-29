@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/api/client";
 import { AuditFeed } from "./AuditFeed";
+import "../../i18n/audit-event-test-resources";
 import { i18n, auditFeedMessages } from "../../i18n/audit-feed-test-resources";
 import { validateLocaleMessages } from "../../i18n/locale-validation";
 
@@ -233,7 +234,7 @@ describe("AuditFeed", () => {
       "company-1",
       expect.objectContaining({ action: "tool_" }),
     );
-    expect(container.textContent).toContain("tested get repository on");
+    expect(container.textContent).toContain("tested get_repository on");
     expect(container.querySelector('a[href="/apps/conn-1/permissions"]')).toBeTruthy();
     expect(container.textContent).toContain("tool_gateway.call_completed");
   });
@@ -633,6 +634,7 @@ describe("AuditFeed", () => {
     expect(container.querySelector('a[href="/issues/PAP-1"]')?.textContent).toBe("PAP-1 · Activity");
     expect(container.textContent).toContain("Export failed"); expect(container.textContent).toContain("issue.comment_added");
     expect(container.textContent).toContain(i18n.t("auditFeedUi.immutable"));
+    expect(container.textContent).toContain(i18n.t("auditEventUi.actions.issue_comment_added"));
     expect(listAgentActionsMock).toHaveBeenCalledTimes(reads);
     await clickButton(i18n.t("auditFeedUi.exportCsv")); await flushReact();
     expect(exportCsvMock).toHaveBeenCalledExactlyOnceWith("company-1", expect.objectContaining({ actorScope: "all", action: "tool_", from: "2026-01-02T00:00:00.000Z" }));

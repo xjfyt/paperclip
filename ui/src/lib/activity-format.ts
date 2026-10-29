@@ -18,6 +18,8 @@ type ActivityIssueReference = {
 };
 
 interface ActivityFormatOptions {
+  /** UI-only localized projection. Canonical/export callers keep legacy output. */
+  display?: boolean;
   agentMap?: Map<string, Agent>;
   userProfileMap?: Map<string, CompanyUserProfile>;
   currentUserId?: string | null;
@@ -458,6 +460,7 @@ export function formatActivityVerb(
   details?: Record<string, unknown> | null,
   options: ActivityFormatOptions = {},
 ): string {
+  if (options.display) return formatActivityDisplayVerb(action, details, options);
   if (action.startsWith("tool_gateway.")) {
     const rawTool = typeof details?.tool === "string"
       ? details.tool
@@ -498,6 +501,61 @@ export function formatActivityVerb(
   if (structuredChange) return structuredChange;
 
   return ACTIVITY_ROW_VERBS[action] ?? action.replace(/[._]/g, " ");
+}
+
+/** Translate only known protocol fields; unknown values and caller-authored text stay raw. */
+function displayActivityValue(kind: "status" | "priority", value: unknown): string {
+  const known = kind === "status"
+    ? ["backlog", "todo", "in_progress", "in_review", "done", "cancelled", "blocked", "idle"]
+    : ["critical", "high", "medium", "low"];
+  return typeof value === "string" && known.includes(value)
+    ? t(`issueActivityUi.${kind}.${value}`)
+    : value == null ? t("issueActivityUi.none") : String(value);
+}
+
+function formatActivityDisplayVerb(action: string, details: ActivityDetails, options: ActivityFormatOptions): string {
+  if (action.startsWith("tool_gateway.")) {
+    const tool = typeof details?.tool === "string" ? details.tool
+      : typeof details?.upstreamToolName === "string" ? details.upstreamToolName : t("auditEventUi.appAction");
+    const isTest = details?.source === "test";
+    const key = action === "tool_gateway.call_completed" ? isTest ? "toolTested" : "toolUsed"
+      : action === "tool_gateway.call_allowed" ? isTest ? "toolTestStarted" : "toolAllowed"
+        : action === "tool_gateway.call_denied" ? "toolDenied"
+          : action === "tool_gateway.approval_requested" ? "toolRequested"
+            : action === "tool_gateway.session_created" ? "sessionCreated"
+              : action === "tool_gateway.session_rejected" ? "sessionRejected"
+                : action === "tool_gateway.discovery" ? "discovery" : null;
+    if (key) return t(`auditEventUi.${key}`, { tool });
+  }
+  if (action === "issue.updated" && details) {
+    const previous = asRecord(details._previous) ?? {};
+    const kind = details.status !== undefined ? "status" : details.priority !== undefined ? "priority" : null;
+    if (kind) {
+      const from = previous[kind];
+      const value = kind === "status" && details.status === "in_review" && details.externalConversationState === "waiting" ? "idle" : details[kind];
+      return t(`auditEventUi.${kind}${from ? "From" : "To"}`, {
+        from: displayActivityValue(kind, from), to: displayActivityValue(kind, value),
+      });
+    }
+  }
+  if (action === "issue.stalled_review_decided" && typeof details?.action === "string" && Object.hasOwn(STALLED_REVIEW_DECISION_LABELS, details.action)) {
+    return t("auditEventUi.on", { verb: t(`issueActivityUi.reviewDecisions.${details.action}`) });
+  }
+  const outcomeTable = action === "issue.thread_interaction_accepted" ? INTERACTION_ACCEPTED_LABELS
+    : action === "issue.thread_interaction_rejected" ? INTERACTION_REJECTED_LABELS : null;
+  if (outcomeTable && typeof details?.interactionKind === "string" && Object.hasOwn(outcomeTable, details.interactionKind)) {
+    const outcome = action === "issue.thread_interaction_accepted" ? "accepted" : "rejected";
+    return t("auditEventUi.on", { verb: t(`issueActivityUi.outcomes.${outcome}.${details.interactionKind}`) });
+  }
+  const relation = formatIssueDetailStructuredChange(action, details, options);
+  if (relation) {
+    const added = action === "issue.blockers_updated" ? readIssueReferences(details, "addedBlockedByIssues") : readParticipants(details, "addedParticipants");
+    const removed = action === "issue.blockers_updated" ? readIssueReferences(details, "removedBlockedByIssues") : readParticipants(details, "removedParticipants");
+    return t(`auditEventUi.${added.length && !removed.length ? "to" : removed.length && !added.length ? "from" : "on"}`, { verb: relation });
+  }
+  return Object.hasOwn(ACTIVITY_ROW_VERBS, action)
+    ? t(`auditEventUi.actions.${action.replaceAll(".", "_")}`)
+    : action;
 }
 
 function formatIssueDetailStructuredChange(action: string, details: ActivityDetails, options: ActivityFormatOptions): string | null {
