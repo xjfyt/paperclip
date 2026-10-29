@@ -27,6 +27,9 @@ active company owner/admin membership. They repeat the canonical company and
 `canActorReadHeartbeatRun` authorization using the run's durable scope/issue
 binding; submitted context cannot redefine it. A company administrator role or
 an imported reference does not grant access to a private originating issue.
+Source checks also remove instance-admin elevation and apply the canonical issue
+privacy predicate regardless of global off/shadow rollout modes. Private ancestor
+and project audience rules therefore remain in force for this import path.
 Other authorized feedback administrators can see the content-free candidate,
 but the source endpoint independently checks the original source every time.
 
@@ -35,8 +38,10 @@ and serializes the exact company/run/sequence import using a transaction-level
 advisory lock. The existing source-event unique index remains the database fence.
 One first import writes one candidate and one content-free audit entry in the
 same transaction. Replays recheck authorization and digest; replaced event IDs
-or changed timestamps cannot reuse the old identity. No notification, plugin
-event, provider request, execution, or reproduction is dispatched.
+or changed timestamps cannot reuse the old identity. These tests cover revocation
+between requests, not linearizability against a concurrent ACL mutation after the
+final privacy read; ACL rows are not locked by this feature. No notification,
+plugin event, provider request, execution, or reproduction is dispatched.
 
 Internal records use `application_log` and server-only source instance
 `internal.run-log.v1`, with `manual_import` indicating the explicit human import.

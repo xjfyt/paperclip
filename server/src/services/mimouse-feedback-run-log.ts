@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
 import { and, eq, gt, sql } from "drizzle-orm";
-import { activityLog, authSessions, heartbeatRuns as runs, heartbeatRunEvents as events, mimouseFeedbackInbox as inbox, type Db } from "@paperclipai/db";
+import { activityLog, authSessions, issues, heartbeatRuns as runs, heartbeatRunEvents as events, mimouseFeedbackInbox as inbox, type Db } from "@paperclipai/db";
 import { RUN_LOG_SOURCE_INSTANCE, feedbackRunLogSelectionSchema, feedbackRunLogImportSchema, feedbackRunLogReferenceSchema,
   type FeedbackRunLogSelection, type FeedbackRunLogImport, type FeedbackRunLogReference } from "@paperclipai/shared/mimouse-feedback-run-log";
 import { conflict, forbidden, notFound } from "../errors.js";
-import { authorizationService, type AuthorizationActor } from "./authorization.js";
+import { authorizationService, issuePrivacyCondition, type AuthorizationActor } from "./authorization.js";
 import { canActorReadHeartbeatRun } from "./heartbeat-run-privacy.js";
 import { assertFeedbackReviewer } from "./mimouse-evaluation/feedback-lineage.js";
 import { feedbackInboxService } from "./mimouse-feedback.js";
@@ -30,8 +30,21 @@ async function load(tx: Tx, companyId: string, actor: AuthorizationActor, input:
   }).from(runs).where(and(eq(runs.id, input.runId), eq(runs.companyId, companyId))).for("share");
   if (!run) throw unavailable();
   const access = authorizationService(tx);
-  const allowed = async () => run && (await access.decide({ actor, action: "company_scope:read", resource: { type: "company", companyId } })).allowed
-    && await canActorReadHeartbeatRun(tx as unknown as Db, access, actor, run);
+  // Feedback review never inherits instance-admin/break-glass elevation. Keep
+  // the real session principal, not the request's broader operator context.
+  const sourceActor: AuthorizationActor = { type: "board", source: "session", userId: actor.userId, sessionId: actor.sessionId,
+    ignoreInstanceAdmin: true, isInstanceAdmin: false };
+  const allowed = async () => {
+    if (!(await access.decide({ actor: sourceActor, action: "company_scope:read", resource: { type: "company", companyId } })).allowed
+      || !await canActorReadHeartbeatRun(tx as unknown as Db, access, sourceActor, run)) return false;
+    if (run.scopeKind === "company") return true;
+    if (!run.issueId) return false;
+    // The existing canonical privacy predicate is deliberately independent of
+    // rollout off/shadow modes. It covers private ancestors and project grants
+    // without reading task text or duplicating the privacy rules here.
+    return tx.select({ id: issues.id }).from(issues).where(and(eq(issues.id, run.issueId), eq(issues.companyId, companyId),
+      issuePrivacyCondition(sourceActor))).limit(1).then(rows => rows.length > 0);
+  };
   if (!await allowed()) throw unavailable();
   const [event] = await tx.select({ id: sql<string>`${events.id}::text`, companyId: events.companyId, runId: events.runId, agentId: events.agentId, seq: events.seq,
     createdAt: sql<string>`to_char(${events.createdAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,

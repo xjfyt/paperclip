@@ -3,7 +3,7 @@ import express from "express";
 import request from "supertest";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
-import { activityLog, agents, authUsers, authSessions, companies, companyMemberships, createDb, heartbeatRuns, heartbeatRunEvents, issues, issueAccessGrants, mimouseFeedbackInbox } from "@paperclipai/db";
+import { activityLog, agents, authUsers, authSessions, companies, companyMemberships, createDb, heartbeatRuns, heartbeatRunEvents, issues, issueAccessGrants, instanceUserRoles, mimouseFeedbackInbox } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { mimouseFeedbackRoutes } from "../routes/mimouse-feedback.js";
 import { HttpError } from "../errors.js";
@@ -57,6 +57,41 @@ it("exports only fixed metadata and imports exactly one candidate/audit under co
   expect((await request(app(second)).get(`${base}/${feedbackId}`)).status).toBe(200);
   expect((await request(app(second)).get(`${base}/${feedbackId}/run-log-source`)).status).toBe(404);
   expect((await post("run-log-import", payload, second)).status).toBe(404);
+});
+it("never grants private source access through instance-admin flags, database roles or privacy rollout modes", async () => {
+  const [candidate] = await db.select({ id: mimouseFeedbackInbox.id }).from(mimouseFeedbackInbox).where(eq(mimouseFeedbackInbox.companyId, companyId));
+  const mode = process.env.PAPERCLIP_ISSUE_PRIVACY_MODE;
+  await db.insert(instanceUserRoles).values({ userId: otherUserId, role: "instance_admin" });
+  try {
+    for (const privacyMode of ["enforce", "off", "shadow"]) {
+      process.env.PAPERCLIP_ISSUE_PRIVACY_MODE = privacyMode;
+      for (const identity of [second, { ...second, isInstanceAdmin: true }]) {
+        expect((await post("run-log-preview", selection, identity)).status).toBe(404);
+        expect((await post("run-log-import", { ...selection, previewDigest: "a".repeat(64), confirm: true }, identity)).status).toBe(404);
+        expect((await request(app(identity)).get(`${base}/${candidate.id}/run-log-source`)).status).toBe(404);
+        expect((await request(app(identity)).get(`${base}/${candidate.id}`)).status).toBe(200);
+      }
+    }
+  } finally {
+    if (mode === undefined) delete process.env.PAPERCLIP_ISSUE_PRIVACY_MODE; else process.env.PAPERCLIP_ISSUE_PRIVACY_MODE = mode;
+    await db.delete(instanceUserRoles).where(and(eq(instanceUserRoles.userId, otherUserId), eq(instanceUserRoles.role, "instance_admin")));
+  }
+});
+it("uses strict canonical ancestor privacy rather than an unrelated readable context issue", async () => {
+  const parentId = randomUUID(), childId = randomUUID(), hiddenRun = randomUUID();
+  await db.insert(issues).values({ id: parentId, companyId, title: "PRIVATE_ANCESTOR_SENTINEL", visibility: "private", createdByUserId: otherUserId, responsibleUserId: otherUserId });
+  await db.insert(issues).values({ id: childId, companyId, title: "PRIVATE_CHILD_SENTINEL", visibility: "open", parentId, privacyParentIssueId: parentId, createdByUserId: otherUserId, responsibleUserId: otherUserId });
+  await db.insert(heartbeatRuns).values({ id: hiddenRun, companyId, agentId, scopeKind: "issue", issueId: childId, contextSnapshot: { issueId } });
+  await db.insert(heartbeatRunEvents).values({ companyId, runId: hiddenRun, agentId, seq: 1, eventType: "fixture" });
+  const [child] = await db.select({ visibility: issues.visibility, privacyParentIssueId: issues.privacyParentIssueId }).from(issues).where(eq(issues.id, childId));
+  expect(child).toEqual({ visibility: "open", privacyParentIssueId: parentId });
+  const mode = process.env.PAPERCLIP_ISSUE_PRIVACY_MODE;
+  try {
+    process.env.PAPERCLIP_ISSUE_PRIVACY_MODE = "off";
+    expect((await post("run-log-preview", { runId: hiddenRun, eventSeq: 1 }, { ...actor, isInstanceAdmin: true })).status).toBe(404);
+    // The actual ancestor principal remains allowed; source privacy is not a blanket deny.
+    expect((await post("run-log-preview", { runId: hiddenRun, eventSeq: 1 }, second)).status).toBe(200);
+  } finally { if (mode === undefined) delete process.env.PAPERCLIP_ISSUE_PRIVACY_MODE; else process.env.PAPERCLIP_ISSUE_PRIVACY_MODE = mode; }
 });
 it("rechecks revocation, current session and actor-bound digest on every confirmation", async () => {
   await db.insert(issueAccessGrants).values({ issueId, subjectType: "user", subjectId: otherUserId, grantedByUserId: userId, source: "explicit" });
