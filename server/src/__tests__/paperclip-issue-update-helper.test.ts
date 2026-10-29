@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import http from "node:http";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -6,14 +6,15 @@ import { ensurePaperclipSkillSymlink } from "@paperclipai/adapter-utils/server-u
 import type { AddressInfo } from "node:net";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { shellExecutable, shellEnvironment } from "@paperclipai/adapter-utils/test-fixtures/local-sandbox";
 
 // End-to-end coverage for the skill-bundled issue update helper: the helper must
 // only exit 0 when the server confirms the write by echoing the update, must
 // classify failures (retry connection-level faults and 5xx, never retry a
 // definitive 4xx), and must stop at two attempts total to honor the shared
 // bounded-write-retry rule.
-const HELPER_PATH = path.resolve("skills/paperclip/scripts/paperclip-issue-update.sh");
-const REPO_HELPER_PATH = path.resolve("scripts/paperclip-issue-update.sh");
+const HELPER_PATH = path.resolve(import.meta.dirname, "../../../skills/paperclip/scripts/paperclip-issue-update.sh");
+const REPO_HELPER_PATH = path.resolve(import.meta.dirname, "../../../scripts/paperclip-issue-update.sh");
 
 interface HelperResult {
   code: number | null;
@@ -74,16 +75,39 @@ describe("paperclip issue update helper", () => {
     return { baseUrl: `http://127.0.0.1:${port}`, requests };
   }
 
-  function runHelper(apiUrl: string, args: string[], options: { helper?: string; cwd?: string; input?: string } = {}): Promise<HelperResult> {
+  async function runHelper(apiUrl: string, args: string[], options: { helper?: string; cwd?: string; input?: string } = {}): Promise<HelperResult> {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-issue-helper-"));
+    cleanupFns.push(() => fs.rm(root, { recursive: true, force: true }));
+    const bashPath = (file: string) => {
+      if (process.platform !== "win32") return file;
+      const absolute = path.resolve(file);
+      if (!/^[A-Za-z]:[\\/]/.test(absolute)) throw new Error("Helper fixture requires a drive-qualified path");
+      return `/${absolute[0]!.toLowerCase()}${absolute.slice(2).replaceAll("\\", "/")}`;
+    };
+    const bin = path.join(root, "bin");
+    await fs.mkdir(bin);
+    const providedJq = process.env.PAPERCLIP_TEST_JQ;
+    if (providedJq) {
+      if (!path.isAbsolute(providedJq) || !(await fs.stat(providedJq)).isFile()
+        || !/^jq-\d+\./.test(execFileSync(providedJq, ["--version"], { encoding: "utf8" }).trim())) {
+        throw new Error("PAPERCLIP_TEST_JQ must name the real absolute jq CLI");
+      }
+      const binary = path.join(bin, process.platform === "win32" ? "jq-native.exe" : "jq-native");
+      await fs.copyFile(providedJq, binary);
+      await fs.chmod(binary, 0o755);
+      await fs.writeFile(path.join(bin, "jq"), `#!/usr/bin/env bash\nexec '${bashPath(binary).replaceAll("'", "'\\''")}' ${process.platform === "win32" ? "--binary " : ""}"$@"\n`, { mode: 0o755 });
+    }
+    const fixtureEnv = {
+      HOME: root, USERPROFILE: root, TMPDIR: root, TMP: root, TEMP: root,
+      PAPERCLIP_API_URL: apiUrl, PAPERCLIP_API_KEY: "test-key", PAPERCLIP_RUN_ID: "test-run",
+    };
+    const env = Object.fromEntries(Object.entries(shellEnvironment(fixtureEnv)).filter(([key]) =>
+      /^(path|pathext|systemroot|windir|msys)$/i.test(key) || key in fixtureEnv));
+    env.PATH = `${bin}${path.delimiter}${env.PATH ?? ""}`;
     return new Promise((resolve, reject) => {
-      const child = spawn("bash", [options.helper ?? HELPER_PATH, ...args], {
+      const child = spawn(shellExecutable("bash"), [bashPath(options.helper ?? HELPER_PATH), ...args], {
         cwd: options.cwd,
-        env: {
-          ...process.env,
-          PAPERCLIP_API_URL: apiUrl,
-          PAPERCLIP_API_KEY: "test-key",
-          PAPERCLIP_RUN_ID: "test-run",
-        },
+        env,
         stdio: ["pipe", "pipe", "pipe"],
       });
       child.stdin.end(options.input);

@@ -125,7 +125,7 @@ describe("native external chat workspace boundary", () => {
       materializeNativeChatTaskRoot(scopeB),
     ]);
     expect(rootA).not.toBe(rootB);
-    expect(path.relative(rootA, rootB)).toBe(`../${issueB}`);
+    expect(path.relative(rootA, rootB)).toBe(path.join("..", issueB));
     expect(path.relative(legacy, rootA).startsWith("..")).toBe(true);
     expect(await readdir(rootA)).toEqual([]);
     expect(await readdir(rootB)).toEqual([]);
@@ -176,17 +176,38 @@ describe("native external chat workspace boundary", () => {
       materializeNativeChatTaskRoot(scopeB),
     ]);
     const body = Buffer.from("only task A fixture bytes");
-    const stages = await Promise.all([
+    const stageResults = await Promise.allSettled([
       stageNativeRunnerAttachmentBytes({ workspaceRoot: rootA, body }),
       stageNativeRunnerAttachmentBytes({
         workspaceRoot: rootB,
         body: Buffer.from("only task B fixture bytes"),
       }),
     ]);
+    const stages = stageResults.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
     try {
-      await expect(
-        readFile(path.join(rootB, stages[0]!.workspaceRelativePath)),
-      ).rejects.toMatchObject({ code: "ENOENT" });
+      if (process.platform === "win32") {
+        for (const result of stageResults) {
+          expect(result.status).toBe("rejected");
+          if (result.status === "rejected") {
+            expect(String(result.reason)).toContain("paperclip_runner_file_handoff_descriptor_unverifiable");
+          }
+        }
+        const assertNoStagedBytes = async (directory: string): Promise<void> => {
+          for (const entry of await readdir(directory, { withFileTypes: true })) {
+            expect(entry.isSymbolicLink()).toBe(false);
+            const target = path.join(directory, entry.name);
+            if (entry.isDirectory()) await assertNoStagedBytes(target);
+            else expect((await readFile(target)).length).toBe(0);
+          }
+        };
+        await assertNoStagedBytes(path.join(rootA, ".paperclip-inbound"));
+        await assertNoStagedBytes(path.join(rootB, ".paperclip-inbound"));
+      } else {
+        expect(stages).toHaveLength(2);
+        await expect(
+          readFile(path.join(rootB, stages[0]!.workspaceRelativePath)),
+        ).rejects.toMatchObject({ code: "ENOENT" });
+      }
       await writeFile(path.join(rootA, "private-output.txt"), body);
       const authority = new PaperclipRunnerToolAuthority(db, {
         companyId,
@@ -228,8 +249,8 @@ describe("native external chat workspace boundary", () => {
       mode: "isolated_workspace",
       strategyType: "git_worktree",
       status: "active",
-      cwd: "/task-owned-worktree",
-      providerRef: "/task-owned-worktree",
+      cwd: path.join(instanceRoot, "task-owned-worktree"),
+      providerRef: path.join(instanceRoot, "task-owned-worktree"),
     };
     expect(nativeChatWorkspaceCwd(scope, workspace, true)).toBe(workspace.cwd);
     expect(nativeChatWorkspaceCwd(scope, null, false)).toBeNull();

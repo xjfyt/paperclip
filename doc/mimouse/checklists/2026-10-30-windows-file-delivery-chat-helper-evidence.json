@@ -1,0 +1,206 @@
+{
+  "schema": "mimouse.local-verification.v1",
+  "recordedAt": "2026-10-30T03:55:25.837092+08:00",
+  "platform": "native Windows x64, Node24, real Git Bash, jq1.8.1 and Unicode-enabled System32 curl8.21; isolated local HTTP, filesystem and PostgreSQL",
+  "verification": [
+    {
+      "label": "Full 3/3: queue and HTTP/2 real Bash upload, exact Unicode filenames and idempotent receipts/PNG/PDF bytes; Windows native descriptor refusal and no persisted delivery.",
+      "passed": 3,
+      "failed": 0,
+      "pending": 0,
+      "command": "cd server; node ../node_modules/vitest/vitest.mjs run src/__tests__/file-delivery-bridges.test.ts --reporter=default --reporter=json --outputFile=../test-results/project-audit-windows-closure/file-delivery-bridges-sixth.json",
+      "environment": {
+        "PAPERCLIP_TEST_JQ": "PAPERCLIP_TEST_JQ=<absolute path to real jq executable>; recorded binary jq1.8.1 SHA256 23cb60a1354eed6bcc8d9b9735e8c7b388cd1fdcb75726b93bc299ef22dd9334",
+        "curl": "Default absolute %SystemRoot%/System32/curl.exe, --version must contain Unicode; optional PAPERCLIP_TEST_CURL absolute override"
+      },
+      "log": {
+        "path": "test-results/project-audit-windows-closure/file-delivery-bridges-sixth.log",
+        "sha256": "969766697b80a87be49d1e86eba329a86bc0ee9325c5da5ff1722a6c9b7b12dd"
+      },
+      "json": {
+        "path": "test-results/project-audit-windows-closure/file-delivery-bridges-sixth.json",
+        "sha256": "6a461378819f53d628b9f5b659565cdf6385d817d8693162997600db5dc32903"
+      }
+    },
+    {
+      "label": "Full 6/6: real distinct task roots, stable task resume, cross-task output refusal and actual Windows inbound descriptor refusal with zero staged payload bytes.",
+      "passed": 6,
+      "failed": 0,
+      "pending": 0,
+      "command": "cd server; node ../node_modules/vitest/vitest.mjs run src/services/native-runtime/native-chat-workspace.test.ts --reporter=default --reporter=json --outputFile=../test-results/project-audit-windows-closure/native-chat-workspace-final.json",
+      "environment": {},
+      "log": {
+        "path": "test-results/project-audit-windows-closure/native-chat-workspace-final.log",
+        "sha256": "1881d6a2ce4ea4287bcd5cb34de9e06fa73b9844595879f61fbd8602644fb0b5"
+      },
+      "json": {
+        "path": "test-results/project-audit-windows-closure/native-chat-workspace-final.json",
+        "sha256": "1e932c6dcd01ae7b0e2f00d3eb94871621267719b408ab5915d8476068c4f496"
+      }
+    },
+    {
+      "label": "Full 9/9: real Bash/jq and loopback HTTP, multiline stdin preserved through installed paths with spaces, echo validation and bounded real HTTP/connection retries.",
+      "passed": 9,
+      "failed": 0,
+      "pending": 0,
+      "command": "cd server; node ../node_modules/vitest/vitest.mjs run src/__tests__/paperclip-issue-update-helper.test.ts --reporter=default --reporter=json --outputFile=../test-results/project-audit-windows-closure/issue-update-helper-first.json",
+      "environment": {
+        "PAPERCLIP_TEST_JQ": "PAPERCLIP_TEST_JQ=<absolute path to real jq executable>; recorded binary jq1.8.1 SHA256 23cb60a1354eed6bcc8d9b9735e8c7b388cd1fdcb75726b93bc299ef22dd9334"
+      },
+      "log": {
+        "path": "test-results/project-audit-windows-closure/issue-update-helper-first.log",
+        "sha256": "00843977bca7fa04ff3b897d24fe6184270b717de0b4a9b8e4fb53c8ff9670bb"
+      },
+      "json": {
+        "path": "test-results/project-audit-windows-closure/issue-update-helper-first.json",
+        "sha256": "89561526ff90dcaca3bacd32c23f4a7cdb1f9c55f2eb06be413a9b5c8a343446"
+      }
+    }
+  ],
+  "changes": [
+    "Test-only changes; production encoding, authentication, company/issue binding and descriptor validation are unchanged.",
+    "Only local POSIX sandbox shell paths are translated at the host Bash boundary. Direct native Node receives its original arguments; no header, URL, token or filename text is rewritten.",
+    "Bash children receive an explicit synthetic HOME/TEMP and filtered system/PATH/fixture environment rather than host credentials. Fixed real jq CLI is copied into each owned fixture bin and runs --binary on Windows.",
+    "Transparent curl wrapper only maps own leading root in file multipart and output path arguments. Real Unicode-capable System32 curl does the actual HTTP request; original name, duplicate IDs and byte assertions remain.",
+    "Windows descriptor tests assert real refusal, zero staged payload bytes/no symlink, unchanged original bytes/no durable attachment/work product/comment. Successful POSIX staging branch is retained; there are no new skips.",
+    "Task path assertions use native separators and drive-qualified owned paths. The common cross-task register_deliverable path_denied assertion runs on every platform.",
+    "Issue helper and repository wrapper paths resolve relative to the test file, so the full test runs from server cwd or an unrelated workspace. Multiline literal stdin is passed directly, not interpolated as shell source."
+  ],
+  "diagnosisHistory": [
+    {
+      "label": "3 failures and afterAll EBUSY: native Node was incorrectly given MSYS /c paths; queue gateway teardown also needed validated owned-process cleanup.",
+      "passed": 0,
+      "failed": 3,
+      "pending": 0,
+      "command": "cd server; node ../node_modules/vitest/vitest.mjs run src/__tests__/file-delivery-bridges.test.ts --reporter=default --reporter=json --outputFile=../test-results/project-audit-windows-closure/file-delivery-bridges-first.json",
+      "environment": {},
+      "log": {
+        "path": "test-results/project-audit-windows-closure/file-delivery-bridges-first.log",
+        "sha256": "91d16d7eed4c8a8747952856d545347254819e55f44334e1ada9880317c2ec7c"
+      },
+      "json": {
+        "path": "test-results/project-audit-windows-closure/file-delivery-bridges-first.json",
+        "sha256": "d65f2201e1bb0b4e6fc960945538566dd1c7a41a4f360a7d3e40e0f3fe83c179"
+      }
+    },
+    {
+      "label": "1 pass/2 failures and afterAll EBUSY: missing real jq and orphaned own gateway after Bash-only stop.",
+      "passed": 1,
+      "failed": 2,
+      "pending": 0,
+      "command": "cd server; node ../node_modules/vitest/vitest.mjs run src/__tests__/file-delivery-bridges.test.ts --reporter=default --reporter=json --outputFile=../test-results/project-audit-windows-closure/file-delivery-bridges-second.json",
+      "environment": {},
+      "log": {
+        "path": "test-results/project-audit-windows-closure/file-delivery-bridges-second.log",
+        "sha256": "b1c5b28e1b4f5e870ad4212803d43fba140796573d4bb8714bce5217cf5af85a"
+      },
+      "json": {
+        "path": "test-results/project-audit-windows-closure/file-delivery-bridges-second.json",
+        "sha256": "520f68d4862423497eabb500a721ad9080e4800faa2631fb3031e47fcfab490b"
+      }
+    },
+    {
+      "label": "1 pass/2 failures: native curl could not open an embedded POSIX multipart file path; teardown fixed.",
+      "passed": 1,
+      "failed": 2,
+      "pending": 0,
+      "command": "cd server; node ../node_modules/vitest/vitest.mjs run src/__tests__/file-delivery-bridges.test.ts --reporter=default --reporter=json --outputFile=../test-results/project-audit-windows-closure/file-delivery-bridges-third.json",
+      "environment": {
+        "PAPERCLIP_TEST_JQ": "PAPERCLIP_TEST_JQ=<absolute path to real jq executable>; recorded binary jq1.8.1 SHA256 23cb60a1354eed6bcc8d9b9735e8c7b388cd1fdcb75726b93bc299ef22dd9334"
+      },
+      "log": {
+        "path": "test-results/project-audit-windows-closure/file-delivery-bridges-third.log",
+        "sha256": "8704c6719eb0cc953fc96ed273b296053df95a6c9795fcb2296bca8745f8e1f5"
+      },
+      "json": {
+        "path": "test-results/project-audit-windows-closure/file-delivery-bridges-third.json",
+        "sha256": "d8c5823d1130931d3d1efb0c55c35154fbf6860423e6cfe903aa56f0477ee4e2"
+      }
+    },
+    {
+      "label": "1 pass/2 failures: real Git curl8.18 multipart Unicode filename corruption broke duplicate receipt reuse.",
+      "passed": 1,
+      "failed": 2,
+      "pending": 0,
+      "command": "cd server; node ../node_modules/vitest/vitest.mjs run src/__tests__/file-delivery-bridges.test.ts --reporter=default --reporter=json --outputFile=../test-results/project-audit-windows-closure/file-delivery-bridges-fourth.json",
+      "environment": {
+        "PAPERCLIP_TEST_JQ": "PAPERCLIP_TEST_JQ=<absolute path to real jq executable>; recorded binary jq1.8.1 SHA256 23cb60a1354eed6bcc8d9b9735e8c7b388cd1fdcb75726b93bc299ef22dd9334"
+      },
+      "log": {
+        "path": "test-results/project-audit-windows-closure/file-delivery-bridges-fourth.log",
+        "sha256": "b5dfd17d6622959a3ca5ec927bcf5a18a247d1f500e2aad23dbcf966bad01318"
+      },
+      "json": {
+        "path": "test-results/project-audit-windows-closure/file-delivery-bridges-fourth.json",
+        "sha256": "038992fbf35f6dbcb54af4599fe6660a48a2c5af3f98bb2477d812f2bf5bca97"
+      }
+    },
+    {
+      "label": "1 pass/2 failures: stronger exact originalFilename assertion isolated Git curl8.18 ACP corruption (Unicode feature absent); server UTF8 parsing was correct.",
+      "passed": 1,
+      "failed": 2,
+      "pending": 0,
+      "command": "cd server; node ../node_modules/vitest/vitest.mjs run src/__tests__/file-delivery-bridges.test.ts --reporter=default --reporter=json --outputFile=../test-results/project-audit-windows-closure/file-delivery-bridges-fifth.json",
+      "environment": {
+        "PAPERCLIP_TEST_JQ": "PAPERCLIP_TEST_JQ=<absolute path to real jq executable>; recorded binary jq1.8.1 SHA256 23cb60a1354eed6bcc8d9b9735e8c7b388cd1fdcb75726b93bc299ef22dd9334"
+      },
+      "log": {
+        "path": "test-results/project-audit-windows-closure/file-delivery-bridges-fifth.log",
+        "sha256": "29295ad7e9417cddab04b4514b457d76dc193229b9697164f5012f23f86900dc"
+      },
+      "json": {
+        "path": "test-results/project-audit-windows-closure/file-delivery-bridges-fifth.json",
+        "sha256": "d8899f48101f6c486f3d941ecdcb271a22607e181eabeb8e3b68228156e9b071"
+      }
+    },
+    {
+      "label": "Original input 3 pass/3 fail: Windows separator, root-absolute fixture normalization, and intentionally unavailable descriptor staging.",
+      "passed": 3,
+      "failed": 3,
+      "pending": 0,
+      "command": "cd server; node ../node_modules/vitest/vitest.mjs run src/services/native-runtime/native-chat-workspace.test.ts --reporter=default --reporter=json --outputFile=../test-results/project-audit-windows-closure/native-chat-workspace-before.json",
+      "environment": {},
+      "log": {
+        "path": "test-results/project-audit-windows-closure/native-chat-workspace-before.log",
+        "sha256": "bb862bdf6b3f9dcc33eb16037aa1b9708b9f75d0890c5e2d20e37d7e524e92a7"
+      },
+      "json": {
+        "path": "test-results/project-audit-windows-closure/native-chat-workspace-before.json",
+        "sha256": "923119d23fac68493dde313550e6bc960aa4b6c587e95c7e83bdf614f9cd3f0f"
+      }
+    }
+  ],
+  "cleanup": [
+    "Original file-delivery first two failing harness rounds left only their own remote gateway processes. Existing marker/path/start-time/handle-validated local sandbox cleanup was used on the two exact fixture roots; their PostgreSQL and app had already closed. Cleanup then removed only those roots.",
+    "An initial erroneous direct-Node /c path was diagnosed as a fixture path conversion mistake. The one exact unique C:/c/.../paperclip-api-eval-SGSVN2 tree was inspected for the expected synthetic files/no links and removed; unknown ancestor directories were preserved.",
+    "Current full run closes queue/HTTP2 bridges, validates/stops own local gateway processes and then stops its app/PostgreSQL fixture. No broad process kill was used."
+  ],
+  "sources": [
+    {
+      "path": "server/src/__tests__/file-delivery-bridges.test.ts",
+      "sha256": "e270e7d05953b41083531671354b7938e757b79c94a3a20052d3c79666ac175d"
+    },
+    {
+      "path": "server/src/services/native-runtime/native-chat-workspace.test.ts",
+      "sha256": "9e36a20967b65964b8c756d91c98f5153e3609096ee261fb5aa0d155315f74fa"
+    },
+    {
+      "path": "server/src/__tests__/paperclip-issue-update-helper.test.ts",
+      "sha256": "0921403e5cb2d67661289f9ed7f1bd519ab652eae27ae010f9dc43aed54e58a1"
+    }
+  ],
+  "limits": [
+    "Local sandbox transport is an actual POSIX shell/Node fixture on Windows. Live Daytona/SSH and external providers were not exercised.",
+    "Native Windows confined-descriptor staging remains intentionally unsupported and fails closed; passing rejection coverage does not qualify native file handoff support.",
+    "Native Windows may create opaque empty staging slots before rejecting; no payload-byte admission is claimed.",
+    "jq/Git Bash/Unicode-enabled curl are real explicit local tool prerequisites; missing prerequisites fail rather than skip. No dependencies or lockfiles were installed or changed."
+  ],
+  "typecheck": {
+    "command": "pnpm --filter @paperclipai/server exec tsc --noEmit",
+    "exitCode": 0,
+    "log": {
+      "path": "test-results/project-audit-windows-closure/file-delivery-chat-helper-types-final.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  }
+}
