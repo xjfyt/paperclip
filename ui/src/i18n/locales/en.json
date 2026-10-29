@@ -1105,6 +1105,20 @@
     "denied": "Access is no longer available. The draft has been cleared.",
     "invalid": "Complete every field. Use a full SHA, credential-free URLs, relative paths without traversal or wildcards, an integer cost limit, and 0–2 repair rounds."
   },
+  "codingProjects": {
+    "title": "Project delivery page",
+    "scope": "Counts cover only the authorized deliveries on this page, not the full project history.",
+    "boundary": "Local hashes do not verify platforms, tests or signatures. All six trusted build targets and artifact upload remain blocked.",
+    "unavailable": "Page summary is unavailable. Refresh to read current evidence.",
+    "empty": "No authorized deliveries match this page.",
+    "counts": "Deliveries: {{deliveries}} · Code candidates: {{candidates}} · Blocked: {{blocked}} · Local files: {{artifacts}}",
+    "filterProject": "View this project",
+    "filterTask": "Filter by this task",
+    "reset": "Clear filters",
+    "first": "Back to first page",
+    "next": "Next authorized page",
+    "staleEvidence": "Remote evidence is stale, missing or unknown. Synchronize before relying on the code gate."
+  },
   "codingRepair": {
     "manage": "Manage bounded repair",
     "title": "Bounded repair tasks",
