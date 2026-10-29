@@ -125,18 +125,38 @@ describe("native runner file handoff", () => {
       readRemoteWorkspaceFile: (input: { contentRef: string; byteSize: number; sha256: string }) => Promise<Buffer>;
     }> = {},
   ) {
+    const transport = publicationTransport();
     return new PaperclipRunnerToolAuthority(db, {
       companyId: overrides.companyId ?? companyId,
       agentId,
       issueId,
       runId,
       workspaceRoot,
-      executionTargetKind: overrides.executionTargetKind ?? "local",
-      readRemoteWorkspaceFile: overrides.readRemoteWorkspaceFile,
+      // Publication/receipt tests use the existing trusted remote reader on
+      // Windows. Local descriptor verification is deliberately unsupported and
+      // tested separately, without replacing the confinement primitive.
+      executionTargetKind: overrides.executionTargetKind ?? transport.executionTargetKind,
+      readRemoteWorkspaceFile: overrides.readRemoteWorkspaceFile ?? (overrides.executionTargetKind === undefined ? transport.readRemoteWorkspaceFile : undefined),
       storage: createStorageService(
         createLocalDiskStorageProvider(storageRoot),
       ),
     });
+  }
+
+  function publicationTransport() {
+    return {
+      executionTargetKind: process.platform === "win32" ? "remote" as const : "local" as const,
+      readRemoteWorkspaceFile: process.platform === "win32" ? async ({ contentRef }: { contentRef: string }) => readFile(path.join(workspaceRoot, contentRef)) : undefined,
+    };
+  }
+
+  async function assertEmptyStagingFiles(root: string): Promise<void> {
+    for (const entry of await readdir(root, { withFileTypes: true })) {
+      const file = path.join(root, entry.name);
+      expect(entry.isSymbolicLink()).toBe(false);
+      if (entry.isDirectory()) await assertEmptyStagingFiles(file);
+      else expect(await readFile(file)).toHaveLength(0);
+    }
   }
 
   function callFor(relativePath: string, body: Buffer, idempotencyKey: string) {
@@ -219,6 +239,13 @@ describe("native runner file handoff", () => {
       await wake.cleanup();
       await expect(readdir(root)).resolves.toEqual([]);
 
+      if (process.platform === "win32") {
+        await expect(stageNativeRunnerAttachmentBytes({ workspaceRoot: root, body: Buffer.from("later authorized bytes") }))
+          .rejects.toThrow("paperclip_runner_file_handoff_descriptor_unverifiable");
+        await assertEmptyStagingFiles(root);
+        return;
+      }
+
       const explicit = await stageNativeRunnerAttachmentBytes({ workspaceRoot: root, body: Buffer.from("later authorized bytes") });
       await expect(readFile(path.join(root, explicit.workspaceRelativePath), "utf8"))
         .resolves.toBe("later authorized bytes");
@@ -233,6 +260,20 @@ describe("native runner file handoff", () => {
   it("scrubs inactive staging bytes on an empty wake without creating another directory", async () => {
     const root = await mkdtemp(path.join(temporaryRoot, "empty-wake-residue-"));
     try {
+      if (process.platform === "win32") {
+        await expect(stageNativeRunnerAttachmentBytes({ workspaceRoot: root, body: Buffer.from("previous attachment") }))
+          .rejects.toThrow("paperclip_runner_file_handoff_descriptor_unverifiable");
+        const entries = await readdir(path.join(root, ".paperclip-inbound"), { recursive: true, withFileTypes: true });
+        const file = entries.find((entry) => entry.isFile());
+        expect(file).toBeDefined();
+        const slot = path.join(file!.parentPath, file!.name);
+        const residue = "stale bytes after an interrupted owner";
+        await writeFile(slot, residue);
+        // Without descriptor identity proof even residue must be preserved.
+        await expect(stageEmptyWake(root)).rejects.toThrow("paperclip_runner_file_handoff_descriptor_unverifiable");
+        expect(await readFile(slot, "utf8")).toBe(residue);
+        return;
+      }
       const previous = await stageNativeRunnerAttachmentBytes({ workspaceRoot: root, body: Buffer.from("previous attachment") });
       await previous.cleanup();
       const slot = path.join(root, previous.workspaceRelativePath);
@@ -521,6 +562,30 @@ describe("native runner file handoff", () => {
     ]);
   });
 
+  it.runIf(process.platform === "win32")("rejects a local descriptor without admitting bytes or persisting any delivery effect", async () => {
+    const body = Buffer.from("unadmitted local bytes");
+    await writeFile(path.join(workspaceRoot, "local-unverifiable.txt"), body);
+    const storage = createStorageService(createLocalDiskStorageProvider(storageRoot));
+    const put = vi.spyOn(storage, "putFile");
+    const local = new PaperclipRunnerToolAuthority(db, { companyId, agentId, issueId, runId, workspaceRoot, executionTargetKind: "local", storage });
+    const state = async () => ({
+      assets: await db.select().from(assets).where(eq(assets.companyId, companyId)),
+      attachments: await db.select().from(issueAttachments).where(eq(issueAttachments.issueId, issueId)),
+      products: await db.select().from(issueWorkProducts).where(eq(issueWorkProducts.issueId, issueId)),
+      comments: await db.select().from(issueComments).where(eq(issueComments.issueId, issueId)),
+      activities: await db.select().from(activityLog).where(eq(activityLog.entityId, issueId)),
+      receipt: await db.select({ resultJson: heartbeatRuns.resultJson }).from(heartbeatRuns).where(eq(heartbeatRuns.id, runId)),
+    });
+    const before = await state();
+    try {
+      await expect(local.execute(callFor("local-unverifiable.txt", body, "local-unverifiable")))
+        .rejects.toThrow("paperclip_runner_file_handoff_descriptor_unverifiable");
+      expect(put).not.toHaveBeenCalled();
+      expect(await state()).toEqual(before);
+      expect(await readFile(path.join(workspaceRoot, "local-unverifiable.txt"))).toEqual(body);
+    } finally { put.mockRestore(); }
+  });
+
   it("fails closed for remote targets, symlinks, traversal, hash drift, and foreign bindings", async () => {
     const body = Buffer.from("untrusted path checks\n", "utf8");
     await writeFile(path.join(workspaceRoot, "checked.txt"), body);
@@ -551,10 +616,10 @@ describe("native runner file handoff", () => {
       ),
     ).rejects.toThrow("paperclip_runner_file_handoff_remote_unsupported");
     await expect(
-      authority().execute(callFor("linked.txt", body, "symlink-denied")),
+      authority({ executionTargetKind: "local" }).execute(callFor("linked.txt", body, "symlink-denied")),
     ).rejects.toThrow("paperclip_runner_file_handoff_symlink_denied");
     await expect(
-      authority().execute(
+      authority({ executionTargetKind: "local" }).execute(
         callFor(
           "linked-directory/nested.txt",
           body,
@@ -563,10 +628,10 @@ describe("native runner file handoff", () => {
       ),
     ).rejects.toThrow("paperclip_runner_file_handoff_symlink_denied");
     await expect(
-      authority().execute(callFor("hardlinked.txt", body, "hardlink-denied")),
+      authority({ executionTargetKind: "local" }).execute(callFor("hardlinked.txt", body, "hardlink-denied")),
     ).rejects.toThrow("paperclip_runner_file_handoff_file_changed");
     await expect(
-      authority().execute(callFor("../checked.txt", body, "traversal-denied")),
+      authority({ executionTargetKind: "local" }).execute(callFor("../checked.txt", body, "traversal-denied")),
     ).rejects.toThrow("paperclip_runner_file_handoff_path_denied");
     await expect(
       authority().execute({
@@ -669,6 +734,14 @@ describe("native runner file handoff", () => {
       },
       storage,
     });
+    if (process.platform === "win32") {
+      expect(stage.attachments).toEqual([{ id: attachment.id, filename: "inbound.txt", contentType: "text/plain", byteSize: body.length,
+        workspaceRelativePath: null, unavailableReason: "attachment_staging_failed" }]);
+      expect(renderNativeRunnerStagedAttachmentPrompt(stage.attachments)).not.toContain("PAPERCLIP_API_KEY");
+      await assertEmptyStagingFiles(path.join(workspaceRoot, ".paperclip-inbound"));
+      await stage.cleanup();
+      return;
+    }
     expect(stage.attachments).toEqual([
       {
         id: attachment.id,
@@ -938,11 +1011,17 @@ describe("native runner file handoff", () => {
       expect.objectContaining({
         id: current.attachment.id,
         filename: "current.txt",
-        unavailableReason: null,
+        unavailableReason: process.platform === "win32" ? "attachment_staging_failed" : null,
       }),
     ]);
     expect(objectReads).toEqual([current.stored.objectKey]);
     expect(objectReads).not.toContain(historical.stored.objectKey);
+    if (process.platform === "win32") {
+      expect(stage.attachments[0]?.workspaceRelativePath).toBeNull();
+      await assertEmptyStagingFiles(path.join(workspaceRoot, ".paperclip-inbound"));
+      await stage.cleanup();
+      return;
+    }
     const relativePath = stage.attachments[0]?.workspaceRelativePath;
     expect(relativePath).toBeTruthy();
     await expect(
@@ -1088,7 +1167,7 @@ describe("native runner file handoff", () => {
       issueId,
       runId,
       workspaceRoot,
-      executionTargetKind: "local",
+      ...publicationTransport(),
       storage: mismatchingStorage,
     });
     await expect(
@@ -1144,7 +1223,7 @@ describe("native runner file handoff", () => {
         issueId,
         runId,
         workspaceRoot,
-        executionTargetKind: "local",
+        ...publicationTransport(),
         storage: receiptFailureStorage,
       });
       let receiptFailure: unknown;
@@ -1331,7 +1410,7 @@ describe("native runner file handoff", () => {
 
       // The replacement can verify and publish the existing bytes itself. No user action is needed.
       const replacement = new PaperclipRunnerToolAuthority(db, { companyId, agentId, issueId, runId: nextRunId,
-        workspaceRoot, executionTargetKind: "local", storage: createStorageService(createLocalDiskStorageProvider(storageRoot)) });
+        workspaceRoot, ...publicationTransport(), storage: createStorageService(createLocalDiskStorageProvider(storageRoot)) });
       const current = await replacement.execute(callFor(`${key}.txt`, body, `${key}-verified`)) as { entityRefs: string[] };
       expect(current.entityRefs[0]).not.toBe(prior.entityRefs[0]);
       expect(await readFile(path.join(workspaceRoot, `${key}.txt`))).toEqual(body);
