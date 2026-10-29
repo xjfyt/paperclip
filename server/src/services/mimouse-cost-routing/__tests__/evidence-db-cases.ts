@@ -2,13 +2,13 @@ import { randomUUID } from "node:crypto";
 import { expect } from "vitest";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { agents, companySkillVersions, mimouseEvaluationDatasets, heartbeatRuns, runUsageReceipts, costEvents, type Db } from "@paperclipai/db";
-import type { heartbeatService } from "../heartbeat.js";
-import { privatePromptTestService, type PrivatePromptIdentity } from "../mimouse-private-prompt-tests/service.js";
-import { privateConfigDigest, privatePromptFixedContext, assertPrivatePromptTextInventory } from "../mimouse-private-prompt-tests/profile.js";
-import { promptRegistryService } from "../mimouse-prompt-registry/service.js";
-import { secretService } from "../secrets.js";
-import { drainHeartbeatRunsToQuiescence } from "../../__tests__/helpers/drain-heartbeat-runs.js";
-import { buildRuntimeRoutingCandidate } from "./evidence-service.js";
+import type { heartbeatService } from "../../heartbeat.js";
+import { privatePromptTestService, type PrivatePromptIdentity } from "../../mimouse-private-prompt-tests/service.js";
+import { privateConfigDigest, privatePromptFixedContext, assertPrivatePromptTextInventory } from "../../mimouse-private-prompt-tests/profile.js";
+import { promptRegistryService } from "../../mimouse-prompt-registry/service.js";
+import { secretService } from "../../secrets.js";
+import { drainHeartbeatRunsToQuiescence } from "../../../__tests__/helpers/drain-heartbeat-runs.js";
+import { buildRuntimeRoutingCandidate } from "../evidence-service.js";
 
 /** Called by the existing owned PG fixture, whose sole provider process is an
  * inert no-network Node stdin echo. All proof rows below come from the production

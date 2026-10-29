@@ -1,0 +1,503 @@
+{
+  "schema": "mimouse.local-verification.v1",
+  "recordedAt": "2026-10-29T23:43:39.668Z",
+  "headAtReceipt": "cb1ef19cbacbd288ff24348e3bf1cbd567953e1e",
+  "scope": "Company skill retained-history reconciliation/deletion, real stopped-execution approval fixture, Git read child lifetime, and complete source-selected MiMouse server suites on native Windows.",
+  "inputSnapshot": {
+    "path": "test-results/project-closure-20261029/mimouse-history-final-inputs.json",
+    "sha256": "3bc609d3e8fca6e1901238b7e5e27783619648e72429f9e81fae0898f3bbce64"
+  },
+  "inputs": [
+    {
+      "path": "server/src/services/company-skills.ts",
+      "sha256": "f8e430314b2fd396195061932e981643bc00b40041e13d2f756a99e7012ff514"
+    },
+    {
+      "path": "server/src/services/mimouse-coding/readonly-git.ts",
+      "sha256": "71db1d9ff17d597aded8c2ad67d2bcf9ef7b2bc0624c72a7c7b284c1babe4787"
+    },
+    {
+      "path": "server/src/__tests__/company-skills-service.test.ts",
+      "sha256": "4c6f85ca462b189b3102ec3bac10d4d90a4c542568ff8ecaad0e167440a3eeb7"
+    },
+    {
+      "path": "server/src/__tests__/mimouse-coding-diff-review.test.ts",
+      "sha256": "99e6e3feedd4c6b5d985955a4b56c4c5ef8efed0e0b39520239ecbdc1c0301cb"
+    },
+    {
+      "path": "server/src/services/mimouse-prompt-applications/integration.test.ts",
+      "sha256": "16c8f6c7bac557266799d989ee3d7f5f74075d6bda374496affc633dd3a0feed"
+    },
+    {
+      "path": "server/src/services/mimouse-prompt-applications/__tests__/approve-stopped-fixture.ts",
+      "sha256": "e2ad602414ab994b43f454b2b927d4ff3839fd4306b6ab5667ebd8acb75de99b"
+    },
+    {
+      "path": "server/src/services/mimouse-cost-routing/__tests__/evidence-db-cases.ts",
+      "sha256": "1cf3e614fa64eee3e41203c8059558b149ab342a691e9f9939cb76c9cf93fb92"
+    },
+    {
+      "path": "server/src/services/mimouse-cost-routing/__tests__/runtime-db-cases.ts",
+      "sha256": "cc22c998580b0bdf0ad8b9cb5a7c11b07e9ac14e7d752fc062c2706e515bdc20"
+    },
+    {
+      "path": "server/src/services/mimouse-private-prompt-tests/__tests__/comparison-db-cases.ts",
+      "sha256": "8bcb22812290cb8179a6b0ad4b21a461cf71d6d9a8a21686565e8007b07e711e"
+    }
+  ],
+  "historicalTestedPrivateFixture": {
+    "path": "server/src/services/mimouse-private-prompt-tests/integration.test.ts",
+    "sha256": "487805033234030ffb5a016da8b2159c48da880c6f189519901030fceec7c13b"
+  },
+  "status": "Current complete 78-file MiMouse entry point passed after unified private-test lifecycle ownership; historical failures remain explicitly preserved.",
+  "postAttemptTestLifecyclePatch": {
+    "path": "server/src/services/mimouse-private-prompt-tests/integration.test.ts",
+    "sha256": "110900dfc1982ff5d3bac8b6edadeb3ff9847ae771e0435b373df07edc8fa94c",
+    "verified": true,
+    "change": "Unified raw-work ownership covers the actual deferred gates/child tasks. Closing opens existing and late gates before joining; actual heartbeat drain and unfinished checks precede shared configuration restoration. afterAll refuses to close or delete resources if held work fails to drain. All original case deadlines and assertions retained.",
+    "receipt": {
+      "path": "doc/mimouse/checklists/2026-10-30-mimouse-private-lifecycle-evidence.json",
+      "sha256": "ebde26481256bc9ca3f7f5a1fac53ee8a0e40ca37335cb1e83af59d0dbac9a10"
+    }
+  },
+  "hashBoundary": "Raw workspace-byte hashes captured after production freeze. They are not CRLF-normalized Git blob hashes and do not assert that unrelated repository inputs were frozen. A later line-ending normalization changes raw hashes and needs explicit interpretation.",
+  "selection": {
+    "path": "test-results/project-closure-20261029/mimouse-server-current-selection.json",
+    "sha256": "d34035d2d66f1f4781d68edebf8d230afe226097bd3e5369eda0a93e226113b2",
+    "files": 78,
+    "differenceFromOriginal76": [
+      "server/src/services/mimouse-private-prompt-tests/integration.test.ts",
+      "server/src/services/mimouse-prompt-applications/integration.test.ts"
+    ],
+    "command": "See exact argv/cwd and literal 78-file roster in test-results/project-closure-20261029/mimouse-server-unified-final-input.json"
+  },
+  "changes": [
+    "Source reconciliation retains skills and immutable version snapshots referenced by same-company MiMouse evaluation datasets, evaluation comparison baseline/candidate versions, evaluation restore skill/before/target versions, or private prompt test versions. Missing local source remains visibly marked; company scope is retained.",
+    "Explicit deletion checks the same four histories before cache removal and rechecks after the existing company/name/skill locks, returning HTTP 409 with mimouse_history_retained instead of exposing a restrictive foreign-key database error.",
+    "Existing-history preflight rejection leaves derived cache intact. History admitted after preflight is preserved by the locked recheck, including authoritative source/version/history bytes; the pre-existing cache API may already have invalidated rebuildable cache in this late-admission case.",
+    "Git HEAD/branch/status reads remain parallel. On the first failure, their already-started promises all settle before returning the original error, so cleanup does not race owned Git children still holding the workspace.",
+    "Vitest/Postgres helper modules moved into __tests__ without business allowlists or production helper re-exports.",
+    "Approval fixtures treat a stopped preflight as instantaneous, reuse the unchanged requestId/digest, drain actual pending operations, and retry only the exact execution_not_stopped refusal. Production stop guards and approval semantics were not relaxed."
+  ],
+  "finalVerification": [
+    {
+      "command": "pnpm exec vitest run --project @paperclipai/server server/src/__tests__/company-skills-service.test.ts --reporter=default --reporter=json --outputFile=test-results/project-closure-20261029/company-skills-delete-complete-final.json",
+      "interpretation": "Complete company skill service file after explicit deletion guard, including existing-history and real late-admission deletion cases.",
+      "result": {
+        "success": true,
+        "files": 1,
+        "passed": 78,
+        "failed": 0,
+        "pending": 0
+      },
+      "json": {
+        "path": "test-results/project-closure-20261029/company-skills-delete-complete-final.json",
+        "sha256": "12a7288a1c19ec62ef22fad7c96510c77ab5b4b255525fe1f3bef30d5d9210a7"
+      },
+      "log": {
+        "path": "test-results/project-closure-20261029/company-skills-delete-complete-final.log",
+        "sha256": "226a995b5c7d7e7cc796858998beaa59a777141fd67509120f7a32cd6dda96b4"
+      },
+      "failedCases": []
+    },
+    {
+      "command": "See selection.command",
+      "interpretation": "Historical complete 78-file attempt with a timed-out raw test body and 19 subsequent failures; preserved as failed evidence, superseded by the separately recorded current-input complete entry point.",
+      "result": {
+        "success": false,
+        "files": 78,
+        "passed": 1214,
+        "failed": 20,
+        "pending": 12
+      },
+      "json": {
+        "path": "test-results/project-closure-20261029/mimouse-server-history-delete-final.json",
+        "sha256": "0d9a15dda6abf85288963fa451a5537d2209445564fd1e50304573ec35a0331d"
+      },
+      "log": {
+        "path": "test-results/project-closure-20261029/mimouse-server-history-delete-final.log",
+        "sha256": "8844b2366930a30777f0b3375efb617d0831d1d4a676e1b5a4fd09714e60614d"
+      },
+      "failedCases": [
+        {
+          "file": "server/src/services/mimouse-private-prompt-tests/integration.test.ts",
+          "name": "drains an ordinary approved wake already queued behind a running private child",
+          "status": "failed"
+        },
+        {
+          "file": "server/src/services/mimouse-private-prompt-tests/integration.test.ts",
+          "name": "does not overwrite a user cancelled harness while its child finishes",
+          "status": "failed"
+        },
+        {
+          "file": "server/src/services/mimouse-private-prompt-tests/integration.test.ts",
+          "name": "does not overwrite a user reassigned harness while its child finishes",
+          "status": "failed"
+        },
+        {
+          "file": "server/src/services/mimouse-private-prompt-tests/integration.test.ts",
+          "name": "rejects changed local source, disabled targets, and env/config overlays without dispatch",
+          "status": "failed"
+        },
+        {
+          "file": "server/src/services/mimouse-private-prompt-tests/integration.test.ts",
+          "name": "fails closed when the prepared witness cannot persist and never replays that attempt",
+          "status": "failed"
+        },
+        {
+          "file": "server/src/services/mimouse-private-prompt-tests/integration.test.ts",
+          "name": "keeps a spawned-but-unpersisted receipt unknown and refuses another attempt",
+          "status": "failed"
+        },
+        {
+          "file": "server/src/services/mimouse-private-prompt-tests/integration.test.ts",
+          "name": "cancels a real fixture child and never replays the cancelled provider-unknown attempt",
+          "status": "failed"
+        },
+        {
+          "file": "server/src/services/mimouse-private-prompt-tests/integration.test.ts",
+          "name": "orders stale harness retries against the real private queue transaction",
+          "status": "failed"
+        },
+        {
+          "file": "server/src/services/mimouse-private-prompt-tests/integration.test.ts",
+          "name": "orders stale harness retries against the real private early_binding transaction",
+          "status": "failed"
+        },
+        {
+          "file": "server/src/services/mimouse-private-prompt-tests/integration.test.ts",
+          "name": "orders stale harness retries against the real private claim transaction",
+          "status": "failed"
+        },
+        {
+          "file": "server/src/services/mimouse-private-prompt-tests/integration.test.ts",
+          "name": "orders stale harness retries against the real private prepare transaction",
+          "status": "failed"
+        },
+        {
+          "file": "server/src/services/mimouse-private-prompt-tests/integration.test.ts",
+          "name": "orders stale harness retries against the real private completion transaction",
+          "status": "failed"
+        },
+        {
+          "file": "server/src/services/mimouse-private-prompt-tests/integration.test.ts",
+          "name": "orders company and intent locks when a duplicate confirmation overlaps harness creation",
+          "status": "failed"
+        },
+        {
+          "file": "server/src/services/mimouse-private-prompt-tests/integration.test.ts",
+          "name": "prepares metadata only and never resumes an existing ticket even after admission",
+          "status": "failed"
+        },
+        {
+          "file": "server/src/services/mimouse-private-prompt-tests/integration.test.ts",
+          "name": "rejects configuration drift and revoked authorization between prepare and execute",
+          "status": "failed"
+        },
+        {
+          "file": "server/src/services/mimouse-private-prompt-tests/integration.test.ts",
+          "name": "serializes execute/cancel and keeps late execute and terminal replay on the same ticket",
+          "status": "failed"
+        },
+        {
+          "file": "server/src/services/mimouse-private-prompt-tests/integration.test.ts",
+          "name": "keeps persisted approval summaries immutable and fails closed on tampering or historical null",
+          "status": "failed"
+        },
+        {
+          "file": "server/src/services/mimouse-private-prompt-tests/integration.test.ts",
+          "name": "explicitly resumes the same admitted ticket after an interrupted harness creation",
+          "status": "failed"
+        },
+        {
+          "file": "server/src/services/mimouse-private-prompt-tests/integration.test.ts",
+          "name": "enforces the actual loopback HTTP router and error middleware without a production login claim",
+          "status": "failed"
+        },
+        {
+          "file": "server/src/services/mimouse-private-prompt-tests/integration.test.ts",
+          "name": "private historical comparison is scoped, sealed and read only",
+          "status": "failed"
+        }
+      ]
+    },
+    {
+      "runKind": "complete-business-suite",
+      "status": "passed",
+      "result": {
+        "files": 78,
+        "passed": 1234,
+        "failed": 0,
+        "pending": 12
+      },
+      "exitCode": 0,
+      "inputCount": 3211,
+      "inputDrift": [],
+      "skipAdded": [],
+      "skipRemoved": [],
+      "ownership": {
+        "rootCloseObserved": true,
+        "knownGenerationCount": 48,
+        "survivingOwnedGenerations": [],
+        "unknownNewGenerations": [],
+        "boundary": "Read-only CIM identities admitted only through a simultaneously observed known child root/parent generation. Unattributed new processes are unknown, never labelled leaked or killed. Short-lived generations between samples are not enumerated; fixture-owned finally/afterAll assertions remain separate evidence."
+      },
+      "files": [
+        {
+          "path": "test-results/project-closure-20261029/mimouse-server-unified-final.json",
+          "sha256": "0615d0c2c96407e76407a9f843a2081d65deeb116e1069160dd767c2965fb73d"
+        },
+        {
+          "path": "test-results/project-closure-20261029/mimouse-server-unified-final.log",
+          "sha256": "46051e0b768f9f112bc70e8e7e7b7f4821a331a97afe419aff1f3ce4e7a02383"
+        },
+        {
+          "path": "test-results/project-closure-20261029/mimouse-server-unified-final-input.json",
+          "sha256": "fef94b0726e314621e7d6543b6aa9bda754f22d34d1da3e98a3d50c536e97d3c"
+        },
+        {
+          "path": "test-results/project-closure-20261029/mimouse-server-unified-final-input-verification.json",
+          "sha256": "b960d414ced5c06b94b784d85dd85e162d8f6608164adb1ccce81ee1c3b589f5"
+        }
+      ]
+    }
+  ],
+  "focusedProof": [
+    {
+      "command": "pnpm exec vitest run --config test-results/project-closure-20261029/company-skills-delete-before-fix.vitest.ts src/__tests__/company-skills-service.test.ts -t 'refuses explicit deletion|rechecks deletion history' --reporter=default --reporter=json --outputFile=test-results/project-closure-20261029/company-skills-delete-red.json",
+      "interpretation": "Immutable Git baseline 3ce943575 transformed in Vitest only. Both new real-Postgres tests fail because the original deletion returns a database error instead of HTTP 409. The 76 pending cases are name-filtered, not platform skips; the config resolves outputFile under server/ and its JSON was then moved to the recorded evidence directory.",
+      "result": {
+        "success": false,
+        "files": 1,
+        "passed": 0,
+        "failed": 2,
+        "pending": 76
+      },
+      "json": {
+        "path": "test-results/project-closure-20261029/company-skills-delete-red.json",
+        "sha256": "79b776543d5d58e7375f5f0da35a56b213b54ecf83b9c67fd095f3da0b4ecd35"
+      },
+      "log": {
+        "path": "test-results/project-closure-20261029/company-skills-delete-red.log",
+        "sha256": "aead6c06da9ba55b739aebe4055f10cb664702bfa4787f8a4f463d3fbfd201d0"
+      },
+      "failedCases": [
+        {
+          "file": "server/src/__tests__/company-skills-service.test.ts",
+          "name": "companySkillService.list refuses explicit deletion of retained MiMouse history with 409 before changing source or cache",
+          "status": "failed"
+        },
+        {
+          "file": "server/src/__tests__/company-skills-service.test.ts",
+          "name": "companySkillService.list rechecks deletion history after preflight under locks and preserves a late admitted reference",
+          "status": "failed"
+        }
+      ]
+    },
+    {
+      "command": null,
+      "interpretation": "Original reconciliation exposes SQLSTATE 23001 on the dataset foreign key. Historical exact shell invocation was not retained; JSON identifies the one executed 'retains missing-source evaluation history' case. This red is separate from an earlier hook-failure run, which is not counted as test success.",
+      "result": {
+        "success": false,
+        "files": 1,
+        "passed": 0,
+        "failed": 1,
+        "pending": 32
+      },
+      "json": {
+        "path": "test-results/project-closure-20261029/mimouse-retention-red2.json",
+        "sha256": "efccbfebd1e5225a019a4b490c94ea3ba163b0e9c4477520a16ca7c1cfd57e6a"
+      },
+      "log": {
+        "path": "test-results/project-closure-20261029/mimouse-retention-red2.log",
+        "sha256": "a11f1abd0d29204960c7f07915eab8b08ada7b0a29bb9451ee2030dce1bcee60"
+      },
+      "failedCases": [
+        {
+          "file": "server/src/services/mimouse-private-prompt-tests/integration.test.ts",
+          "name": "retains missing-source evaluation history and its cache while deleting only same-company unused orphans",
+          "status": "failed"
+        }
+      ]
+    },
+    {
+      "command": null,
+      "interpretation": "Both real historical-reference reconciliation tests pass: pre-existing reference preserves cache, and late admission under transaction recheck preserves authoritative history. Historical exact shell invocation was not retained; JSON identifies both executed cases.",
+      "result": {
+        "success": true,
+        "files": 1,
+        "passed": 2,
+        "failed": 0,
+        "pending": 32
+      },
+      "json": {
+        "path": "test-results/project-closure-20261029/mimouse-retention-green2.json",
+        "sha256": "d604c8fe77e6f0ae567b3a00a7e9bfce50ca58aea5d62d57638ccbd2f953b4ec"
+      },
+      "log": {
+        "path": "test-results/project-closure-20261029/mimouse-retention-green2.log",
+        "sha256": "6b6c8617f9727d64e0832aab76c0969514340d89a3f2ac2f951153a7abc8b1d3"
+      },
+      "failedCases": []
+    },
+    {
+      "command": "pnpm exec vitest run --config test-results/project-closure-20261029/coding-git-siblings-before-fix.vitest.ts src/__tests__/mimouse-coding-diff-review.test.ts -t 'sibling'",
+      "interpretation": "Immutable pre-fix readonly-git implementation fails the real owned-child close-fence regression. An earlier invalid Proxy harness is explicitly not used as red proof.",
+      "result": {
+        "success": false,
+        "files": 1,
+        "passed": 0,
+        "failed": 1,
+        "pending": 27
+      },
+      "json": {
+        "path": "test-results/project-closure-20261029/coding-git-siblings-red2.json",
+        "sha256": "7a666c7ca33a70df73490edaec495f53146ca5e357cc5441993f2d94999d3ac3"
+      },
+      "log": {
+        "path": "test-results/project-closure-20261029/coding-git-siblings-red2.log",
+        "sha256": "2cf52c5731bdf91bbcf06741e1262e4c0d7e6f90b2792c399f353f389a98b9a5"
+      },
+      "failedCases": [
+        {
+          "file": "server/src/__tests__/mimouse-coding-diff-review.test.ts",
+          "name": "source-pinned coding review waits for a real sibling process to close before returning an earlier status refusal",
+          "status": "failed"
+        }
+      ]
+    },
+    {
+      "command": "pnpm exec vitest run --project @paperclipai/server server/src/__tests__/mimouse-coding-diff-review.test.ts",
+      "interpretation": "Complete 28-case coding diff review file passes, including the deterministic child-close regression.",
+      "result": {
+        "success": true,
+        "files": 1,
+        "passed": 28,
+        "failed": 0,
+        "pending": 0
+      },
+      "json": {
+        "path": "test-results/project-closure-20261029/coding-git-siblings-final2.json",
+        "sha256": "53a7e4c2c1722f3a149e9f7337ee49073fb5ae1d5e97a4f71990571cb315ae8d"
+      },
+      "log": {
+        "path": "test-results/project-closure-20261029/coding-git-siblings-final2.log",
+        "sha256": "4b1bb3314860fd8ab731cefcbeb8c031db6b4385c6f2d4d9127465ea3134bae2"
+      },
+      "failedCases": []
+    },
+    {
+      "command": "pnpm exec vitest run --project @paperclipai/server server/src/services/mimouse-prompt-applications/integration.test.ts -t 'real late lease'",
+      "interpretation": "Real preflight true, genuine late environment lease, real approval refusal with zero receipts/unchanged generation, genuine resource removal and lease release, identical approval payload success exactly once.",
+      "result": {
+        "success": true,
+        "files": 1,
+        "passed": 1,
+        "failed": 0,
+        "pending": 12
+      },
+      "json": {
+        "path": "test-results/project-closure-20261029/mimouse-late-lease-barrier-final.json",
+        "sha256": "330f66e05d4826046f69602d3d1627800aec92e0226cda0831a466c1f8e843f6"
+      },
+      "log": {
+        "path": "test-results/project-closure-20261029/mimouse-late-lease-barrier-final.log",
+        "sha256": "4c3ceb4c0850e9c84cb58bbdbf2aa136619a849d3febcc9ee7e4fcc9e61b973a"
+      },
+      "failedCases": []
+    }
+  ],
+  "historicalInputVerification": [
+    {
+      "command": "pnpm exec vitest run --project @paperclipai/server server/src/services/mimouse-private-prompt-tests/integration.test.ts server/src/services/mimouse-prompt-applications/integration.test.ts",
+      "interpretation": "Historical 45/46 run: stopped preflight was true but a later real approval returned execution_not_stopped. Original detailed metadata were not retained; the cause is not claimed reproduced or fixed in production.",
+      "result": {
+        "success": false,
+        "files": 2,
+        "passed": 45,
+        "failed": 1,
+        "pending": 0
+      },
+      "json": {
+        "path": "test-results/project-closure-20261029/mimouse-integrations-history-complete.json",
+        "sha256": "b99da4d5ecf15b314b71c6f6038a6639667d38c451d2728117622eb47d6db15e"
+      },
+      "log": {
+        "path": "test-results/project-closure-20261029/mimouse-integrations-history-complete.log",
+        "sha256": "c11102f2b4085b8cd24d38044d47add708652e19f657221f71844c515d3970c5"
+      },
+      "failedCases": [
+        {
+          "file": "server/src/services/mimouse-private-prompt-tests/integration.test.ts",
+          "name": "produces own-agent routing proof through private execution and central accounting, never manual cost rows",
+          "status": "failed"
+        }
+      ]
+    },
+    {
+      "command": "pnpm exec vitest run --project @paperclipai/server server/src/services/mimouse-private-prompt-tests/integration.test.ts server/src/services/mimouse-prompt-applications/integration.test.ts",
+      "interpretation": "47/47 complete two integration files after the late-lease fixture and helper move; before the final explicit-delete production patch, whose function is not exercised by these integrations.",
+      "result": {
+        "success": true,
+        "files": 2,
+        "passed": 47,
+        "failed": 0,
+        "pending": 0
+      },
+      "json": {
+        "path": "test-results/project-closure-20261029/mimouse-integrations-frozen-final.json",
+        "sha256": "11be499ea1323033ec342568556660c61902098eeff2bda27a05116f8606d81a"
+      },
+      "log": {
+        "path": "test-results/project-closure-20261029/mimouse-integrations-frozen-final.log",
+        "sha256": "4cb13fde2628612ae00c11c23e77749024fcc9ab71ecb2eab22fcd72a5c84e7a"
+      },
+      "failedCases": []
+    },
+    {
+      "command": "Same 78-file selection before final explicit-delete guard",
+      "interpretation": "78 files / 1234 pass / 12 existing skips, all green. Historical previous production input, superseded by the final full entry point above.",
+      "result": {
+        "success": true,
+        "files": 78,
+        "passed": 1234,
+        "failed": 0,
+        "pending": 12
+      },
+      "json": {
+        "path": "test-results/project-closure-20261029/mimouse-server-frozen-final.json",
+        "sha256": "c392ac38b3cafc1bc1b84826b521cefba3869b6e4c37ade9afae9b75f770ce9b"
+      },
+      "log": {
+        "path": "test-results/project-closure-20261029/mimouse-server-frozen-final.log",
+        "sha256": "fbe4d5441467ca49b83973e295443f9be01a4b38f44dc15cef19d48b27800c83"
+      },
+      "failedCases": []
+    }
+  ],
+  "checks": [
+    {
+      "path": "test-results/project-closure-20261029/company-skills-delete-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exitCode": 0
+    },
+    {
+      "path": "test-results/project-closure-20261029/mimouse-final-module-boundaries.log",
+      "sha256": "3135303013881c063304e24883e14df50a3fcacdc7b6a53ba26a3e24b00ad4e2",
+      "exitCode": 0
+    }
+  ],
+  "resourceContentionAttempt": {
+    "status": "Preserve the actual latest result; do not replace its failures with previous-input pass counts.",
+    "concurrentWork": "Parent confirmed simultaneous official general shards, large chat suite, 40k Git stress, CLI and provider tests, plus type checking on this host. No test/production deadline was raised in response to this run.",
+    "observedFirstFailure": "Final JSON confirms Test timed out in 15000ms for 'drains an ordinary approved wake already queued behind a running private child', duration 15534.9472ms versus 6833/6534/4636ms in three prior full observed passes. The next cases saw private_prompt_profile_unsupported then private_prompt_agent_unavailable while that timed-out async body had not yet restored the approved adapter configuration and settled its run. Resource contention is an observed condition, not a proven sole root cause.",
+    "ownedCleanup": "The private suite afterAll performed the actual heartbeat drain and verified its owned PostgreSQL shutdown: pidFile=false and processAlive=false for PID 41320. The fixture deletes the owned temporary home only after that verification. No running suite or PostgreSQL was killed to end this attempt.",
+    "followUp": "Preserved historical failure; unified ownership subsequently verified using real timeout/early-rejection old/new diagnostic comparisons and the separately recorded current-input full 78-file result. No production stop guard, business case budget or database status was relaxed."
+  },
+  "boundaries": [
+    "Native Windows, actual embedded PostgreSQL, owned inert Node/Git processes and synthetic credentials only. No real external provider account or paid model is called.",
+    "The old approval failure lacked retained runtime metadata. Subsequent all-true observations do not establish its root cause. The deterministic real late-lease case proves that the new fixture retry preserves the actual stop gate, rather than claiming a production stop-proof repair.",
+    "Each run is separate; full and focused results overlap and must not be summed. Name-filtered pending cases in focused runs are not unsupported platform skips.",
+    "Workspace-manifest hashing has descriptor and entry identity checks; subsequent SQLite database opening by pathname retains the separately documented TOCTOU boundary. No whole-restoration descriptor-confinement claim is made here."
+  ]
+}

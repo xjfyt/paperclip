@@ -1,6 +1,7 @@
 import { createServer } from "node:net";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, writeFile, appendFile, rm, mkdir, access } from "node:fs/promises";
+import { protectNewPrivatePath } from "@paperclipai/shared/private-filesystem-permissions";
 import { tmpdir } from "node:os";
 import { delimiter, join, resolve } from "node:path";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
@@ -9,7 +10,7 @@ import { activityLog, agents, authSessions, authUsers, companies, companyMembers
   createDb, ensurePostgresDatabase, applyPendingMigrations, environments, heartbeatRuns, heartbeatRunEvents, issues, agentWakeupRequests,
   mimousePrompts, mimousePromptRevisions, mimouseEvaluationDatasets, principalPermissionGrants, loadEmbeddedPostgres, loadWithoutEmbeddedPostgresExitHooks, type Db } from "@paperclipai/db";
 import { mimousePrivatePromptTests } from "@paperclipai/db/schema/mimouse_private_prompt_tests";
-import { mimousePromptApplications, mimousePromptApplicationHeads, mimousePromptApplicationDispatches } from "@paperclipai/db/schema/mimouse_prompt_applications";
+import { mimousePromptApplications, mimousePromptApplicationHeads, mimousePromptApplicationDispatches, mimousePromptApplicationReceipts } from "@paperclipai/db/schema/mimouse_prompt_applications";
 vi.mock("../../adapters/plugin-loader.js", () => ({ buildExternalAdapters: async () => [] }));
 const boundary = vi.hoisted(() => ({ inputs: [] as string[], settle: null as (() => Promise<void>) | null, beforeSpawn: null as (() => Promise<void>) | null }));
 vi.mock("@paperclipai/adapter-utils/execution-target", async original => {
@@ -26,6 +27,9 @@ vi.mock("@paperclipai/adapter-utils/execution-target", async original => {
 import * as executionModule from "./execution.js";
 import * as targetModule from "./target.js";
 import { promptApplicationService } from "./service.js";
+import { environmentService } from "../environments.js";
+import { agentExecutionsHaveStopped } from "../agent-execution-stop.js";
+import { approveStoppedFixture, type ApprovalFixtureTrace } from "./__tests__/approve-stopped-fixture.js";
 import { findPromptApplicationCandidate, preparePromptApplicationExecution } from "./execution.js";
 import { applicationAttemptStopped } from "./recovery.js";
 import { authorizePrivatePrompt } from "../mimouse-private-prompt-tests/service.js";
@@ -43,7 +47,9 @@ let actor: { companyId: string; userId: string; sessionId: string }, target: typ
 let service: ReturnType<typeof promptApplicationService>, heartbeat: ReturnType<typeof heartbeatService>;
 const e = comparisonFixture(), keyValue = "fixture-not-a-real-provider-key", fixed = new Date("2020-01-01T00:00:00Z");
 beforeAll(async () => {
-  home = await mkdtemp(join(tmpdir(), "paperclip-prompt-application-")); await writeFile(join(home, ".owned-test"), "controlled-prompt-disposable-v1");
+  home = await mkdtemp(join(tmpdir(), "paperclip-prompt-application-"));
+  protectNewPrivatePath(home);
+  await writeFile(join(home, ".owned-test"), "controlled-prompt-disposable-v1");
   vi.stubEnv("PAPERCLIP_HOME", home); vi.stubEnv("PAPERCLIP_SECRETS_MASTER_KEY_FILE", join(home, "master.key")); vi.stubEnv("PAPERCLIP_SECRETS_MASTER_KEY", "");
   vi.stubEnv("PAPERCLIP_PROMPT_APPLICATIONS_ENABLED", "true"); vi.stubEnv("PAPERCLIP_TELEMETRY_DISABLED", "1"); vi.stubEnv("DO_NOT_TRACK", "1");
   vi.stubEnv("PAPERCLIP_DISABLE_CWD_ENV_FILE", "true"); vi.stubEnv("DATABASE_URL", ""); vi.stubEnv("DATABASE_MIGRATION_URL", "");
@@ -198,6 +204,56 @@ it("a dispatched witness that wins before withdrawal remains historical and does
   expect((await db.select().from(mimousePromptApplicationDispatches).where(eq(mimousePromptApplicationDispatches.runId, fresh.run.id)))[0].state).toBe("dispatched");
   await capability.stopped(); await finish(fresh.run.id);
 });
+it("rejects a real late lease after a stopped preflight, then approves the unchanged request exactly once after genuine release", async () => {
+  const p = await proposal(), fixedApproval = Object.freeze(approval(p.item));
+  const leases = environmentService(db);
+  const leaseDirectory = join(home, `late-approval-lease-${randomUUID()}`);
+  let lease: Awaited<ReturnType<typeof leases.acquireLease>> | undefined;
+  let released = false, preflight = false;
+  const refusals: ApprovalFixtureTrace[] = [], attempts: string[] = [];
+  const inputCount = boundary.inputs.length;
+  try {
+    const result = await approveStoppedFixture({ db, agentId: target.id, drain: () => heartbeat.drainActiveRunExecutions(),
+      afterFirstPreflight: async () => {
+        preflight = await agentExecutionsHaveStopped(db, [target.id]);
+        expect(preflight).toBe(true);
+        await mkdir(leaseDirectory);
+        lease = await leases.acquireLease({ companyId: actor.companyId, environmentId, provider: "local", providerLeaseId: leaseDirectory,
+          leasePolicy: "ephemeral", metadata: { agentId: target.id } });
+        expect(await agentExecutionsHaveStopped(db, [target.id])).toBe(false);
+      },
+      approve: () => {
+        attempts.push(JSON.stringify(fixedApproval));
+        return service.approve(actor, e.promptId, p.item.id, fixedApproval);
+      },
+      afterRefusal: async trace => {
+        refusals.push(trace);
+        expect(trace.state.stopped).toBe(false);
+        expect(trace.state.activeLeases.map(item => item.id)).toContain(lease!.id);
+        expect(await db.select().from(mimousePromptApplicationReceipts).where(eq(mimousePromptApplicationReceipts.applicationId, p.item.id))).toEqual([]);
+        expect((await service.head(actor, target.id)).generation).toBe(p.item.expectedGeneration);
+        await rm(leaseDirectory, { recursive: true });
+        await leases.releaseLease(lease!.id, "released", { cleanupStatus: "success" });
+        released = true;
+        expect(await agentExecutionsHaveStopped(db, [target.id])).toBe(true);
+      },
+    });
+    expect(preflight).toBe(true);
+    expect(refusals).toHaveLength(1);
+    expect(attempts).toEqual([JSON.stringify(fixedApproval), JSON.stringify(fixedApproval)]);
+    expect((await service.approve(actor, e.promptId, p.item.id, fixedApproval)).receipt.id).toBe(result.receipt.id);
+    expect(await db.select().from(mimousePromptApplicationReceipts).where(eq(mimousePromptApplicationReceipts.applicationId, p.item.id))).toHaveLength(1);
+    expect((await service.head(actor, target.id)).generation).toBe(p.item.expectedGeneration + 1);
+    expect(boundary.inputs).toHaveLength(inputCount);
+    await service.rollback(actor, e.promptId, p.item.id, { requestId: randomUUID(), expectedGeneration: result.receipt.generation });
+  } finally {
+    if (lease && !released) {
+      await rm(leaseDirectory, { recursive: true, force: true });
+      await leases.releaseLease(lease.id, "released", { cleanupStatus: "success" });
+    }
+  }
+});
+
 it("real heartbeat and ordinary Claude prompt assembly reach only the inert Node fixture", async () => {
   const p = await proposal(), approved = await service.approve(actor, e.promptId, p.item.id, approval(p.item));
   const [issue] = await db.insert(issues).values({ companyId: actor.companyId, title: "Actual ordinary runtime fixture", assigneeAgentId: target.id, responsibleUserId: actor.userId, status: "todo" }).returning();

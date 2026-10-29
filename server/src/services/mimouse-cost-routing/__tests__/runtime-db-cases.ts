@@ -3,14 +3,15 @@ import { expect, vi } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import { agents, companies, companyMemberships, principalPermissionGrants, heartbeatRuns, heartbeatRunEvents, issues, agentWakeupRequests, type Db } from "@paperclipai/db";
 import { runtimeRoutingBindings } from "@paperclipai/db/schema/runtime_cost_routing";
-import { promptApplicationService } from "../mimouse-prompt-applications/service.js";
-import { issueService } from "../issues.js";
-import { budgetService } from "../budgets.js";
-import { runtimeCostRoutingService } from "./service.js";
+import { promptApplicationService } from "../../mimouse-prompt-applications/service.js";
+import { issueService } from "../../issues.js";
+import { budgetService } from "../../budgets.js";
+import { runtimeCostRoutingService } from "../service.js";
 import type { verifyProducedRuntimeRoutingEvidence } from "./evidence-db-cases.js";
-import type { PrivatePromptIdentity } from "../mimouse-private-prompt-tests/service.js";
-import type { heartbeatService } from "../heartbeat.js";
-import { drainHeartbeatRunsToQuiescence } from "../../__tests__/helpers/drain-heartbeat-runs.js";
+import type { PrivatePromptIdentity } from "../../mimouse-private-prompt-tests/service.js";
+import type { heartbeatService } from "../../heartbeat.js";
+import { drainHeartbeatRunsToQuiescence } from "../../../__tests__/helpers/drain-heartbeat-runs.js";
+import { approveStoppedFixture } from "../../mimouse-prompt-applications/__tests__/approve-stopped-fixture.js";
 /** Shares the marked disposable PG fixture; every qualifying receipt is produced
  * by the real private heartbeat/accounting flow, never fabricated ledger rows. */
 export async function verifyRuntimeRoutingDispatch(db: Db, actor: PrivatePromptIdentity, heartbeat: ReturnType<typeof heartbeatService>,
@@ -25,8 +26,13 @@ export async function verifyRuntimeRoutingDispatch(db: Db, actor: PrivatePromptI
     const head = await applications.head(actor, item.reference.agentId);
     const prepared = await applications.prepare(actor, item.reference.promptId, { requestId: randomUUID(), agentId: item.reference.agentId,
       comparison: item.reference.comparison, expectedGeneration: head.generation, approvalValidForMinutes: 60 });
-    const approved = await applications.approve(actor, item.reference.promptId, prepared.item.id, { requestId: randomUUID(), expectedGeneration: head.generation,
-      approvalDigest: prepared.item.approvalDigest, confirmOrdinaryVisibility: true, confirmBareComparisonNotToolQuality: true, confirmNewTasksOnly: true, confirmNoAutomaticRun: true });
+    const approval = Object.freeze({ requestId: randomUUID(), expectedGeneration: head.generation,
+      approvalDigest: prepared.item.approvalDigest, confirmOrdinaryVisibility: true as const, confirmBareComparisonNotToolQuality: true as const, confirmNewTasksOnly: true as const, confirmNoAutomaticRun: true as const });
+    const approved = await approveStoppedFixture({ db, agentId: item.reference.agentId,
+      drain: () => heartbeat.drainActiveRunExecutions(),
+      approve: () => applications.approve(actor, item.reference.promptId, prepared.item.id, approval),
+      record: trace => console.log("routing approval fixture barrier", JSON.stringify(trace)),
+    });
     candidates.push({ ...item.reference, applicationId: prepared.item.id, applicationGeneration: approved.receipt.generation });
   }
   const before = ordinaryCalls(), wakeBefore = await db.select().from(agentWakeupRequests), costsBefore = await db.execute(sql`select count(*) as n from cost_events`);
@@ -34,7 +40,7 @@ export async function verifyRuntimeRoutingDispatch(db: Db, actor: PrivatePromptI
     datasetHash: produced[0].evidence.datasetHash, minimumPassRate: 1, maxEvidenceAgeHours: 24, candidates }, approvalValidForMinutes: 60 };
   const proposal = await service.prepare(actor, preparation);
   expect((await service.prepare(actor, preparation)).item.id).toBe(proposal.item.id);
-  const { verifyRuntimeRoutingExpiredClosure } = await import("./closure-db-cases.js");
+  const { verifyRuntimeRoutingExpiredClosure } = await import("../closure-db-cases.js");
   await verifyRuntimeRoutingExpiredClosure(db, actor, proposal.item.id);
   const approval = { requestId: randomUUID(), expectedGeneration: 0, approvalDigest: proposal.item.approvalDigest,
     confirmBareTextProxy: true, confirmHistoricalCostNotQuote: true, confirmNewTasksOnly: true, confirmNoAutomaticRun: true };
@@ -58,7 +64,7 @@ export async function verifyRuntimeRoutingDispatch(db: Db, actor: PrivatePromptI
   const bound = (await service.binding(actor, created.binding.id)).binding;
   const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, bound.runId!));
   expect(run.status, JSON.stringify({ error: run.error, code: run.errorCode })).toBe("succeeded"); expect(ordinaryCalls()).toBe(before + 1);
-  const { verifyRuntimeRoutingRecoverySuppression } = await import("./recovery-db-cases.js");
+  const { verifyRuntimeRoutingRecoverySuppression } = await import("../recovery-db-cases.js");
   await verifyRuntimeRoutingRecoverySuppression(db, issue, run); expect(ordinaryCalls()).toBe(before + 1);
   await expect(issueService(db).checkout(bound.issueId, bound.selectedAgentId, ["backlog", "todo", "in_progress"], run.id)).rejects.toThrow("runtime_routing_checkout_denied");
   expect(bound.state).toBe("start_requested"); expect(bound.providerConsumed).toBe(false);

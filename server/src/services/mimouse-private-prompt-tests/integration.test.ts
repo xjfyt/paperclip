@@ -6,7 +6,8 @@ import { mkdtemp, mkdir, readFile, readdir, writeFile, appendFile, rm, access } 
 import { tmpdir } from "node:os";
 import { delimiter, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { afterAll, beforeAll, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
+import { ownedCaseWorkScope } from "../../__tests__/helpers/owned-case-work.js";
 import { and, eq, sql } from "drizzle-orm";
 import { activityLog, agents, authSessions, authUsers, companies, companyMemberships, companySkills, companySkillVersions,
   mimouseEvaluationDatasets, issueCreateIdempotencyKeys, heartbeatRuns, heartbeatRunEvents, issues, agentWakeupRequests, createDb, type Db,
@@ -61,6 +62,47 @@ vi.mock("../issues.js", async original => {
   } };
 });
 const processBoundary = vi.hoisted(() => ({ inputs: [] as string[], calls: 0, ordinaryCalls: 0, ordinaryAllowed: false, hold: false, releasePath: null as string | null, notifySpawn: null as null | (() => void) }));
+const privateCaseWork = ownedCaseWorkScope();
+let privateCaseResources: { releases: Promise<void>[]; restore: Array<() => void> } | null = null;
+function runOwnedPrivateCase(body: () => Promise<void>) {
+  return privateCaseWork.run(async () => {
+    const resources = { releases: [] as Promise<void>[], restore: [] as Array<() => void> };
+    privateCaseResources = resources;
+    privateCaseWork.current().finally(async () => {
+      // Body/child promises have settled, including late gates. Do not restore
+      // shared fixture state until the actual controller work also stops.
+      if (heartbeat && db) await drainHeartbeatRunsToQuiescence(db, heartbeat);
+      const releases = await Promise.allSettled(resources.releases);
+      const failure = releases.find(result => result.status === "rejected");
+      if (failure?.status === "rejected") throw failure.reason;
+      for (const restore of resources.restore) restore();
+    });
+    await body();
+  });
+}
+function privateCaseSignal() { return privateCaseWork.current().signal(); }
+function trackPrivateCase<T>(work: Promise<T>) { return privateCaseWork.current().track(work); }
+function restorePrivateCase(restore: () => void) {
+  if (!privateCaseResources) throw Error("Private fixture restoration registered outside its owned case");
+  privateCaseResources.restore.push(restore);
+}
+function holdPrivateFixtureChild() {
+  if (!privateCaseResources) throw Error("Private child registered outside its owned case");
+  const ownedReleasePath = join(home, `release-${randomUUID()}`);
+  const closing = privateCaseSignal(), ready = privateCaseSignal();
+  // Normal bodies release this real file in finally. If Vitest stops waiting,
+  // close opens the signal BEFORE joining this release task and the body.
+  privateCaseResources.releases.push(trackPrivateCase(closing.promise.then(() => writeFile(ownedReleasePath, "release"))));
+  processBoundary.hold = true; processBoundary.releasePath = ownedReleasePath; processBoundary.notifySpawn = ready.resolve;
+  restorePrivateCase(() => {
+    if (processBoundary.releasePath === ownedReleasePath) {
+      processBoundary.hold = false; processBoundary.releasePath = null; processBoundary.notifySpawn = null;
+    }
+  });
+  return { ownedReleasePath, spawned: ready.promise };
+}
+beforeEach(() => privateCaseWork.assertIdle());
+afterEach(async () => { await privateCaseWork.drain(); privateCaseResources = null; });
 vi.mock("@paperclipai/adapter-utils/execution-target", async original => {
   const actual = await original<typeof import("@paperclipai/adapter-utils/execution-target")>();
   return { ...actual, runAdapterExecutionTargetProcess: async (runId: string, target: unknown, command: string, args: string[], options: any) => {
@@ -90,6 +132,10 @@ vi.mock("@paperclipai/adapter-utils/execution-target", async original => {
 import { getServerAdapter, privatePromptTestImplementation, registerServerAdapter } from "../../adapters/registry.js";
 import { privatePromptHttpFixture } from "./http-fixture.js";
 import { snapshotFile } from "../skill-snapshot.js";
+import { companySkillService } from "../company-skills.js";
+import { runtimeSkillCacheRoot } from "../runtime-skill-cache.js";
+import { resolvePaperclipInstanceRoot } from "../../home-paths.js";
+import { protectNewPrivatePath } from "@paperclipai/shared/private-filesystem-permissions";
 import * as issueModule from "../issues.js";
 import { assertPrivatePromptEarlyBinding, privatePromptTestService as rawPrivatePromptTestService } from "./service.js";
 import { privateConfigDigest, privatePromptHash } from "./profile.js";
@@ -220,6 +266,7 @@ async function verifyHistoricalMigrationAtomicity(connectionString: string) {
 }
 beforeAll(async () => {
   home = await mkdtemp(join(tmpdir(), "paperclip-private-prompt-home-"));
+  protectNewPrivatePath(home);
   pgLog = `${home}-postgres.log`; recordPg(`owned fixture ${home}`);
   await writeFile(join(home, ".private-prompt-test-fixture"), "paperclip-private-prompt-disposable-v1");
   vi.stubEnv("PAPERCLIP_HOME", home); vi.stubEnv("PAPERCLIP_SECRETS_MASTER_KEY_FILE", join(home, "master.key"));
@@ -282,6 +329,9 @@ beforeAll(async () => {
   heartbeat = heartbeatService(db, { runtimeEnv: {} });
 }, 180000);
 afterAll(async () => {
+  // A failed bounded drain keeps its raw bodies/resources owned. Never close
+  // their database or restore their environment underneath still-live work.
+  await privateCaseWork.drain();
   let safeCleanup = false;
   try {
     if (heartbeat && db) await drainHeartbeatRunsToQuiescence(db, heartbeat);
@@ -294,7 +344,12 @@ afterAll(async () => {
       expect(stillHasPid).toBe(false); expect(alive).toBe(false);
       safeCleanup = !stillHasPid && !alive;
     }
-  } finally { vi.unstubAllEnvs(); vi.unstubAllGlobals(); if (home && safeCleanup) await rm(home, { recursive: true, force: true }); }
+  } finally {
+    if (safeCleanup) {
+      vi.unstubAllEnvs(); vi.unstubAllGlobals();
+      if (home) await rm(home, { recursive: true, force: true });
+    }
+  }
 }, 60000);
 it("installs the real 0357 all-status unique fence and enforced private status constraint", async () => {
   const indexes = await db.execute(sql`select i.indisunique, i.indisvalid, i.indisready, pg_get_expr(i.indpred, i.indrelid) as predicate
@@ -319,7 +374,54 @@ it("installs the real 0357 all-status unique fence and enforced private status c
   expect(violation).toMatchObject({ code: "23514", constraint_name: "mimouse_private_prompt_test_state" });
   expect(await db.select().from(tests).where(eq(tests.id, id))).toHaveLength(0);
 });
-it("creates one intent/wake, dispatches exact stdin, and reads bounded output only through private result", async () => {
+it("retains missing-source evaluation history and its cache while deleting only same-company unused orphans", async () => {
+  const [version] = await db.select().from(companySkillVersions).where(eq(companySkillVersions.id, input.skillVersionId));
+  const [skill] = await db.select().from(companySkills).where(eq(companySkills.id, version.companySkillId));
+  const cache = runtimeSkillCacheRoot(join(resolvePaperclipInstanceRoot(), "skills", actor.companyId), skill.id);
+  await mkdir(cache, { recursive: true });
+  await writeFile(join(cache, "history-sentinel"), "derived cache for retained history");
+  const [orphan] = await db.insert(companySkills).values({ companyId: actor.companyId, key: "unused-orphan", slug: "unused-orphan", name: "Unused orphan", markdown: "Unused" }).returning();
+  const [otherCompany] = await db.insert(companies).values({ name: "Unrelated retention fixture", issuePrefix: `RET${randomUUID().slice(0, 5).toUpperCase()}` }).returning();
+  const [foreign] = await db.insert(companySkills).values({ companyId: otherCompany.id, key: "foreign-orphan", slug: "foreign-orphan", name: "Foreign orphan", markdown: "Foreign" }).returning();
+  let failure: { code?: string; constraint_name?: string } | undefined;
+  try { await companySkillService(db).list(actor.companyId); }
+  catch (error) { failure = (error as { cause?: typeof failure }).cause ?? error as typeof failure; }
+  expect(failure, JSON.stringify(failure ? { code: failure.code, constraint: failure.constraint_name } : null)).toBeUndefined();
+  const [retained] = await db.select().from(companySkills).where(eq(companySkills.id, skill.id));
+  expect(retained.metadata).toHaveProperty("missingSource.reason", "local_source_missing");
+  expect(await db.select().from(companySkillVersions).where(eq(companySkillVersions.id, version.id))).toEqual([version]);
+  expect(await db.select().from(mimouseEvaluationDatasets).where(eq(mimouseEvaluationDatasets.id, input.datasetId))).toHaveLength(1);
+  expect(await readFile(join(cache, "history-sentinel"), "utf8")).toBe("derived cache for retained history");
+  expect(await db.select().from(companySkills).where(eq(companySkills.id, orphan.id))).toEqual([]);
+  expect(await db.select().from(companySkills).where(eq(companySkills.id, foreign.id))).toEqual([foreign]);
+});
+
+it("rechecks history admitted after preflight under the existing company and skill locks", async () => {
+  const [skill] = await db.insert(companySkills).values({ companyId: actor.companyId, key: "late-history", slug: "late-history", name: "Late history", markdown: "Retain snapshot" }).returning();
+  const [version] = await db.insert(companySkillVersions).values({ companyId: actor.companyId, companySkillId: skill.id, revisionNumber: 1,
+    fileInventory: [snapshotFile("SKILL.md", "skill", Buffer.from(skill.markdown))] }).returning();
+  const cache = runtimeSkillCacheRoot(join(resolvePaperclipInstanceRoot(), "skills", actor.companyId), skill.id);
+  await mkdir(cache, { recursive: true }); await writeFile(join(cache, "derived"), "rebuildable");
+  let inserted = false;
+  const service = companySkillService(db, { beforeReconcilePersist: async (id) => {
+    if (id !== skill.id || inserted) return;
+    inserted = true;
+    const cases = [{ id: randomUUID(), input: "Fixed late history", expected: "Fixed" }];
+    await db.insert(mimouseEvaluationDatasets).values({ companyId: actor.companyId, skillId: skill.id, requestId: randomUUID(), requestDigest: "late-history",
+      name: "Late history", cases, datasetHash: privateConfigDigest(cases), actorId: actor.userId });
+  } });
+  await service.list(actor.companyId);
+  expect(inserted).toBe(true);
+  const [retained] = await db.select().from(companySkills).where(eq(companySkills.id, skill.id));
+  expect(retained.metadata).toHaveProperty("missingSource.reason", "local_source_missing");
+  expect(await db.select().from(companySkillVersions).where(eq(companySkillVersions.id, version.id))).toEqual([version]);
+  expect(await db.select().from(mimouseEvaluationDatasets).where(eq(mimouseEvaluationDatasets.skillId, skill.id))).toHaveLength(1);
+  // The existing cache-lock API removes derived cache before entering SQL.
+  // Late history keeps its authoritative snapshot, and may rebuild this cache.
+  await expect(access(cache)).rejects.toMatchObject({ code: "ENOENT" });
+});
+
+it("creates one intent/wake, dispatches exact stdin, and reads bounded output only through private result", () => runOwnedPrivateCase(async () => {
   const service = privatePromptTestService(db, heartbeat.wakeup);
   const [first, duplicate] = await Promise.all([service.create(actor, promptId, input), service.create(actor, promptId, input)]);
   expect(first.item.id).toBe(duplicate.item.id);
@@ -342,7 +444,7 @@ it("creates one intent/wake, dispatches exact stdin, and reads bounded output on
   expect(replay.item.id).toBe(first.item.id); expect(processBoundary.calls).toBe(1);
   await expect(heartbeat.wakeup(input.agentId, { idempotencyKey: `private-prompt-test:${first.item.id}`, contextSnapshot: { issueId: first.item.issueId } })).rejects.toThrow("private_prompt_wake_authority_required");
   await expect(service.create(actor, promptId, { ...input, caseId: randomUUID() })).rejects.toThrow("private_prompt_request_conflict");
-}, 90000);
+}), 90000);
 it("rejects same-name external adapter wrappers without trusting their claimed capability", () => {
   const builtin = getServerAdapter("claude_local");
   expect(privatePromptTestImplementation(builtin)).not.toBeNull();
@@ -354,11 +456,12 @@ it("rejects same-name external adapter wrappers without trusting their claimed c
   } finally { registerServerAdapter(builtin); }
   expect(privatePromptTestImplementation(builtin)).not.toBeNull();
 });
-it("rejects runtime routing overlays before creating a paid intent", async () => {
+it("rejects runtime routing overlays before creating a paid intent", () => runOwnedPrivateCase(async () => {
   await db.update(agents).set({ runtimeConfig: { aiConnection: { connectionId: randomUUID() } } }).where(eq(agents.id, input.agentId));
-  await expect(privatePromptTestService(db, heartbeat.wakeup).create(actor, promptId, { ...input, requestId: randomUUID() })).rejects.toThrow("private_prompt_runtime_overlay_unsupported");
-  await db.update(agents).set({ runtimeConfig: {} }).where(eq(agents.id, input.agentId));
-});
+  try {
+    await expect(privatePromptTestService(db, heartbeat.wakeup).create(actor, promptId, { ...input, requestId: randomUUID() })).rejects.toThrow("private_prompt_runtime_overlay_unsupported");
+  } finally { await db.update(agents).set({ runtimeConfig: {} }).where(eq(agents.id, input.agentId)); }
+}));
 it("rejects cross-company agents and mismatched fixed resource references before dispatch", async () => {
   const before = processBoundary.calls;
   const [otherCompany] = await db.insert(companies).values({ name: "Other private fixture", issuePrefix: "OPV" }).returning();
@@ -368,12 +471,13 @@ it("rejects cross-company agents and mismatched fixed resource references before
   }
   expect(processBoundary.calls).toBe(before);
 });
-it("refuses an idempotency collision with an open or foreign-owned harness", async () => {
+it("refuses an idempotency collision with an open or foreign-owned harness", () => runOwnedPrivateCase(async () => {
   const request = { ...input, requestId: randomUUID() };
   const original = issueModule.issueService;
   const interrupted = vi.spyOn(issueModule, "issueService").mockImplementationOnce((...args) => ({
     ...original(...args), create: async () => { throw Error("fixture interruption before harness"); },
   }));
+  restorePrivateCase(() => { interrupted.mockRestore(); });
   await expect(privatePromptTestService(db, heartbeat.wakeup).create(actor, promptId, request)).rejects.toThrow("fixture interruption");
   interrupted.mockRestore();
   const [intent] = await db.select().from(tests).where(eq(tests.requestId, request.requestId));
@@ -383,7 +487,7 @@ it("refuses an idempotency collision with an open or foreign-owned harness", asy
   await expect(privatePromptTestService(db, heartbeat.wakeup).create(actor, promptId, request)).rejects.toThrow("private_prompt_harness_binding_denied");
   expect((await db.select().from(tests).where(eq(tests.id, intent.id)))[0].issueId).toBeNull();
   expect(processBoundary.calls).toBe(1);
-});
+}));
 it("converges an unadmitted reserved wake to failed on list and never retries it", async () => {
   const request = { ...input, requestId: randomUUID() };
   const refused = vi.fn(async (agentId: string, opts: any) => {
@@ -395,7 +499,7 @@ it("converges an unadmitted reserved wake to failed on list and never retries it
   expect((await service.list(actor, promptId)).items.find(row => row.id === created.item.id)?.errorCode).toBe("private_prompt_wake_not_admitted");
   await service.create(actor, promptId, request); expect(refused).toHaveBeenCalledTimes(1); expect(processBoundary.calls).toBe(1);
 });
-it("advances two distinct private intents then an ordinary approved wake on the same idle agent", async () => {
+it("advances two distinct private intents then an ordinary approved wake on the same idle agent", () => runOwnedPrivateCase(async () => {
   const before = processBoundary.calls;
   const ids: string[] = [];
   for (let index = 0; index < 2; index++) {
@@ -424,13 +528,12 @@ it("advances two distinct private intents then an ordinary approved wake on the 
   } finally {
     await db.update(agents).set({ adapterType: agent.adapterType, adapterConfig: agent.adapterConfig }).where(eq(agents.id, agent.id));
   }
-});
-it("drains an ordinary approved wake already queued behind a running private child", async () => {
+}));
+it("drains an ordinary approved wake already queued behind a running private child", () => runOwnedPrivateCase(async () => {
+  const { ownedReleasePath, spawned } = holdPrivateFixtureChild();
   const [agent] = await db.select().from(agents).where(eq(agents.id, input.agentId));
-  await db.update(agents).set({ runtimeConfig: { heartbeat: { maxConcurrentRuns: 1 } } }).where(eq(agents.id, agent.id));
-  const spawned = new Promise<void>(accept => { processBoundary.notifySpawn = accept; });
-  processBoundary.hold = true; processBoundary.releasePath = join(home, `release-${randomUUID()}`);
   try {
+    await db.update(agents).set({ runtimeConfig: { heartbeat: { maxConcurrentRuns: 1 } } }).where(eq(agents.id, agent.id));
     const created = await privatePromptTestService(db, heartbeat.wakeup).create(actor, promptId, { ...input, requestId: randomUUID() });
     await spawned;
     // The private provider process has already spawned under its approved profile.
@@ -442,22 +545,26 @@ it("drains an ordinary approved wake already queued behind a running private chi
       requestedByActorType: "user", requestedByActorId: actor.userId });
     expect(successor).not.toBeNull();
     expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, successor!.id)))[0].status).toBe("queued");
-    await writeFile(processBoundary.releasePath!, "release");
+    await writeFile(ownedReleasePath, "release");
     await drainHeartbeatRunsToQuiescence(db, heartbeat);
     expect((await privatePromptTestService(db).detail(actor, promptId, created.item.id)).item.status).toBe("completed");
     expect((await db.select().from(issues).where(eq(issues.id, created.item.issueId!)))[0].status).toBe("done");
     expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, successor!.id)))[0].status).toBe("succeeded");
     expect((await db.select().from(agents).where(eq(agents.id, agent.id)))[0].status).toBe("idle");
   } finally {
-    if (processBoundary.releasePath) await writeFile(processBoundary.releasePath, "release");
+    await writeFile(ownedReleasePath, "release");
     await drainHeartbeatRunsToQuiescence(db, heartbeat);
+    const unfinished = await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, actor.companyId), eq(heartbeatRuns.agentId, agent.id),
+      sql`${heartbeatRuns.status} in ('queued', 'running')`,
+    )).limit(1);
+    if (unfinished.length) throw Error("Owned ordinary wake still has an unfinished run after cleanup drain");
     processBoundary.hold = false; processBoundary.releasePath = null; processBoundary.notifySpawn = null;
     await db.update(agents).set({ adapterType: agent.adapterType, adapterConfig: agent.adapterConfig, runtimeConfig: agent.runtimeConfig }).where(eq(agents.id, agent.id));
   }
-});
-it.each(["cancelled", "reassigned"])("does not overwrite a user %s harness while its child finishes", async change => {
-  const spawned = new Promise<void>(accept => { processBoundary.notifySpawn = accept; });
-  processBoundary.hold = true; processBoundary.releasePath = join(home, `release-${randomUUID()}`);
+}));
+it.each(["cancelled", "reassigned"])("does not overwrite a user %s harness while its child finishes", change => runOwnedPrivateCase(async () => {
+  const { ownedReleasePath, spawned } = holdPrivateFixtureChild();
   try {
     const created = await privatePromptTestService(db, heartbeat.wakeup).create(actor, promptId, { ...input, requestId: randomUUID() });
     await spawned;
@@ -470,7 +577,7 @@ it.each(["cancelled", "reassigned"])("does not overwrite a user %s harness while
       ...(change === "cancelled" ? { status: "cancelled" } : { assigneeAgentId: replacementId }),
       companyGuard: actor.companyId, actorUserId: actor.userId,
     });
-    await writeFile(processBoundary.releasePath!, "release");
+    await writeFile(ownedReleasePath, "release");
     await drainHeartbeatRunsToQuiescence(db, heartbeat);
     const [issue] = await db.select().from(issues).where(eq(issues.id, created.item.issueId!));
     expect(issue.status).not.toBe("done");
@@ -478,11 +585,12 @@ it.each(["cancelled", "reassigned"])("does not overwrite a user %s harness while
     else expect(issue.assigneeAgentId).toBe(replacementId);
     expect((await db.select().from(agents).where(eq(agents.id, input.agentId)))[0].status).toBe("idle");
   } finally {
-    if (processBoundary.releasePath) await writeFile(processBoundary.releasePath, "release");
+    await writeFile(ownedReleasePath, "release");
+    await drainHeartbeatRunsToQuiescence(db, heartbeat);
     processBoundary.hold = false; processBoundary.releasePath = null; processBoundary.notifySpawn = null;
   }
-});
-it("rejects changed local source, disabled targets, and env/config overlays without dispatch", async () => {
+}));
+it("rejects changed local source, disabled targets, and env/config overlays without dispatch", () => runOwnedPrivateCase(async () => {
   const [settings] = await db.select().from(instanceSettings);
   const [local] = await db.select().from(environments).where(eq(environments.id, settings.defaultEnvironmentId!));
   const request = { ...input, requestId: randomUUID() };
@@ -506,8 +614,8 @@ it("rejects changed local source, disabled targets, and env/config overlays with
     await db.update(instanceSettings).set({ defaultEnvironmentId: local.id });
     await db.update(environments).set({ status: local.status, config: local.config, envVars: local.envVars }).where(eq(environments.id, local.id));
   }
-});
-it("fails closed when the prepared witness cannot persist and never replays that attempt", async () => {
+}));
+it("fails closed when the prepared witness cannot persist and never replays that attempt", () => runOwnedPrivateCase(async () => {
   const before = processBoundary.calls;
   await db.execute(sql.raw(`CREATE FUNCTION private_fixture_deny_prepared() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.status = 'prepared' THEN RAISE EXCEPTION 'fixture witness unavailable'; END IF; RETURN NEW; END $$;
     CREATE TRIGGER private_fixture_prepared BEFORE UPDATE ON mimouse_private_prompt_tests FOR EACH ROW EXECUTE FUNCTION private_fixture_deny_prepared();`));
@@ -525,8 +633,8 @@ it("fails closed when the prepared witness cannot persist and never replays that
     await db.execute(sql.raw("DROP TRIGGER private_fixture_prepared ON mimouse_private_prompt_tests; DROP FUNCTION private_fixture_deny_prepared();"));
     await db.update(agents).set({ status: "idle" }).where(eq(agents.id, input.agentId));
   }
-});
-it("keeps a spawned-but-unpersisted receipt unknown and refuses another attempt", async () => {
+}));
+it("keeps a spawned-but-unpersisted receipt unknown and refuses another attempt", () => runOwnedPrivateCase(async () => {
   const before = processBoundary.calls;
   await db.execute(sql.raw(`CREATE FUNCTION private_fixture_deny_spawned() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.status = 'spawned' THEN RAISE EXCEPTION 'fixture spawn receipt unavailable'; END IF; RETURN NEW; END $$;
     CREATE TRIGGER private_fixture_spawned BEFORE UPDATE ON mimouse_private_prompt_tests FOR EACH ROW EXECUTE FUNCTION private_fixture_deny_spawned();`));
@@ -545,11 +653,10 @@ it("keeps a spawned-but-unpersisted receipt unknown and refuses another attempt"
     await db.execute(sql.raw("DROP TRIGGER private_fixture_spawned ON mimouse_private_prompt_tests; DROP FUNCTION private_fixture_deny_spawned();"));
     await db.update(agents).set({ status: "idle" }).where(eq(agents.id, input.agentId));
   }
-});
-it("cancels a real fixture child and never replays the cancelled provider-unknown attempt", async () => {
+}));
+it("cancels a real fixture child and never replays the cancelled provider-unknown attempt", () => runOwnedPrivateCase(async () => {
   const before = processBoundary.calls;
-  const spawned = new Promise<void>(accept => { processBoundary.notifySpawn = accept; });
-  processBoundary.hold = true;
+  const { ownedReleasePath, spawned } = holdPrivateFixtureChild();
   const request = { ...input, requestId: randomUUID() };
   try {
     const created = await privatePromptTestService(db, heartbeat.wakeup).create(actor, promptId, request);
@@ -563,11 +670,13 @@ it("cancels a real fixture child and never replays the cancelled provider-unknow
     await privatePromptTestService(db, heartbeat.wakeup).create(actor, promptId, request);
     expect(processBoundary.calls).toBe(before + 1);
   } finally {
-    processBoundary.hold = false; processBoundary.notifySpawn = null;
+    await writeFile(ownedReleasePath, "release");
+    await drainHeartbeatRunsToQuiescence(db, heartbeat);
+    processBoundary.hold = false; processBoundary.releasePath = null; processBoundary.notifySpawn = null;
     await db.update(agents).set({ status: "idle" }).where(eq(agents.id, input.agentId));
   }
-});
-it("reconciles a persisted spawned receipt after terminal run recovery without replay", async () => {
+}));
+it("reconciles a persisted spawned receipt after terminal run recovery without replay", () => runOwnedPrivateCase(async () => {
   const [row] = await db.select().from(tests).where(eq(tests.requestId, input.requestId));
   const before = processBoundary.calls;
   // Model the durable crash window after spawned, before private completion.
@@ -577,8 +686,8 @@ it("reconciles a persisted spawned receipt after terminal run recovery without r
   expect((await freshService.list(actor, promptId)).items.find(item => item.id === row.id)?.status).toBe("unknown");
   await freshService.create(actor, promptId, input);
   expect(processBoundary.calls).toBe(before);
-});
-it("protects private bindings when disabled while leaving an ordinary migrated issue unbound", async () => {
+}));
+it("protects private bindings when disabled while leaving an ordinary migrated issue unbound", () => runOwnedPrivateCase(async () => {
   const [ordinary] = await db.insert(issues).values({ companyId: actor.companyId, title: "Ordinary historical issue", visibility: "open" }).returning();
   const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.agentId, input.agentId));
   vi.stubEnv("PAPERCLIP_PRIVATE_PROMPT_TESTS_ENABLED", "false");
@@ -588,7 +697,7 @@ it("protects private bindings when disabled while leaving an ordinary migrated i
     await expect(heartbeat.wakeup(input.agentId, { contextSnapshot: { issueId: privateRun.issueId } })).rejects.toThrow("private_prompt_generic_wake_denied");
     expect((await privatePromptTestService(db).detail(actor, promptId, privateRun.id)).item.id).toBe(privateRun.id);
   } finally { vi.stubEnv("PAPERCLIP_PRIVATE_PROMPT_TESTS_ENABLED", "true"); }
-});
+}));
 function preparationInput(requestId = randomUUID()) {
   const { confirmRestrictedProfile, confirmExecution, confirmPossibleCharges, ...preparation } = input;
   return { ...preparation, requestId };
@@ -643,7 +752,7 @@ function scheduledPrivateDb(options: {
     },
   });
 }
-it.each(["queue", "early_binding", "claim", "prepare", "completion"])("orders stale harness retries against the real private %s transaction", async phase => {
+it.each(["queue", "early_binding", "claim", "prepare", "completion"])("orders stale harness retries against the real private %s transaction", phase => runOwnedPrivateCase(async () => {
   const before = processBoundary.calls;
   const errors: string[] = [];
   let wakeArgs: Parameters<typeof heartbeat.wakeup> | undefined;
@@ -651,10 +760,9 @@ it.each(["queue", "early_binding", "claim", "prepare", "completion"])("orders st
   const ticket = await service.prepare(actor, promptId, preparationInput());
   const admitted = await service.execute(actor, promptId, ticket.item.id, confirmation(ticket.item.approvalDigest));
   expect(admitted.item.status).toBe("pending_wake"); expect(wakeArgs).toBeDefined();
-  let releaseSnapshot!: () => void, releaseWorker!: () => void;
   let snapshotReached = false, workerReached = false, duplicateSettled = false;
-  const snapshotGate = new Promise<void>(resolve => { releaseSnapshot = resolve; });
-  const workerGate = new Promise<void>(resolve => { releaseWorker = resolve; });
+  const { promise: snapshotGate, resolve: releaseSnapshot } = privateCaseSignal();
+  const { promise: workerGate, resolve: releaseWorker } = privateCaseSignal();
   let firstTransaction = true;
   const duplicateDb = scheduledPrivateDb({ errors, afterTransaction: async () => {
     if (!firstTransaction) return;
@@ -672,15 +780,15 @@ it.each(["queue", "early_binding", "claim", "prepare", "completion"])("orders st
     if (selected) { workerReached = true; await workerGate; }
   } });
   const worker = heartbeatService(workerDb, { runtimeEnv: {} });
-  const duplicate = rawPrivatePromptTestService(duplicateDb, async () => null)
-    .execute(actor, promptId, ticket.item.id, confirmation(ticket.item.approvalDigest));
+  const duplicate = trackPrivateCase(rawPrivatePromptTestService(duplicateDb, async () => null)
+    .execute(actor, promptId, ticket.item.id, confirmation(ticket.item.approvalDigest)));
   const duplicateOutcome = duplicate.then(value => { duplicateSettled = true; return { value }; }, error => { duplicateSettled = true; return { error }; });
   let waking: Promise<unknown> | undefined;
   try {
     await vi.waitFor(() => expect(snapshotReached).toBe(true), { timeout: 10000 });
     // The request really read pending_wake before queueing. Resume it only
     // after the real worker/queue holds its production row lock.
-    waking = worker.wakeup(...wakeArgs!);
+    waking = trackPrivateCase(worker.wakeup(...wakeArgs!));
     waking.catch(() => {});
     await vi.waitFor(() => expect(workerReached).toBe(true), { timeout: 20000 });
     releaseSnapshot();
@@ -709,20 +817,21 @@ it.each(["queue", "early_binding", "claim", "prepare", "completion"])("orders st
     await waking?.catch(() => {});
     await drainHeartbeatRunsToQuiescence(workerDb, worker);
   }
-}, 45000);
-it("orders company and intent locks when a duplicate confirmation overlaps harness creation", async () => {
+}), 45000);
+it("orders company and intent locks when a duplicate confirmation overlaps harness creation", () => runOwnedPrivateCase(async () => {
   const before = processBoundary.calls;
   const service = rawPrivatePromptTestService(db, async () => null);
   const ticket = await service.prepare(actor, promptId, preparationInput());
-  let entered!: () => void, release!: () => void;
-  const reached = new Promise<void>(resolve => { entered = resolve; });
-  const gate = new Promise<void>(resolve => { release = resolve; });
+  const { promise: reached, resolve: entered } = privateCaseSignal();
+  const { promise: gate, resolve: release } = privateCaseSignal();
   harnessGate.beforeCreate = async () => { harnessGate.beforeCreate = null; entered(); await gate; };
-  const first = service.execute(actor, promptId, ticket.item.id, confirmation(ticket.item.approvalDigest));
+  const ownedHarnessHook = harnessGate.beforeCreate;
+  restorePrivateCase(() => { if (harnessGate.beforeCreate === ownedHarnessHook) harnessGate.beforeCreate = null; });
+  const first = trackPrivateCase(service.execute(actor, promptId, ticket.item.id, confirmation(ticket.item.approvalDigest)));
   let second: typeof first | undefined;
   try {
     await reached;
-    second = service.execute(actor, promptId, ticket.item.id, confirmation(ticket.item.approvalDigest));
+    second = trackPrivateCase(service.execute(actor, promptId, ticket.item.id, confirmation(ticket.item.approvalDigest)));
     await vi.waitFor(async () => {
       const waiting = await db.execute(sql`select query from pg_stat_activity where datname = current_database()
         and wait_event_type = 'Lock' and pid <> pg_backend_pid()`);
@@ -740,7 +849,7 @@ it("orders company and intent locks when a duplicate confirmation overlaps harne
     release();
     await Promise.allSettled(second ? [first, second] : [first]);
   }
-}, 30000);
+}), 30000);
 it("prepares metadata only and never resumes an existing ticket even after admission", async () => {
   const before = processBoundary.calls, wake = vi.fn(async () => null), service = rawPrivatePromptTestService(db, wake);
   const preparation = preparationInput();
@@ -756,7 +865,7 @@ it("prepares metadata only and never resumes an existing ticket even after admis
   expect(after.item.status).toBe("pending_wake"); expect(after.item.approvalDigest).toBe(first.item.approvalDigest);
   expect(wake).toHaveBeenCalledTimes(1); expect(processBoundary.calls).toBe(before);
 });
-it("rejects configuration drift and revoked authorization between prepare and execute", async () => {
+it("rejects configuration drift and revoked authorization between prepare and execute", () => runOwnedPrivateCase(async () => {
   const service = rawPrivatePromptTestService(db, heartbeat.wakeup), before = processBoundary.calls;
   const ticket = await service.prepare(actor, promptId, preparationInput());
   const [agent] = await db.select().from(agents).where(eq(agents.id, input.agentId));
@@ -777,14 +886,14 @@ it("rejects configuration drift and revoked authorization between prepare and ex
   expect(cancelled.item.status).toBe("cancelled");
   expect((await service.execute(actor, promptId, ticket.item.id, confirmation(ticket.item.approvalDigest))).item.status).toBe("cancelled");
   expect(processBoundary.calls).toBe(before);
-});
-it("serializes execute/cancel and keeps late execute and terminal replay on the same ticket", async () => {
+}));
+it("serializes execute/cancel and keeps late execute and terminal replay on the same ticket", () => runOwnedPrivateCase(async () => {
   const service = rawPrivatePromptTestService(db, heartbeat.wakeup), before = processBoundary.calls;
   const ticket = await service.prepare(actor, promptId, preparationInput());
   await expect(service.execute(actor, promptId, ticket.item.id, confirmation("0".repeat(64)))).rejects.toThrow("private_prompt_approval_changed");
   const [execution, cancellation] = await Promise.all([
-    service.execute(actor, promptId, ticket.item.id, confirmation(ticket.item.approvalDigest)),
-    service.cancel(actor, promptId, ticket.item.id, { approvalDigest: ticket.item.approvalDigest }),
+    trackPrivateCase(service.execute(actor, promptId, ticket.item.id, confirmation(ticket.item.approvalDigest))),
+    trackPrivateCase(service.cancel(actor, promptId, ticket.item.id, { approvalDigest: ticket.item.approvalDigest })),
   ]);
   await drainHeartbeatRunsToQuiescence(db, heartbeat);
   const resolved = await service.detail(actor, promptId, ticket.item.id);
@@ -795,7 +904,7 @@ it("serializes execute/cancel and keeps late execute and terminal replay on the 
   const count = processBoundary.calls;
   expect((await service.execute(actor, promptId, ticket.item.id, confirmation(ticket.item.approvalDigest))).item.status).toBe(resolved.item.status);
   expect(processBoundary.calls).toBe(count);
-});
+}));
 it("keeps persisted approval summaries immutable and fails closed on tampering or historical null", async () => {
   const service = rawPrivatePromptTestService(db, heartbeat.wakeup), before = processBoundary.calls;
   const ticket = await service.prepare(actor, promptId, preparationInput());
@@ -815,7 +924,7 @@ it("keeps persisted approval summaries immutable and fails closed on tampering o
   await expect(service.execute(actor, promptId, ticket.item.id, confirmation(history.item.approvalDigest))).rejects.toThrow("private_prompt_approval_snapshot_missing");
   expect(processBoundary.calls).toBe(before);
 });
-it("explicitly resumes the same admitted ticket after an interrupted harness creation", async () => {
+it("explicitly resumes the same admitted ticket after an interrupted harness creation", () => runOwnedPrivateCase(async () => {
   const service = rawPrivatePromptTestService(db, heartbeat.wakeup), before = processBoundary.calls;
   const ticket = await service.prepare(actor, promptId, preparationInput());
   const original = issueModule.issueService;
@@ -832,8 +941,8 @@ it("explicitly resumes the same admitted ticket after an interrupted harness cre
   expect(completed.item.status).toBe("completed"); expect(completed.item.approvalDigest).toBe(ticket.item.approvalDigest);
   expect(processBoundary.calls).toBe(before + 1);
   expect(await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.idempotencyKey, `private-prompt-test:${ticket.item.id}`))).toHaveLength(1);
-});
-it("enforces the actual loopback HTTP router and error middleware without a production login claim", async () => {
+}));
+it("enforces the actual loopback HTTP router and error middleware without a production login claim", () => runOwnedPrivateCase(async () => {
   const owner: Express.Request["actor"] = { type: "board", source: "session", userId: actor.userId, sessionId: actor.sessionId,
     companyIds: [actor.companyId], memberships: [{ companyId: actor.companyId, membershipRole: "owner", status: "active" }] };
   const memberId = randomUUID(), memberSession = randomUUID(), now = new Date();
@@ -873,16 +982,16 @@ it("enforces the actual loopback HTTP router and error middleware without a prod
     expect((await http.call("POST", `${cancelPath}/execute`, confirmation(cancelDigest))).body.item.status).toBe("cancelled");
     expect(processBoundary.calls).toBe(before + 1);
   } finally { await http.close(); }
-});
+}));
 it("private historical comparison is scoped, sealed and read only", async () => {
   const before = processBoundary.calls;
-  const { verifyPrivateHistoricalComparison } = await import("./comparison-db-cases.js");
+  const { verifyPrivateHistoricalComparison } = await import("./__tests__/comparison-db-cases.js");
   await verifyPrivateHistoricalComparison(db);
   expect(processBoundary.calls).toBe(before);
 });
-it("produces own-agent routing proof through private execution and central accounting, never manual cost rows", async () => {
+it("produces own-agent routing proof through private execution and central accounting, never manual cost rows", () => runOwnedPrivateCase(async () => {
   const before = processBoundary.calls;
-  const { verifyProducedRuntimeRoutingEvidence } = await import("../mimouse-cost-routing/evidence-db-cases.js");
+  const { verifyProducedRuntimeRoutingEvidence } = await import("../mimouse-cost-routing/__tests__/evidence-db-cases.js");
   const produced = await verifyProducedRuntimeRoutingEvidence(db, actor, heartbeat, input.agentId, input.skillVersionId);
   expect(processBoundary.calls).toBe(before + 4);
   await mkdir(join(home, "routing-bin")); await writeFile(join(home, "routing-bin", process.platform === "win32" ? "claude.cmd" : "claude"), "#!/bin/sh\n# Hash-only fixture, never execute.\nexit 97\n", { mode: 0o700 });
@@ -899,15 +1008,12 @@ it("produces own-agent routing proof through private execution and central accou
       await readFile(join(home, ".private-prompt-test-fixture"), "utf8") !== "paperclip-private-prompt-disposable-v1") throw Error("Refusing non-fixture workspace cleanup");
   await rm(selectedHome, { recursive: true, force: true });
   expect(await access(selectedHome).then(() => true, () => false)).toBe(false);
-  const { verifyRuntimeRoutingDispatch } = await import("../mimouse-cost-routing/runtime-db-cases.js");
+  const { verifyRuntimeRoutingDispatch } = await import("../mimouse-cost-routing/__tests__/runtime-db-cases.js");
   processBoundary.ordinaryAllowed = true;
   try {
-    // Terminal run/accounting rows can precede the worker's finally cleanup.
-    // Approval requires actual stop evidence, so await that same real gate;
-    // never clear a PID, fake a receipt or lower the production requirement.
-    const { agentExecutionsHaveStopped } = await import("../agent-execution-stop.js");
-    await vi.waitFor(async () => expect(await agentExecutionsHaveStopped(db, produced.map(item => item.reference.agentId))).toBe(true),
-      { timeout: 20000, interval: 100 });
+    // Each fixed approval request now owns its real quiescence/admission
+    // barrier; a one-time preflight cannot promise no late work will arrive.
+    await heartbeat.drainActiveRunExecutions();
     await verifyRuntimeRoutingDispatch(db, actor, heartbeat, produced, () => processBoundary.ordinaryCalls);
   }
   catch (error) {
@@ -925,7 +1031,7 @@ it("produces own-agent routing proof through private execution and central accou
   }
   finally { processBoundary.ordinaryAllowed = false; }
   expect(processBoundary.calls).toBe(before + 4); expect(processBoundary.ordinaryCalls).toBe(1);
-}, 180000);
+}), 180000);
 it("denies another active administrator and a revoked original administrator", async () => {
   const before = processBoundary.calls;
   const userId = randomUUID(), sessionId = randomUUID(), now = new Date();

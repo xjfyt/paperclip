@@ -1,0 +1,405 @@
+{
+  "schema": "mimouse.private-fixture-lifecycle.v1",
+  "recordedAt": "2026-10-29T23:43:39.583Z",
+  "head": "2f04e90c8ddd03e2fe897e04db9d562b1be1f939",
+  "source": {
+    "path": "server/src/services/mimouse-private-prompt-tests/integration.test.ts",
+    "sha256": "110900dfc1982ff5d3bac8b6edadeb3ff9847ae771e0435b373df07edc8fa94c"
+  },
+  "runScope": "Native Windows; real local embedded PostgreSQL, inert owned fixture child processes and synthetic credentials. No paid provider or external account calls.",
+  "changes": [
+    "Register each selected raw test callback before its first await; immediately observe and retain original child/transaction promises.",
+    "Closing opens existing and late release gates before joining raw work, avoiding close/body cycles. Only after actual heartbeat drain and unfinished-run checks may finalizers restore adapter configuration or global fixture boundaries.",
+    "Admission refuses unresolved/failed prior cleanup. afterAll first joins held raw work; failure does not close the live DB, restore globals or delete its in-use temporary directory."
+  ],
+  "budgets": {
+    "caseDeadlines": "Unchanged: original 15s/30s/45s/180s registrations and each matrices retained.",
+    "cleanup": "25s bounded owner cleanup inside the existing 30s hook; no blanket case timeout increase.",
+    "faultTransform": "Only ignored diagnostic transforms inject a 5s real deadline or forced outer callback error; production, database stop state and committed test source are not altered."
+  },
+  "staticPreservation": {
+    "recordedAt": "2026-10-29T23:15:22.557Z",
+    "before": {
+      "path": "test-results/project-closure-20261029/fixture-lifecycle-private-after.ts.txt",
+      "sha256": "182a04e721b7dc0e39b76523ac1c455dd733188dab8015c868bc79f358e3c51b"
+    },
+    "after": {
+      "path": "server/src/services/mimouse-private-prompt-tests/integration.test.ts",
+      "sha256": "110900dfc1982ff5d3bac8b6edadeb3ff9847ae771e0435b373df07edc8fa94c"
+    },
+    "assertionCallNodes": {
+      "before": 456,
+      "after": 456,
+      "semanticallyIdentical": true,
+      "sha256": "b5c6a6b5429a6648e01c99bd070a01b5bec7629df91cb7566a43b4c27a0e7f26"
+    },
+    "caseRegistrations": {
+      "before": 29,
+      "after": 29,
+      "titlesMatricesAndBudgetsIdentical": true,
+      "sha256": "3594ae9817157adf8449d19d9c847954e1f003b999e6ebb1d368fc45093353cf"
+    },
+    "boundary": "AST metadata/comments/locations omitted; compares all expect-rooted call nodes and explicit/default test deadlines plus each matrices. This is a static semantic-preservation check, not execution evidence.",
+    "evidence": {
+      "path": "test-results/project-closure-20261029/private-owner-ast-review.json",
+      "sha256": "7d075ea13df2407adf440876df82f7f1220e2855b12f5945121d8a481244970f"
+    }
+  },
+  "focusedVerification": [
+    {
+      "runKind": "intentional-fault-injection",
+      "name": "fixture-lifecycle-private-before-unified-final",
+      "mode": "timeout",
+      "result": {
+        "passed": 1,
+        "expectedFailed": 2,
+        "nameFiltered": 30
+      },
+      "expectedFault": "Real Vitest 5000ms test deadline after real child admission; shared source retains its original 15000ms deadline.",
+      "observations": [
+        {
+          "diagnostic": "private-gate-time",
+          "elapsedMs": 3174
+        },
+        {
+          "diagnostic": "private-order",
+          "gateReached": true,
+          "closedBeforeSafety": false,
+          "adapterType": "process"
+        }
+      ],
+      "failedCases": [
+        {
+          "title": "drains an ordinary approved wake already queued behind a running private child",
+          "error": [
+            "Error: Test timed out in 5000ms."
+          ]
+        },
+        {
+          "title": "MIMOUSE_PRIVATE_LIFECYCLE_OBSERVER waits for original cleanup before successor admission",
+          "error": [
+            "AssertionError: original body must be joined before another case can enter: expected false to be true // Object.is equality"
+          ]
+        }
+      ],
+      "successorPassed": true,
+      "verification": {
+        "exitCode": 1,
+        "inputCount": 2926,
+        "inputDrift": [],
+        "ownership": {
+          "checkedAt": "2026-10-29T23:25:28.809Z",
+          "readOnly": true,
+          "pidFileExists": false,
+          "capturedGenerationCount": 15,
+          "survivingOwnedGenerations": [],
+          "passed": true
+        }
+      },
+      "files": [
+        {
+          "path": "test-results/project-closure-20261029/fixture-lifecycle-private-before-unified-final.json",
+          "sha256": "43fa8e460b1021ee9ef00c036e382b996b5f5faae6cb42fbfe047e666fc7b732"
+        },
+        {
+          "path": "test-results/project-closure-20261029/fixture-lifecycle-private-before-unified-final.log",
+          "sha256": "4d80b93d6794c24be10c2f914152f53520dc42cdeb00116e11226d040076f96d"
+        },
+        {
+          "path": "test-results/project-closure-20261029/fixture-lifecycle-private-before-unified-final-input.json",
+          "sha256": "421a8ff50a3f175eb82a964352bd0cde78c7b90ff2007aea87fcb82d5a3bba8e"
+        },
+        {
+          "path": "test-results/project-closure-20261029/fixture-lifecycle-private-before-unified-final-input-verification.json",
+          "sha256": "39778171ab41bdcfce64c49029cb5e397c6f2744de85a52e440c8e39799f961d"
+        },
+        {
+          "path": "test-results/project-closure-20261029/fixture-lifecycle-private-before-unified-final-ownership.json",
+          "sha256": "3a485bb16e08b8de81c147e33693536ac21032d4396a9a29c72d8397167d9640"
+        }
+      ]
+    },
+    {
+      "runKind": "intentional-fault-injection",
+      "name": "fixture-lifecycle-private-after-unified-final",
+      "mode": "timeout",
+      "result": {
+        "passed": 2,
+        "expectedFailed": 1,
+        "nameFiltered": 32
+      },
+      "expectedFault": "Real Vitest 5000ms test deadline after real child admission; shared source retains its original 15000ms deadline.",
+      "observations": [
+        {
+          "diagnostic": "private-gate-time",
+          "elapsedMs": 3147
+        },
+        {
+          "diagnostic": "private-order",
+          "gateReached": true,
+          "closedBeforeSafety": true,
+          "adapterType": "claude_local"
+        }
+      ],
+      "failedCases": [
+        {
+          "title": "drains an ordinary approved wake already queued behind a running private child",
+          "error": [
+            "Error: Test timed out in 5000ms."
+          ]
+        }
+      ],
+      "successorPassed": true,
+      "verification": {
+        "exitCode": 1,
+        "inputCount": 2926,
+        "inputDrift": [],
+        "ownership": {
+          "checkedAt": "2026-10-29T23:29:21.132Z",
+          "readOnly": true,
+          "pidFileExists": false,
+          "capturedGenerationCount": 15,
+          "survivingOwnedGenerations": [],
+          "passed": true
+        }
+      },
+      "files": [
+        {
+          "path": "test-results/project-closure-20261029/fixture-lifecycle-private-after-unified-final.json",
+          "sha256": "83ed1326f7811edea833aa62c50daa6a9f90866fcb4f0910186e63540821217f"
+        },
+        {
+          "path": "test-results/project-closure-20261029/fixture-lifecycle-private-after-unified-final.log",
+          "sha256": "5d7b17dc58140937ac96cd8e349b5ccd2080725e96267fa7c613ebb9413753fa"
+        },
+        {
+          "path": "test-results/project-closure-20261029/fixture-lifecycle-private-after-unified-final-input.json",
+          "sha256": "382d142101ddb742be007a6f1d0c824e400303e3006acd11bb5280c9c43426f3"
+        },
+        {
+          "path": "test-results/project-closure-20261029/fixture-lifecycle-private-after-unified-final-input-verification.json",
+          "sha256": "7d00bad32b2a42aa5464188cbfb69451b7bd381e29fd33dcc3d52bc75c668b08"
+        },
+        {
+          "path": "test-results/project-closure-20261029/fixture-lifecycle-private-after-unified-final-ownership.json",
+          "sha256": "8fb75c1af4bca9922d5dc58b44c1f6269567c826a3b23f8e721721ac0201b4f7"
+        }
+      ]
+    },
+    {
+      "runKind": "intentional-fault-injection",
+      "name": "fixture-lifecycle-private-gate-before-unified-final",
+      "mode": "manual-gate",
+      "result": {
+        "passed": 1,
+        "expectedFailed": 2,
+        "nameFiltered": 31
+      },
+      "expectedFault": "Forced outer callback rejection after the actual harness-creation transaction gate; original raw body and child promise retained.",
+      "observations": [
+        {
+          "diagnostic": "private-manual-order",
+          "gateReached": true,
+          "bodyClosedBeforeSafety": false,
+          "childClosedBeforeSafety": false,
+          "lateGatePassed": false
+        }
+      ],
+      "realHarnessGateReached": true,
+      "failedCases": [
+        {
+          "title": "orders company and intent locks when a duplicate confirmation overlaps harness creation",
+          "error": [
+            "Error: FORCED_PRIVATE_MANUAL_GATE_CALLBACK_FAILURE"
+          ]
+        },
+        {
+          "title": "MIMOUSE_PRIVATE_MANUAL_GATE_OBSERVER joins raw body and transaction before successor admission",
+          "error": [
+            "AssertionError: expected false to be true // Object.is equality"
+          ]
+        }
+      ],
+      "successorPassed": true,
+      "verification": {
+        "exitCode": 1,
+        "inputCount": 2926,
+        "inputDrift": [],
+        "ownership": {
+          "checkedAt": "2026-10-29T23:35:48.195Z",
+          "readOnly": true,
+          "pidFileExists": false,
+          "capturedGenerationCount": 11,
+          "survivingOwnedGenerations": [],
+          "passed": true
+        }
+      },
+      "files": [
+        {
+          "path": "test-results/project-closure-20261029/fixture-lifecycle-private-gate-before-unified-final.json",
+          "sha256": "cc835b6461bcc3f3619c58d0ec4400a12c42bdc25b273dd8f70930eff725281d"
+        },
+        {
+          "path": "test-results/project-closure-20261029/fixture-lifecycle-private-gate-before-unified-final.log",
+          "sha256": "0a325a295f0a785da0974b0b3021dbbba02df327ace0a99808803ed1abc76186"
+        },
+        {
+          "path": "test-results/project-closure-20261029/fixture-lifecycle-private-gate-before-unified-final-input.json",
+          "sha256": "7f912b70956ddc2476514b462a5d91c20616f81929ba6dd89de003b7cc531085"
+        },
+        {
+          "path": "test-results/project-closure-20261029/fixture-lifecycle-private-gate-before-unified-final-input-verification.json",
+          "sha256": "cde27f2446dd0ee12ce4c3308f12e43e6a93537ea56e834d10d6c9f9393bd741"
+        },
+        {
+          "path": "test-results/project-closure-20261029/fixture-lifecycle-private-gate-before-unified-final-ownership.json",
+          "sha256": "622187dae8b830217cd68a6037f1441e45adf7928f7cf34e8530bb628bb86ce6"
+        }
+      ]
+    },
+    {
+      "runKind": "intentional-fault-injection",
+      "name": "fixture-lifecycle-private-gate-after-unified-final",
+      "mode": "manual-gate",
+      "result": {
+        "passed": 2,
+        "expectedFailed": 1,
+        "nameFiltered": 33
+      },
+      "expectedFault": "Forced outer callback rejection after the actual harness-creation transaction gate; original raw body and child promise retained.",
+      "observations": [
+        {
+          "diagnostic": "private-manual-order",
+          "gateReached": true,
+          "bodyClosedBeforeSafety": true,
+          "childClosedBeforeSafety": true,
+          "lateGatePassed": true
+        }
+      ],
+      "realHarnessGateReached": true,
+      "failedCases": [
+        {
+          "title": "orders company and intent locks when a duplicate confirmation overlaps harness creation",
+          "error": [
+            "Error: FORCED_PRIVATE_MANUAL_GATE_CALLBACK_FAILURE"
+          ]
+        }
+      ],
+      "successorPassed": true,
+      "verification": {
+        "exitCode": 1,
+        "inputCount": 2926,
+        "inputDrift": [],
+        "ownership": {
+          "checkedAt": "2026-10-29T23:37:07.511Z",
+          "readOnly": true,
+          "pidFileExists": false,
+          "capturedGenerationCount": 11,
+          "survivingOwnedGenerations": [],
+          "passed": true
+        }
+      },
+      "files": [
+        {
+          "path": "test-results/project-closure-20261029/fixture-lifecycle-private-gate-after-unified-final.json",
+          "sha256": "7b8a27d37b83aa423b6fe038967cf72fe43ae59e0bb342beda8d7b2766dd297d"
+        },
+        {
+          "path": "test-results/project-closure-20261029/fixture-lifecycle-private-gate-after-unified-final.log",
+          "sha256": "f0caf1e2f596a065654fd5c26e3edb420ca0006158b632fee5e8ca716d40743a"
+        },
+        {
+          "path": "test-results/project-closure-20261029/fixture-lifecycle-private-gate-after-unified-final-input.json",
+          "sha256": "c4dba70010c06456cf0f3959a78d2d1983fabb16c79fa07835a45410e0dd001b"
+        },
+        {
+          "path": "test-results/project-closure-20261029/fixture-lifecycle-private-gate-after-unified-final-input-verification.json",
+          "sha256": "f8ac6fa0d4f2fa16810b6452e513081f780e94d4fad4fe0b6a6b960f286b2fd4"
+        },
+        {
+          "path": "test-results/project-closure-20261029/fixture-lifecycle-private-gate-after-unified-final-ownership.json",
+          "sha256": "b181edf56c53a39745b6d5771c8a2940ec5d004f7ec2fb216fb2c48a94971dbc"
+        }
+      ]
+    }
+  ],
+  "earlierConfoundedDiagnostic": {
+    "runKind": "excluded-diagnostic",
+    "files": [
+      {
+        "path": "test-results/project-closure-20261029/fixture-lifecycle-private-before.json",
+        "sha256": "c304e27231ca34e3a1d9f5cdf8adbd4067f50c35c334c1bc0e8f948cd5f03f74"
+      },
+      {
+        "path": "test-results/project-closure-20261029/fixture-lifecycle-private-before.log",
+        "sha256": "71553f6539bf335b06936f00369bc50c475216da42477c59b57ce652249818a8"
+      }
+    ],
+    "reason": "The first 15s injected pause outlasted the fixture child 10s deadline, causing agent_unavailable in the successor. It is not accepted as a successful successor-isolation proof. The 5s old/new transforms both reach the real gate before their deadline and retain the original unmodified business successor."
+  },
+  "checks": [
+    {
+      "command": "pnpm exec tsc --noEmit",
+      "cwd": "server",
+      "exitCode": 0,
+      "completionEvidence": "Agent exec session 5462 completed exit 0 on the current unified-owner source; empty diagnostic log is retained, not treated alone as proof of exit.",
+      "log": {
+        "path": "test-results/project-closure-20261029/private-owner-expanded-types.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "command": "pnpm check:module-boundaries",
+      "exitCode": 0,
+      "log": {
+        "path": "test-results/project-closure-20261029/module-boundaries-after-private-owner.log",
+        "sha256": "3135303013881c063304e24883e14df50a3fcacdc7b6a53ba26a3e24b00ad4e2"
+      }
+    }
+  ],
+  "boundaries": [
+    "Focused name-filtered cases are not platform skips, and intentional injected failures are not pending official test failures. Counts from overlapping runs are not summed.",
+    "The historical 45/46 stop-preflight/approval refusal lacked retained runtime metadata; the underlying original production cause is not claimed reproduced. Actual late-lease refusal/retry coverage remains a separate real-Postgres proof.",
+    "CIM generation evidence captures explicitly held fixture PID/creation identities, actual database PID-file removal and observed process exit. It does not classify every unrelated system process or claim exhaustive enumeration of short-lived children."
+  ],
+  "completeVerification": {
+    "runKind": "complete-business-suite",
+    "status": "passed",
+    "result": {
+      "files": 78,
+      "passed": 1234,
+      "failed": 0,
+      "pending": 12
+    },
+    "exitCode": 0,
+    "inputCount": 3211,
+    "inputDrift": [],
+    "skipAdded": [],
+    "skipRemoved": [],
+    "ownership": {
+      "rootCloseObserved": true,
+      "knownGenerationCount": 48,
+      "survivingOwnedGenerations": [],
+      "unknownNewGenerations": [],
+      "boundary": "Read-only CIM identities admitted only through a simultaneously observed known child root/parent generation. Unattributed new processes are unknown, never labelled leaked or killed. Short-lived generations between samples are not enumerated; fixture-owned finally/afterAll assertions remain separate evidence."
+    },
+    "files": [
+      {
+        "path": "test-results/project-closure-20261029/mimouse-server-unified-final.json",
+        "sha256": "0615d0c2c96407e76407a9f843a2081d65deeb116e1069160dd767c2965fb73d"
+      },
+      {
+        "path": "test-results/project-closure-20261029/mimouse-server-unified-final.log",
+        "sha256": "46051e0b768f9f112bc70e8e7e7b7f4821a331a97afe419aff1f3ce4e7a02383"
+      },
+      {
+        "path": "test-results/project-closure-20261029/mimouse-server-unified-final-input.json",
+        "sha256": "fef94b0726e314621e7d6543b6aa9bda754f22d34d1da3e98a3d50c536e97d3c"
+      },
+      {
+        "path": "test-results/project-closure-20261029/mimouse-server-unified-final-input-verification.json",
+        "sha256": "b960d414ced5c06b94b784d85dd85e162d8f6608164adb1ccce81ee1c3b589f5"
+      }
+    ]
+  }
+}

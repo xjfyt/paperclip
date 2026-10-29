@@ -4,10 +4,10 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { agents, authSessions, authUsers, companies, companyMemberships, companySkills, companySkillVersions, mimousePrompts,
   mimousePromptRevisions, mimouseEvaluationDatasets, heartbeatRuns, issues, agentWakeupRequests, costEvents, type Db } from "@paperclipai/db";
 import { mimousePrivatePromptTests as tests } from "@paperclipai/db/schema/mimouse_private_prompt_tests";
-import { comparisonFixture } from "./comparison-fixture.js";
-import { privatePromptComparisonService } from "./comparison-service.js";
-import { privatePromptHttpFixture } from "./http-fixture.js";
-import { privateConfigDigest } from "./profile.js";
+import { comparisonFixture } from "../comparison-fixture.js";
+import { privatePromptComparisonService } from "../comparison-service.js";
+import { privatePromptHttpFixture } from "../http-fixture.js";
+import { privateConfigDigest } from "../profile.js";
 /** Called only by the marked, owned integration DB. Inserts synthetic sealed
  * history directly: proves read authorization/scoring, NOT runtime execution. */
 export async function verifyPrivateHistoricalComparison(db: Db) {
