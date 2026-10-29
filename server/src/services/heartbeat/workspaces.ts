@@ -433,6 +433,9 @@ export async function resolveWorkspaceAfterLowTrustPreflight<
 function deriveRepoNameFromRepoUrl(repoUrl: string | null): string | null {
   const trimmed = repoUrl?.trim() ?? "";
   if (!trimmed) return null;
+  // A Windows drive letter is parsed by URL as a scheme, but a local path
+  // must keep the same unnamed managed slot as its POSIX counterpart.
+  if (path.isAbsolute(trimmed)) return null;
   try {
     const parsed = new URL(trimmed);
     const cleanedPath = parsed.pathname.replace(/\/+$/, "");
@@ -510,6 +513,7 @@ async function materializeManagedProjectWorkspace(
     repoRef?: string | null;
     localSource?: string | null;
     resolveGitAuth?: GitRemoteAuthProvider | null;
+    cloneStagingParent?: string;
   },
 ): Promise<{ cwd: string; warning: string | null }> {
   await fs.mkdir(path.dirname(cwd), { recursive: true });
@@ -542,19 +546,32 @@ async function materializeManagedProjectWorkspace(
     await fs.rm(cwd, { recursive: true, force: true });
   }
 
-  // Clone into a temp sibling, then move into place atomically. The shared target directory
+  // Clone into an owned temporary directory, then move into place atomically. The shared target directory
   // is never created in a partial state and never removed on failure, so a concurrent
   // materialization (another process, or a run racing this one) can neither adopt a broken
   // checkout nor lose its own completed one.
   const auth = input.resolveGitAuth && !input.localSource
     ? await input.resolveGitAuth(input.repoUrl)
     : null;
-  const cloneTmpDir = await fs.mkdtemp(`${cwd}.clone-`);
+  // Git for Windows' clone subprocess reserves space beneath GIT_DIR even
+  // with core.longpaths enabled. Keep staging short, on the destination volume.
+  const cloneTmpDir = await fs.mkdtemp(process.platform === "win32"
+    ? path.join(input.cloneStagingParent ?? path.dirname(cwd), ".paperclip-clone-")
+    : `${cwd}.clone-`);
   try {
     try {
       await execFile(
         "git",
-        [...(auth?.configArgs ?? []), "clone", "--no-hardlinks", "--", input.localSource ?? input.repoUrl, cloneTmpDir],
+        [
+          ...(auth?.configArgs ?? []),
+          // Managed paths include company/project UUIDs and nested repositories.
+          // Enable long paths for this invocation and persist it only in the
+          // new checkout so subsequent Git operations can use the same paths.
+          ...(process.platform === "win32" ? ["-c", "core.longpaths=true"] : []),
+          "clone",
+          ...(process.platform === "win32" ? ["-c", "core.longpaths=true"] : []),
+          "--no-hardlinks", "--", input.localSource ?? input.repoUrl, cloneTmpDir,
+        ],
         {
           env: {
             // Spread order matters: the sanitizer strips PAPERCLIP_*, which would remove the
@@ -653,9 +670,12 @@ export async function prepareProjectRepositoryWorkspaces(input: {
   const excludePath = await execFile("git", ["-C", input.cwd, "rev-parse", "--git-path", "info/exclude"], { timeout: 10_000 })
     .then((result) => path.resolve(input.cwd, result.stdout.trim()));
   const exclude = await fs.readFile(excludePath, "utf8").catch(() => "");
-  if (!exclude.split(/\r?\n/).includes(`/${PROJECT_REPOSITORIES_DIR}/`)) {
+  const requiredExcludes = [`/${PROJECT_REPOSITORIES_DIR}/`,
+    ...(process.platform === "win32" ? ["/.paperclip-clone-*/"] : [])];
+  const missingExcludes = requiredExcludes.filter(entry => !exclude.split(/\r?\n/).includes(entry));
+  if (missingExcludes.length > 0) {
     await fs.mkdir(path.dirname(excludePath), { recursive: true });
-    await fs.appendFile(excludePath, `\n/${PROJECT_REPOSITORIES_DIR}/\n`);
+    await fs.appendFile(excludePath, `\n${missingExcludes.join("\n")}\n`);
   }
   const results = [];
   for (const workspace of selected) {
@@ -668,7 +688,10 @@ export async function prepareProjectRepositoryWorkspaces(input: {
     const localSource = workspace.cwd && workspace.cwd !== REPO_ONLY_CWD_SENTINEL
       && await fs.stat(workspace.cwd).then((entry) => entry.isDirectory()).catch(() => false)
       ? workspace.cwd : null;
-    const result = await materializeManagedProjectWorkspace(cwd, { repoUrl, repoRef: workspace.repoRef, localSource, resolveGitAuth: input.resolveGitAuth });
+    const result = await materializeManagedProjectWorkspace(cwd, {
+      repoUrl, repoRef: workspace.repoRef, localSource, resolveGitAuth: input.resolveGitAuth,
+      cloneStagingParent: input.cwd,
+    });
     if (result.warning) throw new Error(result.warning);
     results.push({ workspaceId: workspace.id, cwd, repoUrl, repoRef: workspace.repoRef });
   }

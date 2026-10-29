@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
+import { writeCliFixture } from "@paperclipai/adapter-utils/test-fixtures/native-cli";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { ensureManagedProjectWorkspace, prepareProjectRepositoryWorkspaces } from "../services/heartbeat.ts";
 import { buildGitAuthInvocation, GIT_CREDENTIAL_TOKEN_ENV_KEY } from "../services/git-credentials.ts";
@@ -46,10 +47,10 @@ describe("ensureManagedProjectWorkspace clone credentials", () => {
     [null, "fatal: corrupt loose object"],
   ] as const)("preserves only proven outbound clone classification through the actionable wrapper: %s", async (reason, stderr) => {
     const bin = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-fake-clone-"));
-    await fs.writeFile(path.join(bin, "git"), `#!/bin/sh
-printf '%s\\n' "$FIXTURE_CLONE_STDERR" >&2
-exit 128
-`, { mode: 0o755 });
+    await writeCliFixture(path.join(bin, "git"), `#!${process.execPath}
+process.stderr.write((process.env.FIXTURE_CLONE_STDERR ?? "") + "\\n");
+process.exit(128);
+`);
     try {
       const failure = await ensureManagedProjectWorkspace({
         companyId: "remote-clone-fixture", projectId: path.basename(bin),
@@ -68,7 +69,7 @@ exit 128
       const homeEntries = await fs.readdir(path.dirname(resolveManagedProjectWorkspaceDir({
         companyId: "remote-clone-fixture", projectId: path.basename(bin), repoName: "repo",
       })));
-      expect(homeEntries.some((name) => name.includes(".clone-"))).toBe(false);
+      expect(homeEntries.some((name) => (name.includes(".clone-") || name.startsWith(".paperclip-clone-")))).toBe(false);
     } finally {
       await fs.rm(bin, { recursive: true, force: true });
     }
@@ -89,15 +90,16 @@ exit 128
   it("does not transfer clone classification to a later local checkout failure", async () => {
     const bin = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-fake-checkout-"));
     const previousPath = process.env.PATH;
-    await fs.writeFile(path.join(bin, "git"), `#!/bin/sh
-if [ "$1" = clone ]; then
-  for argument in "$@"; do destination="$argument"; done
-  /bin/mkdir -p "$destination/.git"
-  exit 0
-fi
-printf '%s\\n' "fatal: Authentication failed for 'https://example.test/repo.git'" >&2
-exit 128
-`, { mode: 0o755 });
+    await writeCliFixture(path.join(bin, "git"), `#!${process.execPath}
+const fs = require("node:fs"), path = require("node:path");
+const args = process.argv.slice(2);
+if (args.includes("clone")) {
+  fs.mkdirSync(path.join(args.at(-1), ".git"), { recursive: true });
+  process.exit(0);
+}
+process.stderr.write("fatal: Authentication failed for 'https://example.test/repo.git'\\n");
+process.exit(128);
+`);
     try {
       process.env.PATH = bin;
       const failure = await ensureManagedProjectWorkspace({
@@ -130,7 +132,7 @@ exit 128
       const additional = await prepareProjectRepositoryWorkspaces(input);
       expect(additional).toHaveLength(1);
       expect(additional[0]!.workspaceId).toBe("second");
-      expect(path.relative(anchor.cwd, additional[0]!.cwd)).toMatch(/^\.paperclip-repositories\//);
+      expect(path.relative(anchor.cwd, additional[0]!.cwd).split(path.sep)[0]).toBe(".paperclip-repositories");
       expect((await execFile("git", ["branch", "--show-current"], { cwd: additional[0]!.cwd })).stdout.trim()).toBe("project-branch");
       expect(resolveGitAuth).toHaveBeenCalledWith(second);
       await fs.writeFile(path.join(additional[0]!.cwd, "README.md"), "work in progress");
@@ -294,7 +296,7 @@ exit 128
       expect(gitDir.isDirectory()).toBe(true);
       // No temp clone directories left behind next to the target.
       const siblings = await fs.readdir(path.dirname(first.cwd));
-      expect(siblings.filter((name) => name.includes(".clone-"))).toEqual([]);
+      expect(siblings.filter((name) => (name.includes(".clone-") || name.startsWith(".paperclip-clone-")))).toEqual([]);
     } finally {
       await fs.rm(sourceRepo, { recursive: true, force: true });
     }
@@ -329,7 +331,7 @@ exit 128
     const cwd = resolveManagedProjectWorkspaceDir({ companyId, projectId });
     await expect(fs.stat(cwd)).rejects.toMatchObject({ code: "ENOENT" });
     const siblings = await fs.readdir(path.dirname(cwd));
-    expect(siblings.filter((name) => name.includes(".clone-"))).toEqual([]);
+    expect(siblings.filter((name) => (name.includes(".clone-") || name.startsWith(".paperclip-clone-")))).toEqual([]);
   });
 
   it("keeps using a pre-existing non-git directory as-is without attempting a clone", async () => {

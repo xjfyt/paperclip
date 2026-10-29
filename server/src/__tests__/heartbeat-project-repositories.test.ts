@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, mkdir, writeFile, readFile, realpath, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, readFile, readdir, realpath, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -110,7 +110,7 @@ suite("task project repository provisioning", () => {
       await drainHeartbeatRunsToQuiescence(db, sandboxHeartbeat);
       const [workspace] = await db.select().from(executionWorkspaces).where(eq(executionWorkspaces.sourceIssueId, issueId));
       expect(workspace).toMatchObject({ companyId, projectId, mode: "isolated_workspace", strategyType: "project_primary" });
-      expect(workspace.cwd).toContain(`/isolated-workspaces/${companyId}/${issueId}`);
+      expect(workspace.cwd).toContain(path.join("isolated-workspaces", companyId, issueId));
       expect(execute.mock.calls.filter(([input]) => input.runId === run!.id)).toHaveLength(1);
       const call = execute.mock.calls.find(([input]) => input.runId === run!.id)![0];
       expect(call.context.paperclipEnvironment.driver).toBe("sandbox");
@@ -186,7 +186,7 @@ suite("task project repository provisioning", () => {
         expect(workspace.strategy).toBe("git_worktree");
         expect(execFileSync("git", ["rev-parse", "--is-inside-work-tree"], { cwd: workspace.cwd, encoding: "utf8" }).trim()).toBe("true");
       } else {
-        expect(workspace.cwd).toContain(`${projectId}/_default`);
+        expect(workspace.cwd).toContain(path.join(projectId, "_default"));
       }
     }
   }, 25_000);
@@ -329,7 +329,12 @@ suite("task project repository provisioning", () => {
       const hint = hints.find((entry) => entry.workspaceId === repositoryRows[index]!.id);
       expect(hint?.cwd).toBeTruthy();
       expect(await readFile(path.join(hint!.cwd, "README.md"), "utf8")).toBe(`repository ${index}`);
-      expect(execFileSync("git", ["rev-parse", "--show-toplevel"], { cwd: hint!.cwd, encoding: "utf8" }).trim()).toBe(await realpath(hint!.cwd));
+      const gitRoot = execFileSync("git", ["rev-parse", "--show-toplevel"], { cwd: hint!.cwd, encoding: "utf8" }).trim();
+      expect(path.resolve(gitRoot)).toBe(await realpath(hint!.cwd));
+      expect((await readdir(hint!.cwd)).some(name => name.startsWith(".paperclip-clone-"))).toBe(false);
+      if (process.platform === "win32") {
+        expect(execFileSync("git", ["config", "--local", "--get", "core.longpaths"], { cwd: hint!.cwd, encoding: "utf8" }).trim()).toBe("true");
+      }
     }
   }, 25_000);
 });

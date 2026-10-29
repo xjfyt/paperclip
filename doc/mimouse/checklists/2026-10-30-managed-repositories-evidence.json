@@ -1,0 +1,50 @@
+{
+  "schema": "mimouse.local-verification.v1",
+  "recordedAt": "2026-10-30T03:20:32.2339458+08:00",
+  "scope": "Real Windows Git clone, project workspace and credential failure regression",
+  "changes": [
+    "Keep native absolute filesystem sources in the unnamed managed slot instead of interpreting a Windows drive as a URL scheme.",
+    "Use a short exclusively created staging path on the destination volume; nested repository staging stays under the authorized task anchor, is Git-excluded and is atomically renamed. Never remove a competing published target.",
+    "Enable core.longpaths for Windows clone and the newly created repository only; do not change global Git configuration. This does not promise arbitrary Windows Git working-directory lengths."
+  ],
+  "command": "pnpm exec vitest run --project '@paperclipai/server' server/src/__tests__/heartbeat-project-repositories.test.ts server/src/__tests__/heartbeat-managed-clone-credentials.test.ts --maxWorkers=1 --reporter=json --outputFile=test-results/project-closure-20261029/managed-repositories-complete-final.json",
+  "result": {
+    "failed": 0,
+    "passed": 33,
+    "files": 2,
+    "skipped": 0
+  },
+  "inputs": [
+    {
+      "path": "server/src/services/heartbeat/workspaces.ts",
+      "sha256": "f9c243b0b92a65ee20e62f61ff97d44251db66842404f50b1d2c5fd547793477"
+    },
+    {
+      "path": "server/src/__tests__/heartbeat-project-repositories.test.ts",
+      "sha256": "0804698790f2dbf6bc45bab3afa7fe5b5a69bbfc80042c6e3be0b0ab8a73c1de"
+    },
+    {
+      "path": "server/src/__tests__/heartbeat-managed-clone-credentials.test.ts",
+      "sha256": "9da95b4a875b2302b51f00ac503369a6af0813337c5f75cacffe1b77d875cbda"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "test-results/project-closure-20261029/project-repositories-final2.json",
+      "sha256": "787726bd1b7f11abc37d8c578bb94711ff1106b3dc820ad4e564f3637b988506"
+    },
+    {
+      "path": "test-results/project-closure-20261029/managed-repositories-complete-final.json",
+      "sha256": "504695318ac44ac960bfdbfd169479e2340a8e164f93dc6ff0acabdca5c5ae73"
+    },
+    {
+      "path": "test-results/project-closure-20261029/managed-repositories-complete-final.log",
+      "sha256": "b41132aa240c8e1936fba786df2643df11348a4eb12e4e506ac5b450cb5ea906"
+    }
+  ],
+  "limitations": [
+    "The earlier 13-pass/1-fail record preserves the actual GIT_DIR-too-big failure after merely enabling core.longpaths.",
+    "Credential classification uses an owned native Git fixture; real clone, branch, reuse and PostgreSQL orchestration use actual installed Git and embedded PostgreSQL.",
+    "No remote provider or user credentials were required."
+  ]
+}
