@@ -5,7 +5,7 @@ import type { Agent } from "@paperclipai/shared";
 import { AlertTriangle, ArrowUpRight, Bot, Check, CheckCircle2, ChevronDown, ChevronRight, CircleDashed, Clock, ExternalLink, FileText, GitBranch, ImagePlus, KeyRound, Loader2, MessageSquareQuote, MinusCircle, ShieldAlert, ThumbsUp, TriangleAlert, Wrench, X, XCircle } from "lucide-react";
 import { Link } from "@/lib/router";
 import { formatAssigneeUserLabel } from "../lib/assignees";
-import { describeInteractionAudience, type InteractionAudienceDescription } from "../lib/interaction-audience";
+import { type InteractionAudienceDescription } from "../lib/interaction-audience";
 import { interactionResolutionErrorMessage } from "../lib/interaction-resolution-error";
 import {
   isInteractionPreparingApproval,
@@ -3734,13 +3734,11 @@ export function IssueThreadInteractionCard({
   // reader never has to guess whether an open card is waiting on them. Derived
   // from the same server snapshot the resolver routes enforce, so the copy
   // cannot promise a wider audience than the API allows.
-  const audience = isToolAction
-    ? taskInteractionAudience({
-        interaction, creatorLabel: createdByLabel, addresseeLabel,
-        creatorIsCurrentUser: interaction.createdByUserId != null && interaction.createdByUserId === currentUserId,
-        addresseeIsCurrentUser: interaction.addresseeUserId != null && interaction.addresseeUserId === currentUserId,
-      })
-    : describeInteractionAudience({ interaction, creatorLabel: createdByLabel, addresseeLabel });
+  const audience = taskInteractionAudience({
+    interaction, creatorLabel: createdByLabel, addresseeLabel,
+    creatorIsCurrentUser: interaction.createdByUserId != null && interaction.createdByUserId === currentUserId,
+    addresseeIsCurrentUser: interaction.addresseeUserId != null && interaction.addresseeUserId === currentUserId,
+  });
   if (interaction.kind === "connection_intent" && interaction.payload.accessRequest) {
     return (
       <div id={`interaction-${interaction.id}`}>

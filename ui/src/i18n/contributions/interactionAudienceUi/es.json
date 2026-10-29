@@ -1,0 +1,17 @@
+{
+  "addressed": "Destinatario específico",
+  "onlyAddressee": "Solo {{addressee}} puede responder.",
+  "boardOnly": "Solo una persona del consejo puede responder; los agentes no pueden resolver esta tarjeta.",
+  "assignedBoard": "Asignado a {{addressee}}. Solo una persona del consejo puede responder; los agentes no pueden resolver esta tarjeta.",
+  "addresseeOrBoard": "Solo {{addressee}} o una persona del consejo puede responder.",
+  "exceptCreator": "Cualquier miembro de la organización excepto {{creator}} puede responder.",
+  "anyone": "Cualquier miembro de la organización puede responder: el consejo o cualquier agente, incluido el que preguntó.",
+  "governed": "Esta tarjeta ejecuta una acción sujeta a gobernanza, por lo que solo admite personas independientemente del público solicitado.",
+  "companyCap": "La gobernanza de interacciones de la organización restringió esto de {{requested}} a {{effective}}.",
+  "legacy": "Se creó antes de que Cualquiera fuera la opción predeterminada, por lo que sigue restringida. Una tarjeta nueva sería abierta.",
+  "policies": {
+    "anyone": "Cualquiera",
+    "not_creator": "Cualquiera excepto el creador",
+    "human_only": "Solo personas"
+  }
+}

@@ -1,3 +1,5 @@
+import { useTranslation } from "@/i18n";
+import { displayResolverAudience, type InteractionAudienceDisplaySource } from "@/i18n/interaction-audience-display";
 import { Users } from "lucide-react";
 import type { InteractionAudienceDescription } from "../lib/interaction-audience";
 import { cn } from "../lib/utils";
@@ -17,14 +19,16 @@ import { cn } from "../lib/utils";
  * routes re-check authority at use time.
  */
 export function InteractionAudienceLine({
-  audience,
+  audience: providedAudience,
   variant = "card",
   className,
 }: {
-  audience: InteractionAudienceDescription;
+  audience: InteractionAudienceDescription & { displaySource?: InteractionAudienceDisplaySource };
   variant?: "card" | "compact";
   className?: string;
 }) {
+  useTranslation();
+  const audience = providedAudience.displaySource ? displayResolverAudience(providedAudience.displaySource) : providedAudience;
   const compact = variant === "compact";
   return (
     <div

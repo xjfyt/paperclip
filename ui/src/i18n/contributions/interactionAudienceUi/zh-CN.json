@@ -1,0 +1,17 @@
+{
+  "addressed": "指定回复者",
+  "onlyAddressee": "只有{{addressee}}可以回复。",
+  "boardOnly": "只有董事会成员可以回复，智能体不能处理此卡片。",
+  "assignedBoard": "已指派给{{addressee}}。只有董事会成员可以回复，智能体不能处理此卡片。",
+  "addresseeOrBoard": "只有{{addressee}}或董事会成员可以回复。",
+  "exceptCreator": "组织中除{{creator}}之外的任何人都可以回复。",
+  "anyone": "组织中的任何人都可以回复，包括董事会成员和任意智能体，也包括提出请求的智能体。",
+  "governed": "此卡片执行受治理的操作，无论请求了哪种回复范围，都仅允许人类处理。",
+  "companyCap": "组织交互治理已将回复范围从“{{requested}}”缩小为“{{effective}}”。",
+  "legacy": "此卡片创建于“任何人”成为默认回复范围之前，因此仍受限制。新建卡片将默认开放。",
+  "policies": {
+    "anyone": "任何人",
+    "not_creator": "创建者之外的任何人",
+    "human_only": "仅人类"
+  }
+}

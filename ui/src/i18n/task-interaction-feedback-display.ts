@@ -1,7 +1,8 @@
 import type { IssueThreadInteraction } from "@/lib/issue-thread-interactions";
-import { describeInteractionAudience, type InteractionAudienceDescription } from "@/lib/interaction-audience";
+import { type InteractionAudienceDescription } from "@/lib/interaction-audience";
 import { describeInteractionResolutionFailure, isInteractionAudienceDenial, interactionResolutionErrorCode, INTERACTION_AUDIENCE_DENIAL_CODES } from "@/lib/interaction-resolution-error";
 import { t } from "./index";
+import { displayResolverAudience, type DisplayInteractionAudience } from "./interaction-audience-display";
 
 /** Display-only audience copy from structural policy facts, never translated actor names. */
 export function taskInteractionAudience(args: {
@@ -10,19 +11,19 @@ export function taskInteractionAudience(args: {
   addresseeLabel?: string | null;
   creatorIsCurrentUser?: boolean;
   addresseeIsCurrentUser?: boolean;
-}): InteractionAudienceDescription {
-  const description = describeInteractionAudience(args);
-  const { interaction } = args;
-  const text = (key: string, values: Record<string, string> = {}) => t(`taskThreadFeedbackUi.${key}`, values);
-  const hasAddressee = Boolean(interaction.addresseeAgentId || interaction.addresseeUserId);
-  const userAddressee = Boolean(interaction.addresseeUserId);
-  const addressee = args.addresseeIsCurrentUser ? text("you") : args.addresseeLabel?.trim() || text(userAddressee ? "addressedUser" : "addressedAgent");
-  const creator = args.creatorIsCurrentUser ? text("you") : args.creatorLabel?.trim() || text("creator");
-  const shortSummary = userAddressee ? text("onlyAddressee", { addressee })
-    : description.policy === "human_only" ? hasAddressee ? text("assignedBoard", { addressee }) : text("boardOnly")
-    : hasAddressee ? text("addresseeOrBoard", { addressee }) : description.policy === "not_creator" ? text("exceptCreator", { creator }) : text("anyone");
-  // This compact consumer needs only shortSummary; leave canonical metadata and unused fields intact.
-  return { ...description, shortSummary };
+}): DisplayInteractionAudience {
+  const { interaction, ...labels } = args;
+  return displayResolverAudience({
+    ...labels,
+    facts: {
+      effectiveResolverPolicy: interaction.effectiveResolverPolicy,
+      requestedResolverPolicy: interaction.requestedResolverPolicy,
+      effectiveResolverPolicySource: interaction.effectiveResolverPolicySource,
+      resolverPolicyProvenance: interaction.resolverPolicyProvenance,
+      hasAddressee: Boolean(interaction.addresseeAgentId || interaction.addresseeUserId),
+      isUserAddressee: Boolean(interaction.addresseeUserId),
+    },
+  });
 }
 
 /** Local fallback and guidance only. Raw server/provider reason is never classified by its text. */

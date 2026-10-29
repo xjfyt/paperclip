@@ -1,0 +1,17 @@
+{
+  "addressed": "Addressed",
+  "onlyAddressee": "Only {{addressee}} can respond.",
+  "boardOnly": "Only a person on the board can respond — agents cannot resolve this card.",
+  "assignedBoard": "Assigned to {{addressee}}. Only a person on the board can respond — agents cannot resolve this card.",
+  "addresseeOrBoard": "Only {{addressee}} or a person on the board can respond.",
+  "exceptCreator": "Anyone in the organization except {{creator}} can respond.",
+  "anyone": "Anyone in the organization can respond — the board or any agent, including the one that asked.",
+  "governed": "This card runs a governed action, so it stays human-only whatever audience was requested.",
+  "companyCap": "Organization interaction governance narrowed this from {{requested}} to {{effective}}.",
+  "legacy": "Created before Anyone became the default, so it stays restricted. A new card would be open.",
+  "policies": {
+    "anyone": "Anyone",
+    "not_creator": "Anyone except creator",
+    "human_only": "Human only"
+  }
+}

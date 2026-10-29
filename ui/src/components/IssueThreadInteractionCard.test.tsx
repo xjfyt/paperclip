@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import "@/i18n/interaction-audience-test-resources";
 import "@/i18n/task-thread-tools-test-resources";
 import "@/i18n/task-thread-feedback-test-resources";
 
