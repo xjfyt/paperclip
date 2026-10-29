@@ -10,7 +10,7 @@ const { collectCandidates, collectAudit, selectInventory, routedRoutineFiles, co
   protocolDisplayComponents, protocolDisplayFiles, protocolThreadHosts, protocolRoute, protocolRenderBoundary,
   manualProtocolSources, manualProtocolFiles, collectManualSourceEvidence,
   baselineFile, baselineFileSha256, readBaseline, pathSetSha256, expandedScopeFiles, scopeEdges, manualScopeEdges, manualScopeFiles,
-  scopeEvidenceFiles, legacyDomain, sourceInventory, consumesEdge, verifyScopeEdges, collectScopeDenominators } = require("./audit-mimouse-i18n.cjs");
+  scopeEvidenceFiles, integratedDisplayHelperEdges, integratedDisplayHelperFiles, legacyDomain, sourceInventory, consumesEdge, verifyScopeEdges, collectScopeDenominators } = require("./audit-mimouse-i18n.cjs");
 const parserEntry = process.env.AUDIT_I18N_PARSER
   ? path.resolve(process.env.AUDIT_I18N_PARSER)
   : path.resolve(__dirname, "../node_modules/.pnpm/@babel+parser@7.29.8/node_modules/@babel/parser/lib/index.js");
@@ -702,6 +702,47 @@ test("all expanded imports resolve to exact consumers, including the TaskSidePan
   assert.ok(scopeEdges.some(edge => edge.file.endsWith("/OnboardingWizard.tsx") && edge.host.endsWith("/OnboardingWizardVariant.tsx")));
 });
 
+test("integrated display helpers preserve canonical sources and remain hash-only outside the AST denominator", () => {
+  const original = ["hooks/useDocumentAnnotationMutations.ts", "lib/artifact-card-data.ts", "lib/issue-artifacts.ts",
+    "lib/task-side-panel-state.ts", "lib/attention.ts", "lib/blockedInbox.ts", "lib/inbox.ts",
+    "lib/activity-format.ts", "pages/audit/audit-navigation.ts"].map(file => `ui/src/${file}`);
+  const integrated = ["i18n/attention-row-display.ts", "i18n/blocked-inbox-display.ts", "i18n/decision-desk-display.ts",
+    "i18n/inbox-display.ts", "i18n/interaction-audience-display.ts", "i18n/runner-goal-feedback.ts",
+    "i18n/task-interaction-feedback-display.ts", "lib/agent-configuration-errors.ts", "lib/credential-access-notice.ts",
+    "lib/system-notice-humanizer.ts", "pages/agent-skills/agent-skill-source.ts"].map(file => `ui/src/${file}`).sort();
+  assert.deepEqual(integratedDisplayHelperFiles, integrated);
+  assert.deepEqual(manualScopeFiles, [...original, ...integrated].sort());
+  assert.equal(integratedDisplayHelperEdges.length, 30);
+  assert.ok(integratedDisplayHelperEdges.every(edge => edge.usage === "call"));
+  const baseline = readBaseline(path.resolve(__dirname, ".."));
+  const inventory = selectInventory([...baseline.files, ...expandedScopeFiles, ...manualScopeFiles, ...scopeEvidenceFiles]);
+  assert.equal(inventory.selected.length, 160);
+  assert.ok(manualScopeFiles.every(file => !inventory.selected.includes(file)));
+  for (const host of ["BlockedReasonChip", "InteractionAudienceLine", "task-chat/RunnerGoalWidget"]) {
+    const file = `ui/src/components/${host}.tsx`;
+    assert.ok(scopeEvidenceFiles.includes(file));
+    assert.ok(!inventory.selected.includes(file), "evidence-only consumers never enlarge AST coverage");
+  }
+  const retained = [
+    ["lib/attention.ts", "components/DecisionsToolbar.tsx", "countActiveAttentionFilters"],
+    ["lib/blockedInbox.ts", "components/BlockedInboxView.tsx", "buildBlockedInboxRows"],
+    ["pages/audit/audit-navigation.ts", "pages/audit/AuditHub.tsx", "auditDisplaySections"],
+  ];
+  for (const [file, host, symbol] of retained) {
+    assert.ok(manualScopeEdges.some(edge => edge.file === `ui/src/${file}` && edge.host === `ui/src/${host}` && edge.symbol === symbol && edge.usage === "call"));
+  }
+});
+
+test("split named imports verify each exact value binding without accepting type-only or unrelated calls", () => {
+  const edge = integratedDisplayHelperEdges.find(edge => edge.symbol === "attentionDetailDisplay");
+  const imports = `import { attentionDecideByDisplay } from ${JSON.stringify(edge.importSource)};
+    import { attentionDetailDisplay as Details } from ${JSON.stringify(edge.importSource)};`;
+  assert.equal(consumesEdge(`${imports} Details(item);`, edge, parse), true);
+  assert.equal(consumesEdge(`${imports} attentionDecideByDisplay(item);`, edge, parse), false);
+  assert.equal(consumesEdge(`import { type attentionDetailDisplay as Details } from ${JSON.stringify(edge.importSource)}; Details(item);`, edge, parse), false);
+  assert.equal(consumesEdge(`import { attentionDetailDisplay as Details } from "./wrong-source"; Details(item);`, edge, parse), false);
+});
+
 test("CLI emits independently hashed five-domain, frozen legacy, explicit expansion and manual denominators", t => {
   const { report, result, root } = cliFixture(t);
   assert.equal(result.status, 0, result.stderr);
@@ -722,6 +763,11 @@ test("CLI emits independently hashed five-domain, frozen legacy, explicit expans
     assert.match(scope.sourceSha256, /^[a-f0-9]{64}$/);
   }
   assert.deepEqual(report.manualScope.requestedFiles, manualScopeFiles);
+  assert.deepEqual(report.integratedDisplayHelperFiles, integratedDisplayHelperFiles);
+  assert.equal(report.scope.unscannedTsxFiles.length + report.files.length, report.scope.eligibleTsxFiles);
+  assert.ok(report.scope.unscannedTsxFiles.every(file => !report.files.some(row => row.file === file)));
+  assert.deepEqual(report.scope.evidenceOnlyTsxFiles, scopeEvidenceFiles.filter(file => file.endsWith(".tsx") && !report.files.some(row => row.file === file)));
+  assert.ok(report.scope.evidenceOnlyTsxFiles.every(file => report.scope.unscannedTsxFiles.includes(file)));
   assert.equal(report.manualScope.method, "source-hash-only");
   assert.ok(report.manualScope.evidence.every(row => row.method === "source-hash-only" && row.classification === "needs_manual_review"));
   assert.ok(manualScopeFiles.every(file => !report.files.some(row => row.file === file)));

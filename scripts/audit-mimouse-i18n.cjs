@@ -271,17 +271,55 @@ const scopeEdges = [
   evidenceEdge("new-modules", "components/MimouseCodingProjects.tsx", "pages/MimouseCoding.tsx", "MimouseCodingProjects", "@/components/MimouseCodingProjects"),
 ];
 const expandedScopeFiles = [...new Set(scopeEdges.map(edge => edge.file))].sort();
+// Post-integration display helpers: exact, verified calls only. This includes
+// eight new helpers and three existing helpers whose display opt-in changed.
+// Their returned copy remains manual provenance review, never JSX coverage.
+const integratedDisplayHelperEdges = [
+  evidenceEdge("tasks", "i18n/attention-row-display.ts", "components/AttentionQueueRow.tsx", "attentionDecideByDisplay", "../i18n/attention-row-display", "call"),
+  evidenceEdge("tasks", "i18n/attention-row-display.ts", "components/AttentionQueueRow.tsx", "attentionDetailDisplay", "../i18n/attention-row-display", "call"),
+  evidenceEdge("tasks", "i18n/attention-row-display.ts", "components/DecisionTriageStrip.tsx", "attentionDecideByDisplay", "../i18n/attention-row-display", "call"),
+  evidenceEdge("tasks", "i18n/blocked-inbox-display.ts", "components/BlockedInboxView.tsx", "blockedVariantDisplay", "../i18n/blocked-inbox-display", "call"),
+  evidenceEdge("tasks", "i18n/blocked-inbox-display.ts", "components/BlockedInboxView.tsx", "stoppedAgeDisplay", "../i18n/blocked-inbox-display", "call"),
+  evidenceEdge("tasks", "i18n/blocked-inbox-display.ts", "components/BlockedReasonChip.tsx", "blockedVariantDisplay", "../i18n/blocked-inbox-display", "call"),
+  evidenceEdge("tasks", "i18n/blocked-inbox-display.ts", "components/BlockedReasonChip.tsx", "blockedSeverityDisplay", "../i18n/blocked-inbox-display", "call"),
+  evidenceEdge("tasks", "i18n/decision-desk-display.ts", "pages/WhatNeedsMe.tsx", "decisionGroupLabel", "../i18n/decision-desk-display", "call"),
+  evidenceEdge("tasks", "i18n/decision-desk-display.ts", "pages/DecisionQueuePage.tsx", "decisionGroupLabel", "../i18n/decision-desk-display", "call"),
+  evidenceEdge("tasks", "i18n/decision-desk-display.ts", "components/DecisionDateChips.tsx", "decisionDateLabel", "../i18n/decision-desk-display", "call"),
+  evidenceEdge("tasks", "i18n/decision-desk-display.ts", "i18n/attention-row-display.ts", "decisionDateLabel", "./decision-desk-display", "call"),
+  evidenceEdge("tasks", "i18n/inbox-display.ts", "pages/Inbox.tsx", "inboxGroupDisplay", "../i18n/inbox-display", "call"),
+  evidenceEdge("tasks", "i18n/inbox-display.ts", "pages/Inbox.tsx", "joinRequestDisplay", "../i18n/inbox-display", "call"),
+  evidenceEdge("tasks", "i18n/inbox-display.ts", "pages/LegacyInbox.tsx", "inboxGroupDisplay", "../i18n/inbox-display", "call"),
+  evidenceEdge("tasks", "i18n/inbox-display.ts", "pages/LegacyInbox.tsx", "joinRequestDisplay", "../i18n/inbox-display", "call"),
+  evidenceEdge("tasks", "i18n/interaction-audience-display.ts", "components/AttentionQueueRow.tsx", "displayAttentionResolverAudience", "../i18n/interaction-audience-display", "call"),
+  evidenceEdge("tasks", "i18n/interaction-audience-display.ts", "components/InteractionAudienceLine.tsx", "displayResolverAudience", "@/i18n/interaction-audience-display", "call"),
+  evidenceEdge("tasks", "i18n/interaction-audience-display.ts", "i18n/task-interaction-feedback-display.ts", "displayResolverAudience", "./interaction-audience-display", "call"),
+  evidenceEdge("tasks", "i18n/runner-goal-feedback.ts", "components/task-chat/RunnerGoalWidget.tsx", "createRunnerGoalLocalError", "@/i18n/runner-goal-feedback", "call"),
+  evidenceEdge("tasks", "i18n/runner-goal-feedback.ts", "components/task-chat/RunnerGoalWidget.tsx", "runnerGoalErrorText", "@/i18n/runner-goal-feedback", "call"),
+  evidenceEdge("tasks", "i18n/runner-goal-feedback.ts", "components/task-chat/TaskChatComposer.tsx", "runnerGoalErrorDescriptor", "@/i18n/runner-goal-feedback", "call"),
+  evidenceEdge("tasks", "i18n/task-interaction-feedback-display.ts", "components/AttentionQueueRow.tsx", "taskInteractionError", "../i18n/task-interaction-feedback-display", "call"),
+  evidenceEdge("tasks", "i18n/task-interaction-feedback-display.ts", "components/IssueThreadInteractionCard.tsx", "taskInteractionAudience", "@/i18n/task-interaction-feedback-display", "call"),
+  evidenceEdge("tasks", "i18n/task-interaction-feedback-display.ts", "components/IssueThreadInteractionCard.tsx", "taskInteractionError", "@/i18n/task-interaction-feedback-display", "call"),
+  evidenceEdge("tasks", "i18n/task-interaction-feedback-display.ts", "components/task-chat/TaskChatCompactInteractionCard.tsx", "taskInteractionAudience", "@/i18n/task-interaction-feedback-display", "call"),
+  evidenceEdge("tasks", "i18n/task-interaction-feedback-display.ts", "components/task-chat/TaskChatCompactInteractionCard.tsx", "taskInteractionError", "@/i18n/task-interaction-feedback-display", "call"),
+  evidenceEdge("agents-runs", "lib/agent-configuration-errors.ts", "components/AgentConfigForm.tsx", "agentConfigurationContextError", "@/lib/agent-configuration-errors", "call"),
+  evidenceEdge("tasks", "lib/credential-access-notice.ts", "components/TaskChatThread.tsx", "credentialAccessNotice", "@/lib/credential-access-notice", "call"),
+  evidenceEdge("tasks", "lib/system-notice-humanizer.ts", "components/task-chat/TaskChatSystemNotice.tsx", "humanizeSystemNotice", "@/lib/system-notice-humanizer", "call"),
+  evidenceEdge("agents-runs", "pages/agent-skills/agent-skill-source.ts", "pages/agent-skills/AgentSkillsTab.tsx", "buildAgentSkillSourceMeta", "./agent-skill-source", "call"),
+];
+const integratedDisplayHelperFiles = [...new Set(integratedDisplayHelperEdges.map(edge => edge.file))].sort();
 // Pure helpers remain evidence-only: no fictional JSX coverage for returned copy.
 const manualScopeEdges = [
-  evidenceEdge("tasks", "lib/attention.ts", "components/DecisionsToolbar.tsx", "sourceMeta", "../lib/attention", "call"),
-  evidenceEdge("tasks", "lib/blockedInbox.ts", "components/BlockedInboxView.tsx", "formatStoppedAge", "../lib/blockedInbox", "call"),
+  // Keep canonical sources even when display now opts into a separate helper.
+  evidenceEdge("tasks", "lib/attention.ts", "components/DecisionsToolbar.tsx", "countActiveAttentionFilters", "../lib/attention", "call"),
+  evidenceEdge("tasks", "lib/blockedInbox.ts", "components/BlockedInboxView.tsx", "buildBlockedInboxRows", "../lib/blockedInbox", "call"),
   evidenceEdge("tasks", "lib/inbox.ts", "pages/Inbox.tsx", "buildGroupedInboxSections", "../lib/inbox", "call"),
   evidenceEdge("management", "lib/activity-format.ts", "pages/audit/AuditFeed.tsx", "formatActivityVerb", "@/lib/activity-format", "call"),
   evidenceEdge("tasks", "hooks/useDocumentAnnotationMutations.ts", "components/DocumentAnnotationPanel.tsx", "useDocumentAnnotationMutations", "@/hooks/useDocumentAnnotationMutations", "call"),
   evidenceEdge("tasks", "lib/artifact-card-data.ts", "components/artifacts/IssueArtifactCard.tsx", "loadArtifactCsv", "@/lib/artifact-card-data", "call"),
   evidenceEdge("tasks", "lib/issue-artifacts.ts", "components/task-side-panel/TaskDocumentPanel.tsx", "documentDisplayTitle", "@/lib/issue-artifacts", "call"),
   evidenceEdge("tasks", "lib/task-side-panel-state.ts", "components/task-side-panel/TaskSidePanel.tsx", "taskPanelArtifactsTab", "@/lib/task-side-panel-state", "call"),
-  evidenceEdge("management", "pages/audit/audit-navigation.ts", "pages/audit/AuditHub.tsx", "AUDIT_SECTIONS", "./audit-navigation", "reference"),
+  evidenceEdge("management", "pages/audit/audit-navigation.ts", "pages/audit/AuditHub.tsx", "auditDisplaySections", "./audit-navigation", "call"),
+  ...integratedDisplayHelperEdges,
 ];
 const manualScopeFiles = [...new Set(manualScopeEdges.map(edge => edge.file))].sort();
 const scopeEvidenceFiles = [...new Set([...scopeEdges, ...manualScopeEdges].flatMap(edge => [edge.host, ...(edge.through ? [edge.through] : [])]))].sort();
@@ -322,14 +360,16 @@ function walkEvidenceAst(node, visit) {
 }
 function consumesEdge(source, edge, parse) {
   const ast = parse(source, { sourceType: "module", plugins: ["typescript", "jsx"] });
-  const declaration = ast.program.body.find(node => node.type === "ImportDeclaration" && node.source.value === edge.importSource && node.importKind !== "type");
-  const binding = declaration?.specifiers.find(node => node.type === "ImportSpecifier" && node.imported.name === edge.symbol && node.importKind !== "type");
-  if (!binding) return false;
+  const bindings = new Set(ast.program.body
+    .filter(node => node.type === "ImportDeclaration" && node.source.value === edge.importSource && node.importKind !== "type")
+    .flatMap(declaration => declaration.specifiers.filter(node => node.type === "ImportSpecifier" && node.imported.name === edge.symbol && node.importKind !== "type")
+      .map(binding => binding.local.name)));
+  if (!bindings.size) return false;
   let consumed = false;
   walkEvidenceAst(ast.program, node => {
-    if (edge.usage === "jsx" && node.type === "JSXOpeningElement" && node.name.type === "JSXIdentifier" && node.name.name === binding.local.name) consumed = true;
-    if (edge.usage === "call" && node.type === "CallExpression" && node.callee.type === "Identifier" && node.callee.name === binding.local.name) consumed = true;
-    if (edge.usage === "reference" && node.type === "Identifier" && node.name === binding.local.name) consumed = true;
+    if (edge.usage === "jsx" && node.type === "JSXOpeningElement" && node.name.type === "JSXIdentifier" && bindings.has(node.name.name)) consumed = true;
+    if (edge.usage === "call" && node.type === "CallExpression" && node.callee.type === "Identifier" && bindings.has(node.callee.name)) consumed = true;
+    if (edge.usage === "reference" && node.type === "Identifier" && bindings.has(node.name)) consumed = true;
   });
   return consumed;
 }
@@ -478,7 +518,7 @@ module.exports = { collectCandidates, collectAudit, matchesEntry, selectInventor
   protocolDisplayComponents, protocolDisplayFiles, protocolThreadHosts, protocolRoute, protocolRenderBoundary,
   manualProtocolSources, manualProtocolFiles, collectManualSourceEvidence,
   baselineFile, baselineFileSha256, readBaseline, pathSetSha256, expandedScopeFiles, scopeEdges, manualScopeEdges, manualScopeFiles,
-  scopeEvidenceFiles, domainBasenames, legacyDomain, sourceInventory, consumesEdge, verifyScopeEdges, collectScopeDenominators };
+  scopeEvidenceFiles, integratedDisplayHelperEdges, integratedDisplayHelperFiles, domainBasenames, legacyDomain, sourceInventory, consumesEdge, verifyScopeEdges, collectScopeDenominators };
 
 if (require.main === module) {
   const root = path.resolve(__dirname, "..");
@@ -529,13 +569,15 @@ if (require.main === module) {
     schemaVersion: 5, generatedAt: new Date().toISOString(), parserVersion,
     method: "Bounded Babel AST inventory: JSX text/display attributes (including message and ariaLabel), direct/conditional/template literals, pushToast/toast display fields, setSecretMessage.title and direct window.confirm/window.prompt/window.alert first-argument messages. Dynamic display expressions are separate needs_manual_review locations, not untranslated strings.",
     baseline, legacyScope, legacyPathDrift, expandedScope, manualScope, hostEvidence, invalidScopeEdges, scopeDenominators,
-    requestedExpandedScopeFiles: expandedScopeFiles, missingExpandedScopeFiles, scopeEdges, manualScopeEdges,
+    requestedExpandedScopeFiles: expandedScopeFiles, missingExpandedScopeFiles, scopeEdges, manualScopeEdges, integratedDisplayHelperFiles,
     limits: [
       "Schema 5 freezes the prior 82-path schema-4 list and baseline JSON SHA. New exact high-frequency paths, evidence-only helpers and hosts have separate path-set/content hashes. Five-domain denominators count reviewed source paths, never completed translations or all reachable UI.",
       "Scope changes are not translation progress: do not subtract old/new totals or treat literal/dynamic candidate totals as defect totals. Historical source SHA is retained; current legacy source SHA is recomputed independently.",
       "Explicit host/import/JSX/call/reference checks are syntax evidence, not binding analysis or runtime reachability. Missing paths, hosts, re-export barrels or consumer edges fail closed. Evidence hosts never recursively enlarge the AST inventory.",
       "Default chat-style TaskSidePanel artifacts are included; Classic conditional surfaces remain separately described, not inferred unreachable from names. Pure helper manualScope sources are hash-only and require provenance review; their returns are not AST candidates.",
+      "Post-integration manualScope retains the original nine sources and adds eleven exact display/provenance helpers (eight new helpers plus three changed display opt-ins). Their explicit consumers are evidence-only unless already selected; this does not enlarge the 160-path AST denominator. Canonical labels, local-error provenance, unknown diagnostics and actor-provided values still require manual classification.",
       "Not a complete route/call graph, data-flow analysis, rendered-text count or translation coverage percentage.",
+      "scope.unscannedTsxFiles lists eligible source paths outside the bounded AST inventory; scope.evidenceOnlyTsxFiles identifies hash-only consumers among them. Neither list classifies untranslated copy or establishes runtime reachability.",
       "Schema 4 adds four exact protocol-display TSX files as a separate scope; earlier scopes and candidate meanings are unchanged. Expanded totals are not directly comparable with schema 3. Original sourceSha256 covers only AST-inventoried files; manualSourceSha256 is separate.",
       "The five manualSourceEvidence files (four TS helpers and one named-details TSX source) are source-hash-only, not AST candidate inventories. Helper return values, canonical matching/deduplication labels and provider/user provenance require manual review; zero automatic candidates is not translation proof. TaskChatProtocolActivityRow.tsx is not added to the scanned files.",
       "Protocol import/render and helper-call edges are bounded explicit evidence checked by the script tests, not a CLI-inferred call graph or runtime reachability proof. Host metadata does not recursively select files; the Classic Task Interface and unverified Card branches are not claimed covered.",
@@ -556,7 +598,9 @@ if (require.main === module) {
     requestedQuotaFiles: quotaFiles, missingQuotaFiles,
     requestedProtocolDisplayFiles: protocolDisplayFiles, missingProtocolDisplayFiles,
     requestedManualSourceFiles: manualProtocolFiles, missingManualSourceFiles, manualSourceEvidence, manualSourceSha256,
-    scope: { eligibleTsxFiles: all.length, basenameMatchedFiles: selected.filter(file => matchesEntry(file, names)).length,
+    scope: { eligibleTsxFiles: all.length, unscannedTsxFiles: all.filter(file => !selected.includes(file)).sort(),
+      evidenceOnlyTsxFiles: scopeEvidenceFiles.filter(file => file.endsWith(".tsx") && !selected.includes(file)),
+      basenameMatchedFiles: selected.filter(file => matchesEntry(file, names)).length,
       routedMatchedFiles: routedRoutineFiles.length - missingRoutedFiles.length,
       consumedMatchedFiles: consumedUiFiles.length - missingConsumedFiles.length, consumedComponentHosts: consumedUiComponents,
       companyRouteMatchedFiles: routedCompanyFiles.length - missingCompanyRouteFiles.length, companyRoutes: routedCompanyPages,
