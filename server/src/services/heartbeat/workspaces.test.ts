@@ -68,10 +68,12 @@ async function createRepository(parent: string, text: string) {
   const cwd = path.join(testRoot, parent, "repo");
   await fs.mkdir(cwd, { recursive: true });
   await runGit("git", ["init", cwd]);
+  await runGit("git", ["-C", cwd, "config", "core.autocrlf", "false"]);
   await runGit("git", ["-C", cwd, "config", "user.email", "workspace-test@example.com"]);
   await runGit("git", ["-C", cwd, "config", "user.name", "Workspace Test"]);
   await fs.writeFile(path.join(cwd, "README.md"), text);
-  await runGit("git", ["-C", cwd, "add", "README.md"]);
+  await fs.writeFile(path.join(cwd, ".gitattributes"), "README.md text eol=lf\n");
+  await runGit("git", ["-C", cwd, "add", "README.md", ".gitattributes"]);
   await runGit("git", ["-C", cwd, "commit", "-m", "initial"]);
   return cwd;
 }

@@ -136,13 +136,24 @@ describe("workspace Git scan route load regression", () => {
     const app = createLoadApp(db, companyId, service);
     // Model one busy API server, not 500 independent ephemeral listeners whose
     // accept/close races can reset clients before they reach the scheduler.
-    const server = app.listen(0, "127.0.0.1");
+    const server = app.listen({ port: 0, host: "127.0.0.1", backlog: 1024 });
     await new Promise<void>(resolve => server.once("listening", resolve));
-    const pendingResponses = Array.from({ length: 500 }, (_, index) => request(server)
+    const pendingResponses = [];
+    for (let index = 0; index < 500; index += 1) {
+      const response = request(server)
       .get(`/api/issues/issue-${index}/file-resources/list`)
       .set("x-test-actor", `actor-${index % 73}`)
       .query({ mode: "changed" })
-      .then((response) => response));
+      .then((response) => response);
+      // Attach rejection handling before yielding; allSettled below still
+      // records and rethrows the original failure.
+      void response.catch(() => undefined);
+      pendingResponses.push(response);
+      // All 500 requests remain in flight behind scanGate. Give the listener
+      // accept turns so Windows TCP backlog retries do not dominate this API
+      // scheduler test before requests even reach the application.
+      if (index % 25 === 24) await new Promise<void>(resolve => setImmediate(resolve));
+    }
     // Observe every client rejection immediately, including on assertion failure.
     const settledResponses = Promise.allSettled(pendingResponses);
     try {

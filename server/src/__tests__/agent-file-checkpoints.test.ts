@@ -105,12 +105,15 @@ describe("incremental managed file checkpoints", () => {
     await fs.writeFile(path.join(live(), "script"), "execute");
     await fs.writeFile(path.join(live(), "rename"), "move");
     const first = await captureAgentFiles(live());
-    await fs.chmod(path.join(live(), "script"), 0o755);
+    // NTFS does not encode POSIX execute bits; its read-only bit still gives
+    // a real metadata change that must be captured in the delta.
+    const changedMode = process.platform === "win32" ? 0o444 : 0o755;
+    await fs.chmod(path.join(live(), "script"), changedMode);
     await fs.rename(path.join(live(), "rename"), path.join(live(), "renamed"));
     const next = await captureAgentFiles(live(), first.manifest, path.join(root, "delta"));
     expect(next.stats.copiedFiles).toBe(2);
     expect(next.manifest.entries.map(([name]) => name)).toEqual(["renamed", "script"]);
-    expect((await fs.stat(path.join(root, "delta", "files", "script"))).mode & 0o777).toBe(0o755);
+    expect((await fs.stat(path.join(root, "delta", "files", "script"))).mode & 0o777).toBe(changedMode);
   });
   it("excludes only the remote transport's reserved root, never user file paths", async () => {
     await fs.mkdir(path.join(live(), ".paperclip-runtime"));

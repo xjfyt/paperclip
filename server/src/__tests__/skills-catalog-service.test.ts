@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CatalogSkill } from "@paperclipai/shared";
 
@@ -94,10 +95,10 @@ describe("skills catalog service", () => {
     mockReadFile.mockImplementation(async (filePath: string) => `content:${filePath}`);
     mockRequireResolve.mockImplementation((specifier: string) => {
       if (specifier === "@paperclipai/skills-catalog/package.json") {
-        return "/published/node_modules/@paperclipai/skills-catalog/package.json";
+        return path.resolve("/published/node_modules/@paperclipai/skills-catalog/package.json");
       }
       if (specifier === "@paperclipai/skills-catalog/catalog.json") {
-        return "/published/node_modules/@paperclipai/skills-catalog/generated/catalog.json";
+        return path.resolve("/published/node_modules/@paperclipai/skills-catalog/generated/catalog.json");
       }
       throw new Error(`Unexpected specifier: ${specifier}`);
     });
@@ -204,11 +205,11 @@ describe("skills catalog service", () => {
       markdown: true,
     });
     expect(mockReadFileSync).toHaveBeenCalledWith(
-      "/published/node_modules/@paperclipai/skills-catalog/generated/catalog.json",
+      path.resolve("/published/node_modules/@paperclipai/skills-catalog/generated/catalog.json"),
       "utf8",
     );
     expect(mockReadFile).toHaveBeenCalledWith(
-      "/published/node_modules/@paperclipai/skills-catalog/catalog/bundled/software-development/published-skill/SKILL.md",
+      path.resolve("/published/node_modules/@paperclipai/skills-catalog/catalog/bundled/software-development/published-skill/SKILL.md"),
     );
     expect(mockRequireResolve).toHaveBeenCalledWith("@paperclipai/skills-catalog/package.json");
     expect(mockRequireResolve).toHaveBeenCalledWith("@paperclipai/skills-catalog/catalog.json");
