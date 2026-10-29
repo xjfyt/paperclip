@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import express from "express";
 import request from "supertest";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, onTestFinished, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { agentIdentityKeys, agents, companies, createDb, closeRegisteredClients, ensurePostgresDatabase, runDatabaseBackup, runDatabaseRestore, type Db } from "@paperclipai/db";
 import { resolveWorktreeSeedPlan } from "../../../cli/src/commands/worktree-lib.js";
@@ -13,6 +13,7 @@ import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.j
 import { agentIdentityService, supportsManagedAgentIdentity } from "../services/agent-identity.js";
 import { agentService } from "../services/agents.js";
 import { localEncryptedProvider } from "../secrets/local-encrypted-provider.js";
+import { protectNewPrivatePath } from "@paperclipai/shared/private-filesystem-permissions";
 import { execute } from "../adapters/process/execute.js";
 import { createAgentIdentityRedactor } from "../services/agent-identity-redaction.js";
 import { heartbeatService } from "../services/heartbeat.js";
@@ -29,6 +30,7 @@ describe("agent cryptographic identity", () => {
 
   beforeAll(async () => {
     directory = await mkdtemp(join(tmpdir(), "paperclip-identity-"));
+    protectNewPrivatePath(directory);
     vi.stubEnv("PAPERCLIP_HOME", directory);
     vi.stubEnv("PAPERCLIP_SECRETS_MASTER_KEY", "");
     vi.stubEnv("PAPERCLIP_SECRETS_MASTER_KEY_FILE", join(directory, "master.key"));
@@ -59,21 +61,27 @@ describe("agent cryptographic identity", () => {
   });
 
   it("concurrent first runs converge, restart/model/name changes preserve keys, and ownership is enforced", async () => {
-    const agent = await oldAgent();
-    const pairs = await Promise.all(Array.from({ length: 8 }, () =>
-      agentIdentityService(db).ensureAgentIdentity(companyId, agent.id)));
-    expect(new Set(pairs.map(pair => pair.privateKeyPem)).size).toBe(1);
-    await db.update(agents).set({ name: "Renamed", adapterConfig: { model: "another-model" }, status: "paused" }).where(eq(agents.id, agent.id));
-    const freshDb = createDb(database.connectionString);
-    expect(await agentIdentityService(freshDb).ensureAgentIdentity(companyId, agent.id)).toEqual(pairs[0]);
-    expect(await agentIdentityService(db).getPublicIdentity(randomUUID(), agent.id)).toBeNull();
-    await expect(agentIdentityService(db).ensureAgentIdentity(randomUUID(), agent.id)).rejects.toThrow("Agent not found");
-    const second = await oldAgent();
-    expect((await agentIdentityService(db).ensureAgentIdentity(companyId, second.id)).keyId).not.toBe(pairs[0].keyId);
-    await db.delete(agents).where(eq(agents.id, second.id));
-    expect(await agentIdentityService(db).getPublicIdentity(companyId, second.id)).toBeNull();
-  });
-
+    // Real NTFS probes run for each of the eight serialized key reads. Keep
+    // every operation drained even when Vitest reports a test budget failure.
+    const work = (async () => {
+      const agent = await oldAgent();
+      const outcomes = await Promise.allSettled(Array.from({ length: 8 }, () =>
+        agentIdentityService(db).ensureAgentIdentity(companyId, agent.id)));
+      const pairs = outcomes.map(outcome => { if (outcome.status === "rejected") throw outcome.reason; return outcome.value; });
+      expect(new Set(pairs.map(pair => pair.privateKeyPem)).size).toBe(1);
+      await db.update(agents).set({ name: "Renamed", adapterConfig: { model: "another-model" }, status: "paused" }).where(eq(agents.id, agent.id));
+      const freshDb = createDb(database.connectionString);
+      expect(await agentIdentityService(freshDb).ensureAgentIdentity(companyId, agent.id)).toEqual(pairs[0]);
+      expect(await agentIdentityService(db).getPublicIdentity(randomUUID(), agent.id)).toBeNull();
+      await expect(agentIdentityService(db).ensureAgentIdentity(randomUUID(), agent.id)).rejects.toThrow("Agent not found");
+      const second = await oldAgent();
+      expect((await agentIdentityService(db).ensureAgentIdentity(companyId, second.id)).keyId).not.toBe(pairs[0].keyId);
+      await db.delete(agents).where(eq(agents.id, second.id));
+      expect(await agentIdentityService(db).getPublicIdentity(companyId, second.id)).toBeNull();
+    })();
+    onTestFinished(async () => { await Promise.allSettled([work]); });
+    await work;
+  }, process.platform === "win32" ? 30_000 : 15_000);
   it("creates identities in the agent creation transaction and rolls both writes back on failure", async () => {
     const created = await createAgentLifecycle(db).requestHire(companyId, { name: "New identity", role: "engineer", status: "pending_approval" });
     expect(await agentIdentityService(db).getPublicIdentity(companyId, created.id)).toMatchObject({ algorithm: "Ed25519" });

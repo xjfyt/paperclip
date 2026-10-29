@@ -15,6 +15,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./telemetry": "./src/telemetry/index.ts",
+    "./private-windows-master-key": "./src/private-windows-master-key.ts",
     "./*": "./src/*.ts"
   },
   "publishConfig": {
@@ -27,6 +28,10 @@
       "./telemetry": {
         "types": "./dist/telemetry/index.d.ts",
         "import": "./dist/telemetry/index.js"
+      },
+      "./private-windows-master-key": {
+        "types": "./dist/private-windows-master-key.d.ts",
+        "import": "./dist/private-windows-master-key.js"
       },
       "./*": {
         "types": "./dist/*.d.ts",

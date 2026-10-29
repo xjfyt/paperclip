@@ -10,6 +10,7 @@ import type {
   StoredSecretVersionMaterial,
 } from "./types.js";
 import { badRequest } from "../errors.js";
+import { loadOrCreatePrivateWindowsMasterKey, readPrivateWindowsMasterKey } from "@paperclipai/shared/private-windows-master-key";
 
 interface LocalEncryptedMaterial extends StoredSecretVersionMaterial {
   scheme: "local_encrypted_v1";
@@ -58,6 +59,12 @@ function loadOrCreateMasterKey(allowCreate = true): Buffer {
   }
 
   const keyPath = resolveMasterKeyFilePath();
+  if (process.platform === "win32") {
+    const raw = loadOrCreatePrivateWindowsMasterKey(keyPath, allowCreate);
+    const decoded = decodeMasterKey(raw);
+    if (!decoded) throw badRequest(`Invalid secrets master key at ${keyPath}`);
+    return decoded;
+  }
   if (existsSync(keyPath)) {
     enforceKeyFilePermissionsBestEffort(keyPath);
     const raw = readFileSync(keyPath, "utf8");
@@ -138,6 +145,25 @@ async function inspectLocalEncryptedHealth(): Promise<SecretProviderHealthCheck>
   }
 
   const keyPath = resolveMasterKeyFilePath();
+  if (process.platform === "win32") {
+    try {
+      const raw = readPrivateWindowsMasterKey(keyPath);
+      if (!decodeMasterKey(raw)) throw new Error("Invalid secrets master key material");
+      return { provider: "local_encrypted", status: "ok", message: "Local encrypted provider configured with a private Windows key file", warnings: [],
+        backupGuidance: ["Back up the key file together with database backups.", "A restore needs the same master key and verified private Windows storage."],
+        details: { keySource: "file", keyFilePath: keyPath } };
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return {
+        provider: "local_encrypted", status: "warn", message: `Secrets key file does not exist yet: ${keyPath}`,
+        warnings: ["The first managed secret write will create the key in verified private Windows storage before writing secret bytes."],
+        backupGuidance: ["Back up the key file together with database backups.", "The database alone cannot restore local encrypted secret values."],
+        details: { keySource: "file", keyFilePath: keyPath },
+      };
+      return { provider: "local_encrypted", status: "error", message: "Local encrypted master key is invalid or its private Windows storage could not be verified; preserve the existing key and ACL for authorized remediation.",
+        backupGuidance: ["Preserve the original key and database backups; never regenerate an existing master key to clear a permission error."],
+        details: { keySource: "file", keyFilePath: keyPath } };
+    }
+  }
   if (!existsSync(keyPath)) {
     return {
       provider: "local_encrypted",

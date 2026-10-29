@@ -1,0 +1,148 @@
+{
+  "schema": "mimouse.local-verification.v1",
+  "recordedAt": "2026-10-29T20:41:50.494Z",
+  "platform": "native Windows; actual NTFS DACLs, disposable PostgreSQL and synthetic local key material",
+  "scope": "Default local_encrypted provider private master-key creation/read/health, atomic directory/file publication and existing secret/identity API contracts. No external provider account accessed.",
+  "command": "node node_modules/vitest/vitest.mjs run --project @paperclipai/server server/src/__tests__/local-encrypted-windows-security.test.ts server/src/__tests__/agent-identity-master-key.test.ts server/src/__tests__/secrets-service.test.ts server/src/__tests__/agent-identity.test.ts --maxWorkers=1 --no-file-parallelism --reporter=default --reporter=json --outputFile=test-results/project-closure-20261029/local-master-key-complete-final2.json",
+  "result": {
+    "files": 4,
+    "passed": 120,
+    "failed": 0,
+    "skipped": 0,
+    "perFile": [
+      {
+        "file": "server/src/__tests__/agent-identity-master-key.test.ts",
+        "passed": 2,
+        "failed": 0,
+        "pending": 0
+      },
+      {
+        "file": "server/src/__tests__/agent-identity.test.ts",
+        "passed": 11,
+        "failed": 0,
+        "pending": 0
+      },
+      {
+        "file": "server/src/__tests__/local-encrypted-windows-security.test.ts",
+        "passed": 16,
+        "failed": 0,
+        "pending": 0
+      },
+      {
+        "file": "server/src/__tests__/secrets-service.test.ts",
+        "passed": 91,
+        "failed": 0,
+        "pending": 0
+      }
+    ]
+  },
+  "regressions": [
+    "New empty directory is DACL-protected before atomic publication; new wx empty temporary key is protected before its first payload byte",
+    "Original six-process complete-file publication and six-process missing-directory publication both execute on Windows and converge under the unchanged original 30s budget",
+    "Existing broad file/directory DACL, key symlink/junction/dangling link, malformed private key and unavailable protection refuse without repairing old ACL or replacing key identity",
+    "Private DACL health is ok even when Windows mode bits do not encode privacy; initial absence gives Windows guidance, invalid/unverifiable storage is error with key-preserving backup guidance",
+    "Observed key disappearance during open cannot authorize creating another AES key; health reports verification error, retained original bytes and SDDL are unchanged",
+    "Temporary collision and replaced named entry preserve foreign bytes; independent complete private publication winner remains authoritative",
+    "Windows helper shared by server and CLI initialization through an explicit source/published package subpath; generated format remains 32 random bytes encoded base64, caller retains existing format validation",
+    "Three legacy 20ms cleanup-lock guesses replaced with actual entry signals, measured provider entry windows, provider-write exclusion assertions and finally/allSettled draining"
+  ],
+  "testBudget": {
+    "scope": "Only agent-identity eight-concurrent-real-NTFS case uses Windows 30s, POSIX original 15s. Counts and all encryption/ownership assertions unchanged.",
+    "originalFailure": "local-master-key-complete-final.json:119 passed/1 case timed out at 15.009s, no unhandled errors",
+    "followup": "agent-identity-private-final.json:whole file11/11, case9.194s under lower load; not added to final complete120 total",
+    "cleanup": "Whole case work is drained with onTestFinished/allSettled, including failures/timeouts."
+  },
+  "diagnostics": {
+    "frameworkWarnings": 0,
+    "unhandledErrors": 0,
+    "applicationWarnLines": 18,
+    "interpretation": "The application WARN lines are retained negative provider rollback/auth/identity-injection fixture logs. They are not compiler/framework diagnostics and were not suppressed."
+  },
+  "typecheck": {
+    "sharedExitCode": 0,
+    "serverExitCode": 0,
+    "scope": "Complete shared and server TypeScript projects; see captured logs"
+  },
+  "inputs": [
+    {
+      "path": "packages/shared/package.json",
+      "sha256": "c240d51df3c1c2c18a4ea4f420c709018ac9987fb9ab6d24d281488543b86c00"
+    },
+    {
+      "path": "packages/shared/src/private-windows-master-key.ts",
+      "sha256": "965e806648fad267af5022f37d3466903a4678c029e330fe84b442cfdb83d85c"
+    },
+    {
+      "path": "packages/shared/src/private-filesystem-permissions.ts",
+      "sha256": "5760605ae7d8139a6529b006ac777e21a8985c0140b0ed9faf07209771519c1a"
+    },
+    {
+      "path": "server/src/secrets/local-encrypted-provider.ts",
+      "sha256": "6843976fe9019ff75d2220384f7c8eeb00cba1c8b015a5d80aded424967eb155"
+    },
+    {
+      "path": "server/src/__tests__/local-encrypted-windows-security.test.ts",
+      "sha256": "34c5a79c6ca65aad0cba7e164513972b00e7b4c57db3a991f30ed91122252e55"
+    },
+    {
+      "path": "server/src/__tests__/agent-identity-master-key.test.ts",
+      "sha256": "2f9a85949e53909f53242cdf1eda924e7eb47cb38efedb260a12a4ae11b2a5c6"
+    },
+    {
+      "path": "server/src/__tests__/secrets-service.test.ts",
+      "sha256": "395f900a984ec1a6240567959967336ed1cfd5d7f220fdfcb575e04db8bac30f"
+    },
+    {
+      "path": "server/src/__tests__/agent-identity.test.ts",
+      "sha256": "9e076ca6e16ed91b11098c0ac4094e9d58a492bc9d19e748129a0964a92a11f4"
+    },
+    {
+      "path": "packages/adapter-utils/src/test-fixtures/windows-private-acl.ts",
+      "sha256": "d471d6080095eb364150a7b18cc0f3752f1a8e18e2cd7ff23df633ddb629d72d"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "test-results/project-closure-20261029/local-master-key-complete-final2.json",
+      "sha256": "9631f2f56b19e7c5c8716b3095385d63e531c4498bae40856928e338f23e392c"
+    },
+    {
+      "path": "test-results/project-closure-20261029/local-master-key-complete-final2.log",
+      "sha256": "bc2389946e64f250a87746678693b5ab299fd2a34b6da44c6ffc897aeb2e8c05"
+    },
+    {
+      "path": "test-results/project-closure-20261029/shared-private-master-key-typecheck.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "test-results/project-closure-20261029/local-master-key-typecheck-shared.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "test-results/project-closure-20261029/local-master-key-typecheck-last.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "priorAttempts": [
+    {
+      "json": "test-results/project-closure-20261029/local-master-key-complete-diagnostic.json",
+      "passed": 115,
+      "failed": 5,
+      "unhandled": 3,
+      "scope": "Earlier changing-input diagnostic; old read-race logic and three cleanup-lock fixture failures retained."
+    },
+    {
+      "json": "test-results/project-closure-20261029/local-master-key-complete-final.json",
+      "passed": 119,
+      "failed": 1,
+      "unhandled": 0,
+      "scope": "Complete pre-budget-adjustment run retained; do not replace with a filtered positive result."
+    }
+  ],
+  "limitations": [
+    "POSIX implementation is retained, but no POSIX machine run is claimed by this Windows evidence.",
+    "Existing wide Windows key paths intentionally refuse automatic repair; retain the same original key and database for authorized permission remediation.",
+    "These captured sources cover this private storage path; not a complete clean-install, published-package or every-secret-store attestation.",
+    "Framework zero-warning scope is distinct from deliberate application fixture logs."
+  ]
+}
