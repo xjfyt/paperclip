@@ -1,0 +1,10 @@
+import "./decision-desk-test-resources";
+import "./decision-card-test-resources";
+import { i18n } from "./index";
+import en from "./contributions/attentionRowUi/en.json";
+import zh from "./contributions/attentionRowUi/zh-CN.json";
+import es from "./contributions/attentionRowUi/es.json";
+import ja from "./contributions/attentionRowUi/ja.json";
+export const attentionRowMessages = { en, "zh-CN": zh, es, ja };
+for (const [locale, attentionRowUi] of Object.entries(attentionRowMessages)) i18n.addResourceBundle(locale, "translation", { attentionRowUi }, true, true);
+export { i18n };

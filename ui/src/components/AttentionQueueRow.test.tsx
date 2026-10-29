@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import "../i18n/attention-row-test-resources";
 
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
