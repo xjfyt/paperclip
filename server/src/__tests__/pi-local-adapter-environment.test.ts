@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { installIsolatedHostFixture } from "@paperclipai/adapter-utils/test-fixtures/isolated-host";
+import { writeCliFixture } from "@paperclipai/adapter-utils/test-fixtures/native-cli";
+installIsolatedHostFixture();
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -34,8 +37,7 @@ if (process.argv.includes("--list-models")) {
 }
 process.exit(1);
 `;
-  await fs.writeFile(commandPath, script, "utf8");
-  await fs.chmod(commandPath, 0o755);
+  await writeCliFixture(commandPath, script);
 }
 
 describe("pi_local environment diagnostics", () => {
