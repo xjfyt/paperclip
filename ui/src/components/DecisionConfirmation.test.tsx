@@ -8,7 +8,9 @@ import { DecisionCard } from "./DecisionCard";
 import { DecisionDateChips } from "./DecisionDateChips";
 import { DecisionTriageStrip } from "./DecisionTriageStrip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 import type { AttentionItem } from "@paperclipai/shared";
+vi.mock("../context/CompanyContext", () => ({ useCompany: () => ({ selectedCompanyId: "c1" }) }));
 vi.mock("../context/ToastContext", () => ({ useToastActions: () => ({ pushToast: vi.fn() }) }));
 import type { Decision } from "../api/decisions";
 vi.mock("./MarkdownBody", () => ({ MarkdownBody: ({ children }: { children: string }) => <p>{children}</p> }));
@@ -74,7 +76,7 @@ describe("explicit decision confirmation", () => {
   it("forwards the real triage date trigger events and accessibility attributes", async () => {
     const client = new QueryClient();
     const item = { sourceKind: "decision", subject: { id: "d1", kind: "decision", metadata: {} }, queues: [] } as unknown as AttentionItem;
-    await act(async () => root.render(<QueryClientProvider client={client}><DecisionTriageStrip companyId="c1" item={item} /></QueryClientProvider>));
+    await act(async () => root.render(<QueryClientProvider client={client}><MemoryRouter><DecisionTriageStrip companyId="c1" item={item} /></MemoryRouter></QueryClientProvider>));
     const trigger = button("Pick date");
     await act(async () => trigger.click());
     expect(document.querySelector('input[type="date"]')).not.toBeNull();

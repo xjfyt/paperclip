@@ -5,6 +5,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Sun } from "lucide-react";
 import type { Agent, AttentionItem } from "@paperclipai/shared";
 import { decisionQueuesApi } from "../api/decisionQueues";
+import { useCompany } from "../context/CompanyContext";
+import { useDecisionActionBoundary, type DecisionActionReceipt } from "../hooks/useDecisionActionBoundary";
 import { useToastActions } from "../context/ToastContext";
 import { queryKeys } from "../lib/queryKeys";
 import { attentionIdleDays } from "../lib/attention";
@@ -76,18 +78,29 @@ export function AgingItemRow({
   const queryClient = useQueryClient();
   const { pushToast } = useToastActions();
   const idleDays = attentionIdleDays(item, now);
+  const { selectedCompanyId } = useCompany();
+  const boundary = useDecisionActionBoundary(companyId, JSON.stringify([item.id, item.sourceKind, item.subject.id]), selectedCompanyId);
+  type KeepAction = { companyId: string; sourceKind: AttentionItem["sourceKind"]; sourceId: string; title: string | null };
   const keep = useMutation({
-    mutationFn: () => decisionQueuesApi.setKeep(companyId, item.sourceKind, item.subject.id, true),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.attention(companyId) });
-      pushToast({ title: t("decisionDeskUi.keptToast"), body: item.subject.title ?? undefined, tone: "success" });
+    mutationFn: (receipt: DecisionActionReceipt<KeepAction>) => {
+      if (!boundary.isCurrent(receipt)) throw new DOMException("Decision context changed", "AbortError");
+      const input = receipt.input;
+      return decisionQueuesApi.setKeep(input.companyId, input.sourceKind, input.sourceId, true);
     },
-    onError: (error) =>
+    onSuccess: (_data, receipt) => {
+      if (!boundary.isCurrent(receipt)) return;
+      queryClient.invalidateQueries({ queryKey: queryKeys.attention(receipt.input.companyId) });
+      pushToast({ title: t("decisionDeskUi.keptToast"), body: receipt.input.title ?? undefined, tone: "success" });
+    },
+    onError: (error, receipt) => {
+      if (!boundary.isCurrent(receipt)) return;
       pushToast({
         title: t("decisionDeskUi.keepError"),
         body: error instanceof Error ? error.message : t("decisionDeskUi.tryAgain"),
         tone: "error",
-      }),
+      });
+    },
+    onSettled: (_data, _error, receipt) => boundary.finish(receipt),
   });
 
   return (
@@ -101,10 +114,14 @@ export function AgingItemRow({
           variant="outline"
           size="xs"
           className="h-7 gap-1"
-          disabled={keep.isPending || item.keep}
-          onClick={() => keep.mutate()}
+          disabled={boundary.pending || item.keep}
+          onClick={() => {
+            if (item.keep) return;
+            const receipt = boundary.begin({ companyId, sourceKind: item.sourceKind, sourceId: item.subject.id, title: item.subject.title });
+            if (receipt) keep.mutate(receipt);
+          }}
         >
-          {keep.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
+          {boundary.pending && <Loader2 className="h-3 w-3 animate-spin" />}
           <Sun className="h-3.5 w-3.5" />
           {t(item.keep ? "decisionDeskUi.kept" : "decisionDeskUi.keep")}
         </Button>

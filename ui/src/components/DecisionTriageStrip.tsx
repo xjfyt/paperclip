@@ -1,9 +1,11 @@
-import { useState, type ComponentProps } from "react";
+import { useRef, useState, type ComponentProps } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlarmClock, CalendarClock, ChevronDown, Loader2, Plus, UserPlus, X } from "lucide-react";
 import { buildAgentMentionHref, type Agent, type AttentionItem, type AttentionSourceKind } from "@paperclipai/shared";
 import { decisionQueuesApi } from "../api/decisionQueues";
 import { issuesApi } from "../api/issues";
+import { useCompany } from "../context/CompanyContext";
+import { useDecisionActionBoundary, type DecisionActionReceipt } from "../hooks/useDecisionActionBoundary";
 import { useToastActions } from "../context/ToastContext";
 import { queryKeys } from "../lib/queryKeys";
 import {
@@ -86,58 +88,54 @@ export function DecisionTriageStrip({ item, companyId, agents }: DecisionTriageS
     ?? (typeof item.subject.metadata?.issueId === "string" ? item.subject.metadata.issueId : null)
     ?? (item.subject.kind === "issue" ? item.subject.id : null);
 
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: queryKeys.attention(companyId) });
-    queryClient.invalidateQueries({ queryKey: queryKeys.decisionQueues.list(companyId) });
-    queryClient.invalidateQueries({ queryKey: queryKeys.decisionQueues.triage(companyId, sourceKind, sourceId) });
+  const { selectedCompanyId } = useCompany();
+  const targetKey = JSON.stringify([item.id, sourceKind, sourceId]);
+  const boundary = useDecisionActionBoundary(companyId, targetKey, selectedCompanyId);
+  type TriageActionInput = (
+    { kind: "decideBy" | "snooze"; value: string | null }
+    | { kind: "add" | "remove"; key: string }
+    | { kind: "route"; issueId: string; body: string; agentName: string }
+  );
+  type TriageAction = { companyId: string; sourceKind: AttentionSourceKind; sourceId: string } & TriageActionInput;
+  const verbs = { decideBy: "set when to decide", snooze: "snooze", add: "add to queue", remove: "remove from queue", route: "ask that agent for a recommendation" };
+  const mutation = useMutation({
+    mutationFn: async (receipt: DecisionActionReceipt<TriageAction>): Promise<unknown> => {
+      if (!boundary.isCurrent(receipt)) throw new DOMException("Decision context changed", "AbortError");
+      const input = receipt.input;
+      switch (input.kind) {
+        case "decideBy": return decisionQueuesApi.updateTriage(input.companyId, input.sourceKind, input.sourceId, { decideBy: input.value });
+        case "snooze": return decisionQueuesApi.updateTriage(input.companyId, input.sourceKind, input.sourceId, { snoozedUntil: input.value });
+        case "add": return decisionQueuesApi.addItem(input.companyId, input.key, input.sourceKind, input.sourceId);
+        case "remove": return decisionQueuesApi.removeItem(input.companyId, input.key, input.sourceKind, input.sourceId);
+        case "route": return issuesApi.addComment(input.issueId, input.body);
+      }
+    },
+    onSuccess: (_data, receipt) => {
+      if (!boundary.isCurrent(receipt)) return;
+      const input = receipt.input;
+      queryClient.invalidateQueries({ queryKey: queryKeys.attention(input.companyId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.decisionQueues.list(input.companyId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.decisionQueues.triage(input.companyId, input.sourceKind, input.sourceId) });
+      if (input.kind === "route") pushToast({ title: `Asked ${input.agentName} for a recommendation`, tone: "success" });
+    },
+    onError: (error, receipt) => {
+      if (!boundary.isCurrent(receipt)) return;
+      pushToast({ title: `Could not ${verbs[receipt.input.kind]}`, body: error instanceof Error ? error.message : "Please try again.", tone: "error" });
+    },
+    onSettled: (_data, _error, receipt) => boundary.finish(receipt),
+  });
+  const submit = (action: TriageActionInput) => {
+    const receipt = boundary.begin<TriageAction>({ ...action, companyId, sourceKind, sourceId } as TriageAction, `${action.kind}:${"key" in action ? action.key : ""}`);
+    if (receipt) mutation.mutate(receipt);
   };
-
-  const onError = (verb: string) => (error: unknown) =>
-    pushToast({
-      title: `Could not ${verb}`,
-      body: error instanceof Error ? error.message : "Please try again.",
-      tone: "error",
-    });
-
-  const setDecideBy = useMutation({
-    mutationFn: (decideBy: string | null) =>
-      decisionQueuesApi.updateTriage(companyId, sourceKind, sourceId, { decideBy }),
-    onSuccess: invalidate,
-    onError: onError("set when to decide"),
-  });
-  const setSnooze = useMutation({
-    mutationFn: (snoozedUntil: string | null) =>
-      decisionQueuesApi.updateTriage(companyId, sourceKind, sourceId, { snoozedUntil }),
-    onSuccess: invalidate,
-    onError: onError("snooze"),
-  });
-  const addToQueue = useMutation({
-    mutationFn: (key: string) => decisionQueuesApi.addItem(companyId, key, sourceKind, sourceId),
-    onSuccess: invalidate,
-    onError: onError("add to queue"),
-  });
-  const removeFromQueue = useMutation({
-    mutationFn: (key: string) => decisionQueuesApi.removeItem(companyId, key, sourceKind, sourceId),
-    onSuccess: invalidate,
-    onError: onError("remove from queue"),
-  });
-  const routeToAgent = useMutation({
-    mutationFn: (agent: Agent) => {
-      if (!relatedIssueId) throw new Error("This decision has no linked task to route from.");
-      const mention = `[@${agent.name}](${buildAgentMentionHref(agent.id)})`;
-      const body =
-        `${mention} — could you look at this decision${taskRef ? ` on ${taskRef.identifier}` : ""}, `
-        + `prepare a recommendation, and re-surface it on the decisions desk? (routed from the desk)`;
-      return issuesApi.addComment(relatedIssueId, body);
-    },
-    onSuccess: (_result, agent) => {
-      invalidate();
-      pushToast({ title: `Asked ${agent.name} for a recommendation`, tone: "success" });
-    },
-    onError: onError("ask that agent for a recommendation"),
-  });
-
-  const pending = setDecideBy.isPending || setSnooze.isPending || addToQueue.isPending || removeFromQueue.isPending;
+  const routeToAgent = (agent: Agent) => {
+    if (!relatedIssueId) return;
+    const mention = `[@${agent.name}](${buildAgentMentionHref(agent.id)})`;
+    const body = `${mention} — could you look at this decision${taskRef ? ` on ${taskRef.identifier}` : ""}, `
+      + "prepare a recommendation, and re-surface it on the decisions desk? (routed from the desk)";
+    submit({ kind: "route", issueId: relatedIssueId, body, agentName: agent.name });
+  };
+  const pending = boundary.pending;
   const decideBy = item.decideBy;
   const isDatePreset = decideBy != null && /^\d{4}-\d{2}-\d{2}$/.test(decideBy);
 
@@ -170,7 +168,7 @@ export function DecisionTriageStrip({ item, companyId, agents }: DecisionTriageS
               key={value}
               active={decideBy === (value satisfies DecideByPreset)}
               disabled={pending}
-              onClick={() => setDecideBy.mutate(decideBy === value ? null : value)}
+              onClick={() => submit({ kind: "decideBy", value: decideBy === value ? null : value })}
             >
               {label}
             </SegmentButton>
@@ -188,7 +186,7 @@ export function DecisionTriageStrip({ item, companyId, agents }: DecisionTriageS
                 defaultValue={isDatePreset ? decideBy ?? "" : ""}
                 className="rounded-sm border border-border bg-background px-2 py-1 text-xs"
                 onChange={(event) => {
-                  if (event.target.value) setDecideBy.mutate(event.target.value);
+                  if (event.target.value) submit({ kind: "decideBy", value: event.target.value });
                 }}
               />
             </PopoverContent>
@@ -213,7 +211,7 @@ export function DecisionTriageStrip({ item, companyId, agents }: DecisionTriageS
               className="text-muted-foreground hover:text-destructive disabled:opacity-50"
               aria-label={`Remove from ${queue.title}`}
               disabled={pending}
-              onClick={() => removeFromQueue.mutate(queue.key)}
+              onClick={() => submit({ kind: "remove", key: queue.key })}
             >
               <X className="h-3 w-3" />
             </button>
@@ -221,9 +219,10 @@ export function DecisionTriageStrip({ item, companyId, agents }: DecisionTriageS
         ))}
         <QueuePicker
           companyId={companyId}
+          targetKey={targetKey}
           existingKeys={new Set(item.queues.map((queue) => queue.key))}
           disabled={pending}
-          onAdd={(key) => addToQueue.mutate(key)}
+          onAdd={(key) => submit({ kind: "add", key })}
         />
       </div>
 
@@ -237,7 +236,7 @@ export function DecisionTriageStrip({ item, companyId, agents }: DecisionTriageS
               type="button"
               className="text-muted-foreground hover:text-foreground"
               disabled={pending}
-              onClick={() => setSnooze.mutate(null)}
+              onClick={() => submit({ kind: "snooze", value: null })}
             >
               Clear
             </button>
@@ -253,7 +252,7 @@ export function DecisionTriageStrip({ item, companyId, agents }: DecisionTriageS
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
               {SNOOZE_PRESETS.map((preset) => (
-                <DropdownMenuItem key={preset.label} onClick={() => setSnooze.mutate(preset.resolve())}>
+                <DropdownMenuItem key={preset.label} onClick={() => submit({ kind: "snooze", value: preset.resolve() })}>
                   {preset.label}
                 </DropdownMenuItem>
               ))}
@@ -263,9 +262,9 @@ export function DecisionTriageStrip({ item, companyId, agents }: DecisionTriageS
 
         <AskAgentPicker
           agents={agents ?? []}
-          disabled={routeToAgent.isPending || !relatedIssueId}
+          disabled={pending || !relatedIssueId}
           disabledReason={!relatedIssueId ? "No linked task to ask about" : undefined}
-          onRoute={(agent) => routeToAgent.mutate(agent)}
+          onRoute={routeToAgent}
         />
         {pending && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
       </div>
@@ -299,11 +298,13 @@ function SegmentButton({
 
 function QueuePicker({
   companyId,
+  targetKey,
   existingKeys,
   disabled,
   onAdd,
 }: {
   companyId: string;
+  targetKey: string;
   existingKeys: Set<string>;
   disabled?: boolean;
   onAdd: (key: string) => void;
@@ -318,28 +319,40 @@ function QueuePicker({
     queryFn: () => decisionQueuesApi.list(companyId),
     enabled: open,
   });
+  const { selectedCompanyId } = useCompany();
+  const boundary = useDecisionActionBoundary(companyId, targetKey, selectedCompanyId);
+  const draftRevision = useRef(0);
+  const changeOpen = (value: boolean) => { draftRevision.current++; setOpen(value); };
+  const changeCreating = (value: boolean) => { draftRevision.current++; setCreating(value); };
+  type CreateQueue = { companyId: string; name: string; revision: number };
   const create = useMutation({
-    mutationFn: (name: string) =>
-      decisionQueuesApi.create(companyId, { key: toQueueKey(name), title: name.trim() }),
-    onSuccess: (queue) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.decisionQueues.list(companyId) });
-      onAdd(queue.key);
-      setTitle("");
-      setCreating(false);
-      setOpen(false);
+    mutationFn: (receipt: DecisionActionReceipt<CreateQueue>) => {
+      if (!boundary.isCurrent(receipt)) throw new DOMException("Decision context changed", "AbortError");
+      const { input } = receipt;
+      return decisionQueuesApi.create(input.companyId, { key: toQueueKey(input.name), title: input.name.trim() });
     },
-    onError: (error) =>
-      pushToast({
-        title: "Could not create queue",
-        body: error instanceof Error ? error.message : "Please try again.",
-        tone: "error",
-      }),
+    onSuccess: (queue, receipt) => {
+      if (!boundary.isCurrent(receipt) || draftRevision.current !== receipt.input.revision) return;
+      queryClient.invalidateQueries({ queryKey: queryKeys.decisionQueues.list(receipt.input.companyId) });
+      onAdd(queue.key);
+      setTitle(""); setCreating(false); setOpen(false);
+    },
+    onError: (error, receipt) => {
+      if (!boundary.isCurrent(receipt) || draftRevision.current !== receipt.input.revision) return;
+      pushToast({ title: "Could not create queue", body: error instanceof Error ? error.message : "Please try again.", tone: "error" });
+    },
+    onSettled: (_data, _error, receipt) => boundary.finish(receipt),
   });
+  const createQueue = () => {
+    if (disabled || !title.trim()) return;
+    const receipt = boundary.begin({ companyId, name: title, revision: draftRevision.current });
+    if (receipt) create.mutate(receipt);
+  };
 
   const available = (queues ?? []).filter((queue) => !existingKeys.has(queue.key));
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={changeOpen}>
       <PopoverTrigger asChild>
         <Button type="button" variant="outline" size="xs" className="h-7 gap-1" disabled={disabled}>
           <Plus className="h-3.5 w-3.5" />
@@ -352,20 +365,20 @@ function QueuePicker({
             <input
               autoFocus
               value={title}
-              onChange={(event) => setTitle(event.target.value)}
+              onChange={(event) => { draftRevision.current++; setTitle(event.target.value); }}
               onKeyDown={(event) => {
-                if (event.key === "Enter" && title.trim()) create.mutate(title);
-                if (event.key === "Escape") setCreating(false);
+                if (event.key === "Enter" && title.trim()) createQueue();
+                if (event.key === "Escape") changeCreating(false);
               }}
               placeholder="New queue name…"
               className="w-full rounded-sm border border-border bg-background px-2 py-1 text-xs"
             />
             <div className="flex justify-end gap-1">
-              <Button type="button" variant="ghost" size="xs" onClick={() => setCreating(false)}>
+              <Button type="button" variant="ghost" size="xs" onClick={() => changeCreating(false)}>
                 Cancel
               </Button>
-              <Button type="button" size="xs" disabled={!title.trim() || create.isPending} onClick={() => create.mutate(title)}>
-                {create.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
+              <Button type="button" size="xs" disabled={!title.trim() || boundary.pending} onClick={() => createQueue()}>
+                {boundary.pending && <Loader2 className="h-3 w-3 animate-spin" />}
                 Create
               </Button>
             </div>
@@ -397,7 +410,7 @@ function QueuePicker({
             <button
               type="button"
               className="flex w-full items-center gap-1.5 rounded-sm px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-              onClick={() => setCreating(true)}
+              onClick={() => changeCreating(true)}
             >
               <Plus className="h-3.5 w-3.5" />
               New queue…
