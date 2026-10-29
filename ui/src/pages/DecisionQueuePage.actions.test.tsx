@@ -167,3 +167,20 @@ it("keeps late history in its original company's cache without borrowing it for 
   expect(host.textContent).not.toContain("Old company private history");
   expect(state.history.mock.calls.map(call => call[0])).toEqual(["c1", "c2"]);
 });
+
+it.each(["click", "success", "failure"])("fences actual queue %s when only the real-session marker changes before commit", async mode => {
+  const value = { user: { id: "viewer1" }, session: { id: "paperclip:session:viewer1", userId: "viewer1", scopeKey: "a".repeat(64) } };
+  client.setQueryData(queryKeys.auth.session, value);
+  let settle!: () => void;
+  state.remove.mockImplementation(() => new Promise<void>((resolve, reject) => { settle = mode === "failure" ? () => reject(new Error("old failure")) : resolve; }));
+  await render(); await act(async () => button("Exclude").click()); await type("unchanged reason");
+  const submit = button("Exclude", true);
+  if (mode !== "click") await act(async () => submit.click());
+  await act(async () => {
+    client.setQueryData(queryKeys.auth.session, { ...value, session: { ...value.session, scopeKey: "b".repeat(64) } });
+    if (mode === "click") submit.click(); else settle();
+  }); await flush();
+  expect(state.remove).toHaveBeenCalledTimes(mode === "click" ? 0 : 1);
+  expect(state.toast).not.toHaveBeenCalled();
+  expect(document.querySelector("textarea")?.value).toBe("unchanged reason");
+});
