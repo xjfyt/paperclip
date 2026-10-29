@@ -1,8 +1,8 @@
-import { execFile } from "node:child_process";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import path from "node:path";
-import { promisify } from "node:util";
+import nativePath from "node:path";
+import { fixturePath as path, sandboxPath, shellExecutable, runLocalSandboxProcess } from "@paperclipai/adapter-utils/test-fixtures/local-sandbox";
+import { writeCliFixture } from "@paperclipai/adapter-utils/test-fixtures/native-cli";
 import { cleanupGitHubOperationLaunchers } from "@paperclipai/adapter-utils/execution-target";
 import type { CommandManagedRuntimeRunner } from "@paperclipai/adapter-utils/command-managed-runtime";
 import { describe, expect, it, vi } from "vitest";
@@ -80,33 +80,38 @@ describe("heartbeat GitHub launcher lifetime", () => {
 
 it("keeps anonymous wrappers usable after run cleanup and excludes sandbox image credentials", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "native-anonymous-github-"));
+  const remotePath = (file: string) => process.platform === "win32" ? `/${nativePath.parse(file).root[0]!.toLowerCase()}${sandboxPath(file)}` : file;
+  const hostPath = (file: string) => process.platform === "win32" && /^\/[a-z]\//i.test(file) ? `${file[1]}:${file.slice(2)}` : file;
+  const remoteRoot = remotePath(root);
   try {
     const bin = path.join(root, "bin");
     await mkdir(bin);
     await mkdir(path.join(root, ".config", "gh"), { recursive: true });
     await writeFile(path.join(root, ".config", "gh", "hosts.yml"), "ambient-image-secret");
-    await writeFile(path.join(bin, "gh"), `#!${process.execPath}
+    await writeCliFixture(path.join(bin, "gh"), `#!${process.execPath}
 const fs = require('node:fs');
-process.stdout.write(JSON.stringify({token:process.env.GH_TOKEN || '', githubToken:process.env.GITHUB_TOKEN || '', ssh:process.env.SSH_AUTH_SOCK, global:process.env.GIT_CONFIG_GLOBAL, imageConfig:fs.existsSync(process.env.GH_CONFIG_DIR + '/hosts.yml')}));`, { mode: 0o700 });
-    const imageEnv = { HOME: root, PATH: `${bin}:${path.dirname(process.execPath)}:/usr/bin:/bin`, GH_TOKEN: "ambient-token", GITHUB_TOKEN: "ambient-other-token", SSH_AUTH_SOCK: "/ambient/socket" };
+process.stdout.write(JSON.stringify({token:process.env.GH_TOKEN || '', githubToken:process.env.GITHUB_TOKEN || '', ssh:process.env.SSH_AUTH_SOCK, global:process.env.GIT_CONFIG_GLOBAL, imageConfig:fs.existsSync(process.env.GH_CONFIG_DIR + '/hosts.yml')}));`);
+    const imageEnv = { HOME: remoteRoot, PATH: `${remotePath(bin)}:${remotePath(nativePath.dirname(process.execPath))}:${process.platform === "win32" ? "/mingw64/bin:" : ""}/usr/bin:/bin`, GH_TOKEN: "ambient-token", GITHUB_TOKEN: "ambient-other-token", SSH_AUTH_SOCK: "/ambient/socket" };
     const execute: CommandManagedRuntimeRunner["execute"] = async (input) => {
-      const startedAt = new Date().toISOString();
-      const child = promisify(execFile)(input.command, input.args ?? [], { cwd: input.cwd ?? root, env: { ...imageEnv, ...input.env }, timeout: 15_000 });
-      child.child.stdin?.on("error", () => undefined);
-      child.child.stdin?.end(input.stdin ?? "");
-      const result = await child;
-      return { ...result, exitCode: 0, signal: null, timedOut: false, pid: null, startedAt };
+      const launcher = process.platform === "win32" && ["git", "gh"].includes(path.basename(input.command));
+      return runLocalSandboxProcess("heartbeat-anonymous-github-fixture", launcher ? shellExecutable("sh") : shellExecutable(input.command),
+        launcher ? ["-c", 'exec node "$@"', "fixture-node", input.command, ...(input.args ?? [])] : input.args ?? [], {
+          cwd: hostPath(input.cwd ?? remoteRoot),
+          env: { ...(process.platform === "win32" ? { SystemRoot: process.env.SystemRoot ?? "C:\\Windows", PATHEXT: process.env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD" } : {}), ...imageEnv, ...input.env },
+          inheritEnv: false, stdin: input.stdin, timeoutSec: 15, graceSec: 1, onLog: async () => {},
+        });
     };
-    const sandboxTarget = { ...target, remoteCwd: root, runner: { execute } };
+    const sandboxTarget = { ...target, remoteCwd: remoteRoot, runner: { execute } };
     const base = { native: true, githubConfigured: false, agentId: "agent-a", target: sandboxTarget,
-      cwd: root, env: imageEnv, brokerUrl: "https://unused.invalid", createBrokerToken: () => { throw new Error("must not mint a capability"); } };
+      cwd: remoteRoot, env: imageEnv, brokerUrl: "https://unused.invalid", createBrokerToken: () => { throw new Error("must not mint a capability"); } };
     const first = await prepareHeartbeatGitHubLaunchers({ ...base, runId: "run-one" });
     await cleanupGitHubOperationLaunchers({ runId: "run-one", target: sandboxTarget });
     const second = await prepareHeartbeatGitHubLaunchers({ ...base, runId: "run-two" });
     expect(first.env.PAPERCLIP_GITHUB_LAUNCHER_DIR).toBe(second.env.PAPERCLIP_GITHUB_LAUNCHER_DIR);
-    expect(await readFile(path.join(first.env.PAPERCLIP_GITHUB_LAUNCHER_DIR, "gh"), "utf8")).not.toContain("ambient-token");
+    expect(await readFile(hostPath(path.join(first.env.PAPERCLIP_GITHUB_LAUNCHER_DIR, "gh")), "utf8")).not.toContain("ambient-token");
     // A still-live provider uses its first-turn environment, not the new one.
     const command = await execute({ command: path.join(first.env.PAPERCLIP_GITHUB_LAUNCHER_DIR, "gh"), env: first.env });
+    expect(command.exitCode, command.stderr).toBe(0);
     expect(JSON.parse(command.stdout)).toEqual({ token: "", githubToken: "", ssh: "", global: "/dev/null", imageConfig: false });
     const changedPath = await prepareHeartbeatGitHubLaunchers({ ...base, runId: "run-three", env: { ...imageEnv, PATH: `${imageEnv.PATH}:/extra` } });
     expect(changedPath.env.PAPERCLIP_GITHUB_LAUNCHER_DIR).not.toBe(first.env.PAPERCLIP_GITHUB_LAUNCHER_DIR);

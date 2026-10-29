@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import path from "node:path";
 import { parseGitDescribeVersion, resolveServerVersion } from "../version.js";
 
 describe("parseGitDescribeVersion", () => {
@@ -193,6 +194,7 @@ describe("resolveServerVersion", () => {
   it("uses git metadata for source checkouts whose path contains node_modules", () => {
     const debugLog = vi.fn();
     const gitDescribeCommand = vi.fn(() => "v2026.626.0-58-g518fc71ce\n");
+    const sourceRoot = path.resolve("/tmp/node_modules/source/paperclip");
 
     expect(
       resolveServerVersion({
@@ -200,8 +202,8 @@ describe("resolveServerVersion", () => {
         packageVersion: "2026.707.0-canary.12",
         debugLog,
         gitDescribeCommand,
-        packageRoot: "/tmp/node_modules/source/paperclip/server",
-        pathExists: (path) => path === "/tmp/node_modules/source/paperclip/.git",
+        packageRoot: path.join(sourceRoot, "server"),
+        pathExists: (candidate) => candidate === path.join(sourceRoot, ".git"),
         realpath: (path) => path,
       }),
     ).toBe("2026.626.0+58.git.518fc71ce");
