@@ -1,5 +1,5 @@
 import { configuredEnvironmentProjection } from "../../vendor/paperclip-runner/index.js";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { PgDialect } from "drizzle-orm/pg-core";
 import type { SQL } from "drizzle-orm";
@@ -371,13 +371,22 @@ import {
   shouldRestoreNativeHarnessBackupIntoSandbox,
 } from "./native-session-executor.js";
 
+// Only an unclosed cancellation fixture engages this boundary. Its cleanup
+// failure quarantines later cases before their shared mocks can be reset.
+let cancellationFixtureBoundary: (() => void | Promise<void>) | null = null;
+const cancellationRealTimers = { setTimeout, clearTimeout };
 beforeEach(() => {
-  state.bundledPackManifestPath = null;
-  state.bundledRunnerBinary = null;
-  state.createAssignedMcpTools.mockReset();
-  state.resolveRunnerBinary.mockReset().mockReturnValue("/tmp/paperclip-runnerd");
-  state.resolveCurrentWakeCommentsBinding.mockReset().mockResolvedValue(null);
-  state.assertCurrentWakeCommentsRead.mockReset().mockResolvedValue(undefined);
+  const reset = () => {
+    state.bundledPackManifestPath = null;
+    state.bundledRunnerBinary = null;
+    state.createAssignedMcpTools.mockReset();
+    state.resolveRunnerBinary.mockReset().mockReturnValue("/tmp/paperclip-runnerd");
+    state.resolveCurrentWakeCommentsBinding.mockReset().mockResolvedValue(null);
+    state.assertCurrentWakeCommentsRead.mockReset().mockResolvedValue(undefined);
+  };
+  const boundary = cancellationFixtureBoundary?.();
+  if (boundary) return boundary.then(reset);
+  reset();
 });
 
 describe("first meaningful native agent event", () => {
@@ -5159,7 +5168,7 @@ type LeaseCoordinator = {
 function leaseDb(
   boundExecution: NativeExecutionInputV1 = execution,
   coordinatorOverrides: Partial<LeaseCoordinator> = {},
-  runResultJson: Record<string, unknown> = {},
+  runResultJson: Record<string, unknown> | (() => Record<string, unknown>) = {},
   updates: Array<{ table: unknown; values: Record<string, unknown> }> = [],
   runnerProfileJson: Record<string, unknown> = {},
   runStatus = "running",
@@ -5205,7 +5214,7 @@ function leaseDb(
                   agentId: boundExecution.binding.agentId,
                   companyId: boundExecution.binding.companyId,
                   nativeIssueId: boundExecution.binding.issueId,
-                  resultJson: runResultJson,
+                  resultJson: typeof runResultJson === "function" ? runResultJson() : runResultJson,
                   runnerProfileJson,
                   runtimeMode: "native",
                   status: runStatus,
@@ -5968,17 +5977,144 @@ describe("native resumed preparation timing", () => {
 });
 
 describe("native session cancellation", () => {
-  beforeEach(() => {
+  type CancellationOwner = {
+    closing: boolean;
+    closed: boolean;
+    gates: Set<() => void>;
+    bodies: Set<Promise<unknown>>;
+    children: Set<Promise<unknown>>;
+    cleanups: Set<() => Promise<void>>;
+    drain?: Promise<void>;
+    drainRejected?: boolean;
+    waiting?: Promise<void>;
+    failure?: Error;
+  };
+  let owner: CancellationOwner | null = null;
+  let finishCancellationBackend: (() => void) | null = null;
+  function currentCancellationOwner(): CancellationOwner {
+    if (!owner || owner.closed) throw new Error("Cancellation work started outside its owned fixture");
+    return owner;
+  }
+  function ownCancellationWork<T>(owned: CancellationOwner, bucket: "bodies" | "children", start: () => Promise<T>): Promise<T> {
+    if (owned.closed) throw new Error("Cancellation work registered after teardown");
+    const running = start();
+    // Return the original promise to Vitest/assertions. This non-rejecting
+    // observation records every outcome immediately, including late failures.
+    owned[bucket].add(running.then(value => ({ value }), error => ({ error })));
+    return running;
+  }
+  function ownedCancellationBody<Args extends unknown[]>(body: (...args: Args) => Promise<void>) {
+    return (...args: Args) => ownCancellationWork(currentCancellationOwner(), "bodies", () => body(...args));
+  }
+  function cancellationGate() {
+    const owned = currentCancellationOwner();
+    let resolve!: () => void;
+    const promise = new Promise<void>(done => { resolve = done; });
+    const release = () => resolve();
+    owned.gates.add(release);
+    // A timed-out body can still resume and create another gate. Closing
+    // fixtures release it synchronously instead of waiting on their old body.
+    if (owned.closing) release();
+    return { promise, release };
+  }
+  function addCancellationCleanup(cleanup: () => Promise<void>) {
+    currentCancellationOwner().cleanups.add(cleanup);
+  }
+  function executeCancellationSession(input: Parameters<typeof executePaperclipNativeSession>[0]) {
+    return ownCancellationWork(currentCancellationOwner(), "children", () => executePaperclipNativeSession(input));
+  }
+  function cancelCancellationSession(runId: string, reason: string): Promise<boolean>;
+  function cancelCancellationSession(runId: string, reason: string, options: Parameters<typeof cancelNativeSession>[2]): ReturnType<typeof cancelNativeSession>;
+  function cancelCancellationSession(runId: string, reason: string, options?: Parameters<typeof cancelNativeSession>[2]) {
+    const owned = currentCancellationOwner();
+    return options
+      ? ownCancellationWork(owned, "children", () => cancelNativeSession(runId, reason, options))
+      : ownCancellationWork(owned, "children", () => cancelNativeSession(runId, reason));
+  }
+  async function drainCancellationOwner(owned: CancellationOwner) {
+    owned.closing = true;
+    try {
+      while (true) {
+        if (vi.isFakeTimers()) vi.useRealTimers();
+        for (const release of owned.gates) release();
+        const bodies = [...owned.bodies], children = [...owned.children];
+        if (bodies.length || children.length) {
+          await Promise.all([...bodies, ...children]);
+          for (const done of bodies) owned.bodies.delete(done);
+          for (const done of children) owned.children.delete(done);
+          continue;
+        }
+        await Promise.resolve();
+        if (owned.bodies.size || owned.children.size) continue;
+        const cleanup = [...owned.cleanups].at(-1);
+        if (!cleanup) break;
+        await cleanup();
+        owned.cleanups.delete(cleanup);
+      }
+      owned.closed = true;
+      finishCancellationBackend = null;
+      state.release = null;
+    } catch (error) {
+      owned.drainRejected = true;
+      owned.failure ??= new Error("Cancellation fixture cleanup failed", { cause: error });
+      throw owned.failure;
+    }
+  }
+  function closeCancellationOwner(owned: CancellationOwner, retry = false): Promise<void> {
+    if (owned.failure && !retry) return Promise.reject(owned.failure);
+    if (owned.closed) return Promise.resolve();
+    if (!owned.drain || owned.drainRejected) {
+      owned.drainRejected = false;
+      owned.drain = drainCancellationOwner(owned);
+    }
+    if (owned.waiting && !retry) return owned.waiting;
+    // Stay within the existing hook deadline and latch before Vitest abandons
+    // this hook. Later beforeEach calls reject immediately, rather than paying
+    // another deadline for each remaining case. The real drain keeps running.
+    const budget = 9_900;
+    const waiting = new Promise<void>((resolve, reject) => {
+      const timer = cancellationRealTimers.setTimeout(() => {
+        owned.failure ??= new Error("Cancellation fixture cleanup exceeded its existing hook deadline");
+        reject(owned.failure);
+      }, budget);
+      owned.drain!.then(() => {
+        cancellationRealTimers.clearTimeout(timer); resolve();
+      }, error => {
+        cancellationRealTimers.clearTimeout(timer); reject(error);
+      });
+    });
+    if (!retry) owned.waiting = waiting;
+    return waiting;
+  }
+  cancellationFixtureBoundary = () => {
+    if (!owner) return;
+    if (owner.failure) throw owner.failure;
+    if (!owner.closed) return closeCancellationOwner(owner);
+  };
+  afterEach(async () => { if (owner) await closeCancellationOwner(owner); });
+  afterAll(async () => {
+    // One independent bounded cleanup attempt; never reset the failure latch
+    // to make later cases appear safe after an abandoned/failed teardown.
+    if (owner && !owner.closed) await closeCancellationOwner(owner, true);
+  });
+  beforeEach(async () => {
+    if (owner) await closeCancellationOwner(owner);
+    owner = { closing: false, closed: false, gates: new Set(), bodies: new Set(), children: new Set(), cleanups: new Set() };
+    const finished = cancellationGate();
+    const finish = finished.release;
+    finishCancellationBackend = finish;
     state.cancel.mockReset().mockReturnValue({ cleanup: Promise.resolve() });
     state.persistActivity.mockClear();
     state.publishActivity.mockClear();
     state.release = null;
     state.execute.mockReset().mockImplementation(async (options) => {
-      options.onSession?.({ cancel: state.cancel });
-      await new Promise<void>((resolve) => {
-        state.release = resolve;
-      });
-      options.onSession?.(null);
+      await options.onSession?.({ cancel: state.cancel });
+      // Readiness means async registration accepted the handle, not merely
+      // that the mock backend was entered. The finish gate already exists so
+      // failure before readiness can still drain this exact execution.
+      state.release = finish;
+      await finished.promise;
+      await options.onSession?.(null);
       return {
         result: { summary: "cancelled" },
         terminal: { runTerminalState: "cancelled" },
@@ -5998,14 +6134,18 @@ describe("native session cancellation", () => {
     { useRunnerd: false, durableIntentVisible: false },
     { useRunnerd: true, durableIntentVisible: true },
     { useRunnerd: false, durableIntentVisible: true },
-  ])("waits for an in-flight startup handle before acknowledging Stop (runnerd=$useRunnerd, durable intent=$durableIntentVisible)", async ({ useRunnerd, durableIntentVisible }) => {
+  ])("waits for an in-flight startup handle before acknowledging Stop (runnerd=$useRunnerd, durable intent=$durableIntentVisible)", ownedCancellationBody(async ({ useRunnerd, durableIntentVisible }: { useRunnerd: boolean; durableIntentVisible: boolean }) => {
     const root = await mkdtemp(join(tmpdir(), "native-startup-stop-"));
     const previous = process.env.PAPERCLIP_RUNNER_STATE_DIR;
     process.env.PAPERCLIP_RUNNER_STATE_DIR = root;
-    let open!: () => void, started!: () => void, finish!: () => void;
-    const opening = new Promise<void>(resolve => { open = resolve; });
-    const admitted = new Promise<void>(resolve => { started = resolve; });
-    const finished = new Promise<void>(resolve => { finish = resolve; });
+    addCancellationCleanup(async () => {
+      if (previous === undefined) delete process.env.PAPERCLIP_RUNNER_STATE_DIR;
+      else process.env.PAPERCLIP_RUNNER_STATE_DIR = previous;
+      await rm(root, { recursive: true, force: true });
+    });
+    const openingGate = cancellationGate(), admittedGate = cancellationGate(), finishedGate = cancellationGate();
+    const open = openingGate.release, started = admittedGate.release, finish = finishedGate.release;
+    const opening = openingGate.promise, admitted = admittedGate.promise, finished = finishedGate.promise;
     const submitTurn = vi.fn();
     state.execute.mockReset().mockImplementationOnce(async (options) => {
       started();
@@ -6021,29 +6161,35 @@ describe("native session cancellation", () => {
         highestContiguousSourceSeq: 0,
       };
     });
-    const runResultJson: Record<string, unknown> = {};
-    const running = executePaperclipNativeSession({
-      db: leaseDb(execution, {}, runResultJson), execution, runnerInstanceId: "runner", useRunnerd,
+    const persistence = cancellationDb();
+    const executionUpdates: Array<{ table: unknown; values: Record<string, unknown> }> = [];
+    const readRunResult = () => {
+      const committed = persistence.getResultJson();
+      const intent = committed.nativeCancellation as Record<string, unknown> | undefined;
+      // Exercise an in-memory handoff with/without the pending intent visible,
+      // but both readers must see the same committed acknowledgement afterward.
+      return durableIntentVisible || intent?.dispatchState === "acknowledged" ? committed : {};
+    };
+    const running = executeCancellationSession({
+      db: leaseDb(execution, {}, readRunResult, executionUpdates), execution, runnerInstanceId: "runner", useRunnerd,
     });
     const outcome = running.catch(error => error);
-    const persistence = cancellationDb();
     let stopping: ReturnType<typeof cancelNativeSession> | undefined;
     let acknowledged = false;
     try {
       await admitted;
-      await expect(executePaperclipNativeSession({
+      await expect(executeCancellationSession({
         db: leaseDb(), execution, runnerInstanceId: "duplicate-runner", useRunnerd,
       })).rejects.toThrow("native_session_supervisor_busy");
-      stopping = cancelNativeSession(execution.binding.runId, "operator Stop during startup", {
+      stopping = cancelCancellationSession(execution.binding.runId, "operator Stop during startup", {
         db: persistence.db, scope: "run",
       });
-      void stopping.then(() => { acknowledged = true; });
+      // This is only an acknowledgement observer; the original stopping
+      // promise is asserted and joined below, including its rejection.
+      void stopping.then(() => { acknowledged = true; }, error => ({ error }));
       await new Promise(resolve => setImmediate(resolve));
       expect(acknowledged).toBe(false);
       expect(persistence.getResultJson().nativeCancellation).toMatchObject({ dispatchState: "pending" });
-      // Production execution sees the same durable Stop intent as its API caller.
-      // Exercise that read as well as the in-memory startup handoff.
-      if (durableIntentVisible) Object.assign(runResultJson, persistence.getResultJson());
       open();
       await expect(stopping).resolves.toMatchObject({ dispatched: true });
       expect(state.cancel).toHaveBeenCalledOnce();
@@ -6051,25 +6197,30 @@ describe("native session cancellation", () => {
         dispatchState: "acknowledged", dispatched: true,
       });
       finish();
-      await outcome;
+      const cancelled = await outcome;
+      expect(executionUpdates.some(update => update.table === heartbeatRuns && update.values.status === "failed")).toBe(false);
+      expect(cancelled).toMatchObject({ name: "NativeCancellationPendingRecoveryError" });
       expect(submitTurn).not.toHaveBeenCalled();
     } finally {
       open(); finish();
       await outcome;
-      await stopping;
-      if (previous === undefined) delete process.env.PAPERCLIP_RUNNER_STATE_DIR;
-      else process.env.PAPERCLIP_RUNNER_STATE_DIR = previous;
-      await rm(root, { recursive: true, force: true });
-    }
-  });
 
-  it.each([true, false])("fences a late startup even when Stop reaches its acknowledgement deadline (runnerd=%s)", async (useRunnerd) => {
+      await stopping?.then(value => ({ value }), error => ({ error }));
+    }
+  }));
+
+  it.each([true, false])("fences a late startup even when Stop reaches its acknowledgement deadline (runnerd=%s)", ownedCancellationBody(async (useRunnerd: boolean) => {
     const root = await mkdtemp(join(tmpdir(), "native-late-startup-stop-"));
     const previous = process.env.PAPERCLIP_RUNNER_STATE_DIR;
     process.env.PAPERCLIP_RUNNER_STATE_DIR = root;
-    let open!: () => void, started!: () => void;
-    const opening = new Promise<void>(resolve => { open = resolve; });
-    const admitted = new Promise<void>(resolve => { started = resolve; });
+    addCancellationCleanup(async () => {
+      if (previous === undefined) delete process.env.PAPERCLIP_RUNNER_STATE_DIR;
+      else process.env.PAPERCLIP_RUNNER_STATE_DIR = previous;
+      await rm(root, { recursive: true, force: true });
+    });
+    const openingGate = cancellationGate(), admittedGate = cancellationGate();
+    const open = openingGate.release, started = admittedGate.release;
+    const opening = openingGate.promise, admitted = admittedGate.promise;
     const submitTurn = vi.fn();
     state.execute.mockReset().mockImplementationOnce(async (options) => {
       started(); await opening;
@@ -6077,106 +6228,195 @@ describe("native session cancellation", () => {
       submitTurn();
       throw new Error("a stopped startup must not reach prompt submission");
     });
-    const outcome = executePaperclipNativeSession({ db: leaseDb(), execution, runnerInstanceId: "runner", useRunnerd }).catch(error => error);
     const persistence = cancellationDb();
+    const executionUpdates: Array<{ table: unknown; values: Record<string, unknown> }> = [];
+    const outcome = executeCancellationSession({
+      db: leaseDb(execution, {}, () => persistence.getResultJson(), executionUpdates),
+      execution, runnerInstanceId: "runner", useRunnerd,
+    }).catch(error => error);
     try {
       await admitted;
       vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-      const stopping = cancelNativeSession(execution.binding.runId, "operator Stop", { db: persistence.db, scope: "run" }).catch(error => error);
+      const stopping = cancelCancellationSession(execution.binding.runId, "operator Stop", { db: persistence.db, scope: "run" }).catch(error => error);
       // Let the durable intent commit before advancing the startup deadline.
       await new Promise(resolve => setImmediate(resolve));
       await vi.advanceTimersByTimeAsync(30_000);
       expect(await stopping).toMatchObject({ name: "NativeCancellationPendingRecoveryError" });
       expect(persistence.getResultJson().nativeCancellation).toMatchObject({ dispatchState: "pending" });
       vi.useRealTimers();
-      open(); await outcome;
+      open();
+      const cancelled = await outcome;
+      expect(executionUpdates.some(update => update.table === heartbeatRuns && update.values.status === "failed")).toBe(false);
+      expect(cancelled).toMatchObject({ name: "NativeCancellationPendingRecoveryError" });
       expect(state.cancel).toHaveBeenCalledOnce();
       expect(submitTurn).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers(); open(); await outcome;
+    }
+  }));
+
+  it.each([
+    ["missing", null],
+    ["schema", "other.schema"],
+    ["companyId", "foreign-company"],
+    ["runId", "foreign-run"],
+    ["issueId", "foreign-issue"],
+    ["scope", "issue"],
+    ["intentAuditId", ""],
+    ["dispatchState", "unverified"],
+  ])("does not recover a startup Stop from an invalid durable intent: %s", ownedCancellationBody(async (field: string, value: unknown) => {
+    const root = await mkdtemp(join(tmpdir(), "native-invalid-startup-stop-"));
+    const previous = process.env.PAPERCLIP_RUNNER_STATE_DIR;
+    process.env.PAPERCLIP_RUNNER_STATE_DIR = root;
+    addCancellationCleanup(async () => {
       if (previous === undefined) delete process.env.PAPERCLIP_RUNNER_STATE_DIR;
       else process.env.PAPERCLIP_RUNNER_STATE_DIR = previous;
       await rm(root, { recursive: true, force: true });
-    }
-  });
+    });
+    // Match the adjacent failure-projection unit seam, while retaining the
+    // exact error assertion so incomplete mocks cannot masquerade as Stop.
+    const updateIssue = vi.fn(async () => ({ status: "blocked", statusVersion: 7 }));
+    const issueService = vi.spyOn(issueServiceModule, "issueService").mockReturnValue({
+      update: updateIssue,
+    } as unknown as ReturnType<typeof issueServiceModule.issueService>);
+    addCancellationCleanup(async () => { issueService.mockRestore(); });
+    const opening = cancellationGate(), admitted = cancellationGate();
+    const submitTurn = vi.fn();
+    state.execute.mockReset().mockImplementationOnce(async options => {
+      admitted.release(); await opening.promise;
+      await options.onSession({ cancel: state.cancel });
+      submitTurn();
+      throw new Error("a stopped startup must not reach prompt submission");
+    });
+    const persistence = cancellationDb();
+    const executionUpdates: Array<{ table: unknown; values: Record<string, unknown> }> = [];
+    // Only the execution reader sees the corrupted row. The Stop API still
+    // creates its real intent and acknowledgement through its normal writes.
+    const readRunResult = () => {
+      const committed = persistence.getResultJson();
+      return {
+        ...committed,
+        nativeCancellation: field === "missing" ? undefined : {
+          ...(committed.nativeCancellation as Record<string, unknown> | undefined), [field]: value,
+        },
+      };
+    };
+    const outcome = executeCancellationSession({
+      db: leaseDb(execution, {}, readRunResult, executionUpdates), execution,
+      runnerInstanceId: "runner", useRunnerd: true,
+    }).catch(error => error);
+    try {
+      await admitted.promise;
+      const stopping = cancelCancellationSession(execution.binding.runId, "operator Stop", { db: persistence.db, scope: "run" });
+      await new Promise(resolve => setImmediate(resolve));
+      expect(persistence.getResultJson().nativeCancellation).toMatchObject({ dispatchState: "pending" });
+      opening.release();
+      await expect(stopping).resolves.toMatchObject({ dispatched: true });
+      expect(persistence.getResultJson().nativeCancellation).toMatchObject({ dispatchState: "acknowledged" });
+      expect(await outcome).toMatchObject({ name: "Error", message: "native_session_cancelled" });
+      expect(executionUpdates.some(update => update.table === heartbeatRuns && update.values.status === "failed")).toBe(true);
+      expect(executionUpdates.some(update => update.table === nativeRunFinalizations && update.values.failureCode === "native_retry_cancelled")).toBe(false);
+      expect(updateIssue).toHaveBeenCalledWith(execution.binding.issueId, { status: "blocked" }, expect.anything());
+      expect(state.cancel).toHaveBeenCalledOnce();
+      expect(submitTurn).not.toHaveBeenCalled();
+    } finally { opening.release(); await outcome; }
+  }));
 
-  it("routes control-plane cancellation to the active normalized session and removes the handle", async () => {
-    const running = executePaperclipNativeSession({
+  it("routes control-plane cancellation to the active normalized session and removes the handle", ownedCancellationBody(async () => {
+    const running = executeCancellationSession({
       db: leaseDb(),
       execution,
       runnerInstanceId: "runner",
     });
-    await vi.waitFor(() => expect(state.release).toBeTypeOf("function"));
+    const releaseBackend = finishCancellationBackend;
+    try {
+      await vi.waitFor(() => expect(state.release).toBeTypeOf("function"));
 
-    await expect(
-      cancelNativeSession(execution.binding.runId, "budget hard stop"),
-    ).resolves.toBe(true);
-    await expect(
-      cancelNativeSession(execution.binding.runId, "duplicate budget stop"),
-    ).resolves.toBe(true);
-    expect(state.cancel).toHaveBeenCalledWith({
-      reason: "budget hard stop",
-      signal: expect.any(AbortSignal),
-    });
-    expect(state.cancel).toHaveBeenCalledTimes(1);
+      await expect(
+        cancelCancellationSession(execution.binding.runId, "budget hard stop"),
+      ).resolves.toBe(true);
+      await expect(
+        cancelCancellationSession(execution.binding.runId, "duplicate budget stop"),
+      ).resolves.toBe(true);
+      expect(state.cancel).toHaveBeenCalledWith({
+        reason: "budget hard stop",
+        signal: expect.any(AbortSignal),
+      });
+      expect(state.cancel).toHaveBeenCalledTimes(1);
 
-    state.release?.();
-    await running;
-    await expect(
-      cancelNativeSession(execution.binding.runId, "late cancel"),
-    ).resolves.toBe(false);
-  });
+      state.release?.();
+      await running;
+      await expect(
+        cancelCancellationSession(execution.binding.runId, "late cancel"),
+      ).resolves.toBe(false);
+    } finally {
+      releaseBackend?.();
+      await running.then(value => ({ value }), error => ({ error }));
+    }
+  }));
 
-  it("allows cancellation to be retried when the session dispatch fails", async () => {
+  it("allows cancellation to be retried when the session dispatch fails", ownedCancellationBody(async () => {
     state.cancel.mockImplementationOnce(() => {
       throw new Error("transport unavailable");
     });
-    const running = executePaperclipNativeSession({
+    const running = executeCancellationSession({
       db: leaseDb(),
       execution,
       runnerInstanceId: "runner",
     });
-    await vi.waitFor(() => expect(state.release).toBeTypeOf("function"));
+    const releaseBackend = finishCancellationBackend;
+    try {
+      await vi.waitFor(() => expect(state.release).toBeTypeOf("function"));
 
-    await expect(
-      cancelNativeSession(execution.binding.runId, "budget hard stop"),
-    ).rejects.toThrow("transport unavailable");
-    await expect(
-      cancelNativeSession(execution.binding.runId, "retry budget stop"),
-    ).resolves.toBe(true);
-    expect(state.cancel).toHaveBeenNthCalledWith(2, {
-      reason: "retry budget stop",
-      signal: expect.any(AbortSignal),
-    });
+      await expect(
+        cancelCancellationSession(execution.binding.runId, "budget hard stop"),
+      ).rejects.toThrow("transport unavailable");
+      await expect(
+        cancelCancellationSession(execution.binding.runId, "retry budget stop"),
+      ).resolves.toBe(true);
+      expect(state.cancel).toHaveBeenNthCalledWith(2, {
+        reason: "retry budget stop",
+        signal: expect.any(AbortSignal),
+      });
 
-    state.release?.();
-    await running;
-  });
+      state.release?.();
+      await running;
+    } finally {
+      releaseBackend?.();
+      await running.then(value => ({ value }), error => ({ error }));
+    }
+  }));
 
-  it("observes cleanup failure after cancellation authority is committed", async () => {
+  it("observes cleanup failure after cancellation authority is committed", ownedCancellationBody(async () => {
     state.cancel.mockImplementationOnce(() => ({
       cleanup: Promise.reject(new Error("provider cleanup failed")),
     }));
-    const running = executePaperclipNativeSession({
+    const running = executeCancellationSession({
       db: leaseDb(),
       execution,
       runnerInstanceId: "runner",
     });
-    await vi.waitFor(() => expect(state.release).toBeTypeOf("function"));
+    const releaseBackend = finishCancellationBackend;
+    try {
+      await vi.waitFor(() => expect(state.release).toBeTypeOf("function"));
 
-    await expect(
-      cancelNativeSession(execution.binding.runId, "budget hard stop"),
-    ).resolves.toBe(true);
+      await expect(
+        cancelCancellationSession(execution.binding.runId, "budget hard stop"),
+      ).resolves.toBe(true);
 
-    state.release?.();
-    await running;
-  });
+      state.release?.();
+      await running;
+    } finally {
+      releaseBackend?.();
+      await running.then(value => ({ value }), error => ({ error }));
+    }
+  }));
 
-  it("binds cancellation to nativeIssueId and merges metadata under a row lock", async () => {
+  it("binds cancellation to nativeIssueId and merges metadata under a row lock", ownedCancellationBody(async () => {
     const persistence = cancellationDb();
 
     await expect(
-      cancelNativeSession(execution.binding.runId, "budget hard stop", {
+      cancelCancellationSession(execution.binding.runId, "budget hard stop", {
         db: persistence.db,
         scope: "run",
       }),
@@ -6210,158 +6450,164 @@ describe("native session cancellation", () => {
       }),
     );
     expect(state.publishActivity).toHaveBeenCalledTimes(2);
-  });
+  }));
 
-  it.each(["terminal_failure", "observed", "committed"])("rejects retry phase %s that changed after caller reservation, before any native effect", async phase => {
+  it.each(["terminal_failure", "observed", "committed"])("rejects retry phase %s that changed after caller reservation, before any native effect", ownedCancellationBody(async (phase: string) => {
     const id = "11111111-1111-4111-8111-111111111111";
     const persistence = cancellationDb({ status: "failed",
       coordinator: { runId: execution.binding.runId, assessmentId: null, phase, failureCode: "board_recovery" },
       resultJson: { startupCancellation: { cancellationRequestId: id, retryCancellation: true } } });
-    await expect(cancelNativeSession(execution.binding.runId, "operator Stop", { db: persistence.db,
+    await expect(cancelCancellationSession(execution.binding.runId, "operator Stop", { db: persistence.db,
       scope: "run", cancellationRequestId: id })).rejects.toMatchObject({ status: 409, message: "Native retry is no longer cancellable" });
     expect(persistence.updates).toEqual([]);
     expect(state.cancel).not.toHaveBeenCalled();
     expect(state.persistActivity).not.toHaveBeenCalled();
-  });
+  }));
 
-  it("does not mistake a recovered running attempt for the failed retry that reserved Stop", async () => {
+  it("does not mistake a recovered running attempt for the failed retry that reserved Stop", ownedCancellationBody(async () => {
     const id = "11111111-1111-4111-8111-111111111111";
     const persistence = cancellationDb({ status: "running",
       coordinator: { runId: execution.binding.runId, assessmentId: null, phase: "observed" },
       resultJson: { startupCancellation: { cancellationRequestId: id, retryCancellation: true } } });
-    await expect(cancelNativeSession(execution.binding.runId, "operator Stop", { db: persistence.db,
+    await expect(cancelCancellationSession(execution.binding.runId, "operator Stop", { db: persistence.db,
       scope: "run", cancellationRequestId: id })).rejects.toMatchObject({ status: 409 });
     expect(persistence.updates).toEqual([]);
     expect(state.cancel).not.toHaveBeenCalled();
-  });
+  }));
 
-  it("fences a failed retry at dispatch and preserves the same audited intent on replay", async () => {
+  it("fences a failed retry at dispatch and preserves the same audited intent on replay", ownedCancellationBody(async () => {
     const id = "11111111-1111-4111-8111-111111111111";
     const persistence = cancellationDb({ status: "failed",
       coordinator: { runId: execution.binding.runId, assessmentId: null, phase: "retryable_failure" },
       resultJson: { startupCancellation: { cancellationRequestId: id, retryCancellation: true } } });
-    const first = await cancelNativeSession(execution.binding.runId, "operator Stop", { db: persistence.db, scope: "run", cancellationRequestId: id });
+    const first = await cancelCancellationSession(execution.binding.runId, "operator Stop", { db: persistence.db, scope: "run", cancellationRequestId: id });
     expect(persistence.updates).toContainEqual(expect.objectContaining({ table: nativeRunFinalizations,
       values: expect.objectContaining({ phase: "terminal_failure", failureCode: "native_retry_cancelled", nextAttemptAt: null }) }));
     const writes = persistence.getResultJsonUpdateCount();
-    await expect(cancelNativeSession(execution.binding.runId, "retry Stop", { db: persistence.db,
+    await expect(cancelCancellationSession(execution.binding.runId, "retry Stop", { db: persistence.db,
       scope: "run", cancellationRequestId: id })).resolves.toMatchObject({ auditId: first.auditId });
     expect(persistence.getResultJsonUpdateCount()).toBe(writes);
-  });
+  }));
 
-  it("uses the reserved caller UUID and permits same-intent and default retries", async () => {
+  it("uses the reserved caller UUID and permits same-intent and default retries", ownedCancellationBody(async () => {
     const id = "11111111-1111-4111-8111-111111111111";
     const persistence = cancellationDb({ resultJson: { startupCancellation: { cancellationRequestId: id } } });
-    await cancelNativeSession(execution.binding.runId, "operator Stop", { db: persistence.db, scope: "run", cancellationRequestId: id });
+    await cancelCancellationSession(execution.binding.runId, "operator Stop", { db: persistence.db, scope: "run", cancellationRequestId: id });
     expect(persistence.getResultJson().nativeCancellation).toMatchObject({ intentId: `native-cancellation:${id}` });
     const writes = persistence.getResultJsonUpdateCount();
-    await cancelNativeSession(execution.binding.runId, "same request", { db: persistence.db, scope: "run", cancellationRequestId: id });
-    await cancelNativeSession(execution.binding.runId, "default retry", { db: persistence.db, scope: "run" });
+    await cancelCancellationSession(execution.binding.runId, "same request", { db: persistence.db, scope: "run", cancellationRequestId: id });
+    await cancelCancellationSession(execution.binding.runId, "default retry", { db: persistence.db, scope: "run" });
     expect(persistence.getResultJsonUpdateCount()).toBe(writes);
-    await expect(cancelNativeSession(execution.binding.runId, "foreign caller", {
+    await expect(cancelCancellationSession(execution.binding.runId, "foreign caller", {
       db: persistence.db, scope: "run", cancellationRequestId: "22222222-2222-4222-8222-222222222222",
     })).rejects.toMatchObject({ status: 409 });
     expect(persistence.getResultJsonUpdateCount()).toBe(writes);
-  });
+  }));
 
   it.each([{}, { startupCancellation: { requestedAt: "prior" } },
     { startupCancellation: { cancellationRequestId: "other" } },
     { startupCancellation: { cancellationRequestId: "11111111-1111-4111-8111-111111111111" }, nativeCancellation: { intentId: "foreign" } },
-  ])("rejects missing or raced caller ownership under the intent lock: %j", async resultJson => {
+  ])("rejects missing or raced caller ownership under the intent lock: %j", ownedCancellationBody(async (resultJson: Record<string, unknown>) => {
     const persistence = cancellationDb({ resultJson });
-    await expect(cancelNativeSession(execution.binding.runId, "operator Stop", {
+    await expect(cancelCancellationSession(execution.binding.runId, "operator Stop", {
       db: persistence.db, scope: "run", cancellationRequestId: "11111111-1111-4111-8111-111111111111",
     })).rejects.toMatchObject({ status: 409 });
     expect(persistence.getForUpdateCount()).toBe(1);
     expect(persistence.updates).toEqual([]);
     expect(state.cancel).not.toHaveBeenCalled();
-  });
+  }));
 
-  it("recovers a post-dispatch persistence failure without cancelling the provider twice", async () => {
+  it("recovers a post-dispatch persistence failure without cancelling the provider twice", ownedCancellationBody(async () => {
     const persistence = cancellationDb({ failResultJsonUpdateAt: 2 });
-    const running = executePaperclipNativeSession({
+    const running = executeCancellationSession({
       db: leaseDb(),
       execution,
       runnerInstanceId: "runner",
     });
-    await vi.waitFor(() => expect(state.release).toBeTypeOf("function"));
+    const releaseBackend = finishCancellationBackend;
+    try {
+      await vi.waitFor(() => expect(state.release).toBeTypeOf("function"));
 
-    await expect(
-      cancelNativeSession(execution.binding.runId, "budget hard stop", {
-        db: persistence.db,
-        scope: "run",
-      }),
-    ).rejects.toThrow("post_dispatch_db_failure");
-    expect(state.cancel).toHaveBeenCalledTimes(1);
-    expect(persistence.getResultJson()).toMatchObject({
-      nativeCancellation: {
-        dispatchState: "pending",
-        dispatched: false,
-        intentAuditId: "native-cancellation-audit",
-      },
-    });
+      await expect(
+        cancelCancellationSession(execution.binding.runId, "budget hard stop", {
+          db: persistence.db,
+          scope: "run",
+        }),
+      ).rejects.toThrow("post_dispatch_db_failure");
+      expect(state.cancel).toHaveBeenCalledTimes(1);
+      expect(persistence.getResultJson()).toMatchObject({
+        nativeCancellation: {
+          dispatchState: "pending",
+          dispatched: false,
+          intentAuditId: "native-cancellation-audit",
+        },
+      });
 
-    await expect(
-      cancelNativeSession(execution.binding.runId, "budget hard stop", {
-        db: persistence.db,
-        scope: "run",
-      }),
-    ).resolves.toMatchObject({
-      dispatched: true,
-      auditId: "native-cancellation-audit",
-    });
-    expect(state.cancel).toHaveBeenCalledTimes(1);
-    expect(persistence.getResultJsonUpdateCount()).toBe(3);
-    expect(persistence.getResultJson()).toMatchObject({
-      nativeCancellation: {
-        dispatchState: "acknowledged",
+      await expect(
+        cancelCancellationSession(execution.binding.runId, "budget hard stop", {
+          db: persistence.db,
+          scope: "run",
+        }),
+      ).resolves.toMatchObject({
         dispatched: true,
-        intentAuditId: "native-cancellation-audit",
-        acknowledgementAuditId: "native-cancellation-ack-audit",
-      },
-    });
-    expect(
-      state.persistActivity.mock.calls.filter(
-        ([, input]) =>
-          (input as { action?: string }).action ===
-          "native.cancellation_intent_recorded",
-      ),
-    ).toHaveLength(1);
-    const persistedActivities = state.persistActivity.mock.calls.length;
-    await expect(
-      cancelNativeSession(execution.binding.runId, "budget hard stop", {
-        db: persistence.db,
-        scope: "run",
-      }),
-    ).resolves.toMatchObject({
-      dispatched: true,
-      auditId: "native-cancellation-audit",
-    });
-    expect(state.cancel).toHaveBeenCalledTimes(1);
-    expect(persistence.getResultJsonUpdateCount()).toBe(3);
-    expect(state.persistActivity).toHaveBeenCalledTimes(persistedActivities);
+        auditId: "native-cancellation-audit",
+      });
+      expect(state.cancel).toHaveBeenCalledTimes(1);
+      expect(persistence.getResultJsonUpdateCount()).toBe(3);
+      expect(persistence.getResultJson()).toMatchObject({
+        nativeCancellation: {
+          dispatchState: "acknowledged",
+          dispatched: true,
+          intentAuditId: "native-cancellation-audit",
+          acknowledgementAuditId: "native-cancellation-ack-audit",
+        },
+      });
+      expect(
+        state.persistActivity.mock.calls.filter(
+          ([, input]) =>
+            (input as { action?: string }).action ===
+            "native.cancellation_intent_recorded",
+        ),
+      ).toHaveLength(1);
+      const persistedActivities = state.persistActivity.mock.calls.length;
+      await expect(
+        cancelCancellationSession(execution.binding.runId, "budget hard stop", {
+          db: persistence.db,
+          scope: "run",
+        }),
+      ).resolves.toMatchObject({
+        dispatched: true,
+        auditId: "native-cancellation-audit",
+      });
+      expect(state.cancel).toHaveBeenCalledTimes(1);
+      expect(persistence.getResultJsonUpdateCount()).toBe(3);
+      expect(state.persistActivity).toHaveBeenCalledTimes(persistedActivities);
 
-    state.release?.();
-    await running;
-  });
+      state.release?.();
+      await running;
+    } finally {
+      releaseBackend?.();
+      await running.then(value => ({ value }), error => ({ error }));
+    }
+  }));
 
-  it("fails closed when the persisted native binding has no coordinator", async () => {
+  it("fails closed when the persisted native binding has no coordinator", ownedCancellationBody(async () => {
     const persistence = cancellationDb({ coordinator: null });
 
     await expect(
-      cancelNativeSession(execution.binding.runId, "budget hard stop", {
+      cancelCancellationSession(execution.binding.runId, "budget hard stop", {
         db: persistence.db,
         scope: "run",
       }),
     ).rejects.toThrow("native_cancellation_coordinator_missing");
     expect(persistence.updates).toEqual([]);
     expect(state.persistActivity).not.toHaveBeenCalled();
-  });
+  }));
 
-  it("does not acknowledge an unverified retained runner as cancelled without an authenticated session", async () => {
+  it("does not acknowledge an unverified retained runner as cancelled without an authenticated session", ownedCancellationBody(async () => {
     const persistence = cancellationDb({ ownershipHeld: true });
     await expect(
-      cancelNativeSession(
+      cancelCancellationSession(
         execution.binding.runId,
         "Task closed while waiting",
         {
@@ -6373,7 +6619,7 @@ describe("native session cancellation", () => {
     expect(persistence.updates).toEqual([]);
     expect(state.persistActivity).not.toHaveBeenCalled();
     expect(state.cancel).not.toHaveBeenCalled();
-  });
+  }));
 });
 
 describe("native session execution lease fencing", () => {

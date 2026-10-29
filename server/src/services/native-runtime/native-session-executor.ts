@@ -8916,7 +8916,10 @@ async function executePaperclipNativeSessionWithinScope(
                   // If startup exceeded the caller's deadline, its late handle
                   // must still be cancelled instead of escaping the Stop fence.
                   await cancelNativeSession(input.execution.binding.runId, "Stop requested during native startup");
-                  throw new Error("native_finalization_missing: session returned no semantic result");
+                  // No turn was submitted. The catch path must verify the
+                  // exactly bound durable Stop (including a pending deadline)
+                  // before classifying this as cancellation recovery.
+                  throw new Error("native_session_cancelled");
                 }
                 // Stop can win after the coordinator claim while the provider
                 // session is still opening. Publishing the handle before this
