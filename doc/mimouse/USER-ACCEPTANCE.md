@@ -2,11 +2,13 @@
 
 > **对应代码** — `ui/src/pages/`、`tests/mimouse/`、`external-adapters/`
 > **维护提示** — 用户入口、前提、权限、步骤、oracle 或当前验证索引变化时更新。
-> **最后验证** — 2026-10-29（手测入口和前提核对；步骤不是默认通过报告）
+> **最后验证** — 2026-10-30（当前/历史入口和前提核对；步骤不是默认通过报告）
 
-> **2026-10-29 本机复验** — 最新执行范围、失败与跳过看[项目审计](checklists/2026-10-29-project-audit.md)和[Windows 验证记录](checklists/2026-10-29-project-audit-verification.md)。已有 Windows Edge 四语关键路径证据；全站/真实输入法/外部账号仍须逐项验收，受控技能整树恢复保持 POSIX-only。四项尚缺实现的外部集成按[联调交接清单](contracts/integration-handoff.md)准备，不要求在未接执行器前测试“上传/业务写入成功”。
+> **2026-10-30 当前复核** — 最新执行范围、失败与未闭合项看[复核记录](checklists/2026-10-30-project-closure.md)和[收据索引](checklists/README.md)；[浏览器机器证据](checklists/2026-10-30-browser-closure-evidence.json)记录本机已实际覆盖的页面与 API 范围。10月29日的[项目审计](checklists/2026-10-29-project-audit.md)和[Windows 验证记录](checklists/2026-10-29-project-audit-verification.md)继续保留。全站/真实输入法/外部账号仍须逐项验收，受控技能整树恢复保持 POSIX-only。四项尚缺实现的外部集成按[联调交接清单](contracts/integration-handoff.md)准备，不要求在未接执行器前测试“上传/业务写入成功”。
 
 ## 2026-10-29 重建候选验收入口
+
+以下保留 `0d1105e` 重建候选的输入、旧环境限制和手测入口；本节“当前”“本批”只指该日期快照，不将旧浏览器 blocked 或 12940 项结果顺延到 2026-10-30。
 
 本次从远端e2bab5dc重建，当前候选0d1105e（7294键）已包含普通Claude/Codex配置补译；前一环境c5af04fa未找回。06:42 UTC已阶段推送并核对远端完整SHA`0d1105e6069265a45431ef562861afa7e57ebedf`（[提交](https://github.com/xjfyt/paperclip/commit/0d1105e6069265a45431ef562861afa7e57ebedf)）；[该SHA资源CI](https://github.com/xjfyt/paperclip/actions/runs/40830723132/job/123304070781)成功（非完整CI），后续文档提交另验，拉取后先确认完整SHA。176项定向（原有132＋新增44）、完整类型/构建/正确门禁与53项审计通过，新915文件/92批/12940项于06:59:42 UTC严格聚合通过，失败/skip/todo为0。上一358bd7a的914文件/92批/12896项通过不迁移到当前输入。实际浏览器[环境blocked、未打开页面且无截图](checklists/BROWSER-ENVIRONMENT-20261029.md)，不是应用失败。终态见[验证表](VERIFICATION.md#2026-10-29-重建候选当前证据与未完成检查)；旧环境852/914等历史数字/结果不冒充本次证据。
 
@@ -14,7 +16,7 @@
 
 1. **发布授权环境**：本次GitHub设备登录与0d1105e阶段推送已完成，该SHA资源CI已成功（非完整CI），后续文档仍须核对；不要把token、cookie、密码或设备授权材料写进仓库/验收报告。代码推送与登录授权是两回事，最终仍需核对远端SHA。
 2. **四项合同**：六目标Runner/controller/签名准入、内部产物上传、业务只读源、业务write/apply/持久对账，按[剩余项合同表](REMAINING.md#四项仍依赖外部合同的实现缺口不是只等用户测试)提供说明与脱敏样本。它们仍有代码缺口，不要求你测试不存在的成功路径。
-3. **真实环境验收**：本机浏览器受环境限制，请在[受支持环境复验](checklists/BROWSER-ENVIRONMENT-20261029.md#在受支持环境复验)，选定可销毁测试公司/项目、浏览器/OS/输入法；实连时另提供允许的Casdoor/Agent/通知/GitLab等测试范围、额度及收件目标。凭据只放受控secret store，不放本文。
+3. **真实环境验收**：该重建批次的浏览器曾受环境限制，旧环境可按[受支持环境步骤复验](checklists/BROWSER-ENVIRONMENT-20261029.md#在受支持环境复验)；2026-10-30 的本机范围另见顶部机器证据。新增手测仍需选定可销毁测试公司/项目、浏览器/OS/输入法；实连时另提供允许的Casdoor/Agent/通知/GitLab等测试范围、额度及收件目标。凭据只放受控secret store，不放本文。
 
 ### 重建增量的可执行手测
 
@@ -58,7 +60,7 @@ pnpm test:mimouse:recovery-api
 
 > 2026-10-27 05:06 UTC：本批 UI 冻结源 `5ff8b0dc27985500cf8ea9382102233932368615`，4198键；826文件、83批、10160项完整UI严格聚合通过，零失败/跳过/todo。UI完整类型/生产构建通过；后端相关源码与已验证构建 `b2380f07` 完全一致，该构建完整API163项通过。真实浏览器完成目标文档一次保存、四语草稿与刷新/重启回读、例行界面只读核验；不代表全部原计划或真实供应商已验收。
 
-当前浏览器范围见[例行界面与目标保存](checklists/ROUTINES-GOAL-BROWSER-20261027.md)。以下早期SHA/数字均为各自历史证据。
+该 2026-10-27 快照的浏览器范围见[例行界面与目标保存](checklists/ROUTINES-GOAL-BROWSER-20261027.md)。以下早期SHA/数字均为各自历史证据。
 
 > 2026-10-27 03:04 UTC：最新应用基点 `c6ba2b4ea82b749771de1bc278745977b37215ca` 已完成标准server构建、8文件151项相关服务/真实数据库测试及编译入口完整API162项。自动重试截止与通知令牌精度修复已纳入；本轮未改UI，9848项完整UI属于前一冻结快照，不能迁移为新运行树的全量证据。真实供应商、全平台及全部原计划仍未完成；详见 [VERIFICATION](VERIFICATION.md)。
 
