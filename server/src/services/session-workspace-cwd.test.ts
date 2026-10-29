@@ -24,4 +24,9 @@ describe("isUnsafeSessionWorkspaceCwd", () => {
     expect(isUnsafeSessionWorkspaceCwd("/Users/dotta/paperclip")).toBe(false);
     expect(isUnsafeSessionWorkspaceCwd(null)).toBe(false);
   });
+  it("normalizes the target namespace without treating Windows workspace paths as POSIX roots", () => {
+    expect(isUnsafeSessionWorkspaceCwd("  //var/temporary/../run/  ")).toBe(true);
+    expect(isUnsafeSessionWorkspaceCwd("C:\\workspaces\\project")).toBe(false);
+    expect(isUnsafeSessionWorkspaceCwd("/tmp/workspace\\literal-name")).toBe(false);
+  });
 });
