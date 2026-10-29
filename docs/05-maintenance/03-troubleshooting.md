@@ -60,6 +60,8 @@ pnpm dev:list --data-dir ./tmp/paperclip-dev
 
 本地 SSH env-lab 的 sshd 夹具需要 POSIX 进程身份及信号归属，原生 Windows 会在创建状态前明确拒绝，可在 Linux/WSL2 验证；这不禁用远程 SSH 客户端。独立 Daytona 插件在根工作区之外，需单独安装/类型检查；Windows 私密暂存 ACL、保留普通目录权限及拒绝已有宿主链接的边界见[插件说明](../../packages/plugins/sandbox-providers/daytona/README.md#native-windows-host-transfers)。有 platform skip 或只通过 mock 时，不写成真实供应商或最终安装包验收通过。
 
+`paperclip-skill-utils.test.ts` 的 shell helper 旅程需要真实 Bash 和 jq。Windows 使用已安装的 Git Bash；jq 可由系统提供，或显式设置绝对 `PAPERCLIP_TEST_JQ` 指向真实 jq 可执行文件。测试不会下载依赖；指定文件会复制到当次临时 bin，Windows 用 jq 的 `--binary` 输出保持 POSIX 换行。夹具在执行前按文件身份核对 `curl` 是当次自建假客户端，拒绝落回宿主真实网络客户端。最终检查需记录 jq 版本、摘要、显式环境和源码版本；不要把本轮忽略目录中的临时工具路径写成全局安装前提。
+
 凭据或主密钥报 private permission/ACL 错误时，按[私密文件政策](../03-config/02-private-filesystem.md)检查精确路径：新空路径先建立 owner DACL 再写秘密，既有宽 ACL、链接和不可验证权限保持拒绝；SYSTEM/Administrators 属操作系统特权主体。探针使用固定系统 Windows PowerShell/.NET，无 profile 或模块依赖，探针不可用仍拒绝。不要自动修改旧目录权限或关闭校验。
 
 Windows 的长期工作区服务、Runner 本地文件交付/入站附件和 Grok 订阅凭据读取有明确的拒绝边界，见[平台能力表](../04-modules/01-integration-boundaries.md#五原生-windows-的明确执行边界)。不要把换 shell、只检查路径或放松权限作为处理方式。

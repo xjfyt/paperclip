@@ -12,6 +12,7 @@ import { unprocessable } from '../errors.js';
 import { githubFixture } from './helpers/github-skills.js';
 import { skillSourceService, type SkillSourceContext } from '../services/skill-sources.js';
 import { companySkillService } from '../services/company-skills.js';
+import { shellExecutable, shellEnvironment } from '@paperclipai/adapter-utils/test-fixtures/local-sandbox';
 
 const support = await getEmbeddedPostgresTestSupport();
 describe.skipIf(!support.supported)('skill source persistence', () => {
@@ -75,8 +76,13 @@ describe.skipIf(!support.supported)('skill source persistence', () => {
       const runtime = await skills.listRuntimeSkillEntries(companyId, { materializeMissing: true });
       const staged = runtime.find(entry => entry.key === skill.key)!;
       expect(await fs.readFile(path.join(staged.source, 'assets/image.png'))).toEqual(initial['deep/one/assets/image.png']);
-      expect((await fs.stat(path.join(staged.source, 'scripts/run.sh'))).mode & 0o111).toBeTruthy();
-      expect((await promisify(execFile)(path.join(staged.source, 'scripts/run.sh'))).stdout.trim()).toBe('hello');
+      if (process.platform !== 'win32') expect((await fs.stat(path.join(staged.source, 'scripts/run.sh'))).mode & 0o111).toBeTruthy();
+      expect((await skills.readFile(companyId, skill.id, 'scripts/run.sh'))?.executable).toBe(true);
+      const script = path.join(staged.source, 'scripts/run.sh');
+      const result = process.platform === 'win32'
+        ? await promisify(execFile)(shellExecutable('bash'), [`/${script[0]!.toLowerCase()}${script.slice(2).replaceAll('\\', '/')}`], { env: shellEnvironment() })
+        : await promisify(execFile)(script);
+      expect(result.stdout.trim()).toBe('hello');
     } finally { fetchSpy.mockRestore(); }
     await expect(sources.refresh(companyId, result.source.id, context, { revision: 0, selectedPaths: [], excludedFolders: [] })).rejects.toThrow(/changed/);
     const disconnected = await sources.disconnect(companyId, result.source.id, context);
@@ -91,6 +97,33 @@ describe.skipIf(!support.supported)('skill source persistence', () => {
     expect(await db.select().from(companySkills).where(eq(companySkills.companyId, companyId))).toHaveLength(before.length);
     expect((await skillSourceService(db).list(companyId)).some(source => source.trackingRef === 'rollback')).toBe(false);
     expect((await db.select().from(companySkillVersions)).every(version => before.some(skill => skill.id === version.companySkillId))).toBe(true);
+  });
+  it('preserves portable executable intent across binary edits, clears explicit false, and refuses to borrow it for drifted bytes', async () => {
+    const skills = companySkillService(db);
+    const skill = await skills.createLocalSkill(companyId, { name: 'Portable mode', slug: 'portable-mode' });
+    const first = Buffer.from([0, 128, 1]);
+    const enabled = await skills.updateFile(companyId, skill.id, 'assets/data.bin', first.toString('base64'), null, { encoding: 'base64', executable: true });
+    expect(enabled).toMatchObject({ content: first.toString('base64'), executable: true });
+    const next = Buffer.from([0, 255, 2]);
+    expect(await skills.updateFile(companyId, skill.id, 'assets/data.bin', next.toString('base64'), null, { encoding: 'base64' }))
+      .toMatchObject({ content: next.toString('base64'), executable: true });
+    const version = (await skills.listVersions(companyId, skill.id))[0]!;
+    expect(version.fileInventory.find(file => file.path === 'assets/data.bin')).toMatchObject({ executable: true, encoding: 'base64', content: next.toString('base64') });
+    const disabled = await skills.updateFile(companyId, skill.id, 'assets/data.bin', next.toString('base64'), null, { encoding: 'base64', executable: false });
+    expect(disabled.executable).not.toBe(true);
+    await skills.updateFile(companyId, skill.id, 'assets/data.bin', next.toString('base64'), null, { encoding: 'base64', executable: true });
+    const actual = (await skills.getById(companyId, skill.id))!;
+    const file = path.join(actual.sourceLocator!, 'assets/data.bin');
+    const outside = Buffer.from([0, 42, 3]);
+    await fs.writeFile(file, outside);
+    const drifted = await skills.readFile(companyId, skill.id, 'assets/data.bin');
+    expect(drifted?.content).toBe(outside.toString('base64'));
+    if (process.platform === 'win32') expect(drifted?.executable).not.toBe(true);
+    else expect(drifted?.executable).toBe(true);
+    const afterDrift = await skills.updateFile(companyId, skill.id, 'assets/data.bin', first.toString('base64'), null, { encoding: 'base64' });
+    if (process.platform === 'win32') expect(afterDrift.executable).not.toBe(true);
+    else expect(afterDrift.executable).toBe(true);
+    expect(await fs.readFile(file)).toEqual(first);
   });
   it('retains excluded folders, reviews additions, restores removed paths and preserves pinned versions and copies', async () => {
     const service = skillSourceService(db), skills = companySkillService(db);

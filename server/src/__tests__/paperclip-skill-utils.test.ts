@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
+import { shellExecutable, shellEnvironment } from "@paperclipai/adapter-utils/test-fixtures/local-sandbox";
 import {
   listPaperclipSkillEntries,
   removeMaintainerOnlySkillSymlinks,
@@ -15,9 +16,17 @@ async function makeTempDir(prefix: string): Promise<string> {
 }
 
 const execFileAsync = promisify(execFile);
+const liveHelperRuns = new Set<Promise<unknown>>();
 const artifactHelperPath = path.resolve(
   "skills/paperclip/scripts/paperclip-upload-artifact.sh",
 );
+
+function bashPath(file: string) {
+  if (process.platform !== "win32") return file;
+  const absolute = path.resolve(file);
+  if (!/^[A-Za-z]:[\\/]/.test(absolute)) throw new Error("Artifact helper fixture requires a drive-qualified local path");
+  return `/${absolute[0]!.toLowerCase()}${absolute.slice(2).replaceAll("\\", "/")}`;
+}
 
 async function makeArtifactHelperHarness(
   cleanupDirs: Set<string>,
@@ -49,6 +58,18 @@ async function makeArtifactHelperHarness(
     );
   }
   await fs.writeFile(filePath, "stable generated result\n", "utf8");
+  const configuredJq = process.env.PAPERCLIP_TEST_JQ;
+  if (configuredJq) {
+    if (!path.isAbsolute(configuredJq) || !(await fs.stat(configuredJq)).isFile()) throw new Error("PAPERCLIP_TEST_JQ must name a real absolute jq executable");
+    const version = await execFileAsync(configuredJq, ["--version"]);
+    if (!/^jq-\d+\./.test(version.stdout.trim())) throw new Error("PAPERCLIP_TEST_JQ must be the real jq CLI");
+    const jqBinary = path.join(binDir, process.platform === "win32" ? "jq-native.exe" : "jq-native");
+    await fs.copyFile(configuredJq, jqBinary);
+    await fs.chmod(jqBinary, 0o755);
+    // Native jq uses CRLF by default; its documented --binary option keeps
+    // the real POSIX helper's command substitutions in the POSIX byte contract.
+    await fs.writeFile(path.join(binDir, "jq"), `#!/usr/bin/env bash\nexec '${bashPath(jqBinary).replaceAll("'", "'\\''")}' ${process.platform === "win32" ? "--binary " : ""}"$@"\n`, { mode: 0o755 });
+  }
   const sha256 = createHash("sha256")
     .update(await fs.readFile(filePath))
     .digest("hex");
@@ -186,13 +207,13 @@ exit 2
     { mode: 0o755 },
   );
 
-  const env = {
+  const env = shellEnvironment({
     ...process.env,
-    PATH: `${binDir}:${process.env.PATH ?? ""}`,
+    PATH: [binDir, process.env.PATH ?? process.env.Path ?? ""].join(path.delimiter),
     PAPERCLIP_API_KEY: "test-run-key",
     PAPERCLIP_API_URL: options.apiUrl ?? "http://paperclip.invalid",
     PAPERCLIP_COMPANY_ID: "company-1",
-    PAPERCLIP_HELPER_STATE_DIR: lockDir,
+    PAPERCLIP_HELPER_STATE_DIR: bashPath(lockDir),
     PAPERCLIP_RUN_ID: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
     PAPERCLIP_TASK_ID: "issue-1",
     FAKE_ATTACHMENT_SHA: sha256,
@@ -200,24 +221,32 @@ exit 2
       options.ambiguousHttpStatusAfterCommit ?? "",
     FAKE_CURL_COMMIT_AFTER_DROP_DELAY:
       options.commitAfterDropDelaySeconds ?? "",
-    FAKE_CURL_STATE_DIR: stateDir,
+    FAKE_CURL_STATE_DIR: bashPath(stateDir),
     FAKE_CURL_DROP_FIRST_UPLOAD: options.dropFirstUpload ? "1" : "0",
     FAKE_CURL_DROP_WITHOUT_COMMIT: options.dropWithoutCommit ? "1" : "0",
     FAKE_CURL_MALFORMED_SUCCESS: options.malformedSuccessAfterCommit
       ? "1"
       : "0",
     FAKE_CURL_UPLOAD_DELAY: options.uploadDelaySeconds ?? "",
-  };
+  });
+  // The shared shell environment supplies Git Bash utilities; the owned curl
+  // must stay ahead of them so this fixture can never fall through to a real
+  // HTTP client. Prove resolution before starting the actual helper.
+  env.PATH = [binDir, env.PATH].join(path.delimiter);
+  env.PAPERCLIP_TEST_EXPECTED_CURL = bashPath(fakeCurlPath);
+  const driver = path.join(root, "run-helper.sh");
+  await fs.writeFile(driver, `#!/usr/bin/env bash\nset -euo pipefail\n[[ "$(command -v curl)" -ef "$PAPERCLIP_TEST_EXPECTED_CURL" ]] || { printf 'Owned fake curl was not selected: %s vs %s\\n' \"$(command -v curl)\" \"$PAPERCLIP_TEST_EXPECTED_CURL\" >&2; exit 125; }\ncommand -v jq >/dev/null || { echo 'Install real jq or set PAPERCLIP_TEST_JQ to its absolute executable' >&2; exit 125; }\nexec bash "$@"\n`);
   const run = (
     chatComment?: string,
     selectedFilePath = filePath,
     extraArgs: string[] = [],
-  ) =>
-    execFileAsync(
-      "bash",
+  ) => {
+    const pending = execFileAsync(
+      shellExecutable("bash"),
       [
-        artifactHelperPath,
-        selectedFilePath,
+        bashPath(driver),
+        bashPath(artifactHelperPath),
+        bashPath(selectedFilePath),
         "--title",
         "Stable result",
         ...(chatComment ? ["--chat-comment", chatComment] : []),
@@ -225,6 +254,10 @@ exit 2
       ],
       { cwd: root, env },
     );
+    liveHelperRuns.add(pending);
+    void pending.then(() => liveHelperRuns.delete(pending), () => liveHelperRuns.delete(pending));
+    return pending;
+  };
 
   return { env, filePath, lockDir, root, run, sha256, stateDir };
 }
@@ -233,8 +266,18 @@ describe("paperclip skill utils", () => {
   const cleanupDirs = new Set<string>();
 
   afterEach(async () => {
+    await Promise.allSettled(Array.from(liveHelperRuns));
     await Promise.all(Array.from(cleanupDirs).map((dir) => fs.rm(dir, { recursive: true, force: true })));
     cleanupDirs.clear();
+  });
+  it("refuses a shadowed curl before the helper can issue any request", async () => {
+    const harness = await makeArtifactHelperHarness(cleanupDirs);
+    const shadow = path.join(harness.root, "shadow");
+    await fs.mkdir(shadow);
+    await fs.writeFile(path.join(shadow, "curl"), "#!/usr/bin/env bash\necho 'wrong curl must never run' >&2\nexit 99\n", { mode: 0o755 });
+    harness.env.PATH = [shadow, harness.env.PATH].join(path.delimiter);
+    await expect(harness.run()).rejects.toMatchObject({ code: 125, stderr: expect.stringContaining("Owned fake curl was not selected") });
+    await expect(fs.access(path.join(harness.stateDir, "request-log"))).rejects.toThrow();
   });
 
   it("lists bundled runtime skills from ./skills without pulling in .agents/skills", async () => {
@@ -417,7 +460,9 @@ describe("paperclip skill utils", () => {
     ]);
     expect(retry.stdout).toContain("Uploaded artifact");
     expect(await fs.readFile(path.join(harness.stateDir, "upload-count"), "utf8")).toBe("2");
-  });
+  // Three actual helper processes include two bounded 20-probe reconciliation
+  // loops. Native jq process startup on Windows exceeds the 15s POSIX budget.
+  }, process.platform === "win32" ? 45_000 : 15_000);
 
   it("serializes concurrent matching uploads and reuses the first run-scoped attachment", async () => {
     const harness = await makeArtifactHelperHarness(cleanupDirs, {

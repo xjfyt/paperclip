@@ -16,3 +16,5 @@ packages/db/src/migrations/** text=auto eol=lf
 server/src/onboarding-assets/** text=auto eol=lf
 # Frozen skill releases attest their original text bytes, like catalog assets.
 skills-releases/** text=auto eol=lf
+# POSIX runtime helpers must remain executable by Bash after Windows checkout.
+skills/paperclip/scripts/*.sh text eol=lf
