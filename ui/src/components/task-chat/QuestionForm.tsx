@@ -43,7 +43,7 @@ type Answer = PaperclipQuestionResponse["answers"][string];
 // Provider and server Error.message values remain raw.
 type LocalMessage = { kind: "local"; key: string; values?: Record<string, string | number> };
 type QuestionMessage = LocalMessage | { kind: "raw"; message: string };
-type FormError = QuestionMessage & { fromMissingAnswer?: boolean };
+type FormError = (QuestionMessage | { kind: "action"; cause: unknown; action: "submit" | "cancel" }) & { fromMissingAnswer?: boolean };
 
 function localMessage(key: string, values?: LocalMessage["values"]): LocalMessage {
   return { kind: "local", key, values };
@@ -69,6 +69,8 @@ export interface QuestionFormProps {
    * takeover, which returns the plain composer without touching the request.
    */
   onCancel?: () => void | Promise<void>;
+  /** Display-only formatter; receives the original rejection without wrapping or mutation. */
+  formatActionError?: (cause: unknown, action: "submit" | "cancel") => string;
 }
 
 function answerHasValue(answer: Answer | undefined): boolean {
@@ -262,6 +264,7 @@ function QuestionFormForRequest({
   mentions,
   onSubmit,
   onCancel,
+  formatActionError,
 }: QuestionFormProps) {
   useTranslation();
   const takeoverActions = useTaskChatComposerTakeoverActions();
@@ -437,9 +440,7 @@ function QuestionFormForRequest({
       if (attempt.current === token && draftKey) clearDraft(draftKey);
     } catch (cause) {
       if (attempt.current !== token) return;
-      setError(cause instanceof Error
-        ? { kind: "raw", message: cause.message }
-        : localMessage("submitFailed"));
+      setError({ kind: "action", cause, action: "submit" });
     } finally {
       if (attempt.current === token) {
         attempt.current = null;
@@ -459,9 +460,7 @@ function QuestionFormForRequest({
       if (attempt.current === token && draftKey) clearDraft(draftKey);
     } catch (cause) {
       if (attempt.current !== token) return;
-      setError(cause instanceof Error
-        ? { kind: "raw", message: cause.message }
-        : localMessage("cancelFailed"));
+      setError({ kind: "action", cause, action: "cancel" });
     } finally {
       if (attempt.current === token) {
         attempt.current = null;
@@ -702,7 +701,10 @@ function QuestionFormForRequest({
       <div aria-live="assertive">
         {error ? (
           <div className="mt-2 rounded-sm border border-destructive/60 bg-destructive/10 px-2.5 py-2 text-sm text-destructive">
-            {messageText(error)}
+            {error.kind === "action"
+              ? formatActionError?.(error.cause, error.action) ?? (error.cause instanceof Error
+                ? error.cause.message : t(`questionFormUi.${error.action}Failed`))
+              : messageText(error)}
           </div>
         ) : null}
       </div>

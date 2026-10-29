@@ -35,8 +35,6 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { describeInteractionAudience } from "@/lib/interaction-audience";
-import { interactionResolutionErrorMessage } from "@/lib/interaction-resolution-error";
 import {
   clearDraft,
   loadStructuredDraft,
@@ -58,6 +56,7 @@ import {
   type SuggestedTaskTreeNode,
 } from "@/lib/issue-thread-interactions";
 import { cn } from "@/lib/utils";
+import { taskInteractionAudience, taskInteractionError } from "@/i18n/task-interaction-feedback-display";
 import { taskInteractionSummary, taskQuestionExpirationReason } from "@/i18n/task-interaction-display";
 import { formatDate, formatNumber, t as translate, useTranslation } from "@/i18n";
 import { QuestionForm } from "./QuestionForm";
@@ -769,6 +768,7 @@ function AskUserQuestionsCard({
       disabled={!onSubmitInteractionAnswers}
       imageUploadHandler={onUploadImage}
       mentions={mentions}
+      formatActionError={errorMessage}
       onSubmit={async (response) => {
         const answers: AskUserQuestionsAnswer[] = questionSet.questions.map(
           (question) => {
@@ -787,20 +787,12 @@ function AskUserQuestionsCard({
             };
           },
         );
-        try {
-          await onSubmitInteractionAnswers?.(interaction, answers);
-        } catch (error) {
-          throw new Error(errorMessage(error));
-        }
+        await onSubmitInteractionAnswers?.(interaction, answers);
       }}
       onCancel={
         onCancelInteraction
           ? async () => {
-              try {
-                await onCancelInteraction(interaction);
-              } catch (error) {
-                throw new Error(errorMessage(error));
-              }
+              await onCancelInteraction(interaction);
             }
           : undefined
       }
@@ -838,7 +830,7 @@ function ConfirmationCard({
     draftKey ? loadStructuredDraft(draftKey, "") : "",
   );
   const [working, setWorking] = useState<"accept" | "reject" | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<{ cause: unknown } | null>(null);
   const [revisionUploading, setRevisionUploading] = useState(false);
   const collectsRejectReason = Boolean(
     interaction.payload.rejectRequiresReason ||
@@ -865,7 +857,7 @@ function ConfirmationCard({
       else await onRejectInteraction?.(interaction, reason.trim() || undefined);
       if (draftKey) clearDraft(draftKey);
     } catch (error) {
-      setActionError(errorMessage(error));
+      setActionError({ cause: error });
     } finally {
       setWorking(null);
     }
@@ -1001,7 +993,7 @@ function ConfirmationCard({
           )}
         </div>
       ) : null}
-      <InteractionActionError message={actionError} />
+      <InteractionActionError message={actionError ? errorMessage(actionError.cause) : null} />
       {preparingApproval ? <InteractionPreparationNotice /> : null}
       <ActionRow>
         {rejecting ? (
@@ -1104,7 +1096,7 @@ function CheckboxConfirmationCard({
   const [reason, setReason] = useState(restored?.reason ?? "");
   const [filter, setFilter] = useState("");
   const [working, setWorking] = useState<"accept" | "reject" | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<{ cause: unknown } | null>(null);
   const collectsRejectReason = Boolean(
     interaction.payload.rejectRequiresReason ||
     interaction.payload.allowDeclineReason ||
@@ -1151,7 +1143,7 @@ function CheckboxConfirmationCard({
       else await onRejectInteraction?.(interaction, reason.trim() || undefined);
       if (draftKey) clearDraft(draftKey);
     } catch (error) {
-      setActionError(errorMessage(error));
+      setActionError({ cause: error });
     } finally {
       setWorking(null);
     }
@@ -1243,7 +1235,7 @@ function CheckboxConfirmationCard({
           />
         </div>
       ) : null}
-      <InteractionActionError message={actionError} />
+      <InteractionActionError message={actionError ? errorMessage(actionError.cause) : null} />
       {preparingApproval ? <InteractionPreparationNotice /> : null}
       <ActionRow hint={countHint}>
         {rejecting ? (
@@ -1401,7 +1393,7 @@ function SuggestedTasksCard({
   const [reason, setReason] = useState(restored?.reason ?? "");
   const [filter, setFilter] = useState("");
   const [working, setWorking] = useState<"accept" | "reject" | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<{ cause: unknown } | null>(null);
   useEffect(() => {
     if (draftKey)
       saveStructuredDraft(draftKey, { selected: [...selected], reason });
@@ -1450,7 +1442,7 @@ function SuggestedTasksCard({
       else await onRejectInteraction?.(interaction, reason.trim() || undefined);
       if (draftKey) clearDraft(draftKey);
     } catch (error) {
-      setActionError(errorMessage(error));
+      setActionError({ cause: error });
     } finally {
       setWorking(null);
     }
@@ -1507,7 +1499,7 @@ function SuggestedTasksCard({
           />
         </div>
       ) : null}
-      <InteractionActionError message={actionError} />
+      <InteractionActionError message={actionError ? errorMessage(actionError.cause) : null} />
       <ActionRow
         hint={t("taskThreadInteractionsUi.selectedOfTotal", { selected: formatNumber(selected.size), total: formatNumber(interaction.payload.tasks.length) })}
       >
@@ -1608,7 +1600,7 @@ function ItemVerdictsCard({
     () => new Map(restored?.drafts ?? []),
   );
   const [working, setWorking] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<{ cause: unknown } | null>(null);
   const enabledVerdicts = interaction.payload.verdicts ?? ["approve", "reject"];
   const requireReasonOn = new Set(
     interaction.payload.requireReasonOn ?? ["reject"],
@@ -1714,7 +1706,7 @@ function ItemVerdictsCard({
       await onSubmitInteractionVerdicts(interaction, verdicts);
       if (draftKey) clearDraft(draftKey);
     } catch (error) {
-      setActionError(errorMessage(error));
+      setActionError({ cause: error });
     } finally {
       setWorking(false);
     }
@@ -1872,7 +1864,7 @@ function ItemVerdictsCard({
           </MarkdownBody>
         </Details>
       ) : null}
-      <InteractionActionError message={actionError} />
+      <InteractionActionError message={actionError ? errorMessage(actionError.cause) : null} />
       <ActionRow>
         {takeoverActions?.skipButton}
         <Button
@@ -1925,13 +1917,15 @@ export function TaskChatCompactInteractionCard({
         : (userLabelMap?.get(interaction.addresseeUserId) ??
           interaction.addresseeUserId)
       : null;
-  const audience = describeInteractionAudience({
+  const audience = taskInteractionAudience({
     interaction,
     creatorLabel,
     addresseeLabel,
+    creatorIsCurrentUser: interaction.createdByUserId != null && interaction.createdByUserId === currentUserId,
+    addresseeIsCurrentUser: interaction.addresseeUserId != null && interaction.addresseeUserId === currentUserId,
   });
   const errorMessage = (error: unknown) =>
-    interactionResolutionErrorMessage(error, audience);
+    taskInteractionError(error, audience);
   const audienceLabel =
     interaction.status === "pending" && !audience.isOpen
       ? audience.shortSummary

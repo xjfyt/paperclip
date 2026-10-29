@@ -1,0 +1,17 @@
+{
+  "you": "あなた",
+  "addressedUser": "指定されたユーザー",
+  "addressedAgent": "指定されたエージェント",
+  "creator": "作成元のエージェント",
+  "onlyAddressee": "{{addressee}} のみが回答できます",
+  "assignedBoard": "担当：{{addressee}} · ボードのみ回答可能",
+  "boardOnly": "ボードのみが回答できます",
+  "addresseeOrBoard": "{{addressee}} またはボードのみが回答できます",
+  "exceptCreator": "{{creator}} 以外なら誰でも回答できます",
+  "anyone": "誰でも回答できます",
+  "audienceDenied": "このカードへの回答が許可された対象者ではありません。",
+  "permissionDenied": "このカードに回答する権限がありません。",
+  "settled": "このリクエストは決定待ちではありません。",
+  "tryAgain": "もう一度お試しください。",
+  "submitFailed": "送信できませんでした。もう一度お試しください。"
+}
