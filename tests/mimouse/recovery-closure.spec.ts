@@ -53,6 +53,12 @@ test.beforeAll(async ({ playwright, request }) => {
   const health = await json(await request.get("/api/health"));
   expect(health.deploymentMode).toBe("authenticated");
   expect((await request.get("/api/auth/get-session")).status()).toBe(401);
+  const unknownCompany = randomUUID(), unknownRun = randomUUID();
+  for (const response of [
+    await request.get(`/api/companies/${unknownCompany}/coding`),
+    await request.post(`/api/companies/${unknownCompany}/feedback-inbox/run-log-preview`, { data: { runId: unknownRun, eventSeq: 1 } }),
+    await request.get(`/api/companies/${unknownCompany}/research-routines/${randomUUID()}/history`),
+  ]) expect([401, 403]).toContain(response.status());
   db = await createFixtureDb(); // Verifies the existing fixture's real PG data_directory.
   for (let i = 0; i < 2; i++) sessions.push(await playwright.request.newContext({
     baseURL: "http://127.0.0.1:3100", extraHTTPHeaders: { origin: "http://127.0.0.1:3100" },
