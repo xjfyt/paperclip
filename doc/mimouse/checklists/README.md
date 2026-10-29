@@ -43,7 +43,11 @@
 | [Windows CLI 初始化与完整包](2026-10-30-windows-cli-key-initialization-evidence.json) | 当前 CLI 的 doctor/onboard 私密 key 初始化与完整 69 文件、550 通过、12 条原条件跳过；2582 项声明输入无漂移、0 框架告警，边界不扩大到浏览器、真实外部供应商或最终发布包。 |
 | [Windows 端口注册表](2026-10-30-windows-port-registry-evidence.json) | 两完整文件 15/15，真实共享句柄、路径替换与固定工具反例；同一完整 owner 文件有界重试，未知身份保持拒绝，不把历史首次 rename 失败归因到未经证明的外部 owner。 |
 | [Native finalizer 并发门控](2026-10-30-native-finalizer-gate-evidence.json) | 完整文件 14/14；首个实际 I/O 持有门控时等待第二次 busy 返回再释放，保持原测试预算，不代表整个 Native executor 或官方分片已通过。 |
+| [Native startup Stop 与取消收尾](2026-10-30-native-cancellation-closure-evidence.json) | 当前完整文件 689/689、2919 项声明输入无漂移；首轮真实 675/6、官方失败及明确注入的故障证明分开保留。零框架告警/未处理错误不证明全部官方分片通过。 |
+| [Heartbeat 完成与收尾](2026-10-30-heartbeat-completion-evidence.json) | 五完整文件 74/74，实际 drain 替代固定终态轮询，保持断言和原用例预算；77 条应用 WARN 保留。同期 Native Stop 源变更另验，不能写成全仓冻结通过。 |
+| [其余服务文件原样复验](2026-10-30-remaining-server-evidence.json) | 五完整文件按原代码、断言和预算 147/147；12 个 describe 为分组，不另计文件或用例。运行时/测试输入无漂移，仅四处文档变化；保留旧 deadline 和状态失败及其尚未证明的历史根因，不代替其余测试。 |
 | [工作区 4 万路径流式压力](2026-10-30-workspace-streaming-evidence.json) | final6 完整用例通过，保留 4 万路径、超过 32 MiB 清单、实际文件/删除及 scheduler drain 断言；旧超时保留，专项通过不代替 adapter-utils 整包或官方分片结果。 |
+| [最终静态与构建门禁](2026-10-30-static-build-final-evidence.json) | 串行类型检查、零警告完整构建、Token 及模块/生命周期边界四 gate 全 exit0；当轮 11466 项声明输入中仅 checklists README 文档漂移，源码/测试/用户锁不变。13 项零 diff 为 11 项仅 EOL、2 项原始字节相同，另保留 3 条 Git autocrlf 提示；不代替剩余测试或全平台验收。 |
 
 ## 三、摘要核对与后续输入
 

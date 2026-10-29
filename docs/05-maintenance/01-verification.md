@@ -38,6 +38,8 @@
 
 构建成功与零告警是不同结论；使用零告警门禁时仍需保留实际命令、输出和诊断数，不通过隐藏 stderr、过滤日志或全局关闭编译警告获得通过。单元/浏览器检查中的 warning 同样保留，并区分预期故障夹具输出和测试框架/未处理错误；不把大量通过数覆盖未处理异常。
 
+Vitest 超时不会取消原来的测试 body。异步夹具应先释放门控、等待所有已启动任务结束，再恢复 mock 和清理数据库/目录；收尾失败应阻断后续用例，避免旧任务继续使用下一用例的夹具。Heartbeat 终态断言等待真实 execution drain，具体规则和 helper 见[异步测试收尾](../../doc/DEVELOPING.md#asynchronous-test-cleanup)。Windows 的真实 PostgreSQL、私密文件 DACL 和进程生命周期回归安排在低并发窗口；平台预算需针对实测用例说明，不能靠全局扩大超时掩盖任务泄漏。
+
 ## 三、二开测试夹具隔离
 
 `tests/mimouse/playwright.config.ts` 要求绝对 `PAPERCLIP_MIMOUSE_TEST_HOME` 和明确 marker，拒绝已有应用 config/dotenv。它隔离数据库 URL、配置和多数外部执行开关，且不复用 3100 上的未知服务。
