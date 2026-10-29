@@ -838,27 +838,53 @@ function ResolverFooter({ toggle, children }: { toggle: ReactNode; children: Rea
   );
 }
 
-function ApprovalResolver({ item, companyId, toggle }: { item: AttentionItem; companyId: string; toggle: ReactNode }) {
+function useExpandedRowDecision(item: AttentionItem, companyId: string) {
   const queryClient = useQueryClient();
+  const { pushToast } = useToastActions();
+  const { selectedCompanyId } = useCompany();
+  const boundary = useDecisionActionBoundary(item.companyId, JSON.stringify([item.id, item.sourceKind, item.subject.id]), selectedCompanyId);
+  type Input = { companyId: string; sourceKind: AttentionItem["sourceKind"]; subjectId: string; action: "approve" | "reject" | "request_revision"; note?: string };
+  const mutation = useMutation<unknown, Error, DecisionActionReceipt<Input>>({
+    mutationFn: (receipt) => {
+      if (!boundary.isCurrent(receipt)) throw new DOMException("Decision context changed", "AbortError");
+      const { companyId: targetCompanyId, sourceKind, subjectId, action, note } = receipt.input;
+      if (sourceKind === "approval") {
+        if (action === "approve") return approvalsApi.approve(subjectId, note);
+        if (action === "reject") return approvalsApi.reject(subjectId, note);
+        return approvalsApi.requestRevision(subjectId, note);
+      }
+      if (sourceKind === "join_request") return action === "approve"
+        ? accessApi.approveJoinRequest(targetCompanyId, subjectId)
+        : accessApi.rejectJoinRequest(targetCompanyId, subjectId);
+      throw new Error(t("attentionRowUi.detailRequired"));
+    },
+    onSuccess: (_result, receipt) => {
+      if (!boundary.isCurrent(receipt)) return;
+      const { companyId: targetCompanyId, sourceKind } = receipt.input;
+      queryClient.invalidateQueries({ queryKey: queryKeys.attention(targetCompanyId) });
+      queryClient.invalidateQueries({ queryKey: sourceKind === "approval" ? queryKeys.approvals.list(targetCompanyId) : queryKeys.access.joinRequests(targetCompanyId) });
+    },
+    onError: (error, receipt) => {
+      if (!boundary.isCurrent(receipt)) return;
+      pushToast({ title: t(`attentionRowUi.error.${receipt.input.action}`), body: error instanceof Error ? error.message : t("decisionDeskUi.tryAgain"), tone: "error" });
+    },
+    onSettled: (_result, _error, receipt) => boundary.finish(receipt),
+  });
+  return {
+    pending: boundary.pending || item.companyId !== companyId || companyId !== selectedCompanyId,
+    busy: (action: Input["action"]) => boundary.pending && boundary.isCurrent(mutation.variables) && mutation.variables?.input.action === action,
+    submit: (action: Input["action"], note?: string) => {
+      if (item.companyId !== companyId) return;
+      const receipt = boundary.begin<Input>({ companyId, sourceKind: item.sourceKind, subjectId: item.subject.id, action, note: note?.trim() || undefined });
+      if (receipt) mutation.mutate(receipt);
+    },
+  };
+}
+
+function ApprovalResolver({ item, companyId, toggle }: { item: AttentionItem; companyId: string; toggle: ReactNode }) {
   useTranslation();
   const [note, setNote] = useState("");
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: queryKeys.attention(companyId) });
-    queryClient.invalidateQueries({ queryKey: queryKeys.approvals.list(companyId) });
-  };
-  const approve = useMutation({
-    mutationFn: () => approvalsApi.approve(item.subject.id, note.trim() || undefined),
-    onSuccess: invalidate,
-  });
-  const reject = useMutation({
-    mutationFn: () => approvalsApi.reject(item.subject.id, note.trim() || undefined),
-    onSuccess: invalidate,
-  });
-  const revise = useMutation({
-    mutationFn: () => approvalsApi.requestRevision(item.subject.id, note.trim() || undefined),
-    onSuccess: invalidate,
-  });
-  const pending = approve.isPending || reject.isPending || revise.isPending;
+  const decision = useExpandedRowDecision(item, companyId);
 
   // Verb order matches the collapsed row exactly (revise → reject → approve),
   // so expanding never moves the button the operator was already aiming at.
@@ -871,16 +897,16 @@ function ApprovalResolver({ item, companyId, toggle }: { item: AttentionItem; co
         className="min-h-16 text-sm"
       />
       <ResolverFooter toggle={toggle}>
-        <Button size="sm" variant="outline" onClick={() => revise.mutate()} disabled={pending}>
-          {revise.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+        <Button size="sm" variant="outline" onClick={() => decision.submit("request_revision", note)} disabled={decision.pending}>
+          {decision.busy("request_revision") && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           {t("attentionRowUi.action.request_revision")}
         </Button>
-        <Button size="sm" variant="destructive" onClick={() => reject.mutate()} disabled={pending}>
-          {reject.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+        <Button size="sm" variant="destructive" onClick={() => decision.submit("reject", note)} disabled={decision.pending}>
+          {decision.busy("reject") && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           {t("attentionRowUi.action.reject")}
         </Button>
-        <Button size="sm" onClick={() => approve.mutate()} disabled={pending}>
-          {approve.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+        <Button size="sm" onClick={() => decision.submit("approve", note)} disabled={decision.pending}>
+          {decision.busy("approve") && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           {t("attentionRowUi.action.approve")}
         </Button>
       </ResolverFooter>
@@ -890,29 +916,15 @@ function ApprovalResolver({ item, companyId, toggle }: { item: AttentionItem; co
 
 function JoinRequestResolver({ item, companyId, toggle }: { item: AttentionItem; companyId: string; toggle: ReactNode }) {
   useTranslation();
-  const queryClient = useQueryClient();
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: queryKeys.attention(companyId) });
-    queryClient.invalidateQueries({ queryKey: queryKeys.access.joinRequests(companyId) });
-  };
-  const approve = useMutation({
-    mutationFn: () => accessApi.approveJoinRequest(companyId, item.subject.id),
-    onSuccess: invalidate,
-  });
-  const reject = useMutation({
-    mutationFn: () => accessApi.rejectJoinRequest(companyId, item.subject.id),
-    onSuccess: invalidate,
-  });
-  const pending = approve.isPending || reject.isPending;
-
+  const decision = useExpandedRowDecision(item, companyId);
   return (
     <ResolverFooter toggle={toggle}>
-      <Button size="sm" variant="destructive" onClick={() => reject.mutate()} disabled={pending}>
-        {reject.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+      <Button size="sm" variant="destructive" onClick={() => decision.submit("reject")} disabled={decision.pending}>
+        {decision.busy("reject") && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
         {t("attentionRowUi.action.reject")}
       </Button>
-      <Button size="sm" onClick={() => approve.mutate()} disabled={pending}>
-        {approve.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+      <Button size="sm" onClick={() => decision.submit("approve")} disabled={decision.pending}>
+        {decision.busy("approve") && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
         {t("attentionRowUi.action.approve")}
       </Button>
     </ResolverFooter>
