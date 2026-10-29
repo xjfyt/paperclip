@@ -1,0 +1,55 @@
+{
+  "emptyDecisions": "この期間の判断リクエストはありません。<0>判断モデルを設定</0>してテストを実行してください。",
+  "emptyFast": "この期間のクイック返信はありません。<0>クイック返信を設定</0>してテストを実行してください。",
+  "emptyFastDisabled": "この期間のクイック返信はありません。<0>実験的なクイック返信を有効化</0>してテストを実行してください。",
+  "privacy": "最近のリクエストです。入力内容は保持されません。",
+  "fastResponses": "クイック返信",
+  "decisions": "判断リクエスト",
+  "setupTest": "設定テスト",
+  "services": "Paperclip サービス",
+  "board": "管理者",
+  "formerUser": "以前のユーザー",
+  "viewTask": "タスクを表示",
+  "removedConnection": "削除された接続",
+  "unknownCost": "不明",
+  "loadingDecisions": "判断リクエストを読み込み中…",
+  "failedDecisions": "判断リクエストを読み込めませんでした。",
+  "retry": "再試行",
+  "columns": {
+    "whenFeature": "日時 / 機能",
+    "responsible": "責任者",
+    "task": "タスク",
+    "connection": "接続",
+    "model": "モデル",
+    "status": "状態",
+    "duration": "所要時間",
+    "tokens": "入力 / 出力トークン",
+    "cost": "費用"
+  },
+  "status": {
+    "succeeded": "成功",
+    "running": "実行中",
+    "unknown": "未確定",
+    "skipped": "スキップ済み",
+    "pending": "保留中",
+    "failed": "失敗"
+  },
+  "publication": {
+    "pending": "公開待ち",
+    "streaming": "ストリーミング中",
+    "retry": "公開を再試行中",
+    "published": "公開済み",
+    "suppressed": "抑制済み",
+    "test": "テスト",
+    "failed": "公開失敗",
+    "cancelled": "公開キャンセル済み",
+    "delivery_unknown": "配信状況不明",
+    "awaiting_consent": "同意待ち"
+  },
+  "cost": {
+    "estimated": "推定",
+    "reported": "報告済み"
+  },
+  "loadingFast": "クイック返信を読み込み中…",
+  "failedFast": "クイック返信を読み込めませんでした。"
+}

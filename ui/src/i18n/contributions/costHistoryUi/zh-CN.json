@@ -1,0 +1,55 @@
+{
+  "emptyDecisions": "此时段没有决策请求。<0>配置决策模型</0>以运行测试。",
+  "emptyFast": "此时段没有快速回复。<0>配置快速回复</0>以运行测试。",
+  "emptyFastDisabled": "此时段没有快速回复。<0>启用实验性快速回复</0>以运行测试。",
+  "privacy": "近期请求。输入内容不会保留。",
+  "fastResponses": "快速回复",
+  "decisions": "决策请求",
+  "setupTest": "配置测试",
+  "services": "Paperclip 服务",
+  "board": "管理者",
+  "formerUser": "原用户",
+  "viewTask": "查看任务",
+  "removedConnection": "已移除的连接",
+  "unknownCost": "未知",
+  "loadingDecisions": "正在加载决策请求…",
+  "failedDecisions": "无法加载决策请求。",
+  "retry": "重试",
+  "columns": {
+    "whenFeature": "时间 / 功能",
+    "responsible": "负责人",
+    "task": "任务",
+    "connection": "连接",
+    "model": "模型",
+    "status": "状态",
+    "duration": "耗时",
+    "tokens": "输入 / 输出令牌",
+    "cost": "费用"
+  },
+  "status": {
+    "succeeded": "成功",
+    "running": "运行中",
+    "unknown": "尚未确定",
+    "skipped": "已跳过",
+    "pending": "待处理",
+    "failed": "失败"
+  },
+  "publication": {
+    "pending": "待发布",
+    "streaming": "流式传输中",
+    "retry": "正在重试发布",
+    "published": "已发布",
+    "suppressed": "已抑制",
+    "test": "测试",
+    "failed": "发布失败",
+    "cancelled": "发布已取消",
+    "delivery_unknown": "送达情况未知",
+    "awaiting_consent": "等待同意"
+  },
+  "cost": {
+    "estimated": "估算",
+    "reported": "已报告"
+  },
+  "loadingFast": "正在加载快速回复…",
+  "failedFast": "无法加载快速回复。"
+}

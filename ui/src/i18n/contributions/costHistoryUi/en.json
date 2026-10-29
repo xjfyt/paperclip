@@ -1,0 +1,55 @@
+{
+  "emptyDecisions": "No decision requests in this period. <0>Configure a decision model</0> to run a test.",
+  "emptyFast": "No fast responses in this period. <0>Configure fast response</0> to run a test.",
+  "emptyFastDisabled": "No fast responses in this period. <0>Enable experimental fast responses</0> to run a test.",
+  "privacy": "Recent requests. Inputs are not retained.",
+  "fastResponses": "Fast responses",
+  "decisions": "Decision requests",
+  "setupTest": "Setup test",
+  "services": "Paperclip services",
+  "board": "Board",
+  "formerUser": "Former user",
+  "viewTask": "View task",
+  "removedConnection": "Removed connection",
+  "unknownCost": "Unknown",
+  "loadingDecisions": "Loading decision requests…",
+  "failedDecisions": "Could not load decision requests.",
+  "retry": "Try again",
+  "columns": {
+    "whenFeature": "When / feature",
+    "responsible": "Responsible",
+    "task": "Task",
+    "connection": "Connection",
+    "model": "Model",
+    "status": "Status",
+    "duration": "Duration",
+    "tokens": "Tokens in / out",
+    "cost": "Cost"
+  },
+  "status": {
+    "succeeded": "Succeeded",
+    "running": "Running",
+    "unknown": "Unresolved",
+    "skipped": "Skipped",
+    "pending": "Pending",
+    "failed": "Failed"
+  },
+  "publication": {
+    "pending": "Pending publication",
+    "streaming": "Streaming",
+    "retry": "Retrying publication",
+    "published": "Published",
+    "suppressed": "Suppressed",
+    "test": "Test",
+    "failed": "Publication failed",
+    "cancelled": "Publication cancelled",
+    "delivery_unknown": "Delivery unknown",
+    "awaiting_consent": "Awaiting consent"
+  },
+  "cost": {
+    "estimated": "Estimated",
+    "reported": "Reported"
+  },
+  "loadingFast": "Loading fast responses…",
+  "failedFast": "Could not load fast responses."
+}
