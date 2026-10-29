@@ -1,0 +1,97 @@
+{
+  "schema": "mimouse.local-verification.v1",
+  "recordedAt": "2026-10-30T03:30:39.573287+08:00",
+  "platform": "native Windows x64, actual Git, Git Bash, Node, local filesystem and isolated embedded PostgreSQL",
+  "verification": [
+    {
+      "label": "Full 19/19 pass; real local repositories and native fixture git processes retain original auth classification and cleanup checks.",
+      "passed": 19,
+      "failed": 0,
+      "pending": 0,
+      "command": "cd server; node ../node_modules/vitest/vitest.mjs run src/__tests__/heartbeat-managed-clone-credentials.test.ts --reporter=default --reporter=json --outputFile=../test-results/project-audit-windows-closure/managed-clone-final.json",
+      "log": {
+        "path": "test-results/project-audit-windows-closure/managed-clone-final.log",
+        "sha256": "484bc5fa3a72a86ce88560ce162a5e635bc29af22df75c84fc13d501d9ebb040"
+      },
+      "json": {
+        "path": "test-results/project-audit-windows-closure/managed-clone-final.json",
+        "sha256": "f49866b0dbdf2c05e09c220749edb6d323b4fdfa494161a6c4e633ca9697a1b6"
+      }
+    },
+    {
+      "label": "Full 30 pass / one original Darwin-only skip; actual tsx-produced standalone programs and real archive transfer execute without host credential inheritance.",
+      "passed": 30,
+      "failed": 0,
+      "pending": 1,
+      "command": "cd server; node ../node_modules/vitest/vitest.mjs run src/__tests__/agent-directory-probe.test.ts --reporter=default --reporter=json --outputFile=../test-results/project-audit-windows-closure/agent-probe-credential-free.json",
+      "log": {
+        "path": "test-results/project-audit-windows-closure/agent-probe-credential-free.log",
+        "sha256": "d6b2ad5a3d011e817b1b09df8c5a99e214d345ea582aa37886542fab55d09b47"
+      },
+      "json": {
+        "path": "test-results/project-audit-windows-closure/agent-probe-credential-free.json",
+        "sha256": "0e789813301cfc8bfe2f606a057e23a386ec32b778fb15e3110ea9e0e828adec"
+      }
+    },
+    {
+      "label": "Full 7/7 pass; real Board comment/binding/wake and authorized download; native Windows staging honestly fails descriptor proof without admitting payload bytes.",
+      "passed": 7,
+      "failed": 0,
+      "pending": 0,
+      "command": "cd server; node ../node_modules/vitest/vitest.mjs run src/__tests__/board-native-attachments.integration.test.ts --reporter=default --reporter=json --outputFile=../test-results/project-audit-windows-closure/board-native-attachments-final.json",
+      "log": {
+        "path": "test-results/project-audit-windows-closure/board-native-attachments-final.log",
+        "sha256": "e0d4ad8ef26d9e2d3f307d688b2f21abf52e058a6622f77e21c3a861cc873927"
+      },
+      "json": {
+        "path": "test-results/project-audit-windows-closure/board-native-attachments-final.json",
+        "sha256": "d320ad6516dc6e006f9d005558709cf701c824b500e9ad3b9270e69b4ee70daa"
+      }
+    }
+  ],
+  "originalPlatformSkips": [
+    {
+      "name": "accepts only the observing Darwin host's fixed system aliases",
+      "source": "server/src/__tests__/agent-directory-probe.test.ts",
+      "condition": "original it.runIf(process.platform === \"darwin\")",
+      "reason": "Darwin-only system alias exception cannot be qualified on Windows."
+    }
+  ],
+  "changes": [
+    "Git fixture scripts now use the existing fixed native CLI bridge, returning the same stderr and exit 128. Clone token is located without assuming argv[1], so invocation-local -c core.longpaths works.",
+    "Path-relative assertions use the native separator. Cleanup verifies both old .clone- and new Windows .paperclip-clone- staging prefixes.",
+    "tsx loader is passed as a file URL. Only the local POSIX sandbox boundary maps paths/shell binaries; direct native probe receives its canonical filesystem root.",
+    "Windows mode mutation uses its real supported read-only bit, preserving the POSIX executable-bit case.",
+    "Remote-scratch invalid inputs use a valid POSIX base so rejection is not vacuous. Sandbox children use explicit own HOME/TEMP and inheritEnv:false, retaining only system/PATH and deliberate fixture env.",
+    "Board native Windows branches retain binding/reassignment and HTTP download success, assert attachment_staging_failed with null path, zero-byte staged files and unchanged attachment rows. POSIX original native staging success remains."
+  ],
+  "productionScope": "No production changed by these three test fixes. Root-owned workspaces.ts separately corrects Windows drive paths parsed as c: URLs, uses invocation-local longpaths, and bounds clone staging names; that production has separate root verification.",
+  "windowsStagingLimit": "Opaque empty staging slots/directories may be created; no payload bytes are admitted and no extra binding is persisted. No Windows local native descriptor-support claim is made.",
+  "typecheck": {
+    "command": "pnpm --filter @paperclipai/server exec tsc --noEmit",
+    "exitCode": 0,
+    "log": {
+      "path": "test-results/project-audit-windows-closure/windows-fixture-types-final.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "sources": [
+    {
+      "path": "server/src/__tests__/heartbeat-managed-clone-credentials.test.ts",
+      "sha256": "9da95b4a875b2302b51f00ac503369a6af0813337c5f75cacffe1b77d875cbda"
+    },
+    {
+      "path": "server/src/__tests__/agent-directory-probe.test.ts",
+      "sha256": "db551d2f9cf800793dc75faa4e2c5557b5853995f45fd145bcd7f6835ed9c76f"
+    },
+    {
+      "path": "server/src/__tests__/board-native-attachments.integration.test.ts",
+      "sha256": "462fc77a6a28cb592aab86cc5865fa8cca240689886b8cb7ec245a6abbf4af8b"
+    }
+  ],
+  "limits": [
+    "No global Git configuration or actual external credentials/providers were used.",
+    "The archive transport is a real local POSIX shell fixture on Windows, not a live Daytona/SSH qualification.",
+    "Local descriptor guards are preserved; successful authenticated Board download does not imply native staging support."
+  ]
+}

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdtemp, mkdir, readFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import express from "express";
@@ -239,6 +239,29 @@ describe("Board upload receipt to native wake staging", () => {
         },
       });
       try {
+        if (process.platform === "win32") {
+          // Local native staging cannot prove a Windows descriptor's path.
+          // Keep that production refusal while proving the real Board binding,
+          // wake metadata, and authorized download remain usable.
+          expect(stage.attachments).toEqual([
+            expect.objectContaining({ id: attachment.id, byteSize: bytes.length,
+              workspaceRelativePath: null, unavailableReason: "attachment_staging_failed" }),
+          ]);
+          async function assertNoAdmittedBytes(directory: string): Promise<void> {
+            for (const entry of await readdir(directory, { withFileTypes: true })) {
+              expect(entry.isSymbolicLink()).toBe(false);
+              const filename = path.join(directory, entry.name);
+              if (entry.isDirectory()) await assertNoAdmittedBytes(filename);
+              else expect(await readFile(filename)).toHaveLength(0);
+            }
+          }
+          await assertNoAdmittedBytes(path.join(workspaceRoot, ".paperclip-inbound"));
+          const download = await request(app).get(attachment.contentPath);
+          expect(download.status).toBe(200);
+          expect(Buffer.isBuffer(download.body) ? download.body : Buffer.from(download.text)).toEqual(bytes);
+          expect(await db.select().from(issueAttachments).where(eq(issueAttachments.issueId, issueId))).toEqual([bound]);
+          return;
+        }
         expect(stage.attachments).toEqual([
           expect.objectContaining({
             id: attachment.id,

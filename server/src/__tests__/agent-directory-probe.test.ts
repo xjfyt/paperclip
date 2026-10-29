@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
-import { join } from "node:path";
+import { fixturePath, sandboxPath, shellExecutable, shellArgs, shellEnvironment, runLocalSandboxProcess } from "@paperclipai/adapter-utils/test-fixtures/local-sandbox";
+import { pathToFileURL } from "node:url";
+const join = fixturePath.join;
 import { tmpdir } from "node:os";
 import { createRequire } from "node:module";
 import childProcess, { execFileSync } from "node:child_process";
@@ -18,13 +20,29 @@ describe("stable live agent directory observation", () => {
     fs.writeFileSync(join(root, "notes", "memory.bin"), Buffer.from([0, 1, 255]));
   });
   afterEach(() => { vi.restoreAllMocks(); fs.rmSync(root, { recursive: true, force: true }); });
+  function localSandboxRunner(): import("@paperclipai/adapter-utils/command-managed-runtime").CommandManagedRuntimeRunner {
+    return { execute: async input => {
+      const args = shellArgs(input.args);
+      const passed = { TEMP: root, TMP: root, HOME: sandboxPath(root), TMPDIR: sandboxPath(root), ...input.env };
+      const permitted = new Set(["path", "msys", "systemroot", "windir", "pathext", ...Object.keys(passed).map(name => name.toLowerCase())]);
+      const env = Object.fromEntries(Object.entries(shellEnvironment(passed)).filter(([name]) => permitted.has(name.toLowerCase())));
+      if (input.stdin != null && (args[0] === "-c" || args[0] === "-lc")) {
+        env.PAPERCLIP_TEST_STDIN = input.stdin;
+        args[1] = `printf '%s' "$PAPERCLIP_TEST_STDIN" | (${args[1]})`;
+      }
+      return runLocalSandboxProcess("agent-probe-fixture", shellExecutable(input.command), args, {
+        cwd: input.cwd ?? process.cwd(), env, inheritEnv: false, timeoutSec: (input.timeoutMs ?? 30_000) / 1000,
+        graceSec: 1, onLog: async () => {},
+      });
+    } };
+  }
   function productionPrograms(): { probe: string; cleanup: string } {
     // Product/dev starts the server with tsx. Vitest's own transform does not
     // reproduce the lexical helpers injected into function.toString() there.
     const loader = createRequire(import.meta.url).resolve("tsx");
     const source = new URL("../services/agent-directory-probe.ts", import.meta.url).href;
     const program = `import { agentDirectoryProbeProgram, agentDirectoryTransferCleanupProgram } from ${JSON.stringify(source)}; process.stdout.write(JSON.stringify({probe:agentDirectoryProbeProgram,cleanup:agentDirectoryTransferCleanupProgram}));`;
-    return JSON.parse(execFileSync(process.execPath, ["--import", loader, "--input-type=module", "--eval", program], {
+    return JSON.parse(execFileSync(process.execPath, ["--import", pathToFileURL(loader).href, "--input-type=module", "--eval", program], {
       cwd: root, env: { TSX_DISABLE_CACHE: "1", HOME: root, TMPDIR: root }, encoding: "utf8", timeout: 10_000, maxBuffer: 64 * 1024,
     }));
   }
@@ -78,14 +96,10 @@ describe("stable live agent directory observation", () => {
     expect(() => probeAgentDirectory(`${alias}/redirect`)).toThrow();
   });
   it("observes the complete agent directory after the actual remote transfer", async () => {
-    const remote = `${root}-remote`;
+    const remote = sandboxPath(`${root}-remote`);
     fs.mkdirSync(remote);
     const target = { kind: "remote" as const, transport: "sandbox" as const, remoteCwd: remote,
-      runner: { execute: async (input: Parameters<import("@paperclipai/adapter-utils/command-managed-runtime").CommandManagedRuntimeRunner["execute"]>[0]) => ({
-        stdout: execFileSync(input.command, input.args ?? [], { cwd: input.cwd, input: input.stdin, encoding: "utf8",
-          env: { PATH: process.env.PATH, ...input.env }, timeout: input.timeoutMs, maxBuffer: 32 * 1024 * 1024 }),
-        stderr: "", exitCode: 0, signal: null, timedOut: false, pid: null, startedAt: new Date().toISOString(),
-      }) } };
+      runner: localSandboxRunner() };
     let runtime: Awaited<ReturnType<typeof prepareAdapterExecutionTargetRuntime>> | undefined;
     try {
       const baseline = await captureDirectorySnapshot(root);
@@ -94,13 +108,13 @@ describe("stable live agent directory observation", () => {
         workspaceGitSnapshot: null, workspaceFileMode: "all", workspaceExclude: [".paperclip-runtime", ".paperclip-runtime/**"] });
       expect(fs.readdirSync(`${remote}/.paperclip-runtime`)).toEqual(["agent-files"]);
       expect(fs.readdirSync(`${remote}/.paperclip-runtime/agent-files`)).toEqual([]);
-      execFileSync(process.execPath, ["-e", agentDirectoryTransferCleanupProgram, remote], { env: {}, timeout: 10_000 });
-      expect(() => probeAgentDirectory(remote)).not.toThrow();
-      expect(probeAgentDirectory(remote).digest).toBe(agentDirectoryBaselineDigest(baseline));
+      execFileSync(process.execPath, ["-e", agentDirectoryTransferCleanupProgram, fs.realpathSync(remote)], { env: {}, timeout: 10_000 });
+      expect(() => probeAgentDirectory(fs.realpathSync(remote))).not.toThrow();
+      expect(probeAgentDirectory(fs.realpathSync(remote)).digest).toBe(agentDirectoryBaselineDigest(baseline));
     } finally { await runtime?.cleanupWorkspaceSnapshot?.(); fs.rmSync(remote, { recursive: true, force: true }); }
   });
   it("keeps restart fallback transfer scratch outside the native memory directory", async () => {
-    const remoteCwd = `${root}-remote`;
+    const remoteCwd = sandboxPath(`${root}-remote`);
     const agentHome = join(remoteCwd, ".paperclip-runtime", "agent-files", "agent", "original-run");
     const scratch = join(remoteCwd, ".paperclip-runtime", "paperclip-runner", "agent-file-transfers", "agent", "original-run");
     fs.mkdirSync(agentHome, { recursive: true });
@@ -108,11 +122,7 @@ describe("stable live agent directory observation", () => {
     const target = { kind: "remote" as const, transport: "sandbox" as const, remoteCwd,
       // A newly bound controller target may have no native sync hooks. Exercise
       // the production command/base64 fallback rather than a transport mock.
-      runner: { execute: async (input: Parameters<import("@paperclipai/adapter-utils/command-managed-runtime").CommandManagedRuntimeRunner["execute"]>[0]) => ({
-        stdout: execFileSync(input.command, input.args ?? [], { cwd: input.cwd, input: input.stdin, encoding: "utf8",
-          env: { PATH: process.env.PATH, ...input.env }, timeout: input.timeoutMs, maxBuffer: 32 * 1024 * 1024 }),
-        stderr: "", exitCode: 0, signal: null, timedOut: false, pid: null, startedAt: new Date().toISOString(),
-      }) } };
+      runner: localSandboxRunner() };
     let runtime: Awaited<ReturnType<typeof prepareAdapterExecutionTargetRuntime>> | undefined;
     try {
       const baseline = await captureDirectorySnapshot(root);
@@ -126,20 +136,21 @@ describe("stable live agent directory observation", () => {
       expect(fs.readFileSync(join(root, "notes", "memory.txt"), "utf8")).toBe(memory);
       // A transfer must not introduce a reserved path that the product's own
       // full agent-directory probe rejects, including after controller recovery.
-      expect(() => probeAgentDirectory(agentHome)).not.toThrow();
+      expect(() => probeAgentDirectory(fs.realpathSync(agentHome))).not.toThrow();
       expect(fs.existsSync(join(agentHome, ".paperclip-runtime"))).toBe(false);
       expect(runtime.runtimeRootDir).toBe(scratch);
       expect(fs.readdirSync(scratch)).toEqual([]);
     } finally { await runtime?.cleanupWorkspaceSnapshot?.(); fs.rmSync(remoteCwd, { recursive: true, force: true }); }
   });
   it.each(["outside", "reserved-root", "relative", "traversal", "trailing-slash", "nul"])("rejects %s transfer scratch before filesystem work", async kind => {
-    const reserved = join(root, ".paperclip-runtime");
+    const remoteRoot = sandboxPath(root);
+    const reserved = join(remoteRoot, ".paperclip-runtime");
     const invalid = {
-      outside: `${root}-foreign/scratch`, "reserved-root": reserved, relative: ".paperclip-runtime/scratch",
+      outside: `${remoteRoot}-foreign/scratch`, "reserved-root": reserved, relative: ".paperclip-runtime/scratch",
       traversal: `${reserved}/../../scratch`, "trailing-slash": `${reserved}/scratch/`, nul: `${reserved}/scratch\0`,
     }[kind]!;
     await expect(prepareSandboxManagedRuntime({
-      spec: { transport: "sandbox", provider: "fixture", sandboxId: "owned", remoteCwd: root, apiKey: null },
+      spec: { transport: "sandbox", provider: "fixture", sandboxId: "owned", remoteCwd: remoteRoot, apiKey: null },
       adapterKey: "agent-files", client: {} as never, workspaceLocalDir: root, runtimeRootDir: invalid,
     })).rejects.toThrow("Transfer scratch must remain within the lease runtime tree");
     expect(fs.existsSync(reserved)).toBe(false);
@@ -184,7 +195,7 @@ describe("stable live agent directory observation", () => {
     if (change === "edit") fs.writeFileSync(join(root, "AGENTS.md"), "New instructions\n");
     if (change === "add") fs.writeFileSync(join(root, "new.txt"), "New");
     if (change === "remove") fs.unlinkSync(join(root, "notes", "memory.bin"));
-    if (change === "mode") fs.chmodSync(join(root, "AGENTS.md"), 0o700);
+    if (change === "mode") fs.chmodSync(join(root, "AGENTS.md"), process.platform === "win32" ? 0o400 : 0o700);
     expect(probeAgentDirectory(root).digest).not.toBe(before.digest);
   });
   it.each(["symlink", "hardlink", "reserved"])("rejects %s entries", kind => {
