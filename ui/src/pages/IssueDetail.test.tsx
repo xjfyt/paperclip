@@ -1544,6 +1544,7 @@ describe("IssueDetail", () => {
     mockIssuesApi.deleteComment.mockReset();
     mockRestoreCommentDraft.mockReset().mockReturnValue(true);
     mockFocusCommentComposer.mockClear();
+    mockLocation.key = "task-entry";
     mockLocation.pathname = "/issues/PAP-1";
     mockLocation.search = "";
     mockLocation.hash = "";
@@ -1578,6 +1579,84 @@ describe("IssueDetail", () => {
     expect(archive).toBeDefined();
     await act(async () => archive!.click());
   }
+
+  it.each(["company", "route", "user", "session", "clear", "remove", "unmount"].flatMap(change => [false, true].map(fail => ({ change, fail }))))(
+    "retry boundary suppresses task feedback after $change (failure=$fail)", async ({ change, fail }) => {
+      mockActivityApi.runsForIssue.mockResolvedValue([{ runId: "failed-original", agentId: "agent-original", status: "failed", adapterType: "codex_local", createdAt: "2026-04-21T00:00:00Z" }]);
+      const session = { user: { id: "u1" }, session: { id: "s1", userId: "u1" } };
+      mockAuthApi.getSession.mockResolvedValue(session); queryClient.setQueryData(queryKeys.auth.session, session);
+      const pending = createDeferred<Awaited<ReturnType<typeof agentsApi.retryFailedRun>>>(); mockAgentsApi.retryFailedRun.mockReturnValue(pending.promise);
+      await renderFeedbackHost("en");
+      let result: Promise<void> | void;
+      await act(() => { result = feedbackThread().onRetryFailedRun!("failed-original"); result?.catch(() => {}); });
+      await waitForAssertion(() => expect(mockAgentsApi.retryFailedRun).toHaveBeenCalledTimes(1));
+      if (change === "company") { mockCompanySelection.id = "company-2"; await renderFeedbackHost("en"); }
+      if (change === "route") { mockLocation.hash = "#another-location"; await renderFeedbackHost("en"); }
+      if (change === "unmount") await act(() => root.render(<QueryClientProvider client={queryClient}><div /></QueryClientProvider>));
+      if (change === "user" || change === "session") queryClient.setQueryData(queryKeys.auth.session, { user: { id: change === "user" ? "u2" : "u1" }, session: { id: "s2" } });
+      if (change === "clear") queryClient.clear();
+      if (change === "remove") queryClient.removeQueries({ queryKey: queryKeys.auth.session, exact: true });
+      const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+      await act(async () => { if (fail) pending.reject(new Error("Original failure 原文")); else pending.resolve({ runId: null, issueId: "issue-1" }); await result?.catch(() => {}); });
+      expect(mockFeedbackToast).not.toHaveBeenCalled();
+      for (const key of [queryKeys.issues.runs, queryKeys.issues.liveRuns, queryKeys.issues.activeRun]) expect(invalidate).toHaveBeenCalledWith({ queryKey: key("PAP-1") });
+    },
+  );
+
+  it("retry boundary rejects unknown auth before commit and permits a new known-null task request", async () => {
+    mockActivityApi.runsForIssue.mockResolvedValue([{ runId: "failed-original", agentId: "agent-original", status: "failed", adapterType: "codex_local", createdAt: "2026-04-21T00:00:00Z" }]);
+    mockAuthApi.getSession.mockResolvedValue(null);
+    await renderFeedbackHost("en");
+    mockAgentsApi.retryFailedRun.mockResolvedValue({ runId: "unexpected", issueId: "issue-1" });
+    const staleHandler = feedbackThread().onRetryFailedRun!;
+    queryClient.removeQueries({ queryKey: queryKeys.auth.session, exact: true });
+    await act(async () => { await staleHandler("failed-original"); });
+    expect(mockAgentsApi.retryFailedRun).not.toHaveBeenCalled();
+    await act(() => { queryClient.setQueryData(queryKeys.auth.session, null); });
+    await renderFeedbackHost("en");
+    mockAgentsApi.retryFailedRun.mockResolvedValue({ runId: "new-run", issueId: "issue-1" });
+    await act(async () => { await feedbackThread().onRetryFailedRun!("failed-original"); });
+    expect(mockAgentsApi.retryFailedRun).toHaveBeenCalledExactlyOnceWith("agent-original", "failed-original", "company-1");
+  });
+
+  it("retry boundary does not revive a receipt when the auth cache is removed and restored before commit", async () => {
+    mockActivityApi.runsForIssue.mockResolvedValue([{ runId: "failed-original", agentId: "agent-original", status: "failed", adapterType: "codex_local", createdAt: "2026-04-21T00:00:00Z" }]);
+    mockAuthApi.getSession.mockResolvedValue(null);
+    const old = createDeferred<Awaited<ReturnType<typeof agentsApi.retryFailedRun>>>();
+    const next = createDeferred<Awaited<ReturnType<typeof agentsApi.retryFailedRun>>>();
+    mockAgentsApi.retryFailedRun.mockReturnValueOnce(old.promise).mockReturnValueOnce(next.promise);
+    await renderFeedbackHost("en");
+    let oldResult: Promise<void> | void; let nextResult: Promise<void> | void;
+    await act(() => { oldResult = feedbackThread().onRetryFailedRun!("failed-original"); });
+    queryClient.removeQueries({ queryKey: queryKeys.auth.session, exact: true }); queryClient.setQueryData(queryKeys.auth.session, null);
+    await renderFeedbackHost("en");
+    await act(() => { nextResult = feedbackThread().onRetryFailedRun!("failed-original"); });
+    expect(mockAgentsApi.retryFailedRun).toHaveBeenCalledTimes(2);
+    await act(async () => { old.resolve({ runId: null, issueId: "issue-1" }); await oldResult; });
+    expect(mockFeedbackToast).not.toHaveBeenCalled(); expect(feedbackThread().retryFailedRunId).toBe("failed-original");
+    await act(async () => { next.resolve({ runId: null, issueId: "issue-1" }); await nextResult; });
+    expect(mockFeedbackToast).toHaveBeenCalledTimes(1);
+  });
+
+  it("retry boundary freezes the actual task target and prevents same-act duplicate requests", async () => {
+    mockActivityApi.runsForIssue.mockResolvedValue([{ runId: "failed-original", agentId: "agent-original", status: "failed", adapterType: "codex_local", createdAt: "2026-04-21T00:00:00Z" }]);
+    const pending = createDeferred<Awaited<ReturnType<typeof agentsApi.retryFailedRun>>>();
+    mockAgentsApi.retryFailedRun.mockReturnValue(pending.promise);
+    await renderFeedbackHost("en");
+    let first: Promise<void> | void; let duplicate: Promise<void> | void;
+    await act(() => { const retry = feedbackThread().onRetryFailedRun!; first = retry("failed-original"); duplicate = retry("failed-original"); });
+    await waitForAssertion(() => expect(mockAgentsApi.retryFailedRun).toHaveBeenCalled());
+    expect(mockAgentsApi.retryFailedRun).toHaveBeenCalledExactlyOnceWith("agent-original", "failed-original", "company-1");
+    mockRouteParams.issueId = "PAP-2"; mockLocation.pathname = "/issues/PAP-2";
+    await renderFeedbackHost("en", createIssue({ id: "issue-2", identifier: "PAP-2" }));
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+    await act(async () => { pending.resolve({ runId: null, issueId: "issue-1" }); await first; await duplicate; });
+    expect(mockFeedbackToast).not.toHaveBeenCalled();
+    for (const key of [queryKeys.issues.runs, queryKeys.issues.liveRuns, queryKeys.issues.activeRun]) {
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: key("PAP-1") });
+      expect(invalidate).not.toHaveBeenCalledWith({ queryKey: key("PAP-2") });
+    }
+  });
 
   it.each(Object.entries(issueFeedbackMessages))("localizes failed-run retry feedback on the actual host in %s without changing request identity", async (locale, messages) => {
     const failedRun: RunForIssue = {

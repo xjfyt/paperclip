@@ -1,3 +1,4 @@
+import { useRunRetryBoundary, type RunRetryAttempt } from "../hooks/useRunRetryBoundary";
 import { LocalizedUiError } from "../lib/localized-ui-error";
 import { commentSelfAssigneeOption } from "@/lib/composer-assignee-copy";
 import { MimouseCodingLink } from "@/components/MimouseCodingLink";
@@ -1615,17 +1616,21 @@ const IssueDetailChatTab = memo(function IssueDetailChatTab({
   });
   const resolvedActivity = activity ?? [];
   const resolvedLinkedRuns = linkedRuns ?? [];
+  const { selectedCompanyId: retryCompanyId } = useCompany();
+  const retryBoundary = useRunRetryBoundary(companyId, JSON.stringify([issueId, issueQueryRef]), retryCompanyId);
+  type RetryAttempt = RunRetryAttempt<{ runId: string; agentId: string | null; companyId: string; issueQueryRef: string }>;
   const retryFailedRun = useMutation({
-    mutationFn: async (runId: string) => {
-      const failedRun = resolvedLinkedRuns.find((run) => run.runId === runId);
-      if (!failedRun) throw new Error(mimouseT("issueFeedbackUi.failedRunMissing"));
+    mutationFn: async ({ target: failedRun }: RetryAttempt) => {
+      if (!failedRun.agentId) throw new Error(mimouseT("issueFeedbackUi.failedRunMissing"));
+      const { companyId } = failedRun;
       return agentsApi.retryFailedRun(
         failedRun.agentId,
         failedRun.runId,
         companyId,
       );
     },
-    onSuccess: (result) => {
+    onSuccess: (result, attempt) => {
+      if (!retryBoundary.isCurrent(attempt)) return;
       if (!result.runId) {
         pushToast({
           title: mimouseT("issueFeedbackUi.retryQueued"),
@@ -1634,18 +1639,15 @@ const IssueDetailChatTab = memo(function IssueDetailChatTab({
         });
       }
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.issues.runs(issueQueryRef),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.issues.liveRuns(issueQueryRef),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.issues.activeRun(issueQueryRef),
-      });
+    onSettled: (_data, _error, attempt) => {
+      const { issueQueryRef } = attempt.target;
+      queryClient.invalidateQueries({ queryKey: queryKeys.issues.runs(issueQueryRef) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.issues.liveRuns(issueQueryRef) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.issues.activeRun(issueQueryRef) });
+      retryBoundary.finish(attempt);
     },
-    onError: (error) => {
+    onError: (error, attempt) => {
+      if (!retryBoundary.isCurrent(attempt)) return;
       pushToast({
         title: mimouseT("issueFeedbackUi.retryFailed"),
         body: error instanceof Error ? error.message : mimouseT("issueFeedbackUi.retryFailedBody"),
@@ -1653,6 +1655,11 @@ const IssueDetailChatTab = memo(function IssueDetailChatTab({
       });
     },
   });
+  const requestFailedRunRetry = (runId: string): Promise<void> => {
+    const failedRun = resolvedLinkedRuns.find((run) => run.runId === runId);
+    const attempt = retryBoundary.begin({ runId, agentId: failedRun?.agentId ?? null, companyId, issueQueryRef });
+    return attempt ? retryFailedRun.mutateAsync(attempt).then(() => undefined) : Promise.resolve();
+  };
 
   const interruptibleIssueRun = useMemo(
     () => resolveInterruptibleIssueRun(resolvedActiveRun, resolvedLiveRuns),
@@ -2510,12 +2517,8 @@ const IssueDetailChatTab = memo(function IssueDetailChatTab({
             feedbackDataSharingPreference={feedbackDataSharingPreference}
             feedbackTermsUrl={feedbackTermsUrl}
             linkedRuns={timelineRuns}
-            onRetryFailedRun={(runId) =>
-              retryFailedRun.mutateAsync(runId).then(() => undefined)
-            }
-            retryFailedRunId={
-              retryFailedRun.isPending ? retryFailedRun.variables : null
-            }
+            onRetryFailedRun={requestFailedRunRetry}
+            retryFailedRunId={retryBoundary.pendingRunIds.values().next().value ?? null}
             timelineEvents={timelineEvents}
             workModeChanges={workModeChanges}
             liveRuns={resolvedLiveRuns}

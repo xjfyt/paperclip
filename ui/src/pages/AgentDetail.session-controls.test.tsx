@@ -2,7 +2,7 @@
 import "../i18n/agent-run-metadata-test-resources";
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   instanceGeneralSettingsSchema, instanceExperimentalSettingsWithManagedSchema,
@@ -27,7 +27,10 @@ type ActivityApi = typeof import("../api/activity").activityApi;
 type AccessApi = typeof import("../api/access").accessApi;
 type SettingsApi = typeof import("../api/instanceSettings").instanceSettingsApi;
 type ToolsApi = typeof import("../api/tools").toolsApi;
+const retryCompany = vi.hoisted(() => ({ id: "company-original" }));
+vi.mock("../context/CompanyContext", () => ({ useOptionalCompany: () => ({ selectedCompanyId: retryCompany.id }) }));
 const api = vi.hoisted(() => ({
+  retry: vi.fn<AgentsApi["retryFailedRun"]>(),
   login: vi.fn<AgentsApi["loginWithClaude"]>(), reset: vi.fn<AgentsApi["resetSession"]>(),
   listKeys: vi.fn<AgentsApi["listKeys"]>(), createKey: vi.fn<AgentsApi["createKey"]>(), revokeKey: vi.fn<AgentsApi["revokeKey"]>(),
   run: vi.fn<HeartbeatsApi["get"]>(), events: vi.fn<HeartbeatsApi["events"]>(),
@@ -37,7 +40,7 @@ const api = vi.hoisted(() => ({
   decisions: vi.fn<ToolsApi["getRunDecisionLookup"]>(), copy: vi.fn<(text: string) => Promise<void>>(),
 }));
 vi.mock("../api/agents", () => ({ agentsApi: {
-  loginWithClaude: api.login, resetSession: api.reset,
+  retryFailedRun: api.retry, loginWithClaude: api.login, resetSession: api.reset,
   listKeys: api.listKeys, createKey: api.createKey, revokeKey: api.revokeKey,
 } }));
 vi.mock("../api/heartbeats", () => ({ heartbeatsApi: { get: api.run, events: api.events, log: api.log, workspaceOperations: api.operations } }));
@@ -79,15 +82,16 @@ function makeIssue(index: number): IssueForRun {
   return { issueId: `issue-original-${index}`, identifier: `RAW-${index}`, title: `原始 task ${index}`, status: "todo", priority: "medium" };
 }
 function deferred<T>() {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => { resolve = done; });
-  return { promise, resolve };
+  let resolve!: (value: T) => void; let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((done, fail) => { resolve = done; reject = fail; });
+  return { promise, resolve, reject };
 }
 const t = (key: keyof typeof en) => i18n.t(`agentSessionControlsUi.${key}`);
 let container: HTMLDivElement;
 let root: Root;
 let client: QueryClient;
 beforeEach(async () => {
+  retryCompany.id = "company-original";
   await i18n.changeLanguage("en");
   Object.values(api).forEach(mock => mock.mockReset());
   api.run.mockResolvedValue(makeRun()); api.events.mockResolvedValue([]); api.operations.mockResolvedValue([]);
@@ -324,4 +328,88 @@ it.each(Object.entries(metadataCopy))("localizes real RunDetail operation badges
   expect([...reads(), api.directory.mock.calls.length]).toEqual(requests);
   expect(api.login).not.toHaveBeenCalled(); expect(api.reset).not.toHaveBeenCalled();
   expect(JSON.stringify({ run, operations })).toBe(original);
+});
+
+ it("retry boundary prevents same-act duplicate requests on the real RunDetail", async () => {
+  client.setQueryData(queryKeys.auth.session, null);
+  const pending = deferred<Awaited<ReturnType<AgentsApi["retryFailedRun"]>>>(); api.retry.mockReturnValue(pending.promise);
+  await renderRun();
+  const retry = button(i18n.t("workflow.retry"));
+  await act(async () => { retry.click(); retry.click(); });
+  await waitFor(() => expect(api.retry).toHaveBeenCalled());
+  expect(api.retry).toHaveBeenCalledExactlyOnceWith("agent-original", "run-original", "company-original");
+  await act(async () => pending.resolve({ runId: null, issueId: null })); await flush();
+});
+
+let retryNavigate: ReturnType<typeof useNavigate>;
+let retryLocation = "";
+function RetryRouterProbe() {
+  retryNavigate = useNavigate(); const location = useLocation();
+  retryLocation = location.pathname + location.search + location.hash;
+  return null;
+}
+async function renderRetryRun(run = makeRun()) {
+  await mount(<><RetryRouterProbe /><RunDetail run={run} agentRouteId="original-route" adapterType="claude_local" adapterConfig={{}} /></>);
+}
+it.each(["company", "route", "same-path", "user", "session", "clear", "remove", "unmount"])("retry boundary ignores late RunDetail success after %s", async change => {
+  client.setQueryData(queryKeys.auth.session, { user: { id: "u1" }, session: { id: "s1", userId: "u1" } });
+  const pending = deferred<Awaited<ReturnType<AgentsApi["retryFailedRun"]>>>(); api.retry.mockReturnValue(pending.promise);
+  await renderRetryRun(); await click(i18n.t("workflow.retry"));
+  if (change === "company") { retryCompany.id = "company-new"; await renderRetryRun(); }
+  if (change === "route") await act(async () => { await retryNavigate("/new?query#hash"); });
+  if (change === "same-path") await act(async () => { await retryNavigate("/"); });
+  if (change === "unmount") await mount(<RetryRouterProbe />);
+  if (change === "user" || change === "session") client.setQueryData(queryKeys.auth.session, { user: { id: change === "user" ? "u2" : "u1" }, session: { id: "s2" } });
+  if (change === "clear") client.clear();
+  if (change === "remove") client.removeQueries({ queryKey: queryKeys.auth.session, exact: true });
+  const path = retryLocation;
+  await act(async () => pending.resolve({ runId: "late-successor", issueId: null })); await flush();
+  expect(retryLocation).toBe(path);
+});
+it("retry boundary keeps a new RunDetail attempt pending after router A-B-A and old settlement", async () => {
+  client.setQueryData(queryKeys.auth.session, null);
+  const old = deferred<Awaited<ReturnType<AgentsApi["retryFailedRun"]>>>();
+  const next = deferred<Awaited<ReturnType<AgentsApi["retryFailedRun"]>>>();
+  api.retry.mockReturnValueOnce(old.promise).mockReturnValueOnce(next.promise);
+  await renderRetryRun(); await click(i18n.t("workflow.retry"));
+  await act(async () => { await retryNavigate("/other"); }); await act(async () => { await retryNavigate(-1); });
+  await click(i18n.t("workflow.retry"));
+  expect(api.retry).toHaveBeenCalledTimes(2);
+  await act(async () => old.resolve({ runId: "old", issueId: null })); await flush();
+  expect(retryLocation).toBe("/"); expect(button(i18n.t("managementUi.retrying")).disabled).toBe(true);
+  await act(async () => next.resolve({ runId: "new", issueId: null })); await flush();
+  expect(retryLocation).toBe("/agents/original-route/runs/new");
+});
+
+it("retry boundary retains the original run cache and suppresses old inline errors after a run change", async () => {
+  client.setQueryData(queryKeys.auth.session, null);
+  const old = deferred<Awaited<ReturnType<AgentsApi["retryFailedRun"]>>>();
+  const next = deferred<Awaited<ReturnType<AgentsApi["retryFailedRun"]>>>();
+  api.retry.mockReturnValueOnce(old.promise).mockReturnValueOnce(next.promise);
+  await renderRetryRun(); await click(i18n.t("workflow.retry"));
+  const newer = makeRun({ id: "run-new", agentId: "agent-new" });
+  api.run.mockImplementation(async id => id === newer.id ? newer : makeRun());
+  await renderRetryRun(newer); await click(i18n.t("workflow.retry"));
+  expect(api.retry.mock.calls).toEqual([["agent-original", "run-original", "company-original"], ["agent-new", "run-new", "company-original"]]);
+  const invalidate = vi.spyOn(client, "invalidateQueries");
+  await act(async () => old.reject(new Error("Stale server error 原文"))); await flush();
+  expect(container.textContent).not.toContain("Stale server error 原文");
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.heartbeats("company-original", "agent-original") });
+  expect(invalidate).not.toHaveBeenCalledWith({ queryKey: queryKeys.heartbeats("company-original", "agent-new") });
+  expect(button(i18n.t("managementUi.retrying")).disabled).toBe(true);
+  await act(async () => next.reject(new Error("Current server error 原文"))); await flush();
+  expect(container.textContent).toContain("Current server error 原文");
+});
+
+it.each(["clear", "remove", "session"])("retry boundary rejects RunDetail clicks before auth %s commits", async change => {
+  client.setQueryData(queryKeys.auth.session, { user: { id: "u1" }, session: { id: "s1" } });
+  api.retry.mockResolvedValue({ runId: null, issueId: null });
+  await renderRetryRun(); const retry = button(i18n.t("workflow.retry"));
+  await act(async () => {
+    if (change === "clear") client.clear();
+    if (change === "remove") client.removeQueries({ queryKey: queryKeys.auth.session, exact: true });
+    if (change === "session") client.setQueryData(queryKeys.auth.session, { user: { id: "u1" }, session: { id: "s2" } });
+    retry.click();
+  });
+  expect(api.retry).not.toHaveBeenCalled();
 });

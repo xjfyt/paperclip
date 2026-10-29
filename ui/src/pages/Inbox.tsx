@@ -1,3 +1,5 @@
+import { t as mimouseT } from "@/i18n";
+import { useRunRetryBoundary, type RunRetryAttempt } from "../hooks/useRunRetryBoundary";
 import { systemLabel, useSystemLabels } from "@/i18n/system-labels";
 import { t as browserT, i18n as browserI18n, useTranslation } from "@/i18n";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -1823,43 +1825,38 @@ function StreamlinedInbox({
     },
   });
 
-  const [retryingRunIds, setRetryingRunIds] = useState<Set<string>>(new Set());
-
+  const retryBoundary = useRunRetryBoundary(selectedCompanyId);
+  const retryingRunIds = retryBoundary.pendingRunIds;
+  type RetryAttempt = RunRetryAttempt<{ id: string; runId: string; agentId: string; companyId: string }>;
   const retryRunMutation = useMutation({
-    mutationFn: async (run: HeartbeatRun) => {
-      const result = await agentsApi.retryFailedRun(
-        run.agentId,
-        run.id,
-        run.companyId,
-      );
-      return { newRun: result, originalRun: run };
+    mutationFn: async ({ target: run }: RetryAttempt) => {
+      return agentsApi.retryFailedRun(run.agentId, run.id, run.companyId);
     },
-    onMutate: (run) => {
-      setRetryingRunIds((prev) => new Set(prev).add(run.id));
-    },
-    onSuccess: ({ newRun, originalRun }) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.heartbeats(originalRun.companyId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.heartbeats(originalRun.companyId, originalRun.agentId) });
+    onSuccess: (newRun, attempt) => {
+      if (!retryBoundary.isCurrent(attempt)) return;
       if (newRun.runId)
-        navigate(`/agents/${originalRun.agentId}/runs/${newRun.runId}`);
+        navigate(`/agents/${attempt.target.agentId}/runs/${newRun.runId}`);
       else if (newRun.issueId) navigate(`/issues/${newRun.issueId}`);
     },
-    onError: (error) => {
+    onError: (error, attempt) => {
+      if (!retryBoundary.isCurrent(attempt)) return;
       pushToast({
-        title: "Run retry failed",
-        body: error instanceof Error ? error.message : "Unable to retry run",
+        title: mimouseT("issueFeedbackUi.retryFailed"),
+        body: error instanceof Error ? error.message : mimouseT("issueFeedbackUi.retryFailedBody"),
         tone: "error",
       });
     },
-    onSettled: (_data, _error, run) => {
-      if (!run) return;
-      setRetryingRunIds((prev) => {
-        const next = new Set(prev);
-        next.delete(run.id);
-        return next;
-      });
+    onSettled: (_data, _error, attempt) => {
+      const run = attempt.target;
+      queryClient.invalidateQueries({ queryKey: queryKeys.heartbeats(run.companyId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.heartbeats(run.companyId, run.agentId) });
+      retryBoundary.finish(attempt);
     },
   });
+  const retryRun = (run: HeartbeatRun) => {
+    const attempt = retryBoundary.begin({ id: run.id, runId: run.id, agentId: run.agentId, companyId: run.companyId });
+    if (attempt) retryRunMutation.mutate(attempt);
+  };
 
   const [fadingOutIssues, setFadingOutIssues] = useState<Set<string>>(new Set());
   const [showMarkAllReadConfirm, setShowMarkAllReadConfirm] = useState(false);
@@ -3141,7 +3138,7 @@ function StreamlinedInbox({
                           agentName={agentName(item.run.agentId)}
                           issueLinkState={issueLinkState}
                           onDismiss={() => dismissInboxItem(runKey)}
-                          onRetry={() => retryRunMutation.mutate(item.run)}
+                          onRetry={() => retryRun(item.run)}
                           isRetrying={retryingRunIds.has(item.run.id)}
                           unreadState={nonIssueUnreadState(runKey)}
                           onMarkRead={() => handleMarkNonIssueRead(runKey)}

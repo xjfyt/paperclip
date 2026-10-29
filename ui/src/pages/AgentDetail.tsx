@@ -1,3 +1,4 @@
+import { useRunRetryBoundary, type RunRetryAttempt } from "../hooks/useRunRetryBoundary";
 import { Trans } from "react-i18next";
 import { describeManagementError, managementErrorText, ManagementUiError, renderManagementError, type ManagementErrorDescriptor } from "@/i18n/management-errors";
 import { CapabilityEvidenceLedger } from "@/components/CapabilityEvidenceLedger";
@@ -33,7 +34,7 @@ import { issuesApi } from "../api/issues";
 import { projectsApi } from "../api/projects";
 import { usePanel } from "../context/PanelContext";
 import { useSidebar } from "../context/SidebarContext";
-import { useCompany } from "../context/CompanyContext";
+import { useCompany, useOptionalCompany } from "../context/CompanyContext";
 import { useToastActions } from "../context/ToastContext";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
 import { queryKeys } from "../lib/queryKeys";
@@ -3502,17 +3503,29 @@ export function RunDetail({ run: initialRun, agentRouteId, adapterType, adapterC
     if (taskKey) payload.taskKey = taskKey;
     return payload;
   }, [run.contextSnapshot]);
+  const retryCompany = useOptionalCompany();
+  const retryBoundary = useRunRetryBoundary(run.companyId, JSON.stringify([run.id, run.agentId, agentRouteId]), retryCompany?.selectedCompanyId ?? run.companyId);
+  type RetryAttempt = RunRetryAttempt<{ id: string; runId: string; agentId: string; companyId: string; agentRouteId: string }>;
   const retryRun = useMutation({
-    mutationFn: async () => {
+    mutationFn: async ({ target: run }: RetryAttempt) => {
       return agentsApi.retryFailedRun(run.agentId, run.id, run.companyId);
     },
-    onSuccess: (newRun) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.heartbeats(run.companyId, run.agentId) });
+    onSuccess: (newRun, attempt) => {
+      if (!retryBoundary.isCurrent(attempt)) return;
       if (newRun.runId)
-        navigate(`/agents/${agentRouteId}/runs/${newRun.runId}`);
+        navigate(`/agents/${attempt.target.agentRouteId}/runs/${newRun.runId}`);
       else if (newRun.issueId) navigate(`/issues/${newRun.issueId}`);
     },
+    onSettled: (_data, _error, attempt) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.heartbeats(attempt.target.companyId, attempt.target.agentId) });
+      retryBoundary.finish(attempt);
+    },
   });
+  const retryPending = retryBoundary.pendingRunIds.has(run.id);
+  const requestRetry = () => {
+    const attempt = retryBoundary.begin({ id: run.id, runId: run.id, agentId: run.agentId, companyId: run.companyId, agentRouteId });
+    if (attempt) retryRun.mutate(attempt);
+  };
 
   const rerunWithTrace = useMutation({
     mutationFn: async () => {
@@ -3640,11 +3653,11 @@ export function RunDetail({ run: initialRun, agentRouteId, adapterType, adapterC
                   variant="ghost"
                   size="sm"
                   className="text-xs h-6 px-2"
-                  onClick={() => retryRun.mutate()}
-                  disabled={retryRun.isPending}
+                  onClick={requestRetry}
+                  disabled={retryPending}
                 >
                   <RotateCcw className="h-3.5 w-3.5 mr-1" />
-                  {retryRun.isPending ? mimouseT("managementUi.retrying") : mimouseT("workflow.retry")}
+                  {retryPending ? mimouseT("managementUi.retrying") : mimouseT("workflow.retry")}
                 </Button>
               )}
               <Button
@@ -3730,7 +3743,7 @@ export function RunDetail({ run: initialRun, agentRouteId, adapterType, adapterC
                 {managementErrorText(resumeRun.error, "managementUi.resumeRunFailed")}
               </div>
             )}
-            {retryRun.isError && (
+            {retryRun.isError && retryBoundary.isCurrent(retryRun.variables) && (
               <div className="text-xs text-destructive">
                 {managementErrorText(retryRun.error, "managementUi.retryRunFailed")}
               </div>

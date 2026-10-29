@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import type { ComponentProps } from "react";
+import { queryKeys } from "../lib/queryKeys";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -14,7 +15,7 @@ import {
 import { taskCollectionPreferencesStorageKey } from "../lib/task-collection-preferences";
 
 const routerMock = vi.hoisted(() => ({
-  location: { pathname: "/", search: "", hash: "" },
+  location: { key: "inbox-entry", pathname: "/", search: "", hash: "" },
   navigate: vi.fn(),
 }));
 
@@ -23,6 +24,7 @@ const externalObjectMocks = vi.hoisted(() => ({
 }));
 
 const apiMocks = vi.hoisted(() => ({
+  retryFailedRun: vi.fn(),
   approvalsList: vi.fn(),
   joinRequestsList: vi.fn(),
   userDirectoryList: vi.fn(),
@@ -82,7 +84,7 @@ vi.mock("../api/issues", () => ({
 }));
 
 vi.mock("../api/agents", () => ({
-  agentsApi: { list: apiMocks.agentsList },
+  agentsApi: { list: apiMocks.agentsList, retryFailedRun: apiMocks.retryFailedRun },
 }));
 
 vi.mock("../api/heartbeats", () => ({
@@ -100,8 +102,9 @@ vi.mock("../api/projects", () => ({
   projectsApi: { list: apiMocks.projectsList },
 }));
 
+const retryHost = vi.hoisted(() => ({ companyId: "company-1", toast: vi.fn() }));
 vi.mock("../context/CompanyContext", () => ({
-  useCompany: () => ({ selectedCompanyId: "company-1" }),
+  useCompany: () => ({ selectedCompanyId: retryHost.companyId }),
 }));
 
 vi.mock("../context/BreadcrumbContext", () => ({
@@ -109,7 +112,7 @@ vi.mock("../context/BreadcrumbContext", () => ({
 }));
 
 vi.mock("../context/ToastContext", () => ({
-  useToastActions: () => ({ pushToast: vi.fn() }),
+  useToastActions: () => ({ pushToast: retryHost.toast }),
 }));
 
 vi.mock("../context/DialogContext", () => ({
@@ -337,7 +340,10 @@ function createFailedRun(overrides: Partial<HeartbeatRun> = {}): HeartbeatRun {
 
 function resetInboxApiMocks() {
   for (const mock of Object.values(apiMocks)) mock.mockReset();
+  retryHost.companyId = "company-1";
+  retryHost.toast.mockReset();
   externalObjectMocks.summaries.clear();
+  routerMock.location.key = "inbox-entry";
   routerMock.location.pathname = "/";
   routerMock.location.search = "";
   routerMock.location.hash = "";
@@ -384,6 +390,120 @@ describe("Inbox toolbar", () => {
       clearLocalInboxArchive("company-1", issueId);
     }
     container.remove();
+  });
+
+  it.each([true, false].flatMap(streamlined => ["remove", "clear", "session"].map(change => ({ streamlined, change }))))(
+    "retry boundary rejects a click before auth $change commits (streamlined=$streamlined)", async ({ streamlined, change }) => {
+      routerMock.location.pathname = "/inbox/all";
+      apiMocks.experimentalSettings.mockResolvedValue({ enableStreamlinedUi: streamlined });
+      apiMocks.heartbeatRunsList.mockResolvedValue([createFailedRun()]);
+      apiMocks.retryFailedRun.mockResolvedValue({ runId: null, issueId: null });
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+      queryClient.setQueryData(queryKeys.auth.session, { user: { id: "u1" }, session: { id: "s1" } });
+      const root = createRoot(container);
+      try {
+        await act(() => root.render(<QueryClientProvider client={queryClient}><Inbox /></QueryClientProvider>));
+        const retry = () => Array.from(container.querySelectorAll("button")).find(b => b.textContent?.trim() === "Retry");
+        await vi.waitFor(() => expect(retry()).toBeDefined());
+        await act(() => {
+          if (change === "remove") queryClient.removeQueries({ queryKey: queryKeys.auth.session, exact: true });
+          if (change === "clear") queryClient.clear();
+          if (change === "session") queryClient.setQueryData(queryKeys.auth.session, { user: { id: "u1" }, session: { id: "s2" } });
+          retry()!.click();
+        });
+        expect(apiMocks.retryFailedRun).not.toHaveBeenCalled();
+      } finally { await act(() => root.unmount()); queryClient.clear(); }
+    },
+  );
+
+  it.each([true, false].flatMap(streamlined => ["route", "key", "path", "hash", "user", "session", "clear", "remove", "unmount"].flatMap(change => [false, true].map(fail => ({ streamlined, change, fail })))))(
+    "retry boundary ignores late receipt after $change (streamlined=$streamlined, failure=$fail)", async ({ streamlined, change, fail }) => {
+      routerMock.location.pathname = "/inbox/all";
+      apiMocks.experimentalSettings.mockResolvedValue({ enableStreamlinedUi: streamlined });
+      apiMocks.heartbeatRunsList.mockResolvedValue([createFailedRun()]);
+      const pending = createDeferred<{ runId: string; issueId: null }>(); apiMocks.retryFailedRun.mockReturnValue(pending.promise);
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+      queryClient.setQueryData(queryKeys.auth.session, { user: { id: "u1" }, session: { id: "s1", userId: "u1" } });
+      const root = createRoot(container); let mounted = true;
+      const render = () => root.render(<QueryClientProvider client={queryClient}><Inbox /></QueryClientProvider>);
+      try {
+        await act(render);
+        await vi.waitFor(() => expect(Array.from(container.querySelectorAll("button")).find(b => b.textContent?.trim() === "Retry")).toBeDefined());
+        await act(() => Array.from(container.querySelectorAll("button")).find(b => b.textContent?.trim() === "Retry")!.click());
+        await vi.waitFor(() => expect(apiMocks.retryFailedRun).toHaveBeenCalledTimes(1));
+        if (change === "route") await act(() => { routerMock.location.search = "?new-navigation"; render(); });
+        if (change === "key" || change === "path" || change === "hash") await act(() => {
+          if (change === "key") routerMock.location.key = "new-entry";
+          if (change === "path") routerMock.location.pathname = "/inbox/mine";
+          if (change === "hash") routerMock.location.hash = "#new";
+          render();
+        });
+        if (change === "unmount") { await act(() => root.unmount()); mounted = false; }
+        // Deliberately settle before React gets a chance to commit the cache change.
+        if (change === "user" || change === "session") queryClient.setQueryData(queryKeys.auth.session, { user: { id: change === "user" ? "u2" : "u1" }, session: { id: "s2", userId: change === "user" ? "u2" : "u1" } });
+        if (change === "clear") queryClient.clear();
+        if (change === "remove") queryClient.removeQueries({ queryKey: queryKeys.auth.session, exact: true });
+        const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+        await act(async () => {
+          if (fail) pending.reject(new Error("Original server failure 原文")); else pending.resolve({ runId: "successor", issueId: null });
+          await pending.promise.catch(() => {});
+        });
+        await new Promise(resolve => setTimeout(resolve, 0));
+        expect(routerMock.navigate).not.toHaveBeenCalled(); expect(retryHost.toast).not.toHaveBeenCalled();
+        expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.heartbeats("company-1", "agent-1") });
+      } finally { if (mounted) await act(() => root.unmount()); queryClient.clear(); }
+    },
+  );
+
+  it.each([true, false])("retry boundary preserves a newer attempt through company A-B-A and old settlement (streamlined=%s)", async streamlined => {
+    routerMock.location.pathname = "/inbox/all";
+    apiMocks.experimentalSettings.mockResolvedValue({ enableStreamlinedUi: streamlined });
+    apiMocks.heartbeatRunsList.mockResolvedValue([createFailedRun(), createFailedRun({ id: "run-2", agentId: "agent-2" })]);
+    const old = createDeferred<{ runId: string; issueId: null }>(); const next = createDeferred<{ runId: string; issueId: null }>();
+    apiMocks.retryFailedRun.mockReturnValueOnce(old.promise).mockReturnValue(next.promise);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+    queryClient.setQueryData(queryKeys.auth.session, null);
+    const root = createRoot(container);
+    const render = () => root.render(<QueryClientProvider client={queryClient}><Inbox /></QueryClientProvider>);
+    const retry = () => Array.from(container.querySelectorAll("button")).find(b => b.textContent?.trim() === "Retry")!;
+    try {
+      await act(render); await vi.waitFor(() => expect(retry()).toBeDefined());
+      await act(() => retry().click()); await vi.waitFor(() => expect(apiMocks.retryFailedRun).toHaveBeenCalledTimes(1));
+      // A different failed run remains independently retryable.
+      await act(() => retry().click()); await vi.waitFor(() => expect(apiMocks.retryFailedRun).toHaveBeenCalledTimes(2));
+      await act(() => { retryHost.companyId = "company-2"; render(); });
+      await act(() => { retryHost.companyId = "company-1"; render(); });
+      await act(() => retry().click()); await vi.waitFor(() => expect(apiMocks.retryFailedRun).toHaveBeenCalledTimes(3));
+      await act(async () => { old.resolve({ runId: "old-successor", issueId: null }); await old.promise; });
+      expect(routerMock.navigate).not.toHaveBeenCalled();
+      const pendingButtons = Array.from(container.querySelectorAll("button")).filter(b => b.textContent?.includes("Retrying"));
+      expect(pendingButtons.length).toBeGreaterThan(0); expect(pendingButtons.every(b => b.disabled)).toBe(true);
+      await act(async () => { next.resolve({ runId: "new-successor", issueId: null }); await next.promise; });
+      await vi.waitFor(() => expect(routerMock.navigate).toHaveBeenCalledExactlyOnceWith("/agents/agent-1/runs/new-successor"));
+    } finally { await act(() => root.unmount()); queryClient.clear(); }
+  });
+
+  it.each([true, false])("retry boundary rejects same-act duplicates on the actual Inbox (streamlined=%s)", async streamlined => {
+    routerMock.location.pathname = "/inbox/all";
+    apiMocks.experimentalSettings.mockResolvedValue({ enableStreamlinedUi: streamlined });
+    apiMocks.heartbeatRunsList.mockResolvedValue([createFailedRun()]);
+    const pending = createDeferred<{ runId: string; issueId: null }>();
+    apiMocks.retryFailedRun.mockReturnValue(pending.promise);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+    const root = createRoot(container);
+    try {
+      await act(() => root.render(<QueryClientProvider client={queryClient}><Inbox /></QueryClientProvider>));
+      await vi.waitFor(() => expect(Array.from(container.querySelectorAll("button")).find(b => b.textContent?.trim() === "Retry")).toBeDefined());
+      const button = Array.from(container.querySelectorAll("button")).find(b => b.textContent?.trim() === "Retry")!;
+      await act(() => { button.click(); button.click(); });
+      await vi.waitFor(() => expect(apiMocks.retryFailedRun).toHaveBeenCalled());
+      expect(apiMocks.retryFailedRun).toHaveBeenCalledExactlyOnceWith("agent-1", "run-1", "company-1");
+      await act(() => { retryHost.companyId = "company-2"; root.render(<QueryClientProvider client={queryClient}><Inbox /></QueryClientProvider>); });
+      await act(async () => { pending.resolve({ runId: "successor", issueId: null }); await pending.promise; });
+      await vi.waitFor(() => expect(queryClient.getMutationCache().getAll().every(m => m.state.status !== "pending")).toBe(true));
+      expect(routerMock.navigate).not.toHaveBeenCalled();
+      expect(retryHost.toast).not.toHaveBeenCalled();
+    } finally { await act(() => root.unmount()); queryClient.clear(); }
   });
 
   it.each([
