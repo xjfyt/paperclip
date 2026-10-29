@@ -366,7 +366,7 @@ function isTestFile(relPath: string): boolean {
   );
 }
 
-function listGuidanceFiles(rootDir = repoRoot): string[] {
+function listGuidanceFiles(rootDir = repoRoot, readDirectory: typeof readdirSync = readdirSync): string[] {
   const found: string[] = [];
   // Include tracked files and new authored files, while respecting gitignored
   // local settings. A tracked file remains scanned even if an ignore matches.
@@ -375,15 +375,24 @@ function listGuidanceFiles(rootDir = repoRoot): string[] {
     ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
     { cwd: rootDir, encoding: "utf8" },
   ).split("\0"));
+  // Prune before touching ignored cache/evidence trees. They cannot contribute
+  // an authored file, and walking them makes this safety gate depend on local
+  // downloads and generated fixtures rather than repository guidance.
+  const authoredDirectories = new Set<string>();
+  for (const file of authored) {
+    const segments = file.split("/");
+    for (let length = 1; length < segments.length; length++) authoredDirectories.add(segments.slice(0, length).join("/"));
+  }
 
   function walk(absDir: string, relDir: string): void {
-    for (const entry of readdirSync(absDir, { withFileTypes: true })) {
+    for (const entry of readDirectory(absDir, { withFileTypes: true })) {
       if (entry.isSymbolicLink()) continue;
       const relPath = relDir ? `${relDir}/${entry.name}` : entry.name;
       if (entry.isDirectory()) {
         if (SKIP_DIRS.has(entry.name)) continue;
+        if (!authoredDirectories.has(relPath)) continue;
         if (SKIP_PATH_PREFIXES.some((prefix) => `${relPath}/`.startsWith(prefix))) continue;
-        if (SKIP_DIRS.has(entry.name) || relPath === ".paperclip-runtime") continue;
+        if (relPath === ".paperclip-runtime") continue;
         walk(path.join(absDir, entry.name), relPath);
         continue;
       }
@@ -495,6 +504,7 @@ describe("paperclipai CLI invocation safety", () => {
     ];
     try {
       execFileSync("git", ["init", "--quiet"], { cwd: root });
+      execFileSync("git", ["config", "core.autocrlf", "false"], { cwd: root });
       for (const relPath of [
         ...sourcePaths,
         "tests/runner-e2e/results/campaign/attempt-1/snapshots/api-state.json",
@@ -542,6 +552,7 @@ describe("paperclipai CLI invocation safety", () => {
     const root = mkdtempSync(path.join(os.tmpdir(), "paperclip-cli-guidance-"));
     try {
       execFileSync("git", ["init", "--quiet"], { cwd: root });
+      execFileSync("git", ["config", "core.autocrlf", "false"], { cwd: root });
       writeFileSync(path.join(root, ".gitignore"), "ignored.md\ntracked.md\n");
       for (const name of ["ignored.md", "untracked.md", "tracked.md"]) {
         writeFileSync(path.join(root, name), "pnpm paperclipai issue get issue-1\n");
@@ -556,6 +567,23 @@ describe("paperclipai CLI invocation safety", () => {
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+
+  it("does not traverse ignored generated trees while retaining authored files in the same parent", () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), "paperclip-cli-guidance-"));
+    try {
+      execFileSync("git", ["init", "--quiet"], { cwd: root });
+      mkdirSync(path.join(root, "docs", "generated", "deep"), { recursive: true });
+      writeFileSync(path.join(root, ".gitignore"), "docs/generated/\n");
+      writeFileSync(path.join(root, "docs", "authored.md"), "npx paperclipai issue get issue-1\n");
+      writeFileSync(path.join(root, "docs", "generated", "deep", "recording.md"), "pnpm paperclipai issue get issue-1\n");
+      const generated = path.join(root, "docs", "generated");
+      const readDirectory = ((directory: string, options: { withFileTypes: true }) => {
+        if (directory === generated || directory.startsWith(`${generated}${path.sep}`)) throw new Error("Ignored tree must not be traversed");
+        return readdirSync(directory, options);
+      }) as typeof readdirSync;
+      expect(listGuidanceFiles(root, readDirectory)).toEqual(["docs/authored.md"]);
+    } finally { rmSync(root, { recursive: true, force: true }); }
   });
 
   it("allows only exact-allowlist pnpm paperclipai commands on every guidance surface", () => {

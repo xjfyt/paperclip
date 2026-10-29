@@ -16,6 +16,50 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  portable-tooling:
+    name: Portable tooling (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.22.1
+      - name: Verify build staging, CRLF gates, documentation and strict UI evidence tooling
+        run: node --test scripts/windows-build-gates.test.mjs scripts/test-mimouse-ui.test.mjs scripts/check-project-docs.test.mjs scripts/check-clean-build.test.mjs tests/mimouse/fixture-lifecycle.test.mjs
+      - name: Validate maintained Chinese documentation
+        run: node scripts/check-project-docs.mjs
+
+  build-quality:
+    name: Types, tokens and clean build
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.22.1
+          package-manager-cache: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86
+        with:
+          version: 9.15.4
+      - name: Install the committed dependency graph
+        run: pnpm install --frozen-lockfile
+      - name: Check types and generated contracts
+        run: pnpm typecheck
+      - name: Check design tokens
+        run: pnpm check:token-gates
+      - name: Require a build without warning diagnostics
+        run: pnpm check:build-clean
+
   resources:
     runs-on: ubuntu-latest
     timeout-minutes: 5
