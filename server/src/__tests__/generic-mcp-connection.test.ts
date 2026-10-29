@@ -1,11 +1,17 @@
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
 import { createServer } from "node:http";
+import { lookup as dnsLookup } from "node:dns/promises";
 import { Writable } from "node:stream";
 import express from "express";
 import pino from "pino";
 import request from "supertest";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+
+vi.mock("node:dns/promises", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:dns/promises")>();
+  return { ...actual, lookup: vi.fn(actual.lookup) };
+});
 import {
   activityLog,
   agents,
@@ -637,7 +643,11 @@ describeEmbeddedPostgres("generic remote MCP connections", () => {
     await expect(db.select().from(toolApplications)).resolves.toHaveLength(0);
   });
 
-  it("emits DNS guidance for a real NXDOMAIN failure", async () => {
+  it("emits DNS guidance for an ENOTFOUND resolver failure without external DNS", async () => {
+    vi.mocked(dnsLookup).mockImplementationOnce(async hostname => {
+      expect(hostname).toBe("qa-nonexistent.invalid");
+      throw Object.assign(new Error("synthetic resolver ENOTFOUND"), { code: "ENOTFOUND", syscall: "getaddrinfo" });
+    });
     const company = await createCompany(db);
     const app = createRouteApp(db, {
       deploymentMode: "local_trusted",

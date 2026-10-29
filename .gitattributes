@@ -12,3 +12,7 @@ packages/teams-catalog/catalog/** text=auto eol=lf
 # Deployed migration receipts attest original SQL bytes. Preserve those hashes
 # across Windows checkouts instead of inventing platform-dependent receipts.
 packages/db/src/migrations/** text=auto eol=lf
+# Shipped instruction assets must materialize the same prompt bytes on every OS.
+server/src/onboarding-assets/** text=auto eol=lf
+# Frozen skill releases attest their original text bytes, like catalog assets.
+skills-releases/** text=auto eol=lf

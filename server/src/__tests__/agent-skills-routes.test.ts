@@ -380,7 +380,9 @@ describe("agent skill routes", () => {
       vi.importActual<typeof import("../routes/agents.js")>("../routes/agents.js"),
       vi.importActual<typeof import("../middleware/index.js")>("../middleware/index.js"),
     ]);
-  });
+  // A fresh Windows module graph can exceed the 30s default during broad
+  // verification. Keep this import budget separate from route action deadlines.
+  }, process.platform === "win32" ? 60_000 : 30_000);
 
   it("skips runtime materialization when listing Claude skills", async () => {
     mockAgentService.getById.mockResolvedValue(makeAgent("claude_local"));
