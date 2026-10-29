@@ -2,7 +2,7 @@ import { cp, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "n
 import { execFile as execFileCallback } from "node:child_process";
 import { promisify } from "node:util";
 import os from "node:os";
-import path from "node:path";
+import { fixturePath as path, sandboxPath, shellExecutable, shellArgs, shellEnvironment } from "@paperclipai/adapter-utils/test-fixtures/local-sandbox";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { materializeIsolatedTaskDirectory, shouldUseIsolatedTaskDirectory } from "./isolated-task-directory.js";
 import { prepareSandboxManagedRuntime, type SandboxManagedRuntimeClient, type SandboxSyncOperation } from "@paperclipai/adapter-utils/sandbox-managed-runtime";
@@ -46,7 +46,7 @@ describe("isolated task directories", () => {
   });
 
   async function setup() {
-    root = await mkdtemp(path.join(os.tmpdir(), "paperclip-isolated-task-"));
+    root = sandboxPath(await mkdtemp(path.join(os.tmpdir(), "paperclip-isolated-task-")));
     vi.stubEnv("PAPERCLIP_HOME", root);
     return { companyId: "company-1", issueId: "issue-1" };
   }
@@ -85,7 +85,7 @@ describe("isolated task directories", () => {
           await cp(file.sourcePath, file.targetPath, { recursive: true, dereference: file.followSymlinks ?? false });
         }
         for (const command of operation.postUploadCommands ?? []) {
-          await execFile("sh", ["-c", command.command]);
+          await execFile(shellExecutable("sh"), shellArgs(["-c", command.command]), { env: shellEnvironment() });
         }
         return { operationId: operation.operationId, filesTransferred: operation.files.length, bytesTransferred: 0 };
       })),
@@ -96,7 +96,7 @@ describe("isolated task directories", () => {
       readFile: async (target) => readFile(target),
       listFiles: async (target) => readdir(target),
       remove: async (target) => { await rm(target, { recursive: true, force: true }); },
-      run: async (command) => { await execFile("sh", ["-c", command]); },
+      run: async (command) => { await execFile(shellExecutable("sh"), shellArgs(["-c", command]), { env: shellEnvironment() }); },
       syncIn: transfer,
       syncOut: transfer,
     };
