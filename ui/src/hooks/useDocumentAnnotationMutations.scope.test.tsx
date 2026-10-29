@@ -10,14 +10,24 @@ import { queryKeys } from "@/lib/queryKeys";
 import { useDocumentAnnotationMutations } from "./useDocumentAnnotationMutations";
 vi.mock("@/api/auth", () => ({ authApi: { getSession: async () => null } }));
 const anchor = { selectedText: "Original quote", selector: { quote: { exact: "Original quote", prefix: "", suffix: "" }, position: { normalizedStart: 0, normalizedEnd: 14, markdownStart: 0, markdownEnd: 14 } } };
-const first = { kind: "issue", issueId: "same-id", documentKey: "plan" } as const;
-const second = { kind: "routine", routineId: "same-id", documentKey: "plan" } as const;
+const first = { kind: "issue", issueId: "same-id", documentKey: "description" } as const satisfies DocumentAnnotationTarget;
+const second = { kind: "routine", routineId: "same-id", documentKey: "description" } as const satisfies DocumentAnnotationTarget;
 it("captures the clicked source before async onMutate and never clears a newer document draft", async () => {
   const host = document.createElement("div"); const root = createRoot(host); const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   let current!: ReturnType<typeof useDocumentAnnotationMutations>;
   let resume!: () => void; const cancelled = new Promise<void>(resolve => { resume = resolve; });
   const cancel = vi.spyOn(client, "cancelQueries").mockReturnValueOnce(cancelled);
-  const created = { id: "created-first", comments: [] } as unknown as DocumentAnnotationThreadWithComments;
+  const created: DocumentAnnotationThreadWithComments = {
+    id: "created-first", companyId: "company", issueId: first.issueId, documentId: "issue-description", documentKey: first.documentKey,
+    status: "open", anchorState: "active", anchorConfidence: "exact",
+    originalRevisionId: "revision", originalRevisionNumber: 1, currentRevisionId: "revision", currentRevisionNumber: 1,
+    selectedText: anchor.selectedText, prefixText: "", suffixText: "", ...anchor.selector.position, anchorSelector: anchor.selector,
+    createdByAgentId: null, createdByUserId: "user", resolvedByAgentId: null, resolvedByUserId: null, resolvedAt: null,
+    createdAt: new Date("2026-10-29T00:00:00Z"), updatedAt: new Date("2026-10-29T00:00:00Z"), comments: [],
+  };
+  const newerCache: DocumentAnnotationThreadWithComments[] = [{
+    ...created, id: "keep-newer-cache", issueId: null, routineId: second.routineId, documentId: "routine-description", documentKey: second.documentKey,
+  }];
   const create = vi.spyOn(documentAnnotationsApi, "createForTarget").mockResolvedValue(created);
   const createdCallback = vi.fn(); const focus = vi.fn();
   function Harness({ target }: { target: DocumentAnnotationTarget }) {
@@ -27,7 +37,7 @@ it("captures the clicked source before async onMutate and never clears a newer d
   const render = async (target: DocumentAnnotationTarget) => { await act(async () => root.render(<QueryClientProvider client={client}><Harness target={target} /></QueryClientProvider>)); };
   const keyA = queryKeys.issues.documentAnnotations(first.issueId, first.documentKey, "all");
   const keyB = queryKeys.routines.documentAnnotations(second.routineId, second.documentKey, "all");
-  client.setQueryData(keyA, []); client.setQueryData(keyB, [{ id: "keep-newer-cache" }]);
+  client.setQueryData(keyA, []); client.setQueryData(keyB, newerCache);
   try {
     await render(first); await act(async () => current.createThread.mutate("Keep raw comment 原文"));
     await render(second); expect(host.textContent).toBe("ready");
@@ -35,7 +45,7 @@ it("captures the clicked source before async onMutate and never clears a newer d
     expect(create).toHaveBeenCalledWith(first, expect.objectContaining({ body: "Keep raw comment 原文" }));
     expect(createdCallback).not.toHaveBeenCalled(); expect(focus).not.toHaveBeenCalled();
     expect(client.getQueryData(keyA)).toEqual([created]);
-    expect(client.getQueryData(keyB)).toEqual([{ id: "keep-newer-cache" }]);
+    expect(client.getQueryData(keyB)).toEqual(newerCache);
   } finally { await act(async () => root.unmount()); client.clear(); cancel.mockRestore(); create.mockRestore(); }
 });
 it("ignores a previous target's late mutation error", async () => {
