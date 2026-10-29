@@ -231,7 +231,7 @@ describeEmbeddedPostgres("agent service Claude OAuth binding claim", () => {
 
   beforeAll(async () => {
     mkdirSync(secretsTmpDir, { recursive: true });
-    process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE = path.join(secretsTmpDir, "master.key");
+    process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE = path.join(secretsTmpDir, "private-secrets", "master.key");
     const started = await startEmbeddedPostgresTestDatabase("claude-oauth-binding");
     stopDb = started.cleanup;
     connectionString = started.connectionString;

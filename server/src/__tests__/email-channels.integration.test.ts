@@ -81,7 +81,7 @@ describe("AgentMail durable email pipeline", () => {
   beforeAll(async () => {
     process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE = path.join(
       folder,
-      "master.key",
+      "private-secrets", "master.key",
     );
     database = await startEmbeddedPostgresTestDatabase("paperclip-email-");
     db = createDb(database.connectionString);

@@ -61,7 +61,7 @@ describe.skipIf(!cloudDist)("customer-success managed agent / Cloud / tenant qua
       vi.stubEnv("PAPERCLIP_HOME", directory);
       vi.stubEnv("PAPERCLIP_INSTANCE_ID", "qualification-home");
       vi.stubEnv("PAPERCLIP_AGENT_JWT_SECRET", "isolated-qualification-jwt");
-      vi.stubEnv("PAPERCLIP_SECRETS_MASTER_KEY_FILE", join(directory, "master.key"));
+      vi.stubEnv("PAPERCLIP_SECRETS_MASTER_KEY_FILE", join(directory, "private-secrets", "master.key"));
       vi.stubEnv("PAPERCLIP_SECRETS_MASTER_KEY", "");
       vi.stubEnv("PAPERCLIP_CUSTOMER_SUCCESS_AUTHORITY_ENABLED", "true");
       vi.stubEnv("PAPERCLIP_CUSTOMER_SUCCESS_INSPECTION_ENABLED", "true");

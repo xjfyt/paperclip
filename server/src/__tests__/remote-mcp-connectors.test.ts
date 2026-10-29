@@ -20,7 +20,7 @@ describe("remote connector lifecycle", () => {
   let keyDir: string;
   beforeAll(async () => {
     keyDir = await mkdtemp(join(tmpdir(), "mcp-connector-secrets-"));
-    vi.stubEnv("PAPERCLIP_SECRETS_MASTER_KEY_FILE", join(keyDir, "key"));
+    vi.stubEnv("PAPERCLIP_SECRETS_MASTER_KEY_FILE", join(keyDir, "private-secrets", "key"));
     fixture = await startEmbeddedPostgresTestDatabase("mcp-connectors-test-");
     db = createDb(fixture.connectionString);
   });

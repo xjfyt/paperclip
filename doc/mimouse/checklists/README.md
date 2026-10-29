@@ -47,6 +47,9 @@
 | [Heartbeat 完成与收尾](2026-10-30-heartbeat-completion-evidence.json) | 五完整文件 74/74，实际 drain 替代固定终态轮询，保持断言和原用例预算；77 条应用 WARN 保留。同期 Native Stop 源变更另验，不能写成全仓冻结通过。 |
 | [其余服务文件原样复验](2026-10-30-remaining-server-evidence.json) | 五完整文件按原代码、断言和预算 147/147；12 个 describe 为分组，不另计文件或用例。运行时/测试输入无漂移，仅四处文档变化；保留旧 deadline 和状态失败及其尚未证明的历史根因，不代替其余测试。 |
 | [异步夹具生命周期](2026-10-30-test-lifecycle-evidence.json) | AI/MCP/tool 三完整文件共 610 项通过；helper 四项和受控故障证明另列，明确平台预算例外，保留旧失败与输入边界。不包含仍在完善和验证的 private 集成。 |
+| [MiMouse 历史保留与完整复验](2026-10-30-mimouse-history-final-evidence.json) | 保留历史版本、公司边界及锁后复查的真实回归；最新 78 文件完整运行 1234 通过、12 条原条件跳过，3211 项声明输入无漂移。旧 1214 通过、20 失败的完整尝试保留，不把不同输入或重叠专项相加。 |
+| [Private 集成夹具生命周期](2026-10-30-mimouse-private-lifecycle-evidence.json) | 原预算与断言保留，先释放并 join 原始工作，再 drain、清理和恢复全局状态；受控超时/断言故障证明与最新完整 78 文件结果分列。12 条原条件跳过不算执行成功，不扩大到全部 server 或外部集成。 |
+| [Windows 秘密文件测试夹具](2026-10-30-secret-fixtures-evidence.json) | 19 个非 chat 文件有 257 通过、1 条原 Cloud opt-in 跳过；真实私密文件 key，不绕过生产 ACL 检查。Registry 新鲜两项复验替代原输入覆盖，不另加总；原 20 文件仍有 chat 的 253 个失败和 1 个真实未处理拒绝，不能称整组通过。 |
 | [shared 与 adapter 整包复验](2026-10-30-shared-adapter-final-evidence.json) | 两个独立完整运行：shared 94 文件、997 通过、0 跳过；adapter 80 文件、1725 通过、51 条原条件跳过，集合与 final6–9 相同。包源码/测试/锁无漂移，框架告警/未处理错误为 0；shared 四条模拟 400/413 console.warn、adapter 38 段负向 stderr 保留。不把跳过算成功、不跨重叠运行相加，不包含独立 server 四万路径压力。 |
 | [工作区 4 万路径流式压力](2026-10-30-workspace-streaming-evidence.json) | final6 完整用例通过，保留 4 万路径、超过 32 MiB 清单、实际文件/删除及 scheduler drain 断言；旧超时保留，专项通过不代替 adapter-utils 整包或官方分片结果。 |
 | [最终静态与构建门禁](2026-10-30-static-build-final-evidence.json) | 串行类型检查、零警告完整构建、Token 及模块/生命周期边界四 gate 全 exit0；当轮 11466 项声明输入中仅 checklists README 文档漂移，源码/测试/用户锁不变。13 项零 diff 为 11 项仅 EOL、2 项原始字节相同，另保留 3 条 Git autocrlf 提示；不代替剩余测试或全平台验收。 |

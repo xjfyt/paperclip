@@ -86,7 +86,7 @@ describe("iMessage Photon channel control plane", () => {
     secrets = await mkdtemp(path.join(tmpdir(), "photon-secrets-"));
     process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE = path.join(
       secrets,
-      "master.key",
+      "private-secrets", "master.key",
     );
   }, 30_000);
   afterEach(async () => {

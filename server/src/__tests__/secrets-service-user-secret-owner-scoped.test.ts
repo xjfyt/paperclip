@@ -35,7 +35,7 @@ describeEmbeddedPostgres("secretService resolveAdapterConfigForRuntime — userS
 
   beforeAll(async () => {
     mkdirSync(secretsTmpDir, { recursive: true });
-    process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE = path.join(secretsTmpDir, "master.key");
+    process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE = path.join(secretsTmpDir, "private-secrets", "master.key");
     const started = await startEmbeddedPostgresTestDatabase("owner-scoped-secrets");
     stopDb = started.cleanup;
     db = createDb(started.connectionString);

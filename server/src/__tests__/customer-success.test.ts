@@ -63,7 +63,7 @@ describe("customer-success read authority", () => {
     vi.stubEnv("PAPERCLIP_HOME", directory);
     vi.stubEnv("PAPERCLIP_INSTANCE_ID", "inspection-home");
     vi.stubEnv("PAPERCLIP_AGENT_JWT_SECRET", "inspection-local-fixture");
-    vi.stubEnv("PAPERCLIP_SECRETS_MASTER_KEY_FILE", join(directory, "master.key"));
+    vi.stubEnv("PAPERCLIP_SECRETS_MASTER_KEY_FILE", join(directory, "private-secrets", "master.key"));
     vi.stubEnv("PAPERCLIP_SECRETS_MASTER_KEY", "");
     database = await startEmbeddedPostgresTestDatabase("inspection-db-");
     db = schema.createDb(database.connectionString);

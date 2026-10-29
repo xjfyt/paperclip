@@ -40,7 +40,7 @@ describeEmbeddedPostgres("agent service secret binding sync", () => {
 
   beforeAll(async () => {
     mkdirSync(secretsTmpDir, { recursive: true });
-    process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE = path.join(secretsTmpDir, "master.key");
+    process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE = path.join(secretsTmpDir, "private-secrets", "master.key");
     const started = await startEmbeddedPostgresTestDatabase("agent-secret-bindings");
     stopDb = started.cleanup;
     db = createDb(started.connectionString);
