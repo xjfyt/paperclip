@@ -696,17 +696,18 @@ function buildWorkspaceTarExtractCommand(input: {
 // Named builder (C3): remove paths deleted in the host git worktree from the
 // sandbox workspace. Every path is shell-quoted; the caller supplies only
 // already-confined relative paths from the git snapshot.
-function buildRemoveDeletedPathsCommand(input: { remoteDir: string; manifestPath: string }): string {
+export function buildRemoveDeletedPathsCommand(input: { remoteDir: string; manifestPath: string }): string {
   // NUL input plus bounded xargs batches preserve whitespace and never create
-  // one argument list for the full snapshot. Refuse symlink ancestors.
+  // one argument list for the full snapshot. Refuse symlink ancestors before
+  // mutating the batch, then use one rm process per batch instead of per path.
   const remove = `for entry do
     parent=$entry
     while [ "\${parent#*/}" != "$parent" ]; do
       parent=\${parent%/*}
       if [ -L "$parent" ] || { [ -e "$parent" ] && [ ! -d "$parent" ]; }; then exit 42; fi
     done
-    rm -rf -- "$entry" || exit
-  done`;
+  done
+  rm -rf -- "$@"`;
   return `cd ${shellQuote(input.remoteDir)} && xargs -0 -r -n 64 sh -c ${shellQuote(remove)} sh < ${shellQuote(input.manifestPath)} && rm -f -- ${shellQuote(input.manifestPath)}`;
 }
 
@@ -891,9 +892,12 @@ async function execTar(args: string[], cwd?: string): Promise<void> {
     env: {
       ...process.env,
       COPYFILE_DISABLE: "1",
-      // Git's MSYS tar must restore real native links, never Cygwin text
-      // placeholders that Node would mistake for regular workspace files.
-      ...(windows ? { MSYS: `${(process.env.MSYS ?? "").replace(/\bwinsymlinks:\S+/g, "")} winsymlinks:nativestrict`.trim() } : {}),
+      // Disable MSYS startup argv globbing: it would expand --exclude values
+      // before tar sees them, leaking ignored literals or adding extra members.
+      // Restore native links, never Cygwin placeholders mistaken for files.
+      ...(windows ? { MSYS: [...(process.env.MSYS ?? "").split(/\s+/).filter((option) =>
+        option && option !== "glob" && option !== "noglob" && !option.startsWith("winsymlinks:")),
+        "noglob", "winsymlinks:nativestrict"].join(" ") } : {}),
     },
     maxBuffer: 32 * 1024 * 1024,
   });

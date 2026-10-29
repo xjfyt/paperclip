@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "scope": "Windows GNU tar literal exclusions, guarded deletion batches, Git snapshot materialization budgets and settlement fixture cleanup",
+  "platform": "win32",
+  "recordedAt": "2026-10-29T21:06:32.574Z",
+  "evidence": [
+    {
+      "path": "test-results/project-closure-20261029/gnu-tar-and-deletion-final.json",
+      "sha256": "e895cf1c963e9138cc4b2726aac6704e915be5719e57c0f020774deb0156cb0e",
+      "passed": 10,
+      "failed": 0,
+      "pending": 0
+    },
+    {
+      "path": "test-results/project-closure-20261029/adapter-settlement-materialization-final.json",
+      "sha256": "558c49077556e8ea6b1d92ec2ee9cba44a9ee79f5e20c4c0bd2f03129475ecae",
+      "passed": 80,
+      "failed": 0,
+      "pending": 1
+    }
+  ],
+  "baseline": [
+    {
+      "path": "test-results/project-closure-20261029/gnu-tar-literal-excludes-final.json",
+      "sha256": "a1be9564bcf54ba351bc7c34ad46db1e9dadc656a90d778d5dabd7fe783aaa77",
+      "passed": 0,
+      "failed": 1,
+      "pending": 106
+    },
+    {
+      "path": "test-results/project-closure-20261029/git-materialization-budget-before-red.json",
+      "sha256": "0d7ba03d0573617e150ce60c346a4054de147df351b693029204f892b93e5f79",
+      "passed": 0,
+      "failed": 1,
+      "pending": 61
+    }
+  ],
+  "historicalCompleteRun": {
+    "path": "test-results/project-closure-20261029/adapter-complete-final9.json",
+    "sha256": "47a5c9c1e902ddd2f82fa6234b70835764185e1b8000d749c00e6c1a9d9bdd09",
+    "passed": 1722,
+    "failed": 3,
+    "pending": 51
+  },
+  "sources": [
+    {
+      "path": "packages/adapter-utils/src/sandbox-managed-runtime.ts",
+      "sha256": "2dd483c7d04207337371e71db36581a14ded91ed703a9a37f9aba3a4e10795c7"
+    },
+    {
+      "path": "packages/adapter-utils/src/git-workspace-sync.ts",
+      "sha256": "ad496c80b6feb79912df64823d88d6f9417192f4e337d7b20662c82cd71e690d"
+    },
+    {
+      "path": "packages/adapter-utils/src/git-workspace-sync.test.ts",
+      "sha256": "64e62bf602a8dad39e14dd04ab4ee1352822ececefd29a0c4c1c090231afc64a"
+    },
+    {
+      "path": "packages/adapter-utils/src/tar-long-path.test.ts",
+      "sha256": "36a737e256dd60a4d29cf2aad0f783bbb114d3f858e7dee7c69350a960be1299"
+    },
+    {
+      "path": "packages/adapter-utils/src/workspace-delete-batches.test.ts",
+      "sha256": "ae5560acf44fd3958b76a33decf781f25acf93d5dd3d261fe96ff403ac074024"
+    },
+    {
+      "path": "packages/adapter-utils/src/acpx-engine/settlement-characterization.test.ts",
+      "sha256": "1c471a6963754bb572f9c2281d8ff2f2a71d7634bac8187b85078ceae5ed5b4c"
+    }
+  ],
+  "typecheck": {
+    "command": "pnpm --filter @paperclipai/adapter-utils typecheck",
+    "exitCode": 0,
+    "path": "test-results/project-closure-20261029/adapter-types-root-final.log",
+    "sha256": "44d5feaeb452fddf0d53efee74fad18f75de1eeb83fe7020ea9ea8aad20944fb"
+  },
+  "changes": [
+    "Force MSYS noglob while retaining native symlinks: GNU tar receives literal escaped exclude patterns unchanged, even if caller MSYS requested glob expansion.",
+    "Check every deletion batch ancestor before invoking one rm per batch. Actual shell tests cover 132 paths, ambiguous names, linked/file ancestors, missing entries and file/directory links.",
+    "Use existing snapshot execution budget for fetch, checkout and reset; preserve separate metadata and cleanup deadlines.",
+    "Settlement tests release owned gates and await execution before fixture removal. Windows cleanup gets 30 seconds to contain its existing 15-second child budget and grace."
+  ],
+  "limits": [
+    "80 related complete-suite tests pass with one existing platform skip; 10 archive/deletion tests pass. Do not add overlapping runs into a unique total.",
+    "Full adapter-utils run 9 remained failed (1722 passed, 3 failed, 51 pending): mixed old Git timeout input and two settlement cleanup/timeouts. A new complete run is still required.",
+    "The 40000-path streaming test remains separately in progress; these small real-shell tests do not prove that full workload.",
+    "Ancestor path checks are not descriptor-confined atomic protection against namespace mutation.",
+    "Raw logs and JSON remain ignored local evidence; another checkout may not contain them."
+  ]
+}

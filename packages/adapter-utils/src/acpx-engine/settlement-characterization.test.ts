@@ -50,6 +50,7 @@ import {
 
 const execFile = promisify(execFileCallback);
 const tempRoots: string[] = [];
+const pendingSettlements: Array<() => Promise<unknown>> = [];
 
 async function makeTempRoot() {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-acpx-skills-"));
@@ -58,13 +59,16 @@ async function makeTempRoot() {
 }
 
 afterEach(async () => {
+  // Vitest timeouts do not cancel an async test body. Release owned gates and
+  // drain their executions before removing fixtures or changing shared mocks.
+  await Promise.all(pendingSettlements.splice(0).map((drain) => drain()));
   await cleanupLocalSandboxProcesses(tempRoots);
   await Promise.all(
     tempRoots.splice(0).map((root) =>
       fs.rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 }),
     ),
   );
-});
+}, process.platform === "win32" ? 30_000 : 10_000);
 
 function createLocalSandboxRunner(
   onExecute?: (input: {
@@ -339,8 +343,12 @@ describe("ACP settlement — Layer A: engine teardown orchestration", () => {
           if (blockedPhase === "close_error_reporting" && text.includes("close fixture failed")) await block();
         },
       } as never);
+      pendingSettlements.push(async () => {
+        resume();
+        await Promise.allSettled([execution]);
+      });
       try {
-        await reached;
+        await Promise.race([reached, execution.then(() => { throw new Error("Execution settled before reaching its phase gate"); })]);
         expect([...scopes.values()].at(-1)).toBe(blockedPhase === "close_error_reporting" ? "phase_reporting" : blockedPhase);
       } finally {
         resume();
@@ -385,8 +393,13 @@ describe("ACP settlement — Layer A: engine teardown orchestration", () => {
         return () => { scopes.delete(token); };
       },
     } as never);
+    pendingSettlements.push(async () => {
+      controller.abort();
+      resume();
+      await Promise.allSettled([execution]);
+    });
     try {
-      await turnStarted;
+      await Promise.race([turnStarted, execution.then(() => { throw new Error("Execution settled before starting its turn"); })]);
       controller.abort();
       await cancellationStarted;
       expect([...scopes.values()].at(-1)).toBe("cancel_turn");

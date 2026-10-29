@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { afterEach, expect, it, vi } from "vitest";
-import { createTarballFromDirectory, extractTarballToDirectory } from "./sandbox-managed-runtime.js";
+import { createTarballFromDirectory, escapeTarExcludeLiteral, extractTarballToDirectory } from "./sandbox-managed-runtime.js";
 
 it("archives a real directory beyond the Windows legacy path limit without a self entry", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-tar-long-"));
@@ -48,6 +48,33 @@ async function tarMembers(archive: string) {
   return members;
 }
 afterEach(() => vi.unstubAllEnvs());
+
+it("passes literal and wildcard exclusions to tar without MSYS argv expansion", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-tar-excludes-"));
+  try {
+    const source = path.join(root, "source"); await fs.mkdir(source);
+    const entries = ["secret[1].txt", "secret1.txt", "cache-one", "cache-two"];
+    for (const name of entries) await fs.writeFile(path.join(source, name), name);
+    for (const name of ["group[2]", "group2"]) {
+      await fs.mkdir(path.join(source, name));
+      await fs.writeFile(path.join(source, name, "payload"), name);
+    }
+    // A caller's glob option must not override the controlled argv contract.
+    if (process.platform === "win32") vi.stubEnv("MSYS", "glob winsymlinks:lnk");
+    const archive = path.join(root, "archive.tar");
+    await createTarballFromDirectory({ localDir: source, archivePath: archive,
+      exclude: [escapeTarExcludeLiteral("secret[1].txt"), escapeTarExcludeLiteral("group[2]"), "cache*"] });
+    const members = await tarMembers(archive);
+    expect(new Set(members.keys())).toEqual(new Set(["secret1.txt", "group2/", "group2/payload"]));
+    expect(members.get("secret1.txt")?.body.toString()).toBe("secret1.txt");
+    const output = path.join(root, "output");
+    await extractTarballToDirectory({ archivePath: archive, localDir: output });
+    expect(await fs.readFile(path.join(output, "group2", "payload"), "utf8")).toBe("group2");
+    for (const name of ["secret[1].txt", "group[2]", "cache-one", "cache-two"]) {
+      await expect(fs.lstat(path.join(output, name))).rejects.toMatchObject({ code: "ENOENT" });
+    }
+  } finally { await fs.rm(root, { recursive: true, force: true }); }
+});
 
 it("preserves UTF-8 NUL entry names, exclusions and symlinks beyond the legacy path limit", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-tar-unicode-"));

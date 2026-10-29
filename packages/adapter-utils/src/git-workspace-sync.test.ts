@@ -8,13 +8,13 @@ import { runWorkspaceGitProcess } from "./workspace-git-stream.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { beforeGitExec } = vi.hoisted(() => ({
-  beforeGitExec: { current: null as ((command: string, args: readonly string[]) => void) | null },
+  beforeGitExec: { current: null as ((command: string, args: readonly string[], options?: { timeout?: number }) => void) | null },
 }));
 
 vi.mock("node:child_process", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:child_process")>();
   const execute = ((...args: Parameters<typeof actual.execFile>) => {
-    if (Array.isArray(args[1])) beforeGitExec.current?.(args[0], args[1]);
+    if (Array.isArray(args[1])) beforeGitExec.current?.(args[0], args[1], args[2] !== null && typeof args[2] === "object" ? args[2] : undefined);
     return actual.execFile(...args);
   }) as typeof actual.execFile;
   // Keep Node's custom promisifier and overload behavior for unrelated tests.
@@ -278,6 +278,12 @@ describe("git workspace sync", () => {
       deletedPaths: ["tracked.txt"],
     });
 
+    vi.stubEnv("PAPERCLIP_WORKSPACE_GIT_SNAPSHOT_TIMEOUT_MS", "12345");
+    const materializationBudgets: Array<[string, number | undefined]> = [];
+    beforeGitExec.current = (_command, args, options) => {
+      if (["fetch", "checkout", "reset"].includes(args[2]!)) materializationBudgets.push([args[2]!, options?.timeout]);
+    };
+
     await withShallowGitWorkspaceClone({
       localDir: repo,
       snapshot: snapshot!,
@@ -288,6 +294,7 @@ describe("git workspace sync", () => {
       expect(await git(cloneDir, ["branch", "--show-current"])).toBe("main");
       await expect(readFile(path.join(cloneDir, "tracked.txt"), "utf8")).resolves.toBe("base\n");
     });
+    expect(materializationBudgets).toEqual([["fetch", 12345], ["checkout", 12345], ["reset", 12345]]);
   });
 
   it.skipIf(process.platform === "win32")("preserves nested repository symlinks after the temporary clone is removed", async () => {

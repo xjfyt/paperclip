@@ -593,6 +593,9 @@ export async function withShallowGitWorkspaceClone<T>(
 ): Promise<T> {
   const cloneDir = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-git-workspace-"));
   const tempRef = `refs/paperclip/git-sync/import/${randomUUID()}`;
+  // Materializing a captured tree performs full-tree disk IO as well. Honor
+  // the snapshot budget instead of imposing a hidden one-minute ceiling.
+  const materializationTimeout = workspaceSnapshotTimeoutMs();
   try {
     const originUrl = await readSanitizedOriginRemoteUrl(input.localDir);
     await runLocalGit(input.localDir, ["update-ref", tempRef, input.snapshot.headCommit], {
@@ -617,7 +620,7 @@ export async function withShallowGitWorkspaceClone<T>(
       }).catch(() => undefined);
     }
     await runLocalGit(cloneDir, ["fetch", "--depth=1", input.localDir, tempRef], {
-      timeout: 60_000,
+      timeout: materializationTimeout,
       maxBuffer: 1024 * 1024,
     });
     await runLocalGit(
@@ -626,12 +629,12 @@ export async function withShallowGitWorkspaceClone<T>(
         ? ["checkout", "--force", "-B", input.snapshot.branchName, "FETCH_HEAD"]
         : ["checkout", "--force", "--detach", "FETCH_HEAD"],
       {
-        timeout: 60_000,
+        timeout: materializationTimeout,
         maxBuffer: 1024 * 1024,
       },
     );
     await runLocalGit(cloneDir, ["reset", "--hard", input.snapshot.headCommit], {
-      timeout: 60_000,
+      timeout: materializationTimeout,
       maxBuffer: 1024 * 1024,
     });
     for (const repository of input.snapshot.repositories ?? []) {
