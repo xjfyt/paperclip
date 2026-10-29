@@ -1,3 +1,5 @@
+import { t as inboxT, formatNumber as inboxNumber } from "../i18n";
+import { inboxGroupDisplay, joinRequestDisplay } from "../i18n/inbox-display";
 import { t as mimouseT } from "@/i18n";
 import { useRunRetryBoundary, type RunRetryAttempt } from "../hooks/useRunRetryBoundary";
 import { systemLabel, useSystemLabels } from "@/i18n/system-labels";
@@ -293,8 +295,8 @@ function firstNonEmptyLine(value: string | null | undefined): string | null {
   return line ?? null;
 }
 
-function runFailureMessage(run: HeartbeatRun): string {
-  return firstNonEmptyLine(run.error) ?? firstNonEmptyLine(run.stderrExcerpt) ?? "Run exited with an error.";
+function runFailureMessage(run: HeartbeatRun, display = false): string {
+  return firstNonEmptyLine(run.error) ?? firstNonEmptyLine(run.stderrExcerpt) ?? (display ? inboxT("inboxUi.runError") : "Run exited with an error.");
 }
 
 function approvalStatusLabel(status: Approval["status"]): string {
@@ -388,7 +390,7 @@ export function FailedRunInboxRow({
   useSystemLabels();
   const issueId = readIssueIdFromRun(run);
   const issue = issueId ? issueById.get(issueId) ?? null : null;
-  const displayError = runFailureMessage(run);
+  const displayError = runFailureMessage(run, true);
   const showUnreadSlot = unreadState !== null;
   const showUnreadDot = unreadState === "visible" || unreadState === "fading";
 
@@ -443,7 +445,7 @@ export function FailedRunInboxRow({
                   {issue.title}
                 </>
               ) : (
-                <>Failed run{linkedAgentName ? ` — ${linkedAgentName}` : ""}</>
+                <>{inboxT("inboxUi.failedRun")}{linkedAgentName ? ` — ${linkedAgentName}` : ""}</>
               )}
             </span>
             <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
@@ -467,7 +469,7 @@ export function FailedRunInboxRow({
             disabled={isRetrying}
           >
             <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-            {isRetrying ? "Retrying…" : "Retry"}
+            {isRetrying ? inboxT("inboxUi.retrying") : inboxT("inboxUi.retry")}
           </Button>
           {!showUnreadSlot && (
             <button
@@ -491,7 +493,7 @@ export function FailedRunInboxRow({
           disabled={isRetrying}
         >
           <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-          {isRetrying ? "Retrying…" : "Retry"}
+          {isRetrying ? inboxT("inboxUi.retrying") : inboxT("inboxUi.retry")}
         </Button>
         {!showUnreadSlot && (
           <button
@@ -672,7 +674,7 @@ function JoinRequestInboxRow({
   className?: string;
 }) {
   useSystemLabels();
-  const label = formatJoinRequestInboxLabel(joinRequest);
+  const label = joinRequestDisplay(joinRequest, formatJoinRequestInboxLabel);
   const showUnreadSlot = unreadState !== null;
   const showUnreadDot = unreadState === "visible" || unreadState === "fading";
 
@@ -716,8 +718,8 @@ function JoinRequestInboxRow({
               {label}
             </span>
             <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-              <span>requested {timeAgo(joinRequest.createdAt)} from IP {joinRequest.requestIp}</span>
-              {joinRequest.adapterType && <span>adapter: {joinRequest.adapterType}</span>}
+              <span>{inboxT("inboxUi.requestedFrom", { time: timeAgo(joinRequest.createdAt), ip: joinRequest.requestIp })}</span>
+              {joinRequest.adapterType && <span>{inboxT("inboxUi.adapter", { adapter: joinRequest.adapterType })}</span>}
             </span>
           </span>
         </div>
@@ -1233,8 +1235,10 @@ function StreamlinedInbox({
     return [...options.values()].sort((a, b) => {
       if (a.kind !== b.kind) return a.kind === "user" ? -1 : 1;
       return a.label.localeCompare(b.label);
-    });
-  }, [agents, currentUserId, mineIssues, touchedIssues]);
+    }).map(option => option.id === `user:${currentUserId}`
+      ? { ...option, label: currentUserId === "local-board" ? inboxT("inboxUi.board") : inboxT("inboxUi.me") }
+      : option);
+  }, [agents, currentUserId, mineIssues, touchedIssues, i18n.language]);
   const issuesToRender = useMemo(
     () => {
       if (tab === "mine") return visibleMineIssues;
@@ -1782,7 +1786,7 @@ function StreamlinedInbox({
       navigate(`/approvals/${id}?resolved=approved`);
     },
     onError: (err) => {
-      setActionError(err instanceof Error ? err.message : "Failed to approve");
+      setActionError(err instanceof Error ? err.message : inboxT("inboxUi.approveError"));
     },
   });
 
@@ -1793,7 +1797,7 @@ function StreamlinedInbox({
       queryClient.invalidateQueries({ queryKey: queryKeys.approvals.list(selectedCompanyId!) });
     },
     onError: (err) => {
-      setActionError(err instanceof Error ? err.message : "Failed to reject");
+      setActionError(err instanceof Error ? err.message : inboxT("inboxUi.rejectError"));
     },
   });
 
@@ -1808,7 +1812,7 @@ function StreamlinedInbox({
       queryClient.invalidateQueries({ queryKey: queryKeys.companies.all });
     },
     onError: (err) => {
-      setActionError(err instanceof Error ? err.message : "Failed to approve join request");
+      setActionError(err instanceof Error ? err.message : inboxT("inboxUi.approveJoinError"));
     },
   });
 
@@ -1821,7 +1825,7 @@ function StreamlinedInbox({
       queryClient.invalidateQueries({ queryKey: queryKeys.sidebarBadges(selectedCompanyId!) });
     },
     onError: (err) => {
-      setActionError(err instanceof Error ? err.message : "Failed to reject join request");
+      setActionError(err instanceof Error ? err.message : inboxT("inboxUi.rejectJoinError"));
     },
   });
 
@@ -1917,7 +1921,7 @@ function StreamlinedInbox({
       return { companyId: selectedCompanyId, previousData };
     },
     onError: (err, id, context) => {
-      setActionError(err instanceof Error ? err.message : "Failed to archive task");
+      setActionError(err instanceof Error ? err.message : inboxT("inboxUi.archiveError"));
       if (context?.companyId) clearLocalInboxArchive(context.companyId, id);
       setArchivingIssueIds((prev) => {
         const next = new Set(prev);
@@ -1958,7 +1962,7 @@ function StreamlinedInbox({
       return { companyId: selectedCompanyId };
     },
     onError: (err, id, context) => {
-      setActionError(err instanceof Error ? err.message : "Failed to undo inbox archive");
+      setActionError(err instanceof Error ? err.message : inboxT("inboxUi.undoArchiveError"));
       if (context?.companyId) {
         beginLocalInboxArchive(context.companyId, id);
         boundLocalInboxArchive(context.companyId, id);
@@ -2423,9 +2427,9 @@ function StreamlinedInbox({
       issueFilters.statuses.includes(status as IssueFilterState["statuses"][number]),
     );
   const issueFilterFeedback = issueFilters.liveOnly
-    ? "Live runs only — tasks currently connected to an agent run."
+    ? inboxT("inboxUi.liveFilter")
     : activeStatusFilterApplied
-      ? "Active statuses — open tasks, whether or not an agent is running."
+      ? inboxT("inboxUi.activeFilter")
       : null;
   return (
     <div className="space-y-6">
@@ -2508,7 +2512,7 @@ function StreamlinedInbox({
                 </PopoverTrigger>
                 <PopoverContent align="end" className="w-44 p-0">
                   <div className="space-y-0.5 p-2">
-                    {BLOCKED_GROUP_OPTIONS.map(([value, label]) => (
+                    {BLOCKED_GROUP_OPTIONS.map(([value]) => (
                       <button
                         key={value}
                         type="button"
@@ -2518,7 +2522,7 @@ function StreamlinedInbox({
                         )}
                         onClick={() => setBlockedGroupBy(value)}
                       >
-                        <span>{label}</span>
+                        <span>{inboxT(`inboxUi.group.${value}`)}</span>
                         {blockedGroupBy === value ? <Check className="h-3.5 w-3.5" /> : null}
                       </button>
                     ))}
@@ -2554,7 +2558,7 @@ function StreamlinedInbox({
                 </PopoverTrigger>
                 <PopoverContent align="end" className="w-48 p-0">
                   <div className="space-y-0.5 p-2">
-                    {BLOCKED_SORT_OPTIONS.map(([value, label]) => (
+                    {BLOCKED_SORT_OPTIONS.map(([value]) => (
                       <button
                         key={value}
                         type="button"
@@ -2564,7 +2568,7 @@ function StreamlinedInbox({
                         )}
                         onClick={() => setBlockedSortBy(value)}
                       >
-                        <span>{label}</span>
+                        <span>{inboxT(`inboxUi.sort.${value}`)}</span>
                         {blockedSortBy === value ? <Check className="h-3.5 w-3.5" /> : null}
                       </button>
                     ))}
@@ -2633,7 +2637,7 @@ function StreamlinedInbox({
                       ["assignee", "Responsible"],
                       ["project", "Project"],
                       ...(isolatedWorkspacesEnabled ? ([["workspace", "Workspace"]] as const) : []),
-                    ] as const).map(([value, label]) => (
+                    ] as const).map(([value]) => (
                       <button
                         key={value}
                         type="button"
@@ -2643,7 +2647,7 @@ function StreamlinedInbox({
                         )}
                         onClick={() => updateGroupBy(value)}
                       >
-                        <span>{label}</span>
+                        <span>{inboxT(`inboxUi.group.${value}`)}</span>
                         {groupBy === value ? <Check className="h-3.5 w-3.5" /> : null}
                       </button>
                     ))}
@@ -2676,19 +2680,19 @@ function StreamlinedInbox({
                     onClick={() => setShowMarkAllReadConfirm(true)}
                     disabled={markAllReadMutation.isPending}
                   >
-                    {markAllReadMutation.isPending ? "Marking…" : "Mark all as read"}
+                    {markAllReadMutation.isPending ? inboxT("inboxUi.marking") : inboxT("inboxUi.markAll")}
                   </Button>
                   <Dialog open={showMarkAllReadConfirm} onOpenChange={setShowMarkAllReadConfirm}>
                     <DialogContent className="sm:max-w-md">
                       <DialogHeader>
-                        <DialogTitle>Mark all as read?</DialogTitle>
+                        <DialogTitle>{inboxT("inboxUi.markAllTitle")}</DialogTitle>
                         <DialogDescription>
-                          This will mark {unreadIssueIds.length} unread {unreadIssueIds.length === 1 ? "item" : "items"} as read.
+                          {inboxT("inboxUi.markAll", { count: unreadIssueIds.length, n: inboxNumber(unreadIssueIds.length) })}
                         </DialogDescription>
                       </DialogHeader>
                       <DialogFooter>
                         <Button variant="outline" onClick={() => setShowMarkAllReadConfirm(false)}>
-                          Cancel
+                          {inboxT("inboxUi.cancel")}
                         </Button>
                         <Button
                           onClick={() => {
@@ -2696,7 +2700,7 @@ function StreamlinedInbox({
                             markAllReadMutation.mutate(unreadIssueIds);
                           }}
                         >
-                          Mark all as read
+                          {inboxT("inboxUi.markAll")}
                         </Button>
                       </DialogFooter>
                     </DialogContent>
@@ -2749,14 +2753,14 @@ function StreamlinedInbox({
           icon={searchQuery.trim() ? Search : InboxIcon}
           message={
             searchQuery.trim()
-              ? "No inbox items match your search."
+              ? inboxT("inboxUi.noSearch")
               : tab === "mine"
-              ? "Inbox zero."
+              ? inboxT("inboxUi.zero")
               : tab === "unread"
-              ? "No new inbox items."
+              ? inboxT("inboxUi.noNew")
               : tab === "recent"
-                ? "No recent inbox items."
-                : "No inbox items match these filters."
+                ? inboxT("inboxUi.noRecent")
+                : inboxT("inboxUi.noFilters")
           }
         />
       )}
@@ -2837,7 +2841,7 @@ function StreamlinedInbox({
                           type="button"
                           data-slot="icon-button"
                           className="inline-flex h-4 w-4 shrink-0 items-center justify-center"
-                          aria-label={isExpanded ? "Collapse sub-tasks" : "Expand sub-tasks"}
+                          aria-label={isExpanded ? inboxT("inboxUi.collapse") : inboxT("inboxUi.expand")}
                           onClick={(event) => {
                             event.preventDefault();
                             event.stopPropagation();
@@ -2896,7 +2900,7 @@ function StreamlinedInbox({
                       ) : undefined}
                       titleSuffix={hasChildren && !isExpanded ? (
                         <span className="ml-1.5 text-xs text-muted-foreground">
-                          ({childCount} sub-task{childCount !== 1 ? "s" : ""})
+                          {inboxT("inboxUi.subTasks", { count: childCount, n: inboxNumber(childCount) })}
                         </span>
                       ) : undefined}
                       mobileTitleMeta={streamlinedUiEnabled ? issueActivityTimestamp(issue) : undefined}
@@ -2975,7 +2979,7 @@ function StreamlinedInbox({
                       >
                         <div className="h-px flex-1 bg-border/80" />
                         <span className="shrink-0 text-(length:--text-micro) font-semibold uppercase tracking-wide text-muted-foreground">
-                          {group.searchSection === "archived" ? "Archived" : "Other results"}
+                          {group.searchSection === "archived" ? inboxT("inboxUi.archived") : inboxT("inboxUi.otherResults")}
                         </span>
                         <div className="h-px flex-1 bg-border/80" />
                       </div>,
@@ -3003,7 +3007,7 @@ function StreamlinedInbox({
                             their chevron — same as the tasks list. */}
                         <div className={cn("rounded-lg px-3 sm:pl-0 sm:pr-4", isGroupSelected ? "bg-accent/50" : "hover:bg-accent/50")}>
                         <IssueGroupHeader
-                          label={group.label}
+                          label={inboxGroupDisplay(group) ?? ""}
                           collapsible
                           collapsed={isGroupCollapsed}
                           onToggle={() => toggleGroupCollapse(group.key)}
@@ -3012,8 +3016,8 @@ function StreamlinedInbox({
                               variant="ghost"
                               size="icon-xs"
                               className="-mr-2 text-muted-foreground"
-                              title={`New task in ${group.label}`}
-                              aria-label={`New task in ${group.label}`}
+                              title={inboxT("inboxUi.newTask", { group: inboxGroupDisplay(group) })}
+                              aria-label={inboxT("inboxUi.newTask", { group: inboxGroupDisplay(group) })}
                               onClick={(event) => {
                                 event.stopPropagation();
                                 openCreateIssueForGroup(group);
@@ -3083,7 +3087,7 @@ function StreamlinedInbox({
                             className="shrink-0 text-(length:--text-micro) font-medium uppercase tracking-wider text-muted-foreground/70"
                             data-date-group-label=""
                           >
-                            Earlier
+                            {inboxT("inboxUi.earlier")}
                           </span>
                         </div>,
                       );
@@ -3298,7 +3302,7 @@ function StreamlinedInbox({
           {showSeparatorBefore("alerts") && <Separator />}
           <div>
             <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              Alerts
+              {inboxT("inboxUi.alerts")}
             </h3>
             <div className="divide-y divide-border border border-border">
               {showAggregateAgentError && (
@@ -3309,8 +3313,7 @@ function StreamlinedInbox({
                   >
                     <AlertTriangle className="h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
                     <span className="text-sm">
-                      <span className="font-medium">{dashboard!.agents.error}</span>{" "}
-                      {dashboard!.agents.error === 1 ? "agent has" : "agents have"} errors
+                      {inboxT("inboxUi.agentErrors", { count: dashboard!.agents.error, n: inboxNumber(dashboard!.agents.error) })}
                     </span>
                   </Link>
                   <button
@@ -3331,9 +3334,7 @@ function StreamlinedInbox({
                   >
                     <AlertTriangle className="h-4 w-4 shrink-0 text-yellow-400" />
                     <span className="text-sm">
-                      Budget at{" "}
-                      <span className="font-medium">{dashboard!.costs.monthUtilizationPercent}%</span>{" "}
-                      utilization this month
+                      {inboxT("inboxUi.budget", { percentage: inboxNumber(dashboard!.costs.monthUtilizationPercent / 100, { style: "percent", maximumFractionDigits: 2 }) })}
                     </span>
                   </Link>
                   <button

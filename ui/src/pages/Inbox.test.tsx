@@ -1,6 +1,10 @@
 // @vitest-environment jsdom
 
-import type { ComponentProps } from "react";
+import { act as reactAct, type ComponentProps } from "react";
+import { inboxMessages, i18n } from "../i18n/inbox-test-resources";
+import { validateLocaleMessages } from "../i18n/locale-validation";
+import { inboxGroupDisplay } from "../i18n/inbox-display";
+import { systemLabel } from "../i18n/system-labels";
 import { queryKeys } from "../lib/queryKeys";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -25,6 +29,7 @@ const externalObjectMocks = vi.hoisted(() => ({
 
 const apiMocks = vi.hoisted(() => ({
   retryFailedRun: vi.fn(),
+  markRead: vi.fn(),
   approvalsList: vi.fn(),
   joinRequestsList: vi.fn(),
   userDirectoryList: vi.fn(),
@@ -76,7 +81,7 @@ vi.mock("../api/issues", () => ({
     listCompact: apiMocks.issuesList,
     count: apiMocks.issuesCount,
     listLabels: apiMocks.issueLabels,
-    markRead: vi.fn(),
+    markRead: apiMocks.markRead,
     markUnread: vi.fn(),
     archiveFromInbox: apiMocks.archiveFromInbox,
     unarchiveFromInbox: apiMocks.unarchiveFromInbox,
@@ -348,6 +353,7 @@ function resetInboxApiMocks() {
   routerMock.location.search = "";
   routerMock.location.hash = "";
   routerMock.navigate.mockReset();
+  apiMocks.markRead.mockResolvedValue({});
   apiMocks.approvalsList.mockResolvedValue([]);
   apiMocks.joinRequestsList.mockResolvedValue([]);
   apiMocks.userDirectoryList.mockResolvedValue({ users: [] });
@@ -385,11 +391,93 @@ describe("Inbox toolbar", () => {
     document.body.appendChild(container);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await reactAct(async () => { await i18n.changeLanguage("en"); });
     for (const issueId of getLocalInboxArchiveIssueIds("company-1")) {
       clearLocalInboxArchive("company-1", issueId);
     }
     container.remove();
+  });
+
+  it.each([true, false].flatMap(streamlined => Object.entries(inboxMessages).map(([locale, strings]) => ({ streamlined, locale, strings }))))(
+    "four-language actual Inbox chrome $locale (streamlined=$streamlined)", async ({ streamlined, locale, strings }) => {
+      expect(validateLocaleMessages(strings, inboxMessages.en)).toEqual([]);
+      await i18n.changeLanguage(locale); routerMock.location.pathname = "/inbox/all";
+      apiMocks.experimentalSettings.mockResolvedValue({ enableStreamlinedUi: streamlined });
+      apiMocks.heartbeatRunsList.mockResolvedValue([createFailedRun({ error: "Raw provider <b> Ω" })]);
+      apiMocks.joinRequestsList.mockResolvedValue([createJoinRequest({ requestType: "agent", agentName: "Raw agent Ω", adapterType: "claude_local" })]);
+      apiMocks.dashboardSummary.mockResolvedValue({ agents: { error: 2 }, costs: { monthBudgetCents: 100, monthUtilizationPercent: 95 } });
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } }); const root = createRoot(container);
+      try {
+        await reactAct(async () => root.render(<QueryClientProvider client={client}><Inbox /></QueryClientProvider>));
+        await vi.waitFor(() => expect(client.isFetching()).toBe(0));
+        for (const text of [strings.retry, strings.alerts, "Raw provider <b> Ω", "Raw agent Ω", "claude_local"]) expect(container.textContent).toContain(text);
+        expect(container.querySelector("b")).toBeNull(); expect(container.textContent).not.toContain("inboxUi.");
+        expect(inboxGroupDisplay({ key: "project:p1", label: "Approvals", searchSection: "none" })).toBe("Approvals");
+        expect(inboxGroupDisplay({ key: "archived-search:kind:approval", label: "Approvals", searchSection: "archived" })).toBe(strings.section.approval);
+        expect(apiMocks.retryFailedRun).not.toHaveBeenCalled(); expect(apiMocks.markRead).not.toHaveBeenCalled();
+      } finally { await reactAct(async () => root.unmount()); client.clear(); }
+    },
+  );
+
+  it.each([true, false])("keeps the actual mark-all confirmation mounted and inert on locale switch (streamlined=%s)", async streamlined => {
+    routerMock.location.pathname = "/inbox/unread";
+    apiMocks.experimentalSettings.mockResolvedValue({ enableStreamlinedUi: streamlined });
+    apiMocks.issuesList.mockResolvedValue([createIssue({ id: "raw-issue-id", isUnreadForMe: true, title: "Raw title Ω" })]);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } }); const root = createRoot(container);
+    const markAll = () => [...container.querySelectorAll("button")].find(node => node.textContent?.trim() === inboxMessages.en.markAll)!;
+    try {
+      await reactAct(async () => root.render(<QueryClientProvider client={client}><Inbox /></QueryClientProvider>));
+      await vi.waitFor(() => expect(markAll()).toBeDefined());
+      await reactAct(async () => markAll().click());
+      const dialog = document.querySelector('[role="dialog"]')!;
+      const cancel = [...dialog.querySelectorAll("button")].find(node => node.textContent?.trim() === "Cancel")!; cancel.focus();
+      const reads = apiMocks.issuesList.mock.calls.length;
+      for (const [locale, strings] of Object.entries(inboxMessages)) {
+        await reactAct(async () => { await i18n.changeLanguage(locale); });
+        expect(document.querySelector('[role="dialog"]')).toBe(dialog); expect(dialog.textContent).toContain(strings.markAllTitle);
+        expect(dialog.textContent).toContain(strings.markAll_one.replace("{{n}}", "1"));
+        expect(cancel.textContent).toBe(strings.cancel); expect(document.activeElement).toBe(cancel);
+        expect(apiMocks.markRead).not.toHaveBeenCalled(); expect(apiMocks.issuesList).toHaveBeenCalledTimes(reads);
+      }
+      await reactAct(async () => cancel.click()); expect(document.querySelector('[role="dialog"]')).toBeNull();
+      expect(apiMocks.markRead).not.toHaveBeenCalled();
+      await reactAct(async () => [...container.querySelectorAll("button")].find(node => node.textContent?.trim() === inboxMessages.ja.markAll)!.click());
+      await reactAct(async () => [...document.querySelectorAll('[role="dialog"] button')].find(node => node.textContent?.trim() === inboxMessages.ja.markAll)!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+      expect(apiMocks.markRead).toHaveBeenCalledExactlyOnceWith("raw-issue-id");
+    } finally { await reactAct(async () => root.unmount()); client.clear(); }
+  });
+
+  it.each([true, false])("retains actual search selection and group menu identity across languages (streamlined=%s)", async streamlined => {
+    routerMock.location.pathname = "/inbox/all";
+    apiMocks.experimentalSettings.mockResolvedValue({ enableStreamlinedUi: streamlined });
+    apiMocks.heartbeatRunsList.mockResolvedValue([createFailedRun({ error: "Raw provider diagnostic" })]);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } }); const root = createRoot(container);
+    try {
+      await reactAct(async () => root.render(<QueryClientProvider client={client}><Inbox /></QueryClientProvider>));
+      await vi.waitFor(() => expect(client.isFetching()).toBe(0));
+      const field = container.querySelector<HTMLInputElement>('input[type="search"]')!;
+      await reactAct(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(field, "Raw"); field.dispatchEvent(new Event("input", { bubbles: true })); });
+      await vi.waitFor(() => expect(client.isFetching()).toBe(0)); field.focus(); field.setSelectionRange(1, 3);
+      const reads = apiMocks.issuesList.mock.calls.length;
+      for (const [locale, strings] of Object.entries(inboxMessages)) {
+        await reactAct(async () => { await i18n.changeLanguage(locale); });
+        expect(container.querySelector('input[type="search"]')).toBe(field); expect(field.value).toBe("Raw");
+        expect(document.activeElement).toBe(field); expect([field.selectionStart, field.selectionEnd]).toEqual([1, 3]);
+        expect(field.placeholder).toBe(streamlined ? i18n.t("browserQa.search", { name: locale === "en" ? systemLabel("Inbox").toLowerCase() : systemLabel("Inbox") }) : strings.search); expect(apiMocks.issuesList).toHaveBeenCalledTimes(reads);
+      }
+      await reactAct(async () => container.querySelector<HTMLButtonElement>(`button[title="${systemLabel("Group")}"]`)!.click());
+      const panel = document.querySelector('[data-slot="popover-content"]')!;
+      const type = [...panel.querySelectorAll("button")].find(node => node.textContent === inboxMessages.ja.group.type)!; type.focus();
+      const activeClass = type.className;
+      for (const [locale, strings] of Object.entries(inboxMessages)) {
+        await reactAct(async () => { await i18n.changeLanguage(locale); });
+        expect(document.querySelector('[data-slot="popover-content"]')).toBe(panel);
+        expect([...panel.querySelectorAll("button")].find(node => node.textContent === strings.group.type)).toBe(type);
+        expect(type.className).toBe(activeClass); expect(document.activeElement).toBe(type);
+        expect(apiMocks.issuesList).toHaveBeenCalledTimes(reads); expect(apiMocks.retryFailedRun).not.toHaveBeenCalled(); expect(apiMocks.markRead).not.toHaveBeenCalled();
+      }
+    } finally { await reactAct(async () => root.unmount()); client.clear(); }
   });
 
   it.each([true, false].flatMap(streamlined => ["remove", "clear", "session"].map(change => ({ streamlined, change }))))(
