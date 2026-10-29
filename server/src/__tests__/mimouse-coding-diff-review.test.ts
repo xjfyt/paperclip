@@ -8,6 +8,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import { fixedCommitDiff, reviewBinding, reviewedHead, reviewReceipt, type ReviewDelivery } from "../services/mimouse-coding/diff-review.js";
 const exec = promisify(execFile); const roots: string[] = [];
 const project = { id: 3, http_url_to_repo: "https://git.example/team/repo.git", ssh_url_to_repo: "git@git.example:team/repo.git" };
+// Git invokes core.sshCommand through its shell, including Git Bash on Windows.
+// Native backslashes are escapes there; quote normalized paths as shell words.
+const shellPath = (value: string) => `'${value.replaceAll("\\", "/").replaceAll("'", "'\\''")}'`;
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
 async function fixture(content = "new value\n", extra?: (cwd: string) => Promise<void>) {
   const cwd = await mkdtemp(path.join(os.tmpdir(), "coding-diff-")); roots.push(cwd);
@@ -96,13 +99,13 @@ describe("source-pinned coding review", () => {
     await rm(path.join(f.cwd, ".git", "objects", oldBlob.slice(0, 2), oldBlob.slice(2)));
     const marker = path.join(f.cwd, ".git", "lazy-fetch-ran"); const hook = path.join(f.cwd, ".git", "fixture-ssh");
     // This executable never connects: it only proves whether Git tried transport.
-    await writeFile(hook, `#!/bin/sh\nprintf attempted > '${marker}'\nexit 1\n`); await chmod(hook, 0o755);
+    await writeFile(hook, `#!/bin/sh\nprintf attempted > ${shellPath(marker)}\nexit 1\n`); await chmod(hook, 0o755);
     await f.git("config", "core.repositoryFormatVersion", "1");
     await f.git("config", "extensions.partialClone", "secondary");
     await f.git("config", "remote.secondary.url", "ssh://fixture.invalid/repo.git");
     await f.git("config", "remote.secondary.promisor", "true");
     await f.git("config", "remote.secondary.partialCloneFilter", "blob:none");
-    await f.git("config", "core.sshCommand", hook);
+    await f.git("config", "core.sshCommand", shellPath(hook));
     const args = ["diff", "--no-ext-diff", "--no-textconv", f.row.baseSha, f.row.headSha, "--"];
     await expect(exec("git", args, { cwd: f.cwd, timeout: 5000, env: { ...process.env, GIT_NO_LAZY_FETCH: "0", GIT_ALLOW_PROTOCOL: "ssh", GIT_TERMINAL_PROMPT: "0" } })).rejects.toThrow();
     await access(marker); await rm(marker); // Control proves lazy fetch was attempted.

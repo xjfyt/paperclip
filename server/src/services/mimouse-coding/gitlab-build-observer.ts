@@ -79,7 +79,8 @@ function metadataJson(bytes: Uint8Array): unknown {
   } catch { return fail("receipt_invalid"); }
 }
 
-/** Read-only, default-off and unwired. All config, context, current secret and
+/** Read-only, default-off observer called by build-observation-service; admission
+ * remains blocked. All config, context, current secret and
  * provenance policy must be resolved by an authorized server caller. Test
  * dependencies must never be exposed as API input. No archive extraction or
  * execution; the existing guarded transport may decode HTTP content encoding. */

@@ -49,6 +49,31 @@ it("carries one overall abort deadline through every read-only pagination reques
   expect(transport).toHaveBeenCalledTimes(2); expect(signals.every(signal => signal.aborted)).toBe(true);
 });
 
+it.each(["garbage", "NaN", "Infinity", "-1", "1.5", "1", "11", "2junk"])("refuses incomplete lists with invalid next-page receipt %s", async next => {
+  const transport = vi.fn().mockResolvedValue(Response.json([], { headers: { "x-next-page": next } }));
+  const client = gitlabClient({ origin: "https://git.example", projectId: 1, token: "fixture", allowedOrigins: ["https://git.example"] }, transport);
+  await expect(client.listMergeRequests("work", "main")).rejects.toMatchObject({ code: "gitlab_pagination_requires_review" });
+  expect(transport).toHaveBeenCalledTimes(1);
+});
+
+it.each([undefined, "", "0"])("reads all pages and accepts terminal next-page receipt %s", async next => {
+  const transport = vi.fn()
+    .mockResolvedValueOnce(Response.json([{ iid: 1, sha, state: "opened" }], { headers: { "x-next-page": "2" } }))
+    .mockResolvedValueOnce(Response.json([{ iid: 2, sha, state: "opened" }], next === undefined ? undefined : { headers: { "x-next-page": next } }));
+  const client = gitlabClient({ origin: "https://git.example", projectId: 1, token: "fixture", allowedOrigins: ["https://git.example"] }, transport);
+  expect((await client.listMergeRequests("work", "main")).map(mr => mr.iid)).toEqual([1, 2]);
+  expect(transport).toHaveBeenCalledTimes(2);
+  expect(transport.mock.calls[1][0]).toContain("page=2");
+});
+
+it("preserves an uncertain mutation when the response stream fails after headers", async () => {
+  const body = new ReadableStream({ start(controller) { controller.error(Error("private provider detail")); } });
+  const transport = vi.fn().mockResolvedValue(new Response(body));
+  const client = gitlabClient({ origin: "https://git.example", projectId: 1, token: "fixture", allowedOrigins: ["https://git.example"] }, transport);
+  await expect(client.createMergeRequest("work", "main", "Title")).rejects.toMatchObject({ code: "gitlab_transport_unconfirmed", uncertain: true });
+  expect(transport).toHaveBeenCalledTimes(1);
+});
+
 it.each([{ attempts: -1 }, { attempts: NaN }, { remainingBudgetCents: NaN }, { remainingBudgetCents: Infinity }, { elapsedMs: -1 }, { maxDurationMs: Infinity }, { fingerprint: "" }])("fails closed on invalid repair limit %j", invalid => {
   expect(repairDecision({ attempts: 0, remainingBudgetCents: 10, elapsedMs: 100, maxDurationMs: 1000, fingerprint: "one", previousFingerprint: null, environmentAvailable: true, ...invalid })).toEqual({ action: "human", reason: "invalid_repair_limits" });
 });

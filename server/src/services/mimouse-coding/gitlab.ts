@@ -54,12 +54,24 @@ export function gitlabClient(config: { origin: string; projectId: number; token:
     catch { throw new GitLabError("gitlab_transport_unconfirmed", method !== "GET"); }
     if (!response.ok) throw new GitLabError(`gitlab_http_${response.status}`, method !== "GET" && response.status >= 500);
     const reader = response.body?.getReader(); const chunks: Uint8Array[] = []; let bytes = 0;
-    if (reader) for (;;) { const chunk = await reader.read(); if (chunk.done) break; bytes += chunk.value.length; if (bytes > 2 * 1024 * 1024) { await reader.cancel(); throw new GitLabError("gitlab_response_too_large", method !== "GET"); } chunks.push(chunk.value); }
+    if (reader) {
+      try {
+        for (;;) { const chunk = await reader.read(); if (chunk.done) break; bytes += chunk.value.length; if (bytes > 2 * 1024 * 1024) { await reader.cancel(); throw new GitLabError("gitlab_response_too_large", method !== "GET"); } chunks.push(chunk.value); }
+      } catch (error) {
+        // Headers do not establish a mutation outcome. A failed/aborted body is
+        // still ambiguous, and raw transport diagnostics are not safe receipts.
+        if (error instanceof GitLabError) throw error;
+        throw new GitLabError("gitlab_transport_unconfirmed", method !== "GET");
+      } finally { reader.releaseLock(); }
+    }
     let parsed: unknown;
     try { parsed = JSON.parse(Buffer.concat(chunks).toString("utf8")); } catch { throw new GitLabError("gitlab_invalid_response", method !== "GET"); }
-    const next = Number(response.headers.get("x-next-page"));
-    if (Array.isArray(parsed) && method === "GET" && next > 0) {
-      if (!Number.isSafeInteger(next) || next <= page || next > 10) throw new GitLabError("gitlab_pagination_requires_review");
+    const nextPage = response.headers.get("x-next-page");
+    if (Array.isArray(parsed) && method === "GET" && nextPage && nextPage !== "0") {
+      const next = Number(nextPage);
+      // Invalid headers must not turn a partial list into an empty/unique MR
+      // result, which could otherwise authorize another creation attempt.
+      if (!/^[1-9][0-9]*$/.test(nextPage) || !Number.isSafeInteger(next) || next <= page || next > 10) throw new GitLabError("gitlab_pagination_requires_review");
       const nextUrl = new URL(path, "https://placeholder.invalid"); nextUrl.searchParams.set("page", String(next));
       const rest = await call<unknown[]>(nextUrl.pathname + nextUrl.search, method, undefined, next);
       if (!Array.isArray(rest)) throw new GitLabError("gitlab_invalid_page");

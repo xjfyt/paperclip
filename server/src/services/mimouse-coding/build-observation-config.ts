@@ -1,6 +1,6 @@
 import { createHash, createPublicKey } from "node:crypto";
 import { constants } from "node:fs";
-import { open } from "node:fs/promises";
+import { lstat, open } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import { MIMOUSE_PROVENANCE_LIMITS, mimouseBuildTrustPolicySchema, startMimouseBuildObservationSchema } from "@paperclipai/shared";
@@ -131,7 +131,8 @@ function validateProfiles(profiles: BuildObservationProfile[]) {
 /** Operator-only file selection, never request data. No cache: callers re-read at
  * dispatch/finalization boundaries. Workspace exclusion is a deployment rule,
  * NOT OS isolation; parent directory/same-source multi-instance control remains
- * the operator's responsibility. O_NOFOLLOW only protects the final component.
+ * the operator's responsibility. O_NOFOLLOW protects the final component on
+ * POSIX; entry/handle identity checks also reject links on Windows.
  * Repeated reads cannot make file replacement atomic with a DB transaction. */
 export async function loadBuildObservationConfig(options?: BuildObservationConfigOptions): Promise<BuildObservationConfig> {
   const enabled = options ? options.enabled : process.env.PAPERCLIP_BUILD_OBSERVATIONS_ENABLED === "true";
@@ -139,20 +140,25 @@ export async function loadBuildObservationConfig(options?: BuildObservationConfi
   try {
     const filePath = options ? options.filePath : process.env.PAPERCLIP_BUILD_OBSERVATIONS_CONFIG_FILE;
     if (!filePath || filePath.length > 4096 || /[\u0000-\u001f\u007f]/.test(filePath) || !path.isAbsolute(filePath) || path.normalize(filePath) !== filePath) invalid();
-    // NONBLOCK prevents a misconfigured FIFO from hanging before fstat rejects it.
+    const entry = await lstat(filePath, { bigint: true });
+    if (!entry.isFile() || entry.isSymbolicLink()) invalid();
+    // NONBLOCK prevents a replaced FIFO from hanging before fstat rejects it.
     const handle = await open(filePath, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
     let bytes: Buffer;
     try {
-      const before = await handle.stat();
-      if (!before.isFile() || before.size > BUILD_OBSERVATION_CONFIG_LIMITS.bytes) invalid();
+      const before = await handle.stat({ bigint: true });
+      if (!before.isFile() || before.dev !== entry.dev || before.ino !== entry.ino || before.size > BigInt(BUILD_OBSERVATION_CONFIG_LIMITS.bytes)) invalid();
       const buffer = Buffer.alloc(BUILD_OBSERVATION_CONFIG_LIMITS.bytes + 1); let used = 0;
       while (used < buffer.length) {
         const read = await handle.read(buffer, used, buffer.length - used, used);
         if (!read.bytesRead) break; used += read.bytesRead;
       }
       if (used > BUILD_OBSERVATION_CONFIG_LIMITS.bytes) invalid();
-      const after = await handle.stat();
-      if (before.dev !== after.dev || before.ino !== after.ino || before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs || used !== after.size) invalid();
+      const after = await handle.stat({ bigint: true });
+      if (before.dev !== after.dev || before.ino !== after.ino || before.size !== after.size || before.mtimeNs !== after.mtimeNs || before.ctimeNs !== after.ctimeNs || BigInt(used) !== after.size) invalid();
+      const finalEntry = await lstat(filePath, { bigint: true });
+      if (!finalEntry.isFile() || finalEntry.isSymbolicLink() || finalEntry.dev !== after.dev || finalEntry.ino !== after.ino
+        || finalEntry.size !== after.size || finalEntry.mtimeNs !== after.mtimeNs || finalEntry.ctimeNs !== after.ctimeNs) invalid();
       bytes = buffer.subarray(0, used);
     } finally { await handle.close(); }
     const parsed = configSchema.parse(json(bytes)); validateProfiles(parsed.profiles);

@@ -6,6 +6,7 @@ import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
 import { approvalRecords } from "../approvals.js";
 import { canonical, operationPreview } from "./preview.js";
 import { operationApprovalPayload } from "./approval-payload.js";
+import { logActivity, publishActivity, type ActivityPublication } from "../activity-log.js";
 const digest = (value: unknown) => createHash("sha256").update(canonical(value)).digest("hex");
 function publicRecord(row: typeof previews.$inferSelect): OperationPreviewRecord {
   return { id: row.id, companyId: row.companyId, requestId: row.requestId, actorId: row.actorId, preview: row.preview, approvalId: row.approvalId, createdAt: row.createdAt.toISOString() };
@@ -24,12 +25,21 @@ export function operationPreviewService(db: Db) {
       let preview;
       try { preview = operationPreview(inputSnapshot); } catch (error) { throw unprocessable(error instanceof Error && /^[a-z_]+$/.test(error.message) ? error.message : "invalid_data_preview"); }
       const requestDigest = digest(input);
-      const [row] = await db.insert(previews).values({ companyId, requestId, requestDigest, actorId, inputSnapshot, preview, previewHash: preview.previewHash })
-        .onConflictDoNothing({ target: [previews.companyId, previews.requestId] }).returning();
-      if (row) return { item: publicRecord(row), duplicate: false };
-      const [existing] = await db.select().from(previews).where(and(eq(previews.companyId, companyId), eq(previews.requestId, requestId)));
-      if (!existing || existing.actorId !== actorId || existing.requestDigest !== requestDigest) throw conflict("Preview request already has different input");
-      return { item: publicRecord(existing), duplicate: true };
+      const publications: ActivityPublication[] = [];
+      const result = await db.transaction(async tx => {
+        const [row] = await tx.insert(previews).values({ companyId, requestId, requestDigest, actorId, inputSnapshot, preview, previewHash: preview.previewHash })
+          .onConflictDoNothing({ target: [previews.companyId, previews.requestId] }).returning();
+        if (row) {
+          await logActivity(tx as unknown as Db, { companyId, actorType: "user", actorId,
+            action: "data_operation.preview_created", entityType: "data_operation", entityId: row.id, details: null }, publications);
+          return { item: publicRecord(row), duplicate: false };
+        }
+        const [existing] = await tx.select().from(previews).where(and(eq(previews.companyId, companyId), eq(previews.requestId, requestId)));
+        if (!existing || existing.actorId !== actorId || existing.requestDigest !== requestDigest) throw conflict("Preview request already has different input");
+        return { item: publicRecord(existing), duplicate: true };
+      });
+      publications.forEach(publishActivity);
+      return result;
     },
     async list(companyId: string, limit = 50, beforeId?: string) {
       // Validate the company-scoped identity, but never round-trip its
@@ -47,7 +57,8 @@ export function operationPreviewService(db: Db) {
     async get(companyId: string, id: string) { return publicRecord(await load(companyId, id)); },
     async requestApproval(companyId: string, id: string, actorUserId: string, raw: RequestOperationApprovalInput) {
       const input = requestOperationApprovalSchema.parse(raw);
-      return db.transaction(async tx => {
+      const publications: ActivityPublication[] = [];
+      const result = await db.transaction(async tx => {
         const [member] = await tx.select().from(companyMemberships).where(and(eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, actorUserId))).for("share");
         const [company] = await tx.select().from(companies).where(eq(companies.id, companyId));
         if (company?.status !== "active" || member?.status !== "active" || !["owner", "admin"].includes(member.membershipRole ?? "")) throw forbidden("An active company administrator must request review");
@@ -63,8 +74,12 @@ export function operationPreviewService(db: Db) {
         const payload = operationApprovalPayload(row.id, company.issuePrefix, row.preview, input.locale);
         const approval = await approvalRecords(tx as unknown as Db).create(companyId, { type: "request_board_approval", requestedByUserId: actorUserId, payload });
         await tx.update(previews).set({ approvalId: approval.id, approvalPayloadHash: digest(payload) }).where(eq(previews.id, row.id));
+        await logActivity(tx as unknown as Db, { companyId, actorType: "user", actorId: actorUserId,
+          action: "data_operation.approval_requested", entityType: "data_operation", entityId: row.id, details: null }, publications);
         return { approvalId: approval.id, status: approval.status, previewHash: row.previewHash, externalWrites: 0 };
       });
+      publications.forEach(publishActivity);
+      return result;
     },
     async readiness(companyId: string, id: string): Promise<OperationReadiness> {
       const row = await load(companyId, id), blockers = ["write_adapter_not_implemented"];

@@ -126,7 +126,7 @@ function otherFacts(): MimouseBuildUnassessedFacts {
     tests: "unassessed", workflowClosure: "unassessed", controllerObservation: "blocked", c3: "blocked" };
 }
 
-/** Pure, unwired library. No file/network/DB/clock reads, default trust root,
+/** Pure library used by build observation. No file/network/DB/clock reads, default trust root,
  * signer, registration or collector. Operator policy MUST NOT be client input.
  * The caller must supply the CURRENT trusted server time and CURRENT operator
  * policy; historical/client-selected inputs cannot establish current validity.

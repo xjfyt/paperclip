@@ -5,6 +5,7 @@ import { feedbackImportSchema, type FeedbackImportInput, type FeedbackInboxItem 
 import { conflict, notFound } from "../errors.js";
 import { createFeedbackRedactionState, sanitizeFeedbackText } from "./feedback-redaction.js";
 import { feedbackEvidence, feedbackEvidencePage, FEEDBACK_EVIDENCE_SCAN_LIMIT } from "./mimouse-feedback-evidence.js";
+import { logActivity, publishActivity, type ActivityPublication } from "./activity-log.js";
 const digest = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 // Remove URL credentials and query/fragment values before generic redaction.
 export function sanitizeImportedFeedbackText(text: string, redaction: ReturnType<typeof createFeedbackRedactionState>, field: string, max: number) {
@@ -51,11 +52,20 @@ export function feedbackInboxService(db: Db) {
   return {
     async import(companyId: string, raw: FeedbackImportInput, actorId: string) {
       const input = prepareFeedbackImport(raw);
-      const [inserted] = await db.insert(inbox).values({ ...input, companyId, actorId }).onConflictDoNothing({ target: [inbox.companyId, inbox.sourceKind, inbox.sourceInstance, inbox.externalId] }).returning();
-      if (inserted) return { item: publicItem(inserted), duplicate: false };
-      const [existing] = await db.select().from(inbox).where(and(eq(inbox.companyId, companyId), eq(inbox.sourceKind, input.sourceKind), eq(inbox.sourceInstance, input.sourceInstance), eq(inbox.externalId, input.externalId)));
-      if (!existing || existing.contentDigest !== input.contentDigest) throw conflict("Source event identity already has different content");
-      return { item: publicItem(existing), duplicate: true };
+      const publications: ActivityPublication[] = [];
+      const result = await db.transaction(async tx => {
+        const [inserted] = await tx.insert(inbox).values({ ...input, companyId, actorId }).onConflictDoNothing({ target: [inbox.companyId, inbox.sourceKind, inbox.sourceInstance, inbox.externalId] }).returning();
+        if (inserted) {
+          await logActivity(tx as unknown as Db, { companyId, actorType: "user", actorId,
+            action: "feedback.imported", entityType: "feedback", entityId: inserted.id, details: null }, publications);
+          return { item: publicItem(inserted), duplicate: false };
+        }
+        const [existing] = await tx.select().from(inbox).where(and(eq(inbox.companyId, companyId), eq(inbox.sourceKind, input.sourceKind), eq(inbox.sourceInstance, input.sourceInstance), eq(inbox.externalId, input.externalId)));
+        if (!existing || existing.contentDigest !== input.contentDigest) throw conflict("Source event identity already has different content");
+        return { item: publicItem(existing), duplicate: true };
+      });
+      publications.forEach(publishActivity);
+      return result;
     },
     async list(companyId: string, limit = 50, beforeId?: string) {
       const before = beforeId ? await load(companyId, beforeId) : null;

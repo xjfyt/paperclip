@@ -1,8 +1,12 @@
 /** Test support only: no caller in production and no import-time I/O. */
 import { createHash, randomUUID } from "node:crypto";
+import { execFile } from "node:child_process";
+import { createRequire } from "node:module";
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
-import { join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { promisify } from "node:util";
 import { and, eq, sql } from "drizzle-orm";
 import { applyPendingMigrations, authSessions, authUsers, closeRegisteredClients, companies, companyMemberships,
   companySecrets, companySecretVersions, createDb, ensurePostgresDatabase, executionWorkspaces, issues,
@@ -13,6 +17,8 @@ const token = "fixture-gitlab-token-not-real";
 const secretValue = JSON.stringify({ token });
 const digest = (value: Uint8Array | string) => createHash("sha256").update(value).digest("hex");
 const exists = (file: string) => access(file).then(() => true, () => false);
+const exec = promisify(execFile);
+const require = createRequire(import.meta.url);
 async function availablePort(): Promise<number> {
   return new Promise((accept, reject) => {
     const socket = createServer(); socket.once("error", reject);
@@ -31,14 +37,16 @@ function processStopped(pid: number): boolean {
 /** Creates a disposable real PostgreSQL/session fixture only when a permitted
  * integration test explicitly calls it. All provider credentials are inert. */
 export async function createBuildObservationFixture() {
-  const home = await mkdtemp("/tmp/paperclip-build-observation-");
+  const temporaryRoot = resolve(tmpdir());
+  const home = await mkdtemp(join(temporaryRoot, "paperclip-build-observation-"));
   const marker = `build-observation-disposable-v1:${randomUUID()}`;
   const markerFile = join(home, ".owned-test"), dataDir = join(home, "db"), pidFile = join(dataDir, "postmaster.pid");
   await writeFile(markerFile, marker, { mode: 0o600, flag: "wx" });
   let db: Db | undefined, pg: Awaited<ReturnType<typeof loadEmbeddedPostgres>>["default"]["prototype"] | undefined;
   let databaseUrl: string | undefined, pid: number | undefined, startupAttempted = false, closed = false;
   async function owned() {
-    if (!resolve(home).startsWith("/tmp/paperclip-build-observation-") || await readFile(markerFile, "utf8") !== marker) {
+    if (dirname(resolve(home)) !== temporaryRoot || !basename(home).startsWith("paperclip-build-observation-")
+      || await readFile(markerFile, "utf8") !== marker) {
       throw Error("fixture_ownership_unconfirmed");
     }
   }
@@ -54,7 +62,19 @@ export async function createBuildObservationFixture() {
     await owned();
     if (await exists(pidFile)) await readOwnedPid();
     if (databaseUrl) await closeRegisteredClients(databaseUrl);
-    if (startupAttempted && pg) await pg.stop();
+    if (startupAttempted && pg) {
+      if (process.platform === "win32" && await exists(pidFile)) {
+        // The wrapper uses taskkill /f on Windows, leaving postmaster.pid and
+        // failing this fixture's clean-stop proof. Use its own bundled pg_ctl
+        // to shut down the already verified, disposable cluster gracefully.
+        const dbRequire = createRequire(require.resolve("@paperclipai/db"));
+        const embeddedRequire = createRequire(dbRequire.resolve("embedded-postgres"));
+        const { pg_ctl: pgCtl } = embeddedRequire("@embedded-postgres/windows-x64") as { pg_ctl: string };
+        await exec(pgCtl, ["-D", dataDir, "-m", "fast", "-w", "-t", "15", "stop"], {
+          timeout: 20_000, maxBuffer: 65_536, windowsHide: true,
+        });
+      } else await pg.stop();
+    }
     if (await exists(pidFile) || (pid !== undefined && !processStopped(pid))) {
       throw Error("fixture_preserved_postgres_not_confirmed_stopped");
     }

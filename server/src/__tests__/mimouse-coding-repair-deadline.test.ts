@@ -69,7 +69,7 @@ function fixture() {
 
 describe("bounded coding repair deadline receipts", () => {
   it("wires async preflight before the final synchronous handoff and isolates all coalesce paths", () => {
-    const heartbeat = readFileSync(new URL("../services/heartbeat.ts", import.meta.url), "utf8");
+    const heartbeat = readFileSync(new URL("../services/heartbeat.ts", import.meta.url), "utf8").replace(/\r\n/g, "\n");
     const boundary = heartbeat.slice(heartbeat.indexOf("const dispatchResolvedInteractionContinuationWithAtomicGate ="), heartbeat.indexOf("if (!executionTarget || executionTarget.kind"));
     expect(boundary.indexOf("await reserveRunBudget")).toBeLessThan(boundary.indexOf("await codingRepairRunDeadlineElapsed"));
     expect(boundary.indexOf("await codingRepairRunDeadlineElapsed")).toBeLessThan(boundary.indexOf("return await dispatchResolvedInteractionContinuationAfterAdmission"));
