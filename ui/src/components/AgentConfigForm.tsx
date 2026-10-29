@@ -1,4 +1,5 @@
 import type { TFunction } from "i18next";
+import { agentConfigurationContextError } from "@/lib/agent-configuration-errors";
 import { LocalizedUiError, localizedUiErrorMessage, type LocalizedUiMessage } from "@/lib/localized-ui-error";
 import { useTranslation } from "@/i18n";
 import { useConnectionModels } from "./ai-connections/useConnectionModels";
@@ -460,7 +461,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
   );
   const createSecret = useMutation({
     mutationFn: (input: { name: string; value: string }) => {
-      if (!selectedCompanyId) throw new Error("Select an organization to create secrets");
+      if (!selectedCompanyId) throw agentConfigurationContextError("createSecret");
       return secretsApi.create(selectedCompanyId, input);
     },
     onSuccess: () => {
@@ -471,7 +472,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
 
   const uploadMarkdownImage = useMutation({
     mutationFn: async ({ file, namespace }: { file: File; namespace: string }) => {
-      if (!selectedCompanyId) throw new Error("Select an organization to upload images");
+      if (!selectedCompanyId) throw agentConfigurationContextError("uploadImage");
       return assetsApi.uploadImage(selectedCompanyId, file, namespace);
     },
   });
@@ -936,7 +937,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
       : ["agents", "none", "detect-model", adapterType],
     queryFn: () => {
       if (!selectedCompanyId) {
-        throw new Error("Select an organization to detect the model");
+        throw agentConfigurationContextError("detectModel");
       }
       return agentsApi.detectModel(selectedCompanyId, adapterType);
     },

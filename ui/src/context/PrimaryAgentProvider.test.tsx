@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { i18n } from "@/i18n";
+import { agentConfigurationMessages } from "@/i18n/agent-configuration-test-resources";
 import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -44,7 +46,8 @@ async function waitForOutput(text: string) {
     expect(container.querySelector("output")?.textContent).toBe(text);
   });
 }
-beforeEach(() => {
+beforeEach(async () => {
+  await i18n.changeLanguage("en");
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   state.companyId = "company-a";
   state.get.mockReset().mockResolvedValue(preference());
@@ -54,7 +57,7 @@ beforeEach(() => {
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
 });
 afterEach(async () => {
-  await act(async () => root.unmount()); client.clear(); container.remove(); vi.unstubAllGlobals();
+  await act(async () => root.unmount()); client.clear(); container.remove(); vi.unstubAllGlobals(); await i18n.changeLanguage("en");
 });
 
 describe("primary agent persistence provider", () => {
@@ -125,5 +128,53 @@ describe("primary agent persistence provider", () => {
     await act(async () => container.querySelectorAll("button")[1].click());
     await waitForOutput("maia");
     expect(state.session).toHaveBeenCalledTimes(2);
+  });
+});
+
+
+describe("primary agent localized mutation feedback", () => {
+  it.each(["en", "zh-CN", "es", "ja"] as const)("uses the callback-time language in %s while preserving the error and retry target", async locale => {
+    let reject!: (error: Error) => void;
+    state.set.mockImplementationOnce(() => new Promise((_resolve, fail) => { reject = fail; }));
+    await render(); await waitForOutput("maia");
+    await act(async () => container.querySelector("button")!.click()); await waitForOutput("alex");
+    expect(state.set.mock.calls).toEqual([["company-a", { primaryAgentId: "alex" }]]);
+    await act(async () => { await i18n.changeLanguage(locale); });
+    await act(async () => reject(new Error("Provider Original /raw-path"))); await waitForOutput("maia");
+    expect(state.toast).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ title: agentConfigurationMessages[locale].changePrimaryFailed, body: "Provider Original /raw-path", action: expect.objectContaining({ label: i18n.t("common.retry") }) }));
+    state.get.mockResolvedValue(preference("company-a", "user-a", "alex")); state.set.mockResolvedValue(preference("company-a", "user-a", "alex"));
+    await act(async () => state.toast.mock.calls[0][0].action.onClick()); await waitForOutput("alex");
+    expect(state.set.mock.calls).toEqual([["company-a", { primaryAgentId: "alex" }], ["company-a", { primaryAgentId: "alex" }]]);
+  });
+
+  it.each(["company", "actor"] as const)("does not let an old toast retry act in a newer %s context", async scope => {
+    state.set.mockRejectedValueOnce(new Error("Original failure")); await render(); await waitForOutput("maia");
+    await act(async () => container.querySelector("button")!.click()); await waitForOutput("maia");
+    await vi.waitFor(() => expect(state.toast).toHaveBeenCalledOnce());
+    const retry = state.toast.mock.calls[0][0].action.onClick;
+    const company = scope === "company" ? "company-b" : "company-a";
+    const actor = scope === "actor" ? "user-b" : "user-a";
+    state.get.mockResolvedValue(preference(company, actor, null)); state.companyId = company;
+    if (scope === "actor") await act(async () => client.setQueryData(queryKeys.auth.session, { user: { id: actor } }));
+    await render(); await waitForOutput("none");
+    await act(async () => { await i18n.changeLanguage("ja"); retry(); });
+    expect(state.set.mock.calls).toEqual([["company-a", { primaryAgentId: "alex" }]]);
+    expect(client.getQueryData(queryKeys.primaryAgent.mine(company, actor))).toEqual(preference(company, actor, null));
+  });
+
+  it.each(["company", "actor"] as const)("keeps late success and cache invalidation in the original %s context", async scope => {
+    let resolve!: (value: ReturnType<typeof preference>) => void;
+    state.set.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+    await render(); await waitForOutput("maia"); await act(async () => container.querySelector("button")!.click()); await waitForOutput("alex");
+    const company = scope === "company" ? "company-b" : "company-a";
+    const actor = scope === "actor" ? "user-b" : "user-a";
+    state.get.mockResolvedValue(preference(company, actor, null)); state.companyId = company;
+    if (scope === "actor") await act(async () => client.setQueryData(queryKeys.auth.session, { user: { id: actor } }));
+    await render(); await waitForOutput("none");
+    await act(async () => resolve(preference("company-a", "user-a", "alex"))); await waitForOutput("none");
+    expect(state.set.mock.calls).toEqual([["company-a", { primaryAgentId: "alex" }]]);
+    expect(client.getQueryData(queryKeys.primaryAgent.mine(company, actor))).toEqual(preference(company, actor, null));
+    expect(client.getQueryData(queryKeys.primaryAgent.mine("company-a", "user-a"))).toEqual(preference("company-a", "user-a", "alex"));
+    expect(state.toast).not.toHaveBeenCalled(); expect(container.querySelector("[data-pending]")?.textContent).toBe("none");
   });
 });

@@ -126,5 +126,9 @@
   "hint": "Hint: {{hint}}",
   "comingSoon": "Coming soon",
   "experimental": "Experimental",
-  "managedSandboxUnavailable": "This instance runs agents only in its managed sandbox environment, but no managed sandbox environment is available to test in. Check that the managed sandbox provider is active, then retry the test."
+  "managedSandboxUnavailable": "This instance runs agents only in its managed sandbox environment, but no managed sandbox environment is available to test in. Check that the managed sandbox provider is active, then retry the test.",
+  "changePrimaryFailed": "Couldn't change your primary agent.",
+  "createSecretOrganization": "Select an organization to create secrets",
+  "uploadImageOrganization": "Select an organization to upload images",
+  "detectModelOrganization": "Select an organization to detect the model"
 }

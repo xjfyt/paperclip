@@ -126,5 +126,9 @@
   "hint": "提示：{{hint}}",
   "comingSoon": "即将推出",
   "experimental": "实验性",
-  "managedSandboxUnavailable": "此实例仅在托管沙箱环境中运行 Agent，但没有可用于测试的托管沙箱环境。请检查托管沙箱提供商是否已启用，然后重试测试。"
+  "managedSandboxUnavailable": "此实例仅在托管沙箱环境中运行 Agent，但没有可用于测试的托管沙箱环境。请检查托管沙箱提供商是否已启用，然后重试测试。",
+  "changePrimaryFailed": "无法更改你的主 Agent。",
+  "createSecretOrganization": "请选择组织后再创建密钥",
+  "uploadImageOrganization": "请选择组织后再上传图片",
+  "detectModelOrganization": "请选择组织后再检测模型"
 }

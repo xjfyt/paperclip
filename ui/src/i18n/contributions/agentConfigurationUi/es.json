@@ -126,5 +126,9 @@
   "hint": "Sugerencia: {{hint}}",
   "comingSoon": "Próximamente",
   "experimental": "Experimental (en pruebas)",
-  "managedSandboxUnavailable": "Esta instancia solo ejecuta agentes en su sandbox administrado, pero no hay uno disponible para la prueba. Comprueba que el proveedor del sandbox administrado esté activo y vuelve a probar."
+  "managedSandboxUnavailable": "Esta instancia solo ejecuta agentes en su sandbox administrado, pero no hay uno disponible para la prueba. Comprueba que el proveedor del sandbox administrado esté activo y vuelve a probar.",
+  "changePrimaryFailed": "No se pudo cambiar tu agente principal.",
+  "createSecretOrganization": "Selecciona una organización para crear secretos",
+  "uploadImageOrganization": "Selecciona una organización para subir imágenes",
+  "detectModelOrganization": "Selecciona una organización para detectar el modelo"
 }

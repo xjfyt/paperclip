@@ -126,5 +126,9 @@
   "hint": "ヒント：{{hint}}",
   "comingSoon": "近日公開",
   "experimental": "試験的機能",
-  "managedSandboxUnavailable": "このインスタンスはマネージドサンドボックスでのみエージェントを実行しますが、テスト可能な環境がありません。マネージドサンドボックスのプロバイダーが有効か確認し、再度テストしてください。"
+  "managedSandboxUnavailable": "このインスタンスはマネージドサンドボックスでのみエージェントを実行しますが、テスト可能な環境がありません。マネージドサンドボックスのプロバイダーが有効か確認し、再度テストしてください。",
+  "changePrimaryFailed": "プライマリエージェントを変更できませんでした。",
+  "createSecretOrganization": "シークレットを作成する組織を選択してください",
+  "uploadImageOrganization": "画像をアップロードする組織を選択してください",
+  "detectModelOrganization": "モデルを検出する組織を選択してください"
 }
