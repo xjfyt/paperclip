@@ -1,8 +1,16 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AdapterExecutionContext, AdapterExecutionResult } from "@paperclipai/adapter-utils";
+import { writeCliFixture } from "@paperclipai/adapter-utils/test-fixtures/native-cli";
+import { installIsolatedHostFixture } from "@paperclipai/adapter-utils/test-fixtures/isolated-host";
+
+async function accountingCli(directory: string, provider = "openai") {
+  const command = join(directory, "runtime");
+  await writeCliFixture(command, `#!/usr/bin/env node\nprocess.stdout.write(${JSON.stringify(`${provider}  test\n`)});\n`);
+  return process.platform === "win32" ? `${command}.exe` : command;
+}
 
 const processResult = vi.hoisted(() => vi.fn());
 vi.mock("@paperclipai/adapter-utils/execution-target", async (original) => ({
@@ -29,13 +37,14 @@ const cases: Array<{ name: string; execute: () => Promise<Execute>; event: unkno
 ];
 
 describe("CLI adapter accounting on timeout", () => {
+  installIsolatedHostFixture();
   // Keep OpenCode runtime config copies inside each fixture; host config may
   // include plugins and large dependency trees unrelated to accounting.
   const directories: string[] = [];
   afterEach(async () => { vi.clearAllMocks(); for (const dir of directories.splice(0)) await rm(dir, { recursive: true, force: true }); });
   it.each(cases.filter(f => ["codex", "cursor", "opencode"].includes(f.name)))("$name preserves malformed optional counters through the checkpoint wrapper", async fixture => {
     const dir = await mkdtemp(join(tmpdir(), "paperclip-invalid-counter-")); directories.push(dir);
-    const command = join(dir, "runtime"); await writeFile(command, "#!/bin/sh\nprintf 'openai  test\\n'\n", { mode: 0o755 });
+    const command = await accountingCli(dir);
     const execute = await fixture.execute();
     for (const cached of ["private malformed counter", false, {}, 0, undefined]) for (const newline of [false, true]) {
       const event = fixture.name === "opencode"
@@ -63,10 +72,10 @@ describe("CLI adapter accounting on timeout", () => {
         expect(onUsage.mock.calls.every(([receipt]) => !receipt.complete && receipt.costStatus === "unpriced")).toBe(true);
       }
     }
-  });
+  }, process.platform === "win32" ? 60_000 : 15_000);
   it.each(cases.filter(fixture => fixture.name !== "kimi"))("$name flushes its attempt and surfaces checkpoint persistence failures", async (fixture) => {
     const dir = await mkdtemp(join(tmpdir(), "paperclip-accounting-adapter-")); directories.push(dir);
-    const command = join(dir, "runtime"); await writeFile(command, "#!/bin/sh\nprintf 'openai  test\\n'\n", { mode: 0o755 });
+    const command = await accountingCli(dir);
     const stdout = JSON.stringify(fixture.event);
     processResult.mockImplementation(async (_run, _target, _command, _args, options) => {
       // Local process logging catches callback failures. Finalization must
@@ -100,7 +109,10 @@ describe("CLI adapter accounting on timeout", () => {
       }
       for (const [kind, auth, biller] of [["openrouter", "api_key", "openrouter"], ["custom", "api_key", "unknown"], ["local", "none", "unknown"]]) {
         const routed = await execute({ ...context, config: { ...context.config,
-          managedAiRouting: { kind, auth }, env: { ...(context.config.env as object), OPENAI_API_KEY: "", PAPERCLIP_AI_PROVIDER_KEY: auth === "none" ? "" : "fixture" },
+          // A connector supplies its own runtime home; accounting must not
+          // depend on a developer's ambient ChatGPT subscription credentials.
+          managedAiConnection: true, managedAiRouting: { kind, auth },
+          env: { ...(context.config.env as object), CODEX_HOME: join(dir, "connector-home"), OPENAI_API_KEY: "", PAPERCLIP_AI_PROVIDER_KEY: auth === "none" ? "" : "fixture" },
         } });
         expect(routed).toMatchObject({ billingType: "api", biller, costUsd: null });
         expect(onUsage.mock.calls.at(-1)![0]).toMatchObject({ billingType: "api", biller, costUsd: null });
@@ -188,10 +200,10 @@ describe("CLI adapter accounting on timeout", () => {
     }
     onUsage.mockRejectedValue(new Error("Receipt persistence failed"));
     await expect(execute(context)).rejects.toThrow("Receipt persistence failed");
-  });
+  }, process.platform === "win32" ? 60_000 : 15_000);
   it.each(cases.filter(f => ["pi", "opencode"].includes(f.name)))("$name preserves full-stream accounting after stdout truncation", async (fixture) => {
     const dir = await mkdtemp(join(tmpdir(), "paperclip-accounting-tail-")); directories.push(dir);
-    const command = join(dir, "runtime"); await writeFile(command, "#!/bin/sh\nprintf 'anthropic  test\\n'\n", { mode: 0o755 });
+    const command = await accountingCli(dir, "anthropic");
     const execute = await fixture.execute();
     for (const checkpoint of [true, false]) for (const timedOut of [false, true]) for (const missingPrice of [false, true]) {
       const early = structuredClone(fixture.event) as any;
@@ -226,7 +238,7 @@ describe("CLI adapter accounting on timeout", () => {
 
   it.each(cases)("$name retains observed accounting when the process times out", async (fixture) => {
     const dir = await mkdtemp(join(tmpdir(), "paperclip-accounting-adapter-")); directories.push(dir);
-    const command = join(dir, "runtime"); await writeFile(command, "#!/bin/sh\nprintf 'openai  test\\n'\n", { mode: 0o755 });
+    const command = await accountingCli(dir);
     processResult.mockResolvedValue({ exitCode: null, signal: "SIGTERM", timedOut: true, stdout: JSON.stringify(fixture.event), stderr: "", pid: 123, startedAt: new Date().toISOString() });
     const execute = await fixture.execute();
     const result = await execute({
