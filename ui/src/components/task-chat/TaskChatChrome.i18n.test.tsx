@@ -72,7 +72,7 @@ it.each(locales)("keeps the plan popover pinned, raw steps and numeric state unc
 it.each(locales)("keeps reasoning and system disclosure bodies raw while translating their local controls in %s", async locale => {
   await language(locale); const retry = vi.fn();
   const thinking: TaskChatThinkingItem = { id: "thinking", kind: "thinking", lines: ["Reasoning raw body 原文"], streaming: true };
-  const notice: TaskChatMessageItem = { id: "notice", kind: "message", author: "system", text: "No live execution path. Provider diagnostic 原文", presentation: { kind: "system_notice", title: "No live execution path" } };
+  const notice: TaskChatMessageItem = { id: "notice", kind: "message", author: "system", text: "No live execution path. Provider diagnostic 原文", presentation: { kind: "system_notice", title: "No live execution path", tone: "warning", detailsDefaultOpen: false } };
   await render(<><TaskChatThinking item={thinking} /><TaskChatSystemNotice item={notice} onTryAgainNoLiveExecutionPath={retry} /></>);
   const reasoningButton = container.querySelector<HTMLButtonElement>('[data-testid="task-chat-thinking"] button')!;
   await act(async () => reasoningButton.click());
@@ -104,5 +104,6 @@ it("does not reopen a dismissed plan through Escape focus restoration without a 
   expect(document.querySelector(`[aria-label="${messages.en.turnChecklist}"]`)).not.toBeNull();
   await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
   expect(document.querySelector(`[aria-label="${messages.en.turnChecklist}"]`)).toBeNull();
-  expect(document.activeElement).toBe(button);
+  // Radix restores focus in a deferred FocusScope cleanup. Await the observable contract.
+  await vi.waitFor(() => expect(document.activeElement).toBe(button));
 });

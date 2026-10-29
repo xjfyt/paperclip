@@ -62,7 +62,7 @@ it.each(locales)("gives QuestionForm its original rejection object and retains t
   const formatter = vi.fn((error: unknown) => `${messages[i18n.language as Locale].submitFailed} ${(error as Error).message}`);
   const submit = vi.fn().mockRejectedValue(cause);
   await act(async () => root.render(<QuestionForm id="question-original" draftKey="question-feedback-original"
-    questionSet={{ schema: "paperclip.question_set.v1", questions: [{ id: "q-raw", prompt: "Raw prompt", answerMode: "single_select", options: [{ id: "raw-option", label: "Raw option" }] }] }}
+    questionSet={{ schema: "paperclip.question_set.v1", questions: [{ id: "q-raw", prompt: "Raw prompt", required: true, answerMode: "single_select", options: [{ id: "raw-option", label: "Raw option" }] }] }}
     onSubmit={submit} formatActionError={formatter} />));
   await click("Raw option"); const saved = localStorage.getItem("question-feedback-original");
   await click(questionFormMessages[locale].submitAnswers);
@@ -76,7 +76,7 @@ it.each(locales)("retains compact question failure codes instead of wrapping the
   await language(locale);
   const submit = vi.fn().mockRejectedValue({ status: 403, body: { code: "interaction_human_only" } });
   const interaction = { ...pendingAskUserQuestionsInteraction, effectiveResolverPolicy: "human_only" as const, payload: { ...pendingAskUserQuestionsInteraction.payload, questions: [], questionSet: {
-    schema: "paperclip.question_set.v1" as const, questions: [{ id: "q-raw", prompt: "Raw prompt", answerMode: "single_select" as const, options: [{ id: "raw-option", label: "Raw option" }] }] } } };
+    schema: "paperclip.question_set.v1" as const, questions: [{ id: "q-raw", prompt: "Raw prompt", required: true, answerMode: "single_select" as const, options: [{ id: "raw-option", label: "Raw option" }] }] } } };
   await render({ interaction, draftKey: "compact-question-original", onSubmitInteractionAnswers: submit });
   await click("Raw option"); const saved = localStorage.getItem("compact-question-original");
   await click(questionFormMessages[locale].submitAnswers);
