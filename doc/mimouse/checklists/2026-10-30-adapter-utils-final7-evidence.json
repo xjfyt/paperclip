@@ -1,0 +1,77 @@
+{
+  "schema": "mimouse.local-verification.v1",
+  "recordedAt": "2026-10-29T19:46:57.693Z",
+  "scope": "Complete adapter-utils project on native Windows, final7; root attests production frozen during this run. Appended evidence preserves final6 historical receipt.",
+  "command": "pnpm exec vitest run --project @paperclipai/adapter-utils --maxWorkers=1 --reporter=json --outputFile=test-results/project-closure-20261029/adapter-complete-final7.json",
+  "result": {
+    "files": 79,
+    "passed": 1716,
+    "failed": 0,
+    "skipped": 51
+  },
+  "notes": [
+    "Includes five actual filesystem/identity/race regressions for manifestFileSha256; source/descriptor identities use bigint dev/ino and size/mtimeNs/ctimeNs checks, final symbolic-link/replacement/mutation rejected.",
+    "The same 51 pre-existing platform/provider conditions remain skipped, according to root. They are not successful provider journeys.",
+    "final7 overlaps final6 and all earlier targeted runs: do not sum their totals.",
+    "Input capture below covers relevant changed sources/helpers and prior final6 capture scope, not every transitive package or a clean installation.",
+    "Retained path-based SQLite reopening remains a separate existing boundary; no complete descriptor-confinement claim."
+  ],
+  "diagnostics": {
+    "frameworkOrUnhandled": false,
+    "applicationWarnLines": 0,
+    "scope": "Compiler/framework diagnostics are separate from intentional fixture stdout/stderr; the raw log is preserved."
+  },
+  "previousEvidence": "doc/mimouse/checklists/2026-10-30-adapter-utils-complete-evidence.json",
+  "inputs": [
+    {
+      "path": "packages/adapter-utils/src/sandbox-managed-runtime.ts",
+      "sha256": "d68d2cad90916d34efa29e4f07a63e4e9666da46b7e8eb9673df3dffb6842d4c"
+    },
+    {
+      "path": "packages/adapter-utils/src/tar-long-path.test.ts",
+      "sha256": "4def65bac1b6848440be73d046b662bfdfc14ad09e0744ea1aba991d17618388"
+    },
+    {
+      "path": "packages/adapter-utils/src/acpx-engine/execute.test.ts",
+      "sha256": "037c789ce3586ff7bec2c518f39f3c27aa07da6572ded96a9b5ccecad5695178"
+    },
+    {
+      "path": "packages/adapter-utils/src/execution-target-stdin-race.test.ts",
+      "sha256": "9aede7d96095a71a8ed9cf5236f961bbc71d3f5e5ebed461e914ab453692fa72"
+    },
+    {
+      "path": "packages/adapter-utils/src/sandbox-callback-bridge.ts",
+      "sha256": "38cdf46ca68977374ee8467d77232f59e33cd7263c96c9dff05d5bb7e3d2125a"
+    },
+    {
+      "path": "packages/adapter-utils/src/sandbox-callback-bridge.test.ts",
+      "sha256": "255cab30c84193f7e3614aace63115f9da26d7f941496c732e5dbccba9aa4287"
+    },
+    {
+      "path": "packages/adapter-utils/src/workspace-manifest.ts",
+      "sha256": "a724ca7ac623b86081020cafdfa14e38d17f17e80d552b807f8b1348cc7d46ee"
+    },
+    {
+      "path": "packages/adapter-utils/src/workspace-manifest-file-safety.test.ts",
+      "sha256": "c1192579868a48dd73aae1b5acf9dc5317e6b1a67010a60a38ad666df9df9162"
+    },
+    {
+      "path": "packages/adapter-utils/src/test-fixtures/local-sandbox.ts",
+      "sha256": "b617e41843bc565f3ff3995357cff44105ef085a661507d25b7911467e96c76d"
+    },
+    {
+      "path": "packages/adapter-utils/src/test-fixtures/native-cli.ts",
+      "sha256": "03105e5517667c1b5193d5d07138674aad1bc9c4c89d81aaf31f3b9fce4bb13a"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "test-results/project-closure-20261029/adapter-complete-final7.json",
+      "sha256": "b393b49712e50fab82ea50f322381b3c30f7408a2587acce6e8a9144e4345842"
+    },
+    {
+      "path": "test-results/project-closure-20261029/adapter-complete-final7.log",
+      "sha256": "31a1f4cd8af9840a2790199fabb11d3079ad4154401361ed563a4e7c8b12ba63"
+    }
+  ]
+}

@@ -22,6 +22,7 @@
 | [Windows 服务恢复夹具](2026-10-30-windows-server-recovery-evidence.json) | Git/私密 HOME/实际 Node 退出及精确缓存容量回归。两个原有 POSIX 孤儿进程组用例仍跳过，不放宽 Windows 生产停止证明。 |
 | [决策签名密钥与启动接线](2026-10-30-decision-signing-evidence.json) | 真实 NTFS 的首字节前保护、既有宽 ACL/链接拒绝及原字节/DACL 保全；原子发布赢家与临时路径碰撞；启动测试逐项正常关闭，真实 PG 决策流程另列。不证明其它秘密路径或非 Windows 实机验收。 |
 | [adapter-utils 完整回归](2026-10-30-adapter-utils-complete-evidence.json) | 最新冻结输入下 78 文件、1711 通过、51 条平台/供应商条件跳过；与早期 launcher 收据分开，不累加重叠数量。 |
+| [adapter-utils final7](2026-10-30-adapter-utils-final7-evidence.json) | 后续包含 manifest 五项真实文件身份回归的 79 文件、1716 通过、51 条原平台/供应商条件跳过；保留 final6 收据，两个重叠全量结果不相加。 |
 | [托管仓库与工作树](2026-10-30-managed-repositories-evidence.json) | 真实本机 Git、任务 anchor 内短路径 clone 与同卷提升；新仓库配置和清理边界，不修改全局 Git。 |
 | [Native session 执行与恢复](2026-10-30-native-session-evidence.json) | 执行/恢复与空 runtime context 清理的专项输入；不把 descriptor 文件交付限制扩大成全部 Windows Runner 不可用。 |
 | [Windows Agent 下载快照](2026-10-30-windows-agent-download-evidence.json) | 已验证文件的私密临时磁盘副本、源句柄释放与流清理边界；不是持久备份。 |
