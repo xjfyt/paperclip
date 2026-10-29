@@ -48,7 +48,78 @@
   "existingSkips": {
     "count": 12,
     "unchangedFromHistoricalFinal3": true,
-    "cases": []
+    "cases": [
+      {
+        "file": "cli/src/__tests__/install-command.test.ts",
+        "fullName": "managed install commands installs a GitHub branch through codeload and reuses the resolved SHA",
+        "status": "skipped"
+      },
+      {
+        "file": "cli/src/__tests__/install-command.test.ts",
+        "fullName": "managed install commands installs through the shim, reports provenance, and uninstalls without deleting user data",
+        "status": "skipped"
+      },
+      {
+        "file": "cli/src/__tests__/install-command.test.ts",
+        "fullName": "managed install commands requires explicit non-interactive consent before resolving git refs",
+        "status": "skipped"
+      },
+      {
+        "file": "cli/src/__tests__/install-store.test.ts",
+        "fullName": "managed install store uses the pinned Node for child tools even with an older node first on the service PATH",
+        "status": "skipped"
+      },
+      {
+        "file": "cli/src/__tests__/private-permissions.test.ts",
+        "fullName": "retains POSIX mode checks",
+        "status": "skipped"
+      },
+      {
+        "file": "cli/src/__tests__/update-command.test.ts",
+        "fullName": "update command backs up, installs side-by-side, flips, and rolls back instantly",
+        "status": "skipped"
+      },
+      {
+        "file": "cli/src/__tests__/update-command.test.ts",
+        "fullName": "update command explains how to recover when the pre-update database is unreachable",
+        "status": "skipped"
+      },
+      {
+        "file": "cli/src/__tests__/update-command.test.ts",
+        "fullName": "update command re-resolves a moving git branch and activates the new SHA payload",
+        "status": "skipped"
+      },
+      {
+        "file": "cli/src/__tests__/update-command.test.ts",
+        "fullName": "update command requires explicit confirmation before downgrading",
+        "status": "skipped"
+      },
+      {
+        "file": "cli/src/__tests__/update-command.test.ts",
+        "fullName": "update command rolls back the active payload when restart validation fails",
+        "status": "skipped"
+      },
+      {
+        "file": "cli/src/__tests__/update-command.test.ts",
+        "fullName": "update command skips the pre-update backup when there is no onboarded instance data",
+        "status": "skipped"
+      },
+      {
+        "file": "cli/src/__tests__/update-command.test.ts",
+        "fullName": "update command surfaces a failure to restart the rolled-back payload",
+        "status": "skipped"
+      }
+    ],
+    "metadataCorrection": {
+      "recordedAt": "2026-10-29T22:11:36.615Z",
+      "reason": "The previous cases array was empty because the extraction omitted Vitest 5 assertions with status skipped. The original and final complete-run JSON have the same 12 file/fullName pairs; no new skip or removed skip was found.",
+      "comparison": {
+        "path": "test-results/project-closure-20261029/cli-original-skip-name-comparison.json",
+        "sha256": "78a06f754576b0caf9cba8b73304b42d12e746623e3e58d1573499f45cec580f"
+      },
+      "previousWorkingReceiptSha256": "235d78d3acf03b7ac61f60736272676c0b889db8e875e9749e52e89ad88b1782",
+      "scope": "Auditable metadata correction only. No CLI rerun, result count, source hash, historical red record or original capture time was changed."
+    }
   },
   "targetedVerification": [
     {

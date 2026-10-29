@@ -38,7 +38,12 @@
 | [Clone、probe 与 board](2026-10-30-windows-clone-probe-board-evidence.json) | 实际本地 Git、受控独立程序和隔离 PG；凭据边界、权限与原 Darwin 条件单列，不代表远端仓库或账号验收。 |
 | [文件交付与 issue helper](2026-10-30-windows-file-delivery-chat-helper-evidence.json) | Git Bash、真实 jq/Unicode curl、本机 HTTP 与精确文件字节；Windows descriptor 拒绝和零落地单列，不误称本机 FD 交付成功。 |
 | [Windows Unicode tar](2026-10-30-windows-unicode-tar-evidence.json) | 原始 Unicode/NUL 成员、真实 GNU tar 及长路径/链接回归；后续排除规则与整包回归以收口报告为准，不能用此早期专项代替后来的失败结果。 |
+| [Windows 工作区传输](2026-10-30-windows-workspace-transfer-evidence.json) | GNU tar 字面排除规则、受控批量删除及 Git 物化预算的专项和相关完整套件；保留 adapter final9 整包失败。当轮未覆盖 4 万路径压力的完成结果，后续压力验证另列独立收据，不把这些重叠结果相加。 |
 | [CLI 既有 key 读取竞态](2026-10-30-windows-worktree-observed-key-evidence.json) | 已观察目标在打开前消失时拒绝重建，原字节/SDDL 保全；完整 NTFS 专项 16/16，名字过滤的 pending 不当作平台跳过。 |
+| [Windows CLI 初始化与完整包](2026-10-30-windows-cli-key-initialization-evidence.json) | 当前 CLI 的 doctor/onboard 私密 key 初始化与完整 69 文件、550 通过、12 条原条件跳过；2582 项声明输入无漂移、0 框架告警，边界不扩大到浏览器、真实外部供应商或最终发布包。 |
+| [Windows 端口注册表](2026-10-30-windows-port-registry-evidence.json) | 两完整文件 15/15，真实共享句柄、路径替换与固定工具反例；同一完整 owner 文件有界重试，未知身份保持拒绝，不把历史首次 rename 失败归因到未经证明的外部 owner。 |
+| [Native finalizer 并发门控](2026-10-30-native-finalizer-gate-evidence.json) | 完整文件 14/14；首个实际 I/O 持有门控时等待第二次 busy 返回再释放，保持原测试预算，不代表整个 Native executor 或官方分片已通过。 |
+| [工作区 4 万路径流式压力](2026-10-30-workspace-streaming-evidence.json) | final6 完整用例通过，保留 4 万路径、超过 32 MiB 清单、实际文件/删除及 scheduler drain 断言；旧超时保留，专项通过不代替 adapter-utils 整包或官方分片结果。 |
 
 ## 三、摘要核对与后续输入
 
