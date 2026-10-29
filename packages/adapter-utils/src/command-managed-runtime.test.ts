@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
-import path from "node:path";
+import { fixturePath as path, sandboxPath, shellExecutable, shellArgs, shellScript, shellEnvironment } from "./test-fixtures/local-sandbox.js";
 import { execFile as execFileCallback, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
@@ -63,10 +63,10 @@ function makeSpawnRunner(options: {
         });
         const startedAt = new Date().toISOString();
         const command =
-          input.command === "sh" ? "/bin/sh" : input.command === "bash" ? "/bin/bash" : input.command;
-        const child = spawn(command, input.args ?? [], {
+          shellExecutable(input.command);
+        const child = spawn(command, shellArgs(input.args), {
           cwd: input.cwd,
-          env: { ...process.env, ...input.env },
+          env: shellEnvironment(input.env),
         });
         let stdout = "";
         let stderr = "";
@@ -183,7 +183,7 @@ describe("command managed runtime", () => {
     cleanupDirs.push(rootDir);
 
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     await mkdir(path.join(localWorkspaceDir, ".paperclip-runtime"), { recursive: true });
     await mkdir(remoteWorkspaceDir, { recursive: true });
     await writeFile(path.join(localWorkspaceDir, "README.md"), "local workspace\n", "utf8");
@@ -208,13 +208,10 @@ describe("command managed runtime", () => {
       }): Promise<RunProcessResult> => {
         calls.push({ ...input });
         const startedAt = new Date().toISOString();
-        const env = {
-          ...process.env,
-          ...input.env,
-        };
+        const env = shellEnvironment(input.env);
         const command =
-          input.command === "sh" ? "/bin/sh" : input.command === "bash" ? "/bin/bash" : input.command;
-        const args = [...(input.args ?? [])];
+          shellExecutable(input.command);
+        const args = shellArgs(input.args);
         if (
           input.stdin != null &&
           (input.command === "sh" || input.command === "bash") &&
@@ -298,7 +295,7 @@ describe("command managed runtime", () => {
     cleanupDirs.push(rootDir);
 
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     const localHomeDir = path.join(rootDir, "local-home");
     await mkdir(localWorkspaceDir, { recursive: true });
     await mkdir(remoteWorkspaceDir, { recursive: true });
@@ -352,7 +349,7 @@ describe("command managed runtime", () => {
     cleanupDirs.push(rootDir);
 
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     await mkdir(localWorkspaceDir, { recursive: true });
     await mkdir(remoteWorkspaceDir, { recursive: true });
     await writeFile(path.join(localWorkspaceDir, "README.md"), "anchor\n", "utf8");
@@ -405,7 +402,7 @@ describe("command managed runtime", () => {
     cleanupDirs.push(rootDir);
 
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     await mkdir(localWorkspaceDir, { recursive: true });
     await mkdir(remoteWorkspaceDir, { recursive: true });
 
@@ -435,8 +432,8 @@ describe("command managed runtime", () => {
     cleanupDirs.push(rootDir);
 
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteBaseDir = path.join(rootDir, "remote-base");
-    const remoteWorkspaceDir = path.join(remoteBaseDir, ".paperclip-runtime", "runs", "test", "workspace");
+    const remoteBaseDir = sandboxPath(path.join(rootDir, "remote-base"));
+    const remoteWorkspaceDir = sandboxPath(path.join(remoteBaseDir, ".paperclip-runtime", "runs", "test", "workspace"));
     await mkdir(localWorkspaceDir, { recursive: true });
     await mkdir(remoteBaseDir, { recursive: true });
     await writeFile(path.join(localWorkspaceDir, "README.md"), "local workspace\n", "utf8");
@@ -462,7 +459,7 @@ describe("command managed runtime", () => {
   it("uploads a multi-MB payload in a single process and preserves exact bytes", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-command-write-"));
     cleanupDirs.push(rootDir);
-    const remotePath = path.join(rootDir, "nested", "payload.bin");
+    const remotePath = sandboxPath(path.join(rootDir, "nested", "payload.bin"));
 
     // ~3 MB of every byte value so the test catches any non-binary-safe handling.
     const payload = Buffer.alloc(3 * 1024 * 1024);
@@ -499,7 +496,7 @@ describe("command managed runtime", () => {
   it("stages a single-file write to <path>.paperclip-upload then atomically renames it (single-stream path)", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-command-atomic-"));
     cleanupDirs.push(rootDir);
-    const remotePath = path.join(rootDir, "nested", "payload.bin");
+    const remotePath = sandboxPath(path.join(rootDir, "nested", "payload.bin"));
 
     const { runner, calls } = makeSpawnRunner({ supportsSingleStreamStdinProgress: true });
     const client = createCommandManagedRuntimeClient({ runner, commandCwd: "/", timeoutMs: 30_000 });
@@ -518,7 +515,7 @@ describe("command managed runtime", () => {
   it("cleans up a staged upload when rename fails", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-command-upload-cleanup-"));
     cleanupDirs.push(rootDir);
-    const remotePath = path.join(rootDir, "nested", "payload.bin");
+    const remotePath = sandboxPath(path.join(rootDir, "nested", "payload.bin"));
 
     const payload = Buffer.alloc(3 * 1024 * 1024, 7);
     const { runner, calls } = makeSpawnRunner({ supportsSingleStreamStdinProgress: true });
@@ -555,7 +552,7 @@ describe("command managed runtime", () => {
   it("stages a single-file write to a temp then renames it on the chunked fallback path too", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-command-atomic-fallback-"));
     cleanupDirs.push(rootDir);
-    const remotePath = path.join(rootDir, "nested", "payload.bin");
+    const remotePath = sandboxPath(path.join(rootDir, "nested", "payload.bin"));
 
     const payload = Buffer.alloc(10 * 1024 * 1024);
     for (let i = 0; i < payload.length; i++) payload[i] = i % 256;
@@ -695,7 +692,7 @@ describe("command managed runtime", () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-syncin-fallback-"));
     cleanupDirs.push(rootDir);
     const sourceDir = path.join(rootDir, "source");
-    const targetDir = path.join(rootDir, "target");
+    const targetDir = sandboxPath(path.join(rootDir, "target"));
     const markerDir = path.join(rootDir, "markers");
     await mkdir(path.join(sourceDir, "nested"), { recursive: true });
     await mkdir(markerDir, { recursive: true });
@@ -945,7 +942,7 @@ describe("command managed runtime", () => {
   it("falls back to chunked upload progress when the runner cannot report mid-stream stdin progress", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-command-write-fallback-"));
     cleanupDirs.push(rootDir);
-    const remotePath = path.join(rootDir, "nested", "payload.bin");
+    const remotePath = sandboxPath(path.join(rootDir, "nested", "payload.bin"));
 
     const payload = Buffer.alloc(12 * 1024 * 1024);
     for (let i = 0; i < payload.length; i++) payload[i] = i % 256;
@@ -979,7 +976,7 @@ describe("command managed runtime", () => {
   it("falls back to bounded chunks when the runner does not explicitly opt in", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-command-write-fallback-no-progress-"));
     cleanupDirs.push(rootDir);
-    const remotePath = path.join(rootDir, "nested", "payload.bin");
+    const remotePath = sandboxPath(path.join(rootDir, "nested", "payload.bin"));
 
     const payload = Buffer.alloc(12 * 1024 * 1024);
     for (let i = 0; i < payload.length; i++) payload[i] = i % 256;
@@ -1004,7 +1001,7 @@ describe("command managed runtime", () => {
   it("downloads in bounded stdout chunks and reports monotonic byte progress to the total", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-command-read-"));
     cleanupDirs.push(rootDir);
-    const remotePath = path.join(rootDir, "download.bin");
+    const remotePath = sandboxPath(path.join(rootDir, "download.bin"));
 
     const payload = Buffer.alloc(7 * 1024 * 1024);
     for (let i = 0; i < payload.length; i++) payload[i] = (i * 7) % 256;

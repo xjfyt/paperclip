@@ -10,7 +10,13 @@ const program = path.basename(process.argv[1]);
 const originalPath = (process.env.PATH || '').split(path.delimiter).filter(p => {
   try { return fs.realpathSync(p) !== directory; } catch { return true; }
 });
-const executable = originalPath.map(p => path.join(p, program)).find(p => {
+// CreateProcess cannot execute extensionless scripts or batch files directly.
+// Only select native images on Windows; do not introduce a shell at this
+// credential-bearing child boundary.
+const extensions = process.platform === 'win32'
+  ? (process.env.PATHEXT || '.EXE;.COM').split(';').filter(ext => /^\.(exe|com)$/i.test(ext))
+  : [''];
+const executable = originalPath.flatMap(p => extensions.map(ext => path.resolve(p, program + ext))).find(p => {
   try { fs.accessSync(p, fs.constants.X_OK); return fs.statSync(p).isFile(); } catch { return false; }
 });
 if (!['git', 'gh'].includes(program) || !executable) {
@@ -107,7 +113,7 @@ async function main() {
   env.ZDOTDIR = configDirectory;
   env.BASH_ENV = '/dev/null';
   env.GIT_SSH_COMMAND = 'ssh -F /dev/null -o IdentityAgent=none -o IdentitiesOnly=yes -o IdentityFile=none -o BatchMode=yes';
-  const child = spawn(executable, process.argv.slice(2), { env, stdio: 'inherit' });
+  const child = spawn(executable, process.argv.slice(2), { env, stdio: 'inherit', shell: false });
   for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(signal, () => child.kill(signal));
   child.once('error', () => { process.stderr.write('Paperclip: GitHub command could not start.\n'); process.exitCode = 1; });
   child.once('exit', (code, signal) => { process.exitCode = code === null ? 128 : code; });

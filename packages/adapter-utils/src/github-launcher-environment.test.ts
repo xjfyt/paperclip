@@ -1,13 +1,16 @@
 import { execFile } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { watch } from "node:fs";
-import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir as nativeMkdir, readFile as nativeReadFile, realpath, rm as nativeRm, writeFile as nativeWriteFile } from "node:fs/promises";
 import os from "node:os";
-import path from "node:path";
+import nativePath from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as ssh from "./ssh.js";
 import type { CommandManagedRuntimeRunner } from "./command-managed-runtime.js";
 import { githubBrokerEnvironment } from "./github-launcher.js";
+import { fixturePath as path, sandboxPath, shellExecutable } from "./test-fixtures/local-sandbox.js";
+import { writeCliFixture } from "./test-fixtures/native-cli.js";
 import {
   ensureAdapterExecutionTargetCommandResolvable,
   prepareGitHubOperationLaunchers,
@@ -16,6 +19,16 @@ import {
 } from "./execution-target.js";
 
 const exec = promisify(execFile);
+// Expose the real Git Bash POSIX mount namespace to the simulated provider;
+// translate only the test's own filesystem access back to the native host.
+const hostPath = (value: string) => process.platform === "win32" && /^\/[a-z]\//i.test(value)
+  ? `${value[1]}:${value.slice(2)}` : value;
+const remotePathFor = (value: string) => process.platform === "win32"
+  ? `/${nativePath.parse(value).root[0]!.toLowerCase()}${sandboxPath(value)}` : value;
+const mkdir = (file: string, options?: Parameters<typeof nativeMkdir>[1]) => nativeMkdir(hostPath(file), options);
+const readFile = (file: string, encoding: "utf8") => nativeReadFile(hostPath(file), encoding);
+const writeFile = (file: string, data: string) => nativeWriteFile(hostPath(file), data);
+const rm = (file: string, options?: Parameters<typeof nativeRm>[1]) => nativeRm(hostPath(file), options);
 const roots: string[] = [];
 afterEach(async () => {
   vi.restoreAllMocks();
@@ -24,22 +37,35 @@ afterEach(async () => {
 });
 
 async function sandbox(layout: string) {
-  const root = await mkdtemp(path.join(os.tmpdir(), "paperclip-launcher-env-"));
+  const root = remotePathFor(await mkdtemp(path.join(os.tmpdir(), "paperclip-launcher-env-")));
   roots.push(root);
   const bin = path.join(root, layout);
   await mkdir(bin, { recursive: true });
   for (const cli of ["claude", "codex", "git", "gh"]) {
-    await writeFile(path.join(bin, cli), `#!/bin/sh\nprintf '%s\\n' '${cli} started'\n`, { mode: 0o700 });
+    await writeCliFixture(hostPath(path.join(bin, cli)), `#!/bin/sh\nprintf '%s\\n' '${cli} started'\n`);
   }
-  const remotePath = `${bin}:${path.dirname(process.execPath)}:/usr/local/bin:/usr/bin:/bin`;
+  const nodeDirectory = process.platform === "win32"
+    ? `/${nativePath.parse(process.execPath).root[0]!.toLowerCase()}${sandboxPath(path.dirname(process.execPath))}`
+    : path.dirname(process.execPath);
+  const remotePath = `${bin}:${nodeDirectory}:${process.platform === "win32" ? "/mingw64/bin:" : ""}/usr/local/bin:/usr/bin:/bin`;
   // Execute real shells and staged launchers, with a provider-owned environment.
   // Do not inherit the controller's PATH, HOME, credentials, or shell hooks.
   const execute: CommandManagedRuntimeRunner["execute"] = async (input) => {
     const startedAt = new Date().toISOString();
     try {
-      const execution = exec(input.command, input.args ?? [], {
-        cwd: input.cwd ?? root,
-        env: { HOME: root, PATH: remotePath, ...input.env },
+      const script = process.platform === "win32" && ["git", "gh"].includes(path.basename(input.command));
+      const environment = { HOME: root, PATH: remotePath, ...input.env };
+      // This fixture models a POSIX provider. Git Bash converts its POSIX PATH
+      // to native PATH only when starting the real Windows Node executable.
+      // Keep controller credentials out of the provider-owned environment.
+      const execution = exec(script ? shellExecutable("sh") : shellExecutable(input.command), script
+        ? ["-c", 'exec node "$@"', "fixture-node", input.command, ...(input.args ?? [])]
+        : input.args ?? [], {
+        cwd: hostPath(input.cwd ?? root),
+        env: process.platform === "win32" ? {
+          SystemRoot: process.env.SystemRoot, PATHEXT: process.env.PATHEXT,
+          ...environment,
+        } : environment,
         timeout: input.timeoutMs ?? 15_000,
       });
       const inputComplete = new Promise<void>((resolve, reject) => {
@@ -68,6 +94,31 @@ async function sandbox(layout: string) {
 }
 
 describe("managed GitHub launcher environment", () => {
+  it.runIf(process.platform === "win32")("runs native staged launchers with real Git and preserves CLI arguments and exit status", async () => {
+    const root = await mkdtemp(nativePath.join(os.tmpdir(), "paperclip-native-github-"));
+    roots.push(root);
+    const bin = nativePath.join(root, "tools with 'quotes' and spaces");
+    await writeCliFixture(nativePath.join(bin, "gh"), '#!/usr/bin/env node\nprocess.stdout.write(JSON.stringify({args:process.argv.slice(2),token:process.env.GH_TOKEN ?? null})); process.exitCode=Number(process.env.FIXTURE_EXIT ?? 0);');
+    const env = await prepareGitHubOperationLaunchers({ runId: `native-${randomUUID()}`, target: null, cwd: root,
+      env: { ...githubBrokerEnvironment({}, { url: "", token: "" }), PATH: `${bin}${nativePath.delimiter}${process.env.PATH}` } });
+    roots.push(env.PAPERCLIP_GITHUB_LAUNCHER_DIR!);
+    expect(env.PATH!.split(nativePath.delimiter)[0]).toBe(env.PAPERCLIP_GITHUB_LAUNCHER_DIR);
+    const execute = (program: string, args: string[], extra: Record<string, string> = {}) => runAdapterExecutionTargetProcess("native-launcher", null, program, args,
+      { cwd: root, env: { ...env, ...extra }, timeoutSec: 10, graceSec: 1, onLog: async () => {} });
+    const git = await execute("git", ["--version"]);
+    expect(git.exitCode, git.stderr).toBe(0);
+    expect(git.stdout).toMatch(/^git version /);
+    const shim = await execute(nativePath.join(env.PAPERCLIP_GITHUB_LAUNCHER_DIR!, "git.cmd"), ["--version"]);
+    expect(shim.exitCode, shim.stderr).toBe(0);
+    expect(shim.stdout).toMatch(/^git version /);
+    const args = ["with spaces", "single'quote", 'double"quote', "", "trailing\\", "a&b", "a|b", "a(b)", "%PATH%", "!delayed!", "a^b", "a>b", "a<b"];
+    const gh = await execute("gh", args, { GH_TOKEN: "host-must-not-leak", FIXTURE_EXIT: "23" });
+    expect(gh.exitCode, gh.stderr).toBe(23);
+    expect(JSON.parse(gh.stdout)).toEqual({ args, token: null });
+    await writeFile(nativePath.join(env.PAPERCLIP_GITHUB_LAUNCHER_DIR!, "gh"), "throw new Error('must never execute');");
+    await expect(execute("gh", [])).rejects.toThrow("Invalid controller-owned GitHub launcher");
+  });
+
   // The Daytona native directory oracle uses Linux inotify. Run its real
   // filesystem regression on that platform; shell/launcher tests cover both.
   it.runIf(process.platform === "linux")("keeps launcher restaging and command scratch inside the runner runtime", async () => {
@@ -106,6 +157,7 @@ describe("managed GitHub launcher environment", () => {
     await writeFile(path.join(fixture.root, "package.json"), packageJson);
     // Exercise real Git; gh uses the fixture CLI because it need not be installed.
     await rm(path.join(fixture.bin, "git"));
+    if (process.platform === "win32") await rm(path.join(fixture.bin, "git.exe"));
     const env = await prepareGitHubOperationLaunchers({
       runId: "run-package-type", target: fixture.target, cwd: fixture.root,
       env: githubBrokerEnvironment({}, { url: "", token: "" }),
@@ -164,7 +216,8 @@ describe("managed GitHub launcher environment", () => {
     const fixture = await sandbox("ssh-toolchain/bin");
     // Use real Git for the probe, not the launcher fixture's stub.
     await rm(path.join(fixture.bin, "git"));
-    await exec("git", ["init", fixture.root]);
+    if (process.platform === "win32") await rm(path.join(fixture.bin, "git.exe"));
+    await exec("git", ["init", hostPath(fixture.root)]);
     const controllerCwd = path.join(fixture.root, "controller");
     await mkdir(controllerCwd);
     vi.spyOn(ssh, "createSshCommandManagedRuntimeRunner").mockReturnValue(fixture.runner);
@@ -176,7 +229,9 @@ describe("managed GitHub launcher environment", () => {
       target, cwd: controllerCwd, env: {}, hostCredentials: false, networkAccess: true,
     });
 
-    expect(JSON.parse(env.PAPERCLIP_GIT_METADATA_ROOTS!)).toEqual([await realpath(path.join(fixture.root, ".git"))]);
+    const canonical = await fixture.runner.execute({ command: "sh", args: ["-c", "cd .git && pwd -P"] });
+    expect(canonical.exitCode, canonical.stderr).toBe(0);
+    expect(JSON.parse(env.PAPERCLIP_GIT_METADATA_ROOTS!)).toEqual([canonical.stdout.trim()]);
   });
 
   it("uses target Git configuration without importing controller credentials", async () => {
@@ -218,7 +273,7 @@ describe("managed GitHub launcher environment", () => {
     const env = await prepareGitHubExecutionEnvironment({ target: null, cwd: path.join(root, "repo"), env: {}, hostCredentials: true, networkAccess: true });
     expect(env.GH_TOKEN).toBe("legacy-token");
     expect(env.GIT_CONFIG_GLOBAL).toBeUndefined();
-    expect(env.PAPERCLIP_GIT_METADATA_ROOTS).toContain("/repo/.git");
+    expect(JSON.parse(env.PAPERCLIP_GIT_METADATA_ROOTS!)).toContain(await realpath(path.join(root, "repo", ".git")));
     const config = await exec("git", ["config", "credential.helper"], { cwd: root, env: { ...process.env, ...env } });
     expect(config.stdout.trim()).toBe("store");
     const isolated = await prepareGitHubExecutionEnvironment({ target: null, cwd: root, env: {}, hostCredentials: false, networkAccess: false });

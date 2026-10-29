@@ -1,6 +1,6 @@
-import { lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { cp, lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
-import path from "node:path";
+import { fixturePath as path, sandboxPath, shellExecutable, shellArgs, shellScript, shellEnvironment } from "./test-fixtures/local-sandbox.js";
 import { execFile as execFileCallback } from "node:child_process";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
@@ -37,8 +37,8 @@ function makeNativeClient(): RecordingClient {
     await rm(targetPath, { recursive: true, force: true });
     await mkdir(targetPath, { recursive: true });
     // followSymlinks true dereferences to bytes (like tar -h); falsy preserves links.
-    const copyArgs = followSymlinks ? ["-RL"] : ["-a"];
-    await execFile("cp", [...copyArgs, `${sourcePath}/.`, targetPath]);
+    await cp(sourcePath, targetPath, { recursive: true, dereference: Boolean(followSymlinks),
+      ...(!followSymlinks ? { verbatimSymlinks: true } : {}) });
     const entries = await readdir(targetPath, { withFileTypes: true }).catch(() => []);
     return entries.length;
   };
@@ -57,7 +57,7 @@ function makeNativeClient(): RecordingClient {
       }
       // Honor the operation's ordered post-upload commands (PR-2), fail-fast.
       for (const command of operation.postUploadCommands ?? []) {
-        await execFile("sh", ["-c", command.command], { maxBuffer: 32 * 1024 * 1024 });
+        await execFile(shellExecutable("sh"), ["-c", shellScript(command.command)], { maxBuffer: 32 * 1024 * 1024, env: shellEnvironment() });
       }
       return { operationId: operation.operationId, filesTransferred, bytesTransferred: 0 };
     })),
@@ -75,7 +75,7 @@ function makeNativeClient(): RecordingClient {
       return entries.filter((e) => e.isFile()).map((e) => e.name).sort();
     },
     remove: async (remotePath) => { await rm(remotePath, { recursive: true, force: true }); },
-    run: async (command) => { await execFile("sh", ["-c", command], { maxBuffer: 32 * 1024 * 1024 }); },
+    run: async (command) => { await execFile(shellExecutable("sh"), ["-c", shellScript(command)], { maxBuffer: 32 * 1024 * 1024, env: shellEnvironment() }); },
     syncIn: async (operations) => { syncInOps.push(operations); return applyOperations(operations); },
     syncOut: async (operations) => { syncOutOps.push(operations); return applyOperations(operations); },
   };
@@ -97,7 +97,7 @@ describe("sandbox native file sync", () => {
     cleanupDirs.push(rootDir);
     const repo = path.join(rootDir, "repo");
     const selectedDir = path.join(repo, "project");
-    const remoteDir = path.join(rootDir, "remote");
+    const remoteDir = sandboxPath(path.join(rootDir, "remote"));
     await mkdir(selectedDir, { recursive: true });
     await execFile("git", ["-C", repo, "init"]);
     await writeFile(path.join(repo, "outside.txt"), "outside boundary\n");
@@ -134,7 +134,7 @@ describe("sandbox native file sync", () => {
     // preparation in production).
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-native-absent-workspace-"));
     cleanupDirs.push(rootDir);
-    const remoteDir = path.join(rootDir, "remote");
+    const remoteDir = sandboxPath(path.join(rootDir, "remote"));
 
     const { client } = makeNativeClient();
     const prepared = await prepareSandboxManagedRuntime({
@@ -158,7 +158,7 @@ describe("sandbox native file sync", () => {
 
     const { client } = makeNativeClient();
     await expect(prepareSandboxManagedRuntime({
-      spec: { transport: "sandbox", provider: "test", sandboxId: "s1", remoteCwd: path.join(rootDir, "remote"), timeoutMs: 30_000, apiKey: null },
+      spec: { transport: "sandbox", provider: "test", sandboxId: "s1", remoteCwd: sandboxPath(path.join(rootDir, "remote")), timeoutMs: 30_000, apiKey: null },
       adapterKey: "test-adapter",
       client,
       workspaceLocalDir: path.join(notADirectory, "workspace"),
@@ -169,7 +169,7 @@ describe("sandbox native file sync", () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-native-sync-"));
     cleanupDirs.push(rootDir);
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     const localAssetsDir = path.join(rootDir, "local-assets");
     await mkdir(localWorkspaceDir, { recursive: true });
     await mkdir(localAssetsDir, { recursive: true });
@@ -228,7 +228,7 @@ describe("sandbox native file sync", () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-native-timeout-"));
     cleanupDirs.push(rootDir);
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     const defaultAssetDir = path.join(rootDir, "default-asset");
     const customAssetDir = path.join(rootDir, "custom-asset");
     await mkdir(localWorkspaceDir, { recursive: true });
@@ -269,7 +269,7 @@ describe("sandbox native file sync", () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-native-custom-"));
     cleanupDirs.push(rootDir);
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     const localAssetsDir = path.join(rootDir, "local-assets");
     await mkdir(localWorkspaceDir, { recursive: true });
     await mkdir(localAssetsDir, { recursive: true });
@@ -308,7 +308,7 @@ describe("sandbox native file sync", () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-native-additional-"));
     cleanupDirs.push(rootDir);
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     await mkdir(localWorkspaceDir, { recursive: true });
     await writeFile(path.join(localWorkspaceDir, "README.md"), "anchor\n", "utf8");
 
@@ -381,7 +381,7 @@ describe("sandbox native file sync", () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-native-additional-fail-"));
     cleanupDirs.push(rootDir);
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     const goodDir = path.join(rootDir, "src-good");
     await mkdir(localWorkspaceDir, { recursive: true });
     await mkdir(goodDir, { recursive: true });
@@ -414,7 +414,7 @@ describe("sandbox native file sync", () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-native-symlink-"));
     cleanupDirs.push(rootDir);
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     const assetsPreserve = path.join(rootDir, "assets-preserve");
     const assetsDeref = path.join(rootDir, "assets-deref");
     const target = path.join(rootDir, "target.md");
@@ -454,6 +454,29 @@ describe("assertSyncOperationsConfined", () => {
     expect(() => assertSyncOperationsConfined(op("/remote/ws/sub"), {
       sourceRoots: ["/host/src"], targetRoots: ["/remote/ws"],
     })).not.toThrow();
+  });
+
+  it("confines Windows host uploads while keeping the sandbox endpoint POSIX", () => {
+    expect(() => assertSyncOperationsConfined(op("/remote/ws/archive.tar", "C:\\owned\\stage\\archive.tar"), {
+      sourceRoots: ["C:\\owned\\stage"], targetRoots: ["/remote/ws"], sourcePathStyle: "win32",
+    })).not.toThrow();
+    for (const source of ["C:\\owned\\stage\\..\\private.tar", "D:\\owned\\stage\\archive.tar", "C:\\owned\\stage-other\\archive.tar"]) {
+      expect(() => assertSyncOperationsConfined(op("/remote/ws/archive.tar", source), {
+        sourceRoots: ["C:\\owned\\stage"], targetRoots: ["/remote/ws"], sourcePathStyle: "win32",
+      })).toThrow(/escapes its confinement root/);
+    }
+    expect(() => assertSyncOperationsConfined(op("C:\\remote\\ws\\archive.tar", "C:\\owned\\stage\\archive.tar"), {
+      sourceRoots: ["C:\\owned\\stage"], targetRoots: ["/remote/ws"], sourcePathStyle: "win32",
+    })).toThrow(/confined absolute path/);
+  });
+
+  it("confines Windows host downloads without allowing a cross-drive target", () => {
+    expect(() => assertSyncOperationsConfined(op("C:\\owned\\restore\\archive.tar", "/remote/ws/archive.tar"), {
+      sourceRoots: ["/remote/ws"], targetRoots: ["C:\\owned\\restore"], targetPathStyle: "win32",
+    })).not.toThrow();
+    expect(() => assertSyncOperationsConfined(op("D:\\owned\\restore\\archive.tar", "/remote/ws/archive.tar"), {
+      sourceRoots: ["/remote/ws"], targetRoots: ["C:\\owned\\restore"], targetPathStyle: "win32",
+    })).toThrow(/escapes its confinement root/);
   });
 
   it("rejects a relative target", () => {

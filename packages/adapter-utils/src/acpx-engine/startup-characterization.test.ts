@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import os from "node:os";
-import path from "node:path";
+import { fixturePath as path, sandboxPath, shellExecutable, shellArgs, shellScript, shellEnvironment, runLocalSandboxProcess as runChildProcess, cleanupLocalSandboxProcesses } from "../test-fixtures/local-sandbox.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AcpRuntimeOptions } from "acpx/runtime";
 import type { AdapterExecutionContext, AdapterRuntimeMcpAccess } from "@paperclipai/adapter-utils";
@@ -24,7 +24,7 @@ vi.mock("@paperclipai/adapter-utils/execution-target", async (importActual) => {
   };
 });
 import { createAcpxEngineExecutor, type AcpxEngineExecutorOptions } from "./execute.js";
-import { runChildProcess } from "../server-utils.js";
+
 
 const tempRoots: string[] = [];
 
@@ -35,6 +35,7 @@ async function makeTempRoot() {
 }
 
 afterEach(async () => {
+  await cleanupLocalSandboxProcesses(tempRoots);
   // A remote run stages a process-session bridge whose detached event writer can
   // still be flushing a trailing event file into `.../process-sessions/<id>/events`
   // when the run's own best-effort `client.remove(sessionDir)` (which production
@@ -77,10 +78,10 @@ function createLocalSandboxRunner(
     }) => {
       counter += 1;
       onExecute?.(input);
-      const command = input.command === "bash" ? "/bin/bash" : input.command;
-      return await runChildProcess(`acpx-sandbox-run-${counter}`, command, input.args ?? [], {
+      const command = shellExecutable(input.command);
+      return await runChildProcess(`acpx-sandbox-run-${counter}`, command, shellArgs(input.args), {
         cwd: input.cwd ?? process.cwd(),
-        env: input.env ?? {},
+        env: shellEnvironment(input.env),
         stdin: input.stdin,
         timeoutSec: Math.max(1, Math.ceil((input.timeoutMs ?? 30_000) / 1000)),
         graceSec: 5,
@@ -187,7 +188,7 @@ async function setupRemoteSandbox() {
   const root = await makeTempRoot();
   const stateDir = path.join(root, "state");
   const localCwd = path.join(root, "worktree");
-  const remoteCwd = path.join(root, "remote-workspace");
+  const remoteCwd = sandboxPath(path.join(root, "remote-workspace"));
   await fs.mkdir(localCwd, { recursive: true });
   await fs.mkdir(remoteCwd, { recursive: true });
   // A file present only in the HOST worktree proves the workspace is shipped

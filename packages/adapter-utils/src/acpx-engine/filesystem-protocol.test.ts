@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createAcpRuntime, createAgentRegistry, createRuntimeStore } from "acpx/runtime";
 
 const runnerRuntimePath = createRequire(new URL("../../../paperclip-runner/package.json", import.meta.url)).resolve("acpx/runtime");
-const nativeRuntime = await import(runnerRuntimePath) as typeof import("acpx/runtime");
+const nativeRuntime = await import(runnerRuntimePath) as typeof import("../../../paperclip-runner/node_modules/acpx/dist/runtime.js");
 const runtimes = [
   { version: "0.12.0", api: { createAcpRuntime, createAgentRegistry, createRuntimeStore } },
   { version: "0.13.1", api: nativeRuntime },
@@ -33,15 +33,21 @@ async function drive(api: (typeof runtimes)[number]["api"], input: {
   operations: Array<{ method: string; path: string; content?: string }>;
 }) {
   let stderr = "";
-  const runtime = api.createAcpRuntime({
+  const options = {
     cwd: input.cwd,
     sessionStore: api.createRuntimeStore({ stateDir: path.join(input.root, "state") }),
-    agentRegistry: api.createAgentRegistry({ overrides: { custom: `${JSON.stringify(process.execPath.replaceAll("\\", "/"))} ${JSON.stringify(fixture.replaceAll("\\", "/"))}` } }),
     permissionMode: input.permissionMode ?? "approve-all",
-    nonInteractivePermissions: "deny",
+    nonInteractivePermissions: "deny" as const,
     inheritProcessEnv: false,
     onAgentStderr: (chunk: string) => { stderr += chunk; },
-  });
+  };
+  // Each API owns its registry type: 0.13 supports argv and deliberately
+  // rejects raw strings on Windows, while the legacy 0.12 API takes strings.
+  const runtime = api === nativeRuntime
+    ? nativeRuntime.createAcpRuntime({ ...options,
+      agentRegistry: nativeRuntime.createAgentRegistry({ overrides: { custom: [process.execPath, fixture] } }) })
+    : createAcpRuntime({ ...options,
+      agentRegistry: createAgentRegistry({ overrides: { custom: `${JSON.stringify(process.execPath.replaceAll("\\", "/"))} ${JSON.stringify(fixture.replaceAll("\\", "/"))}` } }) });
   const handle = await runtime.ensureSession({
     sessionKey: "filesystem-protocol", agent: "custom", mode: "oneshot",
     cwd: input.cwd, sessionOptions: { env: {} },

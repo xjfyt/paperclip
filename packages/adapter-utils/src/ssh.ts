@@ -1245,6 +1245,12 @@ async function isSshEnvLabFixtureProcess(state: Pick<SshEnvLabFixtureState, "pid
 }
 
 export async function getSshEnvLabSupport(): Promise<SshEnvLabSupport> {
+  if (process.platform === "win32") {
+    return {
+      supported: false,
+      reason: "The local SSH env-lab fixture requires POSIX sshd process identity and signal ownership; use Linux or WSL2. Remote SSH clients remain available.",
+    };
+  }
   if (process.platform === "darwin" && process.env.PAPERCLIP_ENABLE_DARWIN_SSH_ENV_LAB !== "1") {
     return {
       supported: false,

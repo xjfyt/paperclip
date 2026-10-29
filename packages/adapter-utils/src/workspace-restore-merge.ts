@@ -543,9 +543,16 @@ async function copySnapshotEntry(sourceDir: string, targetDir: string, relative:
     await fs.copyFile(sourcePath, temporary, fsConstants.COPYFILE_FICLONE).catch(async () => {
       await fs.copyFile(sourcePath, temporary);
     });
-    await fs.chmod(temporary, entry.mode);
-    const file = await fs.open(temporary, "r");
-    try { await file.sync(); } finally { await file.close(); }
+    // Windows FlushFileBuffers needs a writable handle, including when the
+    // incoming file is read-only. Grant owner-write only to this new temp,
+    // obtain the handle, then restore the final mode before flushing/promoting.
+    // POSIX retains its original read-handle fsync semantics for read-only data.
+    await fs.chmod(temporary, process.platform === "win32" ? entry.mode | 0o200 : entry.mode);
+    const file = await fs.open(temporary, process.platform === "win32" ? "r+" : "r");
+    try {
+      if (process.platform === "win32") await fs.chmod(temporary, entry.mode);
+      await file.sync();
+    } finally { await file.close(); }
     const existing = await fs.lstat(targetPath).catch(() => null);
     if (existing?.isDirectory()) await fs.rm(targetPath, { recursive: true, force: true });
     await fs.rename(temporary, targetPath);

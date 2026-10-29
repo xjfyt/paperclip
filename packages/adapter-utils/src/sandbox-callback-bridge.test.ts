@@ -2,7 +2,7 @@ import { execFile as execFileCallback, spawn } from "node:child_process";
 import { createServer } from "node:http";
 import fs, { mkdir, mkdtemp, readFile, readdir, rm, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
-import path from "node:path";
+import { fixturePath as path, sandboxPath, shellExecutable, shellArgs, shellScript, shellEnvironment } from "./test-fixtures/local-sandbox.js";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -47,13 +47,10 @@ describe("sandbox callback bridge", () => {
         timeoutMs?: number;
       }): Promise<RunProcessResult> => {
         const startedAt = new Date().toISOString();
-        const env = {
-          ...process.env,
-          ...input.env,
-        };
+        const env = shellEnvironment(input.env);
         const command =
-          input.command === "sh" ? "/bin/sh" : input.command === "bash" ? "/bin/bash" : input.command;
-        const args = [...(input.args ?? [])];
+          shellExecutable(input.command);
+        const args = shellArgs(input.args);
         if (
           input.stdin != null &&
           (input.command === "sh" || input.command === "bash") &&
@@ -136,7 +133,7 @@ describe("sandbox callback bridge", () => {
     cleanupDirs.push(rootDir);
 
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     await mkdir(localWorkspaceDir, { recursive: true });
     await mkdir(remoteWorkspaceDir, { recursive: true });
     await writeFile(path.join(localWorkspaceDir, "README.md"), "bridge test\n", "utf8");
@@ -337,7 +334,7 @@ describe("sandbox callback bridge", () => {
   it("keeps the bounded reader fail-closed when a visible request grows after its size is reserved", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-bridge-growing-request-"));
     cleanupDirs.push(rootDir);
-    const queueDir = path.join(rootDir, "queue");
+    const queueDir = sandboxPath(path.join(rootDir, "queue"));
     const directories = sandboxCallbackBridgeDirectories(queueDir);
     const client = createFileSystemSandboxCallbackBridgeQueueClient();
     const requestPath = path.join(directories.requestsDir, "growing.json");
@@ -380,7 +377,7 @@ describe("sandbox callback bridge", () => {
   it("serves schema discovery over the queue and denies schema mutations and lookalikes", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-bridge-schema-"));
     cleanupDirs.push(rootDir);
-    const queueDir = path.join(rootDir, "queue");
+    const queueDir = sandboxPath(path.join(rootDir, "queue"));
     const directories = sandboxCallbackBridgeDirectories(queueDir);
     const schema = { openapi: "3.1.0", paths: {} };
     const forwarded: string[] = [];
@@ -930,7 +927,7 @@ describe("sandbox callback bridge", () => {
     cleanupDirs.push(rootDir);
 
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     await mkdir(localWorkspaceDir, { recursive: true });
     await mkdir(remoteWorkspaceDir, { recursive: true });
     await writeFile(path.join(localWorkspaceDir, "README.md"), "bridge response lock test\n", "utf8");
@@ -1022,7 +1019,7 @@ describe("sandbox callback bridge", () => {
     cleanupDirs.push(rootDir);
 
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     await mkdir(localWorkspaceDir, { recursive: true });
     await mkdir(remoteWorkspaceDir, { recursive: true });
     await writeFile(path.join(localWorkspaceDir, "README.md"), "bridge guard test\n", "utf8");
@@ -1122,7 +1119,7 @@ describe("sandbox callback bridge", () => {
     cleanupDirs.push(rootDir);
 
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     await mkdir(localWorkspaceDir, { recursive: true });
     await mkdir(remoteWorkspaceDir, { recursive: true });
     await writeFile(path.join(localWorkspaceDir, "README.md"), "bridge timeout test\n", "utf8");
@@ -1174,7 +1171,7 @@ describe("sandbox callback bridge", () => {
     cleanupDirs.push(rootDir);
 
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     await mkdir(localWorkspaceDir, { recursive: true });
     await mkdir(remoteWorkspaceDir, { recursive: true });
     await writeFile(path.join(localWorkspaceDir, "README.md"), "bridge malformed response test\n", "utf8");
@@ -1234,7 +1231,7 @@ describe("sandbox callback bridge", () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-bridge-sync-"));
     cleanupDirs.push(rootDir);
 
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     const remoteAssetDir = path.posix.join(
       remoteWorkspaceDir,
       ".paperclip-runtime",
@@ -1286,7 +1283,7 @@ describe("sandbox callback bridge", () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-bridge-sync-corrupt-"));
     cleanupDirs.push(rootDir);
 
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     const remoteAssetDir = path.posix.join(
       remoteWorkspaceDir,
       ".paperclip-runtime",
@@ -1345,7 +1342,7 @@ describe("sandbox callback bridge", () => {
   it("test_process_session_script_skipped_when_remote_hash_matches: warm start with a matching remote hash writes 0 execs", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-hashskip-warm-"));
     cleanupDirs.push(rootDir);
-    const remoteDir = path.join(rootDir, "runtime", "codex", "process-sessions");
+    const remoteDir = sandboxPath(path.join(rootDir, "runtime", "codex", "process-sessions"));
     const remotePath = path.posix.join(remoteDir, "paperclip-process-session-remote.mjs");
     const lockDir = path.posix.join(remoteDir, ".paperclip-process-session-script.lock");
     const body = "console.log('process session remote script v1');\n";
@@ -1360,7 +1357,7 @@ describe("sandbox callback bridge", () => {
     };
     const args = {
       runner,
-      remoteCwd: rootDir,
+      remoteCwd: sandboxPath(rootDir),
       remoteDir,
       remotePath,
       body,
@@ -1397,10 +1394,25 @@ describe("sandbox callback bridge", () => {
     ).resolves.toEqual([]);
   });
 
+  it("verifies exact uploaded bytes when the file path requires checksum filename escaping", async () => {
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-hashskip-escaped-"));
+    cleanupDirs.push(rootDir);
+    const remoteDir = sandboxPath(path.join(rootDir, "directory\\with-escape"));
+    const remotePath = path.posix.join(remoteDir, "script.mjs");
+    const body = "console.log('exact upload bytes');\n";
+    const args = { runner: createExecRunner(), remoteCwd: sandboxPath(rootDir), remoteDir, remotePath, body,
+      label: "Escaped path script", action: "sync escaped path script", lockDir: path.posix.join(remoteDir, ".lock"), timeoutMs: 30_000 };
+    const first = await syncRemoteTextFileWithHashSkip(args);
+    expect(first.uploaded).toBe(true);
+    expect(await readFile(remotePath, "utf8")).toBe(body);
+    const second = await syncRemoteTextFileWithHashSkip(args);
+    expect(second).toEqual({ uploaded: false, sha256: first.sha256 });
+  });
+
   it("test_process_session_script_rewritten_on_hash_mismatch: a mismatched remote hash still rewrites the script", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-hashskip-cold-"));
     cleanupDirs.push(rootDir);
-    const remoteDir = path.join(rootDir, "runtime", "codex", "process-sessions");
+    const remoteDir = sandboxPath(path.join(rootDir, "runtime", "codex", "process-sessions"));
     const remotePath = path.posix.join(remoteDir, "paperclip-process-session-remote.mjs");
     const lockDir = path.posix.join(remoteDir, ".paperclip-process-session-script.lock");
     const body = "console.log('process session remote script v2');\n";
@@ -1411,7 +1423,7 @@ describe("sandbox callback bridge", () => {
 
     const result = await syncRemoteTextFileWithHashSkip({
       runner: createExecRunner(),
-      remoteCwd: rootDir,
+      remoteCwd: sandboxPath(rootDir),
       remoteDir,
       remotePath,
       body,
@@ -1428,7 +1440,7 @@ describe("sandbox callback bridge", () => {
   it("fails loud when the hash-skip sync exec errors instead of silently re-uploading", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-hashskip-fail-"));
     cleanupDirs.push(rootDir);
-    const remoteDir = path.join(rootDir, "runtime", "codex", "process-sessions");
+    const remoteDir = sandboxPath(path.join(rootDir, "runtime", "codex", "process-sessions"));
     const remotePath = path.posix.join(remoteDir, "paperclip-process-session-remote.mjs");
     const lockDir = path.posix.join(remoteDir, ".paperclip-process-session-script.lock");
 
@@ -1450,7 +1462,7 @@ describe("sandbox callback bridge", () => {
     await expect(
       syncRemoteTextFileWithHashSkip({
         runner,
-        remoteCwd: rootDir,
+        remoteCwd: sandboxPath(rootDir),
         remoteDir,
         remotePath,
         body: "console.log('never written');\n",
@@ -3032,7 +3044,7 @@ describe("sandbox callback bridge", () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), prefix));
     cleanupDirs.push(rootDir);
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     await mkdir(localWorkspaceDir, { recursive: true });
     await mkdir(remoteWorkspaceDir, { recursive: true });
     await writeFile(path.join(localWorkspaceDir, "README.md"), "bridge test\n", "utf8");
@@ -3224,7 +3236,7 @@ describe("sandbox callback bridge", () => {
     cleanupDirs.push(rootDir);
     const entrypoint = path.join(rootDir, "paperclip-bridge-server.mjs");
     await writeFile(entrypoint, getSandboxCallbackBridgeServerSource(), "utf8");
-    const queueDir = path.join(rootDir, "queue");
+    const queueDir = sandboxPath(path.join(rootDir, "queue"));
     await mkdir(queueDir, { recursive: true });
 
     const blocker = createServer();
@@ -3269,7 +3281,7 @@ describe("sandbox callback bridge", () => {
     cleanupDirs.push(rootDir);
     const entrypoint = path.join(rootDir, "paperclip-bridge-server.mjs");
     await writeFile(entrypoint, getSandboxCallbackBridgeServerSource(), "utf8");
-    const queueDir = path.join(rootDir, "queue");
+    const queueDir = sandboxPath(path.join(rootDir, "queue"));
     await mkdir(queueDir, { recursive: true });
 
     const child = spawn(process.execPath, [entrypoint], {
@@ -3301,7 +3313,7 @@ describe("sandbox callback bridge", () => {
     cleanupDirs.push(rootDir);
     const entrypoint = path.join(rootDir, "paperclip-bridge-server.mjs");
     await writeFile(entrypoint, getSandboxCallbackBridgeServerSource(), "utf8");
-    const queueDir = path.join(rootDir, "queue");
+    const queueDir = sandboxPath(path.join(rootDir, "queue"));
     await mkdir(queueDir, { recursive: true });
 
     const child = spawn(process.execPath, [entrypoint], {
@@ -3777,7 +3789,7 @@ describe("sandbox callback bridge", () => {
     cleanupDirs.push(root);
     const asset = await createSandboxCallbackBridgeAsset();
     cleanupFns.push(asset.cleanup);
-    const queueDir = path.join(root, "queue");
+    const queueDir = sandboxPath(path.join(root, "queue"));
     const bridgeToken = createSandboxCallbackBridgeToken();
     const worker = await startSandboxCallbackBridgeWorker({
       client: options.client ?? createFileSystemSandboxCallbackBridgeQueueClient(), queueDir,
@@ -3785,7 +3797,7 @@ describe("sandbox callback bridge", () => {
     });
     cleanupFns.push(() => worker.stop());
     const gateway = await startSandboxCallbackBridgeServer({
-      runner: createExecRunner(), remoteCwd: root, assetRemoteDir: asset.localDir,
+      runner: createExecRunner(), remoteCwd: sandboxPath(root), assetRemoteDir: asset.localDir,
       queueDir, bridgeToken, maxBodyBytes: options.maxBodyBytes, pollIntervalMs: 10,
     });
     cleanupFns.push(() => gateway.stop());
@@ -3849,7 +3861,7 @@ describe("sandbox callback bridge", () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-bridge-queue-maxbody-"));
     cleanupDirs.push(rootDir);
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     await mkdir(localWorkspaceDir, { recursive: true });
     await mkdir(remoteWorkspaceDir, { recursive: true });
     await writeFile(path.join(localWorkspaceDir, "README.md"), "bridge maxBodyBytes test\n", "utf8");
@@ -3905,7 +3917,7 @@ describe("sandbox callback bridge", () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-bridge-queue-body-shape-"));
     cleanupDirs.push(rootDir);
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     await mkdir(localWorkspaceDir, { recursive: true });
     await mkdir(remoteWorkspaceDir, { recursive: true });
     await writeFile(path.join(localWorkspaceDir, "README.md"), "bridge body shape test\n", "utf8");

@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import os from "node:os";
-import path from "node:path";
+import { fixturePath as path, sandboxPath, shellExecutable, shellArgs, shellScript, shellEnvironment, runLocalSandboxProcess as runChildProcess, cleanupLocalSandboxProcesses } from "../test-fixtures/local-sandbox.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createRuntimeStore, type AcpRuntimeOptions, type AcpSessionRecord, type AcpSessionStore } from "acpx/runtime";
 import type { AdapterExecutionContext, AdapterRuntimeMcpAccess } from "@paperclipai/adapter-utils";
@@ -38,7 +38,7 @@ import {
 } from "./execute.js";
 import { ACPX_HANDSHAKE_TIMEOUT_MS } from "./constants.js";
 import { sessionCodec } from "./session-codec.js";
-import { runChildProcess } from "../server-utils.js";
+
 import { createPromptContextFixture } from "../test-fixtures/prompt-context.js";
 import { setExpensiveWorkspaceGitExecutor } from "../git-workspace-sync.js";
 import { createWorkspaceRestoreTeardown } from "../workspace-restore-teardown.js";
@@ -61,6 +61,7 @@ async function makeTempRoot() {
 }
 
 afterEach(async () => {
+  await cleanupLocalSandboxProcesses(tempRoots);
   defaultGeminiTestHome = undefined;
   // A remote run stages a process-session bridge whose detached event writer can
   // still be flushing a trailing event file into `.../process-sessions/<id>/events`
@@ -120,10 +121,10 @@ function createLocalSandboxRunner(
     }) => {
       counter += 1;
       onExecute?.(input);
-      const command = input.command === "bash" ? "/bin/bash" : input.command;
-      return await runChildProcess(`acpx-sandbox-run-${counter}`, command, input.args ?? [], {
+      const command = shellExecutable(input.command);
+      return await runChildProcess(`acpx-sandbox-run-${counter}`, command, shellArgs(input.args), {
         cwd: input.cwd ?? process.cwd(),
-        env: input.env ?? {},
+        env: shellEnvironment(input.env),
         stdin: input.stdin,
         timeoutSec: Math.max(1, Math.ceil((input.timeoutMs ?? 30_000) / 1000)),
         graceSec: 5,
@@ -2484,7 +2485,7 @@ describe("shared ACPX engine runtime behavior", () => {
     const root = await makeTempRoot();
     const stateDir = path.join(root, "state");
     const localCwd = path.join(root, "worktree");
-    const remoteCwd = path.join(root, "remote-workspace");
+    const remoteCwd = sandboxPath(path.join(root, "remote-workspace"));
     await fs.mkdir(localCwd, { recursive: true });
     await fs.mkdir(remoteCwd, { recursive: true });
 
@@ -2553,7 +2554,7 @@ describe("shared ACPX engine runtime behavior", () => {
     // must reuse — not invalidate — the staged runtime. So the fingerprint has to
     // ignore the host cwd and key only on the advertised session cwd (`remoteCwd`).
     const root = await makeTempRoot();
-    const remoteCwd = path.join(root, "remote-workspace");
+    const remoteCwd = sandboxPath(path.join(root, "remote-workspace"));
     await fs.mkdir(remoteCwd, { recursive: true });
 
     const runOnce = async (hostWorktree: string) => {
@@ -3063,8 +3064,8 @@ describe("gemini ACP flag selection", () => {
 
   async function writeFakeGemini(binDir: string, version: string) {
     await fs.mkdir(binDir, { recursive: true });
-    const binPath = path.join(binDir, "gemini");
-    await fs.writeFile(binPath, `#!/bin/sh\necho "${version}"\n`, { mode: 0o755 });
+    const binPath = path.join(binDir, process.platform === "win32" ? "gemini.cmd" : "gemini");
+    await fs.writeFile(binPath, process.platform === "win32" ? `@echo off\r\necho ${version}\r\n` : `#!/bin/sh\necho "${version}"\n`, { mode: 0o755 });
   }
 
   function pathWithFakeBin(binDir: string): string {
@@ -3472,7 +3473,7 @@ describe("ACPX engine remote sandbox staging seam (PR 1: workspace + cwd)", () =
     const root = await makeTempRoot();
     const stateDir = path.join(root, "state");
     const localCwd = path.join(root, "worktree");
-    const remoteCwd = path.join(root, "remote-workspace");
+    const remoteCwd = sandboxPath(path.join(root, "remote-workspace"));
     await fs.mkdir(localCwd, { recursive: true });
     await fs.mkdir(remoteCwd, { recursive: true });
     // A file present only in the HOST worktree proves the workspace is shipped
@@ -3775,7 +3776,7 @@ describe("ACPX engine remote managed-home seam (PR 2: per-adapter home seed)", (
     const root = await makeTempRoot();
     const stateDir = path.join(root, "state");
     const localCwd = path.join(root, "worktree");
-    const remoteCwd = path.join(root, "remote-workspace");
+    const remoteCwd = sandboxPath(path.join(root, "remote-workspace"));
     await fs.mkdir(localCwd, { recursive: true });
     await fs.mkdir(remoteCwd, { recursive: true });
     await fs.writeFile(path.join(localCwd, "hello.txt"), "hi", "utf8");
@@ -3996,7 +3997,7 @@ describe("ACPX engine Claude skill bundle staging (remote ACP lane)", () => {
     const root = await makeTempRoot();
     const stateDir = path.join(root, "state");
     const localCwd = path.join(root, "worktree");
-    const remoteCwd = path.join(root, "remote-workspace");
+    const remoteCwd = sandboxPath(path.join(root, "remote-workspace"));
     await fs.mkdir(localCwd, { recursive: true });
     await fs.mkdir(remoteCwd, { recursive: true });
     const executionTarget = {
@@ -4066,14 +4067,14 @@ describe("ACPX engine Claude skill bundle staging (remote ACP lane)", () => {
     const prompt = String(meta[0]?.prompt ?? "");
     expect(prompt).toContain(`- bounded: ${"x".repeat(512)} (file: `);
     expect(prompt).not.toContain("x".repeat(513));
-    expect(prompt).toMatch(/- absent \(file: .*\/absent\/SKILL\.md\)/);
-    expect(prompt).toMatch(/- malformed \(file: .*\/malformed\/SKILL\.md\)/);
+    expect(prompt).toMatch(/- absent \(file: .*[/\\]absent[/\\]SKILL\.md\)/);
+    expect(prompt).toMatch(/- malformed \(file: .*[/\\]malformed[/\\]SKILL\.md\)/);
     for (const body of ["BOUNDED_BODY", "ABSENT_BODY", "MALFORMED_BODY"]) expect(prompt).not.toContain(body);
   });
 
-  it("rewrites the prompt and skill identity onto the in-sandbox skill root once the bundle is staged", async () => {
+  it.each(["review", "review with spaces"])("rewrites the prompt and skill identity onto the in-sandbox skill root once the bundle is staged (%s)", async (runtimeName) => {
     const { stateDir, localCwd, executionTarget } = await setupRemoteSandbox();
-    const skill = await createSkill(path.join(localCwd, "skills"), "review", "---\ndescription: Review requested task documents.\n---\n# review\nREMOTE_BODY_ONLY\n");
+    const skill = await createSkill(path.join(localCwd, "skills"), runtimeName, "---\ndescription: Review requested task documents.\n---\n# review\nREMOTE_BODY_ONLY\n");
 
     const { meta, result } = await runExecutor(
       {
@@ -4096,7 +4097,7 @@ describe("ACPX engine Claude skill bundle staging (remote ACP lane)", () => {
 
     const inSandboxSkillsRoot = prompt.match(/Skill root: (\S+)/)![1]!;
     expect(inSandboxSkillsRoot).not.toBe(hostSkillsHome);
-    expect(prompt).toContain(`- review: Review requested task documents. (file: ${path.join(inSandboxSkillsRoot, "review", "SKILL.md")})`);
+    expect(prompt).toContain(`- ${runtimeName}: Review requested task documents. (file: ${path.join(inSandboxSkillsRoot, runtimeName, "SKILL.md")})`);
     expect(prompt).not.toContain("REMOTE_BODY_ONLY");
     await expect(
       fs.readFile(path.join(inSandboxSkillsRoot, skill.runtimeName, "SKILL.md"), "utf8"),
@@ -4316,7 +4317,7 @@ describe("ACPX engine remote session-lifecycle re-staging (PR 3: stage once / re
     const root = await makeTempRoot();
     const stateDir = path.join(root, "state");
     const localCwd = path.join(root, "worktree");
-    const remoteCwd = path.join(root, "remote-workspace");
+    const remoteCwd = sandboxPath(path.join(root, "remote-workspace"));
     await fs.mkdir(localCwd, { recursive: true });
     await fs.mkdir(remoteCwd, { recursive: true });
     await fs.writeFile(path.join(localCwd, "hello.txt"), "hi", "utf8");
@@ -5065,7 +5066,7 @@ describe("ACPX engine sandbox-start spans (opt-in root + child parenting)", () =
   });
 
   async function remoteSandboxTarget(root: string) {
-    const remoteCwd = path.join(root, "remote-workspace");
+    const remoteCwd = sandboxPath(path.join(root, "remote-workspace"));
     await fs.mkdir(remoteCwd, { recursive: true });
     return {
       kind: "remote",
@@ -5526,7 +5527,7 @@ describe("ACPX engine sandbox-start spans (opt-in root + child parenting)", () =
     const root = await makeTempRoot();
     const stateDir = path.join(root, "state");
     const localCwd = path.join(root, "worktree");
-    const remoteCwd = path.join(root, "remote-workspace");
+    const remoteCwd = sandboxPath(path.join(root, "remote-workspace"));
     await fs.mkdir(localCwd, { recursive: true });
     await fs.mkdir(remoteCwd, { recursive: true });
     // A plugin-backed target with a lease id. The provider clamps to `plugin`
@@ -5774,7 +5775,7 @@ describe("ACPX engine sandbox-start spans (opt-in root + child parenting)", () =
     const root = await makeTempRoot();
     const stateDir = path.join(root, "state");
     const localCwd = path.join(root, "worktree");
-    const remoteCwd = path.join(root, "remote-workspace");
+    const remoteCwd = sandboxPath(path.join(root, "remote-workspace"));
     await fs.mkdir(localCwd, { recursive: true });
     const { traceContext, spans } = createRecordingStartupTrace();
 
@@ -6134,7 +6135,7 @@ describe("ACPX engine per-step startup timing (run.startup.step events)", () => 
     const root = await makeTempRoot();
     const stateDir = path.join(root, "state");
     const localCwd = path.join(root, "worktree");
-    const remoteCwd = path.join(root, "remote-workspace");
+    const remoteCwd = sandboxPath(path.join(root, "remote-workspace"));
     // A configured CODEX_HOME keeps the codex-home seed deterministic (skips the
     // managed-home copy from the host ~/.codex) so steps 2 and 3 run cleanly.
     const codexHome = path.join(root, "codex-home");
@@ -6186,7 +6187,7 @@ describe("ACPX engine per-step startup timing (run.startup.step events)", () => 
     const root = await makeTempRoot();
     const stateDir = path.join(root, "state");
     const localCwd = path.join(root, "worktree");
-    const remoteCwd = path.join(root, "remote-workspace");
+    const remoteCwd = sandboxPath(path.join(root, "remote-workspace"));
     await fs.mkdir(localCwd, { recursive: true });
     await fs.mkdir(remoteCwd, { recursive: true });
     const executionTarget = {
@@ -6222,7 +6223,7 @@ describe("ACPX engine per-step startup timing (run.startup.step events)", () => 
     const root = await makeTempRoot();
     const stateDir = path.join(root, "state");
     const localCwd = path.join(root, "worktree");
-    const remoteCwd = path.join(root, "remote-workspace");
+    const remoteCwd = sandboxPath(path.join(root, "remote-workspace"));
     await fs.mkdir(localCwd, { recursive: true });
     await fs.mkdir(remoteCwd, { recursive: true });
     const executionTarget = {
@@ -6339,7 +6340,7 @@ describe("ACPX engine run lifecycle corrections (F1: settle every failure after 
     const root = await makeTempRoot();
     const stateDir = path.join(root, "state");
     const localCwd = path.join(root, "worktree");
-    const remoteCwd = path.join(root, "remote-workspace");
+    const remoteCwd = sandboxPath(path.join(root, "remote-workspace"));
     await fs.mkdir(localCwd, { recursive: true });
     await fs.mkdir(remoteCwd, { recursive: true });
     await fs.writeFile(path.join(localCwd, "hello.txt"), "hi", "utf8");
@@ -6530,7 +6531,7 @@ describe("ACPX engine run lifecycle corrections (F1: settle every failure after 
         `scenario "${scenario.name}" must end the sandbox.startup span exactly once`,
       ).toBe(1);
     }
-  });
+  }, 60_000); // Three real sandbox startups, including all exit/cleanup paths.
 });
 
 describe("ACPX engine run lifecycle corrections (F2: close the runtime for every pre-turn failure)", () => {
@@ -6752,7 +6753,7 @@ describe("ACPX engine run lifecycle corrections (F3: one teardown error policy)"
     const root = await makeTempRoot();
     const stateDir = path.join(root, "state");
     const localCwd = path.join(root, "worktree");
-    const remoteCwd = path.join(root, "remote-workspace");
+    const remoteCwd = sandboxPath(path.join(root, "remote-workspace"));
     await fs.mkdir(localCwd, { recursive: true });
     await fs.mkdir(remoteCwd, { recursive: true });
     await fs.writeFile(path.join(localCwd, "hello.txt"), "hi", "utf8");
@@ -7364,7 +7365,7 @@ describe("ACPX engine sandbox bridge run-disposition seam (fail-closed)", () => 
     const root = await makeTempRoot();
     const stateDir = path.join(root, "state");
     const localCwd = path.join(root, "worktree");
-    const remoteCwd = path.join(root, "remote-workspace");
+    const remoteCwd = sandboxPath(path.join(root, "remote-workspace"));
     await fs.mkdir(localCwd, { recursive: true });
     await fs.mkdir(remoteCwd, { recursive: true });
     await fs.writeFile(path.join(localCwd, "hello.txt"), "hi", "utf8");
@@ -8162,7 +8163,7 @@ describe("ACPX startup handshake guard and late-completion fence", () => {
     const root = await makeTempRoot();
     const stateDir = path.join(root, "state");
     const localCwd = path.join(root, "worktree");
-    const remoteCwd = path.join(root, "remote-workspace");
+    const remoteCwd = sandboxPath(path.join(root, "remote-workspace"));
     await fs.mkdir(localCwd, { recursive: true });
     await fs.mkdir(remoteCwd, { recursive: true });
     await fs.writeFile(path.join(localCwd, "hello.txt"), "hi", "utf8");

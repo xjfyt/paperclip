@@ -7,7 +7,7 @@ import { duplexPair, type Duplex } from "node:stream";
 import { execFile, spawn } from "node:child_process";
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
-import path from "node:path";
+import { fixturePath as path, sandboxPath, shellExecutable, shellArgs, shellScript, shellEnvironment, runLocalSandboxProcess as runChildProcess } from "./test-fixtures/local-sandbox.js";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -52,7 +52,7 @@ import {
   type StartupTracer,
 } from "./acpx-engine/startup-timing.js";
 import { createSandboxRunLogTailFactory, type SandboxRunLogTailFactory } from "./sandbox-run-log-stream.js";
-import { runChildProcess, type RunProcessResult } from "./server-utils.js";
+import type { RunProcessResult } from "./server-utils.js";
 import { shellQuote } from "./ssh.js";
 import type { CommandManagedDuplexChannel } from "./command-managed-runtime.js";
 import {
@@ -149,10 +149,10 @@ describe("sandbox adapter execution targets", () => {
         onSpawn?: (meta: { pid: number; startedAt: string }) => Promise<void>;
       }) => {
         counter += 1;
-        const command = input.command === "bash" ? "/bin/bash" : input.command;
-        return runChildProcess(`sandbox-run-${counter}`, command, input.args ?? [], {
+        const command = shellExecutable(input.command);
+        return runChildProcess(`sandbox-run-${counter}`, command, shellArgs(input.args), {
           cwd: input.cwd ?? process.cwd(),
-          env: input.env ?? {},
+          env: shellEnvironment(input.env),
           stdin: input.stdin,
           timeoutSec: Math.max(1, Math.ceil((input.timeoutMs ?? 30_000) / 1000)),
           graceSec: 5,
@@ -215,7 +215,7 @@ describe("sandbox adapter execution targets", () => {
 
   async function runProxyWithInput(command: string, input: string, keepStdinOpen = false): Promise<ProxyRunResult> {
     const startedAt = performance.now();
-    const child = spawn(command, [], { stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn(process.execPath, [command], { stdio: ["pipe", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
     child.stdout.setEncoding("utf8");
@@ -320,7 +320,7 @@ describe("sandbox adapter execution targets", () => {
       privateKeyPem: keys.privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
     };
     const target: AdapterSandboxExecutionTarget = {
-      kind: "remote", transport: "sandbox", providerKey: "local-test", remoteCwd: rootDir,
+      kind: "remote", transport: "sandbox", providerKey: "local-test", remoteCwd: sandboxPath(rootDir),
       timeoutMs: 30_000, runner: createLocalSandboxRunner(),
     };
     const challenge = randomBytes(32);
@@ -392,7 +392,7 @@ describe("sandbox adapter execution targets", () => {
       kind: "remote",
       transport: "sandbox",
       providerKey: "local-test",
-      remoteCwd: rootDir,
+      remoteCwd: sandboxPath(rootDir),
       timeoutMs: 30_000,
       streamRunLogs: true,
       runner: createLocalSandboxRunner(),
@@ -400,7 +400,7 @@ describe("sandbox adapter execution targets", () => {
     const logsDir = path.posix.join(rootDir, ".paperclip-runtime", "bridge", "logs");
     const runLogTail = createSandboxRunLogTailFactory({
       runner: target.runner!,
-      remoteCwd: rootDir,
+      remoteCwd: sandboxPath(rootDir),
       logsDir,
       shellCommand: "bash",
     }).create();
@@ -445,7 +445,7 @@ describe("sandbox adapter execution targets", () => {
       kind: "remote",
       transport: "sandbox",
       providerKey: "local-test",
-      remoteCwd: rootDir,
+      remoteCwd: sandboxPath(rootDir),
       timeoutMs: 30_000,
       runner,
     };
@@ -453,7 +453,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetProcessSessionBridge({
       runId: "run-process-session-makedir",
       target,
-      runtimeRootDir: path.posix.join(rootDir, ".paperclip-runtime", "acpx"),
+      runtimeRootDir: sandboxPath(path.posix.join(rootDir, ".paperclip-runtime", "acpx")),
       adapterKey: "acpx",
       command: process.execPath,
       args: [childPath],
@@ -499,8 +499,10 @@ describe("sandbox adapter execution targets", () => {
       );
 
       const nodeBinDir = path.dirname(process.execPath);
-      const explicitHostPath = `${nodeBinDir}:/explicit-host-bin`;
-      const sandboxNativePath = `/usr/bin:/bin:${nodeBinDir}`;
+      const explicitHostPath = [nodeBinDir, path.resolve("/explicit-host-bin")].join(path.delimiter);
+      const sandboxNativePath = process.platform === "win32"
+        ? `${nodeBinDir};${shellEnvironment().PATH}`
+        : `/usr/bin:/bin:${nodeBinDir}`;
       vi.stubEnv("PATH", explicitHostPath);
 
       const delegate = createLocalSandboxRunner();
@@ -520,7 +522,7 @@ describe("sandbox adapter execution targets", () => {
         kind: "remote",
         transport: "sandbox",
         providerKey: "local-test",
-        remoteCwd: rootDir,
+        remoteCwd: sandboxPath(rootDir),
         timeoutMs: 30_000,
         runner,
       };
@@ -528,7 +530,7 @@ describe("sandbox adapter execution targets", () => {
       const bridge = await startAdapterExecutionTargetProcessSessionBridge({
         runId: `run-process-session-${outputMode}-path`,
         target,
-        runtimeRootDir: path.posix.join(rootDir, ".paperclip-runtime", "acpx"),
+        runtimeRootDir: sandboxPath(path.posix.join(rootDir, ".paperclip-runtime", "acpx")),
         adapterKey: "acpx",
         command: process.execPath,
         args: [childPath],
@@ -570,17 +572,17 @@ describe("sandbox adapter execution targets", () => {
           const sessionRoot = path.join(runtimeRootDir, "process-sessions");
           const entries = await readdir(sessionRoot, { withFileTypes: true });
           const sessionDir = path.join(sessionRoot, entries.find((entry) => entry.isDirectory())!.name);
-          expect((await stat(sessionDir)).mode & 0o777).toBe(0o700);
-          expect((await stat(path.join(sessionDir, "command.b64"))).mode & 0o777).toBe(0o600);
+          if (process.platform !== "win32") expect((await stat(sessionDir)).mode & 0o777).toBe(0o700);
+          if (process.platform !== "win32") expect((await stat(path.join(sessionDir, "command.b64"))).mode & 0o777).toBe(0o600);
           checkedPrivatePayload = true;
         }
         return delegate.execute(input);
       },
     };
-    const runtimeRootDir = path.join(rootDir, ".paperclip-runtime");
+    const runtimeRootDir = sandboxPath(path.join(rootDir, ".paperclip-runtime"));
     const bridge = await startAdapterExecutionTargetProcessSessionBridge({
       runId: "large-process-env", adapterKey: "acpx", runtimeRootDir,
-      target: { kind: "remote", transport: "sandbox", providerKey: "local-test", remoteCwd: rootDir, runner },
+      target: { kind: "remote", transport: "sandbox", providerKey: "local-test", remoteCwd: sandboxPath(rootDir), runner },
       command: process.execPath, args: [childPath], cwd: rootDir,
       env: { LARGE_CONTEXT: value }, timeoutSec: 10, streamOutputViaSession,
     });
@@ -605,9 +607,9 @@ describe("sandbox adapter execution targets", () => {
     const delegate = createLocalSandboxRunner();
     const logs: string[] = [];
     const bridge = await startAdapterExecutionTargetProcessSessionBridge({
-      runId: "wrapper-launch-error", adapterKey: "acpx", runtimeRootDir: rootDir,
+      runId: "wrapper-launch-error", adapterKey: "acpx", runtimeRootDir: sandboxPath(rootDir),
       target: {
-        kind: "remote", transport: "sandbox", providerKey: "local-test", remoteCwd: rootDir,
+        kind: "remote", transport: "sandbox", providerKey: "local-test", remoteCwd: sandboxPath(rootDir),
         runner: { execute: async (input) => input.useSession
           ? { exitCode: 127, stdout: "", stderr: "argument list too long: env\n", timedOut: false, signal: null, pid: null, startedAt: null }
           : delegate.execute(input) },
@@ -630,9 +632,9 @@ describe("sandbox adapter execution targets", () => {
     cleanupDirs.push(rootDir);
     const delegate = createLocalSandboxRunner();
     await expect(startAdapterExecutionTargetProcessSessionBridge({
-      runId: "payload-upload-error", adapterKey: "acpx", runtimeRootDir: rootDir,
+      runId: "payload-upload-error", adapterKey: "acpx", runtimeRootDir: sandboxPath(rootDir),
       target: {
-        kind: "remote", transport: "sandbox", providerKey: "local-test", remoteCwd: rootDir,
+        kind: "remote", transport: "sandbox", providerKey: "local-test", remoteCwd: sandboxPath(rootDir),
         runner: { execute: async (input) => {
           if (/command\.b64\.[^/]+\.paperclip-upload\.b64/.test(input.args?.[1] ?? "") && input.args![1].includes(">>")) {
             throw new Error("Upload interrupted");
@@ -658,9 +660,9 @@ describe("sandbox adapter execution targets", () => {
     cleanupDirs.push(rootDir);
     const delegate = createLocalSandboxRunner();
     const bridge = await startAdapterExecutionTargetProcessSessionBridge({
-      runId: "payload-read-error", adapterKey: "acpx", runtimeRootDir: rootDir,
+      runId: "payload-read-error", adapterKey: "acpx", runtimeRootDir: sandboxPath(rootDir),
       target: {
-        kind: "remote", transport: "sandbox", providerKey: "local-test", remoteCwd: rootDir,
+        kind: "remote", transport: "sandbox", providerKey: "local-test", remoteCwd: sandboxPath(rootDir),
         runner: { execute: async (input) => {
           if (input.env?.PAPERCLIP_PROCESS_SESSION_DIR || input.args?.[1]?.includes("nohup node")) {
             const sessionRoot = path.join(rootDir, "process-sessions");
@@ -723,7 +725,7 @@ describe("sandbox adapter execution targets", () => {
       kind: "remote",
       transport: "sandbox",
       providerKey: "local-test",
-      remoteCwd: rootDir,
+      remoteCwd: sandboxPath(rootDir),
       timeoutMs: 30_000,
       runner,
     };
@@ -731,7 +733,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetProcessSessionBridge({
       runId: "run-process-session-poll-parent",
       target,
-      runtimeRootDir: path.posix.join(rootDir, ".paperclip-runtime", "acpx"),
+      runtimeRootDir: sandboxPath(path.posix.join(rootDir, ".paperclip-runtime", "acpx")),
       adapterKey: "acpx",
       command: process.execPath,
       args: [childPath],
@@ -787,7 +789,7 @@ describe("sandbox adapter execution targets", () => {
       kind: "remote",
       transport: "sandbox",
       providerKey: "local-test",
-      remoteCwd: rootDir,
+      remoteCwd: sandboxPath(rootDir),
       timeoutMs: 30_000,
       runner,
     };
@@ -795,7 +797,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetProcessSessionBridge({
       runId: "run-process-session-poll-nogetter",
       target,
-      runtimeRootDir: path.posix.join(rootDir, ".paperclip-runtime", "acpx"),
+      runtimeRootDir: sandboxPath(path.posix.join(rootDir, ".paperclip-runtime", "acpx")),
       adapterKey: "acpx",
       command: process.execPath,
       args: [childPath],
@@ -856,7 +858,7 @@ describe("sandbox adapter execution targets", () => {
       kind: "remote",
       transport: "sandbox",
       providerKey: "local-test",
-      remoteCwd: rootDir,
+      remoteCwd: sandboxPath(rootDir),
       timeoutMs: 30_000,
       runner,
     };
@@ -864,7 +866,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetProcessSessionBridge({
       runId: "run-process-session-stdin-parent",
       target,
-      runtimeRootDir: path.posix.join(rootDir, ".paperclip-runtime", "acpx"),
+      runtimeRootDir: sandboxPath(path.posix.join(rootDir, ".paperclip-runtime", "acpx")),
       adapterKey: "acpx",
       command: process.execPath,
       args: [childPath],
@@ -938,7 +940,7 @@ describe("sandbox adapter execution targets", () => {
       kind: "remote",
       transport: "sandbox",
       providerKey: "local-test",
-      remoteCwd: rootDir,
+      remoteCwd: sandboxPath(rootDir),
       timeoutMs: 30_000,
       runner: createLocalSandboxRunner(),
     };
@@ -946,7 +948,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetProcessSessionBridge({
       runId: "run-process-session-sendinput-span",
       target,
-      runtimeRootDir: path.posix.join(rootDir, ".paperclip-runtime", "acpx"),
+      runtimeRootDir: sandboxPath(path.posix.join(rootDir, ".paperclip-runtime", "acpx")),
       adapterKey: "acpx",
       command: process.execPath,
       args: [childPath],
@@ -1010,7 +1012,7 @@ describe("sandbox adapter execution targets", () => {
       kind: "remote",
       transport: "sandbox",
       providerKey: "local-test",
-      remoteCwd: rootDir,
+      remoteCwd: sandboxPath(rootDir),
       timeoutMs: 30_000,
       runner: createLocalSandboxRunner(),
     };
@@ -1018,7 +1020,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetProcessSessionBridge({
       runId: "run-process-session-poll-span",
       target,
-      runtimeRootDir: path.posix.join(rootDir, ".paperclip-runtime", "acpx"),
+      runtimeRootDir: sandboxPath(path.posix.join(rootDir, ".paperclip-runtime", "acpx")),
       adapterKey: "acpx",
       command: process.execPath,
       args: [childPath],
@@ -1061,7 +1063,7 @@ describe("sandbox adapter execution targets", () => {
       kind: "remote",
       transport: "sandbox",
       providerKey: "local-test",
-      remoteCwd: rootDir,
+      remoteCwd: sandboxPath(rootDir),
       timeoutMs: 30_000,
       runner: createLocalSandboxRunner(),
     };
@@ -1069,7 +1071,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetProcessSessionBridge({
       runId: "run-process-session",
       target,
-      runtimeRootDir: path.posix.join(rootDir, ".paperclip-runtime", "acpx"),
+      runtimeRootDir: sandboxPath(path.posix.join(rootDir, ".paperclip-runtime", "acpx")),
       adapterKey: "acpx",
       command: process.execPath,
       args: [childPath],
@@ -1114,10 +1116,10 @@ describe("sandbox adapter execution targets", () => {
         kind: "remote",
         transport: "sandbox",
         providerKey: "local-test",
-        remoteCwd: rootDir,
+        remoteCwd: sandboxPath(rootDir),
         runner: createLocalSandboxRunner(),
       },
-      runtimeRootDir: path.posix.join(rootDir, ".paperclip-runtime", "acpx"),
+      runtimeRootDir: sandboxPath(path.posix.join(rootDir, ".paperclip-runtime", "acpx")),
       adapterKey: "acpx",
       command: exitCode === null ? path.join(rootDir, "missing-agent") : process.execPath,
       args: ["-e", `process.stdout.write("final output\\n".repeat(16_384)); process.stderr.write("final diagnostic\\n"); process.exitCode = ${exitCode};`],
@@ -1164,9 +1166,9 @@ describe("sandbox adapter execution targets", () => {
       code: 1e100, signal: "untrusted-private-signal",
     };
     const bridge = await startAdapterExecutionTargetProcessSessionBridge({
-      runId: "terminal-flush", adapterKey: "acpx", runtimeRootDir: rootDir,
+      runId: "terminal-flush", adapterKey: "acpx", runtimeRootDir: sandboxPath(rootDir),
       target: {
-        kind: "remote", transport: "sandbox", remoteCwd: rootDir,
+        kind: "remote", transport: "sandbox", remoteCwd: sandboxPath(rootDir),
         runner: { execute: async (input) => {
           if (!input.useSession) {
             const script = input.args?.[1] ?? "";
@@ -1242,9 +1244,9 @@ describe("sandbox adapter execution targets", () => {
     let releaseLog!: () => void;
     const stalledLog = new Promise<void>((resolve) => { releaseLog = resolve; });
     const bridge = await startAdapterExecutionTargetProcessSessionBridge({
-      runId: "terminal-stream", adapterKey: "acpx", runtimeRootDir: rootDir,
+      runId: "terminal-stream", adapterKey: "acpx", runtimeRootDir: sandboxPath(rootDir),
       target: {
-        kind: "remote", transport: "sandbox", remoteCwd: rootDir,
+        kind: "remote", transport: "sandbox", remoteCwd: sandboxPath(rootDir),
         runner: { execute: async (input) => {
           if (input.useSession) throw new Error("synthetic-private-provider-detail");
           return delegate.execute(input);
@@ -1275,9 +1277,9 @@ describe("sandbox adapter execution targets", () => {
     let releaseLog!: () => void;
     const stalledLog = new Promise<void>((resolve) => { releaseLog = resolve; });
     const bridge = await startAdapterExecutionTargetProcessSessionBridge({
-      runId: "terminal-poll", adapterKey: "acpx", runtimeRootDir: rootDir,
+      runId: "terminal-poll", adapterKey: "acpx", runtimeRootDir: sandboxPath(rootDir),
       target: {
-        kind: "remote", transport: "sandbox", remoteCwd: rootDir,
+        kind: "remote", transport: "sandbox", remoteCwd: sandboxPath(rootDir),
         runner: { execute: async (input) => {
           const script = input.args?.[1] ?? "";
           if (script.includes("/events'/*.json")) throw new Error("synthetic-private-provider-detail");
@@ -1306,8 +1308,8 @@ describe("sandbox adapter execution targets", () => {
     cleanupDirs.push(rootDir);
     const logs: string[] = [];
     const bridge = await startAdapterExecutionTargetProcessSessionBridge({
-      runId: "terminal-proxy", adapterKey: "acpx", runtimeRootDir: rootDir,
-      target: { kind: "remote", transport: "sandbox", remoteCwd: rootDir, runner: createLocalSandboxRunner() },
+      runId: "terminal-proxy", adapterKey: "acpx", runtimeRootDir: sandboxPath(rootDir),
+      target: { kind: "remote", transport: "sandbox", remoteCwd: sandboxPath(rootDir), runner: createLocalSandboxRunner() },
       command: "cat", args: [], cwd: rootDir, env: {},
       onLog: async (stream, chunk) => { if (stream === "stderr") logs.push(chunk); },
     });
@@ -1352,7 +1354,7 @@ describe("sandbox adapter execution targets", () => {
       kind: "remote",
       transport: "sandbox",
       providerKey: "local-test",
-      remoteCwd: rootDir,
+      remoteCwd: sandboxPath(rootDir),
       timeoutMs: 30_000,
       runner: createLocalSandboxRunner(),
     };
@@ -1360,7 +1362,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetProcessSessionBridge({
       runId: "run-process-session-buffer",
       target,
-      runtimeRootDir: path.posix.join(rootDir, ".paperclip-runtime", "acpx"),
+      runtimeRootDir: sandboxPath(path.posix.join(rootDir, ".paperclip-runtime", "acpx")),
       adapterKey: "acpx",
       command: process.execPath,
       args: [childPath],
@@ -1398,7 +1400,7 @@ describe("sandbox adapter execution targets", () => {
       kind: "remote",
       transport: "sandbox",
       providerKey: "local-test",
-      remoteCwd: rootDir,
+      remoteCwd: sandboxPath(rootDir),
       timeoutMs: 30_000,
       runner: createLocalSandboxRunner(),
     };
@@ -1406,7 +1408,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetProcessSessionBridge({
       runId: "run-process-session-fast-exit",
       target,
-      runtimeRootDir: path.posix.join(rootDir, ".paperclip-runtime", "acpx"),
+      runtimeRootDir: sandboxPath(path.posix.join(rootDir, ".paperclip-runtime", "acpx")),
       adapterKey: "acpx",
       command: process.execPath,
       args: [childPath],
@@ -1436,7 +1438,7 @@ describe("sandbox adapter execution targets", () => {
       kind: "remote",
       transport: "sandbox",
       providerKey: "local-test",
-      remoteCwd: rootDir,
+      remoteCwd: sandboxPath(rootDir),
       timeoutMs: 30_000,
       runner: createLocalSandboxRunner(),
     };
@@ -1444,7 +1446,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetProcessSessionBridge({
       runId: "run-process-session-auth",
       target,
-      runtimeRootDir: path.posix.join(rootDir, ".paperclip-runtime", "acpx"),
+      runtimeRootDir: sandboxPath(path.posix.join(rootDir, ".paperclip-runtime", "acpx")),
       adapterKey: "acpx",
       command: process.execPath,
       args: [childPath],
@@ -1516,7 +1518,7 @@ describe("sandbox adapter execution targets", () => {
       kind: "remote",
       transport: "sandbox",
       providerKey: "local-test",
-      remoteCwd: rootDir,
+      remoteCwd: sandboxPath(rootDir),
       timeoutMs: 30_000,
       runner: createLocalSandboxRunner(),
     };
@@ -1524,7 +1526,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetProcessSessionBridge({
       runId: "run-process-session-stream",
       target,
-      runtimeRootDir: path.posix.join(rootDir, ".paperclip-runtime", "acpx"),
+      runtimeRootDir: sandboxPath(path.posix.join(rootDir, ".paperclip-runtime", "acpx")),
       adapterKey: "acpx",
       command: process.execPath,
       args: [childPath],
@@ -1535,7 +1537,7 @@ describe("sandbox adapter execution targets", () => {
     });
     expect(bridge).not.toBeNull();
 
-    const child = spawn(bridge!.agentCommand, [], { stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn(process.execPath, [bridge!.agentCommand], { stdio: ["pipe", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
     let exited = false;
@@ -1602,7 +1604,7 @@ describe("sandbox adapter execution targets", () => {
         kind: "remote",
         transport: "sandbox",
         providerKey: "local-test",
-        remoteCwd: rootDir,
+        remoteCwd: sandboxPath(rootDir),
         timeoutMs: 30_000,
         runner: createLocalSandboxRunner(),
       };
@@ -1610,7 +1612,7 @@ describe("sandbox adapter execution targets", () => {
       const bridge = await startAdapterExecutionTargetProcessSessionBridge({
         runId: "run-stream-echo",
         target,
-        runtimeRootDir: path.posix.join(rootDir, ".paperclip-runtime", "acpx"),
+        runtimeRootDir: sandboxPath(path.posix.join(rootDir, ".paperclip-runtime", "acpx")),
         adapterKey: "acpx",
         command: process.execPath,
         args: [childPath],
@@ -1655,7 +1657,7 @@ describe("sandbox adapter execution targets", () => {
         kind: "remote",
         transport: "sandbox",
         providerKey: "local-test",
-        remoteCwd: rootDir,
+        remoteCwd: sandboxPath(rootDir),
         timeoutMs: 30_000,
         runner: createLocalSandboxRunner(),
       };
@@ -1664,7 +1666,7 @@ describe("sandbox adapter execution targets", () => {
       const bridge = await startAdapterExecutionTargetProcessSessionBridge({
         runId: "run-stream-span",
         target,
-        runtimeRootDir: path.posix.join(rootDir, ".paperclip-runtime", "acpx"),
+        runtimeRootDir: sandboxPath(path.posix.join(rootDir, ".paperclip-runtime", "acpx")),
         adapterKey: "acpx",
         command: process.execPath,
         args: [childPath],
@@ -1708,7 +1710,7 @@ describe("sandbox adapter execution targets", () => {
         kind: "remote",
         transport: "sandbox",
         providerKey: "local-test",
-        remoteCwd: rootDir,
+        remoteCwd: sandboxPath(rootDir),
         timeoutMs: 30_000,
         runner: createLocalSandboxRunner(),
       };
@@ -1723,7 +1725,7 @@ describe("sandbox adapter execution targets", () => {
       const bridge = await startAdapterExecutionTargetProcessSessionBridge({
         runId: "run-stream-parent",
         target,
-        runtimeRootDir: path.posix.join(rootDir, ".paperclip-runtime", "acpx"),
+        runtimeRootDir: sandboxPath(path.posix.join(rootDir, ".paperclip-runtime", "acpx")),
         adapterKey: "acpx",
         command: process.execPath,
         args: [childPath],
@@ -1768,7 +1770,7 @@ describe("sandbox adapter execution targets", () => {
         kind: "remote",
         transport: "sandbox",
         providerKey: "local-test",
-        remoteCwd: rootDir,
+        remoteCwd: sandboxPath(rootDir),
         timeoutMs: 30_000,
         runner: createLocalSandboxRunner(),
       };
@@ -1778,7 +1780,7 @@ describe("sandbox adapter execution targets", () => {
       const bridge = await startAdapterExecutionTargetProcessSessionBridge({
         runId: "run-stream-linger",
         target,
-        runtimeRootDir: path.posix.join(rootDir, ".paperclip-runtime", "acpx"),
+        runtimeRootDir: sandboxPath(path.posix.join(rootDir, ".paperclip-runtime", "acpx")),
         adapterKey: "acpx",
         command: process.execPath,
         args: [childPath],
@@ -1832,7 +1834,7 @@ describe("sandbox adapter execution targets", () => {
         kind: "remote",
         transport: "sandbox",
         providerKey: "local-test",
-        remoteCwd: rootDir,
+        remoteCwd: sandboxPath(rootDir),
         timeoutMs: 30_000,
         runner: createLocalSandboxRunner(),
       };
@@ -1840,7 +1842,7 @@ describe("sandbox adapter execution targets", () => {
       const bridge = await startAdapterExecutionTargetProcessSessionBridge({
         runId: "run-stream-buffer",
         target,
-        runtimeRootDir: path.posix.join(rootDir, ".paperclip-runtime", "acpx"),
+        runtimeRootDir: sandboxPath(path.posix.join(rootDir, ".paperclip-runtime", "acpx")),
         adapterKey: "acpx",
         command: process.execPath,
         args: [childPath],
@@ -1881,7 +1883,7 @@ describe("sandbox adapter execution targets", () => {
         kind: "remote",
         transport: "sandbox",
         providerKey: "local-test",
-        remoteCwd: rootDir,
+        remoteCwd: sandboxPath(rootDir),
         timeoutMs: 30_000,
         runner: createLocalSandboxRunner(),
       };
@@ -1889,7 +1891,7 @@ describe("sandbox adapter execution targets", () => {
       const bridge = await startAdapterExecutionTargetProcessSessionBridge({
         runId: "run-stream-fast-exit",
         target,
-        runtimeRootDir: path.posix.join(rootDir, ".paperclip-runtime", "acpx"),
+        runtimeRootDir: sandboxPath(path.posix.join(rootDir, ".paperclip-runtime", "acpx")),
         adapterKey: "acpx",
         command: process.execPath,
         args: [childPath],
@@ -1934,7 +1936,7 @@ describe("sandbox adapter execution targets", () => {
         kind: "remote",
         transport: "sandbox",
         providerKey: "local-test",
-        remoteCwd: rootDir,
+        remoteCwd: sandboxPath(rootDir),
         timeoutMs: 30_000,
         runner: createLocalSandboxRunner(),
       };
@@ -1942,7 +1944,7 @@ describe("sandbox adapter execution targets", () => {
       const bridge = await startAdapterExecutionTargetProcessSessionBridge({
         runId: "run-stream-live",
         target,
-        runtimeRootDir: path.posix.join(rootDir, ".paperclip-runtime", "acpx"),
+        runtimeRootDir: sandboxPath(path.posix.join(rootDir, ".paperclip-runtime", "acpx")),
         adapterKey: "acpx",
         command: process.execPath,
         args: [childPath],
@@ -1954,7 +1956,7 @@ describe("sandbox adapter execution targets", () => {
       });
       expect(bridge).not.toBeNull();
 
-      const child = spawn(bridge!.agentCommand, [], { stdio: ["pipe", "pipe", "pipe"] });
+      const child = spawn(process.execPath, [bridge!.agentCommand], { stdio: ["pipe", "pipe", "pipe"] });
       let stdout = "";
       let stderr = "";
       let exited = false;
@@ -2057,7 +2059,7 @@ describe("sandbox adapter execution targets", () => {
         kind: "remote",
         transport: "sandbox",
         providerKey: "local-test",
-        remoteCwd: rootDir,
+        remoteCwd: sandboxPath(rootDir),
         timeoutMs: 30_000,
         runner,
       };
@@ -2065,7 +2067,7 @@ describe("sandbox adapter execution targets", () => {
       const bridge = await startAdapterExecutionTargetProcessSessionBridge({
         runId: "run-stream-isolation",
         target,
-        runtimeRootDir: path.posix.join(rootDir, ".paperclip-runtime", "acpx"),
+        runtimeRootDir: sandboxPath(path.posix.join(rootDir, ".paperclip-runtime", "acpx")),
         adapterKey: "acpx",
         command: process.execPath,
         args: [childPath],
@@ -2532,8 +2534,8 @@ describe("sandbox adapter execution targets", () => {
   it("starts a localhost Paperclip bridge for sandbox targets in bridge mode", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-execution-target-bridge-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
-    const runtimeRootDir = path.join(remoteCwd, ".paperclip-runtime", "codex");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
+    const runtimeRootDir = sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex"));
     await mkdir(runtimeRootDir, { recursive: true });
 
     const requests: Array<{ method: string; url: string; auth: string | null; runId: string | null }> = [];
@@ -2605,8 +2607,8 @@ describe("sandbox adapter execution targets", () => {
   it("creates a sandbox run log tail factory when bridge streaming is enabled", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-execution-target-bridge-stream-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
-    const runtimeRootDir = path.join(remoteCwd, ".paperclip-runtime", "codex");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
+    const runtimeRootDir = sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex"));
     await mkdir(runtimeRootDir, { recursive: true });
 
     const logs: Array<{ stream: "stdout" | "stderr"; chunk: string }> = [];
@@ -2649,8 +2651,8 @@ describe("sandbox adapter execution targets", () => {
   it("defaults sandbox run log streaming on and honors the explicit opt-out", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-execution-target-bridge-stream-default-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
-    const runtimeRootDir = path.join(remoteCwd, ".paperclip-runtime", "codex");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
+    const runtimeRootDir = sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex"));
     await mkdir(runtimeRootDir, { recursive: true });
 
     const baseTarget: AdapterSandboxExecutionTarget = {
@@ -2844,8 +2846,8 @@ describe("sandbox adapter execution targets", () => {
   it("exposes the Paperclip bridge to the sandbox shell surface", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-execution-target-bridge-shell-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
-    const runtimeRootDir = path.join(remoteCwd, ".paperclip-runtime", "claude");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
+    const runtimeRootDir = sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "claude"));
     await mkdir(runtimeRootDir, { recursive: true });
 
     const requests: Array<{ method: string; url: string; auth: string | null; runId: string | null }> = [];
@@ -2958,8 +2960,8 @@ describe("sandbox adapter execution targets", () => {
   it("bounds callback bridge operations independently of the adapter run timeout", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-execution-target-bridge-timeout-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
-    const runtimeRootDir = path.join(remoteCwd, ".paperclip-runtime", "codex");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
+    const runtimeRootDir = sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex"));
     await mkdir(runtimeRootDir, { recursive: true });
 
     const delegateRunner = createLocalSandboxRunner();
@@ -3022,8 +3024,8 @@ describe("sandbox adapter execution targets", () => {
     // request id outside the broker deduplication set.
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-execution-target-bridge-limit-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
-    const runtimeRootDir = path.join(remoteCwd, ".paperclip-runtime", "codex");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
+    const runtimeRootDir = sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex"));
     await mkdir(runtimeRootDir, { recursive: true });
 
     const requests: Array<{ method: string; url: string; auth: string | null; runId: string | null }> = [];
@@ -3114,8 +3116,8 @@ describe("sandbox adapter execution targets", () => {
     // through, so the caller can retry the safe read.
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-execution-target-bridge-safe-limit-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
-    const runtimeRootDir = path.join(remoteCwd, ".paperclip-runtime", "codex");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
+    const runtimeRootDir = sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex"));
     await mkdir(runtimeRootDir, { recursive: true });
 
     const requests: Array<{ method: string; url: string; auth: string | null; runId: string | null }> = [];
@@ -3197,8 +3199,8 @@ describe("sandbox adapter execution targets", () => {
     // retry repeats a mutation that already committed.
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-execution-target-bridge-outcome-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
-    const runtimeRootDir = path.join(remoteCwd, ".paperclip-runtime", "codex");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
+    const runtimeRootDir = sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex"));
     await mkdir(runtimeRootDir, { recursive: true });
 
     const responseBody = JSON.stringify({ error: "Mutation outcome is indeterminate.", outcome: "indeterminate", retryable: false });
@@ -3266,8 +3268,8 @@ describe("sandbox adapter execution targets", () => {
   it("forwards bridge traffic to the local listen origin even when public API URLs are configured", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-execution-target-bridge-local-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
-    const runtimeRootDir = path.join(remoteCwd, ".paperclip-runtime", "claude");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
+    const runtimeRootDir = sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "claude"));
     await mkdir(runtimeRootDir, { recursive: true });
 
     const requests: Array<{ method: string; url: string; auth: string | null; runId: string | null }> = [];
@@ -3344,8 +3346,8 @@ describe("sandbox adapter execution targets", () => {
   it("lets an explicit hostApiUrl input override the bridge forward target", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-execution-target-bridge-override-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
-    const runtimeRootDir = path.join(remoteCwd, ".paperclip-runtime", "claude");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
+    const runtimeRootDir = sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "claude"));
     await mkdir(runtimeRootDir, { recursive: true });
 
     const requests: string[] = [];
@@ -3751,7 +3753,7 @@ describe("sandbox adapter execution targets", () => {
     // file bridge and record the typed open-failure reason, never hang.
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-http2-startup-fail-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const api = await startRecordingApiServer();
     const base = createLocalSandboxRunner();
@@ -3775,7 +3777,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-startup-fail",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: api.origin,
@@ -3814,7 +3816,7 @@ describe("sandbox adapter execution targets", () => {
   it("test_daytona_selects_http2_v1", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-http2-select-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const api = await startRecordingApiServer();
     const sessionRef: { current: http2.ClientHttp2Session | null } = { current: null };
@@ -3839,7 +3841,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-http2",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: api.origin,
@@ -3883,7 +3885,7 @@ describe("sandbox adapter execution targets", () => {
   it("streams run logs on the http2 path under the same gate and log line as the file path", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-http2-runlog-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const api = await startRecordingApiServer();
     const { runner } = makeHttp2SelectionRunner();
@@ -3902,7 +3904,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-duplex-log",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: api.origin,
@@ -3929,7 +3931,7 @@ describe("sandbox adapter execution targets", () => {
   it("returns no run-log tail on the http2 path when streaming is opted out", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-http2-runlog-off-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const api = await startRecordingApiServer();
     const { runner } = makeHttp2SelectionRunner();
@@ -3947,7 +3949,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-http2-log-off",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: api.origin,
@@ -3965,7 +3967,7 @@ describe("sandbox adapter execution targets", () => {
   it("routes http2 channel-open and fallback records to a recorder attached on the server seam", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-http2-recorder-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const api = await startRecordingApiServer();
 
@@ -3994,7 +3996,7 @@ describe("sandbox adapter execution targets", () => {
     const openBridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-http2-open",
       target: openTarget,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: api.origin,
@@ -4026,7 +4028,7 @@ describe("sandbox adapter execution targets", () => {
     const fallbackBridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-duplex-fallback",
       target: fallbackTarget,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: api.origin,
@@ -4050,7 +4052,7 @@ describe("sandbox adapter execution targets", () => {
   ])("selects the file bridge when $name", async ({ enable, capability }) => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-duplex-gate-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const api = await startRecordingApiServer();
     const { runner, control } = makeDuplexSelectionRunner();
@@ -4067,7 +4069,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-gate",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: api.origin,
@@ -4109,7 +4111,7 @@ describe("sandbox adapter execution targets", () => {
   ])("fails closed to the file bridge on $name and leaves no live session", async ({ onOpen }) => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-duplex-fail-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const api = await startRecordingApiServer();
     const { runner, control } = makeDuplexSelectionRunner(onOpen);
@@ -4126,7 +4128,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-fail",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: api.origin,
@@ -4162,7 +4164,7 @@ describe("sandbox adapter execution targets", () => {
     async ({ buildReady }) => {
       const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-duplex-addr-"));
       cleanupDirs.push(rootDir);
-      const remoteCwd = path.join(rootDir, "workspace");
+      const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
       await mkdir(remoteCwd, { recursive: true });
 
       // An endpoint an attacker controls. No request that carries the bridge
@@ -4201,7 +4203,7 @@ describe("sandbox adapter execution targets", () => {
       const bridge = await startAdapterExecutionTargetPaperclipBridge({
         runId: "run-addr",
         target,
-        runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+        runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
         adapterKey: "codex",
         hostApiToken: "real-run-jwt",
         hostApiUrl: api.origin,
@@ -4230,7 +4232,7 @@ describe("sandbox adapter execution targets", () => {
   it("test_route_allowlist_header_cleanup_and_token_replacement_hold_on_http2", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-http2-403-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const api = await startRecordingApiServer();
     const sessionRef: { current: http2.ClientHttp2Session | null } = { current: null };
@@ -4253,7 +4255,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-http2-403",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: api.origin,
@@ -4358,7 +4360,7 @@ describe("sandbox adapter execution targets", () => {
 
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-http2-raw-bytes-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const sessionRef: { current: http2.ClientHttp2Session | null } = { current: null };
     let bridgeToken = "";
@@ -4380,7 +4382,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-raw-bytes",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: `http://127.0.0.1:${echoAddress.port}`,
@@ -4463,7 +4465,7 @@ describe("sandbox adapter execution targets", () => {
   it("records an http2 request span with latency and the fixed dimension keys", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-http2-obs-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const api = await startRecordingApiServer();
     const sessionRef: { current: http2.ClientHttp2Session | null } = { current: null };
@@ -4487,7 +4489,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-obs",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: api.origin,
@@ -4535,7 +4537,7 @@ describe("sandbox adapter execution targets", () => {
   it("increments the fallback counter with an approved reason when the capability is absent", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-duplex-fb-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const api = await startRecordingApiServer();
     const { runner } = makeDuplexSelectionRunner();
@@ -4553,7 +4555,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-fb",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: api.origin,
@@ -4607,7 +4609,7 @@ describe("sandbox adapter execution targets", () => {
     async ({ error, expectedReason }) => {
       const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-duplex-stage-"));
       cleanupDirs.push(rootDir);
-      const remoteCwd = path.join(rootDir, "workspace");
+      const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
       await mkdir(remoteCwd, { recursive: true });
       const api = await startRecordingApiServer();
       // A runner whose duplex open rejects. The host binds the caught error and
@@ -4631,7 +4633,7 @@ describe("sandbox adapter execution targets", () => {
       const bridge = await startAdapterExecutionTargetPaperclipBridge({
         runId: "run-stage",
         target,
-        runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+        runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
         adapterKey: "codex",
         hostApiToken: "real-run-jwt",
         hostApiUrl: api.origin,
@@ -4668,7 +4670,7 @@ describe("sandbox adapter execution targets", () => {
   ])("increments the loss counter with the loss class $name", async ({ dispatchFirst, expectedClass }) => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-http2-loss-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const api = await startRecordingApiServer();
     const sessionRef: { current: http2.ClientHttp2Session | null } = { current: null };
@@ -4694,7 +4696,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-loss",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: api.origin,
@@ -4733,7 +4735,7 @@ describe("sandbox adapter execution targets", () => {
   it("keeps serving the request path when the telemetry recorder throws", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-http2-guard-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const api = await startRecordingApiServer();
     const sessionRef: { current: http2.ClientHttp2Session | null } = { current: null };
@@ -4757,7 +4759,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-guard",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: api.origin,
@@ -4793,7 +4795,7 @@ describe("sandbox adapter execution targets", () => {
     // the query, the body, and both tokens never ride a sink either.
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-http2-redact-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const api = await startRecordingApiServer();
 
@@ -4830,7 +4832,7 @@ describe("sandbox adapter execution targets", () => {
       bridge = await startAdapterExecutionTargetPaperclipBridge({
         runId: "run-redact",
         target,
-        runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+        runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
         adapterKey: "codex",
         hostApiToken: AGENT_TOKEN_SENTINEL,
         hostApiUrl: api.origin,
@@ -4883,7 +4885,7 @@ describe("sandbox adapter execution targets", () => {
   it("maps a sentinel provider key to the constant other across every sink", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-http2-prov-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const api = await startRecordingApiServer();
     const sessionRef: { current: http2.ClientHttp2Session | null } = { current: null };
@@ -4908,7 +4910,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-prov",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: api.origin,
@@ -4953,7 +4955,7 @@ describe("sandbox adapter execution targets", () => {
   it("caps the pre-READY readiness buffer and falls back with a contaminated reason", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-duplex-cap-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const api = await startRecordingApiServer();
     // The fake gateway sends a large pre-READY blob with no newline, then one
@@ -4979,7 +4981,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-cap",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: api.origin,
@@ -5007,7 +5009,7 @@ describe("sandbox adapter execution targets", () => {
   it("caps the pre-READY buffer under many small newline-less chunks", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-duplex-cap-small-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const api = await startRecordingApiServer();
     // An adversarial provider controls the chunk size. It sends many small
@@ -5037,7 +5039,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-cap-small",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: api.origin,
@@ -5064,7 +5066,7 @@ describe("sandbox adapter execution targets", () => {
   it("bounds the pre-READY newline-scan work by the bytes received", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-duplex-scan-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const api = await startRecordingApiServer();
     // An adversarial provider sends many small newline-less chunks before the
@@ -5095,7 +5097,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-scan-bound",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: api.origin,
@@ -5120,7 +5122,7 @@ describe("sandbox adapter execution targets", () => {
   it("bounds the pre-READY buffer growth-copy work by the bytes received", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-duplex-growth-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const api = await startRecordingApiServer();
     // An adversarial provider sends many small newline-less fragments before the
@@ -5152,7 +5154,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-growth-bound",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: api.origin,
@@ -5178,7 +5180,7 @@ describe("sandbox adapter execution targets", () => {
   it("bounds the pre-READY skip scan work by the bytes received", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-duplex-blank-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const api = await startRecordingApiServer();
     // An adversarial provider sends one pre-READY chunk of many blank lines and a
@@ -5210,7 +5212,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-blank-scan",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: api.origin,
@@ -5240,7 +5242,7 @@ describe("sandbox adapter execution targets", () => {
   it("test_a_prologue_of_any_length_before_the_ready_line_is_discarded", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-http2-noise-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const api = await startRecordingApiServer();
     // A PTY channel echoes the launch wrapper line before it sets raw mode, so the
@@ -5270,7 +5272,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-noise-ready",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: api.origin,
@@ -5296,7 +5298,7 @@ describe("sandbox adapter execution targets", () => {
   it("settles a wrong-nonce READY frame as a nonce mismatch, even after a noise line", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-duplex-noise-nonce-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const api = await startRecordingApiServer();
     // The gate skips the echo line, then reads a READY frame that decodes cleanly
@@ -5321,7 +5323,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-noise-nonce",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: api.origin,
@@ -5347,7 +5349,7 @@ describe("sandbox adapter execution targets", () => {
   it("enforces the buffer cap on an over-cap blank prefix before it accepts a valid READY frame", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-duplex-capbypass-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const api = await startRecordingApiServer();
     // The cap must bound every pre-READY path, including a skipped blank line. An
@@ -5378,7 +5380,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-cap-bypass",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: api.origin,
@@ -5405,7 +5407,7 @@ describe("sandbox adapter execution targets", () => {
   it("records the channel-open span with the fallback_reason dimension on the fallback path", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-duplex-openspan-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const api = await startRecordingApiServer();
     // A wrong-nonce READY frame fails the handshake, so the gate falls back. The
@@ -5429,7 +5431,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-open-span",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: api.origin,
@@ -5458,7 +5460,7 @@ describe("sandbox adapter execution targets", () => {
   it("drops a header outside the allowlist on the host http2 forward path", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-http2-hdr-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const api = await startRecordingApiServer();
     const sessionRef: { current: http2.ClientHttp2Session | null } = { current: null };
@@ -5481,7 +5483,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-hdr",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: api.origin,
@@ -5521,7 +5523,7 @@ describe("sandbox adapter execution targets", () => {
   it("selects the http2 transport for a large forward budget", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-http2-budget-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const api = await startRecordingApiServer();
     const sessionRef: { current: http2.ClientHttp2Session | null } = { current: null };
@@ -5548,7 +5550,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-budget",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: api.origin,
@@ -5574,7 +5576,7 @@ describe("sandbox adapter execution targets", () => {
   it("test_a_missing_preface_aborts_the_open_and_falls_back_to_queue_v1", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-http2-no-preface-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const api = await startRecordingApiServer();
     // The gateway sends a valid READY line, but no HTTP/2 client preface ever
@@ -5600,7 +5602,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-no-preface",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: api.origin,
@@ -5628,7 +5630,7 @@ describe("sandbox adapter execution targets", () => {
   it("test_disabled_flag_selects_queue_v1", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-http2-disabled-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const api = await startRecordingApiServer();
     const { runner, control } = makeHttp2SelectionRunner();
@@ -5647,7 +5649,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-disabled",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: api.origin,
@@ -5672,7 +5674,7 @@ describe("sandbox adapter execution targets", () => {
     // host never re-attempts http2_v1 afterward in the same run.
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-http2-one-way-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const api = await startRecordingApiServer();
     const { runner, control } = makeHttp2SelectionRunner((ctx) => {
@@ -5693,7 +5695,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-one-way",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: api.origin,
@@ -5727,7 +5729,7 @@ describe("sandbox adapter execution targets", () => {
     // frame), and asserts zero bytes crossed the channel the whole time.
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-http2-no-early-write-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const api = await startRecordingApiServer();
     const base = createLocalSandboxRunner();
@@ -5779,7 +5781,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-no-early-write",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: api.origin,
@@ -5807,7 +5809,7 @@ describe("sandbox adapter execution targets", () => {
     // stream — may contain the sentinel bytes.
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-http2-invalid-ready-bytes-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const api = await startRecordingApiServer();
     const INVALID_LINE_SENTINEL = "sentinelinvalidreadyline62fa";
@@ -5832,7 +5834,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-invalid-ready-bytes",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: api.origin,
@@ -5858,7 +5860,7 @@ describe("sandbox adapter execution targets", () => {
     // latch must keep the success and emit no loss event for it.
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-http2-orderly-close-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const api = await startRecordingApiServer();
     let emitExit: (() => void) | null = null;
@@ -5881,7 +5883,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-orderly-close",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: api.origin,
@@ -5913,7 +5915,7 @@ describe("sandbox adapter execution targets", () => {
     // proves the http2_v1 forward handler reuses that one function unchanged.
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-http2-safe-retry-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const api = await startRecordingApiServer();
     const sessionRef: { current: http2.ClientHttp2Session | null } = { current: null };
@@ -5936,7 +5938,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-safe-retry",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: api.origin,
@@ -5974,7 +5976,7 @@ describe("sandbox adapter execution targets", () => {
     // byte — trips the size check this test exists to force.
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-http2-unsafe-indeterminate-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const api = await startRecordingApiServer();
     const sessionRef: { current: http2.ClientHttp2Session | null } = { current: null };
@@ -5997,7 +5999,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-unsafe-indeterminate",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: api.origin,
@@ -6050,7 +6052,7 @@ describe("sandbox adapter execution targets", () => {
 
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-http2-abort-forward-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const sessionRef: { current: http2.ClientHttp2Session | null } = { current: null };
     let bridgeToken = "";
@@ -6072,7 +6074,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-abort-forward",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: apiOrigin,
@@ -6135,7 +6137,7 @@ describe("sandbox adapter execution targets", () => {
 
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-http2-denied-response-chunk-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const sessionRef: { current: http2.ClientHttp2Session | null } = { current: null };
     let bridgeToken = "";
@@ -6157,7 +6159,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-denied-response-chunk",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: apiOrigin,
@@ -6223,7 +6225,7 @@ describe("sandbox adapter execution targets", () => {
 
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-http2-denied-response-concat-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const sessionRef: { current: http2.ClientHttp2Session | null } = { current: null };
     let bridgeToken = "";
@@ -6245,7 +6247,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-denied-response-concat",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: apiOrigin,
@@ -6338,7 +6340,7 @@ describe("sandbox adapter execution targets", () => {
 
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-http2-denied-response-mutation-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const sessionRef: { current: http2.ClientHttp2Session | null } = { current: null };
     let bridgeToken = "";
@@ -6360,7 +6362,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-denied-response-mutation",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: apiOrigin,
@@ -6418,7 +6420,7 @@ describe("sandbox adapter execution targets", () => {
 
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-http2-ceiling-aggregate-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const sessionRef: { current: http2.ClientHttp2Session | null } = { current: null };
     let bridgeToken = "";
@@ -6439,7 +6441,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-ceiling-aggregate",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: apiOrigin,
@@ -6492,7 +6494,7 @@ describe("sandbox adapter execution targets", () => {
     });
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-http2-host-body-limit-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const target: AdapterSandboxExecutionTarget = {
       kind: "remote",
@@ -6507,7 +6509,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-host-body-limit",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: api.origin,
@@ -6551,8 +6553,8 @@ describe("sandbox adapter execution targets", () => {
     // forwards the request and still returns the host's body.
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-queue-no-reservation-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
-    const runtimeRootDir = path.join(remoteCwd, ".paperclip-runtime", "codex");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
+    const runtimeRootDir = sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex"));
     await mkdir(runtimeRootDir, { recursive: true });
 
     const apiServer = createServer((req, res) => {
@@ -6618,7 +6620,7 @@ describe("sandbox adapter execution targets", () => {
   async function runReadinessReplay(emit: (ctx: Http2OpenContext) => void) {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-pty-replay-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const api = await startRecordingApiServer();
     const { runner, control } = makeHttp2SelectionRunner(emit);
@@ -6636,7 +6638,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-pty-replay",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: api.origin,
@@ -6755,7 +6757,7 @@ describe("sandbox adapter execution targets", () => {
     // instead, which only holds when the offset is exact.
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-http2-preface-offset-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const api = await startRecordingApiServer();
     const sessionRef: { current: http2.ClientHttp2Session | null } = { current: null };
@@ -6779,7 +6781,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-preface-offset",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: api.origin,
@@ -6810,7 +6812,7 @@ describe("sandbox adapter execution targets", () => {
     // that follows READY.
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-http2-preface-lookalike-"));
     cleanupDirs.push(rootDir);
-    const remoteCwd = path.join(rootDir, "workspace");
+    const remoteCwd = sandboxPath(path.join(rootDir, "workspace"));
     await mkdir(remoteCwd, { recursive: true });
     const api = await startRecordingApiServer();
     const sessionRef: { current: http2.ClientHttp2Session | null } = { current: null };
@@ -6834,7 +6836,7 @@ describe("sandbox adapter execution targets", () => {
     const bridge = await startAdapterExecutionTargetPaperclipBridge({
       runId: "run-preface-lookalike",
       target,
-      runtimeRootDir: path.join(remoteCwd, ".paperclip-runtime", "codex"),
+      runtimeRootDir: sandboxPath(path.join(remoteCwd, ".paperclip-runtime", "codex")),
       adapterKey: "codex",
       hostApiToken: "real-run-jwt",
       hostApiUrl: api.origin,

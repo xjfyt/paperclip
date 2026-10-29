@@ -925,7 +925,26 @@ export async function runAdapterExecutionTargetProcess(
       ? sanitizeRemoteExecutionEnv(options.env)
       : options.env;
 
-  const result = await runChildProcess(runId, command, args, {
+  // Controller-owned GitHub JS launchers can use Node directly on native
+  // Windows. Avoid cmd parsing of argument data (quotes, %, metacharacters).
+  // Do not infer an interpreter for arbitrary user-provided scripts.
+  let localCommand = command;
+  let localArgs = args;
+  if (process.platform === "win32" && target?.kind !== "remote" && ["git", "gh"].includes(command)
+      && env.PAPERCLIP_GITHUB_LAUNCHER_DIR) {
+    const directory = path.resolve(env.PAPERCLIP_GITHUB_LAUNCHER_DIR);
+    const expectedRoot = path.resolve(os.tmpdir(), "paperclip-github-runtime");
+    const script = path.join(directory, command);
+    if (path.dirname(directory) !== expectedRoot || !/^[a-zA-Z0-9_-]+$/.test(path.basename(directory))
+        || path.resolve((env.PATH ?? "").split(path.delimiter)[0] ?? "") !== directory
+        || await fs.realpath(directory) !== directory || await fs.realpath(script) !== script
+        || await fs.readFile(script, "utf8") !== githubLauncherSource()) {
+      throw new Error("Invalid controller-owned GitHub launcher");
+    }
+    localCommand = process.execPath;
+    localArgs = [script, ...args];
+  }
+  const result = await runChildProcess(runId, localCommand, localArgs, {
     cwd: options.cwd,
     env,
     inheritEnv: options.inheritEnv,
@@ -1751,7 +1770,8 @@ export async function prepareGitHubOperationLaunchers(input: {
   const directory = githubOperationLauncherDirectory(input);
   const configDirectory = path.posix.join(directory, "gh-config");
   const basePath = await githubOperationLauncherBasePath(remote, input.env);
-  const managedPath = basePath ? `${directory}:${basePath}` : directory;
+  const localWindows = !remote && process.platform === "win32";
+  const managedPath = basePath ? `${directory}${remote ? ":" : path.delimiter}${basePath}` : directory;
   // Login shells may reorder PATH through /etc/profile or path_helper. Restore
   // the managed launchers after startup without loading a host user's profile.
   // Empty merge overrides clear host identity before launch, but Git treats
@@ -1768,6 +1788,16 @@ export async function prepareGitHubOperationLaunchers(input: {
     ...["git", "gh"].map((name) => [name, githubLauncherSource()] as const),
     ...[".zshenv", ".zprofile", ".zshrc", ".bash_profile", ".bashrc", ".profile"].map((name) => [name, profile] as const),
   ]);
+  if (localWindows) {
+    // Like Node's own CLI shims, only this controller-written entry uses cmd.
+    // The broker launcher itself starts the real Git/gh native image with
+    // shell:false. Disable delayed expansion and escape literal % in Node's
+    // trusted installation path; user arguments are forwarded without CALL.
+    const node = process.execPath.replaceAll("%", "%%");
+    for (const program of ["git", "gh"]) {
+      files[`${program}.cmd`] = `@echo off\r\nsetlocal DisableDelayedExpansion\r\n@"${node}" "%~dp0${program}" %*\r\n`;
+    }
+  }
   if (remote) {
     const runner = adapterExecutionTargetCommandRunner(remote);
     for (const [program, body] of Object.entries(files)) {

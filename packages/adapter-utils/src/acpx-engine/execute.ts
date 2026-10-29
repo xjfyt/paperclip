@@ -4,8 +4,6 @@ import fs from "node:fs/promises";
 import fsSync from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import { createHash, randomUUID } from "node:crypto";
 import { parseFrontmatterMarkdown } from "@paperclipai/shared";
 import { fileURLToPath } from "node:url";
@@ -76,6 +74,7 @@ import {
   readPaperclipRuntimeSkillEntries,
   readPaperclipIssueWorkModeFromContext,
   renderTemplate,
+  runChildProcess,
   resolvePaperclipInstanceRootForAdapter,
   hydrateFreshSessionHandoff,
   selectInitialCommunicationGuidance,
@@ -876,7 +875,6 @@ async function resolveBuiltInAgentCommand(input: {
   return { command: resolved, shellCommand: shellQuote(resolved) };
 }
 
-const execFileAsync = promisify(execFile);
 // Gemini CLI renamed --experimental-acp to --acp in 0.33.0. acpx normally
 // rewrites the flag itself, but the agent wrapper script hides the gemini
 // command from acpx's detection, so the engine must downgrade it here.
@@ -921,12 +919,16 @@ async function normalizeGeminiAcpCommandShell(commandShell: string, env: NodeJS.
   if (!tokens) return commandShell;
   let versionParts: number[] | null = null;
   try {
-    const { stdout } = await execFileAsync(tokens[0], ["--version"], {
-      timeout: GEMINI_VERSION_PROBE_TIMEOUT_MS,
-      encoding: "utf8",
-      env,
+    const result = await runChildProcess("gemini-version-probe", tokens[0], ["--version"], {
+      cwd: process.cwd(),
+      env: Object.fromEntries(Object.entries(env).filter((entry): entry is [string, string] => entry[1] !== undefined)),
+      inheritEnv: false,
+      timeoutSec: GEMINI_VERSION_PROBE_TIMEOUT_MS / 1000,
+      graceSec: 0.1,
+      onLog: async () => {},
     });
-    versionParts = parseGeminiVersionParts(stdout);
+    if (result.timedOut || result.exitCode !== 0) return commandShell;
+    versionParts = parseGeminiVersionParts(result.stdout);
   } catch {
     return commandShell;
   }
@@ -2487,16 +2489,28 @@ async function buildRuntime(input: {
           path.posix.join(stagedRuntime.workspaceRemoteDir ?? cwd, ".paperclip-runtime", acpxAgent),
         "skills",
       );
-    const rebaseToSandbox = (value: string) => value.split(claudeSkillsBundleDir!).join(inSandboxSkillsRoot);
-    skillPromptInstructions = rebaseToSandbox(skillPromptInstructions);
+    // Rewrite the structured root and exact owned SKILL.md paths, rather
+    // than arbitrary prefix matches in user-authored descriptions. This also
+    // handles spaces in a skill name and leaves `<root>-other` untouched.
+    skillPromptInstructions = skillPromptInstructions.split("\n").map((line) =>
+      line === `Skill root: ${claudeSkillsBundleDir}` ? `Skill root: ${inSandboxSkillsRoot}` : line).join("\n");
+    const selectedSkills = Array.isArray(skillsIdentity.selectedSkills) ? skillsIdentity.selectedSkills : [];
+    for (const name of selectedSkills) {
+      if (typeof name !== "string") continue;
+      const hostFile = path.join(claudeSkillsBundleDir, name, "SKILL.md");
+      const relative = path.relative(claudeSkillsBundleDir, hostFile);
+      if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) continue;
+      const remoteFile = path.posix.join(inSandboxSkillsRoot, ...relative.split(path.sep));
+      skillPromptInstructions = skillPromptInstructions.split(`(file: ${hostFile})`).join(`(file: ${remoteFile})`);
+    }
     skillsIdentity = {
       ...skillsIdentity,
-      skillRoot: typeof skillsIdentity.skillRoot === "string"
-        ? rebaseToSandbox(skillsIdentity.skillRoot)
-        : skillsIdentity.skillRoot,
+      skillRoot: skillsIdentity.skillRoot === claudeSkillsBundleDir ? inSandboxSkillsRoot : skillsIdentity.skillRoot,
     };
     for (let i = 0; i < skillCommandNotes.length; i += 1) {
-      skillCommandNotes[i] = rebaseToSandbox(skillCommandNotes[i]!);
+      const suffix = ` at ${claudeSkillsBundleDir}.`;
+      const note = skillCommandNotes[i]!;
+      if (note.endsWith(suffix)) skillCommandNotes[i] = note.slice(0, -suffix.length) + ` at ${inSandboxSkillsRoot}.`;
     }
   }
   // Both bridge starts run under one try so a failure at EITHER — including the

@@ -1,11 +1,26 @@
-import { execFile as execFileCallback } from "node:child_process";
+import { execFile as execFileCallback, execFileSync } from "node:child_process";
 import { lstat, mkdir, mkdtemp, readFile, readlink, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { workspacePaths } from "./workspace-manifest.js";
 import { runWorkspaceGitProcess } from "./workspace-git-stream.js";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const { beforeGitExec } = vi.hoisted(() => ({
+  beforeGitExec: { current: null as ((command: string, args: readonly string[]) => void) | null },
+}));
+
+vi.mock("node:child_process", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:child_process")>();
+  const execute = ((...args: Parameters<typeof actual.execFile>) => {
+    if (Array.isArray(args[1])) beforeGitExec.current?.(args[0], args[1]);
+    return actual.execFile(...args);
+  }) as typeof actual.execFile;
+  // Keep Node's custom promisifier and overload behavior for unrelated tests.
+  Object.defineProperties(execute, Object.getOwnPropertyDescriptors(actual.execFile));
+  return { ...actual, execFile: execute };
+});
 import { getWorkspaceRestoreDiagnostic, withWorkspaceRestoreDiagnostics, withWorkspaceRestoreStep, withWorkspaceRestoreGitCommand } from "./workspace-restore-diagnostics.js";
 
 import {
@@ -55,7 +70,20 @@ async function git(cwd: string, args: string[]): Promise<string> {
 describe("git workspace sync", () => {
   const cleanupDirs: string[] = [];
 
+  beforeEach(async () => {
+    // The fixture's byte assertions must not inherit a developer's Windows
+    // checkout conversion setting or write to their real Git configuration.
+    const configDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-git-test-config-"));
+    cleanupDirs.push(configDir);
+    const config = path.join(configDir, "gitconfig");
+    await writeFile(config, "[core]\n\tautocrlf = false\n\tlongpaths = true\n");
+    vi.stubEnv("GIT_CONFIG_GLOBAL", config);
+    vi.stubEnv("GIT_CONFIG_NOSYSTEM", "1");
+  });
+
   afterEach(async () => {
+    beforeGitExec.current = null;
+    vi.unstubAllEnvs();
     setExpensiveWorkspaceGitExecutor(null);
     for (const snapshot of snapshots.splice(0)) await disposeGitWorkspaceSnapshot(snapshot);
     while (cleanupDirs.length > 0) {
@@ -94,7 +122,10 @@ describe("git workspace sync", () => {
 
     // Deleted lane: commit the file first (in isolation, before anything else
     // is staged), then remove it from the work tree.
-    const deletedName = " deleted padded ";
+    // Win32 strips trailing ASCII spaces from ordinary filenames, whereas an
+    // em space is preserved and still catches accidental trim() on all lanes.
+    const padding = process.platform === "win32" ? "\u2003" : " ";
+    const deletedName = ` deleted padded${padding}`;
     await writeFile(path.join(repo, deletedName), "deleted\n", "utf8");
     await git(repo, ["add", deletedName]);
     await git(repo, ["commit", "-qm", "add deleted padded"]);
@@ -102,18 +133,18 @@ describe("git workspace sync", () => {
 
     // Overlay lane, staged-new half: `git diff --diff-filter=ACMRTUXB HEAD`
     // reports a staged-but-uncommitted file as added.
-    const overlayName = " overlay padded ";
+    const overlayName = ` overlay padded${padding}`;
     await writeFile(path.join(repo, overlayName), "overlay\n", "utf8");
     await git(repo, ["add", overlayName]);
 
     // Overlay lane, untracked half: `ls-files --others --exclude-standard`.
-    const untrackedName = " untracked padded ";
+    const untrackedName = ` untracked padded${padding}`;
     await writeFile(path.join(repo, untrackedName), "untracked\n", "utf8");
 
     // Ignored lane: a double-wildcard pattern avoids the separate rule that
     // Git trims an unescaped trailing space in a .gitignore PATTERN itself;
     // the padding under test lives in the matched FILE name.
-    const ignoredName = " ignored padded ";
+    const ignoredName = ` ignored padded${padding}`;
     await writeFile(path.join(repo, ".gitignore"), "*ignored*padded*\n", "utf8");
     await writeFile(path.join(repo, ignoredName), "ignored\n", "utf8");
 
@@ -777,27 +808,21 @@ describe("git workspace sync", () => {
     it.each([false, true])("rejects a checkout during integration (initially detached: %s)", async (detached) => {
       const { repo, baseline, importedHead } = await rewrittenHistory();
       if (detached) await git(repo, ["checkout", "--detach"]);
-      const realGit = (await execFile("sh", ["-c", "command -v git"])).stdout.trim();
-      const bin = path.join(repo, "test-bin");
-      await mkdir(bin);
-      const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
       // Switch branches after the initial identity read, at the merge-base
-      // subprocess boundary. Both refs still point to the expected old OID.
-      await writeFile(path.join(bin, "git"), `#!/bin/sh
-if [ "$3" = merge-base ]; then
-  ${quote(realGit)} -C "$2" checkout -B other ${baseline.headCommit} >/dev/null 2>&1 || exit 1
-fi
-exec ${quote(realGit)} "$@"
-`, { mode: 0o755 });
-      const priorPath = process.env.PATH;
-      process.env.PATH = `${bin}${path.delimiter}${priorPath ?? ""}`;
+      // subprocess boundary. This hook still performs a real Git checkout and
+      // every production subprocess runs normally; it avoids an extensionless
+      // shell shim that Windows CreateProcess cannot execute through PATH.
+      beforeGitExec.current = (command, args) => {
+        if (command !== "git" || args[0] !== "-C" || args[1] !== repo || args[2] !== "merge-base") return;
+        beforeGitExec.current = null;
+        execFileSync("git", ["-C", repo, "checkout", "-B", "other", baseline.headCommit], { stdio: "pipe" });
+      };
       try {
         await expect(integrateImportedGitHead({
           localDir: repo, importedHead, baseline: { ...baseline, branchName: detached ? null : "host" },
         })).rejects.toThrow("branch changed");
       } finally {
-        if (priorPath === undefined) delete process.env.PATH;
-        else process.env.PATH = priorPath;
+        beforeGitExec.current = null;
       }
       expect(await git(repo, ["symbolic-ref", "--short", "HEAD"])).toBe("other");
       expect(await git(repo, ["rev-parse", "host"])).toBe(baseline.headCommit);
@@ -1206,7 +1231,7 @@ exit 0
       const scan = await readReferencedSourceGitIgnoredPaths(repo);
 
       expect(scan?.ignoredPaths).toEqual(["secret.env"]);
-    });
+    }, 60_000); // Creates 30,000 real files before measuring the >4 MiB output.
 
     it("routes both scan commands through the registered scheduler instead of spawning git directly", async () => {
       const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-referenced-scheduler-"));

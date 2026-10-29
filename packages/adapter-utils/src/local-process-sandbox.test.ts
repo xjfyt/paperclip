@@ -40,8 +40,8 @@ describe("local process sandbox", () => {
 
   it("parses read-only and writable extra paths", () => {
     expect(parseLocalProcessSandboxExtraPaths(["/opt/cache", { path: "/var/lib/tool", access: "rw" }])).toEqual([
-      { path: "/opt/cache", access: "ro" },
-      { path: "/var/lib/tool", access: "rw" },
+      { path: path.resolve("/opt/cache"), access: "ro" },
+      { path: path.resolve("/var/lib/tool"), access: "rw" },
     ]);
     expect(() => parseLocalProcessSandboxExtraPaths(["relative"])).toThrow("must be an absolute path");
   });

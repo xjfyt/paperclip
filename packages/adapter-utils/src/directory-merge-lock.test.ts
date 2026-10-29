@@ -4,7 +4,6 @@ import { once } from "node:events";
 import { access, link, mkdir, mkdtemp, readFile, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { withDirectoryMergeLock, WORKSPACE_RESTORE_LOCK_TIMEOUT_CODE } from "./workspace-restore-merge.js";
@@ -16,8 +15,8 @@ describe("directory merge lock process lifetime", () => {
   // that still holds the lock. The --import hook runs the evaluated code in
   // the process this file spawns directly, so killing it really does release
   // the lock.
-  const loader = fileURLToPath(new URL("../../../cli/node_modules/tsx/dist/loader.mjs", import.meta.url));
-  const module = fileURLToPath(new URL("./workspace-restore-merge.ts", import.meta.url));
+  const loader = new URL("../../../cli/node_modules/tsx/dist/loader.mjs", import.meta.url).href;
+  const module = new URL("./workspace-restore-merge.ts", import.meta.url).href;
   const directories: string[] = [];
   const children: ChildProcess[] = [];
   afterEach(async () => {

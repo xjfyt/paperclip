@@ -176,12 +176,22 @@ function parseProgressLine(line: string): ParsedProgressLine {
 }
 
 describe("ssh env-lab fixture", () => {
+  it.runIf(process.platform === "win32")("rejects the local POSIX sshd fixture before creating state on native Windows", async () => {
+    const rootDir = await createFixtureRootDir();
+    const statePath = path.join(rootDir, "state.json");
+    await expect(getSshEnvLabSupport()).resolves.toEqual({
+      supported: false,
+      reason: expect.stringContaining("requires POSIX sshd process identity"),
+    });
+    await expect(startSshEnvLabFixture({ statePath })).rejects.toThrow(/requires POSIX sshd process identity/);
+    await expect(stat(statePath)).rejects.toMatchObject({ code: "ENOENT" });
+  });
   afterEach(drainFixtureTeardowns);
   // Backstop: if a throw inside afterEach ever leaves an entry on the stack,
   // this drains it too instead of stranding a listener until the process exits.
   afterAll(drainFixtureTeardowns);
 
-  it("starts an isolated sshd fixture and executes commands through it", async () => {
+  it.skipIf(process.platform === "win32")("starts an isolated sshd fixture and executes commands through it", async () => {
     const rootDir = await createFixtureRootDir();
     const statePath = path.join(rootDir, "state.json");
 
@@ -204,7 +214,7 @@ describe("ssh env-lab fixture", () => {
     expect(stopped.running).toBe(false);
   }, SSH_FIXTURE_TEST_TIMEOUT_MS);
 
-  it("resolves a relative statePath to the same absolute state across start, status, and stop", async () => {
+  it.skipIf(process.platform === "win32")("resolves a relative statePath to the same absolute state across start, status, and stop", async () => {
     const rootDir = await createFixtureRootDir();
     const absoluteStatePath = path.join(rootDir, "state.json");
     // A path relative to the test process's own working directory. This is
@@ -254,7 +264,7 @@ describe("ssh env-lab fixture", () => {
     expect(afterStop.running).toBe(false);
   }, SSH_FIXTURE_TEST_TIMEOUT_MS);
 
-  it("forwards stdin to remote SSH commands", async () => {
+  it.skipIf(process.platform === "win32")("forwards stdin to remote SSH commands", async () => {
     const rootDir = await createFixtureRootDir();
     const statePath = path.join(rootDir, "state.json");
 
@@ -282,7 +292,7 @@ describe("ssh env-lab fixture", () => {
     expect(result.stdout).toBe("hello over ssh stdin\n");
   }, SSH_FIXTURE_TEST_TIMEOUT_MS);
 
-  it("does not treat an unrelated reused pid as the running fixture", async () => {
+  it.skipIf(process.platform === "win32")("does not treat an unrelated reused pid as the running fixture", async () => {
     const rootDir = await createFixtureRootDir();
     const statePath = path.join(rootDir, "state.json");
 
@@ -374,7 +384,7 @@ describe("ssh env-lab fixture", () => {
     }
   }, SSH_FIXTURE_TEST_TIMEOUT_MS);
 
-  it("stops the fixture listener and frees its loopback port", async () => {
+  it.skipIf(process.platform === "win32")("stops the fixture listener and frees its loopback port", async () => {
     const rootDir = await createFixtureRootDir();
     const statePath = path.join(rootDir, "state.json");
 
@@ -403,7 +413,7 @@ describe("ssh env-lab fixture", () => {
     });
   }, SSH_FIXTURE_TEST_TIMEOUT_MS);
 
-  it("leaves no live listener and no root directory when the fixture fails readiness", async () => {
+  it.skipIf(process.platform === "win32")("leaves no live listener and no root directory when the fixture fails readiness", async () => {
     if (sshEnvLabUnsupportedReason) {
       console.warn(`Skipping SSH readiness-failure cleanup test: ${sshEnvLabUnsupportedReason}`);
       return;
@@ -522,7 +532,7 @@ describe("ssh env-lab fixture", () => {
     ).rejects.toThrow("Invalid SSH environment variable key: BAD KEY");
   });
 
-  it("syncs a local directory into the remote fixture workspace", async () => {
+  it.skipIf(process.platform === "win32")("syncs a local directory into the remote fixture workspace", async () => {
     const rootDir = await createFixtureRootDir();
     const statePath = path.join(rootDir, "state.json");
     const localDir = path.join(rootDir, "local-overlay");
@@ -554,7 +564,7 @@ describe("ssh env-lab fixture", () => {
     expect(result.stdout).not.toContain("appledouble-present");
   }, SSH_FIXTURE_TEST_TIMEOUT_MS);
 
-  it("reports throttled upload progress with a clamped percent and terminal 100% line", async () => {
+  it.skipIf(process.platform === "win32")("reports throttled upload progress with a clamped percent and terminal 100% line", async () => {
     const rootDir = await createFixtureRootDir();
     const statePath = path.join(rootDir, "state.json");
     const localDir = path.join(rootDir, "local-overlay");
@@ -601,7 +611,7 @@ describe("ssh env-lab fixture", () => {
     expect(last.doneMb).toBe(last.totalMb);
   }, SSH_FIXTURE_TEST_TIMEOUT_MS);
 
-  it("reports restore progress with a terminal completion line", async () => {
+  it.skipIf(process.platform === "win32")("reports restore progress with a terminal completion line", async () => {
     const rootDir = await createFixtureRootDir();
     const statePath = path.join(rootDir, "state.json");
     const localDir = path.join(rootDir, "local-overlay");
@@ -646,7 +656,7 @@ describe("ssh env-lab fixture", () => {
     );
   }, SSH_FIXTURE_TEST_TIMEOUT_MS);
 
-  it("reports exact git-history import percentage from the known bundle size", async () => {
+  it.skipIf(process.platform === "win32")("reports exact git-history import percentage from the known bundle size", async () => {
     const rootDir = await createFixtureRootDir();
     const statePath = path.join(rootDir, "state.json");
     const localRepo = path.join(rootDir, "local-workspace");
@@ -687,7 +697,7 @@ describe("ssh env-lab fixture", () => {
     expect(lastImport.doneMb).toBe(lastImport.totalMb);
   }, SSH_FIXTURE_TEST_TIMEOUT_MS);
 
-  it("can dereference local symlinks while syncing to the remote fixture", async () => {
+  it.skipIf(process.platform === "win32")("can dereference local symlinks while syncing to the remote fixture", async () => {
     const rootDir = await createFixtureRootDir();
     const statePath = path.join(rootDir, "state.json");
     const sourceDir = path.join(rootDir, "source");
@@ -722,7 +732,7 @@ describe("ssh env-lab fixture", () => {
     expect(result.stdout).toContain("{\"token\":\"secret\"}");
   }, SSH_FIXTURE_TEST_TIMEOUT_MS);
 
-  it("clears stale files when plain SSH preparation is retried", async () => {
+  it.skipIf(process.platform === "win32")("clears stale files when plain SSH preparation is retried", async () => {
     const rootDir = await createFixtureRootDir();
     const localDir = path.join(rootDir, "plain-local");
     await mkdir(path.join(localDir, "node_modules"), { recursive: true });
@@ -744,7 +754,7 @@ describe("ssh env-lab fixture", () => {
     expect(await readFile(path.join(started.workspaceDir, "node_modules", "personal.bin"))).toEqual(binary);
   }, SSH_FIXTURE_TEST_TIMEOUT_MS);
 
-  it("round-trips a git workspace through the SSH fixture", async () => {
+  it.skipIf(process.platform === "win32")("round-trips a git workspace through the SSH fixture", async () => {
     const rootDir = await createFixtureRootDir();
     const statePath = path.join(rootDir, "state.json");
     const localRepo = path.join(rootDir, "local-workspace");
@@ -803,7 +813,7 @@ describe("ssh env-lab fixture", () => {
     expect(await git(localRepo, ["status", "--short"])).not.toContain("._tracked.txt");
   }, SSH_FIXTURE_TEST_TIMEOUT_MS);
 
-  it("preserves both concurrent SSH restores in a shared git workspace", async () => {
+  it.skipIf(process.platform === "win32")("preserves both concurrent SSH restores in a shared git workspace", async () => {
     const rootDir = await createFixtureRootDir();
     const statePath = path.join(rootDir, "state.json");
     const localRepo = path.join(rootDir, "local-workspace");
@@ -860,7 +870,7 @@ describe("ssh env-lab fixture", () => {
     await expect(readFile(path.join(localRepo, "run-b.txt"), "utf8")).resolves.toBe("from run b\n");
   }, SSH_FIXTURE_TEST_TIMEOUT_MS);
 
-  it("round-trips project repositories nested in .paperclip-repositories across consecutive SSH runs", async () => {
+  it.skipIf(process.platform === "win32")("round-trips project repositories nested in .paperclip-repositories across consecutive SSH runs", async () => {
     const rootDir = await createFixtureRootDir();
     const statePath = path.join(rootDir, "state.json");
     const localRepo = path.join(rootDir, "local-workspace");
@@ -961,7 +971,7 @@ describe("ssh env-lab fixture", () => {
     await expect(readFile(path.join(nestedRepo, "frontend.txt"), "utf8")).resolves.toBe("frontend remote dirty\n");
   }, SSH_FIXTURE_TEST_TIMEOUT_MS * 2);
 
-  it("restores project repositories through the direct SSH restore path", async () => {
+  it.skipIf(process.platform === "win32")("restores project repositories through the direct SSH restore path", async () => {
     const rootDir = await createFixtureRootDir();
     const statePath = path.join(rootDir, "state.json");
     const localRepo = path.join(rootDir, "local-workspace");
@@ -1059,7 +1069,7 @@ describe("ssh env-lab fixture", () => {
     })).rejects.toThrow("Workspace baseline must exclude .paperclip-repositories");
   }, SSH_FIXTURE_TEST_TIMEOUT_MS);
 
-  it("preserves nested per-run files across sequential SSH restores with stale baselines", async () => {
+  it.skipIf(process.platform === "win32")("preserves nested per-run files across sequential SSH restores with stale baselines", async () => {
     const rootDir = await createFixtureRootDir();
     const statePath = path.join(rootDir, "state.json");
     const localRepo = path.join(rootDir, "local-workspace");
@@ -1114,7 +1124,7 @@ describe("ssh env-lab fixture", () => {
       .toBe("from run b\n");
   }, SSH_FIXTURE_TEST_TIMEOUT_MS);
 
-  it("round-trips remote git commits through the managed runtime restore path", async () => {
+  it.skipIf(process.platform === "win32")("round-trips remote git commits through the managed runtime restore path", async () => {
     const rootDir = await createFixtureRootDir();
     const statePath = path.join(rootDir, "state.json");
     const localRepo = path.join(rootDir, "local-workspace");
@@ -1155,7 +1165,7 @@ describe("ssh env-lab fixture", () => {
     await expect(readFile(path.join(localRepo, "tracked.txt"), "utf8")).resolves.toBe("dirty remote\n");
   }, SSH_FIXTURE_TEST_TIMEOUT_MS);
 
-  it("propagates remote commits to the local worktree with no git remote configured (no-remote-git contract)", async () => {
+  it.skipIf(process.platform === "win32")("propagates remote commits to the local worktree with no git remote configured (no-remote-git contract)", async () => {
     // Locks in the architectural contract documented in
     // packages/adapter-utils/README.md and packages/adapters/AUTHORING.md:
     // the local execution-workspace cwd is the only persistence boundary
@@ -1216,7 +1226,7 @@ describe("ssh env-lab fixture", () => {
     expect(await git(localRepo, ["remote"])).toBe("");
   }, SSH_FIXTURE_TEST_TIMEOUT_MS);
 
-  it("merges concurrent remote commits through the managed runtime restore path", async () => {
+  it.skipIf(process.platform === "win32")("merges concurrent remote commits through the managed runtime restore path", async () => {
     const rootDir = await createFixtureRootDir();
     const statePath = path.join(rootDir, "state.json");
     const localRepo = path.join(rootDir, "local-workspace");

@@ -391,12 +391,15 @@ describe("workspace restore merge", () => {
         entriesDuringLock = await readdir(lockRootDir);
       });
 
-      expect((await stat(lockRootDir)).mode & 0o777).toBe(0o700);
+      // Windows reports synthesized mode bits; chmod's POSIX access bits
+      // cannot establish a Windows ACL. The ownership/lifetime assertions
+      // below still run against the real lock database on every platform.
+      if (process.platform !== "win32") expect((await stat(lockRootDir)).mode & 0o777).toBe(0o700);
       expect(entriesDuringLock.filter((name) => name.endsWith(".owner.json"))).toHaveLength(1);
       const entriesAfterRelease = await readdir(lockRootDir);
       expect(entriesAfterRelease).toHaveLength(1);
       expect(entriesAfterRelease[0]).toMatch(/\.lock\.sqlite$/);
-      expect((await stat(path.join(lockRootDir, entriesAfterRelease[0]!))).mode & 0o777).toBe(0o600);
+      if (process.platform !== "win32") expect((await stat(path.join(lockRootDir, entriesAfterRelease[0]!))).mode & 0o777).toBe(0o600);
     });
 
     it("classifies the real lock-timeout error by its stable code, never by the message text", async () => {

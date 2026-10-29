@@ -552,22 +552,24 @@ export interface SandboxManagedRuntimeClient {
  * authors every `targetPath`, but the native transport crosses the host↔sandbox
  * trust boundary, so we canonicalize and confine each mapping's source and target
  * to an orchestrator-owned root before handing the operation to a provider.
- * Absolute escapes and `..` traversal are rejected fail-closed. Sandbox and host
- * paths on the server are POSIX.
+ * Absolute escapes and `..` traversal are rejected fail-closed. Sandbox paths
+ * are POSIX; the host endpoint explicitly selects its native path syntax.
  */
 export function assertSyncOperationsConfined(
   operations: SandboxSyncOperation[],
-  roots: { sourceRoots: string[]; targetRoots: string[] },
+  roots: { sourceRoots: string[]; targetRoots: string[]; sourcePathStyle?: "posix" | "win32"; targetPathStyle?: "posix" | "win32" },
 ): void {
-  const confine = (candidate: string, allowed: string[], label: string): void => {
-    const normalized = path.posix.normalize(candidate);
-    if (!path.posix.isAbsolute(normalized) || normalized === ".." || normalized.includes("/../") || normalized.endsWith("/..")) {
+  const confine = (candidate: string, allowed: string[], label: string, style: "posix" | "win32"): void => {
+    const paths = style === "win32" ? path.win32 : path.posix;
+    const normalized = paths.normalize(candidate);
+    if (!paths.isAbsolute(normalized)) {
       throw new Error(`sync operation ${label} path is not a confined absolute path: ${candidate}`);
     }
     const within = allowed.some((root) => {
-      const normalizedRoot = path.posix.normalize(root);
-      const prefix = normalizedRoot.endsWith("/") ? normalizedRoot : `${normalizedRoot}/`;
-      return normalized === normalizedRoot || normalized.startsWith(prefix);
+      const normalizedRoot = paths.normalize(root);
+      if (!paths.isAbsolute(normalizedRoot)) return false;
+      const relative = paths.relative(normalizedRoot, normalized);
+      return relative === "" || (!paths.isAbsolute(relative) && relative !== ".." && !relative.startsWith(`..${paths.sep}`));
     });
     if (!within) {
       throw new Error(`sync operation ${label} path escapes its confinement root: ${candidate}`);
@@ -575,8 +577,8 @@ export function assertSyncOperationsConfined(
   };
   for (const operation of operations) {
     for (const mapping of operation.files) {
-      confine(mapping.sourcePath, roots.sourceRoots, "source");
-      confine(mapping.targetPath, roots.targetRoots, "target");
+      confine(mapping.sourcePath, roots.sourceRoots, "source", roots.sourcePathStyle ?? "posix");
+      confine(mapping.targetPath, roots.targetRoots, "target", roots.targetPathStyle ?? "posix");
     }
   }
 }
@@ -1182,8 +1184,25 @@ export async function prepareSandboxManagedRuntime(input: {
   const syncWorkspace = input.syncWorkspace !== false &&
     (await fs.access(input.workspaceLocalDir).then(
       () => true,
-      (error: NodeJS.ErrnoException) => {
-        if (error.code === "ENOENT") return false;
+      async (error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") {
+          // Windows can report ENOENT instead of ENOTDIR when an ancestor is
+          // a file. Only a genuinely absent directory may disable syncing.
+          let ancestor = path.dirname(path.resolve(input.workspaceLocalDir));
+          while (true) {
+            try {
+              if (!(await fs.stat(ancestor)).isDirectory()) {
+                throw Object.assign(new Error(`Workspace ancestor is not a directory: ${ancestor}`), { code: "ENOTDIR", cause: error });
+              }
+              return false;
+            } catch (ancestorError) {
+              if ((ancestorError as NodeJS.ErrnoException).code !== "ENOENT") throw ancestorError;
+              const parent = path.dirname(ancestor);
+              if (parent === ancestor) throw ancestorError;
+              ancestor = parent;
+            }
+          }
+        }
         throw error;
       },
     ));
@@ -1368,6 +1387,7 @@ export async function prepareSandboxManagedRuntime(input: {
       assertSyncOperationsConfined(operations, {
         sourceRoots: params.sourceRoots,
         targetRoots: params.targetRoots,
+        sourcePathStyle: process.platform === "win32" ? "win32" : "posix",
       });
       const upload = makeTransferProgress(
         input.onProgress,
@@ -1656,7 +1676,7 @@ export async function prepareSandboxManagedRuntime(input: {
           const { localPath, projectId, ignoreResolution } = source;
           const label = `project-${projectId}`;
           try {
-            if (!path.posix.isAbsolute(localPath)) {
+            if (!path.isAbsolute(localPath)) {
               throw new Error(`additional source localPath is not an absolute path: ${localPath}`);
             }
             if (
@@ -1871,6 +1891,7 @@ export async function prepareSandboxManagedRuntime(input: {
                       assertSyncOperationsConfined(operations, {
                         sourceRoots: [runtimeRootDir],
                         targetRoots: [tempDir],
+                        targetPathStyle: process.platform === "win32" ? "win32" : "posix",
                       });
                       const syncResult = await input.client.syncOut!(operations);
                       const transferredBytes = sumSyncResultBytes(syncResult);
@@ -1927,6 +1948,7 @@ export async function prepareSandboxManagedRuntime(input: {
                   assertSyncOperationsConfined(operations, {
                     sourceRoots: [workspaceRemoteDir],
                     targetRoots: [extractedDir],
+                    targetPathStyle: process.platform === "win32" ? "win32" : "posix",
                   });
                   await fs.mkdir(extractedDir, { recursive: true });
                   const workspaceRestore = makeTransferProgress(

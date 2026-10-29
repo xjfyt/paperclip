@@ -3,7 +3,7 @@ import { symlinkSync } from "node:fs";
 import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, readlink, rename, rm, writeFile } from "node:fs/promises";
 import net from "node:net";
 import os from "node:os";
-import path from "node:path";
+import { fixturePath as path, sandboxPath, shellExecutable, shellArgs, shellScript, shellEnvironment, runLocalSandboxProcess as runChildProcess } from "./test-fixtures/local-sandbox.js";
 import { promisify } from "node:util";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 
@@ -13,7 +13,7 @@ import {
   type AdapterSandboxExecutionTarget,
 } from "./execution-target.js";
 import { createCommandManagedSandboxCallbackBridgeQueueClient } from "./sandbox-callback-bridge.js";
-import { runChildProcess, type RunProcessResult } from "./server-utils.js";
+import type { RunProcessResult } from "./server-utils.js";
 
 const execFile = promisify(execFileCallback);
 
@@ -298,10 +298,10 @@ describe("stdin file race (parent PAP-4037)", () => {
         const script = input.args?.[1] ?? "";
         if (onExecute) await onExecute(script);
         const command =
-          input.command === "bash" ? "/bin/bash" : input.command === "sh" ? "/bin/sh" : input.command;
-        return runChildProcess(`stdin-order-run-${counter}`, command, input.args ?? [], {
+          shellExecutable(input.command);
+        return runChildProcess(`stdin-order-run-${counter}`, command, shellArgs(input.args), {
           cwd: input.cwd ?? process.cwd(),
-          env: input.env ?? {},
+          env: shellEnvironment(input.env),
           stdin: input.stdin,
           timeoutSec: Math.max(1, Math.ceil((input.timeoutMs ?? 30_000) / 1000)),
           graceSec: 5,
@@ -336,7 +336,7 @@ describe("stdin file race (parent PAP-4037)", () => {
       kind: "remote",
       transport: "sandbox",
       providerKey: "local-test",
-      remoteCwd: rootDir,
+      remoteCwd: sandboxPath(rootDir),
       timeoutMs: 30_000,
       runner,
     };
@@ -344,7 +344,7 @@ describe("stdin file race (parent PAP-4037)", () => {
     const bridge = await startAdapterExecutionTargetProcessSessionBridge({
       runId: "run-stdin-host-order",
       target,
-      runtimeRootDir: path.posix.join(rootDir, ".paperclip-runtime", "acpx"),
+      runtimeRootDir: sandboxPath(path.posix.join(rootDir, ".paperclip-runtime", "acpx")),
       adapterKey: "acpx",
       command: process.execPath,
       args: [childPath],
@@ -435,7 +435,7 @@ describe("stdin file race (parent PAP-4037)", () => {
       kind: "remote",
       transport: "sandbox",
       providerKey: "local-test",
-      remoteCwd: rootDir,
+      remoteCwd: sandboxPath(rootDir),
       timeoutMs: 30_000,
       runner,
     };
@@ -443,7 +443,7 @@ describe("stdin file race (parent PAP-4037)", () => {
     const bridge = await startAdapterExecutionTargetProcessSessionBridge({
       runId: "run-stdin-stop-order",
       target,
-      runtimeRootDir: path.posix.join(rootDir, ".paperclip-runtime", "acpx"),
+      runtimeRootDir: sandboxPath(path.posix.join(rootDir, ".paperclip-runtime", "acpx")),
       adapterKey: "acpx",
       command: process.execPath,
       args: [childPath],
@@ -530,8 +530,8 @@ describe("stdin file race (parent PAP-4037)", () => {
       };
       const bridge = await startAdapterExecutionTargetProcessSessionBridge({
         runId: "run-stdin-retry",
-        target: { kind: "remote", transport: "sandbox", remoteCwd: rootDir, runner },
-        runtimeRootDir: path.join(rootDir, "runtime"),
+        target: { kind: "remote", transport: "sandbox", remoteCwd: sandboxPath(rootDir), runner },
+        runtimeRootDir: sandboxPath(path.join(rootDir, "runtime")),
         adapterKey: "acpx", command: process.execPath, args: [childPath], cwd: rootDir, env: {},
       });
       let peer: net.Socket | undefined;
@@ -610,8 +610,8 @@ describe("stdin file race (parent PAP-4037)", () => {
     const bridge = await startAdapterExecutionTargetProcessSessionBridge({
       runId: "run-stdin-failed",
       timeoutSec: failure === "Provider never responds" ? 5 : undefined,
-      target: { kind: "remote", transport: "sandbox", remoteCwd: rootDir, runner },
-      runtimeRootDir: path.join(rootDir, "runtime"),
+      target: { kind: "remote", transport: "sandbox", remoteCwd: sandboxPath(rootDir), runner },
+      runtimeRootDir: sandboxPath(path.join(rootDir, "runtime")),
       adapterKey: "acpx", command: "cat", args: [], cwd: rootDir, env: {},
       onLog: async (stream, chunk) => { if (stream === "stderr") stderr += chunk; },
     });
@@ -656,8 +656,8 @@ describe("stdin file race (parent PAP-4037)", () => {
     });
     const bridge = await startAdapterExecutionTargetProcessSessionBridge({
       runId: "run-stdin-log-stall",
-      target: { kind: "remote", transport: "sandbox", remoteCwd: rootDir, runner },
-      runtimeRootDir: path.join(rootDir, "runtime"),
+      target: { kind: "remote", transport: "sandbox", remoteCwd: sandboxPath(rootDir), runner },
+      runtimeRootDir: sandboxPath(path.join(rootDir, "runtime")),
       adapterKey: "acpx", command: "cat", args: [], cwd: rootDir, env: {},
       onLog: async (stream) => {
         if (stream === "stderr") {
@@ -710,7 +710,7 @@ describe("stdin file race (parent PAP-4037)", () => {
     // Observe the test-owned promise even in the immediate-failure case.
     void stalledCleanup.catch(() => {});
     const client = createCommandManagedSandboxCallbackBridgeQueueClient({
-      remoteCwd: rootDir,
+      remoteCwd: sandboxPath(rootDir),
       runner: {
         execute: async (input) => {
           const script = input.args?.[1] ?? "";
@@ -752,34 +752,15 @@ describe("stdin file race (parent PAP-4037)", () => {
         if ((input.command === "sh" || input.command === "bash") && args[0] === "-c" && typeof args[1] === "string") {
           scripts.push(args[1]);
         }
-        const command = input.command === "sh" ? "/bin/sh" : input.command === "bash" ? "/bin/bash" : input.command;
-        try {
-          const result = await execFile(command, args, {
-            cwd: input.cwd,
-            env: { ...process.env, ...input.env },
-            maxBuffer: 32 * 1024 * 1024,
-          });
-          return {
-            exitCode: 0,
-            signal: null,
-            timedOut: false,
-            stdout: result.stdout,
-            stderr: result.stderr,
-            pid: null,
-            startedAt: null,
-          };
-        } catch (error) {
-          const err = error as NodeJS.ErrnoException & { stdout?: string; stderr?: string; code?: string | number | null };
-          return {
-            exitCode: typeof err.code === "number" ? err.code : null,
-            signal: null,
-            timedOut: false,
-            stdout: err.stdout ?? "",
-            stderr: err.stderr ?? "",
-            pid: null,
-            startedAt: null,
-          };
-        }
+        const command = shellExecutable(input.command);
+        return runChildProcess("stdin-atomic-write-fixture", command, shellArgs(args), {
+          cwd: input.cwd ?? process.cwd(),
+          env: shellEnvironment(input.env),
+          stdin: input.stdin,
+          timeoutSec: Math.max(1, Math.ceil((input.timeoutMs ?? 30_000) / 1000)),
+          graceSec: 5,
+          onLog: async () => {},
+        });
       },
     };
   }
@@ -908,6 +889,20 @@ describe("deterministic remote process-session wrapper shutdown (PAP-5316)", () 
   // path) is still running. Production host code never does this — it never
   // matches or signals a process by name or command line.
   async function findLivePidsByArgvSubstring(substring: string): Promise<number[]> {
+    if (process.platform === "win32") {
+      // MSYS ps omits native Node processes. Query the actual Windows process
+      // table; failure must fail the assertion rather than masquerade as exit.
+      const { stdout } = await execFile(path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe"), ["-NoProfile", "-NonInteractive", "-Command",
+        "Get-CimInstance Win32_Process -Filter \"name='node.exe'\" | Select-Object ProcessId,CommandLine | ConvertTo-Json -Compress"],
+      { windowsHide: true, timeout: 10_000, maxBuffer: 4 * 1024 * 1024 });
+      const parsed = JSON.parse(stdout || "[]") as { ProcessId: number; CommandLine: string | null } | Array<{ ProcessId: number; CommandLine: string | null }>;
+      const rows = Array.isArray(parsed) ? parsed : [parsed];
+      // The same local file is exposed as C:/... to native Node and /... at
+      // the fake POSIX provider boundary. Only compare their path spelling.
+      const normalize = (value: string) => value.replaceAll("\\", "/").replace(/[A-Za-z]:\//g, "/");
+      return rows.filter(row => row.CommandLine && normalize(row.CommandLine).includes(normalize(substring)))
+        .map(row => row.ProcessId);
+    }
     try {
       const { stdout } = await execFile("ps", ["-eo", "pid=,args="]);
       const pids: number[] = [];
@@ -1121,6 +1116,9 @@ describe("deterministic remote process-session wrapper shutdown (PAP-5316)", () 
     // (PAP-5374). seq 1 is sessionDir's probe (the first one
     // captureSessionIdentity() runs).
     fstatFailure?: { seq: 1 | 2 };
+    // NTFS chmod does not deny traversal. Simulate that exact lstat error
+    // in the wrapper only, after a real clean verification has completed.
+    lstatFailure?: "sessionDir" | "stdinDir";
   }) {
     const sessionDir = await mkdtemp(path.join(options?.parentDir ?? os.tmpdir(), "paperclip-wrapper-lifecycle-"));
     cleanupDirs.push(sessionDir);
@@ -1132,7 +1130,7 @@ describe("deterministic remote process-session wrapper shutdown (PAP-5316)", () 
     const wrapperPath = path.join(sessionDir, "wrapper.mjs");
     await writeFile(wrapperPath, getProcessSessionRemoteSource({ outputToStdout: options?.outputToStdout === true }), "utf8");
 
-    const config = { command: options?.command ?? "cat", args: options?.args ?? [], cwd: sessionDir, env: {} };
+    const config = { command: options?.command ?? "cat", args: options?.args ?? [], cwd: path.dirname(sessionDir), env: {} };
     const commandPayload = Buffer.from(JSON.stringify(config), "utf8").toString("base64");
 
     const env: Record<string, string> = {
@@ -1144,6 +1142,31 @@ describe("deterministic remote process-session wrapper shutdown (PAP-5316)", () 
     if (options?.terminateGraceMs != null) env.PAPERCLIP_PROCESS_SESSION_TERMINATE_GRACE_MS = String(options.terminateGraceMs);
 
     const execArgv: string[] = [];
+    const lstatFailureMarker = path.join(sessionDir, "lstat-failure.marker");
+    const lstatReadyMarker = path.join(sessionDir, "lstat-ready.marker");
+    if (options?.lstatFailure) {
+      const preload = path.join(sessionDir, "lstat-failure-preload.cjs");
+      const target = options.lstatFailure === "sessionDir" ? sessionDir : stdinDir;
+      await writeFile(preload, `
+const fs = require("node:fs");
+const path = require("node:path");
+const target = path.resolve(${JSON.stringify(target)});
+const ready = ${JSON.stringify(lstatReadyMarker)};
+const marker = ${JSON.stringify(lstatFailureMarker)};
+const original = fs.promises.lstat.bind(fs.promises);
+fs.promises.lstat = async (candidate, ...args) => {
+  const verifying = new Error().stack.includes("verifySessionIdentity");
+  if (verifying && path.resolve(String(candidate)) === target) {
+    if (fs.existsSync(marker)) throw Object.assign(new Error("test traversal denied"), { code: "EACCES" });
+    const stats = await original(candidate, ...args);
+    fs.writeFileSync(ready, "verified");
+    return stats;
+  }
+  return original(candidate, ...args);
+};
+`, "utf8");
+      execArgv.push("--require", preload);
+    }
     if (options?.fakeBirthtime) {
       env.PAPERCLIP_TEST_FAKE_BIRTHTIME_TARGET = options.fakeBirthtime.target;
       env.PAPERCLIP_TEST_FAKE_BIRTHTIME_MODE = options.fakeBirthtime.mode;
@@ -1161,7 +1184,9 @@ describe("deterministic remote process-session wrapper shutdown (PAP-5316)", () 
     }
 
     const child = spawn(process.execPath, [...execArgv, wrapperPath], {
-      cwd: sessionDir,
+      // Removing the control directory is the input under test. Keep process
+      // cwd outside it: Windows correctly forbids deleting an active cwd.
+      cwd: path.dirname(sessionDir),
       env,
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -1222,6 +1247,10 @@ describe("deterministic remote process-session wrapper shutdown (PAP-5316)", () 
       exited,
       exitInfo: () => ({ code: exitCode, signal: exitSignal }),
       readEventFiles,
+      activateLstatFailure: async () => {
+        await waitFor(async () => await readFile(lstatReadyMarker, "utf8").catch(() => "") === "verified");
+        await writeFile(lstatFailureMarker, "deny");
+      },
     };
   }
 
@@ -1246,10 +1275,10 @@ describe("deterministic remote process-session wrapper shutdown (PAP-5316)", () 
         const script = input.args?.[1] ?? "";
         if (onExecute) await onExecute(script);
         const command =
-          input.command === "bash" ? "/bin/bash" : input.command === "sh" ? "/bin/sh" : input.command;
-        return runChildProcess(`wrapper-lifecycle-run-${counter}`, command, input.args ?? [], {
+          shellExecutable(input.command);
+        return runChildProcess(`wrapper-lifecycle-run-${counter}`, command, shellArgs(input.args), {
           cwd: input.cwd ?? process.cwd(),
-          env: input.env ?? {},
+          env: shellEnvironment(input.env),
           stdin: input.stdin,
           timeoutSec: Math.max(1, Math.ceil((input.timeoutMs ?? 30_000) / 1000)),
           graceSec: 5,
@@ -1301,7 +1330,7 @@ describe("deterministic remote process-session wrapper shutdown (PAP-5316)", () 
     const bridge = await startAdapterExecutionTargetProcessSessionBridge({
       runId: input.runId,
       target,
-      runtimeRootDir: path.posix.join(input.rootDir, ".paperclip-runtime", "acpx"),
+      runtimeRootDir: sandboxPath(path.posix.join(input.rootDir, ".paperclip-runtime", "acpx")),
       adapterKey: "acpx",
       command: process.execPath,
       args: [childPath],
@@ -1419,7 +1448,7 @@ describe("deterministic remote process-session wrapper shutdown (PAP-5316)", () 
       kind: "remote",
       transport: "sandbox",
       providerKey: "local-test",
-      remoteCwd: rootDir,
+      remoteCwd: sandboxPath(rootDir),
       timeoutMs: 30_000,
       runner,
     };
@@ -1427,7 +1456,7 @@ describe("deterministic remote process-session wrapper shutdown (PAP-5316)", () 
     const bridge = await startAdapterExecutionTargetProcessSessionBridge({
       runId: "run-forged-exit",
       target,
-      runtimeRootDir: path.posix.join(rootDir, ".paperclip-runtime", "acpx"),
+      runtimeRootDir: sandboxPath(path.posix.join(rootDir, ".paperclip-runtime", "acpx")),
       adapterKey: "acpx",
       command: process.execPath,
       args: [childPath],
@@ -1503,10 +1532,10 @@ describe("deterministic remote process-session wrapper shutdown (PAP-5316)", () 
         }
         counter += 1;
         const command =
-          input.command === "bash" ? "/bin/bash" : input.command === "sh" ? "/bin/sh" : input.command;
-        return runChildProcess(`forged-only-run-${counter}`, command, input.args ?? [], {
+          shellExecutable(input.command);
+        return runChildProcess(`forged-only-run-${counter}`, command, shellArgs(input.args), {
           cwd: input.cwd ?? process.cwd(),
-          env: input.env ?? {},
+          env: shellEnvironment(input.env),
           stdin: input.stdin,
           timeoutSec: Math.max(1, Math.ceil((input.timeoutMs ?? 30_000) / 1000)),
           graceSec: 5,
@@ -1518,7 +1547,7 @@ describe("deterministic remote process-session wrapper shutdown (PAP-5316)", () 
       kind: "remote",
       transport: "sandbox",
       providerKey: "local-test",
-      remoteCwd: rootDir,
+      remoteCwd: sandboxPath(rootDir),
       timeoutMs: 30_000,
       runner,
     };
@@ -1527,7 +1556,7 @@ describe("deterministic remote process-session wrapper shutdown (PAP-5316)", () 
     const bridge = await startAdapterExecutionTargetProcessSessionBridge({
       runId: "run-forged-only",
       target,
-      runtimeRootDir: path.posix.join(rootDir, ".paperclip-runtime", "acpx"),
+      runtimeRootDir: sandboxPath(path.posix.join(rootDir, ".paperclip-runtime", "acpx")),
       adapterKey: "acpx",
       command: process.execPath,
       args: [childPath],
@@ -1584,14 +1613,14 @@ describe("deterministic remote process-session wrapper shutdown (PAP-5316)", () 
       kind: "remote",
       transport: "sandbox",
       providerKey: "local-test",
-      remoteCwd: rootDir,
+      remoteCwd: sandboxPath(rootDir),
       timeoutMs: 30_000,
       runner,
     };
     const bridge = await startAdapterExecutionTargetProcessSessionBridge({
       runId: "run-no-signal",
       target,
-      runtimeRootDir: path.posix.join(rootDir, ".paperclip-runtime", "acpx"),
+      runtimeRootDir: sandboxPath(path.posix.join(rootDir, ".paperclip-runtime", "acpx")),
       adapterKey: "acpx",
       command: process.execPath,
       args: [childPath],
@@ -1753,7 +1782,7 @@ describe("deterministic remote process-session wrapper shutdown (PAP-5316)", () 
       kind: "remote",
       transport: "sandbox",
       providerKey: "local-test",
-      remoteCwd: rootDir,
+      remoteCwd: sandboxPath(rootDir),
       timeoutMs: 30_000,
       runner,
     };
@@ -1762,7 +1791,7 @@ describe("deterministic remote process-session wrapper shutdown (PAP-5316)", () 
     const bridge = await startAdapterExecutionTargetProcessSessionBridge({
       runId: "run-normal-exit",
       target,
-      runtimeRootDir: path.posix.join(rootDir, ".paperclip-runtime", "acpx"),
+      runtimeRootDir: sandboxPath(path.posix.join(rootDir, ".paperclip-runtime", "acpx")),
       adapterKey: "acpx",
       command: process.execPath,
       args: [childPath],
@@ -1820,10 +1849,10 @@ describe("deterministic remote process-session wrapper shutdown (PAP-5316)", () 
         }
         counter += 1;
         const command =
-          input.command === "bash" ? "/bin/bash" : input.command === "sh" ? "/bin/sh" : input.command;
-        return runChildProcess(`never-acks-run-${counter}`, command, input.args ?? [], {
+          shellExecutable(input.command);
+        return runChildProcess(`never-acks-run-${counter}`, command, shellArgs(input.args), {
           cwd: input.cwd ?? process.cwd(),
-          env: input.env ?? {},
+          env: shellEnvironment(input.env),
           stdin: input.stdin,
           timeoutSec: Math.max(1, Math.ceil((input.timeoutMs ?? 30_000) / 1000)),
           graceSec: 5,
@@ -1835,7 +1864,7 @@ describe("deterministic remote process-session wrapper shutdown (PAP-5316)", () 
       kind: "remote",
       transport: "sandbox",
       providerKey: "local-test",
-      remoteCwd: rootDir,
+      remoteCwd: sandboxPath(rootDir),
       timeoutMs: 30_000,
       runner,
     };
@@ -1844,7 +1873,7 @@ describe("deterministic remote process-session wrapper shutdown (PAP-5316)", () 
     const bridge = await startAdapterExecutionTargetProcessSessionBridge({
       runId: "run-never-acks",
       target,
-      runtimeRootDir: path.posix.join(rootDir, ".paperclip-runtime", "acpx"),
+      runtimeRootDir: sandboxPath(path.posix.join(rootDir, ".paperclip-runtime", "acpx")),
       adapterKey: "acpx",
       command: process.execPath,
       args: [childPath],
@@ -1972,10 +2001,10 @@ describe("deterministic remote process-session wrapper shutdown (PAP-5316)", () 
         }
 
         const command =
-          input.command === "bash" ? "/bin/bash" : input.command === "sh" ? "/bin/sh" : input.command;
-        return runChildProcess(`lost-identity-run-${counter}`, command, input.args ?? [], {
+          shellExecutable(input.command);
+        return runChildProcess(`lost-identity-run-${counter}`, command, shellArgs(input.args), {
           cwd: input.cwd ?? process.cwd(),
-          env: input.env ?? {},
+          env: shellEnvironment(input.env),
           stdin: input.stdin,
           timeoutSec: Math.max(1, Math.ceil((input.timeoutMs ?? 30_000) / 1000)),
           graceSec: 5,
@@ -1988,7 +2017,7 @@ describe("deterministic remote process-session wrapper shutdown (PAP-5316)", () 
       kind: "remote",
       transport: "sandbox",
       providerKey: "local-test",
-      remoteCwd: rootDir,
+      remoteCwd: sandboxPath(rootDir),
       timeoutMs: 30_000,
       runner,
     };
@@ -1996,7 +2025,7 @@ describe("deterministic remote process-session wrapper shutdown (PAP-5316)", () 
     const bridge = await startAdapterExecutionTargetProcessSessionBridge({
       runId: "run-lost-identity",
       target,
-      runtimeRootDir: path.posix.join(rootDir, ".paperclip-runtime", "acpx"),
+      runtimeRootDir: sandboxPath(path.posix.join(rootDir, ".paperclip-runtime", "acpx")),
       adapterKey: "acpx",
       command: process.execPath,
       args: [childPath],
@@ -2146,14 +2175,18 @@ describe("deterministic remote process-session wrapper shutdown (PAP-5316)", () 
       args: [childPath],
       parentDir,
       terminateGraceMs: 200,
+      lstatFailure: process.platform === "win32" ? "sessionDir" : undefined,
     });
 
     const pid = await waitForTrackedChildPid(pidFile);
     // Let capture succeed and the poll loop run a clean cycle first, so the
     // termination below proves the verify-time latch, not the capture-time
     // one.
-    await delay(150);
-    await chmod(parentDir, 0o000);
+    if (process.platform === "win32") await wrapper.activateLstatFailure();
+    else {
+      await delay(150);
+      await chmod(parentDir, 0o000);
+    }
     try {
       await expectWrapperAndTrackedChildToDie(wrapper, pid);
     } finally {
@@ -2171,14 +2204,18 @@ describe("deterministic remote process-session wrapper shutdown (PAP-5316)", () 
     const childPath = path.join(rootDir, "t19-child.mjs");
     await writeFile(childPath, trackedChildSource(pidFile), "utf8");
 
-    const wrapper = await startWrapperProcess({ ...wrapperOptions, command: process.execPath, args: [childPath] });
+    const wrapper = await startWrapperProcess({ ...wrapperOptions, command: process.execPath, args: [childPath],
+      lstatFailure: process.platform === "win32" ? "stdinDir" : undefined });
 
     const pid = await waitForTrackedChildPid(pidFile);
-    await delay(150);
     // Deny traversal into sessionDir itself: lstat(stdinDir) fails EACCES
     // while lstat(sessionDir) still succeeds, since a directory's own mode
     // never gates lstat of the directory itself, only lookups inside it.
-    await chmod(wrapper.sessionDir, 0o000);
+    if (process.platform === "win32") await wrapper.activateLstatFailure();
+    else {
+      await delay(150);
+      await chmod(wrapper.sessionDir, 0o000);
+    }
     try {
       await expectWrapperAndTrackedChildToDie(wrapper, pid);
     } finally {

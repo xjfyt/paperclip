@@ -2,10 +2,10 @@ import { randomBytes } from "node:crypto";
 import { promises as fsPromises } from "node:fs";
 import { lstat, mkdir, mkdtemp, readFile, readdir, readlink, rm, stat, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
-import path from "node:path";
+import { fixturePath as path, sandboxPath, shellExecutable, shellArgs, shellScript, shellEnvironment } from "./test-fixtures/local-sandbox.js";
 import { execFile as execFileCallback, spawn } from "node:child_process";
 import { promisify } from "node:util";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as gitSync from "./git-workspace-sync.js";
 import * as restoreMerge from "./workspace-restore-merge.js";
 import { getWorkspaceRestoreDiagnostic } from "./workspace-restore-diagnostics.js";
@@ -127,7 +127,7 @@ function attachNativeRecordingSyncIn(
         bytesTransferred += bytes.byteLength;
       }
       for (const command of operation.postUploadCommands ?? []) {
-        await execFile("sh", ["-c", command.command], { maxBuffer: 32 * 1024 * 1024 });
+        await execFile(shellExecutable("sh"), ["-c", shellScript(command.command)], { maxBuffer: 32 * 1024 * 1024, env: shellEnvironment() });
       }
       resultOperations.push({ operationId: operation.operationId, filesTransferred, bytesTransferred });
     }
@@ -165,7 +165,7 @@ function attachCapturingSyncIn(
         filesTransferred += 1;
       }
       for (const command of operation.postUploadCommands ?? []) {
-        await execFile("sh", ["-c", command.command], { maxBuffer: 32 * 1024 * 1024 });
+        await execFile(shellExecutable("sh"), ["-c", shellScript(command.command)], { maxBuffer: 32 * 1024 * 1024, env: shellEnvironment() });
       }
       resultOperations.push({ operationId: operation.operationId, filesTransferred, bytesTransferred });
     }
@@ -217,8 +217,8 @@ function makeInlineSpawnRunner(): CommandManagedRuntimeRunner {
       new Promise<RunProcessResult>((resolve) => {
         const startedAt = new Date().toISOString();
         const command =
-          input.command === "sh" ? "/bin/sh" : input.command === "bash" ? "/bin/bash" : input.command;
-        const child = spawn(command, input.args ?? [], { cwd: input.cwd, env: { ...process.env, ...input.env } });
+          shellExecutable(input.command);
+        const child = spawn(command, shellArgs(input.args), { cwd: input.cwd, env: shellEnvironment(input.env) });
         let stdout = "";
         let stderr = "";
         child.stdout.on("data", (chunk) => { stdout += chunk.toString("utf8"); });
@@ -240,7 +240,7 @@ async function stageOneReferencedProject(
 ): Promise<PreparedSandboxManagedRuntime> {
   const rootDir = path.dirname(referencedDir);
   const localWorkspaceDir = path.join(rootDir, "local-workspace");
-  const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+  const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
   await mkdir(localWorkspaceDir, { recursive: true });
   await writeFile(path.join(localWorkspaceDir, "README.md"), "anchor\n", "utf8");
   return await prepareCommandManagedRuntime({
@@ -283,7 +283,7 @@ function makeFilesystemClient(): SandboxManagedRuntimeClient {
       await rm(remotePath, { recursive: true, force: true });
     },
     run: async (command) => {
-      await execFile("sh", ["-c", command], { maxBuffer: 32 * 1024 * 1024 });
+      await execFile(shellExecutable("sh"), ["-c", shellScript(command)], { maxBuffer: 32 * 1024 * 1024, env: shellEnvironment() });
     },
   };
   attachFallbackSyncIn(client);
@@ -340,6 +340,17 @@ function createRecordingTraceContext(): {
   return { traceContext, spans };
 }
 
+beforeEach(() => {
+  // Keep the real Git fixture independent from host checkout conversion and
+  // permit its deliberately long paths and real symlink entries on Windows.
+  vi.stubEnv("GIT_CONFIG_COUNT", "3");
+  for (const [index, [key, value]] of [["core.autocrlf", "false"], ["core.longpaths", "true"], ["core.symlinks", "true"]].entries()) {
+    vi.stubEnv("GIT_CONFIG_KEY_" + index, key);
+    vi.stubEnv("GIT_CONFIG_VALUE_" + index, value);
+  }
+});
+afterEach(() => { vi.unstubAllEnvs(); });
+
 describe("sandbox managed runtime", () => {
   const cleanupDirs: string[] = [];
 
@@ -347,7 +358,7 @@ describe("sandbox managed runtime", () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "paperclip-multi-repo-"));
     cleanupDirs.push(root);
     const local = path.join(root, "local");
-    const remote = path.join(root, "remote");
+    const remote = sandboxPath(path.join(root, "remote"));
     const secondPath = ".paperclip-repositories/backend";
     for (const [relative, contents] of [["", "frontend"], [secondPath, "backend"]]) {
       const cwd = path.join(local, relative!);
@@ -388,7 +399,7 @@ describe("sandbox managed runtime", () => {
     for (const relative of ["", secondPath]) {
       const cwd = path.join(remote, relative);
       expect((await lstat(path.join(cwd, ".git"))).isDirectory()).toBe(true);
-      expect(await readlink(path.join(cwd, ".claude/skills/demo"))).toBe("../../skills/demo");
+      expect((await readlink(path.join(cwd, ".claude/skills/demo"))).replaceAll("\\", "/")).toBe("../../skills/demo");
       expect(await readFile(path.join(cwd, ".claude/skills/demo/SKILL.md"), "utf8")).toBe("base skill\n");
       await expect(stat(path.join(cwd, "secret.txt"))).rejects.toMatchObject({ code: "ENOENT" });
       await writeFile(path.join(cwd, "README.md"), `updated ${relative}`);
@@ -405,7 +416,7 @@ describe("sandbox managed runtime", () => {
       expect(await readFile(path.join(local, relative, "README.md"), "utf8")).toBe(`updated ${relative}`);
       expect(await git(path.join(local, relative), ["log", "-1", "--format=%s"])).toBe("remote change");
       expect(await readFile(path.join(local, relative, "secret.txt"), "utf8")).toBe("must stay local");
-      expect(await readlink(path.join(local, relative, ".claude/skills/demo"))).toBe("../../skills/demo");
+      expect((await readlink(path.join(local, relative, ".claude/skills/demo"))).replaceAll("\\", "/")).toBe("../../skills/demo");
       expect(await readFile(path.join(local, relative, ".claude/skills/demo/SKILL.md"), "utf8")).toBe("updated skill\n");
     }
   }, 30_000);
@@ -424,7 +435,7 @@ describe("sandbox managed runtime", () => {
     );
     cleanupDirs.push(rootDir);
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     await mkdir(localWorkspaceDir, { recursive: true });
     await mkdir(remoteWorkspaceDir, { recursive: true });
     await writeFile(
@@ -478,8 +489,8 @@ describe("sandbox managed runtime", () => {
     );
     cleanupDirs.push(rootDir);
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const firstRemoteDir = path.join(rootDir, "first-remote");
-    const replacementRemoteDir = path.join(rootDir, "replacement-remote");
+    const firstRemoteDir = sandboxPath(path.join(rootDir, "first-remote"));
+    const replacementRemoteDir = sandboxPath(path.join(rootDir, "replacement-remote"));
     const durableSeed = {
       workspaceArchivePath: path.join(rootDir, "state", "workspace.tar"),
       gitArchivePath: path.join(rootDir, "state", "git.tar"),
@@ -627,7 +638,7 @@ describe("sandbox managed runtime", () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-sandbox-managed-"));
     cleanupDirs.push(rootDir);
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     const localAssetsDir = path.join(rootDir, "local-assets");
     const linkedAssetPath = path.join(rootDir, "linked-skill.md");
     await mkdir(path.join(localWorkspaceDir, ".claude"), { recursive: true });
@@ -658,8 +669,9 @@ describe("sandbox managed runtime", () => {
         await rm(remotePath, { recursive: true, force: true });
       },
       run: async (command) => {
-        await execFile("sh", ["-c", command], {
+        await execFile(shellExecutable("sh"), ["-c", shellScript(command)], {
           maxBuffer: 32 * 1024 * 1024,
+          env: shellEnvironment(),
         });
       },
     };
@@ -726,7 +738,7 @@ describe("sandbox managed runtime", () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-sandbox-zero-report-"));
     cleanupDirs.push(rootDir);
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     await mkdir(localWorkspaceDir, { recursive: true });
     // Sizeable content, well above the 0.1 MB rounding step, so a fallback bug
     // that stays at 0 is distinguishable from a small transfer that would
@@ -776,7 +788,7 @@ describe("sandbox managed runtime", () => {
       const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-sandbox-asset-key-"));
       cleanupDirs.push(rootDir);
       const localWorkspaceDir = path.join(rootDir, "local-workspace");
-      const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+      const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
       const localAssetsDir = path.join(rootDir, "local-assets");
       await mkdir(localWorkspaceDir, { recursive: true });
       await mkdir(localAssetsDir, { recursive: true });
@@ -812,7 +824,7 @@ describe("sandbox managed runtime", () => {
       const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-sandbox-asset-key-"));
       cleanupDirs.push(rootDir);
       const localWorkspaceDir = path.join(rootDir, "local-workspace");
-      const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+      const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
       const localAssetsDir = path.join(rootDir, "local-assets");
       await mkdir(localWorkspaceDir, { recursive: true });
       await mkdir(localAssetsDir, { recursive: true });
@@ -842,7 +854,7 @@ describe("sandbox managed runtime", () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-sandbox-rebase-"));
     cleanupDirs.push(rootDir);
     const host = path.join(rootDir, "host");
-    const remote = path.join(rootDir, "remote");
+    const remote = sandboxPath(path.join(rootDir, "remote"));
     await mkdir(host);
     await git(host, ["init"]);
     await git(host, ["checkout", "-b", "work"]);
@@ -895,7 +907,7 @@ describe("sandbox managed runtime", () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-sandbox-reset-"));
     cleanupDirs.push(rootDir);
     const host = path.join(rootDir, "host");
-    const remote = path.join(rootDir, "remote");
+    const remote = sandboxPath(path.join(rootDir, "remote"));
     await mkdir(host);
     await git(host, ["init"]);
     await git(host, ["checkout", "-b", "work"]);
@@ -930,7 +942,7 @@ describe("sandbox managed runtime", () => {
     cleanupDirs.push(rootDir);
     const sourceRepoDir = path.join(rootDir, "source-repo");
     const localWorkspaceDir = path.join(rootDir, "local-worktree");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
 
     await mkdir(sourceRepoDir, { recursive: true });
     await git(sourceRepoDir, ["init"]);
@@ -987,7 +999,7 @@ describe("sandbox managed runtime", () => {
         await rm(remotePath, { recursive: true, force: true });
       },
       run: async (command) => {
-        await execFile("sh", ["-c", command], { maxBuffer: 32 * 1024 * 1024 });
+        await execFile(shellExecutable("sh"), ["-c", shellScript(command)], { maxBuffer: 32 * 1024 * 1024, env: shellEnvironment() });
       },
     };
     const runtimeStatuses: Array<{ phase: string; message: string }> = [];
@@ -1087,7 +1099,7 @@ describe("sandbox managed runtime", () => {
     cleanupDirs.push(rootDir);
     const sourceRepoDir = path.join(rootDir, "source-repo");
     const localWorkspaceDir = path.join(rootDir, "local-worktree");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
 
     await mkdir(sourceRepoDir, { recursive: true });
     await git(sourceRepoDir, ["init"]);
@@ -1124,7 +1136,7 @@ describe("sandbox managed runtime", () => {
         await rm(remotePath, { recursive: true, force: true });
       },
       run: async (command) => {
-        await execFile("sh", ["-c", command], { maxBuffer: 32 * 1024 * 1024 });
+        await execFile(shellExecutable("sh"), ["-c", shellScript(command)], { maxBuffer: 32 * 1024 * 1024, env: shellEnvironment() });
       },
     };
 
@@ -1198,7 +1210,7 @@ describe("sandbox managed runtime", () => {
     cleanupDirs.push(rootDir);
     const sourceRepoDir = path.join(rootDir, "source-repo");
     const localWorkspaceDir = path.join(rootDir, "local-worktree");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
 
     await mkdir(sourceRepoDir, { recursive: true });
     await git(sourceRepoDir, ["init"]);
@@ -1243,7 +1255,7 @@ describe("sandbox managed runtime", () => {
         await rm(remotePath, { recursive: true, force: true });
       },
       run: async (command) => {
-        await execFile("sh", ["-c", command], { maxBuffer: 32 * 1024 * 1024 });
+        await execFile(shellExecutable("sh"), ["-c", shellScript(command)], { maxBuffer: 32 * 1024 * 1024, env: shellEnvironment() });
       },
     };
 
@@ -1349,7 +1361,7 @@ describe("sandbox managed runtime", () => {
           transport: "sandbox",
           provider: "test",
           sandboxId: "sandbox-1",
-          remoteCwd: path.join(rootDir, "remote"),
+          remoteCwd: sandboxPath(path.join(rootDir, "remote")),
           timeoutMs: 30_000,
           apiKey: null,
         },
@@ -1406,7 +1418,7 @@ describe("sandbox managed runtime", () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-sandbox-ignored-whitespace-"));
     cleanupDirs.push(rootDir);
     const workspaceLocalDir = path.join(rootDir, "workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     await initGitRepo(workspaceLocalDir);
 
     // A double-wildcard pattern avoids the separate rule that Git trims an
@@ -1435,7 +1447,7 @@ describe("sandbox managed runtime", () => {
         await rm(remotePath, { recursive: true, force: true });
       },
       run: async (command) => {
-        await execFile("sh", ["-c", command], { maxBuffer: 32 * 1024 * 1024 });
+        await execFile(shellExecutable("sh"), ["-c", shellScript(command)], { maxBuffer: 32 * 1024 * 1024, env: shellEnvironment() });
       },
     };
     attachFallbackSyncIn(client);
@@ -1465,7 +1477,7 @@ describe("sandbox managed runtime", () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-sandbox-tarself-"));
     cleanupDirs.push(rootDir);
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     const localAssetsDir = path.join(rootDir, "local-assets");
     await mkdir(path.join(localWorkspaceDir, "src"), { recursive: true });
     await mkdir(localAssetsDir, { recursive: true });
@@ -1496,7 +1508,7 @@ describe("sandbox managed runtime", () => {
         await rm(remotePath, { recursive: true, force: true });
       },
       run: async (command) => {
-        await execFile("sh", ["-c", command], { maxBuffer: 32 * 1024 * 1024 });
+        await execFile(shellExecutable("sh"), ["-c", shellScript(command)], { maxBuffer: 32 * 1024 * 1024, env: shellEnvironment() });
       },
     };
 
@@ -1543,7 +1555,7 @@ describe("sandbox managed runtime", () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-sandbox-home-tmp-"));
     cleanupDirs.push(rootDir);
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     const homeDir = path.join(rootDir, "codex-home");
     await mkdir(localWorkspaceDir, { recursive: true });
 
@@ -1582,7 +1594,7 @@ describe("sandbox managed runtime", () => {
         await rm(remotePath, { recursive: true, force: true });
       },
       run: async (command) => {
-        await execFile("sh", ["-c", command], { maxBuffer: 32 * 1024 * 1024 });
+        await execFile(shellExecutable("sh"), ["-c", shellScript(command)], { maxBuffer: 32 * 1024 * 1024, env: shellEnvironment() });
       },
     };
 
@@ -1635,7 +1647,7 @@ describe("sandbox managed runtime", () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-sandbox-progress-"));
     cleanupDirs.push(rootDir);
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     const localAssetsDir = path.join(rootDir, "local-assets");
     await mkdir(localWorkspaceDir, { recursive: true });
     await mkdir(localAssetsDir, { recursive: true });
@@ -1674,7 +1686,7 @@ describe("sandbox managed runtime", () => {
         await rm(remotePath, { recursive: true, force: true });
       },
       run: async (command) => {
-        await execFile("sh", ["-c", command], { maxBuffer: 32 * 1024 * 1024 });
+        await execFile(shellExecutable("sh"), ["-c", shellScript(command)], { maxBuffer: 32 * 1024 * 1024, env: shellEnvironment() });
       },
     };
 
@@ -1719,7 +1731,7 @@ describe("sandbox managed runtime", () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-sandbox-empty-"));
     cleanupDirs.push(rootDir);
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     await mkdir(localWorkspaceDir, { recursive: true });
 
     const downloadedTars: { remotePath: string; bytes: Buffer }[] = [];
@@ -1743,7 +1755,7 @@ describe("sandbox managed runtime", () => {
       },
       run: async (command) => {
         runCommands.push(command);
-        await execFile("sh", ["-c", command], { maxBuffer: 32 * 1024 * 1024 });
+        await execFile(shellExecutable("sh"), ["-c", shellScript(command)], { maxBuffer: 32 * 1024 * 1024, env: shellEnvironment() });
       },
     };
 
@@ -1775,7 +1787,7 @@ describe("sandbox managed runtime", () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-sandbox-default-asset-"));
     cleanupDirs.push(rootDir);
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     const localAssetsDir = path.join(rootDir, "local-assets");
     await mkdir(localWorkspaceDir, { recursive: true });
     await mkdir(localAssetsDir, { recursive: true });
@@ -1800,7 +1812,7 @@ describe("sandbox managed runtime", () => {
       },
       run: async (command) => {
         runCommands.push(command);
-        await execFile("sh", ["-c", command], { maxBuffer: 32 * 1024 * 1024 });
+        await execFile(shellExecutable("sh"), ["-c", shellScript(command)], { maxBuffer: 32 * 1024 * 1024, env: shellEnvironment() });
       },
     };
 
@@ -1840,7 +1852,7 @@ describe("sandbox managed runtime", () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-sandbox-seam-"));
     cleanupDirs.push(rootDir);
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     const localAssetsDir = path.join(rootDir, "local-assets");
     await mkdir(localWorkspaceDir, { recursive: true });
     await mkdir(localAssetsDir, { recursive: true });
@@ -1861,7 +1873,7 @@ describe("sandbox managed runtime", () => {
         await rm(remotePath, { recursive: true, force: true });
       },
       run: async (command) => {
-        await execFile("sh", ["-c", command], { maxBuffer: 32 * 1024 * 1024 });
+        await execFile(shellExecutable("sh"), ["-c", shellScript(command)], { maxBuffer: 32 * 1024 * 1024, env: shellEnvironment() });
       },
     };
 
@@ -1922,7 +1934,7 @@ describe("sandbox managed runtime", () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-sandbox-traversal-"));
     cleanupDirs.push(rootDir);
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     const localAssetsDir = path.join(rootDir, "local-assets");
     await mkdir(localWorkspaceDir, { recursive: true });
     await mkdir(localAssetsDir, { recursive: true });
@@ -1945,7 +1957,7 @@ describe("sandbox managed runtime", () => {
         await rm(remotePath, { recursive: true, force: true });
       },
       run: async (command) => {
-        await execFile("sh", ["-c", command], { maxBuffer: 32 * 1024 * 1024 });
+        await execFile(shellExecutable("sh"), ["-c", shellScript(command)], { maxBuffer: 32 * 1024 * 1024, env: shellEnvironment() });
       },
     };
     attachFallbackSyncIn(client);
@@ -1986,7 +1998,7 @@ describe("sandbox managed runtime", () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-sandbox-native-asset-"));
     cleanupDirs.push(rootDir);
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     const localAssetsDir = path.join(rootDir, "local-assets");
     await mkdir(localWorkspaceDir, { recursive: true });
     await mkdir(localAssetsDir, { recursive: true });
@@ -2013,7 +2025,7 @@ describe("sandbox managed runtime", () => {
       },
       run: async (command) => {
         directRuns.push(command);
-        await execFile("sh", ["-c", command], { maxBuffer: 32 * 1024 * 1024 });
+        await execFile(shellExecutable("sh"), ["-c", shellScript(command)], { maxBuffer: 32 * 1024 * 1024, env: shellEnvironment() });
       },
     };
     const captured: SandboxSyncOperation[] = [];
@@ -2087,7 +2099,7 @@ describe("sandbox managed runtime", () => {
     cleanupDirs.push(rootDir);
     const sourceRepoDir = path.join(rootDir, "source-repo");
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     await mkdir(sourceRepoDir, { recursive: true });
     await git(sourceRepoDir, ["init"]);
     await git(sourceRepoDir, ["checkout", "-b", "main"]);
@@ -2119,7 +2131,7 @@ describe("sandbox managed runtime", () => {
       },
       run: async (command) => {
         directRuns.push(command);
-        await execFile("sh", ["-c", command], { maxBuffer: 32 * 1024 * 1024 });
+        await execFile(shellExecutable("sh"), ["-c", shellScript(command)], { maxBuffer: 32 * 1024 * 1024, env: shellEnvironment() });
       },
     };
     const captured: SandboxSyncOperation[] = [];
@@ -2171,7 +2183,7 @@ describe("sandbox managed runtime", () => {
     cleanupDirs.push(rootDir);
     const sourceRepoDir = path.join(rootDir, "source-repo");
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     await mkdir(sourceRepoDir, { recursive: true });
     await git(sourceRepoDir, ["init"]);
     await git(sourceRepoDir, ["checkout", "-b", "main"]);
@@ -2196,7 +2208,7 @@ describe("sandbox managed runtime", () => {
         await rm(remotePath, { recursive: true, force: true });
       },
       run: async (command) => {
-        await execFile("sh", ["-c", command], { maxBuffer: 32 * 1024 * 1024 });
+        await execFile(shellExecutable("sh"), ["-c", shellScript(command)], { maxBuffer: 32 * 1024 * 1024, env: shellEnvironment() });
       },
     };
     const captured: SandboxSyncOperation[] = [];
@@ -2228,7 +2240,7 @@ describe("sandbox managed runtime", () => {
     cleanupDirs.push(rootDir);
     const sourceRepoDir = path.join(rootDir, "source-repo");
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     await mkdir(sourceRepoDir, { recursive: true });
     await git(sourceRepoDir, ["init"]);
     await git(sourceRepoDir, ["checkout", "-b", "main"]);
@@ -2259,7 +2271,7 @@ describe("sandbox managed runtime", () => {
         await rm(remotePath, { recursive: true, force: true });
       },
       run: async (command) => {
-        await execFile("sh", ["-c", command], { maxBuffer: 32 * 1024 * 1024 });
+        await execFile(shellExecutable("sh"), ["-c", shellScript(command)], { maxBuffer: 32 * 1024 * 1024, env: shellEnvironment() });
       },
     };
     const captured: SandboxSyncOperation[] = [];
@@ -2294,7 +2306,7 @@ describe("sandbox managed runtime", () => {
     cleanupDirs.push(rootDir);
     const sourceRepoDir = path.join(rootDir, "source-repo");
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     await mkdir(sourceRepoDir, { recursive: true });
     await git(sourceRepoDir, ["init"]);
     await git(sourceRepoDir, ["checkout", "-b", "main"]);
@@ -2322,7 +2334,7 @@ describe("sandbox managed runtime", () => {
         await rm(remotePath, { recursive: true, force: true });
       },
       run: async (command) => {
-        await execFile("sh", ["-c", command], { maxBuffer: 32 * 1024 * 1024 });
+        await execFile(shellExecutable("sh"), ["-c", shellScript(command)], { maxBuffer: 32 * 1024 * 1024, env: shellEnvironment() });
       },
     };
     const captured: SandboxSyncOperation[] = [];
@@ -2455,7 +2467,7 @@ describe("sandbox managed runtime", () => {
     cleanupDirs.push(rootDir);
     const sourceRepoDir = path.join(rootDir, "source-repo");
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     const homeDir = path.join(rootDir, "codex-home");
 
     // Git-backed workspace → git history + workspace overlay share one merged op.
@@ -2495,7 +2507,7 @@ describe("sandbox managed runtime", () => {
       },
       run: async (command) => {
         directRuns.push(command);
-        await execFile("sh", ["-c", command], { maxBuffer: 32 * 1024 * 1024 });
+        await execFile(shellExecutable("sh"), ["-c", shellScript(command)], { maxBuffer: 32 * 1024 * 1024, env: shellEnvironment() });
       },
     };
     const captured: SandboxSyncOperation[] = [];
@@ -2567,7 +2579,7 @@ describe("sandbox managed runtime", () => {
     cleanupDirs.push(rootDir);
     const sourceRepoDir = path.join(rootDir, "source-repo");
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     const assetDir = path.join(rootDir, "asset-home");
 
     // A git-backed workspace produces both a git-history tar and an overlay tar.
@@ -2593,7 +2605,7 @@ describe("sandbox managed runtime", () => {
       readFile: async (remotePath) => await readFile(remotePath),
       listFiles: async () => [],
       remove: async (remotePath) => { await rm(remotePath, { recursive: true, force: true }); },
-      run: async (command) => { await execFile("sh", ["-c", command], { maxBuffer: 32 * 1024 * 1024 }); },
+      run: async (command) => { await execFile(shellExecutable("sh"), ["-c", shellScript(command)], { maxBuffer: 32 * 1024 * 1024, env: shellEnvironment() }); },
     };
     const captured: SandboxSyncOperation[] = [];
     attachCapturingSyncIn(client, captured);
@@ -2643,7 +2655,7 @@ describe("sandbox managed runtime", () => {
       const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-access-ro-"));
       cleanupDirs.push(rootDir);
       const localWorkspaceDir = path.join(rootDir, "local-workspace");
-      const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+      const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
       const referencedDir = path.join(rootDir, "referenced-project");
       await mkdir(localWorkspaceDir, { recursive: true });
       await mkdir(referencedDir, { recursive: true });
@@ -2659,7 +2671,7 @@ describe("sandbox managed runtime", () => {
         readFile: async (remotePath) => await readFile(remotePath),
         listFiles: async () => [],
         remove: async (remotePath) => { await rm(remotePath, { recursive: true, force: true }); },
-        run: async (command) => { await execFile("sh", ["-c", command], { maxBuffer: 32 * 1024 * 1024 }); },
+        run: async (command) => { await execFile(shellExecutable("sh"), ["-c", shellScript(command)], { maxBuffer: 32 * 1024 * 1024, env: shellEnvironment() }); },
       };
       const captured: SandboxSyncOperation[] = [];
       attachCapturingSyncIn(client, captured);
@@ -2701,7 +2713,7 @@ describe("sandbox managed runtime", () => {
       const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-project-bytes-"));
       cleanupDirs.push(rootDir);
       const localWorkspaceDir = path.join(rootDir, "local-workspace");
-      const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+      const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
       const referencedDir = path.join(rootDir, "referenced-project");
       await mkdir(localWorkspaceDir, { recursive: true });
       await mkdir(referencedDir, { recursive: true });
@@ -2722,7 +2734,7 @@ describe("sandbox managed runtime", () => {
         readFile: async (remotePath) => await readFile(remotePath),
         listFiles: async () => [],
         remove: async (remotePath) => { await rm(remotePath, { recursive: true, force: true }); },
-        run: async (command) => { await execFile("sh", ["-c", command], { maxBuffer: 32 * 1024 * 1024 }); },
+        run: async (command) => { await execFile(shellExecutable("sh"), ["-c", shellScript(command)], { maxBuffer: 32 * 1024 * 1024, env: shellEnvironment() }); },
       };
       attachCapturingSyncIn(client, []);
 
@@ -2784,7 +2796,7 @@ describe("sandbox managed runtime", () => {
       cleanupDirs.push(rootDir);
 
       const localWorkspaceDir = path.join(rootDir, "local-workspace");
-      const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+      const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
       await mkdir(localWorkspaceDir, { recursive: true });
       await mkdir(remoteWorkspaceDir, { recursive: true });
       await writeFile(path.join(localWorkspaceDir, "README.md"), "anchor content\n", "utf8");
@@ -2803,8 +2815,8 @@ describe("sandbox managed runtime", () => {
           new Promise<RunProcessResult>((resolve) => {
             const startedAt = new Date().toISOString();
             const command =
-              input.command === "sh" ? "/bin/sh" : input.command === "bash" ? "/bin/bash" : input.command;
-            const child = spawn(command, input.args ?? [], { cwd: input.cwd, env: { ...process.env, ...input.env } });
+              shellExecutable(input.command);
+            const child = spawn(command, shellArgs(input.args), { cwd: input.cwd, env: shellEnvironment(input.env) });
             let stdout = "";
             let stderr = "";
             child.stdout.on("data", (chunk) => { stdout += chunk.toString("utf8"); });
@@ -3042,7 +3054,7 @@ describe("sandbox managed runtime", () => {
       const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-ignore-bound-staging-"));
       cleanupDirs.push(rootDir);
       const localWorkspaceDir = path.join(rootDir, "local-workspace");
-      const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+      const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
       const healthyDir = path.join(rootDir, "referenced-healthy");
       const countBreachDir = path.join(rootDir, "referenced-count-breach");
       const byteBreachDir = path.join(rootDir, "referenced-byte-breach");
@@ -3242,7 +3254,7 @@ describe("sandbox managed runtime", () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-ignore-failed-skip-"));
     cleanupDirs.push(rootDir);
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     const healthyDir = path.join(rootDir, "referenced-healthy");
     const failedDir = path.join(rootDir, "referenced-failed");
     await mkdir(localWorkspaceDir, { recursive: true });
@@ -3278,7 +3290,7 @@ describe("sandbox managed runtime", () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-pack-span-"));
     cleanupDirs.push(rootDir);
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     await mkdir(localWorkspaceDir, { recursive: true });
     await writeFile(path.join(localWorkspaceDir, "README.md"), "workspace body\n", "utf8");
 
@@ -3321,7 +3333,7 @@ describe("sandbox managed runtime", () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-pack-nest-"));
     cleanupDirs.push(rootDir);
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     await mkdir(localWorkspaceDir, { recursive: true });
     await writeFile(path.join(localWorkspaceDir, "README.md"), "workspace body\n", "utf8");
 
@@ -3959,7 +3971,7 @@ function makeGatedOutboundClient(
       await rm(remotePath, { recursive: true, force: true });
     },
     run: async (command) => {
-      await execFile("sh", ["-c", command], { maxBuffer: 32 * 1024 * 1024 });
+      await execFile(shellExecutable("sh"), ["-c", shellScript(command)], { maxBuffer: 32 * 1024 * 1024, env: shellEnvironment() });
     },
     allowConcurrentSyncOperations: concurrent,
     syncOut: async (operations) =>
@@ -4044,7 +4056,7 @@ describe("sandbox managed runtime outbound coordinator", () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-outbound-coordinator-"));
     cleanupDirs.push(rootDir);
     const workspaceDir = path.join(rootDir, "workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     await mkdir(workspaceDir, { recursive: true });
     await writeFile(path.join(workspaceDir, "file.txt"), "workspace\n", "utf8");
     const dirs = new Map<string, string>();
@@ -4362,7 +4374,7 @@ describe("sandbox git-bundle export transport", () => {
         await rm(remotePath, { recursive: true, force: true });
       },
       run: async (command) => {
-        await execFile("sh", ["-c", command], { maxBuffer: 32 * 1024 * 1024 });
+        await execFile(shellExecutable("sh"), ["-c", shellScript(command)], { maxBuffer: 32 * 1024 * 1024, env: shellEnvironment() });
       },
     };
     attachFallbackSyncIn(client);
@@ -4418,7 +4430,7 @@ describe("sandbox git-bundle export transport", () => {
     cleanupDirs.push(rootDir);
     const sourceRepoDir = path.join(rootDir, "source-repo");
     const localWorkspaceDir = path.join(rootDir, "local-worktree");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     await mkdir(sourceRepoDir, { recursive: true });
     await git(sourceRepoDir, ["init"]);
     await git(sourceRepoDir, ["checkout", "-b", "main"]);
@@ -4564,7 +4576,7 @@ describe("sandbox git-bundle export transport", () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-restore-partial-"));
     cleanupDirs.push(rootDir);
     const localWorkspaceDir = path.join(rootDir, "local-workspace");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     await mkdir(localWorkspaceDir, { recursive: true });
     await writeFile(path.join(localWorkspaceDir, "base.txt"), "base\n", "utf8");
     const client = makeTransportClient(true, { syncOutOperations: [], readFilePaths: [] });
@@ -4620,7 +4632,7 @@ describe("sandbox git-bundle export transport", () => {
     const mappings = bundleFileMappings(capture);
     expect(mappings).toHaveLength(1);
     expect(mappings[0]!.kind).toBe("file");
-    expect(path.posix.basename(mappings[0]!.targetPath)).toBe("git-delta.bundle");
+    expect(path.basename(mappings[0]!.targetPath)).toBe("git-delta.bundle");
     expect(capture.readFilePaths.some((remotePath) => remotePath.endsWith("git-delta.bundle"))).toBe(false);
 
     // The small status file stays on `readFile`; the change does not migrate it.
@@ -4659,7 +4671,7 @@ describe("sandbox git-bundle export transport", () => {
     // linked worktree shares the source object store, and the boundary commit
     // stays reachable there; a standalone repository lets `gc` prune it.
     const localWorkspaceDir = path.join(rootDir, "local-repo");
-    const remoteWorkspaceDir = path.join(rootDir, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(rootDir, "remote-workspace"));
     await mkdir(localWorkspaceDir, { recursive: true });
     await git(localWorkspaceDir, ["init"]);
     await git(localWorkspaceDir, ["checkout", "-b", "work"]);

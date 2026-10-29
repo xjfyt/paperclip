@@ -1720,11 +1720,13 @@ export async function syncRemoteTextFileWithHashSkip(input: {
       `expected_sha=${shellQuote(sha256)}`,
       "hash_file() {",
       "  if command -v sha256sum >/dev/null 2>&1; then",
-      "    sha256sum \"$1\" | awk '{print $1}'",
+      // Hash stdin so GNU tools never prepend a backslash when an escaped
+      // filename contains a backslash/newline. The comparison remains exact.
+      "    sha256sum < \"$1\" | awk '{print $1}'",
       "    return 0",
       "  fi",
       "  if command -v shasum >/dev/null 2>&1; then",
-      "    shasum -a 256 \"$1\" | awk '{print $1}'",
+      "    shasum -a 256 < \"$1\" | awk '{print $1}'",
       "    return 0",
       "  fi",
       "  return 127",

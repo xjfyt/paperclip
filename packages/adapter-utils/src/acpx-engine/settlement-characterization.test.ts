@@ -12,7 +12,7 @@
 // F2/F3 describes in `execute.test.ts` (~:2602, ~:4858).
 import fs from "node:fs/promises";
 import os from "node:os";
-import path from "node:path";
+import { fixturePath as path, sandboxPath, shellExecutable, shellArgs, shellScript, shellEnvironment, runLocalSandboxProcess as runChildProcess, cleanupLocalSandboxProcesses } from "../test-fixtures/local-sandbox.js";
 import { execFile as execFileCallback } from "node:child_process";
 import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -39,7 +39,7 @@ import {
   createAcpxEngineExecutor,
   type AcpxEngineExecutorOptions,
 } from "./execute.js";
-import { runChildProcess } from "../server-utils.js";
+
 import {
   mirrorDirectory,
   prepareSandboxManagedRuntime,
@@ -58,6 +58,7 @@ async function makeTempRoot() {
 }
 
 afterEach(async () => {
+  await cleanupLocalSandboxProcesses(tempRoots);
   await Promise.all(
     tempRoots.splice(0).map((root) =>
       fs.rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 }),
@@ -87,10 +88,10 @@ function createLocalSandboxRunner(
     }) => {
       counter += 1;
       onExecute?.(input);
-      const command = input.command === "bash" ? "/bin/bash" : input.command;
-      return await runChildProcess(`acpx-sandbox-run-${counter}`, command, input.args ?? [], {
+      const command = shellExecutable(input.command);
+      return await runChildProcess(`acpx-sandbox-run-${counter}`, command, shellArgs(input.args), {
         cwd: input.cwd ?? process.cwd(),
-        env: input.env ?? {},
+        env: shellEnvironment(input.env),
         stdin: input.stdin,
         timeoutSec: Math.max(1, Math.ceil((input.timeoutMs ?? 30_000) / 1000)),
         graceSec: 5,
@@ -201,7 +202,7 @@ async function setupRemoteSandbox() {
   const root = await makeTempRoot();
   const stateDir = path.join(root, "state");
   const localCwd = path.join(root, "worktree");
-  const remoteCwd = path.join(root, "remote-workspace");
+  const remoteCwd = sandboxPath(path.join(root, "remote-workspace"));
   await fs.mkdir(localCwd, { recursive: true });
   await fs.mkdir(remoteCwd, { recursive: true });
   await fs.writeFile(path.join(localCwd, "hello.txt"), "hi", "utf8");
@@ -886,7 +887,7 @@ function makeFsClient(options: {
     },
     run: async (command) => {
       options.runCommands?.push(command);
-      await execFile("sh", ["-c", command], { maxBuffer: 32 * 1024 * 1024 });
+      await execFile(shellExecutable("sh"), ["-c", shellScript(command)], { maxBuffer: 32 * 1024 * 1024, env: shellEnvironment() });
     },
   };
   client.syncIn = async (operations: SandboxSyncOperation[]): Promise<SandboxSyncResult> => {
@@ -928,7 +929,7 @@ function makeFsClient(options: {
 }
 
 async function git(cwd: string, args: string[]): Promise<string> {
-  const { stdout } = await execFile("git", ["-C", cwd, ...args], { maxBuffer: 32 * 1024 * 1024 });
+  const { stdout } = await execFile("git", ["-C", cwd, ...args], { maxBuffer: 32 * 1024 * 1024, env: shellEnvironment() });
   return stdout.trim();
 }
 
@@ -940,7 +941,7 @@ describe("ACP settlement — Layer B: restoreWorkspace order + native-sync selec
     // (sandbox-managed-runtime.ts:1192-1218) and the finalize ordering.
     const root = await makeTempRoot();
     const localWorkspaceDir = path.join(root, "local-workspace");
-    const remoteWorkspaceDir = path.join(root, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(root, "remote-workspace"));
     await fs.mkdir(path.join(localWorkspaceDir, ".claude"), { recursive: true });
     await fs.writeFile(path.join(localWorkspaceDir, "README.md"), "local workspace\n", "utf8");
     await fs.writeFile(path.join(localWorkspaceDir, ".claude", "settings.json"), '{"local":true}\n', "utf8");
@@ -1010,7 +1011,7 @@ describe("ACP settlement — Layer B: restoreWorkspace order + native-sync selec
     const root = await makeTempRoot();
     const sourceRepoDir = path.join(root, "source-repo");
     const localWorkspaceDir = path.join(root, "local-worktree");
-    const remoteWorkspaceDir = path.join(root, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(root, "remote-workspace"));
 
     await fs.mkdir(sourceRepoDir, { recursive: true });
     await git(sourceRepoDir, ["init"]);
@@ -1069,7 +1070,7 @@ describe("ACP settlement — Layer B: restoreWorkspace order + native-sync selec
     // native it uses `client.syncOut`, never the workspace-download tarball.
     const root = await makeTempRoot();
     const localWorkspaceDir = path.join(root, "local-workspace");
-    const remoteWorkspaceDir = path.join(root, "remote-workspace");
+    const remoteWorkspaceDir = sandboxPath(path.join(root, "remote-workspace"));
     await fs.mkdir(localWorkspaceDir, { recursive: true });
     await fs.writeFile(path.join(localWorkspaceDir, "README.md"), "local workspace\n", "utf8");
 
