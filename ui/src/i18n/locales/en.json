@@ -947,6 +947,79 @@
     "planDocument": "Plan document",
     "agent": "agent"
   },
+  "attentionRowUi": {
+    "expand": "Expand decision",
+    "collapse": "Collapse decision",
+    "more": "See more",
+    "less": "See less",
+    "open": "Open",
+    "restore": "Restore",
+    "rowActions": "Row actions",
+    "dismiss": "Dismiss",
+    "openSource": "Open source",
+    "actions": "Decision actions",
+    "setBy": "Set by {{name}}",
+    "reappears": "Reappears {{time}}",
+    "soon": "soon",
+    "agent": "an agent",
+    "you": "you",
+    "whenever": "Whenever",
+    "notSet": "Not set",
+    "missingIssue": "Missing issue reference for this decision.",
+    "detailRequired": "This decision must be completed from its detail view.",
+    "note": "Optional decision note…",
+    "moreImages": "{{n}} more",
+    "viewIssue": "View issue",
+    "snooze": "Snooze",
+    "custom": "Custom",
+    "snoozeUntil": "Snooze until…",
+    "oneHour": "1 hour",
+    "fourHours": "4 hours",
+    "tomorrow": "Tomorrow morning",
+    "nextWeek": "Next week",
+    "options_one": "{{n}} option",
+    "options_other": "{{n}} options",
+    "questions_one": "{{n}} question",
+    "questions_other": "{{n}} questions",
+    "suggestedTasks_one": "{{n}} suggested task",
+    "suggestedTasks_other": "{{n}} suggested tasks",
+    "verdicts_one": "{{n}} item to verdict",
+    "verdicts_other": "{{n}} items to verdict",
+    "blockedBy": "Blocked by {{target}}",
+    "budget": "{{percent}}% of budget used (${{observed}} / ${{limit}})",
+    "confirmationAccepted": "Confirmation accepted",
+    "confirmationDeclined": "Confirmation declined",
+    "action": {
+      "approve": "Approve",
+      "reject": "Reject",
+      "accept": "Accept",
+      "request_revision": "Request revision"
+    },
+    "error": {
+      "approve": "Could not approve",
+      "reject": "Could not reject",
+      "accept": "Could not accept confirmation",
+      "request_revision": "Could not request revision"
+    },
+    "approval": {
+      "approve": "Approval approved",
+      "reject": "Approval rejected",
+      "request_revision": "Approval sent for revision"
+    },
+    "join_request": {
+      "approve": "Join request approved",
+      "reject": "Join request rejected"
+    }
+  },
+  "auditNavigationUi": {
+    "title": "Audit",
+    "activity": "Activity",
+    "runs": "Runs",
+    "costs": "Costs",
+    "budgets": "Budgets",
+    "timeline": "Timeline",
+    "selectOrganization": "Select an organization to view Audit."
+  },
   "auth": {
     "failed": "Authentication failed",
     "unavailable": "Unable to check sign-in. Refresh and try again.",
@@ -2194,6 +2267,117 @@
     "unavailable": "This decision is no longer available — it may have been resolved elsewhere.",
     "unknownResult": "Unknown effect status on {{target}} — {{status}}"
   },
+  "decisionDeskUi": {
+    "decisions": "Decisions",
+    "selectCompany": "Select an organization first.",
+    "dismissed": "Dismissed",
+    "undo": "Undo",
+    "snoozed": "Snoozed",
+    "aging": "Aging",
+    "decided": "Decided",
+    "expired": "Expired",
+    "agingDesk": "Idle past {{days}} days — kept off the desk. Keep any you still want surfaced.",
+    "agingQueue": "Idle past {{days}} days — kept off the queue. Keep any you still want surfaced.",
+    "loadingDecided": "Loading decided decisions…",
+    "emptyDecided": "No decided decisions.",
+    "loadingExpired": "Loading expired decisions…",
+    "emptyExpired": "No expired decisions.",
+    "bundle_one": "{{agent}} proposed {{n}} decision",
+    "bundle_other": "{{agent}} proposed {{n}} decisions",
+    "agent": "An agent",
+    "fromSource": "· from ",
+    "pendingCount": "{{n}} pending",
+    "noMatch": "No decisions match your filters.",
+    "caughtUp": "You’re all caught up.",
+    "adjustFilters": "Adjust or clear the filters to see the rest.",
+    "nothingNeedsYou": "Nothing needs a decision from you right now.",
+    "emptyQueue": "This queue is empty.",
+    "emptyQueueHelp": "Decisions land here when they match the queue's rules or an agent adds them.",
+    "seedError": "Could not update seeding",
+    "tryAgain": "Please try again.",
+    "seedOn": "Auto-seeding is on",
+    "seedOff": "Auto-seeding is off",
+    "seedOnHelp": "This queue fills itself automatically. Decisions are added the moment they match any of its rules:",
+    "seedOffHelp": "Automatic adds are paused. These rules would add decisions to the queue when on:",
+    "disableSeedHelp": "Turning it off stops new automatic adds only — decisions already here stay, and you can still add or remove decisions by hand.",
+    "disabledSeedHelp": "Adding or removing decisions by hand still works while automatic seeding is off.",
+    "disable": "Disable",
+    "enable": "Enable",
+    "removed": "Removed from queue",
+    "excludeError": "Could not exclude",
+    "exclude": "Exclude",
+    "removeTitle": "Remove from this queue",
+    "reasonPlaceholder": "Reason (optional)…",
+    "cancel": "Cancel",
+    "all": "All",
+    "custom": "Custom",
+    "from": "From",
+    "to": "To",
+    "clear": "Clear",
+    "filter": "Filter",
+    "group": "Group",
+    "sort": "Sort",
+    "type": "Type",
+    "severity": "Severity",
+    "project": "Project",
+    "workspace": "Workspace",
+    "noProject": "No project",
+    "noWorkspace": "No workspace",
+    "count_one": "{{n}} decision",
+    "count_other": "{{n}} decisions",
+    "queues": "Decision queues",
+    "recent": "Recent activity",
+    "kept": "Kept",
+    "keep": "Keep on desk",
+    "keptToast": "Kept on desk",
+    "keepError": "Could not keep this decision",
+    "idle_one": "Idle {{n}} day",
+    "idle_other": "Idle {{n}} days",
+    "date": {
+      "all": "All",
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "last_7_days": "Last 7 days",
+      "this_month": "This month",
+      "this_week": "This week",
+      "earlier": "Earlier"
+    },
+    "groupBy": {
+      "none": "None",
+      "date": "Date",
+      "type": "Type",
+      "project": "Project",
+      "severity": "Severity"
+    },
+    "sortBy": {
+      "newest": "Newest first",
+      "oldest": "Oldest first"
+    },
+    "severities": {
+      "critical": "Critical",
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low"
+    },
+    "source": {
+      "approval": "Approval",
+      "decision": "Decision",
+      "issue_thread_interaction": "Decision requested",
+      "join_request": "Join request",
+      "recovery_action": "Recovery",
+      "productivity_review": "Task",
+      "blocker_attention": "Blocked dependency",
+      "review": "Review",
+      "failed_run": "Failed run",
+      "budget_alert": "Budget",
+      "agent_error_alert": "Agent error"
+    },
+    "shelf": {
+      "decide-now": "Decide now",
+      "new-today": "New today",
+      "earlier": "Earlier"
+    }
+  },
   "decisionSettingsUi": {
     "title": "Decision model",
     "viewUsage": "View usage",
@@ -2809,6 +2993,27 @@
     "saveFailed": "Failed to save inbox agent policy.",
     "saved": "Saved",
     "noCompany": "Select an organization to manage inbox agent archiving."
+  },
+  "instructionHistoryUi": {
+    "history": "History",
+    "loading": "Loading revisions…",
+    "historyFailed": "Could not load instruction history. Retry to read it again.",
+    "diffFailed": "Could not load the revision comparison. Retry to read it again.",
+    "restoreFailed": "Could not restore the revision.",
+    "retryHistory": "Retry history",
+    "retryDiff": "Retry comparison",
+    "retrying": "Retrying…",
+    "current": "Current",
+    "older": "Older revisions",
+    "selected": "Selected revision",
+    "changes": "Changes from selected revision to current",
+    "removed": "Removed:",
+    "added": "Added:",
+    "unchanged": "No content changes.",
+    "restore": "Restore as new revision",
+    "restoring": "Restoring…",
+    "saveFirst": "Save or cancel your edits before restoring.",
+    "empty": "No revisions available."
   },
   "inviteAuth": {
     "checking": "Checking sign-in methods…",
@@ -5457,6 +5662,12 @@
     "bindingWitnessBoundary": "These routing records are not the task’s current run status. They do not prove that the model consumed input or completed successfully. Open the task to inspect progress, errors and results.",
     "openTask": "Open task and run details"
   },
+  "searchableSelectUi": {
+    "close": "Close selector",
+    "search": "Search...",
+    "empty": "No options found.",
+    "loading": "Loading..."
+  },
   "selectorHostUi": {
     "allSkills": "All skills",
     "noSkillAgentsOrganization": "No agents in this organization support skills yet.",
@@ -5983,6 +6194,55 @@
     "tryingAgain": "Trying again...",
     "tryAgain": "Try again"
   },
+  "taskThreadComposerUi": {
+    "add": "Add",
+    "closeAdd": "Close Add menu",
+    "files": "Files and images",
+    "privateTask": "Private task",
+    "goal": "Goal",
+    "keepPursuing": "Keep pursuing",
+    "plan": "Plan mode",
+    "planDetail": "Plan before acting",
+    "ask": "Ask mode",
+    "askDetail": "Answer without changes",
+    "auto": "Auto mode",
+    "removeMode": "Remove {{mode}}",
+    "privacyExplanation": "Only you and people you share with can read this task",
+    "removePrivate": "Remove private task",
+    "private": "Private",
+    "worktrees": "Worktrees",
+    "searchWorktrees": "Search worktrees...",
+    "noMatchingWorktrees": "No matching worktrees.",
+    "selectWorktree": "Select worktree",
+    "loadingWorktrees": "Loading existing worktrees…",
+    "loadFailed": "Couldn't load worktrees.",
+    "noWorktrees": "No existing worktrees yet. Choose New worktree to start one.",
+    "reuse": "Reuse a worktree",
+    "otherOptions": "Other options",
+    "existingWorkspace": "Existing workspace",
+    "modes": {
+      "isolated_workspace": {
+        "label": "New worktree",
+        "description": "Start in an isolated checkout."
+      },
+      "shared_workspace": {
+        "label": "Project workspace",
+        "description": "Use the project's shared checkout."
+      },
+      "operator_branch": {
+        "label": "New branch",
+        "description": "Create a branch in the project workspace."
+      },
+      "agent_default": {
+        "label": "Agent default",
+        "description": "Let the agent choose its workspace."
+      },
+      "inherit": {
+        "label": "Project default",
+        "description": "Use the project's worktree settings."
+      }
+    }
+  },
   "taskThreadFeedbackUi": {
     "you": "you",
     "addressedUser": "the addressed user",
@@ -6082,6 +6342,14 @@
       "defer": "defer"
     }
   },
+  "taskThreadNoticeUi": {
+    "systemUpdate": "System update",
+    "claudeAuth": "Task paused — Claude needs re-authentication",
+    "missingBinding": "Task paused — a secret/config binding is missing",
+    "workspaceProblem": "Task paused — workspace problem",
+    "waitingOwner": "Task paused — waiting on {{owner}}",
+    "waitingRecoveryOwner": "Task paused — waiting on a recovery owner"
+  },
   "taskThreadReceiptsUi": {
     "skipped": "Skipped interaction",
     "withdrawn": "Withdrawn interaction",
@@ -6138,6 +6406,28 @@
   "taskThreadResourceUi": {
     "documentRevision": "Document · rev {{revision}}",
     "agentAttachment": "Agent attachment"
+  },
+  "taskThreadToolsUi": {
+    "pending": "Waiting for approval",
+    "running": "Approved · Running…",
+    "executed": "Succeeded",
+    "failed": "Execution failed",
+    "declined": "Declined",
+    "expired": "Expired",
+    "cancelled": "Cancelled",
+    "actionFailed": "The action could not complete.",
+    "alwaysAllowed": " · Always allowed",
+    "hideResult": "Hide result details",
+    "showResult": "Show result details",
+    "viewResult": "View result",
+    "declining": "Declining…",
+    "decline": "Decline",
+    "saving": "Saving…",
+    "approving": "Approving…",
+    "approveRun": "Approve & run",
+    "approveRequest": "Approve request",
+    "approvalOptions": "Approval options",
+    "alwaysAllow": "Always allow"
   },
   "toolActivityUi": {
     "exact_apply_patch_running": "Applying a patch",

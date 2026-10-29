@@ -947,6 +947,79 @@
     "planDocument": "Documento del plan",
     "agent": "agente"
   },
+  "attentionRowUi": {
+    "expand": "Expandir decisión",
+    "collapse": "Contraer decisión",
+    "more": "Ver más",
+    "less": "Ver menos",
+    "open": "Abrir",
+    "restore": "Restaurar",
+    "rowActions": "Acciones de la fila",
+    "dismiss": "Descartar",
+    "openSource": "Abrir origen",
+    "actions": "Acciones de decisión",
+    "setBy": "Establecido por {{name}}",
+    "reappears": "Reaparece {{time}}",
+    "soon": "pronto",
+    "agent": "un agente",
+    "you": "ti",
+    "whenever": "Cuando sea",
+    "notSet": "Sin establecer",
+    "missingIssue": "Falta la referencia de tarea para esta decisión.",
+    "detailRequired": "Esta decisión debe completarse en su vista de detalle.",
+    "note": "Nota de decisión opcional…",
+    "moreImages": "{{n}} más",
+    "viewIssue": "Ver tarea",
+    "snooze": "Posponer",
+    "custom": "Personalizado",
+    "snoozeUntil": "Posponer hasta…",
+    "oneHour": "1 hora",
+    "fourHours": "4 horas",
+    "tomorrow": "Mañana por la mañana",
+    "nextWeek": "La próxima semana",
+    "options_one": "{{n}} opción",
+    "options_other": "{{n}} opciones",
+    "questions_one": "{{n}} pregunta",
+    "questions_other": "{{n}} preguntas",
+    "suggestedTasks_one": "{{n}} tarea sugerida",
+    "suggestedTasks_other": "{{n}} tareas sugeridas",
+    "verdicts_one": "{{n}} elemento por evaluar",
+    "verdicts_other": "{{n}} elementos por evaluar",
+    "blockedBy": "Bloqueada por {{target}}",
+    "budget": "{{percent}}% del presupuesto usado (${{observed}} / ${{limit}})",
+    "confirmationAccepted": "Confirmación aceptada",
+    "confirmationDeclined": "Confirmación rechazada",
+    "action": {
+      "approve": "Aprobar",
+      "reject": "Rechazar",
+      "accept": "Aceptar",
+      "request_revision": "Solicitar revisión"
+    },
+    "error": {
+      "approve": "No se pudo aprobar",
+      "reject": "No se pudo rechazar",
+      "accept": "No se pudo aceptar la confirmación",
+      "request_revision": "No se pudo solicitar una revisión"
+    },
+    "approval": {
+      "approve": "Aprobación concedida",
+      "reject": "Aprobación rechazada",
+      "request_revision": "Aprobación enviada a revisión"
+    },
+    "join_request": {
+      "approve": "Solicitud de acceso aprobada",
+      "reject": "Solicitud de acceso rechazada"
+    }
+  },
+  "auditNavigationUi": {
+    "title": "Auditoría",
+    "activity": "Actividad",
+    "runs": "Ejecuciones",
+    "costs": "Costes",
+    "budgets": "Presupuestos",
+    "timeline": "Cronología",
+    "selectOrganization": "Selecciona una organización para ver la auditoría."
+  },
   "auth": {
     "failed": "Error de autenticación",
     "unavailable": "No se pudo verificar el acceso. Actualiza e inténtalo de nuevo.",
@@ -2194,6 +2267,117 @@
     "unavailable": "Esta decisión ya no está disponible; puede haberse resuelto en otro lugar.",
     "unknownResult": "Estado de efecto desconocido en {{target}} — {{status}}"
   },
+  "decisionDeskUi": {
+    "decisions": "Decisiones",
+    "selectCompany": "Selecciona primero una organización.",
+    "dismissed": "Descartadas",
+    "undo": "Deshacer",
+    "snoozed": "Pospuestas",
+    "aging": "Antiguas",
+    "decided": "Decididas",
+    "expired": "Vencidas",
+    "agingDesk": "Sin actividad durante más de {{days}} días; fuera del panel. Conserva las que quieras seguir viendo.",
+    "agingQueue": "Sin actividad durante más de {{days}} días; fuera de la cola. Conserva las que quieras seguir viendo.",
+    "loadingDecided": "Cargando decisiones resueltas…",
+    "emptyDecided": "No hay decisiones resueltas.",
+    "loadingExpired": "Cargando decisiones vencidas…",
+    "emptyExpired": "No hay decisiones vencidas.",
+    "bundle_one": "{{agent}} propuso {{n}} decisión",
+    "bundle_other": "{{agent}} propuso {{n}} decisiones",
+    "agent": "Un agente",
+    "fromSource": "· de ",
+    "pendingCount": "{{n}} pendientes",
+    "noMatch": "Ninguna decisión coincide con los filtros.",
+    "caughtUp": "Estás al día.",
+    "adjustFilters": "Ajusta o borra los filtros para ver el resto.",
+    "nothingNeedsYou": "No hay nada que requiera tu decisión ahora.",
+    "emptyQueue": "Esta cola está vacía.",
+    "emptyQueueHelp": "Las decisiones aparecen aquí al coincidir con las reglas de la cola o cuando un agente las añade.",
+    "seedError": "No se pudo actualizar la incorporación automática",
+    "tryAgain": "Inténtalo de nuevo.",
+    "seedOn": "Incorporación automática activada",
+    "seedOff": "Incorporación automática desactivada",
+    "seedOnHelp": "Esta cola se llena automáticamente. Las decisiones se añaden al coincidir con cualquiera de sus reglas:",
+    "seedOffHelp": "La incorporación automática está pausada. Al activarla, estas reglas añadirán decisiones a la cola:",
+    "disableSeedHelp": "Desactivarla solo detiene las nuevas incorporaciones automáticas; las decisiones actuales permanecen y puedes añadirlas o quitarlas manualmente.",
+    "disabledSeedHelp": "Puedes seguir añadiendo o quitando decisiones manualmente mientras esté desactivada.",
+    "disable": "Desactivar",
+    "enable": "Activar",
+    "removed": "Eliminada de la cola",
+    "excludeError": "No se pudo excluir",
+    "exclude": "Excluir",
+    "removeTitle": "Eliminar de esta cola",
+    "reasonPlaceholder": "Motivo (opcional)…",
+    "cancel": "Cancelar",
+    "all": "Todas",
+    "custom": "Personalizado",
+    "from": "Desde",
+    "to": "Hasta",
+    "clear": "Borrar",
+    "filter": "Filtrar",
+    "group": "Agrupar",
+    "sort": "Ordenar",
+    "type": "Tipo",
+    "severity": "Gravedad",
+    "project": "Proyecto",
+    "workspace": "Espacio de trabajo",
+    "noProject": "Sin proyecto",
+    "noWorkspace": "Sin espacio de trabajo",
+    "count_one": "{{n}} decisión",
+    "count_other": "{{n}} decisiones",
+    "queues": "Colas de decisiones",
+    "recent": "Actividad reciente",
+    "kept": "Conservada",
+    "keep": "Conservar en el panel",
+    "keptToast": "Conservada en el panel",
+    "keepError": "No se pudo conservar esta decisión",
+    "idle_one": "Sin actividad {{n}} día",
+    "idle_other": "Sin actividad {{n}} días",
+    "date": {
+      "all": "Todas",
+      "today": "Hoy",
+      "yesterday": "Ayer",
+      "last_7_days": "Últimos 7 días",
+      "this_month": "Este mes",
+      "this_week": "Esta semana",
+      "earlier": "Anteriores"
+    },
+    "groupBy": {
+      "none": "Ninguno",
+      "date": "Fecha",
+      "type": "Tipo",
+      "project": "Proyecto",
+      "severity": "Gravedad"
+    },
+    "sortBy": {
+      "newest": "Más recientes primero",
+      "oldest": "Más antiguas primero"
+    },
+    "severities": {
+      "critical": "Crítica",
+      "high": "Alta",
+      "medium": "Media",
+      "low": "Baja"
+    },
+    "source": {
+      "approval": "Aprobación",
+      "decision": "Decisión",
+      "issue_thread_interaction": "Decisión solicitada",
+      "join_request": "Solicitud de acceso",
+      "recovery_action": "Recuperación",
+      "productivity_review": "Tarea",
+      "blocker_attention": "Dependencia bloqueada",
+      "review": "Revisión",
+      "failed_run": "Ejecución fallida",
+      "budget_alert": "Presupuesto",
+      "agent_error_alert": "Error del agente"
+    },
+    "shelf": {
+      "decide-now": "Decidir ahora",
+      "new-today": "Nuevas de hoy",
+      "earlier": "Anteriores"
+    }
+  },
   "decisionSettingsUi": {
     "title": "Modelo de decisión",
     "viewUsage": "Ver uso",
@@ -2809,6 +2993,27 @@
     "saveFailed": "No se pudo guardar la política de Agents.",
     "saved": "Guardado",
     "noCompany": "Selecciona una organización para gestionar el archivado de Agents."
+  },
+  "instructionHistoryUi": {
+    "history": "Historial",
+    "loading": "Cargando revisiones…",
+    "historyFailed": "No se pudo cargar el historial de instrucciones. Reintenta la lectura.",
+    "diffFailed": "No se pudo cargar la comparación de revisiones. Reintenta la lectura.",
+    "restoreFailed": "No se pudo restaurar la revisión.",
+    "retryHistory": "Reintentar historial",
+    "retryDiff": "Reintentar comparación",
+    "retrying": "Reintentando…",
+    "current": "Actual",
+    "older": "Revisiones anteriores",
+    "selected": "Revisión seleccionada",
+    "changes": "Cambios de la revisión seleccionada a la actual",
+    "removed": "Eliminado:",
+    "added": "Añadido:",
+    "unchanged": "Sin cambios de contenido.",
+    "restore": "Restaurar como nueva revisión",
+    "restoring": "Restaurando…",
+    "saveFirst": "Guarda o cancela tus cambios antes de restaurar.",
+    "empty": "No hay revisiones disponibles."
   },
   "inviteAuth": {
     "checking": "Comprobando métodos de acceso…",
@@ -5457,6 +5662,12 @@
     "bindingWitnessBoundary": "Estos registros de enrutamiento no indican el estado actual de ejecución de la tarea. No demuestran que el modelo haya consumido la entrada ni completado el trabajo correctamente. Abra la tarea para consultar el progreso, los errores y los resultados.",
     "openTask": "Abrir tarea y detalles de ejecución"
   },
+  "searchableSelectUi": {
+    "close": "Cerrar selector",
+    "search": "Buscar...",
+    "empty": "No se encontraron opciones.",
+    "loading": "Cargando..."
+  },
   "selectorHostUi": {
     "allSkills": "Todas las habilidades",
     "noSkillAgentsOrganization": "Ningún agente de esta organización admite habilidades todavía.",
@@ -5983,6 +6194,55 @@
     "tryingAgain": "Reintentando...",
     "tryAgain": "Reintentar"
   },
+  "taskThreadComposerUi": {
+    "add": "Añadir",
+    "closeAdd": "Cerrar menú Añadir",
+    "files": "Archivos e imágenes",
+    "privateTask": "Tarea privada",
+    "goal": "Objetivo",
+    "keepPursuing": "Seguir persiguiendo",
+    "plan": "Modo de planificación",
+    "planDetail": "Planificar antes de actuar",
+    "ask": "Modo de consulta",
+    "askDetail": "Responder sin hacer cambios",
+    "auto": "Modo automático",
+    "removeMode": "Quitar {{mode}}",
+    "privacyExplanation": "Solo tú y las personas con quienes la compartas pueden leer esta tarea",
+    "removePrivate": "Quitar tarea privada",
+    "private": "Privada",
+    "worktrees": "Árboles de trabajo",
+    "searchWorktrees": "Buscar árboles de trabajo...",
+    "noMatchingWorktrees": "No hay árboles de trabajo coincidentes.",
+    "selectWorktree": "Seleccionar árbol de trabajo",
+    "loadingWorktrees": "Cargando árboles de trabajo existentes…",
+    "loadFailed": "No se pudieron cargar los árboles de trabajo.",
+    "noWorktrees": "Aún no hay árboles de trabajo. Elige Nuevo árbol de trabajo para crear uno.",
+    "reuse": "Reutilizar un árbol de trabajo",
+    "otherOptions": "Otras opciones",
+    "existingWorkspace": "Espacio de trabajo existente",
+    "modes": {
+      "isolated_workspace": {
+        "label": "Nuevo árbol de trabajo",
+        "description": "Empezar en una copia de trabajo aislada."
+      },
+      "shared_workspace": {
+        "label": "Espacio de trabajo del proyecto",
+        "description": "Usar la copia de trabajo compartida del proyecto."
+      },
+      "operator_branch": {
+        "label": "Nueva rama",
+        "description": "Crear una rama en el espacio de trabajo del proyecto."
+      },
+      "agent_default": {
+        "label": "Predeterminado del agente",
+        "description": "Dejar que el agente elija su espacio de trabajo."
+      },
+      "inherit": {
+        "label": "Predeterminado del proyecto",
+        "description": "Usar la configuración de árboles de trabajo del proyecto."
+      }
+    }
+  },
   "taskThreadFeedbackUi": {
     "you": "tú",
     "addressedUser": "el usuario destinatario",
@@ -6082,6 +6342,14 @@
       "defer": "posponer"
     }
   },
+  "taskThreadNoticeUi": {
+    "systemUpdate": "Actualización del sistema",
+    "claudeAuth": "Tarea en pausa: Claude necesita volver a autenticarse",
+    "missingBinding": "Tarea en pausa: falta una vinculación de secreto o configuración",
+    "workspaceProblem": "Tarea en pausa: problema del espacio de trabajo",
+    "waitingOwner": "Tarea en pausa: esperando a {{owner}}",
+    "waitingRecoveryOwner": "Tarea en pausa: esperando a un responsable de recuperación"
+  },
   "taskThreadReceiptsUi": {
     "skipped": "Interacción omitida",
     "withdrawn": "Interacción retirada",
@@ -6138,6 +6406,28 @@
   "taskThreadResourceUi": {
     "documentRevision": "Documento · revisión {{revision}}",
     "agentAttachment": "Archivo adjunto del agente"
+  },
+  "taskThreadToolsUi": {
+    "pending": "Esperando aprobación",
+    "running": "Aprobado · En ejecución…",
+    "executed": "Completado",
+    "failed": "Error de ejecución",
+    "declined": "Rechazado",
+    "expired": "Caducado",
+    "cancelled": "Cancelado",
+    "actionFailed": "No se pudo completar la acción.",
+    "alwaysAllowed": " · Siempre permitido",
+    "hideResult": "Ocultar detalles del resultado",
+    "showResult": "Mostrar detalles del resultado",
+    "viewResult": "Ver resultado",
+    "declining": "Rechazando…",
+    "decline": "Rechazar",
+    "saving": "Guardando…",
+    "approving": "Aprobando…",
+    "approveRun": "Aprobar y ejecutar",
+    "approveRequest": "Aprobar solicitud",
+    "approvalOptions": "Opciones de aprobación",
+    "alwaysAllow": "Permitir siempre"
   },
   "toolActivityUi": {
     "exact_apply_patch_running": "Aplicando un parche",

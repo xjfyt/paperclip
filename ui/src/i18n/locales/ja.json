@@ -947,6 +947,79 @@
     "planDocument": "計画書",
     "agent": "エージェント"
   },
+  "attentionRowUi": {
+    "expand": "決定を展開",
+    "collapse": "決定を折りたたむ",
+    "more": "詳細を表示",
+    "less": "表示を減らす",
+    "open": "開く",
+    "restore": "戻す",
+    "rowActions": "行の操作",
+    "dismiss": "非表示",
+    "openSource": "元を開く",
+    "actions": "決定の操作",
+    "setBy": "設定者：{{name}}",
+    "reappears": "{{time}}に再表示",
+    "soon": "まもなく",
+    "agent": "エージェント",
+    "you": "あなた",
+    "whenever": "いつでも",
+    "notSet": "未設定",
+    "missingIssue": "この決定にはタスクへの参照がありません。",
+    "detailRequired": "この決定は詳細画面から完了してください。",
+    "note": "決定メモ（任意）…",
+    "moreImages": "他 {{n}} 件",
+    "viewIssue": "タスクを表示",
+    "snooze": "スヌーズ",
+    "custom": "カスタム",
+    "snoozeUntil": "スヌーズの終了日時…",
+    "oneHour": "1時間",
+    "fourHours": "4時間",
+    "tomorrow": "明日の朝",
+    "nextWeek": "来週",
+    "options_one": "{{n}} 個の選択肢",
+    "options_other": "{{n}} 個の選択肢",
+    "questions_one": "{{n}} 個の質問",
+    "questions_other": "{{n}} 個の質問",
+    "suggestedTasks_one": "{{n}} 個の提案タスク",
+    "suggestedTasks_other": "{{n}} 個の提案タスク",
+    "verdicts_one": "{{n}} 項目の判定待ち",
+    "verdicts_other": "{{n}} 項目の判定待ち",
+    "blockedBy": "{{target}} によりブロック",
+    "budget": "予算の {{percent}}% を使用（${{observed}} / ${{limit}}）",
+    "confirmationAccepted": "確認を承認しました",
+    "confirmationDeclined": "確認を拒否しました",
+    "action": {
+      "approve": "承認",
+      "reject": "拒否",
+      "accept": "承認",
+      "request_revision": "修正を依頼"
+    },
+    "error": {
+      "approve": "承認できませんでした",
+      "reject": "拒否できませんでした",
+      "accept": "確認を承認できませんでした",
+      "request_revision": "修正を依頼できませんでした"
+    },
+    "approval": {
+      "approve": "承認しました",
+      "reject": "承認を拒否しました",
+      "request_revision": "修正を依頼しました"
+    },
+    "join_request": {
+      "approve": "参加申請を承認しました",
+      "reject": "参加申請を拒否しました"
+    }
+  },
+  "auditNavigationUi": {
+    "title": "監査",
+    "activity": "アクティビティ",
+    "runs": "実行",
+    "costs": "コスト",
+    "budgets": "予算",
+    "timeline": "タイムライン",
+    "selectOrganization": "監査を表示する組織を選択してください。"
+  },
   "auth": {
     "failed": "認証に失敗しました",
     "unavailable": "ログイン状態を確認できません。再読み込みしてください。",
@@ -2194,6 +2267,117 @@
     "unavailable": "この決定は利用できません。別の場所で解決済みの可能性があります。",
     "unknownResult": "{{target}} の変更状態が不明 — {{status}}"
   },
+  "decisionDeskUi": {
+    "decisions": "決定",
+    "selectCompany": "最初に組織を選択してください。",
+    "dismissed": "非表示済み",
+    "undo": "元に戻す",
+    "snoozed": "スヌーズ中",
+    "aging": "長期未処理",
+    "decided": "決定済み",
+    "expired": "期限切れ",
+    "agingDesk": "{{days}} 日以上未処理のためデスクから除外されています。引き続き表示したいものを残せます。",
+    "agingQueue": "{{days}} 日以上未処理のためキューから除外されています。引き続き表示したいものを残せます。",
+    "loadingDecided": "決定済みの項目を読み込み中…",
+    "emptyDecided": "決定済みの項目はありません。",
+    "loadingExpired": "期限切れの項目を読み込み中…",
+    "emptyExpired": "期限切れの項目はありません。",
+    "bundle_one": "{{agent}} が {{n}} 件の決定を提案",
+    "bundle_other": "{{agent}} が {{n}} 件の決定を提案",
+    "agent": "エージェント",
+    "fromSource": "· 元：",
+    "pendingCount": "{{n}} 件保留中",
+    "noMatch": "フィルターに一致する決定はありません。",
+    "caughtUp": "すべて対応済みです。",
+    "adjustFilters": "残りを表示するにはフィルターを変更または解除してください。",
+    "nothingNeedsYou": "現在、あなたの決定が必要な項目はありません。",
+    "emptyQueue": "このキューは空です。",
+    "emptyQueueHelp": "ルールに一致するか、エージェントが追加した決定がここに表示されます。",
+    "seedError": "自動追加の設定を更新できませんでした",
+    "tryAgain": "もう一度お試しください。",
+    "seedOn": "自動追加はオンです",
+    "seedOff": "自動追加はオフです",
+    "seedOnHelp": "このキューには、次のいずれかのルールに一致した決定が自動で追加されます：",
+    "seedOffHelp": "自動追加は一時停止中です。有効にすると次のルールで決定が追加されます：",
+    "disableSeedHelp": "オフにすると新しい自動追加のみ停止します。既存の決定は残り、手動で追加・削除できます。",
+    "disabledSeedHelp": "自動追加がオフでも、手動で決定を追加・削除できます。",
+    "disable": "無効にする",
+    "enable": "有効にする",
+    "removed": "キューから除外しました",
+    "excludeError": "除外できませんでした",
+    "exclude": "除外",
+    "removeTitle": "このキューから除外",
+    "reasonPlaceholder": "理由（任意）…",
+    "cancel": "キャンセル",
+    "all": "すべて",
+    "custom": "カスタム",
+    "from": "開始日",
+    "to": "終了日",
+    "clear": "クリア",
+    "filter": "フィルター",
+    "group": "グループ",
+    "sort": "並べ替え",
+    "type": "種類",
+    "severity": "重要度",
+    "project": "プロジェクト",
+    "workspace": "ワークスペース",
+    "noProject": "プロジェクトなし",
+    "noWorkspace": "ワークスペースなし",
+    "count_one": "{{n}} 件の決定",
+    "count_other": "{{n}} 件の決定",
+    "queues": "決定キュー",
+    "recent": "最近のアクティビティ",
+    "kept": "保持済み",
+    "keep": "デスクに残す",
+    "keptToast": "デスクに残しました",
+    "keepError": "この決定を保持できませんでした",
+    "idle_one": "{{n}} 日間未処理",
+    "idle_other": "{{n}} 日間未処理",
+    "date": {
+      "all": "すべて",
+      "today": "今日",
+      "yesterday": "昨日",
+      "last_7_days": "過去7日間",
+      "this_month": "今月",
+      "this_week": "今週",
+      "earlier": "以前"
+    },
+    "groupBy": {
+      "none": "なし",
+      "date": "日付",
+      "type": "種類",
+      "project": "プロジェクト",
+      "severity": "重要度"
+    },
+    "sortBy": {
+      "newest": "新しい順",
+      "oldest": "古い順"
+    },
+    "severities": {
+      "critical": "緊急",
+      "high": "高",
+      "medium": "中",
+      "low": "低"
+    },
+    "source": {
+      "approval": "承認",
+      "decision": "決定",
+      "issue_thread_interaction": "決定依頼",
+      "join_request": "参加申請",
+      "recovery_action": "復旧",
+      "productivity_review": "タスク",
+      "blocker_attention": "依存関係ブロック",
+      "review": "レビュー",
+      "failed_run": "実行失敗",
+      "budget_alert": "予算",
+      "agent_error_alert": "エージェントエラー"
+    },
+    "shelf": {
+      "decide-now": "今すぐ決定",
+      "new-today": "今日の新着",
+      "earlier": "以前"
+    }
+  },
   "decisionSettingsUi": {
     "title": "判断モデル",
     "viewUsage": "使用状況を表示",
@@ -2809,6 +2993,27 @@
     "saveFailed": "受信トレイの Agent ポリシーを保存できませんでした。",
     "saved": "保存しました",
     "noCompany": "組織を選択して受信トレイの Agent アーカイブ設定を管理してください。"
+  },
+  "instructionHistoryUi": {
+    "history": "履歴",
+    "loading": "リビジョンを読み込み中…",
+    "historyFailed": "指示の履歴を読み込めませんでした。再読み込みしてください。",
+    "diffFailed": "リビジョンの比較を読み込めませんでした。再読み込みしてください。",
+    "restoreFailed": "リビジョンを復元できませんでした。",
+    "retryHistory": "履歴を再読み込み",
+    "retryDiff": "比較を再読み込み",
+    "retrying": "再読み込み中…",
+    "current": "現在",
+    "older": "以前のリビジョン",
+    "selected": "選択したリビジョン",
+    "changes": "選択したリビジョンから現在までの変更",
+    "removed": "削除:",
+    "added": "追加:",
+    "unchanged": "内容の変更はありません。",
+    "restore": "新しいリビジョンとして復元",
+    "restoring": "復元中…",
+    "saveFirst": "復元する前に編集内容を保存またはキャンセルしてください。",
+    "empty": "利用可能なリビジョンはありません。"
   },
   "inviteAuth": {
     "checking": "ログイン方法を確認中…",
@@ -5457,6 +5662,12 @@
     "bindingWitnessBoundary": "これらのルーティング記録は、タスクの現在の実行状態ではありません。モデルによる入力の使用や正常完了を証明するものでもありません。進捗、エラー、結果はタスクを開いて確認してください。",
     "openTask": "タスクと実行の詳細を開く"
   },
+  "searchableSelectUi": {
+    "close": "選択画面を閉じる",
+    "search": "検索...",
+    "empty": "選択肢が見つかりません。",
+    "loading": "読み込み中..."
+  },
   "selectorHostUi": {
     "allSkills": "すべてのスキル",
     "noSkillAgentsOrganization": "この組織には、まだスキルに対応したエージェントがいません。",
@@ -5983,6 +6194,55 @@
     "tryingAgain": "再試行中…",
     "tryAgain": "再試行"
   },
+  "taskThreadComposerUi": {
+    "add": "追加",
+    "closeAdd": "追加メニューを閉じる",
+    "files": "ファイルと画像",
+    "privateTask": "非公開タスク",
+    "goal": "目標",
+    "keepPursuing": "継続して取り組む",
+    "plan": "計画モード",
+    "planDetail": "実行前に計画する",
+    "ask": "質問モード",
+    "askDetail": "変更せずに回答する",
+    "auto": "自動モード",
+    "removeMode": "{{mode}}を解除",
+    "privacyExplanation": "このタスクはあなたと共有相手のみが閲覧できます",
+    "removePrivate": "非公開設定を解除",
+    "private": "非公開",
+    "worktrees": "ワークツリー",
+    "searchWorktrees": "ワークツリーを検索...",
+    "noMatchingWorktrees": "一致するワークツリーはありません。",
+    "selectWorktree": "ワークツリーを選択",
+    "loadingWorktrees": "既存のワークツリーを読み込み中…",
+    "loadFailed": "ワークツリーを読み込めませんでした。",
+    "noWorktrees": "ワークツリーはまだありません。「新しいワークツリー」を選択して作成してください。",
+    "reuse": "ワークツリーを再利用",
+    "otherOptions": "その他のオプション",
+    "existingWorkspace": "既存のワークスペース",
+    "modes": {
+      "isolated_workspace": {
+        "label": "新しいワークツリー",
+        "description": "独立したチェックアウトで開始します。"
+      },
+      "shared_workspace": {
+        "label": "プロジェクトのワークスペース",
+        "description": "プロジェクトの共有チェックアウトを使用します。"
+      },
+      "operator_branch": {
+        "label": "新しいブランチ",
+        "description": "プロジェクトのワークスペースにブランチを作成します。"
+      },
+      "agent_default": {
+        "label": "エージェントのデフォルト",
+        "description": "エージェントにワークスペースを選択させます。"
+      },
+      "inherit": {
+        "label": "プロジェクトのデフォルト",
+        "description": "プロジェクトのワークツリー設定を使用します。"
+      }
+    }
+  },
   "taskThreadFeedbackUi": {
     "you": "あなた",
     "addressedUser": "指定されたユーザー",
@@ -6082,6 +6342,14 @@
       "defer": "保留"
     }
   },
+  "taskThreadNoticeUi": {
+    "systemUpdate": "システム更新",
+    "claudeAuth": "タスク一時停止中 — Claude の再認証が必要です",
+    "missingBinding": "タスク一時停止中 — シークレットまたは設定のバインドが不足しています",
+    "workspaceProblem": "タスク一時停止中 — ワークスペースに問題があります",
+    "waitingOwner": "タスク一時停止中 — {{owner}} を待っています",
+    "waitingRecoveryOwner": "タスク一時停止中 — 復旧担当者を待っています"
+  },
   "taskThreadReceiptsUi": {
     "skipped": "対話をスキップしました",
     "withdrawn": "対話を取り下げました",
@@ -6138,6 +6406,28 @@
   "taskThreadResourceUi": {
     "documentRevision": "ドキュメント · リビジョン {{revision}}",
     "agentAttachment": "エージェントの添付ファイル"
+  },
+  "taskThreadToolsUi": {
+    "pending": "承認待ち",
+    "running": "承認済み · 実行中…",
+    "executed": "成功",
+    "failed": "実行に失敗しました",
+    "declined": "辞退済み",
+    "expired": "期限切れ",
+    "cancelled": "キャンセル済み",
+    "actionFailed": "操作を完了できませんでした。",
+    "alwaysAllowed": " · 常に許可",
+    "hideResult": "結果の詳細を非表示",
+    "showResult": "結果の詳細を表示",
+    "viewResult": "結果を表示",
+    "declining": "辞退中…",
+    "decline": "辞退",
+    "saving": "保存中…",
+    "approving": "承認中…",
+    "approveRun": "承認して実行",
+    "approveRequest": "リクエストを承認",
+    "approvalOptions": "承認オプション",
+    "alwaysAllow": "常に許可"
   },
   "toolActivityUi": {
     "exact_apply_patch_running": "パッチを適用中",

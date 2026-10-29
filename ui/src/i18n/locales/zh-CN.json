@@ -947,6 +947,79 @@
     "planDocument": "计划文档",
     "agent": "智能体"
   },
+  "attentionRowUi": {
+    "expand": "展开决策",
+    "collapse": "收起决策",
+    "more": "查看更多",
+    "less": "收起",
+    "open": "打开",
+    "restore": "恢复",
+    "rowActions": "行操作",
+    "dismiss": "忽略",
+    "openSource": "打开来源",
+    "actions": "决策操作",
+    "setBy": "由 {{name}} 设置",
+    "reappears": "{{time}}重新显示",
+    "soon": "即将",
+    "agent": "某个智能体",
+    "you": "你",
+    "whenever": "随时",
+    "notSet": "未设置",
+    "missingIssue": "此决策缺少任务引用。",
+    "detailRequired": "必须从详情页完成此决策。",
+    "note": "决策备注（选填）…",
+    "moreImages": "另有 {{n}} 项",
+    "viewIssue": "查看任务",
+    "snooze": "稍后处理",
+    "custom": "自定义",
+    "snoozeUntil": "稍后处理至…",
+    "oneHour": "1 小时",
+    "fourHours": "4 小时",
+    "tomorrow": "明天上午",
+    "nextWeek": "下周",
+    "options_one": "{{n}} 个选项",
+    "options_other": "{{n}} 个选项",
+    "questions_one": "{{n}} 个问题",
+    "questions_other": "{{n}} 个问题",
+    "suggestedTasks_one": "{{n}} 个建议任务",
+    "suggestedTasks_other": "{{n}} 个建议任务",
+    "verdicts_one": "{{n}} 个待判定项",
+    "verdicts_other": "{{n}} 个待判定项",
+    "blockedBy": "受 {{target}} 阻塞",
+    "budget": "已使用预算的 {{percent}}%（${{observed}} / ${{limit}}）",
+    "confirmationAccepted": "已接受确认",
+    "confirmationDeclined": "已拒绝确认",
+    "action": {
+      "approve": "批准",
+      "reject": "拒绝",
+      "accept": "接受",
+      "request_revision": "请求修改"
+    },
+    "error": {
+      "approve": "无法批准",
+      "reject": "无法拒绝",
+      "accept": "无法接受确认",
+      "request_revision": "无法请求修改"
+    },
+    "approval": {
+      "approve": "审批已批准",
+      "reject": "审批已拒绝",
+      "request_revision": "审批已退回修改"
+    },
+    "join_request": {
+      "approve": "加入请求已批准",
+      "reject": "加入请求已拒绝"
+    }
+  },
+  "auditNavigationUi": {
+    "title": "审计",
+    "activity": "活动",
+    "runs": "运行",
+    "costs": "费用",
+    "budgets": "预算",
+    "timeline": "时间线",
+    "selectOrganization": "请选择组织以查看审计。"
+  },
   "auth": {
     "failed": "身份验证失败",
     "unavailable": "无法检查登录状态，请刷新重试。",
@@ -2194,6 +2267,117 @@
     "unavailable": "此决策已不可用 — 可能已在其他位置处理。",
     "unknownResult": "{{target}} 的效果状态未知 — {{status}}"
   },
+  "decisionDeskUi": {
+    "decisions": "决策",
+    "selectCompany": "请先选择一个组织。",
+    "dismissed": "已忽略",
+    "undo": "撤销",
+    "snoozed": "已稍后处理",
+    "aging": "长期闲置",
+    "decided": "已决策",
+    "expired": "已过期",
+    "agingDesk": "闲置超过 {{days}} 天 — 已移出工作台。可保留仍需显示的决策。",
+    "agingQueue": "闲置超过 {{days}} 天 — 已移出队列。可保留仍需显示的决策。",
+    "loadingDecided": "正在加载已决策事项…",
+    "emptyDecided": "暂无已决策事项。",
+    "loadingExpired": "正在加载已过期决策…",
+    "emptyExpired": "暂无已过期决策。",
+    "bundle_one": "{{agent}} 提议了 {{n}} 项决策",
+    "bundle_other": "{{agent}} 提议了 {{n}} 项决策",
+    "agent": "某个智能体",
+    "fromSource": "· 来自 ",
+    "pendingCount": "{{n}} 项待处理",
+    "noMatch": "没有符合筛选条件的决策。",
+    "caughtUp": "已处理完毕。",
+    "adjustFilters": "调整或清除筛选条件以查看其余决策。",
+    "nothingNeedsYou": "目前没有需要你决策的事项。",
+    "emptyQueue": "此队列为空。",
+    "emptyQueueHelp": "决策符合队列规则或由智能体添加时会出现在此处。",
+    "seedError": "无法更新自动加入设置",
+    "tryAgain": "请重试。",
+    "seedOn": "自动加入已启用",
+    "seedOff": "自动加入已停用",
+    "seedOnHelp": "此队列会自动填充。决策符合任意规则时会立即加入：",
+    "seedOffHelp": "自动加入已暂停。启用后，以下规则会将决策加入队列：",
+    "disableSeedHelp": "停用只会停止新的自动加入 — 现有决策将保留，仍可手动添加或移除。",
+    "disabledSeedHelp": "自动加入停用时，仍可手动添加或移除决策。",
+    "disable": "停用",
+    "enable": "启用",
+    "removed": "已从队列移除",
+    "excludeError": "无法排除",
+    "exclude": "排除",
+    "removeTitle": "从此队列移除",
+    "reasonPlaceholder": "原因（选填）…",
+    "cancel": "取消",
+    "all": "全部",
+    "custom": "自定义",
+    "from": "开始日期",
+    "to": "结束日期",
+    "clear": "清除",
+    "filter": "筛选",
+    "group": "分组",
+    "sort": "排序",
+    "type": "类型",
+    "severity": "严重程度",
+    "project": "项目",
+    "workspace": "工作区",
+    "noProject": "无项目",
+    "noWorkspace": "无工作区",
+    "count_one": "{{n}} 项决策",
+    "count_other": "{{n}} 项决策",
+    "queues": "决策队列",
+    "recent": "近期活动",
+    "kept": "已保留",
+    "keep": "保留在工作台",
+    "keptToast": "已保留在工作台",
+    "keepError": "无法保留此决策",
+    "idle_one": "已闲置 {{n}} 天",
+    "idle_other": "已闲置 {{n}} 天",
+    "date": {
+      "all": "全部",
+      "today": "今天",
+      "yesterday": "昨天",
+      "last_7_days": "最近 7 天",
+      "this_month": "本月",
+      "this_week": "本周",
+      "earlier": "更早"
+    },
+    "groupBy": {
+      "none": "无",
+      "date": "日期",
+      "type": "类型",
+      "project": "项目",
+      "severity": "严重程度"
+    },
+    "sortBy": {
+      "newest": "最新优先",
+      "oldest": "最早优先"
+    },
+    "severities": {
+      "critical": "紧急",
+      "high": "高",
+      "medium": "中",
+      "low": "低"
+    },
+    "source": {
+      "approval": "审批",
+      "decision": "决策",
+      "issue_thread_interaction": "请求决策",
+      "join_request": "加入请求",
+      "recovery_action": "恢复",
+      "productivity_review": "任务",
+      "blocker_attention": "依赖阻塞",
+      "review": "审阅",
+      "failed_run": "运行失败",
+      "budget_alert": "预算",
+      "agent_error_alert": "智能体错误"
+    },
+    "shelf": {
+      "decide-now": "立即决策",
+      "new-today": "今日新增",
+      "earlier": "更早"
+    }
+  },
   "decisionSettingsUi": {
     "title": "决策模型",
     "viewUsage": "查看用量",
@@ -2809,6 +2993,27 @@
     "saveFailed": "无法保存收件箱 Agent 策略。",
     "saved": "已保存",
     "noCompany": "请选择组织后管理收件箱 Agent 归档策略。"
+  },
+  "instructionHistoryUi": {
+    "history": "历史记录",
+    "loading": "正在读取修订记录…",
+    "historyFailed": "无法读取指令历史记录。请重试读取。",
+    "diffFailed": "无法读取修订对比。请重试读取。",
+    "restoreFailed": "无法恢复修订。",
+    "retryHistory": "重试读取历史记录",
+    "retryDiff": "重试读取对比",
+    "retrying": "正在重试…",
+    "current": "当前",
+    "older": "更早的修订",
+    "selected": "已选修订",
+    "changes": "从已选修订到当前的变更",
+    "removed": "删除：",
+    "added": "新增：",
+    "unchanged": "内容无变更。",
+    "restore": "恢复为新修订",
+    "restoring": "正在恢复…",
+    "saveFirst": "恢复前请先保存或取消编辑。",
+    "empty": "暂无修订记录。"
   },
   "inviteAuth": {
     "checking": "正在检查登录方式…",
@@ -5457,6 +5662,12 @@
     "bindingWitnessBoundary": "这些路由凭据不是任务当前的运行状态，也不证明模型已使用输入或成功完成。请打开任务查看进度、错误和结果。",
     "openTask": "打开任务和运行详情"
   },
+  "searchableSelectUi": {
+    "close": "关闭选择器",
+    "search": "搜索...",
+    "empty": "未找到选项。",
+    "loading": "加载中..."
+  },
   "selectorHostUi": {
     "allSkills": "全部技能",
     "noSkillAgentsOrganization": "此组织中尚无支持技能的智能体。",
@@ -5983,6 +6194,55 @@
     "tryingAgain": "正在重试…",
     "tryAgain": "重试"
   },
+  "taskThreadComposerUi": {
+    "add": "添加",
+    "closeAdd": "关闭添加菜单",
+    "files": "文件和图片",
+    "privateTask": "私密任务",
+    "goal": "目标",
+    "keepPursuing": "持续推进",
+    "plan": "规划模式",
+    "planDetail": "先规划再执行",
+    "ask": "问答模式",
+    "askDetail": "仅回答，不做修改",
+    "auto": "自动模式",
+    "removeMode": "移除{{mode}}",
+    "privacyExplanation": "只有你和获得分享的人可以查看此任务",
+    "removePrivate": "取消私密任务",
+    "private": "私密",
+    "worktrees": "工作树",
+    "searchWorktrees": "搜索工作树...",
+    "noMatchingWorktrees": "没有匹配的工作树。",
+    "selectWorktree": "选择工作树",
+    "loadingWorktrees": "正在加载已有工作树…",
+    "loadFailed": "无法加载工作树。",
+    "noWorktrees": "还没有工作树。选择“新建工作树”来创建。",
+    "reuse": "复用工作树",
+    "otherOptions": "其他选项",
+    "existingWorkspace": "已有工作区",
+    "modes": {
+      "isolated_workspace": {
+        "label": "新建工作树",
+        "description": "在隔离的检出目录中开始。"
+      },
+      "shared_workspace": {
+        "label": "项目工作区",
+        "description": "使用项目的共享检出目录。"
+      },
+      "operator_branch": {
+        "label": "新建分支",
+        "description": "在项目工作区中创建分支。"
+      },
+      "agent_default": {
+        "label": "智能体默认设置",
+        "description": "让智能体选择工作区。"
+      },
+      "inherit": {
+        "label": "项目默认设置",
+        "description": "使用项目的工作树设置。"
+      }
+    }
+  },
   "taskThreadFeedbackUi": {
     "you": "你",
     "addressedUser": "指定用户",
@@ -6082,6 +6342,14 @@
       "defer": "暂缓"
     }
   },
+  "taskThreadNoticeUi": {
+    "systemUpdate": "系统更新",
+    "claudeAuth": "任务已暂停 — Claude 需要重新认证",
+    "missingBinding": "任务已暂停 — 缺少密钥或配置绑定",
+    "workspaceProblem": "任务已暂停 — 工作区出现问题",
+    "waitingOwner": "任务已暂停 — 等待 {{owner}}",
+    "waitingRecoveryOwner": "任务已暂停 — 等待恢复负责人"
+  },
   "taskThreadReceiptsUi": {
     "skipped": "已跳过交互",
     "withdrawn": "已撤回交互",
@@ -6138,6 +6406,28 @@
   "taskThreadResourceUi": {
     "documentRevision": "文档 · 修订 {{revision}}",
     "agentAttachment": "智能体附件"
+  },
+  "taskThreadToolsUi": {
+    "pending": "等待批准",
+    "running": "已批准 · 运行中…",
+    "executed": "已成功",
+    "failed": "执行失败",
+    "declined": "已拒绝",
+    "expired": "已过期",
+    "cancelled": "已取消",
+    "actionFailed": "操作未能完成。",
+    "alwaysAllowed": " · 始终允许",
+    "hideResult": "隐藏结果详情",
+    "showResult": "显示结果详情",
+    "viewResult": "查看结果",
+    "declining": "正在拒绝…",
+    "decline": "拒绝",
+    "saving": "正在保存…",
+    "approving": "正在批准…",
+    "approveRun": "批准并运行",
+    "approveRequest": "批准请求",
+    "approvalOptions": "批准选项",
+    "alwaysAllow": "始终允许"
   },
   "toolActivityUi": {
     "exact_apply_patch_running": "正在应用补丁",
