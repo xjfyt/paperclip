@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 // Exact source contracts only, not runtime/E2E proof for every host. No compiler API is required.
-function readPage(path: string) { return readFileSync(new URL(`../pages/${path}`, import.meta.url), "utf8"); }
+function readPage(path: string) { return readFileSync(new URL(`../pages/${path}`, import.meta.url), "utf8").replace(/\r\n/g, "\n"); }
 function occurrences(source: string, text: string, count: number) {
   expect(source.split(text).length - 1, text).toBe(count);
 }

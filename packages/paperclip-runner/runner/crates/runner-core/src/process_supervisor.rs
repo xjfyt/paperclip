@@ -1,10 +1,17 @@
 use std::cell::Cell;
 use std::collections::VecDeque;
-use std::fs::{self, File, OpenOptions};
-use std::io::{self, BufRead, BufReader, Read, Seek, SeekFrom, Write};
+#[cfg(any(target_os = "macos", all(test, target_os = "linux")))]
+use std::fs;
+use std::fs::File;
+#[cfg(target_os = "macos")]
+use std::fs::OpenOptions;
+use std::io::{self, BufRead, BufReader, Write};
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender};
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -22,12 +29,14 @@ use std::os::unix::fs::{FileExt, MetadataExt, OpenOptionsExt, PermissionsExt};
 use uuid::Uuid;
 
 use serde::Serialize;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use sha2::{Digest, Sha256};
 
 use crate::local_runner::LocalRunnerError;
 
 const PROCESS_OUTPUT_QUEUE_CAPACITY: usize = 256;
 const VERIFIED_RUNTIME_EXECUTABLE_ENV: &str = "PAPERCLIP_VERIFIED_RUNTIME_EXECUTABLE";
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 const VERIFIED_COMMONJS_ARTIFACT_LOADER: &str = r#"const fs=require("node:fs");const Module=require("node:module");const filename=process.argv[1];const source=fs.readFileSync(filename,"utf8").replace(/^#![^\r\n]*(?:\r?\n|$)/,"");const artifact=new Module(filename);artifact.filename=filename;artifact.paths=[];artifact._compile(source,filename);"#;
 
 pub(crate) fn is_node_interpreter(path: &Path) -> bool {
@@ -38,7 +47,9 @@ pub(crate) fn is_node_interpreter(path: &Path) -> bool {
 
 #[derive(Clone, Debug)]
 pub struct VerifiedProcessArtifact {
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     display_path: PathBuf,
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     file: Arc<File>,
     #[cfg(target_os = "macos")]
     executable: Option<Arc<NamedExecutableSnapshot>>,
@@ -47,29 +58,38 @@ pub struct VerifiedProcessArtifact {
 impl VerifiedProcessArtifact {
     pub fn snapshot_verified(
         display_path: PathBuf,
-        mut file: File,
+        file: File,
         expected_sha256: &str,
     ) -> Result<Self, LocalRunnerError> {
-        file.seek(SeekFrom::Start(0)).map_err(|error| {
-            LocalRunnerError::invalid(format!(
-                "failed to rewind verified process artifact {}: {error}",
-                display_path.display()
-            ))
-        })?;
-        #[cfg(target_os = "linux")]
-        let file = sealed_snapshot(&display_path, &mut file, expected_sha256)?;
-        #[cfg(target_os = "macos")]
-        let file = unlinked_snapshot(&display_path, &mut file, expected_sha256)?;
-        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-        return Err(LocalRunnerError::invalid(
-            "verified process snapshots are supported only on Linux and macOS",
-        ));
-        Ok(Self {
-            display_path,
-            file: Arc::new(file),
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        {
+            let mut file = file;
+            file.seek(SeekFrom::Start(0)).map_err(|error| {
+                LocalRunnerError::invalid(format!(
+                    "failed to rewind verified process artifact {}: {error}",
+                    display_path.display()
+                ))
+            })?;
+            #[cfg(target_os = "linux")]
+            let file = sealed_snapshot(&display_path, &mut file, expected_sha256)?;
             #[cfg(target_os = "macos")]
-            executable: None,
-        })
+            let file = unlinked_snapshot(&display_path, &mut file, expected_sha256)?;
+            Ok(Self {
+                display_path,
+                file: Arc::new(file),
+                #[cfg(target_os = "macos")]
+                executable: None,
+            })
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+        {
+            // Unsupported platforms never retain a source handle or produce a
+            // launchable artifact. Keep the explicit fail-closed contract.
+            drop((display_path, file, expected_sha256));
+            Err(LocalRunnerError::invalid(
+                "verified process snapshots are supported only on Linux and macOS",
+            ))
+        }
     }
 
     /// Executable snapshots need a named image on Darwin. Construct that image
@@ -393,6 +413,7 @@ fn unlinked_snapshot(
     result
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn copy_verified(
     source: &mut File,
     destination: &mut File,
@@ -423,6 +444,7 @@ fn copy_verified(
     Ok(())
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn snapshot_error(display_path: &Path, error: impl std::fmt::Display) -> LocalRunnerError {
     LocalRunnerError::invalid(format!(
         "failed to create immutable process snapshot for {}: {error}",
@@ -440,15 +462,23 @@ pub enum VerifiedProcessArgument {
 
 #[derive(Clone, Debug)]
 pub struct VerifiedProcessLaunch {
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     program: VerifiedProcessArtifact,
+    #[cfg(any(test, target_os = "linux", target_os = "macos"))]
     args: Vec<VerifiedProcessArgument>,
     inherit_runtime_executable: bool,
 }
 
 impl VerifiedProcessLaunch {
     pub fn new(program: VerifiedProcessArtifact, args: Vec<VerifiedProcessArgument>) -> Self {
+        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+        drop(program);
+        #[cfg(not(any(test, target_os = "linux", target_os = "macos")))]
+        drop(args);
         Self {
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
             program,
+            #[cfg(any(test, target_os = "linux", target_os = "macos"))]
             args,
             inherit_runtime_executable: false,
         }
@@ -901,7 +931,7 @@ pub struct SupervisedProcess {
 }
 
 impl SupervisedProcess {
-    #[cfg(test)]
+    #[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
     pub(crate) fn replace_output_receiver_for_test(
         &mut self,
         output: Receiver<ProcessOutput>,

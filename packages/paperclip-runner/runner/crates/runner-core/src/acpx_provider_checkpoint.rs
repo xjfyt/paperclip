@@ -10,8 +10,7 @@ use std::os::unix::fs::DirBuilderExt;
 use serde::{Deserialize, Serialize};
 
 use crate::acpx_provider_session::{
-    AcpxPermissionMode, AcpxProviderSessionConfig, AcpxProviderSessionIdentity, CursorMode,
-    PiThinkingLevel,
+    AcpxPermissionMode, AcpxProviderSessionConfig, AcpxProviderSessionIdentity, PiThinkingLevel,
 };
 use crate::durable::{
     create_private_temporary_file, open_private_regular_file, verify_private_directory,
@@ -298,9 +297,13 @@ fn read_checkpoint_bytes(
 }
 
 fn secure_directory(path: &Path, label: &str) -> Result<(), LocalRunnerError> {
-    let mut builder = DirBuilder::new();
+    let builder = DirBuilder::new();
     #[cfg(unix)]
-    builder.mode(0o700);
+    let builder = {
+        let mut builder = builder;
+        builder.mode(0o700);
+        builder
+    };
     match builder.create(path) {
         Ok(()) => {}
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}

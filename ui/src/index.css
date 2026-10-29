@@ -472,25 +472,9 @@
   background-color: var(--streamlined-task-detail-bg);
 }
 
-::highlight(paperclip-doc-annotation-open) {
-  background-color: transparent;
-  color: inherit;
-}
-
-::highlight(paperclip-doc-annotation-focused) {
-  background-color: transparent;
-  color: inherit;
-}
-
-::highlight(paperclip-doc-annotation-stale) {
-  background-color: transparent;
-  color: inherit;
-}
-
-::highlight(paperclip-doc-annotation-resolved) {
-  background-color: transparent;
-  color: inherit;
-}
+/* Native annotation ranges intentionally have no paint rules: the overlay
+   below owns their visuals. Unstyled custom highlights already preserve the
+   originating text color and transparent background. */
 
 .paperclip-doc-annotation-highlight::before {
   position: absolute;

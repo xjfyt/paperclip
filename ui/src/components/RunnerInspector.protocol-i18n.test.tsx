@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { readFileSync } from "node:fs";
+import path from "node:path";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it } from "vitest";
@@ -121,8 +122,8 @@ it.each(locales)("real inspector terminal keeps raw status/reason while translat
 });
 
 it("keeps the production inspector selection-to-preview wiring reachable from AgentDetail RunDetail", () => {
-  const page = readFileSync("src/pages/AgentDetail.tsx", "utf8");
-  const inspector = readFileSync("src/components/RunnerInspector.tsx", "utf8");
+  const page = readFileSync(path.resolve(import.meta.dirname, "../pages/AgentDetail.tsx"), "utf8");
+  const inspector = readFileSync(path.resolve(import.meta.dirname, "RunnerInspector.tsx"), "utf8");
   expect(page).toMatch(/onClick=\{\(\) => setInspectorOpen\(true\)\}[\s\S]*?workflow\.inspectRun/);
   expect(page).toMatch(/<RunnerInspector[\s\S]*?runId=\{run.id\}[\s\S]*?open=\{inspectorOpen\}/);
   expect(inspector).toContain('const selectedEvents = selectedOperation?.events ?? [];');

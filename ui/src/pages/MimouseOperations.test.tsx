@@ -15,7 +15,15 @@ const id = "11111111-1111-4111-8111-111111111111", hash = "a".repeat(64);
 const operation = { key: "b".repeat(64), sourceId: "source-a", targetId: "target-a", action: "update", before: { amount: "100.00" }, after: { amount: "123.40" }, expectedTargetHash: "c".repeat(64), expectedTargetVersion: "declared-only", sourceHash: "d".repeat(64), afterHash: "e".repeat(64) };
 const base = { id, companyId: "company-a", requestId: "22222222-2222-4222-8222-222222222222", actorId: "owner-a", approvalId: null, createdAt: "2026-10-26T00:00:00Z", preview: { schemaVersion: 1, companyId: "company-a", period: "2026-10", timeZone: "Asia/Shanghai", sourceInstance: "import", targetInstance: "target", mapping: [{ sourceField: "amount", targetField: "amount" }], operations: [operation], excluded: [], counts: { insert: 0, update: 1, noop: 0, excluded: 0 }, evidenceMode: "imported_snapshot", mode: "dry_run", externalWrites: 0, previewHash: hash } };
 let host: HTMLDivElement, root: Root, client: QueryClient, approved: boolean, requested: boolean, current: typeof base;
-async function flush() { await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); }); }
+async function flush() {
+  // Auth, list and detail queries form a render-dependent chain. A fixed 10ms
+  // sleep races their notifications on Windows and under a loaded test shard.
+  await vi.waitFor(async () => {
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+    expect(client.isFetching()).toBe(0);
+    expect(host.textContent).not.toContain(i18n.t("common.loading"));
+  });
+}
 async function mount() { await act(async () => root.render(<QueryClientProvider client={client}><MimouseOperations /></QueryClientProvider>)); await flush(); }
 function button(text: string) { const found = [...host.querySelectorAll("button")].find(item => item.textContent?.trim() === text); expect(found).toBeTruthy(); return found!; }
 async function click(element: Element) { await act(async () => element.dispatchEvent(new MouseEvent("click", { bubbles: true }))); await flush(); }

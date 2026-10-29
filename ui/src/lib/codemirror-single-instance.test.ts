@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 // CodeMirror validates extensions with instanceof, and Lezer allocates
 // NodeProp IDs within each module instance. The installed graph must contain
@@ -33,7 +33,7 @@ const rootManifest = JSON.parse(
 ) as { pnpm?: { overrides?: Record<string, string> } };
 
 /**
- * Every physical copy of `target` reachable from the ui package's
+ * Every physical copy of the invariant packages reachable from the ui package's
  * installed graph. Walks the graph the way pnpm lays it out — each
  * package's dependencies are linked either in its own node_modules
  * (workspace packages) or beside it in its .pnpm bucket — and realpaths
@@ -41,9 +41,10 @@ const rootManifest = JSON.parse(
  * from the ui roots keeps orphaned .pnpm buckets from older installs out
  * of the census.
  */
-function reachableCopies(target: string): string[] {
-  const copies = new Set<string>();
+function reachableCopies(): Map<string, Set<string>> {
+  const copies = new Map(SINGLE_INSTANCE_PACKAGES.map(([name]) => [name as string, new Set<string>()]));
   const visited = new Set<string>();
+  const visitedDependencyDirs = new Set<string>();
   const queue: string[] = [uiRoot];
 
   const packageEntries = (nodeModulesDir: string): string[] => {
@@ -62,8 +63,8 @@ function reachableCopies(target: string): string[] {
     return entries;
   };
 
-  while (queue.length > 0) {
-    const packageDir = queue.shift()!;
+  for (let index = 0; index < queue.length; index++) {
+    const packageDir = queue[index];
     if (visited.has(packageDir)) continue;
     visited.add(packageDir);
     if (visited.size > 20_000) {
@@ -83,6 +84,8 @@ function reachableCopies(target: string): string[] {
     }
 
     for (const dependencyDir of dependencyDirs) {
+      if (visitedDependencyDirs.has(dependencyDir)) continue;
+      visitedDependencyDirs.add(dependencyDir);
       if (!existsSync(dependencyDir)) continue;
       for (const entry of packageEntries(dependencyDir)) {
         let entryDir: string;
@@ -91,15 +94,20 @@ function reachableCopies(target: string): string[] {
         } catch {
           continue; // dangling symlink
         }
-        if (entry === target) copies.add(entryDir);
+        copies.get(entry)?.add(entryDir);
         queue.push(entryDir);
       }
     }
   }
-  return [...copies];
+  return copies;
 }
 
 describe("codemirror single-instance invariant", () => {
+  let installedCopies: Map<string, Set<string>>;
+  // Inspect the real installed graph once. This is filesystem setup rather
+  // than three separate 5s unit tests; cold Windows disks can exceed that
+  // budget without any duplicate package. Keep the complete graph/bound.
+  beforeAll(() => { installedCopies = reachableCopies(); }, 60_000);
   for (const [pkg, major] of SINGLE_INSTANCE_PACKAGES) {
     it(`keeps the ${pkg} override in the root manifest and its workspace mirror`, () => {
       // Removing the override is the only way a second copy can come
@@ -119,7 +127,7 @@ describe("codemirror single-instance invariant", () => {
     });
 
     it(`installs exactly one physical copy of ${pkg}`, () => {
-      const copies = reachableCopies(pkg);
+      const copies = [...installedCopies.get(pkg)!];
       expect(
         copies.length,
         `${pkg} is not installed anywhere in the ui graph`,

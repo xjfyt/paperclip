@@ -18,7 +18,13 @@ vi.mock("@/context/CompanyContext", () => ({ useCompany: () => ({ selectedCompan
 vi.mock("@/context/BreadcrumbContext", () => ({ useBreadcrumbs: () => ({ setBreadcrumbs: calls.breadcrumbs }) }));
 const report = { id: "report-a", companyId: "company-a", datasetId: "dataset-a", report: { reportHash: "a".repeat(64), baseline: { versionId: "base", cases: 1, passed: 1, blocked: 0, totalCostCents: null, knownCostCents: 0 }, candidate: { versionId: "next", cases: 1, passed: 1, blocked: 0, totalCostCents: null, knownCostCents: 0 }, passCountDelta: 0, eligibleForHumanReview: false, blockers: ["candidate_cost_unknown"], results: [] } };
 let host: HTMLDivElement, root: Root, client: QueryClient;
-async function flush() { await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); }); }
+async function flush() {
+  await vi.waitFor(async () => {
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+    expect(client.isFetching()).toBe(0);
+    expect(host.textContent).not.toContain(i18n.t("common.loading"));
+  });
+}
 async function mount() { await act(async () => root.render(<QueryClientProvider client={client}><MimouseEvaluation /></QueryClientProvider>)); await flush(); }
 beforeEach(async () => {
   for (const [locale, value] of Object.entries({ en, "zh-CN": zh, es, ja })) i18n.addResourceBundle(locale, "translation", { evaluationUi: value }, true, true);

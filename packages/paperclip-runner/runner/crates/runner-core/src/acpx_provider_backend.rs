@@ -2,7 +2,9 @@ use crate::generated_acpx_profiles::{
     acpx_release_profile, ACPX_DRIVER_KIND, QUALIFIED_ACPX_VERSION,
 };
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
-use std::fs::{self, DirBuilder, File};
+#[cfg(unix)]
+use std::fs::File;
+use std::fs::{self, DirBuilder};
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
@@ -2379,9 +2381,13 @@ fn replacement_continuity_payload(
 }
 
 fn secure_directory(path: &Path, label: &str) -> Result<(), DurableRunnerError> {
-    let mut builder = DirBuilder::new();
+    let builder = DirBuilder::new();
     #[cfg(unix)]
-    builder.mode(0o700);
+    let builder = {
+        let mut builder = builder;
+        builder.mode(0o700);
+        builder
+    };
     match builder.create(path) {
         Ok(()) => {}
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
@@ -2416,12 +2422,12 @@ mod tests {
         directory
     }
 
-    fn write_artifact(path: &Path, contents: &[u8], executable: bool) {
+    fn write_artifact(path: &Path, contents: &[u8], _executable: bool) {
         fs::write(path, contents).unwrap();
         #[cfg(unix)]
         fs::set_permissions(
             path,
-            fs::Permissions::from_mode(if executable { 0o700 } else { 0o600 }),
+            fs::Permissions::from_mode(if _executable { 0o700 } else { 0o600 }),
         )
         .unwrap();
     }

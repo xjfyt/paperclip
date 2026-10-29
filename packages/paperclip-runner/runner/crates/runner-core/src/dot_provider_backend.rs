@@ -2,7 +2,9 @@
 //! receipts; the authenticated controller owns OAuth, the mailbox and policy.
 //! No network credential or callback address enters this provider descriptor.
 use std::collections::{BTreeMap, VecDeque};
-use std::fs::{self, File};
+use std::fs;
+#[cfg(unix)]
+use std::fs::File;
 use std::io::{Read, Write};
 use std::path::PathBuf;
 

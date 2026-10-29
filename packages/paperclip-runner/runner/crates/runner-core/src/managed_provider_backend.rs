@@ -2232,9 +2232,13 @@ fn session_event_payload(
 }
 
 fn secure_directory(path: &Path, label: &str) -> Result<(), DurableRunnerError> {
-    let mut builder = DirBuilder::new();
+    let builder = DirBuilder::new();
     #[cfg(unix)]
-    builder.mode(0o700);
+    let builder = {
+        let mut builder = builder;
+        builder.mode(0o700);
+        builder
+    };
     match builder.create(path) {
         Ok(()) => {}
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}

@@ -14,7 +14,13 @@ vi.mock("@/api/auth", () => ({ authApi: auth }));
 vi.mock("@/context/CompanyContext", () => ({ useCompany: () => company })); vi.mock("@/api/client", () => ({ api })); vi.mock("@/api/agents", () => ({ agentsApi: agents }));
 let host: HTMLDivElement, root: Root, client: QueryClient;
 const data = { enabled: true, connections: [{ id: "connection-1", status: "connected", allowedAgentIds: [] }], jobs: [] };
-async function flush() { await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); }); }
+async function flush() {
+  await vi.waitFor(async () => {
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+    expect(client.isFetching()).toBe(0);
+    expect(host.textContent).not.toContain(i18n.t("common.loading"));
+  });
+}
 async function mount() { await act(async () => root.render(<BreadcrumbProvider><QueryClientProvider client={client}><MimouseWorkbuddy /></QueryClientProvider></BreadcrumbProvider>)); await flush(); }
 async function click(element: Element) { await act(async () => { element.dispatchEvent(new MouseEvent("click", { bubbles: true })); }); await flush(); }
 beforeEach(async () => {
@@ -36,5 +42,12 @@ it("changing the selection clears its prior permission confirmation", async () =
 it("remounts account-scoped controls when the signed-in user changes", async () => {
   await mount(); const checks = host.querySelectorAll('input[type="checkbox"]'); await click(checks[0]); await click(checks[1]);
   await act(async () => { client.setQueryData(queryKeys.auth.session, { user: { id: "owner-b" }, session: { userId: "owner-b" } }); }); await flush();
-  const next = host.querySelectorAll('input[type="checkbox"]'); expect((next[0] as HTMLInputElement).checked).toBe(false); expect((next[1] as HTMLInputElement).checked).toBe(false); expect(api.post).not.toHaveBeenCalled();
+  await vi.waitFor(async () => {
+    await flush();
+    expect(client.getQueryData(["workbuddy-authorizable-agents", "company-a", "owner-b"])).toHaveLength(1);
+    const next = host.querySelectorAll<HTMLInputElement>('input[type="checkbox"]');
+    expect(next).toHaveLength(3);
+    expect(next[0].checked).toBe(false); expect(next[1].checked).toBe(false);
+  });
+  expect(api.post).not.toHaveBeenCalled();
 });

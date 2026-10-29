@@ -158,6 +158,7 @@ pub(crate) fn apply_configured_environment(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
     use std::collections::BTreeMap;
 
     #[test]

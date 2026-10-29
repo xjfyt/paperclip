@@ -16,7 +16,14 @@ vi.mock("@/api/file-resources", () => ({ fileResourcesApi: { resolve: async () =
 vi.mock("@/components/FileViewerSheet", () => ({ FileViewerMetadataRow: () => null, FileViewerBody: ({ onSetAnnouncement }: { onSetAnnouncement: (value: string) => void }) => { mock.announce = onSetAnnouncement; return <p>Raw 原文 1234</p>; } }));
 let root: Root; let container: HTMLDivElement; let client: QueryClient;
 const payload: Extract<TaskSidePanelTabPayload, { kind: "workspace-file" }> = { kind: "workspace-file", path: "same/report.md", workspace: "auto", workspaceId: null, projectId: null, line: null, column: null };
-async function render(issueId = "one") { await act(async () => root.render(<QueryClientProvider client={client}><TaskWorkspaceFilePanel issueId={issueId} payload={payload} /></QueryClientProvider>)); await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); }); }
+async function render(issueId = "one") {
+  await act(async () => root.render(<QueryClientProvider client={client}><TaskWorkspaceFilePanel issueId={issueId} payload={payload} /></QueryClientProvider>));
+  await vi.waitFor(async () => {
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+    expect(client.isFetching()).toBe(0);
+    expect(container.querySelector('button[aria-label="Copy file contents"]')).not.toBeNull();
+  });
+}
 beforeEach(async () => { await i18n.changeLanguage("en"); mock.company = "one"; container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container); client = new QueryClient({ defaultOptions: { queries: { retry: false } } }); });
 afterEach(async () => { await act(async () => root.unmount()); client.clear(); container.remove(); vi.resetAllMocks(); });
 it.each(["issue", "company"])("ignores late clipboard and announcement after changing %s with the same path", async field => {
