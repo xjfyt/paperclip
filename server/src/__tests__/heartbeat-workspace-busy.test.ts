@@ -308,7 +308,8 @@ describeEmbeddedPostgres("shared-workspace run serialization", () => {
         driver: agentEnvironmentDriver,
         status: "active",
         config: agentEnvironmentDriver === "ssh"
-          ? { host: "workspace-test.invalid", username: "test", remoteWorkspacePath: workspaceCwd }
+          // The mocked SSH provider has a POSIX namespace independent of the host.
+          ? { host: "workspace-test.invalid", username: "test", remoteWorkspacePath: `/workspaces/${companyId}` }
           : { provider: "fake", image: "fake:test", reuseLease: false },
       });
     }
