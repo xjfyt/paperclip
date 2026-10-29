@@ -179,15 +179,14 @@ export function TaskBrowserFooter({
                   <DropdownMenuLabel>{t("taskRecoveryControlsUi.browser.size")}</DropdownMenuLabel>
                   <DropdownMenuRadioGroup
                     value={viewport}
+                    // Radix also emits this when the selected value is chosen again.
+                    // Keep one path so explicit reapply/takeover does not dispatch twice.
                     onValueChange={(value) =>
                       onResize(value as BrowserUseViewportPreset)
                     }
                   >
                     <DropdownMenuRadioItem
                       value="fit"
-                      onSelect={() => {
-                        if (viewport === "fit") onResize("fit");
-                      }}
                     >
                       {t("taskRecoveryControlsUi.browser.fit")}
                     </DropdownMenuRadioItem>
@@ -199,9 +198,6 @@ export function TaskBrowserFooter({
                     <DropdownMenuSeparator />
                     <DropdownMenuRadioItem
                       value="default"
-                      onSelect={() => {
-                        if (viewport === "default") onResize("default");
-                      }}
                     >
                       {t("taskRecoveryControlsUi.browser.browserDefault")}
                     </DropdownMenuRadioItem>
@@ -210,9 +206,6 @@ export function TaskBrowserFooter({
                       <DropdownMenuRadioItem
                         key={preset.id}
                         value={preset.id}
-                        onSelect={() => {
-                          if (viewport === preset.id) onResize(preset.id);
-                        }}
                       >
                         <span>{t(`taskRecoveryControlsUi.browser.presets.${preset.id}`)}</span>
                         <span className="ml-auto font-mono text-xs tabular-nums text-muted-foreground">

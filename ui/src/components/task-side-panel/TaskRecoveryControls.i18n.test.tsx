@@ -192,9 +192,7 @@ describe.each(languages)("mounted recovery controls in %s", language => {
       for (let repeat = 0; repeat < 2; repeat += 1) {
         await openSizes(); const count = props.onResize.mock.calls.length;
         menuItem(label).click(); await settle();
-        // Preserve the existing same-selection callbacks in this copy-only change:
-        // the item onSelect and Radix group onValueChange both reapply it.
-        expect(props.onResize.mock.calls.slice(count)).toEqual([[preset], [preset]]);
+        expect(props.onResize.mock.calls.slice(count)).toEqual([[preset]]);
       }
     }
     footer({ ...props, resizing: true }); expect(container.textContent).toContain(tr("browser.resizing"));
