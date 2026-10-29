@@ -10,6 +10,14 @@ import { BrokerClientError, UnixBrokerClient } from "./broker-client.js";
 
 const LENGTH_PREFIX_BYTES = 4;
 
+// Exercise the same real IPC framing over the host's socket namespace. This
+// does not claim that the privileged Unix broker itself runs on Windows.
+function fixtureSocket(name: string): string {
+  return process.platform === "win32"
+    ? `\\\\.\\pipe\\paperclip-${name}-${randomUUID()}`
+    : path.join(os.tmpdir(), `${name}-${randomUUID()}.sock`);
+}
+
 /**
  * Minimal in-process broker that speaks the exact `[4-byte BE length][json]`
  * framing of the real socket server, so these tests exercise the client's
@@ -18,7 +26,7 @@ const LENGTH_PREFIX_BYTES = 4;
 function startFakeBroker(
   handler: (request: Record<string, unknown>) => unknown,
 ): { socketPath: string; server: net.Server } {
-  const socketPath = path.join(os.tmpdir(), `tsh-broker-${randomUUID()}.sock`);
+  const socketPath = fixtureSocket("tsh-broker");
   const server = net.createServer((socket) => {
     const chunks: Buffer[] = [];
     let expected = -1;
@@ -156,7 +164,7 @@ describe("UnixBrokerClient", () => {
 
   it("errors when the socket path does not exist (transport error)", async () => {
     const client = new UnixBrokerClient({
-      socketPath: path.join(os.tmpdir(), `missing-${randomUUID()}.sock`),
+      socketPath: fixtureSocket("missing"),
       timeoutMs: 500,
     });
     await expect(client.list()).rejects.toMatchObject({ code: "transport_error" });
@@ -165,7 +173,7 @@ describe("UnixBrokerClient", () => {
 
 /** Build a truly-silent broker and assert the client times out against it. */
 async function silentTimeout(): Promise<boolean> {
-  const socketPath = path.join(os.tmpdir(), `silent-${randomUUID()}.sock`);
+  const socketPath = fixtureSocket("silent");
   const connections: net.Socket[] = [];
   const server = net.createServer((socket) => {
     // Accept, never respond. Swallow the abortive close the client sends when

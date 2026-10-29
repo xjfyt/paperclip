@@ -23,7 +23,9 @@ describe("local service supervision", () => {
     await resetRuntimeServicesForTests({ terminateProcesses: true });
   });
 
-  it("keeps request-logging runtime stdio usable after the supervisor side closes", async () => {
+  it(process.platform === "win32"
+    ? "rejects unsupported service supervision before creating a registry or starting a service"
+    : "keeps request-logging runtime stdio usable after the supervisor side closes", async () => {
     const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-service-stdio-"));
     const paperclipHome = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-service-home-"));
     const previousPaperclipHome = process.env.PAPERCLIP_HOME;
@@ -40,7 +42,7 @@ describe("local service supervision", () => {
     const nodeCommand = "'" + nodeExecutable.replace(/'/g, "'\\''") + "'";
     let registryRecord: Awaited<ReturnType<typeof listLocalServiceRegistryRecords>>[number] | null = null;
     try {
-      const [service] = await startRuntimeServicesForWorkspaceControl({
+      const starting = startRuntimeServicesForWorkspaceControl({
         actor: { id: null, name: "Board", companyId: randomUUID() },
         issue: null,
         workspace: {
@@ -78,6 +80,15 @@ describe("local service supervision", () => {
         adapterEnv: {},
       });
 
+      if (process.platform === "win32") {
+        await expect(starting).rejects.toMatchObject({ status: 422,
+          details: { code: "workspace_runtime_service_platform_unsupported" } });
+        expect(await fs.readdir(workspaceRoot)).toEqual([]);
+        expect(await fs.readdir(paperclipHome)).toEqual([]);
+        return;
+      }
+      const [service] = await starting;
+
       expect(service?.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
       expect(service?.port).toBeTypeOf("number");
       registryRecord = (await listLocalServiceRegistryRecords({ profileKind: "workspace-runtime" }))
@@ -106,8 +117,7 @@ describe("local service supervision", () => {
     }
   }, 15_000);
 
-  it("does not wait for an unrelated process that takes over the service port", async () => {
-    if (process.platform === "win32") return;
+  it.skipIf(process.platform === "win32")("does not wait for an unrelated process that takes over the service port", async () => {
     const unrelatedListener = net.createServer();
     await new Promise<void>((resolve) => unrelatedListener.listen(0, "127.0.0.1", resolve));
     const address = unrelatedListener.address();

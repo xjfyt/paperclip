@@ -1,8 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { installIsolatedHostFixture } from "@paperclipai/adapter-utils/test-fixtures/isolated-host";
+import { writeCliFixture } from "@paperclipai/adapter-utils/test-fixtures/native-cli";
+installIsolatedHostFixture();
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { execute } from "@paperclipai/adapter-pi-local/server";
+// Pi captures its home at module load. Import after the isolated host hook so
+// these real child processes never install skills in the developer's home.
+beforeEach(() => vi.resetModules());
 
 async function writeFakePiCommand(commandPath: string): Promise<void> {
   const script = `#!/usr/bin/env node
@@ -23,8 +28,7 @@ console.log(JSON.stringify({
 }));
 process.exit(0);
 `;
-  await fs.writeFile(commandPath, script, "utf8");
-  await fs.chmod(commandPath, 0o755);
+  await writeCliFixture(commandPath.replace(/\.exe$/, ""), script);
 }
 
 async function writeEnvDumpPiCommand(commandPath: string, envDumpPath: string): Promise<void> {
@@ -42,15 +46,14 @@ console.log(JSON.stringify({ type: "turn_end", message: { role: "assistant", con
 console.log(JSON.stringify({ type: "agent_end", messages: [] }));
 process.exit(0);
 `;
-  await fs.writeFile(commandPath, script, "utf8");
-  await fs.chmod(commandPath, 0o755);
+  await writeCliFixture(commandPath.replace(/\.exe$/, ""), script);
 }
 
 describe("pi_local execute", () => {
   it("fails the run when Pi exhausts automatic retries despite exiting 0", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-pi-execute-"));
     const workspace = path.join(root, "workspace");
-    const commandPath = path.join(root, "pi");
+    const commandPath = path.join(root, process.platform === "win32" ? "pi.exe" : "pi");
     await fs.mkdir(workspace, { recursive: true });
     await writeFakePiCommand(commandPath);
 
@@ -58,6 +61,7 @@ describe("pi_local execute", () => {
     process.env.HOME = root;
 
     try {
+      const { execute } = await import("@paperclipai/adapter-pi-local/server");
       const result = await execute({
         runId: "run-pi-quota-exhausted",
         agent: {
@@ -96,7 +100,7 @@ describe("pi_local execute", () => {
   it("prepends installed skill bin/ dirs to the spawned Pi child PATH", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-pi-path-"));
     const workspace = path.join(root, "workspace");
-    const commandPath = path.join(root, "pi");
+    const commandPath = path.join(root, process.platform === "win32" ? "pi.exe" : "pi");
     const skillDir = path.join(root, "skills", "demo-skill");
     const skillBinDir = path.join(skillDir, "bin");
     const envDumpPath = path.join(root, "captured-path.txt");
@@ -109,6 +113,7 @@ describe("pi_local execute", () => {
     process.env.HOME = root;
 
     try {
+      const { execute } = await import("@paperclipai/adapter-pi-local/server");
       await execute({
         runId: "run-pi-skill-path",
         agent: {
@@ -155,7 +160,7 @@ describe("pi_local execute", () => {
   it("does not expose bin/ dirs from skills that are not injected", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-pi-path-neg-"));
     const workspace = path.join(root, "workspace");
-    const commandPath = path.join(root, "pi");
+    const commandPath = path.join(root, process.platform === "win32" ? "pi.exe" : "pi");
     const nonInjectedSkillDir = path.join(root, "skills", "not-injected");
     const nonInjectedBinDir = path.join(nonInjectedSkillDir, "bin");
     const envDumpPath = path.join(root, "captured-path.txt");
@@ -168,6 +173,7 @@ describe("pi_local execute", () => {
     process.env.HOME = root;
 
     try {
+      const { execute } = await import("@paperclipai/adapter-pi-local/server");
       await execute({
         runId: "run-pi-skill-path-neg",
         agent: {
