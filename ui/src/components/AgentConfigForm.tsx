@@ -344,6 +344,7 @@ function ConfigSections({ order, className, children }: {
 /* ---- Form ---- */
 
 export function AgentConfigForm(props: AgentConfigFormProps) {
+  const { t } = useTranslation();
   const { mode, adapterModels: externalModels } = props;
   const isCreate = mode === "create";
   const cards = props.sectionLayout === "cards";
@@ -896,7 +897,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
     ? environmentDisplayLabel(instanceDefaultEnvironment)
     : managedSandboxOnly
       ? "Paperclip Computer"
-      : "Local";
+      : t("agentConfigurationUi.local");
 
   const runnerProvider = adapterType === "paperclip_runner"
     ? String(isCreate ? props.values.adapterSchemaValues?.provider ?? "codex"
@@ -1404,9 +1405,9 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
         {isDirty && !props.hideInlineSave && (
           <div className="sticky top-0 z-10 flex items-center justify-end border-b border-primary/20 bg-background/90 px-4 py-2 backdrop-blur-sm">
             <div className="flex items-center gap-3">
-              <span className="text-xs text-muted-foreground">Unsaved changes</span>
+              <span className="text-xs text-muted-foreground">{t("agentConfigurationUi.unsaved")}</span>
               <Button size="sm" onClick={handleSave} disabled={props.isSaving}>
-                {props.isSaving ? "Saving..." : "Save"}
+                {props.isSaving ? t("agentConfigurationUi.saving") : t("common.save")}
               </Button>
             </div>
           </div>
@@ -1415,8 +1416,8 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
         {props.environmentVariablesPlacement === "secrets" && (
           <div data-config-section="environment-variables" className={cn(!cards && "border-b border-border")}>
             {cards
-              ? <h3 className="mb-3 text-sm font-medium">Environment variables</h3>
-              : <div className="px-4 py-2 text-xs font-medium text-muted-foreground">Environment variables</div>
+              ? <h3 className="mb-3 text-sm font-medium">{t("agentConfigurationUi.environmentVariables")}</h3>
+              : <div className="px-4 py-2 text-xs font-medium text-muted-foreground">{t("agentConfigurationUi.environmentVariables")}</div>
             }
             <div className={cn(cards ? "rounded-lg border border-border p-4" : "px-4 pb-3")}>
               {environmentVariablesEditor}
@@ -1426,11 +1427,11 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
 
         <div data-config-section="secrets" className={cn(!cards && "border-b border-border")}>
           {cards
-            ? <h3 className="mb-3 text-sm font-medium">Secret access</h3>
-            : <div className="px-4 py-2 text-xs font-medium text-muted-foreground">Secret access</div>
+            ? <h3 className="mb-3 text-sm font-medium">{t("agentConfigurationUi.secretAccess")}</h3>
+            : <div className="px-4 py-2 text-xs font-medium text-muted-foreground">{t("agentConfigurationUi.secretAccess")}</div>
           }
           <div className={cn(cards ? "space-y-3 rounded-lg border border-border p-4" : "space-y-3 px-4 pb-3")}>
-            <p className="text-xs text-muted-foreground">{help.secretAccess}</p>
+            <p className="text-xs text-muted-foreground">{t("agentConfigurationUi.helpSecretAccess")}</p>
             <AgentSecretAccessEditor
               config={{ ...config, ...overlay.adapterConfig }}
               secrets={availableSecrets}
@@ -1453,13 +1454,13 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
       {isDirty && !props.hideInlineSave && (
         <div className="sticky top-0 z-10 flex items-center justify-end px-4 py-2 bg-background/90 backdrop-blur-sm border-b border-primary/20">
           <div className="flex items-center gap-3">
-            <span className="text-xs text-muted-foreground">Unsaved changes</span>
+            <span className="text-xs text-muted-foreground">{t("agentConfigurationUi.unsaved")}</span>
             <Button
               size="sm"
               onClick={handleSave}
               disabled={!isCreate && props.isSaving}
             >
-              {!isCreate && props.isSaving ? "Saving..." : "Save"}
+              {!isCreate && props.isSaving ? t("agentConfigurationUi.saving") : t("common.save")}
             </Button>
           </div>
         </div>
@@ -1469,40 +1470,40 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
       {!isCreate && (
         <div data-config-section="identity" className={cn(!cards && "border-b border-border")}>
           {cards
-            ? <h3 className="text-sm font-medium mb-3">{props.sectionTitles?.["identity"] ?? "Identity"}</h3>
-            : <div className="px-4 py-2 text-xs font-medium text-muted-foreground">Identity</div>
+            ? <h3 className="text-sm font-medium mb-3">{props.sectionTitles?.["identity"] ?? t("agentConfigurationUi.identity")}</h3>
+            : <div className="px-4 py-2 text-xs font-medium text-muted-foreground">{t("agentConfigurationUi.identity")}</div>
           }
           <div className={cn(cards ? "border border-border rounded-lg p-4 space-y-3" : "px-4 pb-3 space-y-3")}>
-            <Field label="Name" hint={help.name}>
+            <Field label={t("agentConfigurationUi.name")} hint={t("agentConfigurationUi.helpName")}>
               <DraftInput
                 value={eff("identity", "name", props.agent.name)}
                 onCommit={(v) => mark("identity", "name", v)}
                 immediate
                 className={inputClass}
-                placeholder="Agent name"
+                placeholder={t("agentConfigurationUi.agentName")}
               />
             </Field>
-            <Field label="Title" hint={help.title}>
+            <Field label={t("agentConfigurationUi.title")} hint={t("agentConfigurationUi.helpTitle")}>
               <DraftInput
                 value={eff("identity", "title", props.agent.title ?? "")}
                 onCommit={(v) => mark("identity", "title", v || null)}
                 immediate
                 className={inputClass}
-                placeholder="e.g. VP of Engineering"
+                placeholder={t("agentConfigurationUi.titlePlaceholder")}
               />
             </Field>
-            <Field label="Reports to" hint={help.reportsTo}>
+            <Field label={t("agentConfigurationUi.reportsTo")} hint={t("agentConfigurationUi.helpReportsTo")}>
               <ReportsToPicker
                 agents={companyAgents}
                 value={eff("identity", "reportsTo", props.agent.reportsTo ?? null)}
                 onChange={(id) => mark("identity", "reportsTo", id)}
                 excludeAgentIds={[props.agent.id]}
-                chooseLabel="Choose manager…"
+                chooseLabel={t("agentConfigurationUi.chooseManager")}
               />
             </Field>
             {isLocal && !props.hidePromptTemplate && (
               <>
-                <Field label="Prompt Template" hint={help.promptTemplate}>
+                <Field label={t("agentConfigurationUi.promptTemplate")} hint={t("agentConfigurationUi.helpPromptTemplate", { agentId: "{{ agent.id }}", agentName: "{{ agent.name }}", agentRole: "{{ agent.role }}" })}>
                   <MarkdownEditor
                     value={eff(
                       "adapterConfig",
@@ -1510,7 +1511,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                       String(config.promptTemplate ?? ""),
                     )}
                     onChange={(v) => mark("adapterConfig", "promptTemplate", v ?? "")}
-                    placeholder="You are agent {{ agent.name }}. Your role is {{ agent.role }}..."
+                    placeholder={t("agentConfigurationUi.promptPlaceholder", { agentName: "{{ agent.name }}", role: "{{ agent.role }}" })}
                     contentClassName="min-h-(--sz-88px) text-sm font-mono"
                     imageUploadHandler={async (file) => {
                       const namespace = `agents/${props.agent.id}/prompt-template`;
@@ -1520,7 +1521,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                   />
                 </Field>
                 <div className="rounded-md border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-100">
-                  Prompt template is replayed on every heartbeat. Keep it compact and dynamic to avoid recurring token cost and cache churn.
+                  {t("agentConfigurationUi.promptWarning")}
                 </div>
               </>
             )}
@@ -1535,23 +1536,21 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
         // Render the environment read-only instead of the selectable picker.
         <div data-config-section="environment" className={cn(!cards && (isCreate ? "border-t border-border" : "border-b border-border"))}>
           {cards
-            ? <h3 className="text-sm font-medium mb-3">Environment</h3>
-            : <div className="px-4 py-2 text-xs font-medium text-muted-foreground">Environment</div>
+            ? <h3 className="text-sm font-medium mb-3">{t("agentConfigurationUi.environment")}</h3>
+            : <div className="px-4 py-2 text-xs font-medium text-muted-foreground">{t("agentConfigurationUi.environment")}</div>
           }
           <div className={cn(cards ? "border border-border rounded-lg p-4 space-y-3" : "px-4 pb-3 space-y-3")}>
             <Field
-              label="Default environment"
-              hint="This instance runs all agents in the Kubernetes sandbox. Local execution is disabled."
+              label={t("agentConfigurationUi.defaultEnvironment")}
+              hint={t("agentConfigurationUi.forcedEnvironmentHelp")}
             >
               {kubernetesEnvironment ? (
                 <div className={cn(inputClass, "flex items-center text-muted-foreground")}>
-                  {kubernetesEnvironment.name} · Kubernetes sandbox
+                  {kubernetesEnvironment.name} · {t("agentConfigurationUi.kubernetesSandbox")}
                 </div>
               ) : (
                 <div className="rounded-md border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
-                  This instance requires the Kubernetes sandbox, but no managed Kubernetes
-                  environment is available for this organization yet. Configure one before creating
-                  agents; execution will not fall back to local.
+                  {t("agentConfigurationUi.missingKubernetes")}
                 </div>
               )}
             </Field>
@@ -1560,11 +1559,11 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
       ) : showEnvironmentOverrideControl ? (
         <div data-config-section="environment" className={cn(!cards && (isCreate ? "border-t border-border" : "border-b border-border"))}>
           {cards
-            ? <h3 className="text-sm font-medium mb-3">Environment</h3>
-            : <div className="px-4 py-2 text-xs font-medium text-muted-foreground">Environment</div>
+            ? <h3 className="text-sm font-medium mb-3">{t("agentConfigurationUi.environment")}</h3>
+            : <div className="px-4 py-2 text-xs font-medium text-muted-foreground">{t("agentConfigurationUi.environment")}</div>
           }
           <div className={cn(cards ? "border border-border rounded-lg p-4 space-y-3" : "px-4 pb-3 space-y-3")}>
-            <Field label="Environment override">
+            <Field label={t("agentConfigurationUi.environmentOverride")}>
               <div className="space-y-2">
                 <select
                   className={inputClass}
@@ -1578,7 +1577,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                     mark("identity", "defaultEnvironmentId", nextValue || null);
                   }}
                 >
-                  <option value="">Default: {inheritedEnvironmentLabel}</option>
+                  <option value="">{t("agentConfigurationUi.defaultValue", { value: inheritedEnvironmentLabel })}</option>
                   {environmentOptions.map((environment) => (
                     <option key={environment.id} value={environment.id}>
                       {environmentDisplayLabel(environment)}
@@ -1595,8 +1594,8 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
       <div data-config-section="adapter" className={cn(!cards && (isCreate ? "border-t border-border" : "border-b border-border"))}>
         <div className={cn(cards ? "flex items-center justify-between mb-3" : "px-4 py-2 flex items-center justify-between gap-2")}>
           {cards
-            ? <h3 className="text-sm font-medium">{props.sectionTitles?.["adapter"] ?? "Adapter"}</h3>
-            : <span className="text-xs font-medium text-muted-foreground">Adapter</span>
+            ? <h3 className="text-sm font-medium">{props.sectionTitles?.["adapter"] ?? t("agentConfigurationUi.adapter")}</h3>
+            : <span className="text-xs font-medium text-muted-foreground">{t("agentConfigurationUi.adapter")}</span>
           }
           {showInlineAdapterTestEnvironmentButton && (
             <Button
@@ -1613,7 +1612,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
         </div>
         <div className={cn(cards ? "border border-border rounded-lg p-4 space-y-3" : "px-4 pb-3 space-y-3")}>
           {showAdapterTypeField && (
-            <Field label="Adapter type" hint={help.adapterType}>
+            <Field label={t("agentConfigurationUi.adapterType")} hint={t("agentConfigurationUi.helpAdapterType")}>
               <AdapterTypeDropdown
                 value={isDotRunner ? "openai_dot" : adapterType}
                 disabledTypes={adapterPickerDisabledTypes}
@@ -1722,7 +1721,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
 
           {/* Working directory */}
           {showLegacyWorkingDirectoryField && (
-            <Field label="Working directory (deprecated)" hint={help.cwd}>
+            <Field label={t("agentConfigurationUi.workingDirectory")} hint={t("agentConfigurationUi.helpCwd")}>
               <div className="flex items-center gap-2 rounded-md border border-border px-2.5 py-1.5">
                 <FolderOpen className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                 <DraftInput
@@ -1842,13 +1841,13 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
       {(
         <div data-config-section="configuration" className={cn(!cards && "border-b border-border")}>
           {cards
-            ? <h3 className="text-sm font-medium mb-3">Configuration</h3>
-            : <div className="px-4 py-2 text-xs font-medium text-muted-foreground">Configuration</div>
+            ? <h3 className="text-sm font-medium mb-3">{t("agentConfigurationUi.configuration")}</h3>
+            : <div className="px-4 py-2 text-xs font-medium text-muted-foreground">{t("agentConfigurationUi.configuration")}</div>
           }
           <div className={cn(cards ? "border border-border rounded-lg p-4 space-y-3" : "px-4 pb-3 space-y-3")}>
               {!isCreate && typeof config.bootstrapPromptTemplate === "string" && config.bootstrapPromptTemplate && (
                 <>
-                  <Field label="Bootstrap prompt (legacy)" hint={help.bootstrapPrompt}>
+                  <Field label={t("agentConfigurationUi.bootstrapPrompt")} hint={t("agentConfigurationUi.helpBootstrapPrompt")}>
                     <MarkdownEditor
                       value={eff(
                         "adapterConfig",
@@ -1858,7 +1857,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                       onChange={(v) =>
                         mark("adapterConfig", "bootstrapPromptTemplate", v || undefined)
                       }
-                      placeholder="Optional initial setup prompt for the first run"
+                      placeholder={t("agentConfigurationUi.bootstrapPlaceholder")}
                       contentClassName="min-h-(--sz-44px) text-sm font-mono"
                       imageUploadHandler={async (file) => {
                         const namespace = `agents/${props.agent.id}/bootstrap-prompt`;
@@ -1868,14 +1867,14 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                     />
                   </Field>
                   <div className="rounded-md border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
-                    Bootstrap prompt is legacy and will be removed in a future release. Consider moving this content into the agent&apos;s prompt template or instructions file instead.
+                    {t("agentConfigurationUi.bootstrapWarning")}
                   </div>
                 </>
               )}
               {renderAdapterFields("configuration")}
               {(isLocal || adapterType === "process" || configSchema?.fields.some((field) => schemaFieldSection(field.key) === "advanced")) && (
               <CollapsibleSection
-                title="Advanced"
+                title={t("agentConfigurationUi.advanced")}
                 open={configurationAdvancedOpen}
                 onToggle={() => setConfigurationAdvancedOpen(!configurationAdvancedOpen)}
               >
@@ -1892,7 +1891,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                 flashes on a managed instance.
               */}
               {!hideHostPaths && (
-                <Field label="Command" hint={help.localCommand}>
+                <Field label={t("agentConfigurationUi.command")} hint={t("agentConfigurationUi.helpLocalCommand")}>
                   <DraftInput
                     value={
                       isCreate
@@ -1927,7 +1926,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                 </Field>
               )}
 
-              <Field label="Extra args (comma-separated)" hint={help.extraArgs}>
+              <Field label={t("agentConfigurationUi.extraArgs")} hint={t("agentConfigurationUi.helpExtraArgs")}>
                 <DraftInput
                   value={
                     isCreate
@@ -1940,7 +1939,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                       : mark("adapterConfig", "extraArgs", v?.trim() ? parseCommaArgs(v) : null)
                   }
                   className={inputClass}
-                  placeholder="e.g. --verbose, --foo=bar"
+                  placeholder={t("agentConfigurationUi.extraArgsPlaceholder")}
                 />
               </Field>
 
@@ -1957,8 +1956,8 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
       {props.environmentVariablesPlacement !== "secrets" && (isLocal || configSchema?.fields.some((field) => schemaFieldSection(field.key) === "environment")) && (
         <div data-config-section="environment-variables" className={cn(!cards && "border-b border-border")}>
           {cards
-            ? <h3 className="text-sm font-medium mb-3">Environment variables</h3>
-            : <div className="px-4 py-2 text-xs font-medium text-muted-foreground">Environment variables</div>
+            ? <h3 className="text-sm font-medium mb-3">{t("agentConfigurationUi.environmentVariables")}</h3>
+            : <div className="px-4 py-2 text-xs font-medium text-muted-foreground">{t("agentConfigurationUi.environmentVariables")}</div>
           }
           <div className={cn(cards ? "border border-border rounded-lg p-4 space-y-3" : "px-4 pb-3 space-y-3")}>
             {isLocal ? environmentVariablesEditor : renderAdapterFields("environment")}
@@ -1970,23 +1969,23 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
       {isCreate && showCreateRunPolicySection ? (
         <div data-config-section="run-policy" className={cn(!cards && "border-b border-border")}>
           {cards
-            ? <h3 className="text-sm font-medium flex items-center gap-2 mb-3"><Heart className="h-3 w-3" /> Run Policy</h3>
-            : <div className="px-4 py-2 text-xs font-medium text-muted-foreground flex items-center gap-2"><Heart className="h-3 w-3" /> Run Policy</div>
+            ? <h3 className="text-sm font-medium flex items-center gap-2 mb-3"><Heart className="h-3 w-3" /> {t("agentConfigurationUi.runPolicy")}</h3>
+            : <div className="px-4 py-2 text-xs font-medium text-muted-foreground flex items-center gap-2"><Heart className="h-3 w-3" /> {t("agentConfigurationUi.runPolicy")}</div>
           }
           <div className={cn(cards ? "border border-border rounded-lg p-4 space-y-3" : "px-4 pb-3 space-y-3")}>
             <ToggleWithNumber
-              label="Heartbeat on interval"
-              hint={help.heartbeatInterval}
+              label={t("agentConfigurationUi.heartbeatInterval")}
+              hint={t("agentConfigurationUi.helpHeartbeatInterval")}
               checked={val!.heartbeatEnabled}
               onCheckedChange={(v) => set!({ heartbeatEnabled: v })}
               number={val!.intervalSec}
               onNumberChange={(v) => set!({ intervalSec: v })}
-              numberLabel="sec"
-              numberPrefix="Run heartbeat every"
-              numberHint={help.intervalSec}
+              numberLabel={t("agentConfigurationUi.seconds")}
+              numberPrefix={t("agentConfigurationUi.heartbeatEvery")}
+              numberHint={t("agentConfigurationUi.helpIntervalSec")}
               showNumber={val!.heartbeatEnabled}
             />
-            <CollapsibleSection title="Advanced Run Policy" open={runPolicyAdvancedOpen} onToggle={() => setRunPolicyAdvancedOpen(!runPolicyAdvancedOpen)}>
+            <CollapsibleSection title={t("agentConfigurationUi.advancedRunPolicy")} open={runPolicyAdvancedOpen} onToggle={() => setRunPolicyAdvancedOpen(!runPolicyAdvancedOpen)}>
               <div className="space-y-3">{renderAdapterFields("runPolicy")}</div>
             </CollapsibleSection>
           </div>
@@ -1994,26 +1993,26 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
       ) : !isCreate ? (
         <div data-config-section="run-policy" className={cn(!cards && "border-b border-border")}>
           {cards
-            ? <h3 className="text-sm font-medium flex items-center gap-2 mb-3"><Heart className="h-3 w-3" /> Run Policy</h3>
-            : <div className="px-4 py-2 text-xs font-medium text-muted-foreground flex items-center gap-2"><Heart className="h-3 w-3" /> Run Policy</div>
+            ? <h3 className="text-sm font-medium flex items-center gap-2 mb-3"><Heart className="h-3 w-3" /> {t("agentConfigurationUi.runPolicy")}</h3>
+            : <div className="px-4 py-2 text-xs font-medium text-muted-foreground flex items-center gap-2"><Heart className="h-3 w-3" /> {t("agentConfigurationUi.runPolicy")}</div>
           }
           <div className={cn(cards ? "border border-border rounded-lg overflow-hidden" : "")}>
             <div className={cn(cards ? "p-4 space-y-3" : "px-4 pb-3 space-y-3")}>
               <ToggleWithNumber
-                label="Heartbeat on interval"
-                hint={help.heartbeatInterval}
+                label={t("agentConfigurationUi.heartbeatInterval")}
+                hint={t("agentConfigurationUi.helpHeartbeatInterval")}
                 checked={eff("heartbeat", "enabled", heartbeat.enabled === true)}
                 onCheckedChange={(v) => mark("heartbeat", "enabled", v)}
                 number={eff("heartbeat", "intervalSec", Number(heartbeat.intervalSec ?? 300))}
                 onNumberChange={(v) => mark("heartbeat", "intervalSec", v)}
-                numberLabel="sec"
-                numberPrefix="Run heartbeat every"
-                numberHint={help.intervalSec}
+                numberLabel={t("agentConfigurationUi.seconds")}
+                numberPrefix={t("agentConfigurationUi.heartbeatEvery")}
+                numberHint={t("agentConfigurationUi.helpIntervalSec")}
                 showNumber={eff("heartbeat", "enabled", heartbeat.enabled === true)}
               />
             </div>
             <CollapsibleSection
-              title="Advanced Run Policy"
+              title={t("agentConfigurationUi.advancedRunPolicy")}
               bordered={cards}
               open={runPolicyAdvancedOpen}
               onToggle={() => setRunPolicyAdvancedOpen(!runPolicyAdvancedOpen)}
@@ -2025,7 +2024,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
               {!isCreate && (
                 <>
                   {!configSchema?.fields.some((field) => field.key === "timeoutSec") && (
-                  <Field label="Timeout (sec)" hint={help.timeoutSec}>
+                  <Field label={t("agentConfigurationUi.timeout")} hint={t("agentConfigurationUi.helpTimeoutSec")}>
                     <DraftNumberInput
                       value={eff(
                         "adapterConfig",
@@ -2039,7 +2038,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                   </Field>
                   )}
                   {!configSchema?.fields.some((field) => field.key === "graceSec") && (
-                  <Field label="Interrupt grace period (sec)" hint={help.graceSec}>
+                  <Field label={t("agentConfigurationUi.grace")} hint={t("agentConfigurationUi.helpGraceSec")}>
                     <DraftNumberInput
                       value={eff(
                         "adapterConfig",
@@ -2056,8 +2055,8 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
               )}
               </>)}
               <ToggleField
-                label="Wake on demand"
-                hint={help.wakeOnDemand}
+                label={t("agentConfigurationUi.wakeOnDemand")}
+                hint={t("agentConfigurationUi.helpWakeOnDemand")}
                 checked={eff(
                   "heartbeat",
                   "wakeOnDemand",
@@ -2065,7 +2064,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                 )}
                 onChange={(v) => mark("heartbeat", "wakeOnDemand", v)}
               />
-              <Field label="Cooldown (sec)" hint={help.cooldownSec}>
+              <Field label={t("agentConfigurationUi.cooldown")} hint={t("agentConfigurationUi.helpCooldownSec")}>
                 <DraftNumberInput
                   value={eff(
                     "heartbeat",
@@ -2077,7 +2076,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                   className={inputClass}
                 />
               </Field>
-              <Field label="Max concurrent runs" hint={help.maxConcurrentRuns}>
+              <Field label={t("agentConfigurationUi.maxConcurrentRuns")} hint={t("agentConfigurationUi.helpMaxConcurrentRuns")}>
                 <DraftNumberInput
                   value={eff(
                     "heartbeat",
@@ -2091,14 +2090,14 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
               </Field>
               <div className="rounded-md border border-border/70 px-3 py-2">
                 <ToggleField
-                  label="Continue after max-turn stop"
-                  hint={help.maxTurnContinuationEnabled}
+                  label={t("agentConfigurationUi.continueAfterMaxTurns")}
+                  hint={t("agentConfigurationUi.helpMaxTurnContinuationEnabled")}
                   checked={maxTurnContinuationEnabled}
                   onChange={(v) => updateMaxTurnContinuation({ enabled: v })}
                 />
                 {maxTurnContinuationEnabled ? (
                   <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                    <Field label="Continuation attempts" hint={help.maxTurnContinuationMaxAttempts}>
+                    <Field label={t("agentConfigurationUi.continuationAttempts")} hint={t("agentConfigurationUi.helpMaxTurnContinuationMaxAttempts")}>
                       <DraftNumberInput
                         value={maxTurnContinuationMaxAttempts}
                         onCommit={(v) =>
@@ -2109,7 +2108,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                         className={inputClass}
                       />
                     </Field>
-                    <Field label="Continuation delay (sec)" hint={help.maxTurnContinuationDelaySec}>
+                    <Field label={t("agentConfigurationUi.continuationDelay")} hint={t("agentConfigurationUi.helpMaxTurnContinuationDelaySec")}>
                       <DraftNumberInput
                         value={maxTurnContinuationDelaySec}
                         onCommit={(v) =>
@@ -2134,11 +2133,11 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
         <div className={cn(!cards && "border-b border-border")}>
           {cards ? (
             <h3 className="mb-3 flex items-center gap-2 text-sm font-medium">
-              <Bug className="h-3 w-3" /> Debugging
+              <Bug className="h-3 w-3" /> {t("agentConfigurationUi.debugging")}
             </h3>
           ) : (
             <div className="flex items-center gap-2 px-4 py-2 text-xs font-medium text-muted-foreground">
-              <Bug className="h-3 w-3" /> Debugging
+              <Bug className="h-3 w-3" /> {t("agentConfigurationUi.debugging")}
             </div>
           )}
           <div
@@ -2150,8 +2149,8 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
             )}
           >
             <ToggleField
-              label="Capture raw provider traces"
-              hint="Stores exact provider traffic for every future run until disabled. Traces may contain sensitive prompts and tool arguments, are administrator-only, and expire after 24 hours."
+              label={t("agentConfigurationUi.captureTraces")}
+              hint={t("agentConfigurationUi.captureTracesHelp")}
               checked={eff<unknown>("debug", "providerTrace", debug.providerTrace) === "raw"}
               onChange={(enabled) =>
                 mark("debug", "providerTrace", enabled ? "raw" : undefined)
@@ -2161,7 +2160,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
               <div className="mt-3 flex items-start gap-2 rounded-md border border-border bg-background/60 px-3 py-2 text-xs text-foreground">
                 <Bug className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <span>
-                  Raw tracing is on for future runs. Paperclip keeps at most 64 MiB per run and automatically deletes it after 24 hours.
+                  {t("agentConfigurationUi.tracesEnabled")}
                 </span>
               </div>
             ) : null}

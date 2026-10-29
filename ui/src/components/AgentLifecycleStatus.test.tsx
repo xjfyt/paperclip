@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { AgentLifecycleState } from "@paperclipai/shared";
 import { expect, it, vi } from "vitest";
 import { AgentLifecycleStatus, agentLifecycleRefetchInterval } from "./AgentLifecycleStatus";
+import "../i18n/agent-configuration-test-resources";
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 

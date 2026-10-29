@@ -3,6 +3,7 @@
 import "@/i18n/agent-setup-test-resources";
 import "@/i18n/agent-setup-login-test-resources";
 import { i18n } from "@/i18n";
+import { agentConfigurationMessages } from "@/i18n/agent-configuration-test-resources";
 import { useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { flushSync } from "react-dom";
@@ -748,6 +749,52 @@ describe("AgentConfigForm environment selector", () => {
     roots = [];
     document.body.innerHTML = "";
     vi.clearAllMocks();
+  });
+
+  it.each(["en", "zh-CN", "es", "ja"] as const)("preserves actual configuration drafts, focus, selections and save payload across %s switch", async locale => {
+    const environment = { id: "sandbox-raw-id", name: "Customer environment 原文", driver: "sandbox", config: { provider: "daytona" } } as Environment;
+    const result = await renderForm([environment], { adapterConfig: { model: "vendor/model-raw", cwd: "/customer/raw-path", env: { API_KEY: { type: "secret_ref", secretId: "secret-raw-id", version: "latest" } } } });
+    roots.push(result.root);
+    await clickByText(result.container, "Advanced Run Policy");
+    await flushReact();
+    const name = result.container.querySelector<HTMLInputElement>('input[placeholder="Agent name"]')!;
+    await act(async () => setInputValue(name, "Customer <原文> name"));
+    const select = result.container.querySelector<HTMLSelectElement>('select')!;
+    await act(async () => { select.value = environment.id; select.dispatchEvent(new Event("change", { bubbles: true })); });
+    await flushReact();
+    name.focus(); name.setSelectionRange(2, 8);
+    const callsBefore = { models: mockAgentsApi.adapterModels.mock.calls.length, detect: mockAgentsApi.detectModel.mock.calls.length, test: mockAgentsApi.testEnvironment.mock.calls.length };
+    await act(async () => { await i18n.changeLanguage(locale); }); await flushReact();
+    const messages = agentConfigurationMessages[locale];
+    expect(result.container.querySelector(`input[placeholder="${messages.agentName}"]`)).toBe(name);
+    expect(name.value).toBe("Customer <原文> name"); expect(document.activeElement).toBe(name);
+    expect([name.selectionStart, name.selectionEnd]).toEqual([2, 8]);
+    expect(result.container.querySelector('select')).toBe(select); expect(select.value).toBe(environment.id);
+    for (const key of ["identity", "environment", "environmentVariables", "runPolicy", "wakeOnDemand", "cooldown", "continuationAttempts", "unsaved"] as const) expect(result.container.textContent).toContain(messages[key]);
+    expect(result.container.textContent).toContain(environment.name);
+    expect(result.container.querySelector(`button[aria-label="${messages.helpName}"]`)).not.toBeNull();
+    expect(result.container.querySelector<HTMLInputElement>('input[placeholder="/path/to/project"]')?.value).toBe("/customer/raw-path");
+    expect(mockAgentsApi.adapterModels).toHaveBeenCalledTimes(callsBefore.models);
+    expect(mockAgentsApi.detectModel).toHaveBeenCalledTimes(callsBefore.detect);
+    expect(mockAgentsApi.testEnvironment).toHaveBeenCalledTimes(callsBefore.test); expect(result.onSave).not.toHaveBeenCalled();
+    await clickByText(result.container, i18n.t("common.save")); await flushReact();
+    expect(result.onSave).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ name: "Customer <原文> name", defaultEnvironmentId: environment.id }));
+    expect(JSON.stringify(result.onSave.mock.calls[0][0])).not.toContain("agentConfigurationUi");
+  });
+
+  it.each(["en", "zh-CN", "es", "ja"] as const)("localizes the secrets surface headings and preserves unsaved variable values in %s", async locale => {
+    const result = await renderForm([], {}, { content: "secrets", environmentVariablesPlacement: "secrets" }); roots.push(result.root);
+    await clickByText(result.container, "Add variable");
+    const name = result.container.querySelector<HTMLInputElement>('input[aria-label="Variable name"]')!;
+    const value = result.container.querySelector<HTMLInputElement>('input[aria-label="Variable value"]')!;
+    await act(async () => { setInputValue(name, "CUSTOM_WIRE_KEY"); setInputValue(value, "opaque-value-原文"); });
+    value.focus(); value.setSelectionRange(1, 5);
+    await act(async () => { await i18n.changeLanguage(locale); }); await flushReact();
+    expect(result.container.textContent).toContain(agentConfigurationMessages[locale].environmentVariables);
+    expect(result.container.textContent).toContain(agentConfigurationMessages[locale].secretAccess);
+    expect(name.value).toBe("CUSTOM_WIRE_KEY"); expect(value.value).toBe("opaque-value-原文");
+    expect(document.activeElement).toBe(value); expect([value.selectionStart, value.selectionEnd]).toEqual([1, 5]);
+    expect(result.onSave).not.toHaveBeenCalled(); expect(mockAgentsApi.testEnvironment).not.toHaveBeenCalled();
   });
 
   it("promotes environment drafts through the page Save action and discards them through the page Discard action", async () => {

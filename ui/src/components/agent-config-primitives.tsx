@@ -76,7 +76,7 @@ export function HintIcon({ text }: { text: string }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <button type="button" className="inline-flex text-muted-foreground/50 hover:text-muted-foreground transition-colors">
+        <button type="button" aria-label={text} className="inline-flex text-muted-foreground/50 hover:text-muted-foreground transition-colors">
           <HelpCircle className="h-3 w-3" />
         </button>
       </TooltipTrigger>
@@ -162,6 +162,7 @@ export function ToggleWithNumber({
           {hint && <HintIcon text={hint} />}
         </div>
         <ToggleSwitch
+          aria-label={label}
           checked={checked}
           onCheckedChange={onCheckedChange}
         />
