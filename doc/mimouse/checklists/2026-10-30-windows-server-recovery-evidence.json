@@ -1,0 +1,75 @@
+{
+  "recordedOn": "2026-10-30",
+  "platform": "native Windows; owned disposable PostgreSQL/loopback HTTP and inert Node fixtures",
+  "scope": "Test-harness portability and deterministic cache-capacity measurement; no production change in this tranche, no real provider credentials/network",
+  "results": {
+    "heartbeatFull": {
+      "passed": 398,
+      "failed": 0,
+      "skippedOrNameFiltered": 2
+    },
+    "adapterValidationFull": {
+      "passed": 45,
+      "failed": 0,
+      "skipped": 0,
+      "report": "server-windows-owned-diagnostic.json"
+    },
+    "targetedOwnedStop": {
+      "passed": 18,
+      "failed": 0,
+      "nameFiltered": 382
+    },
+    "cacheCapacity": {
+      "passed": 1,
+      "failed": 0,
+      "skippedOrNameFiltered": 14
+    }
+  },
+  "originalPlatformSkips": [
+    "keeps process-group-only hot-restart adoptions out of process_lost reaping",
+    "does not signal an unowned persisted process group after the tracked parent exits"
+  ],
+  "newPlatformSkips": 0,
+  "rootCauses": [
+    "Six Git classification fixtures relied on extensionless shebang execution; native Windows now executes the same scripts through real PE test bridges, preserving numeric exit/stderr and preventing remote Git calls",
+    "Positive validation fixtures now create a new private HOME/PAPERCLIP_HOME/CODEX_HOME, including their synthetic auth, and path assertions use a portable separator representation",
+    "Win32 TerminateProcess reports actual numeric exit1/null signal; preserved all cancellation, duplicate-owner, error, no-success-event and terminal-state assertions",
+    "The eight graceful-result Windows cases use a genuine owned Node exit0 after Stop captures ownership; the real child close handle proves exit. They do not claim Windows POSIX signal delivery or native process-group support",
+    "Cache capacity test was measuring 261 real requests over the five-second stale TTL and retaining only147 entries; only that test pins Date.now after seeding and finally restores it, retaining the exact256-entry bound and all261 real HTTP/DB requests"
+  ],
+  "inputFreeze": {
+    "workspaceServiceGuard": "Parent/code_review confirmed production frozen before full400 started at02:00 local",
+    "nativeCliBridge": "Test-only cache-existence cleanup fix was delegated during the full run; fixed C# source/argv/env/child execution remained unchanged, and this suite uses static TMP rather than per-test TMP rotation"
+  },
+  "inputs": {
+    "server/src/__tests__/heartbeat-process-recovery.test.ts": "068099455e599f3570eb010fd3abc9eabeeaffa71740fd508acb92a533355ddf",
+    "server/src/__tests__/agent-adapter-validation-routes.test.ts": "666cd55e069aa2d81c5c6e812dd04ad76af4b524b079f2a8ed9a92fbda583acc",
+    "server/src/__tests__/issue-list-assignee-filter-routes.test.ts": "b3f9d38d19a2b1ee912c0dd4e1f7c9d441eb805b581405f50bc8f67a9a56c5ad"
+  },
+  "logs": {
+    "test-results/project-audit-windows-closure/server-windows-git-and-home.log": "5decc697d99a4f7665a3f535020d6b2b3b598edfb4ddd9e1ccad1629bd95827c",
+    "test-results/project-audit-windows-closure/server-windows-git-and-home.json": "f360babefe00662e02ea030ce433832f29b9f5e314983b688a9a74f1543dd3d8",
+    "test-results/project-audit-windows-closure/server-windows-owned-diagnostic.log": "92c56a808a28b6b556dd5562216b77a965d3137e1c47cbf42f577da06f9d6dcd",
+    "test-results/project-audit-windows-closure/server-windows-owned-diagnostic.json": "e9fd41f52cb798582a8af588d2bce3f666f8dab7f262e94ea0f3ffb07d45c365",
+    "test-results/project-audit-windows-closure/server-owned-stop-final.log": "3db54ed2babad83c64be18369b3238747b56a5868582bf6bd2a7cb894eaa41c0",
+    "test-results/project-audit-windows-closure/server-owned-stop-final.json": "15c98c8ffea24ea2643d3afbe147d65adf17a805d525e74bd27be7613710fe83",
+    "test-results/project-audit-windows-closure/heartbeat-process-recovery-final.log": "86e1b06f38b79a2f46f920b0504441c2ac4241fbf3c19e43d8ecc1a056980cfb",
+    "test-results/project-audit-windows-closure/heartbeat-process-recovery-final.json": "e5de0ef966211dacb83f971817c3f9c0388236025055a8e70aae2f62da2eec49",
+    "test-results/project-audit-windows-closure/issue-list-cache-capacity.log": "70e69d8952a4a5b37c2a8b616640e9e696ab538d22fce67e05a7aaed3d85d55f",
+    "test-results/project-audit-windows-closure/issue-list-cache-capacity.json": "d8861c2f5820f30c4b377d708f63ca216a3d9f94456891c99770086ec1bf5cda",
+    "test-results/project-audit-windows-closure/server-windows-fixture-typecheck-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "commands": {
+    "heartbeatFull": "cd server; node ../node_modules/vitest/vitest.mjs run src/__tests__/heartbeat-process-recovery.test.ts --reporter=default --reporter=json --outputFile=../test-results/project-audit-windows-closure/heartbeat-process-recovery-final.json",
+    "validation": "cd server; node ../node_modules/vitest/vitest.mjs run src/__tests__/agent-adapter-validation-routes.test.ts src/__tests__/heartbeat-process-recovery.test.ts -t \"agent routes adapter validation|settles an owned process Stop before classifying its signal|independent process unrequested signal\"",
+    "cache": "cd server; node ../node_modules/vitest/vitest.mjs run src/__tests__/issue-list-assignee-filter-routes.test.ts -t \"bounds compact issue-list server cache entries\""
+  },
+  "limits": [
+    "Validation HTTP actor/services use the existing route-unit doubles; this does not prove real authentication",
+    "The two original POSIX orphaned process-group tests remain platform scoped; production Windows group/ownership guards were not weakened"
+  ],
+  "typecheck": {
+    "command": "pnpm --filter @paperclipai/server exec tsc --noEmit",
+    "exitCode": 0
+  }
+}

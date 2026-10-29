@@ -1,9 +1,11 @@
 import express from "express";
+import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import request from "supertest";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import type { ServerAdapterModule } from "../adapters/index.js";
+import { protectNewPrivatePath } from "@paperclipai/shared/private-filesystem-permissions";
 
 const mockAgentService = vi.hoisted(() => ({
   create: vi.fn(),
@@ -241,6 +243,7 @@ async function unregisterTestAdapter(type: string) {
 }
 
 describe("agent routes adapter validation", () => {
+  let fixtureRoot: string | undefined;
   beforeEach(async () => {
     vi.resetModules();
     vi.doUnmock("../routes/agents.js");
@@ -249,6 +252,16 @@ describe("agent routes adapter validation", () => {
     vi.doUnmock("../routes/agents.js");
     registerModuleMocks();
     vi.clearAllMocks();
+    fixtureRoot = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-agent-validation-"));
+    protectNewPrivatePath(fixtureRoot);
+    const userHome = path.join(fixtureRoot, "user"), codexHome = path.join(userHome, ".codex");
+    await fs.mkdir(codexHome, { recursive: true });
+    await fs.writeFile(path.join(codexHome, "auth.json"), '{"OPENAI_API_KEY":"fixture-only-key"}\n', { mode: 0o600 });
+    vi.spyOn(os, "homedir").mockReturnValue(userHome);
+    vi.stubEnv("PAPERCLIP_HOME", path.join(fixtureRoot, "paperclip"));
+    vi.stubEnv("PAPERCLIP_INSTANCE_ID", "default");
+    vi.stubEnv("CODEX_HOME", codexHome);
+    vi.stubEnv("PAPERCLIP_DISABLE_CWD_ENV_FILE", "true");
     mockAdapterPluginStore.getDisabledAdapterTypes.mockReturnValue([]);
     mockCompanySkillService.listRuntimeSkillEntries.mockResolvedValue([]);
     mockCompanySkillService.resolveRequestedSkillKeys.mockResolvedValue([]);
@@ -337,6 +350,14 @@ describe("agent routes adapter validation", () => {
   afterEach(async () => {
     await unregisterTestAdapter("external_test");
     await unregisterTestAdapter(missingAdapterType);
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+    if (fixtureRoot) {
+      const owned = path.resolve(fixtureRoot);
+      if (!owned.startsWith(path.resolve(os.tmpdir()) + path.sep) || !path.basename(owned).startsWith("paperclip-agent-validation-")) throw Error("Unsafe validation fixture cleanup path");
+      await fs.rm(owned, { recursive: true, force: true });
+      fixtureRoot = undefined;
+    }
   });
 
   it("selects and refreshes the runner provider catalog independently", async () => {
@@ -486,7 +507,7 @@ describe("agent routes adapter validation", () => {
     const adapterConfig = patch.adapterConfig as Record<string, unknown>;
     const env = adapterConfig.env as Record<string, unknown>;
     expect(env.OPENAI_API_KEY).toBe("sk-test-key");
-    expect(String(env.CODEX_HOME)).toContain(`/companies/company-1/agents/${agentId}/codex-home`);
+    expect(String(env.CODEX_HOME).replaceAll("\\", "/")).toContain(`/companies/company-1/agents/${agentId}/codex-home`);
   });
 
   it("allows codex_local agents to share the host Codex home", async () => {
@@ -535,7 +556,7 @@ describe("agent routes adapter validation", () => {
     const adapterConfig = createInput.adapterConfig as Record<string, unknown>;
     const env = adapterConfig.env as Record<string, unknown>;
     expect(env.OPENAI_API_KEY).toBe("sk-test-key");
-    expect(String(env.CODEX_HOME)).toContain(`/companies/company-1/agents/${agentId}/codex-home`);
+    expect(String(env.CODEX_HOME).replaceAll("\\", "/")).toContain(`/companies/company-1/agents/${agentId}/codex-home`);
   });
 
   it("restores a saved agent's redacted CODEX_HOME before testing its adapter", async () => {

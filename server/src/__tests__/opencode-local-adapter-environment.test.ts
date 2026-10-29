@@ -1,10 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { installIsolatedHostFixture } from "@paperclipai/adapter-utils/test-fixtures/isolated-host";
+import { writePosixCliFixture } from "@paperclipai/adapter-utils/test-fixtures/portable-cli";
+installIsolatedHostFixture();
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { testEnvironment } from "@paperclipai/adapter-opencode-local/server";
 
 describe("opencode_local environment diagnostics", () => {
+  beforeEach(() => {
+    for (const key of ["OPENCODE_AUTH_JSON", "OPENCODE_CONFIG", "OPENCODE_CONFIG_CONTENT", "OPENCODE_CONFIG_DIR"]) vi.stubEnv(key, undefined);
+  });
   it("reports a missing working directory as an error when cwd is absolute", async () => {
     const cwd = path.join(
       os.tmpdir(),
@@ -32,8 +38,7 @@ describe("opencode_local environment diagnostics", () => {
   it("treats an empty OPENAI_API_KEY override as missing", async () => {
     const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-opencode-env-empty-key-"));
     // This case tests environment precedence, not model-discovery retry delays.
-    const fakeOpencode = path.join(cwd, "opencode");
-    await fs.writeFile(fakeOpencode, "#!/bin/sh\necho openai/test-model\n", { mode: 0o755 });
+    const fakeOpencode = await writePosixCliFixture(path.join(cwd, "opencode"), "#!/bin/sh\necho openai/test-model\n");
     const originalOpenAiKey = process.env.OPENAI_API_KEY;
     process.env.OPENAI_API_KEY = "sk-host-value";
 
@@ -67,7 +72,7 @@ describe("opencode_local environment diagnostics", () => {
   it("classifies ProviderModelNotFoundError probe output as model-unavailable warning", async () => {
     const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-opencode-env-probe-cwd-"));
     const binDir = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-opencode-env-probe-bin-"));
-    const fakeOpencode = path.join(binDir, "opencode");
+    let fakeOpencode = path.join(binDir, "opencode");
     const script = [
       "#!/bin/sh",
       "echo 'ProviderModelNotFoundError: ProviderModelNotFoundError' 1>&2",
@@ -77,8 +82,7 @@ describe("opencode_local environment diagnostics", () => {
     ].join("\n");
 
     try {
-      await fs.writeFile(fakeOpencode, script, "utf8");
-      await fs.chmod(fakeOpencode, 0o755);
+      fakeOpencode = await writePosixCliFixture(fakeOpencode, script);
 
       const result = await testEnvironment({
         companyId: "company-1",

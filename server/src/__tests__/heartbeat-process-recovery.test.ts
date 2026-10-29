@@ -26,6 +26,7 @@ import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { writeCliFixture } from "@paperclipai/adapter-utils/test-fixtures/native-cli";
 import { and, eq, or, inArray, sql } from "drizzle-orm";
 import {
   afterAll,
@@ -496,6 +497,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
   > | null = null;
   const childProcesses = new Set<ChildProcess>();
   const cleanupPids = new Set<number>();
+  const ownedStopDirectories = new Set<string>();
 
   beforeAll(async () => {
     if (externalTestDatabaseUrl) {
@@ -556,6 +558,12 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       }
     }
     cleanupPids.clear();
+    for (const directory of ownedStopDirectories) {
+      const resolved = path.resolve(directory);
+      if (!resolved.startsWith(path.resolve(os.tmpdir()) + path.sep) || !path.basename(resolved).startsWith("paperclip-owned-stop-")) throw Error("Unsafe owned Stop fixture cleanup path");
+      await fs.rm(resolved, { recursive: true, force: true });
+    }
+    ownedStopDirectories.clear();
     await cancelActiveRunsForCleanup(db, 5_000);
     let idlePolls = 0;
     for (let attempt = 0; attempt < 100; attempt += 1) {
@@ -6008,7 +6016,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     await fs.mkdir(bin);
     // A real child process supplies execFile's numeric exit/stderr evidence.
     // Every command is intercepted, so no fixture can reach a remote Git host.
-    await fs.writeFile(path.join(bin, "git"), `#!${process.execPath}\n` +
+    await writeCliFixture(path.join(bin, "git"), `#!${process.execPath}\n` +
       `const fs = require('node:fs');\n` +
       `const args = process.argv.slice(2);\n` +
       `fs.appendFileSync(${JSON.stringify(callsPath)}, JSON.stringify(args) + '\\n');\n` +
@@ -6016,7 +6024,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       `const diagnostics = ${JSON.stringify(diagnostics)};\n` +
       `const index = remotes.indexOf(args.at(-2));\n` +
       `if (!args.includes('clone') || index < 0) { process.stderr.write('Unexpected fixture Git command\\n'); process.exit(2); }\n` +
-      `process.stderr.write(diagnostics[index] + '\\n'); process.exitCode = 128;\n`, { mode: 0o755 });
+      `process.stderr.write(diagnostics[index] + '\\n'); process.exitCode = 128;\n`);
     const heartbeat = heartbeatService(db);
     const previousSettings = await instanceSettingsService(db).getExperimental();
     const previousPath = process.env.PATH;
@@ -6099,7 +6107,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     await fs.writeFile(path.join(cwd, "README.md"), "Keep this local repository intact.\n");
     execFileSync("git", ["add", "README.md"], { cwd, stdio: "ignore" });
     execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.test", "commit", "-m", "Fixture"], { cwd, stdio: "ignore" });
-    await fs.writeFile(path.join(bin, "git"), `#!${process.execPath}\n` +
+    await writeCliFixture(path.join(bin, "git"), `#!${process.execPath}\n` +
       `const fs = require('node:fs'); const { spawnSync } = require('node:child_process');\n` +
       `const args = process.argv.slice(2);\n` +
       `if (args.includes('clone')) {\n` +
@@ -6109,7 +6117,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       `}\n` +
       `if (args.some(arg => ['fetch', 'pull', 'push', 'ls-remote', 'submodule'].includes(arg))) process.exit(2);\n` +
       `const result = spawnSync('git', args, { stdio: 'inherit', env: { ...process.env, PATH: ${JSON.stringify(previousPath)} } });\n` +
-      `process.exit(result.status ?? 2);\n`, { mode: 0o755 });
+      `process.exit(result.status ?? 2);\n`);
     try {
       process.env.PATH = `${bin}${path.delimiter}${previousPath ?? ""}`;
       process.env.PAPERCLIP_HOME = home;
@@ -8814,6 +8822,11 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     "settles an owned $adapterType Stop before classifying its $mode",
     async ({ mode, graceful, failure, adapterType }) => {
       const stopSignal = adapterType === "codex_local" ? "SIGINT" : "SIGTERM";
+      const naturalExitDirectory = process.platform === "win32" && graceful
+        ? await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-owned-stop-")) : null;
+      if (naturalExitDirectory) ownedStopDirectories.add(naturalExitDirectory);
+      const naturalExitPath = naturalExitDirectory ? path.join(naturalExitDirectory, "finish") : null;
+      let ownedChild: ChildProcess | undefined;
       const actualProcess = await vi.importActual<
         typeof import("../adapters/process/execute.js")
       >("../adapters/process/execute.js");
@@ -8856,7 +8869,18 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
         return observedResult;
       }) as typeof mockAdapterExecute);
       mockTerminateLocalService.mockImplementationOnce(async (...args) => {
-        await actualSupervisor.terminateLocalService(...args);
+        if (naturalExitPath) {
+          // Windows TerminateProcess cannot deliver a graceful POSIX signal.
+          // Model a genuine provider exit(0) after Stop owns the operation and
+          // before that operation settles. Await the real child handle; never
+          // signal its already-exited PID, which Windows may immediately reuse.
+          if (!ownedChild || ownedChild.exitCode !== null || ownedChild.signalCode !== null) throw Error("Owned natural-exit fixture is not running");
+          const closed = new Promise<void>(resolve => ownedChild!.once("close", () => resolve()));
+          await fs.writeFile(naturalExitPath, "finish");
+          await closed;
+          expect(ownedChild.exitCode).toBe(0);
+          expect(ownedChild.signalCode).toBeNull();
+        } else await actualSupervisor.terminateLocalService(...args);
         reportTerminated();
         await terminationRelease;
         if (failure === "termination")
@@ -8875,7 +8899,8 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
             command: process.execPath,
             args: [
               "-e",
-              `${graceful ? `process.on('${stopSignal}', () => process.exit(0));` : ""} console.log('stop ready'); setInterval(() => {}, 1000)`,
+              `${naturalExitPath ? `const fs = require('node:fs'); setInterval(() => { if (fs.existsSync(${JSON.stringify(naturalExitPath)})) process.exit(0); }, 10);`
+                : graceful ? `process.on('${stopSignal}', () => process.exit(0));` : ""} console.log('stop ready'); setInterval(() => {}, 1000)`,
             ],
             graceSec: 1,
           },
@@ -8887,6 +8912,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
         runningProcesses.get(runId),
       );
       expect(running?.child.pid).toBeTruthy();
+      ownedChild = running?.child;
       await ready;
       const cancellation = heartbeat
         .cancelRun(runId, "Stopped by test operator")
@@ -8904,7 +8930,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
         expect(await waitForValue(async () => observedResult)).toMatchObject(
           graceful
             ? { exitCode: 0, signal: null }
-            : { exitCode: null, signal: stopSignal },
+            : process.platform === "win32" ? { exitCode: 1, signal: null } : { exitCode: null, signal: stopSignal },
         );
         // The process utility already removed its child record on close. A new
         // service instance must still join the original cancellation owner.
@@ -9094,8 +9120,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
         expect((await heartbeat.cancelRun(runId))?.status).toBe("succeeded");
       } else {
         expect(finished).toMatchObject({
-          exitCode: null,
-          signal: "SIGTERM",
+          ...(process.platform === "win32" ? { exitCode: 1, signal: null } : { exitCode: null, signal: "SIGTERM" }),
           errorCode: "adapter_failed",
         });
       }
