@@ -51,23 +51,25 @@ describe("applyDevRunnerOptions", () => {
 
   it("uses the selected instance for the default config path", () => {
     const env: NodeJS.ProcessEnv = { PAPERCLIP_INSTANCE_ID: "experiment" };
+    const home = path.resolve("/isolated/home");
 
-    applyDevRunnerOptions(["--data-dir", "/isolated/home"], env, "/unused");
+    applyDevRunnerOptions(["--data-dir", home], env, "/unused");
 
     expect(env.PAPERCLIP_CONFIG).toBe(
-      path.join("/isolated/home", "instances", "experiment", "config.json"),
+      path.join(home, "instances", "experiment", "config.json"),
     );
   });
 
   it("preserves explicit config and context paths", () => {
+    const home = path.resolve("/isolated/home");
     const env: NodeJS.ProcessEnv = {
       PAPERCLIP_CONFIG: "/explicit/config.json",
       PAPERCLIP_CONTEXT: "/explicit/context.json",
     };
 
-    applyDevRunnerOptions(["--data-dir", "/isolated/home"], env, "/unused");
+    applyDevRunnerOptions(["--data-dir", home], env, "/unused");
 
-    expect(env.PAPERCLIP_HOME).toBe("/isolated/home");
+    expect(env.PAPERCLIP_HOME).toBe(home);
     expect(env.PAPERCLIP_CONFIG).toBe("/explicit/config.json");
     expect(env.PAPERCLIP_CONTEXT).toBe("/explicit/context.json");
   });
