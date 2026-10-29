@@ -14,7 +14,7 @@ vi.mock("@/lib/clipboard", () => ({ copyTextToClipboard: vi.fn() }));
 vi.mock("@/api/file-resources", () => ({ fileResourcesApi: { resolve: async () => ({ title: "report.md", contentType: "text/markdown", capabilities: { preview: true, download: false } }), content: async () => ({ content: { data: "Raw 原文 1234", encoding: "utf8" } }) } }));
 vi.mock("@/components/FileViewerSheet", () => ({ FileViewerMetadataRow: () => null, FileViewerBody: ({ onSetAnnouncement }: { onSetAnnouncement: (value: string) => void }) => { mock.announce = onSetAnnouncement; return <p>Raw 原文 1234</p>; } }));
 let root: Root; let container: HTMLDivElement; let client: QueryClient;
-const payload = { kind: "workspace-file", path: "same/report.md", workspace: "task", workspaceId: null, projectId: null } as Extract<TaskSidePanelTabPayload, { kind: "workspace-file" }>;
+const payload: Extract<TaskSidePanelTabPayload, { kind: "workspace-file" }> = { kind: "workspace-file", path: "same/report.md", workspace: "auto", workspaceId: null, projectId: null, line: null, column: null };
 async function render(issueId = "one") { await act(async () => root.render(<QueryClientProvider client={client}><TaskWorkspaceFilePanel issueId={issueId} payload={payload} /></QueryClientProvider>)); await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); }); }
 beforeEach(async () => { await i18n.changeLanguage("en"); mock.company = "one"; container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container); client = new QueryClient({ defaultOptions: { queries: { retry: false } } }); });
 afterEach(async () => { await act(async () => root.unmount()); client.clear(); container.remove(); vi.resetAllMocks(); });

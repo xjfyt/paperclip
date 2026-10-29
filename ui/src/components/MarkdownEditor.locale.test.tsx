@@ -29,6 +29,7 @@ it("updates the live rich-editor label without remounting or replacing its conte
     expect(editable).not.toBeNull();
     const initialLabel = editable.getAttribute("aria-label");
     const lexical = getNearestEditorFromDOMNode(editable);
+    if (!lexical) throw new Error("Expected the mounted rich editor to expose its Lexical editor");
     await act(async () => lexical.update(() => {
       const text = $getRoot().getFirstDescendant();
       if ($isTextNode(text)) text.setTextContent("Draft 原文 1234 edited");
