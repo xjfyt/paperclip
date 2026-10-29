@@ -19,3 +19,5 @@ skills-releases/** text=auto eol=lf
 # POSIX runtime helpers must remain executable by Bash after Windows checkout.
 skills/paperclip/scripts/*.sh text eol=lf
 scripts/provision-worktree*.sh text eol=lf
+# Announcement asset names attest their exact bytes, including text assets.
+announcements/**/assets/** text=auto eol=lf

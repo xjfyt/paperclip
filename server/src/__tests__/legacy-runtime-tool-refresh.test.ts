@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AdapterExecutionContext } from "@paperclipai/adapter-utils";
+import { writeCliFixture } from "@paperclipai/adapter-utils/test-fixtures/native-cli";
 
 // Pi resolves its session directory at module load. Keep that test directory
 // under the temporary root instead of the operator's real home.
@@ -30,8 +31,8 @@ describe("legacy environment tool access on resumed conversations", () => {
     ["cursor", cursor, "--resume"], ["opencode_local", opencode, "--session"], ["pi_local", pi, "--session"],
   ] as const)("refreshes %s without dropping its conversation", async (type, execute, resumeFlag) => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-cli-tool-refresh-")); roots.push(root);
-    const command = path.join(root, "agent");
-    await fs.writeFile(command, "#!/bin/sh\nprintf 'provider  model\\nopenai  gpt-5\\n'\n", { mode: 0o755 });
+    const command = path.join(root, process.platform === "win32" ? "agent.exe" : "agent");
+    await writeCliFixture(command.replace(/\.exe$/, ""), "#!/usr/bin/env node\nconsole.log('provider  model\\nopenai  gpt-5');\n");
     const sessionId = type === "pi_local" ? path.join(root, "session.jsonl") : "existing-session";
     if (type === "pi_local") await fs.writeFile(sessionId, JSON.stringify({ type: "session", cwd: root }) + "\n");
     const stdout = type === "kimi_local"

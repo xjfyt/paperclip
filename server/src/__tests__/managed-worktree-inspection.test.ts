@@ -4,6 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { shellExecutable, shellEnvironment } from "@paperclipai/adapter-utils/test-fixtures/local-sandbox";
+import { writeCliFixture } from "@paperclipai/adapter-utils/test-fixtures/native-cli";
 import { ensurePersistedExecutionWorkspaceAvailable, inspectManagedGitWorktreeBranch } from "../services/workspace-runtime.js";
 
 const exec = promisify(execFile);
@@ -27,10 +29,11 @@ async function fixture() {
 }
 
 async function replaceListProbe(root: string, body: string) {
-  const realGit = (await exec("/bin/sh", ["-c", "command -v git"])).stdout.trim();
+  const realGit = (await exec(shellExecutable("sh"), ["-c", process.platform === "win32"
+    ? 'cygpath -w "$(command -v git)"' : "command -v git"], { env: shellEnvironment() })).stdout.trim();
   const bin = path.join(root, "bin");
   await fs.mkdir(bin);
-  await fs.writeFile(path.join(bin, "git"), `#!${process.execPath}\nconst args=process.argv.slice(2);\nif(args[0]==="worktree"&&args[1]==="list"){${body}}else{const r=require("node:child_process").spawnSync(${JSON.stringify(realGit)},args,{stdio:"inherit"});process.exitCode=r.status??1;}\n`, { mode: 0o755 });
+  await writeCliFixture(path.join(bin, "git"), `#!${process.execPath}\nconst args=process.argv.slice(2);\nif(args[0]==="worktree"&&args[1]==="list"){${body}}else{const r=require("node:child_process").spawnSync(${JSON.stringify(realGit)},args,{stdio:"inherit"});process.exitCode=r.status??1;}\n`);
   vi.stubEnv("PATH", `${bin}${path.delimiter}${process.env.PATH ?? ""}`);
 }
 
