@@ -39,7 +39,7 @@ export default defineConfig({
       PAPERCLIP_OIDC_ENABLED: "false", PAPERCLIP_WORKBUDDY_ENABLED: "false", PAPERCLIP_GITLAB_PUBLISH_ENABLED: "false", PAPERCLIP_GITLAB_POLL_ENABLED: "false", PAPERCLIP_CODING_REPAIR_ENABLED: "false",
       PAPERCLIP_NOTIFICATIONS_ENABLED: "true", PAPERCLIP_NOTIFICATIONS_WORKER_ENABLED: "false",
       PAPERCLIP_OPEN_ON_LISTEN: "false", PAPERCLIP_TELEMETRY_DISABLED: "1", DO_NOT_TRACK: "1",
-      PAPERCLIP_BIND: "loopback", PAPERCLIP_DEPLOYMENT_MODE: "local_trusted", PAPERCLIP_UI_DEV_MIDDLEWARE: "false" },
+      PAPERCLIP_BIND: "loopback", PAPERCLIP_DEPLOYMENT_MODE: process.env.PAPERCLIP_MIMOUSE_TEST_AUTHENTICATED === "true" ? "authenticated" : "local_trusted", PAPERCLIP_UI_DEV_MIDDLEWARE: "false" },
   },
   outputDir: "../../test-results/mimouse", reporter: [["list"]],
 });
