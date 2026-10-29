@@ -1,11 +1,12 @@
 import { hasNativeLocalProcessStop } from "../native-local-process-stop.js";
 import { randomUUID } from "node:crypto";
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rename, rm } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
+import { promisify } from "node:util";
 
 import { and, eq } from "drizzle-orm";
 import {
@@ -73,13 +74,16 @@ const describeEmbeddedPostgres = embeddedPostgresSupport.supported
   ? describe
   : describe.skip;
 
-const fakeCodexAppServer = resolve(
+const fakeCodexCandidates = ["debug", "release"].map(profile => resolve(
   import.meta.dirname,
-  "../../../../packages/paperclip-runner/runner/target/debug/fake-codex-app-server",
-);
+  `../../../../packages/paperclip-runner/runner/target/${profile}/fake-codex-app-server${process.platform === "win32" ? ".exe" : ""}`,
+));
+const fakeCodexAppServer = fakeCodexCandidates.find(existsSync) ?? fakeCodexCandidates[0]!;
 const binariesAvailable =
   existsSync(defaultCapabilityRunnerdBinary()) && existsSync(fakeCodexAppServer);
 const realProcessIt = binariesAvailable ? it : it.skip;
+const executeFile = promisify(execFile);
+const ownedRunners = new Map<number, { stateRoot: string; startedAt: string | null }>();
 
 async function closeServer(server: Server | null): Promise<void> {
   if (!server) return;
@@ -116,6 +120,36 @@ async function stopOwnedProcessGroup(
   expectedStateRoot: string,
 ): Promise<void> {
   if (!pid || !processAlive(pid)) return;
+  const ownership = ownedRunners.get(pid);
+  if (!ownership?.startedAt || ownership.stateRoot !== expectedStateRoot) {
+    throw new Error("Refusing to stop a runner without its captured process generation");
+  }
+  if (process.platform === "win32") {
+    const script = `
+$ErrorActionPreference = 'Stop'
+$pidValue = [int]$env:PAPERCLIP_TEST_OWNED_PID
+$expected = [long]$env:PAPERCLIP_TEST_OWNED_START
+$entry = Get-CimInstance Win32_Process -Filter "ProcessId = $pidValue"
+if ($null -eq $entry) { exit 0 }
+$instance = [Diagnostics.Process]::GetProcessById($pidValue)
+$null = $instance.Handle
+$actual = ([DateTimeOffset]$instance.StartTime.ToUniversalTime()).ToUnixTimeMilliseconds()
+$observed = ([DateTimeOffset]$entry.CreationDate.ToUniversalTime()).ToUnixTimeMilliseconds()
+$root = $env:PAPERCLIP_TEST_OWNED_ROOT.Replace('\\', '/')
+$command = ([string]$entry.CommandLine).Replace('\\', '/')
+$pattern = '(^|[\\s"])' + [Regex]::Escape($root) + '(/|[\\s"]|$)'
+if ($actual -ne $expected -or $observed -ne $actual -or $command -notmatch $pattern) { throw 'Owned runner identity changed' }
+$instance.Kill()
+if (-not $instance.WaitForExit(5000)) { throw 'Owned runner did not exit' }
+`;
+    await executeFile(resolve(process.env.SystemRoot ?? "C:\\Windows", "System32/WindowsPowerShell/v1.0/powershell.exe"),
+      ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script], {
+        env: { ...process.env, PAPERCLIP_TEST_OWNED_PID: String(pid), PAPERCLIP_TEST_OWNED_START: String(Date.parse(ownership.startedAt)), PAPERCLIP_TEST_OWNED_ROOT: expectedStateRoot },
+        timeout: 10_000, windowsHide: true,
+      });
+    return;
+  }
+  if (await readProcessStartedAt(pid) !== ownership.startedAt) throw new Error("Owned runner generation changed");
   const command = await import("node:child_process").then(
     ({ execFileSync }) =>
       execFileSync("ps", ["-p", String(pid), "-o", "command="], {
@@ -125,8 +159,7 @@ async function stopOwnedProcessGroup(
   if (!command.includes(expectedStateRoot)) {
     throw new Error(`Refusing to signal process ${pid}; ownership changed`);
   }
-  if (process.platform !== "win32") process.kill(-pid, "SIGKILL");
-  else process.kill(pid, "SIGKILL");
+  process.kill(-pid, "SIGKILL");
   await waitForCondition(`owned process ${pid} to exit`, () => !processAlive(pid));
 }
 
@@ -137,6 +170,7 @@ describeEmbeddedPostgres("native runner restart recovery with real processes", (
   let server: Server | null = null;
   let apiUrl: string;
   let originalPaperclipHome: string | undefined;
+  let paperclipHomeOverridden = false;
 
   const companyId = randomUUID();
   const agentId = randomUUID();
@@ -150,6 +184,7 @@ describeEmbeddedPostgres("native runner restart recovery with real processes", (
     paperclipHome = await mkdtemp(resolve(tmpdir(), "native-restart-home-"));
     originalPaperclipHome = process.env.PAPERCLIP_HOME;
     process.env.PAPERCLIP_HOME = paperclipHome;
+    paperclipHomeOverridden = true;
     const controllerStartedAt = await readProcessStartedAt(process.pid);
     successor = {
       bootId: randomUUID(),
@@ -187,18 +222,30 @@ describeEmbeddedPostgres("native runner restart recovery with real processes", (
       runtimeConfig: {},
       permissions: {},
     });
-  });
+  }, process.platform === "win32" ? 90_000 : 30_000);
 
   afterAll(async () => {
-    runnerPrpWebSocketInternals.resetForTests();
-    await closeServer(server);
-    await temporary.cleanup();
-    await Promise.all([
-      rm(runtimeRoot, { recursive: true, force: true }),
-      rm(paperclipHome, { recursive: true, force: true }),
-    ]);
-    if (originalPaperclipHome === undefined) delete process.env.PAPERCLIP_HOME;
-    else process.env.PAPERCLIP_HOME = originalPaperclipHome;
+    try {
+      runnerPrpWebSocketInternals.resetForTests();
+      await closeServer(server);
+      let cleanupFailure: unknown;
+      for (const [pid, owner] of ownedRunners) {
+        try { await stopOwnedProcessGroup(pid, owner.stateRoot); }
+        catch (error) { cleanupFailure ??= error; }
+      }
+      await temporary?.cleanup();
+      if (cleanupFailure) throw cleanupFailure;
+      await Promise.all([runtimeRoot, paperclipHome]
+        .filter((folder) => typeof folder === "string")
+        .map((folder) => rm(folder, { recursive: true, force: true })));
+    } finally {
+      // A failed beforeAll must neither erase the caller's untouched home nor
+      // hide its original error by attempting rm(undefined).
+      if (paperclipHomeOverridden) {
+        if (originalPaperclipHome === undefined) delete process.env.PAPERCLIP_HOME;
+        else process.env.PAPERCLIP_HOME = originalPaperclipHome;
+      }
+    }
   });
 
   async function seedRun(
@@ -272,6 +319,12 @@ describeEmbeddedPostgres("native runner restart recovery with real processes", (
       ],
       stateDirectory,
       lifecyclePolicy: { mode: "warm" as const, idleTimeoutMs: 60_000 },
+      onSpawn: async ({ pid }: { pid: number }) => {
+        ownedRunners.set(pid, { stateRoot: stateDirectory, startedAt: null });
+        const startedAt = await readProcessStartedAt(pid);
+        if (!startedAt) throw new Error("Owned runner generation unavailable");
+        ownedRunners.set(pid, { stateRoot: stateDirectory, startedAt });
+      },
       prpIdentity: {
         runnerInstanceId: fixture.native.runnerInstanceId,
         environmentLeaseId: fixture.native.environmentLeaseId,
@@ -991,7 +1044,11 @@ describeEmbeddedPostgres("native runner restart recovery with real processes", (
           .where(eq(heartbeatRuns.retryOfRunId, fixture.runId)),
       ).resolves.toHaveLength(0);
     } finally {
-      await stopOwnedProcessGroup(pid, stateDirectory).catch(() => undefined);
+      if (child.exitCode === null && child.signalCode === null) {
+        const closed = new Promise<void>((resolveClose) => child.once("close", () => resolveClose()));
+        child.kill("SIGKILL");
+        await closed;
+      }
     }
   });
 
