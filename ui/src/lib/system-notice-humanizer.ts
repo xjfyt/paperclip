@@ -46,6 +46,8 @@ function firstSentence(body: string): string | undefined {
 export function humanizeSystemNotice(input: {
   body: string;
   presentation?: IssueCommentPresentation | null;
+  /** Explicit display-only opt-in; canonical titles and original body stay unchanged by default. */
+  displayTitle?: (key: "systemUpdate" | "claudeAuth" | "missingBinding" | "workspaceProblem" | "waitingOwner" | "waitingRecoveryOwner", values?: Record<string, string>) => string;
 }): HumanizedSystemNotice {
   const presentationTitle = input.presentation?.title?.trim();
   const presentationTone = input.presentation?.tone;
@@ -58,19 +60,19 @@ export function humanizeSystemNotice(input: {
 
   if (code === "claude_auth_required") {
     return {
-      title: "Task paused — Claude needs re-authentication",
+      title: input.displayTitle?.("claudeAuth") ?? "Task paused — Claude needs re-authentication",
       tone: presentationTone ?? "warning",
     };
   }
   if (code === "configuration_incomplete" || body.includes("secret/env bindings are missing")) {
     return {
-      title: "Task paused — a secret/config binding is missing",
+      title: input.displayTitle?.("missingBinding") ?? "Task paused — a secret/config binding is missing",
       tone: presentationTone ?? "warning",
     };
   }
   if (code === "workspace_validation_failed" || body.includes("workspace failed validation")) {
     return {
-      title: "Task paused — workspace problem",
+      title: input.displayTitle?.("workspaceProblem") ?? "Task paused — workspace problem",
       tone: presentationTone ?? "warning",
     };
   }
@@ -78,14 +80,14 @@ export function humanizeSystemNotice(input: {
     const owner = recoveryOwnerName(body);
     return {
       title: owner
-        ? `Task paused — waiting on ${owner}`
-        : "Task paused — waiting on a recovery owner",
+        ? input.displayTitle?.("waitingOwner", { owner }) ?? `Task paused — waiting on ${owner}`
+        : input.displayTitle?.("waitingRecoveryOwner") ?? "Task paused — waiting on a recovery owner",
       tone: presentationTone ?? "warning",
     };
   }
 
   return {
-    title: FALLBACK_TITLE,
+    title: input.displayTitle?.("systemUpdate") ?? FALLBACK_TITLE,
     tone: presentationTone ?? "neutral",
     detail: firstSentence(body),
   };

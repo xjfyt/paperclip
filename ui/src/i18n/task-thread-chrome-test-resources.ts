@@ -1,3 +1,4 @@
+import "./task-thread-notice-test-resources";
 // Test only: integration composes contributions into runtime locales.
 import { i18n } from "./index";
 import en from "./contributions/taskThreadChromeUi/en.json";

@@ -1,0 +1,22 @@
+{
+  "pending": "Waiting for approval",
+  "running": "Approved · Running…",
+  "executed": "Succeeded",
+  "failed": "Execution failed",
+  "declined": "Declined",
+  "expired": "Expired",
+  "cancelled": "Cancelled",
+  "actionFailed": "The action could not complete.",
+  "alwaysAllowed": " · Always allowed",
+  "hideResult": "Hide result details",
+  "showResult": "Show result details",
+  "viewResult": "View result",
+  "declining": "Declining…",
+  "decline": "Decline",
+  "saving": "Saving…",
+  "approving": "Approving…",
+  "approveRun": "Approve & run",
+  "approveRequest": "Approve request",
+  "approvalOptions": "Approval options",
+  "alwaysAllow": "Always allow"
+}

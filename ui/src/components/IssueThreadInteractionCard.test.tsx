@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import "@/i18n/task-thread-tools-test-resources";
+import "@/i18n/task-thread-feedback-test-resources";
 
 import { act as reactAct, type ComponentProps, type ReactNode } from "react";
 import { flushSync } from "react-dom";

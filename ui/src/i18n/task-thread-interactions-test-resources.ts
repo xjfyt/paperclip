@@ -1,3 +1,4 @@
+import "./task-thread-tools-test-resources";
 // Test only: integration composes contributions into runtime locales.
 import "./task-thread-feedback-test-resources";
 import "./task-thread-receipts-test-resources";

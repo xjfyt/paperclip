@@ -1,0 +1,8 @@
+{
+  "systemUpdate": "System update",
+  "claudeAuth": "Task paused — Claude needs re-authentication",
+  "missingBinding": "Task paused — a secret/config binding is missing",
+  "workspaceProblem": "Task paused — workspace problem",
+  "waitingOwner": "Task paused — waiting on {{owner}}",
+  "waitingRecoveryOwner": "Task paused — waiting on a recovery owner"
+}

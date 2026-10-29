@@ -1,3 +1,5 @@
+import { useTranslation } from "@/i18n";
+import { taskInteractionAudience, taskInteractionError } from "@/i18n/task-interaction-feedback-display";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Agent } from "@paperclipai/shared";
 import { AlertTriangle, ArrowUpRight, Bot, Check, CheckCircle2, ChevronDown, ChevronRight, CircleDashed, Clock, ExternalLink, FileText, GitBranch, ImagePlus, KeyRound, Loader2, MessageSquareQuote, MinusCircle, ShieldAlert, ThumbsUp, TriangleAlert, Wrench, X, XCircle } from "lucide-react";
@@ -1690,6 +1692,7 @@ function ToolActionResolution({
   state: ToolActionCardState;
   interaction: RequestConfirmationInteraction;
 }) {
+  const { t } = useTranslation();
   const result = interaction.result?.toolAction;
   const [resultOpen, setResultOpen] = useState(false);
   const output = state === "executed" ? result?.resultSummary?.trim() : null;
@@ -1698,29 +1701,29 @@ function ToolActionResolution({
     try { formattedOutput = JSON.stringify(JSON.parse(output), null, 2); } catch { /* Plain-text results remain readable. */ }
   }
   const labels = {
-    pending: "Waiting for approval",
-    running: "Approved · Running…",
-    executed: "Succeeded",
-    failed: "Execution failed",
-    declined: "Declined",
-    expired: "Expired",
-    cancelled: "Cancelled",
+    pending: t("taskThreadToolsUi.pending"),
+    running: t("taskThreadToolsUi.running"),
+    executed: t("taskThreadToolsUi.executed"),
+    failed: t("taskThreadToolsUi.failed"),
+    declined: t("taskThreadToolsUi.declined"),
+    expired: t("taskThreadToolsUi.expired"),
+    cancelled: t("taskThreadToolsUi.cancelled"),
   };
   const Icon = state === "running" ? Loader2 : state === "executed" ? CheckCircle2 : state === "failed" ? AlertTriangle : state === "expired" ? Clock : MinusCircle;
-  const detail = state === "failed" ? result?.errorMessage?.trim() || "The action could not complete."
+  const detail = state === "failed" ? result?.errorMessage?.trim() || t("taskThreadToolsUi.actionFailed")
     : state === "declined" ? interaction.result?.reason?.trim()
     : null;
   const status = <>
     <Icon className={cn("h-3.5 w-3.5 shrink-0", state === "running" && "animate-spin", state === "failed" && "text-destructive")} />
     {labels[state]}
-    {result?.rememberedAction ? " · Always allowed" : ""}
+    {result?.rememberedAction ? t("taskThreadToolsUi.alwaysAllowed") : ""}
   </>;
   return (
     <div className="space-y-1 text-sm text-muted-foreground" aria-live="polite">
       {output ? (
         <Collapsible open={resultOpen} onOpenChange={setResultOpen}>
           <CollapsibleTrigger asChild>
-            <button type="button" className="flex items-center gap-1.5 rounded-sm hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={resultOpen ? "Hide result details" : "Show result details"}>
+            <button type="button" className="flex items-center gap-1.5 rounded-sm hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={t(resultOpen ? "taskThreadToolsUi.hideResult" : "taskThreadToolsUi.showResult")}>
               {status}<ChevronDown className={cn("h-3 w-3", resultOpen && "rotate-180")} />
             </button>
           </CollapsibleTrigger>
@@ -1731,7 +1734,7 @@ function ToolActionResolution({
       ) : <p className="flex items-center gap-1.5">{status}</p>}
       {detail ? <p className={cn("break-words", state === "failed" && "text-destructive")}>{detail}</p> : null}
       {state === "executed" && result?.resultHref?.trim() ? (
-        <a className="inline-flex items-center gap-1 underline underline-offset-4 hover:text-foreground" href={result.resultHref} target="_blank" rel="noreferrer">View result<ExternalLink className="h-3 w-3" /></a>
+        <a className="inline-flex items-center gap-1 underline underline-offset-4 hover:text-foreground" href={result.resultHref} target="_blank" rel="noreferrer">{t("taskThreadToolsUi.viewResult")}<ExternalLink className="h-3 w-3" /></a>
       ) : null}
     </div>
   );
@@ -1750,10 +1753,11 @@ function RequestToolActionCard({
   onRejectInteraction?: (interaction: RequestConfirmationInteraction, reason?: string) => Promise<void> | void;
   externalReferences?: MarkdownExternalReferenceMap;
 }) {
+  const { t } = useTranslation();
   const payload = interaction.payload.toolAction!;
   const [working, setWorking] = useState<"accept" | "always" | "reject" | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const resolutionErrorMessage = useResolutionErrorMessage();
+  const [actionError, setActionError] = useState<{ cause: unknown } | null>(null);
+  const audience = useContext(InteractionAudienceContext);
   const isPending = state === "pending";
   const variant = payload.risk === "destructive" ? "destructive" : "cta";
 
@@ -1768,7 +1772,7 @@ function RequestToolActionCard({
       if (decision === "reject") await onRejectInteraction?.(interaction);
       else await onAcceptInteraction?.(interaction, undefined, undefined, decision === "always");
     } catch (error) {
-      setActionError(resolutionErrorMessage(error));
+      setActionError({ cause: error });
     } finally {
       setWorking(null);
     }
@@ -1788,22 +1792,22 @@ function RequestToolActionCard({
       {isPending ? (
         <div className="mt-3 flex justify-end gap-2">
           <Button size="sm" variant="ghost" disabled={!onRejectInteraction || working !== null} onClick={() => void decide("reject")}>
-            {working === "reject" ? "Declining…" : "Decline"}
+            {working === "reject" ? t("taskThreadToolsUi.declining") : t("taskThreadToolsUi.decline")}
           </Button>
-          <div className="inline-flex" role="group" aria-label="Approve request">
+          <div className="inline-flex" role="group" aria-label={t("taskThreadToolsUi.approveRequest")}>
             <Button size="sm" variant={variant} className={payload.rememberActionScope ? "rounded-r-none" : undefined} disabled={!onAcceptInteraction || working !== null} onClick={() => void decide("accept")}>
-              {working === "accept" || working === "always" ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />{working === "always" ? "Saving…" : "Approving…"}</> : "Approve & run"}
+              {working === "accept" || working === "always" ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />{working === "always" ? t("taskThreadToolsUi.saving") : t("taskThreadToolsUi.approving")}</> : t("taskThreadToolsUi.approveRun")}
             </Button>
             {payload.rememberActionScope ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button size="icon-sm" variant={variant} className="rounded-l-none border-l border-background/30" aria-label="Approval options" disabled={!onAcceptInteraction || working !== null}>
+                  <Button size="icon-sm" variant={variant} className="rounded-l-none border-l border-background/30" aria-label={t("taskThreadToolsUi.approvalOptions")} disabled={!onAcceptInteraction || working !== null}>
                     <ChevronDown className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem onSelect={() => void decide("always")} title={payload.rememberActionScope} aria-description={payload.rememberActionScope}>
-                    Always allow
+                    {t("taskThreadToolsUi.alwaysAllow")}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -1811,7 +1815,7 @@ function RequestToolActionCard({
           </div>
         </div>
       ) : null}
-      <InteractionActionError message={actionError} />
+      <InteractionActionError message={actionError ? taskInteractionError(actionError.cause, audience ?? { isOpen: true, shortSummary: "" }) : null} />
     </div>
   );
 }
@@ -3622,6 +3626,7 @@ export function IssueThreadInteractionCard({
   onUploadImage,
   externalReferences,
 }: IssueThreadInteractionCardProps) {
+  useTranslation();
   // Single enforcement point (PAP-424, plan from PAP-420; extended by PAP-437):
   // a card that should never be drawn — a degenerate `ask_user_questions`
   // (placeholder junk like the onboarding `Test / A` card, no genuine question)
@@ -3729,11 +3734,13 @@ export function IssueThreadInteractionCard({
   // reader never has to guess whether an open card is waiting on them. Derived
   // from the same server snapshot the resolver routes enforce, so the copy
   // cannot promise a wider audience than the API allows.
-  const audience = describeInteractionAudience({
-    interaction,
-    creatorLabel: createdByLabel,
-    addresseeLabel,
-  });
+  const audience = isToolAction
+    ? taskInteractionAudience({
+        interaction, creatorLabel: createdByLabel, addresseeLabel,
+        creatorIsCurrentUser: interaction.createdByUserId != null && interaction.createdByUserId === currentUserId,
+        addresseeIsCurrentUser: interaction.addresseeUserId != null && interaction.addresseeUserId === currentUserId,
+      })
+    : describeInteractionAudience({ interaction, creatorLabel: createdByLabel, addresseeLabel });
   if (interaction.kind === "connection_intent" && interaction.payload.accessRequest) {
     return (
       <div id={`interaction-${interaction.id}`}>

@@ -1,0 +1,8 @@
+{
+  "systemUpdate": "系统更新",
+  "claudeAuth": "任务已暂停 — Claude 需要重新认证",
+  "missingBinding": "任务已暂停 — 缺少密钥或配置绑定",
+  "workspaceProblem": "任务已暂停 — 工作区出现问题",
+  "waitingOwner": "任务已暂停 — 等待 {{owner}}",
+  "waitingRecoveryOwner": "任务已暂停 — 等待恢复负责人"
+}

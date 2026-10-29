@@ -1,0 +1,22 @@
+{
+  "pending": "等待批准",
+  "running": "已批准 · 运行中…",
+  "executed": "已成功",
+  "failed": "执行失败",
+  "declined": "已拒绝",
+  "expired": "已过期",
+  "cancelled": "已取消",
+  "actionFailed": "操作未能完成。",
+  "alwaysAllowed": " · 始终允许",
+  "hideResult": "隐藏结果详情",
+  "showResult": "显示结果详情",
+  "viewResult": "查看结果",
+  "declining": "正在拒绝…",
+  "decline": "拒绝",
+  "saving": "正在保存…",
+  "approving": "正在批准…",
+  "approveRun": "批准并运行",
+  "approveRequest": "批准请求",
+  "approvalOptions": "批准选项",
+  "alwaysAllow": "始终允许"
+}

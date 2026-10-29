@@ -1,0 +1,22 @@
+{
+  "pending": "承認待ち",
+  "running": "承認済み · 実行中…",
+  "executed": "成功",
+  "failed": "実行に失敗しました",
+  "declined": "辞退済み",
+  "expired": "期限切れ",
+  "cancelled": "キャンセル済み",
+  "actionFailed": "操作を完了できませんでした。",
+  "alwaysAllowed": " · 常に許可",
+  "hideResult": "結果の詳細を非表示",
+  "showResult": "結果の詳細を表示",
+  "viewResult": "結果を表示",
+  "declining": "辞退中…",
+  "decline": "辞退",
+  "saving": "保存中…",
+  "approving": "承認中…",
+  "approveRun": "承認して実行",
+  "approveRequest": "リクエストを承認",
+  "approvalOptions": "承認オプション",
+  "alwaysAllow": "常に許可"
+}

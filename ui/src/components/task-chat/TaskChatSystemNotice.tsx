@@ -67,6 +67,7 @@ export function TaskChatSystemNotice({
   const { title, tone, detail } = humanizeSystemNotice({
     body: item.text,
     presentation: item.presentation,
+    displayTitle: (key, values) => t(`taskThreadNoticeUi.${key}`, values),
   });
   const sections = mapCommentMetadataToSystemNoticeSections(item.metadata, {
     runAgentId: item.runAgentId,

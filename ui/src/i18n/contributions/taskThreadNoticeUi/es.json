@@ -1,0 +1,8 @@
+{
+  "systemUpdate": "Actualización del sistema",
+  "claudeAuth": "Tarea en pausa: Claude necesita volver a autenticarse",
+  "missingBinding": "Tarea en pausa: falta una vinculación de secreto o configuración",
+  "workspaceProblem": "Tarea en pausa: problema del espacio de trabajo",
+  "waitingOwner": "Tarea en pausa: esperando a {{owner}}",
+  "waitingRecoveryOwner": "Tarea en pausa: esperando a un responsable de recuperación"
+}

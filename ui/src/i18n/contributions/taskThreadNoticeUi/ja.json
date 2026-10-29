@@ -1,0 +1,8 @@
+{
+  "systemUpdate": "システム更新",
+  "claudeAuth": "タスク一時停止中 — Claude の再認証が必要です",
+  "missingBinding": "タスク一時停止中 — シークレットまたは設定のバインドが不足しています",
+  "workspaceProblem": "タスク一時停止中 — ワークスペースに問題があります",
+  "waitingOwner": "タスク一時停止中 — {{owner}} を待っています",
+  "waitingRecoveryOwner": "タスク一時停止中 — 復旧担当者を待っています"
+}
