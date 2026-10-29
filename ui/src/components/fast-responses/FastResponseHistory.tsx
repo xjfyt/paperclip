@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "@/i18n";
 import { fastResponsesApi } from "@/api/fast-responses";
 import { DecisionHistoryTable } from "@/components/decision-models/DecisionHistory";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,7 @@ export function FastResponseHistory({
   from?: string | null;
   to?: string | null;
 }) {
+  const { t } = useTranslation();
   const { enabled } = useFastResponsesEnabled();
   const query = useQuery({
     queryKey: ["fast-response-history", companyId, from, to],
@@ -28,16 +30,16 @@ export function FastResponseHistory({
   });
   if (query.isPending)
     return (
-      <p className="text-sm text-muted-foreground">Loading fast responses…</p>
+      <p className="text-sm text-muted-foreground">{t("costHistoryUi.loadingFast")}</p>
     );
   if (query.error)
     return (
       <div role="alert">
         <p className="text-sm text-destructive">
-          Could not load fast responses.
+          {t("costHistoryUi.failedFast")}
         </p>
         <Button variant="outline" onClick={() => void query.refetch()}>
-          Try again
+          {t("costHistoryUi.retry")}
         </Button>
       </div>
     );
