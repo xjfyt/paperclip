@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { taskThreadGoalMessages } from "@/i18n/task-thread-goal-test-resources";
+import { createRunnerGoalLocalError } from "@/i18n/runner-goal-feedback";
 import "@/i18n/task-thread-queue-test-resources";
 import "@/i18n/task-thread-composer-test-resources";
 import "@/i18n/searchable-select-test-resources";
@@ -2235,6 +2237,18 @@ describe("TaskChatComposer", () => {
       tokenBudgetControl: true,
       usageReporting: true,
     };
+
+    it.each(["en", "zh-CN", "es", "ja"] as const)("keeps /goal source feedback localized without clearing or reposting the draft in %s", async locale => {
+      await act(async () => { await i18n.changeLanguage(locale); });
+      const original = createRunnerGoalLocalError("missingGoal"); const onRunnerGoalCommand = vi.fn().mockRejectedValue(original); const onAdd = vi.fn();
+      render(<TaskChatComposer onAdd={onAdd} workMode="standard" runnerGoalCapability={capability} onRunnerGoalCommand={onRunnerGoalCommand} draftKey="goal-source-draft" />);
+      typeText("/goal edit"); pressKey("Enter", { metaKey: true }); await flushAsync();
+      expect(container.textContent).toContain(taskThreadGoalMessages[locale].missingGoal); expect(editable().textContent).toBe("/goal edit");
+      const next = locale === "ja" ? "es" : "ja"; await act(async () => { await i18n.changeLanguage(next); });
+      expect(container.textContent).toContain(taskThreadGoalMessages[next].missingGoal); expect(editable().textContent).toBe("/goal edit"); expect(onRunnerGoalCommand).toHaveBeenCalledExactlyOnceWith({ action: "edit" }); expect(onAdd).not.toHaveBeenCalled(); expect(original.message).toBe(taskThreadGoalMessages.en.missingGoal);
+      const raw = new Error(original.message); onRunnerGoalCommand.mockRejectedValue(raw); pressKey("Enter", { metaKey: true }); await flushAsync();
+      expect(container.textContent).toContain(raw.message); expect(editable().textContent).toBe("/goal edit"); expect(onRunnerGoalCommand).toHaveBeenCalledTimes(2); expect(onAdd).not.toHaveBeenCalled();
+    });
 
     it("matches only an exact first /goal token", () => {
       expect(parseRunnerGoalCommand(" /goal Ship the feature ")).toEqual({

@@ -1,3 +1,4 @@
+import { runnerGoalErrorDescriptor, type RunnerGoalErrorDescriptor } from "@/i18n/runner-goal-feedback";
 import { composerModePlaceholder } from "@/lib/composer-assignee-copy";
 import { systemLabel } from "@/i18n/system-labels";
 import { t as mimouseUiT, useTranslation as useMimouseUiTranslation } from "@/i18n";
@@ -191,7 +192,7 @@ type GoalArgumentsError = {
   values: { command: string };
 };
 
-type ComposerLocalActionError = GoalArgumentsError | {
+type ComposerLocalActionError = RunnerGoalErrorDescriptor | GoalArgumentsError | {
   key:
     | "taskComposerErrorsUi.createFailed"
     | "taskComposerErrorsUi.separateTask"
@@ -1038,9 +1039,9 @@ export function TaskChatComposer({
         editorRef.current?.clear();
       } catch (error) {
         setActionError(
-          error instanceof Error
+          runnerGoalErrorDescriptor(error) ?? (error instanceof Error
             ? error.message
-            : { key: "taskComposerErrorsUi.goalFailed" },
+            : { key: "taskComposerErrorsUi.goalFailed" }),
         );
       }
       return;

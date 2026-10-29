@@ -1,3 +1,5 @@
+import { t as displayText, useTranslation, formatNumber } from "@/i18n";
+import { createRunnerGoalLocalError, runnerGoalErrorText } from "@/i18n/runner-goal-feedback";
 import { useCallback, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Flag, Loader2, Pause, Play, Pencil, Trash2 } from "lucide-react";
@@ -16,13 +18,13 @@ import { Textarea } from "@/components/ui/textarea";
 import type { RunnerGoalComposerCommand } from "./TaskChatComposer";
 
 const PENDING_LABELS: Record<string, string> = {
-  starting: "Starting",
-  editing: "Saving",
-  replacing: "Replacing",
-  pausing: "Pausing after current turn",
-  resuming: "Resuming",
-  clearing: "Clearing",
-  continuing: "Continuing in a new run",
+  starting: "starting",
+  editing: "saving",
+  replacing: "replacing",
+  pausing: "pausing",
+  resuming: "resuming",
+  clearing: "clearing",
+  continuing: "continuing",
 };
 
 function requestId() {
@@ -32,18 +34,19 @@ function requestId() {
 }
 
 function formatDuration(seconds: number) {
-  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 60) return displayText("taskThreadGoalUi.seconds", { number: formatNumber(seconds) });
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
+  if (minutes < 60) return displayText("taskThreadGoalUi.minutes", { number: formatNumber(minutes) });
   const hours = Math.floor(minutes / 60);
-  return `${hours}h ${minutes % 60}m`;
+  return displayText("taskThreadGoalUi.hoursMinutes", { hours: formatNumber(hours), minutes: formatNumber(minutes % 60) });
 }
 
 function formatTokens(tokens: number) {
-  return tokens >= 1_000 ? `${(tokens / 1_000).toFixed(tokens >= 10_000 ? 0 : 1)}k` : String(tokens);
+  return formatNumber(tokens, tokens >= 1_000 ? { notation: "compact", maximumFractionDigits: tokens >= 10_000 ? 0 : 1 } : undefined);
 }
 
 export function useRunnerGoalControl(issueId: string | null, agentId: string | null) {
+  useTranslation();
   const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState(false);
   const [dialog, setDialog] = useState<{
@@ -51,7 +54,7 @@ export function useRunnerGoalControl(issueId: string | null, agentId: string | n
     objective: string;
     revision: number;
   } | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<{ cause: unknown } | null>(null);
   useEffect(() => {
     setExpanded(false);
     setDialog(null);
@@ -95,9 +98,9 @@ export function useRunnerGoalControl(issueId: string | null, agentId: string | n
     setActionError(null);
     try {
       const current = query.data ?? (await query.refetch()).data;
-      if (!current?.agentId) throw new Error(current?.capability.reason ?? "Select an agent to use /goal.");
+      if (!current?.agentId) throw current?.capability.reason != null ? new Error(current.capability.reason) : createRunnerGoalLocalError("selectAgent");
       if (current.capability.availability !== "available") {
-        throw new Error(current.capability.reason ?? "Session goals are unsupported by this agent.");
+        throw current.capability.reason != null ? new Error(current.capability.reason) : createRunnerGoalLocalError("unsupported");
       }
       await mutation.mutateAsync({
         requestId: requestId(),
@@ -108,14 +111,14 @@ export function useRunnerGoalControl(issueId: string | null, agentId: string | n
         ...(action === "replace" ? { confirmReplace } : {}),
       });
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : "The goal action could not be applied.");
+      setActionError({ cause: error });
       throw error;
     }
   }, [mutation, query]);
 
   const edit = useCallback(async () => {
     const current = query.data ?? (await query.refetch()).data;
-    if (!current?.goal) throw new Error("There is no current session goal to edit.");
+    if (!current?.goal) throw createRunnerGoalLocalError("missingGoal");
     mutation.reset();
     setActionError(null);
     setExpanded(true);
@@ -126,7 +129,7 @@ export function useRunnerGoalControl(issueId: string | null, agentId: string | n
     if (command.action === "focus") {
       const current = query.data ?? (await query.refetch()).data;
       if (!current?.goal && !current?.pendingAction) {
-        throw new Error("Add an objective after /goal to start a goal.");
+        throw createRunnerGoalLocalError("addObjective");
       }
       setExpanded(true);
       return;
@@ -170,7 +173,7 @@ export function useRunnerGoalControl(issueId: string | null, agentId: string | n
     dialog,
     setDialog,
     submitDialog,
-    actionError,
+    actionError: actionError ? runnerGoalErrorText(actionError.cause) : null,
     mutation,
     executeAction,
     edit,
@@ -181,18 +184,16 @@ export function useRunnerGoalControl(issueId: string | null, agentId: string | n
 export type RunnerGoalControl = ReturnType<typeof useRunnerGoalControl>;
 
 export function RunnerGoalWidget({ control }: { control: RunnerGoalControl }) {
+  const { t } = useTranslation();
   const projection = control.data;
   const goal = projection?.goal ?? null;
   const capability = projection?.capability;
   const can = (action: "set" | "pause" | "resume" | "clear") =>
     capability?.availability === "available" && capability.actions.includes(action);
   const resumable = goal && ["paused", "blocked", "limited", "usage_limited"].includes(goal.status);
-  const pendingLabel = projection?.pendingAction ? PENDING_LABELS[projection.pendingAction] : null;
-  const mutationError = control.actionError ?? (control.mutation?.error instanceof Error
-    ? control.mutation.error.message
-    : control.mutation?.error
-      ? "The goal action could not be applied."
-      : null);
+  const pendingLabelKey = projection?.pendingAction ? PENDING_LABELS[projection.pendingAction] : null;
+  const pendingLabel = pendingLabelKey ? t(`taskThreadGoalUi.${pendingLabelKey}`) : null;
+  const mutationError = control.actionError ?? (control.mutation?.error ? runnerGoalErrorText(control.mutation.error) : null);
   // Expansion controls the objective's detail, not whether an empty card exists.
   // In particular, a cleared goal must disappear even after it was expanded.
   if (!goal && !projection?.pendingAction && !control.dialog && !mutationError) return null;
@@ -200,14 +201,14 @@ export function RunnerGoalWidget({ control }: { control: RunnerGoalControl }) {
   return (
     <section
       className="rounded-xl border border-border/80 bg-card/95 px-3 py-2 shadow-sm"
-      aria-label="Agent session goal"
+      aria-label={t("taskThreadGoalUi.agentSessionGoal")}
       data-testid="runner-goal-widget"
     >
       <div className="flex items-start gap-2">
         <Flag className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-xs font-semibold">Session goal</span>
+            <span className="text-xs font-semibold">{t("taskThreadGoalUi.sessionGoal")}</span>
             {goal ? (
               <span className="rounded-full bg-muted px-1.5 py-0.5 text-xs font-medium capitalize" role="status">
                 {goal.status.replaceAll("_", " ")}
@@ -215,7 +216,7 @@ export function RunnerGoalWidget({ control }: { control: RunnerGoalControl }) {
             ) : null}
             {goal?.workingNow ? (
               <span className="inline-flex items-center gap-1 text-xs text-primary" role="status">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" /> Working now
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" /> {t("taskThreadGoalUi.workingNow")}
               </span>
             ) : null}
             {pendingLabel ? (
@@ -228,7 +229,7 @@ export function RunnerGoalWidget({ control }: { control: RunnerGoalControl }) {
             <p className={cn("mt-1 text-sm leading-snug", control.expanded ? "max-h-40 overflow-auto" : "line-clamp-2")}>{goal.objective}</p>
           ) : (
             <p className="mt-1 text-xs text-muted-foreground">
-              {capability?.reason ?? "Type /goal followed by an objective to pursue work across turns."}
+              {capability?.reason ?? t("taskThreadGoalUi.goalHint")}
             </p>
           )}
           {goal ? (
@@ -236,33 +237,33 @@ export function RunnerGoalWidget({ control }: { control: RunnerGoalControl }) {
               <span>{formatDuration(goal.elapsedSeconds)}</span>
               {capability?.usageReporting ? (
                 <span>
-                  {formatTokens(goal.tokensUsed)} tokens
+                  {t("taskThreadGoalUi.tokens", { number: formatTokens(goal.tokensUsed) })}
                   {goal.tokenBudget ? ` / ${formatTokens(goal.tokenBudget)}` : ""}
                 </span>
               ) : null}
-              {goal.iterations > 0 ? <span>{goal.iterations} iterations</span> : null}
+              {goal.iterations > 0 ? <span>{t("taskThreadGoalUi.iterations", { number: formatNumber(goal.iterations) })}</span> : null}
               {goal.lastReason ? <span className="truncate">{goal.lastReason}</span> : null}
             </div>
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {goal && can("set") ? (
-            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => void control.edit().catch(() => {})} aria-label="Edit goal">
+            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => void control.edit().catch(() => {})} aria-label={t("taskThreadGoalUi.edit")}>
               <Pencil className="h-3.5 w-3.5" aria-hidden />
             </Button>
           ) : null}
           {goal?.status === "active" && can("pause") ? (
-            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => void control.executeAction("pause").catch(() => {})} aria-label="Pause goal">
+            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => void control.executeAction("pause").catch(() => {})} aria-label={t("taskThreadGoalUi.pause")}>
               <Pause className="h-3.5 w-3.5" aria-hidden />
             </Button>
           ) : null}
           {resumable && can("resume") ? (
-            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => void control.executeAction("resume").catch(() => {})} aria-label="Resume goal">
+            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => void control.executeAction("resume").catch(() => {})} aria-label={t("taskThreadGoalUi.resume")}>
               <Play className="h-3.5 w-3.5" aria-hidden />
             </Button>
           ) : null}
           {goal && can("clear") ? (
-            <Button size="icon" variant="ghost" className={cn("h-7 w-7", "text-muted-foreground hover:text-destructive")} onClick={() => void control.executeAction("clear").catch(() => {})} aria-label="Clear goal">
+            <Button size="icon" variant="ghost" className={cn("h-7 w-7", "text-muted-foreground hover:text-destructive")} onClick={() => void control.executeAction("clear").catch(() => {})} aria-label={t("taskThreadGoalUi.clear")}>
               <Trash2 className="h-3.5 w-3.5" aria-hidden />
             </Button>
           ) : null}
@@ -280,15 +281,13 @@ export function RunnerGoalWidget({ control }: { control: RunnerGoalControl }) {
             void control.submitDialog();
           }}>
             <DialogHeader>
-              <DialogTitle>{control.dialog?.action === "replace" ? "Replace session goal?" : "Edit session goal"}</DialogTitle>
+              <DialogTitle>{t(control.dialog?.action === "replace" ? "taskThreadGoalUi.replaceTitle" : "taskThreadGoalUi.editTitle")}</DialogTitle>
               <DialogDescription>
-                {control.dialog?.action === "replace"
-                  ? "This clears the unfinished goal and starts a new goal with the objective below."
-                  : "Update the objective without clearing the goal's progress."}
+                {t(control.dialog?.action === "replace" ? "taskThreadGoalUi.replaceDetail" : "taskThreadGoalUi.editDetail")}
               </DialogDescription>
             </DialogHeader>
             <label className="block space-y-2">
-              <span className="text-sm font-medium">Goal objective</span>
+              <span className="text-sm font-medium">{t("taskThreadGoalUi.objective")}</span>
               <Textarea
                 value={control.dialog?.objective ?? ""}
                 maxLength={4_000}
@@ -308,9 +307,9 @@ export function RunnerGoalWidget({ control }: { control: RunnerGoalControl }) {
             </label>
             {mutationError ? <p className="text-sm text-destructive" role="alert">{mutationError}</p> : null}
             <DialogFooter>
-              <Button type="button" variant="outline" disabled={control.mutation?.isPending} onClick={() => control.setDialog(null)}>Cancel</Button>
+              <Button type="button" variant="outline" disabled={control.mutation?.isPending} onClick={() => control.setDialog(null)}>{t("common.cancel")}</Button>
               <Button type="submit" disabled={!control.dialog?.objective.trim() || control.mutation?.isPending}>
-                {control.mutation?.isPending ? "Saving…" : control.dialog?.action === "replace" ? "Replace goal" : "Save goal"}
+                {t(control.mutation?.isPending ? "taskThreadGoalUi.savingPending" : control.dialog?.action === "replace" ? "taskThreadGoalUi.replace" : "taskThreadGoalUi.save")}
               </Button>
             </DialogFooter>
           </form>
