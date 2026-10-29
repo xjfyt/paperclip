@@ -5,6 +5,7 @@ import type { PaperclipConfig } from "../config/schema.js";
 import type { CheckResult } from "./index.js";
 import { resolveRuntimeLikePath } from "./path-resolver.js";
 import { hasPrivatePermissions, protectNewPrivatePath } from "@paperclipai/shared/private-filesystem-permissions";
+import { loadOrCreatePrivateWindowsMasterKey, readPrivateWindowsMasterKey } from "@paperclipai/shared/private-windows-master-key";
 
 const AWS_CREDENTIAL_SOURCE_HINT =
   "Provide AWS runtime credentials through the AWS SDK default credential chain: IAM role/workload identity, AWS_PROFILE/SSO/shared credentials, web identity, container/instance metadata, or short-lived shell credentials";
@@ -94,6 +95,30 @@ export function secretsCheck(config: PaperclipConfig, configPath?: string): Chec
       : config.secrets.localEncrypted.keyFilePath;
   const keyFilePath = resolveRuntimeLikePath(configuredPath, configPath);
 
+  if (process.platform === "win32") {
+    try {
+      const raw = readPrivateWindowsMasterKey(keyFilePath);
+      if (!decodeMasterKey(raw)) return {
+        name: "Secrets adapter", status: "fail", message: "Invalid local encrypted master key material; preserve the existing key and database for authorized remediation",
+        canRepair: false, repairHint: "Preserve the original key and database backups; never regenerate an existing master key to clear a validation error",
+      };
+      return withStrictModeNote({ name: "Secrets adapter", status: "pass", message: "Local encrypted provider configured with verified private Windows key storage" }, config);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") return {
+        name: "Secrets adapter", status: "fail", message: "Local encrypted master key requires verified private Windows storage; existing keys and ACLs are never repaired",
+        canRepair: false, repairHint: "Preserve the existing key and database backups; authorize private storage remediation without replacing the key",
+      };
+      return withStrictModeNote({
+        name: "Secrets adapter", status: "warn", message: `Secrets key file does not exist yet: ${keyFilePath}`, canRepair: true,
+        repair: () => {
+          const raw = loadOrCreatePrivateWindowsMasterKey(keyFilePath, true);
+          if (!decodeMasterKey(raw)) throw new Error("Invalid existing local encrypted master key; preserve the key and database for authorized remediation");
+        },
+        repairHint: "Run with --repair to create the key in verified private Windows storage before its first byte",
+      }, config);
+    }
+  }
+
   if (!fs.existsSync(keyFilePath)) {
     return withStrictModeNote(
       {
@@ -142,9 +167,7 @@ export function secretsCheck(config: PaperclipConfig, configPath?: string): Chec
   const keyMode = fs.statSync(keyFilePath).mode & 0o777;
   const permissionWarning =
     !hasPrivatePermissions(keyFilePath, keyMode)
-      ? process.platform === "win32"
-        ? "; key file Windows ACL could not be confirmed private to its owner and OS administrators"
-        : `; key file permissions are ${keyMode.toString(8)} (run chmod 600 ${keyFilePath})`
+      ? `; key file permissions are ${keyMode.toString(8)} (run chmod 600 ${keyFilePath})`
       : "";
 
   return withStrictModeNote(

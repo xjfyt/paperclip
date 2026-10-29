@@ -1,5 +1,5 @@
 import { execFile, spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -11,6 +11,7 @@ import {
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
 import { createStoredZipArchive } from "./helpers/zip.js";
+import { hasPrivatePermissions } from "@paperclipai/shared/private-filesystem-permissions";
 
 const execFileAsync = promisify(execFile);
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -128,6 +129,9 @@ function createBasePaperclipEnv(options: TestPaperclipEnv) {
   env.PAPERCLIP_AUTH_STORE = path.join(options.paperclipHome, "auth.json");
   if (options.shellHome) {
     env.HOME = options.shellHome;
+    env.USERPROFILE = options.shellHome;
+    env.APPDATA = path.join(options.shellHome, "AppData", "Roaming");
+    env.LOCALAPPDATA = path.join(options.shellHome, "AppData", "Local");
   }
 
   return env;
@@ -339,6 +343,15 @@ describeEmbeddedPostgres("paperclipai company import/export e2e", () => {
 
   it("exports a company package and imports it into new and existing companies", async () => {
     expect(serverProcess).not.toBeNull();
+
+    // Exercise the actual run -> doctor repair -> provider flow. Never seed a
+    // test-only env key to bypass first-run disk initialization.
+    if (process.platform === "win32") {
+      const key = path.join(tempRoot, "secrets", "master.key");
+      expect(hasPrivatePermissions(path.dirname(key), statSync(path.dirname(key)).mode)).toBe(true);
+      expect(hasPrivatePermissions(key, statSync(key).mode)).toBe(true);
+      expect(Buffer.from(readFileSync(key, "utf8"), "base64")).toHaveLength(32);
+    }
 
     const cliContext = await runCliJson<{
       contextPath: string;

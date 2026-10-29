@@ -1,0 +1,243 @@
+{
+  "schema": "mimouse.local-verification.v1",
+  "recordedAt": "2026-10-30T05:36:07.157451+08:00",
+  "platform": "native Windows x64, Node24, actual NTFS DACL/file operations, local HTTP and isolated embedded PostgreSQL; no live provider accounts",
+  "problem": "Normal CLI startup and onboarding initialized local_encrypted paths using POSIX file modes on Windows. Doctor protected only the new key file, leaving its directory unverified; onboarding/configure did not establish real private Windows ACLs. The hardened server provider correctly rejected the resulting storage during managed agent identity encryption, producing the observed agent-create HTTP500.",
+  "causalEvidence": "The original API500 response was redacted. Source call path run->doctor(repair)->agent identity provider plus native first-byte DACL gates independently establish the incompatible storage creation behavior; do not claim the original server exposed its private error stack.",
+  "changes": [
+    "Windows ensureLocalSecretsKeyFile and secretsCheck now share the same private master-key loader/read contract as the server. Missing directories and keys are privately/atomically initialized before payload bytes; existing broad/reparse/invalid storage is refused without ACL repair or regeneration.",
+    "Once an existing file was observed, later read failure cannot authorize a new key. Doctor distinguishes initial missing/warn/repairable from existing unverifiable or malformed/fail/nonrepairable. Existing POSIX logic and key formats remain unchanged.",
+    "Actual company import/export E2E retains file-backed AES initialization. No env-key fixture bypass was introduced; first-run key/parent DACL checks were added and its agent identity service performs real encrypt/decrypt verification.",
+    "Onboarding/doctor tests now allocate owned native PAPERCLIP_HOME/HOME/USERPROFILE/APPDATA/LOCALAPPDATA paths. Company E2E children also receive native home overrides. Per-case default master-key paths no longer depend on the ambient user profile.",
+    "Tests track the actual asynchronous command promise, await it before releasing environment/cwd, and delete only roots registered by their own exclusive mkdtemp calls. Rejections are not swallowed; timeout/failure may be reported by both body and teardown.",
+    "Only tests actually executing native ACL initialization receive Windows20s/POSIX5s budgets; the ordinary invalid-config rejection stays at its prior default. The production ACL inspector deadline remains ten seconds."
+  ],
+  "primaryVerification": {
+    "command": "cd cli; node ../node_modules/vitest/vitest.mjs run --maxWorkers=1 --reporter=default --reporter=json --outputFile=../test-results/project-closure-20261029/cli-complete-final6.json",
+    "files": 69,
+    "passed": 550,
+    "failed": 0,
+    "pending": 12,
+    "log": {
+      "path": "test-results/project-closure-20261029/cli-complete-final6.log",
+      "sha256": "8d65b2a402e0a4ee2da0a07b2371a6d3c726c7ef264058f04ae4c8c16a6a9d29"
+    },
+    "json": {
+      "path": "test-results/project-closure-20261029/cli-complete-final6.json",
+      "sha256": "05717f56bd5f9f5692765f9436c9b170a80215020ce684f36b46f0635a3df86f"
+    }
+  },
+  "primaryInputIdentity": {
+    "snapshot": {
+      "path": "test-results/project-closure-20261029/cli-complete-final6-input.json",
+      "sha256": "6000f22b23ca88ee3e952b458cde08c96127c0b96f63e53c687c351b39ade6ba"
+    },
+    "verification": {
+      "path": "test-results/project-closure-20261029/cli-complete-final6-input-verification.json",
+      "sha256": "b59fd74813c0b0dfd79f7e089b8560174261f5bddc11236743211a9170450a41"
+    },
+    "comparedFiles": 2582,
+    "changedFiles": [],
+    "scope": "2582 listed CLI/source dependency code/config/script/SQL entries and manifests; excludes compiled artifacts, non-code fixtures and three explicitly identified Vitest-only DB helpers, as described in the input manifest. Not a whole-repository/transitive binary identity claim."
+  },
+  "frameworkDiagnostics": {
+    "nodeOrVitestWarningAndUnhandledMarkers": [],
+    "count": 0,
+    "note": "Expected product CLI warning/error prompts in negative tests are separate from framework warnings. Process exited zero; Vitest JSON success=true and zero failed cases."
+  },
+  "existingSkips": {
+    "count": 12,
+    "unchangedFromHistoricalFinal3": true,
+    "cases": []
+  },
+  "targetedVerification": [
+    {
+      "command": "cd cli; node ../node_modules/vitest/vitest.mjs run src/__tests__/secrets-initialization-windows.test.ts src/__tests__/doctor.test.ts src/__tests__/onboard.test.ts src/__tests__/secrets.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=../test-results/project-closure-20261029/cli-key-initialization-targeted-first.json",
+      "files": 4,
+      "passed": 31,
+      "failed": 0,
+      "pending": 0,
+      "log": {
+        "path": "test-results/project-closure-20261029/cli-key-initialization-targeted-first.log",
+        "sha256": "b89e511d647691972ec7cf225f5a9e73373c25fa8648376c52654f2d0d105c42"
+      },
+      "json": {
+        "path": "test-results/project-closure-20261029/cli-key-initialization-targeted-first.json",
+        "sha256": "ce8f9fac36a327dddc8e17907d66bfcabf91f0cb04d647c416fb166c350d69aa"
+      }
+    },
+    {
+      "command": "cd cli; node ../node_modules/vitest/vitest.mjs run src/__tests__/company-import-export-e2e.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=../test-results/project-closure-20261029/company-import-export-initialization-final.json",
+      "files": 1,
+      "passed": 1,
+      "failed": 0,
+      "pending": 0,
+      "log": {
+        "path": "test-results/project-closure-20261029/company-import-export-initialization-final.log",
+        "sha256": "925ad0da31c9b82d75ea2792d99cbfa3348ee45699903e3afae8afa7f7e62cb5"
+      },
+      "json": {
+        "path": "test-results/project-closure-20261029/company-import-export-initialization-final.json",
+        "sha256": "fac37e4ed7b2ac68ac9d7d7b837d4a38915a475853dfba8d20a37a702694a26b"
+      }
+    },
+    {
+      "command": "cd cli; node ../node_modules/vitest/vitest.mjs run src/__tests__/doctor.test.ts src/__tests__/onboard.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=../test-results/project-closure-20261029/cli-key-initialization-isolated-final.json",
+      "files": 2,
+      "passed": 15,
+      "failed": 0,
+      "pending": 0,
+      "log": {
+        "path": "test-results/project-closure-20261029/cli-key-initialization-isolated-final.log",
+        "sha256": "aff04fc172ff546d5db5adef4866cbcee3a8404e4ed0d9e9c19ae08667c531c7"
+      },
+      "json": {
+        "path": "test-results/project-closure-20261029/cli-key-initialization-isolated-final.json",
+        "sha256": "d0f618d794010ac1e11f2d9d20c9be2e7987b9ccf01c10b5d8f21c46d8e6d997"
+      }
+    }
+  ],
+  "redRegression": {
+    "description": "Before changing either initialization entrypoint, both fresh native first-byte DACL gates failed on the broad parent. Six pending are name-filtered, not platform skips.",
+    "command": "cd cli; node ../node_modules/vitest/vitest.mjs run src/__tests__/secrets-initialization-windows.test.ts -t \"creates fresh private storage\" --reporter=default --reporter=json --outputFile=../test-results/project-closure-20261029/cli-key-initialization-before-red.json",
+    "files": 1,
+    "passed": 0,
+    "failed": 2,
+    "pending": 6,
+    "log": {
+      "path": "test-results/project-closure-20261029/cli-key-initialization-before-red.log",
+      "sha256": "b9165033a46088a5ead72521bc7642acb524d8f34d73cf47099cedb97829e09c"
+    },
+    "json": {
+      "path": "test-results/project-closure-20261029/cli-key-initialization-before-red.json",
+      "sha256": "c3c646d4f689de818ad2d83db6691aeea4358de227e4d1774c5826b4545637e0"
+    }
+  },
+  "historicalCompleteRuns": [
+    {
+      "classification": "Original 68-file run: company agent-create HTTP500 and observed-key test collected against old cached production. Neither is hidden by the latest result.",
+      "command": "Root historical full CLI command; see log/JSON",
+      "files": 68,
+      "passed": 540,
+      "failed": 2,
+      "pending": 12,
+      "log": {
+        "path": "test-results/project-closure-20261029/cli-complete-final3.log",
+        "sha256": "99666af921b579682458d64444574a864619efdf1e059b188c8844b6e25c1ccd"
+      },
+      "json": {
+        "path": "test-results/project-closure-20261029/cli-complete-final3.json",
+        "sha256": "6c7d2804ef4a4e1a8784c519b9478dafead742220942aea92f044aa4581a4b85"
+      }
+    },
+    {
+      "classification": "69-file first initialization run: five real ACL command cases exceeded the previous five-second test budgets. Four source entries changed during the run (two actual adapter-utils changes and two later-confirmed test-only DB helpers); this is historical mixed input, not final frozen proof.",
+      "inputVerification": {
+        "path": "test-results/project-closure-20261029/cli-complete-final4-input-verification.json",
+        "sha256": "bf3b7534c839042a70f5df0aa87686bb14f630ec1b43b947d4220ee98db1ecec"
+      },
+      "command": "cd cli; node ../node_modules/vitest/vitest.mjs run --maxWorkers=1 --reporter=default --reporter=json --outputFile=../test-results/project-closure-20261029/cli-complete-final4.json",
+      "files": 69,
+      "passed": 545,
+      "failed": 5,
+      "pending": 12,
+      "log": {
+        "path": "test-results/project-closure-20261029/cli-complete-final4.log",
+        "sha256": "d4ebbb985a201bcf9db99f307bd77b181370c0482d8d5388cd4d5807d5b6873b"
+      },
+      "json": {
+        "path": "test-results/project-closure-20261029/cli-complete-final4.json",
+        "sha256": "8d0e1e203df64268fe27b3a553e14697ad30fd957e609c9e70f474da5d651636"
+      }
+    },
+    {
+      "classification": "69-file owned-home run: lock-owner publication rename EPERM plus one staging ACL read returning unverified. It was not a test20s timeout. One separate readonly-git production file changed during the run.",
+      "inputVerification": {
+        "path": "test-results/project-closure-20261029/cli-complete-final5-input-verification.json",
+        "sha256": "d92fd38d2395935ee5a172a16bbdbcbe6081c1b68404665040de46ae4e4dc27b"
+      },
+      "command": "cd cli; node ../node_modules/vitest/vitest.mjs run --maxWorkers=1 --reporter=default --reporter=json --outputFile=../test-results/project-closure-20261029/cli-complete-final5.json",
+      "files": 69,
+      "passed": 548,
+      "failed": 2,
+      "pending": 12,
+      "log": {
+        "path": "test-results/project-closure-20261029/cli-complete-final5.log",
+        "sha256": "934157148b765490c7bb696eeed08f56f5550617def0930080ba942a9f77666b"
+      },
+      "json": {
+        "path": "test-results/project-closure-20261029/cli-complete-final5.json",
+        "sha256": "fcc094a1515f6835403541e4a5e3e99d0b898d7a9e50c6e2af70825d2151f8a0"
+      }
+    }
+  ],
+  "ambientHomeFinding": "Earlier custom-config onboarding tests still derived default key storage from the actual user profile. The new validator therefore performed validation reads there. No key body was emitted and no existing profile key/body/DACL was rewritten. Those earlier runs are not claimed as fully isolated. Corrected per-case home/native AppData overrides; the isolated15-case log emits twelve successful onboarding key paths, all below owned Temp roots.",
+  "unreproducedAclFailure": {
+    "observation": "final5 failed privateDirectory(staging) after protection because its read-only ACL probe returned false; the underlying OS reason was not captured. The failure phase did not reach the master-key payload writer.",
+    "status": "Not reproduced, original reason unknown. Latest green execution is not evidence that the original cause was repaired. The guard and ten-second production probe deadline are unchanged.",
+    "rootDiagnostics": "Root separately recorded 71 existing-key probes and 220 probes over twenty fresh directory/key initializations, all passing; see root diagnostic artifacts for their exact scope.",
+    "diagnosticArtifacts": [
+      {
+        "path": "test-results/project-closure-20261029/acl-inspector-diagnostic.json",
+        "sha256": "41bd489ed5782e9794ca7891f480ad5af9f979bf2393da7d1d5c4f8bbf4ef71a"
+      },
+      {
+        "path": "test-results/project-closure-20261029/acl-initialization-diagnostic.json",
+        "sha256": "c6a5369dd62213f957126f21d9d93b3ed1e069b5dfa5181658ec9d9d6834958a"
+      }
+    ]
+  },
+  "registryFix": {
+    "receipt": {
+      "path": "doc/mimouse/checklists/2026-10-30-windows-port-registry-evidence.json",
+      "sha256": "2325e65eefbc98a7f7ab572ccbcc8a5e819a93aa7fdbc3c063207fb8b0999503"
+    },
+    "commit": "e5187d4d3",
+    "scope": "Real sharing-class recovery and observed identity guards verified separately by15 protocol cases and red controls. Historical EPERM handle ownership remains unknown."
+  },
+  "checks": [
+    {
+      "command": "pnpm --filter paperclipai exec tsc --noEmit",
+      "exitCode": 0,
+      "log": {
+        "path": "test-results/project-closure-20261029/cli-key-initialization-types-final3.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "command": "git diff --check -- cli/src/config/secrets-key.ts cli/src/checks/secrets-check.ts cli/src/__tests__/doctor.test.ts cli/src/__tests__/onboard.test.ts cli/src/__tests__/secrets-initialization-windows.test.ts cli/src/__tests__/company-import-export-e2e.test.ts",
+      "exitCode": 0
+    }
+  ],
+  "sources": [
+    {
+      "path": "cli/src/config/secrets-key.ts",
+      "sha256": "de7a18e837a77abdf12d99da8f2586f2137c7a52815c56dfce70ccb6f32b0289"
+    },
+    {
+      "path": "cli/src/checks/secrets-check.ts",
+      "sha256": "2659e7f1109e138030a9c901ad13145dd645751a777523ae8244978af386b5f5"
+    },
+    {
+      "path": "cli/src/__tests__/doctor.test.ts",
+      "sha256": "8e8de87e78b181545cb8349aca5e6635676cbcf4e80a35c63ed8db382965e567"
+    },
+    {
+      "path": "cli/src/__tests__/onboard.test.ts",
+      "sha256": "263cfe8a2776fd542b19f9a410e382990d75aef92f782feecd53184c23449139"
+    },
+    {
+      "path": "cli/src/__tests__/secrets-initialization-windows.test.ts",
+      "sha256": "2779210cf5d5a7a2a654304a9709715c34ac33a0b6ffa334140565280e8993e3"
+    },
+    {
+      "path": "cli/src/__tests__/company-import-export-e2e.test.ts",
+      "sha256": "49f8960ec7e16f105e284918a0f13f44977fbfbfe883847d413aaeb9e80f199f"
+    }
+  ],
+  "limits": [
+    "This receipt qualifies the applicable native Windows CLI suite, including mock-based unit tests and the described real local filesystem/HTTP/database paths. It is not live external-provider, browser or packaged-release qualification.",
+    "No dependencies were installed, lockfile edited, real profile key/body/ACL changed or real user database mutated.",
+    "Published server/shared helper verification and full-repository type/build/test gates are separate root/other-agent receipts, not implied by this CLI count."
+  ]
+}

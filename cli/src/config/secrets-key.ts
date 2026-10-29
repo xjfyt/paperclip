@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { PaperclipConfig } from "./schema.js";
 import { resolveRuntimeLikePath } from "../utils/path-resolver.js";
+import { loadOrCreatePrivateWindowsMasterKey, readPrivateWindowsMasterKey } from "@paperclipai/shared/private-windows-master-key";
 
 export type EnsureSecretsKeyResult =
   | { status: "created"; path: string }
@@ -29,6 +30,19 @@ export function ensureLocalSecretsKeyFile(
       ? keyFileOverride.trim()
       : config.secrets.localEncrypted.keyFilePath;
   const keyFilePath = resolveRuntimeLikePath(configuredPath, configPath);
+
+  if (process.platform === "win32") {
+    let existed = false;
+    try { fs.lstatSync(keyFilePath); existed = true; }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+    if (existed) {
+      // A read failure after observing an existing key cannot authorize rotation.
+      readPrivateWindowsMasterKey(keyFilePath);
+      return { status: "existing", path: keyFilePath };
+    }
+    loadOrCreatePrivateWindowsMasterKey(keyFilePath, true);
+    return { status: "created", path: keyFilePath };
+  }
 
   if (fs.existsSync(keyFilePath)) {
     return { status: "existing", path: keyFilePath };

@@ -10,6 +10,11 @@ import { secretsCheck } from "../checks/secrets-check.js";
 import { setFixtureAcl } from "./helpers/windows-private-acl.js";
 
 const ORIGINAL_ENV = { ...process.env };
+const pendingDoctor = new Set<ReturnType<typeof doctor>>();
+const ownedDirectories = new Set<string>();
+function runDoctor(...args: Parameters<typeof doctor>) {
+  const operation = doctor(...args); pendingDoctor.add(operation); return operation;
+}
 
 async function availablePort(): Promise<number> {
   const server = net.createServer();
@@ -24,6 +29,7 @@ async function availablePort(): Promise<number> {
 
 function createTempConfig(serverPort: number): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "paperclip-doctor-"));
+  ownedDirectories.add(root);
   const configPath = path.join(root, ".paperclip", "config.json");
   const runtimeRoot = path.join(root, "runtime");
 
@@ -94,16 +100,29 @@ describe("doctor", () => {
     delete process.env.PAPERCLIP_AGENT_JWT_SECRET;
     delete process.env.PAPERCLIP_SECRETS_MASTER_KEY;
     delete process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE;
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "paperclip-doctor-home-"));
+    ownedDirectories.add(home);
+    process.env.PAPERCLIP_HOME = home; process.env.HOME = home; process.env.USERPROFILE = home;
+    process.env.APPDATA = path.join(home, "AppData", "Roaming");
+    process.env.LOCALAPPDATA = path.join(home, "AppData", "Local");
   });
 
-  afterEach(() => {
-    process.env = { ...ORIGINAL_ENV };
-  });
+  afterEach(async () => {
+    try { await Promise.all(pendingDoctor); }
+    finally {
+      pendingDoctor.clear(); process.env = { ...ORIGINAL_ENV };
+      for (const directory of ownedDirectories) {
+        if (path.dirname(path.resolve(directory)) !== path.resolve(os.tmpdir()) || !path.basename(directory).startsWith("paperclip-doctor-")) throw new Error("Refusing cleanup outside the owned doctor fixture");
+        fs.rmSync(directory, { recursive: true, force: true });
+      }
+      ownedDirectories.clear();
+    }
+  }, process.platform === "win32" ? 120_000 : 10_000);
 
   it("re-runs repairable checks so repaired failures do not remain blocking", async () => {
     const configPath = createTempConfig(await availablePort());
 
-    const summary = await doctor({
+    const summary = await runDoctor({
       config: configPath,
       repair: true,
       yes: true,
@@ -112,7 +131,7 @@ describe("doctor", () => {
     expect(summary.failed).toBe(0);
     expect(summary.warned).toBe(0);
     expect(process.env.PAPERCLIP_AGENT_JWT_SECRET).toBeTruthy();
-  });
+  }, process.platform === "win32" ? 20_000 : 5_000);
   it.skipIf(process.platform !== "win32")("keeps an existing broad key ACL visible without rewriting key material", async () => {
     const configPath = createTempConfig(await availablePort());
     const config = JSON.parse(fs.readFileSync(configPath, "utf8")) as PaperclipConfig;
@@ -122,7 +141,8 @@ describe("doctor", () => {
     const key = config.secrets.localEncrypted.keyFilePath;
     const original = fs.readFileSync(key);
     setFixtureAcl(path.resolve(configPath, "../.."), key, true);
-    expect(secretsCheck(config, configPath).status).toBe("warn");
+    const unsafe = secretsCheck(config, configPath);
+    expect(unsafe.status).toBe("fail"); expect(unsafe.canRepair).toBe(false); expect(unsafe.repair).toBeUndefined();
     expect(fs.readFileSync(key)).toEqual(original);
   }, 20000);
 });

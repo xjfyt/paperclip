@@ -16,8 +16,19 @@ const ORIGINAL_CWD = process.cwd();
 const ORIGINAL_PATH = process.env.PATH;
 const ORIGINAL_EXIT_CODE = process.exitCode;
 
+const aclInitializationTimeout = process.platform === "win32" ? 20_000 : 5_000;
+const pendingOnboard = new Set<ReturnType<typeof onboard>>();
+const ownedDirectories = new Set<string>();
+function temporaryDirectory(prefix: string) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  ownedDirectories.add(root); return root;
+}
+function runOnboard(...args: Parameters<typeof onboard>) {
+  const operation = onboard(...args); pendingOnboard.add(operation); return operation;
+}
+
 function createExistingConfigFixture() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "paperclip-onboard-"));
+  const root = temporaryDirectory("paperclip-onboard-");
   const runtimeRoot = path.join(root, "runtime");
   const configPath = path.join(root, ".paperclip", "config.json");
   const config: PaperclipConfig = {
@@ -84,7 +95,7 @@ function createExistingConfigFixture() {
 }
 
 function createFreshConfigPath() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "paperclip-onboard-fresh-"));
+  const root = temporaryDirectory("paperclip-onboard-fresh-");
   return path.join(root, ".paperclip", "config.json");
 }
 
@@ -112,69 +123,90 @@ describe("onboard", () => {
     delete process.env.PAPERCLIP_OPEN_ON_LISTEN;
     delete process.env.PAPERCLIP_NO_BROWSER;
     delete process.env.HOST;
+    // A custom config path does not relocate default secrets/managed state.
+    // Every case must therefore supply an owned native home as well.
+    const home = temporaryDirectory("paperclip-onboard-home-");
+    process.env.PAPERCLIP_HOME = home;
+    process.env.HOME = home; process.env.USERPROFILE = home;
+    process.env.APPDATA = path.join(home, "AppData", "Roaming");
+    process.env.LOCALAPPDATA = path.join(home, "AppData", "Local");
     runCommandMock.mockReset();
   });
 
-  afterEach(() => {
-    process.env = { ...ORIGINAL_ENV };
-    process.chdir(ORIGINAL_CWD);
-    process.exitCode = ORIGINAL_EXIT_CODE;
-  });
+  afterEach(async () => {
+    try {
+      // A test timeout does not cancel its real command promise. Settle it
+      // before releasing environment/cwd or deleting its owned directories.
+      await Promise.all(pendingOnboard);
+    } finally {
+      pendingOnboard.clear();
+      process.env = { ...ORIGINAL_ENV };
+      process.chdir(ORIGINAL_CWD);
+      process.exitCode = ORIGINAL_EXIT_CODE;
+      for (const directory of ownedDirectories) {
+        if (path.dirname(path.resolve(directory)) !== path.resolve(os.tmpdir()) || !path.basename(directory).startsWith("paperclip-onboard-")) throw new Error("Refusing cleanup outside the owned onboarding fixture");
+        fs.rmSync(directory, { recursive: true, force: true });
+      }
+      ownedDirectories.clear();
+    }
+  }, process.platform === "win32" ? 120_000 : 10_000);
 
   it("preserves an existing config when rerun without flags", async () => {
     const fixture = createExistingConfigFixture();
 
-    await onboard({ config: fixture.configPath });
+    await runOnboard({ config: fixture.configPath });
 
     expect(fs.readFileSync(fixture.configPath, "utf8")).toBe(fixture.configText);
     expect(fs.existsSync(`${fixture.configPath}.backup`)).toBe(false);
     expect(fs.existsSync(path.join(path.dirname(fixture.configPath), ".env"))).toBe(true);
-  });
+  }, aclInitializationTimeout);
 
   it("preserves an existing config when rerun with --yes", async () => {
     const fixture = createExistingConfigFixture();
 
-    await onboard({ config: fixture.configPath, yes: true, invokedByRun: true });
+    await runOnboard({ config: fixture.configPath, yes: true, invokedByRun: true });
 
     expect(fs.readFileSync(fixture.configPath, "utf8")).toBe(fixture.configText);
     expect(fs.existsSync(`${fixture.configPath}.backup`)).toBe(false);
     expect(fs.existsSync(path.join(path.dirname(fixture.configPath), ".env"))).toBe(true);
-  });
+  }, aclInitializationTimeout);
 
   it("does not opt into opening a browser for a non-interactive existing setup", async () => {
     const fixture = createExistingConfigFixture();
 
-    await onboard({ config: fixture.configPath, yes: true });
+    await runOnboard({ config: fixture.configPath, yes: true });
 
     expect(runCommandMock).toHaveBeenCalledWith({ config: fixture.configPath, repair: true, yes: true });
     expect(process.env.PAPERCLIP_OPEN_ON_LISTEN).toBeUndefined();
-  });
+  }, aclInitializationTimeout);
 
-  it.each([
+  for (const [label, configPathForTest] of [
     ["existing", () => createExistingConfigFixture().configPath],
     ["fresh", () => createFreshConfigPath()],
-  ])("opens the browser once while an interactive %s setup starts", async (_label, configPathForTest) => {
-    const configPath = configPathForTest();
-    const stdinIsTTY = process.stdin.isTTY;
-    const stdoutIsTTY = process.stdout.isTTY;
-    let openOnListenDuringRun: string | undefined;
-    Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: true });
-    Object.defineProperty(process.stdout, "isTTY", { configurable: true, value: true });
-    runCommandMock.mockImplementation(async () => {
-      openOnListenDuringRun = process.env.PAPERCLIP_OPEN_ON_LISTEN;
-    });
+  ] as const) {
+    it(`opens the browser once while an interactive ${label} setup starts`, async () => {
+      const configPath = configPathForTest();
+      const stdinIsTTY = process.stdin.isTTY;
+      const stdoutIsTTY = process.stdout.isTTY;
+      let openOnListenDuringRun: string | undefined;
+      Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: true });
+      Object.defineProperty(process.stdout, "isTTY", { configurable: true, value: true });
+      runCommandMock.mockImplementation(async () => {
+        openOnListenDuringRun = process.env.PAPERCLIP_OPEN_ON_LISTEN;
+      });
 
-    try {
-      await onboard({ config: configPath, yes: true });
-    } finally {
-      Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: stdinIsTTY });
-      Object.defineProperty(process.stdout, "isTTY", { configurable: true, value: stdoutIsTTY });
-    }
+      try {
+        await runOnboard({ config: configPath, yes: true });
+      } finally {
+        Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: stdinIsTTY });
+        Object.defineProperty(process.stdout, "isTTY", { configurable: true, value: stdoutIsTTY });
+      }
 
-    expect(runCommandMock).toHaveBeenCalledWith({ config: configPath, repair: true, yes: true });
-    expect(openOnListenDuringRun).toBe("true");
-    expect(process.env.PAPERCLIP_OPEN_ON_LISTEN).toBeUndefined();
-  });
+      expect(runCommandMock).toHaveBeenCalledWith({ config: configPath, repair: true, yes: true });
+      expect(openOnListenDuringRun).toBe("true");
+      expect(process.env.PAPERCLIP_OPEN_ON_LISTEN).toBeUndefined();
+    }, aclInitializationTimeout);
+  }
 
   it.each([
     ["PAPERCLIP_NO_BROWSER", "1"],
@@ -192,7 +224,7 @@ describe("onboard", () => {
     });
 
     try {
-      await onboard({ config: configPath, yes: true });
+      await runOnboard({ config: configPath, yes: true });
     } finally {
       Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: stdinIsTTY });
       Object.defineProperty(process.stdout, "isTTY", { configurable: true, value: stdoutIsTTY });
@@ -201,7 +233,7 @@ describe("onboard", () => {
     expect(runCommandMock).toHaveBeenCalledWith({ config: configPath, repair: true, yes: true });
     expect(openOnListenDuringRun).not.toBe("true");
     expect(process.env[key]).toBe(value);
-  });
+  }, aclInitializationTimeout);
 
   it("backs up invalid config bytes and refuses --yes replacement", async () => {
     const configPath = createFreshConfigPath();
@@ -209,7 +241,7 @@ describe("onboard", () => {
     fs.mkdirSync(path.dirname(configPath), { recursive: true });
     fs.writeFileSync(configPath, invalidBytes);
 
-    await onboard({ config: configPath, yes: true, invokedByRun: true });
+    await runOnboard({ config: configPath, yes: true, invokedByRun: true });
 
     expect(process.exitCode).toBe(1);
     expect(fs.readFileSync(configPath)).toEqual(invalidBytes);
@@ -222,22 +254,22 @@ describe("onboard", () => {
     process.env.HOST = "0.0.0.0";
     process.env.PAPERCLIP_BIND = "lan";
 
-    await onboard({ config: configPath, yes: true, invokedByRun: true });
+    await runOnboard({ config: configPath, yes: true, invokedByRun: true });
 
     const raw = JSON.parse(fs.readFileSync(configPath, "utf8")) as PaperclipConfig;
     expect(raw.server.deploymentMode).toBe("local_trusted");
     expect(raw.server.exposure).toBe("private");
     expect(raw.server.bind).toBe("loopback");
     expect(raw.server.host).toBe("127.0.0.1");
-  });
+  }, aclInitializationTimeout);
 
   it("creates instance-root config and data paths for a fresh PAPERCLIP_HOME", async () => {
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), "paperclip-onboard-home-"));
-    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "paperclip-onboard-cwd-"));
+    const home = temporaryDirectory("paperclip-onboard-home-");
+    const cwd = temporaryDirectory("paperclip-onboard-cwd-");
     process.chdir(cwd);
     process.env.PAPERCLIP_HOME = home;
 
-    await onboard({ yes: true, invokedByRun: true });
+    await runOnboard({ yes: true, invokedByRun: true });
 
     const instanceRoot = path.join(home, "instances", "default");
     const configPath = path.join(instanceRoot, "config.json");
@@ -252,20 +284,20 @@ describe("onboard", () => {
     expect(fs.readFileSync(path.join(instanceRoot, ".env"), "utf8"))
       .toContain("PAPERCLIP_TOOL_ACTION_SIGNING_SECRET=");
     expect(fs.existsSync(path.join(instanceRoot, "secrets", "master.key"))).toBe(true);
-  });
+  }, aclInitializationTimeout);
 
   it("supports authenticated/private quickstart bind presets", async () => {
     const configPath = createFreshConfigPath();
     process.env.PAPERCLIP_TAILNET_BIND_HOST = "100.64.0.8";
 
-    await onboard({ config: configPath, yes: true, invokedByRun: true, bind: "tailnet" });
+    await runOnboard({ config: configPath, yes: true, invokedByRun: true, bind: "tailnet" });
 
     const raw = JSON.parse(fs.readFileSync(configPath, "utf8")) as PaperclipConfig;
     expect(raw.server.deploymentMode).toBe("authenticated");
     expect(raw.server.exposure).toBe("private");
     expect(raw.server.bind).toBe("tailnet");
     expect(raw.server.host).toBe("100.64.0.8");
-  });
+  }, aclInitializationTimeout);
 
   it("keeps tailnet quickstart on loopback until tailscale is available", async () => {
     const configPath = createFreshConfigPath();
@@ -273,7 +305,7 @@ describe("onboard", () => {
     process.env.PATH = "";
 
     try {
-      await onboard({ config: configPath, yes: true, invokedByRun: true, bind: "tailnet" });
+      await runOnboard({ config: configPath, yes: true, invokedByRun: true, bind: "tailnet" });
     } finally {
       process.env.PATH = ORIGINAL_PATH;
     }
@@ -283,18 +315,18 @@ describe("onboard", () => {
     expect(raw.server.exposure).toBe("private");
     expect(raw.server.bind).toBe("tailnet");
     expect(raw.server.host).toBe("127.0.0.1");
-  });
+  }, aclInitializationTimeout);
 
   it("ignores deployment env overrides during --yes quickstart", async () => {
     const configPath = createFreshConfigPath();
     process.env.PAPERCLIP_DEPLOYMENT_MODE = "authenticated";
 
-    await onboard({ config: configPath, yes: true, invokedByRun: true });
+    await runOnboard({ config: configPath, yes: true, invokedByRun: true });
 
     const raw = JSON.parse(fs.readFileSync(configPath, "utf8")) as PaperclipConfig;
     expect(raw.server.deploymentMode).toBe("local_trusted");
     expect(raw.server.exposure).toBe("private");
     expect(raw.server.bind).toBe("loopback");
     expect(raw.server.host).toBe("127.0.0.1");
-  });
+  }, aclInitializationTimeout);
 });
