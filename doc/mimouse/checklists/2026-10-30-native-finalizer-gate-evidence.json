@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "scope": "Real PostgreSQL workspace finalization recovery fixture ordering",
+  "platform": "win32",
+  "recordedAt": "2026-10-29T21:26:45.021Z",
+  "command": "node test-results/project-closure-20261029/run-isolated-server.mjs native-finalizer-gate-final server/src/services/native-runtime/native-workspace-finalizer.test.ts",
+  "result": {
+    "passed": 14,
+    "failed": 0,
+    "pending": 0
+  },
+  "evidence": {
+    "path": "test-results/project-closure-20261029/native-finalizer-gate-final.json",
+    "sha256": "56cdd87175d0e8450d84271403b31103249cd7f94cd8aa0e16ebfbde0a6d3656"
+  },
+  "sources": [
+    {
+      "path": "server/src/services/native-runtime/native-workspace-finalizer.test.ts",
+      "sha256": "17cc79509848454830636cf2a772705512728f355f64a47f960eb7fb18195092"
+    }
+  ],
+  "changes": [
+    "The first real recovery call stays held at filesystem I/O while the second is awaited and must return busy without a second I/O entry. Only then is the first call released and the single succeeded workspace operation asserted.",
+    "An arbitrary one-second host-scheduling race is removed. Existing test deadlines remain unchanged.",
+    "Both started calls are observed and joined before restoring the stat spy, including failed assertions or test completion."
+  ],
+  "limits": [
+    "Production finalization and recovery code are unchanged.",
+    "The earlier general-server shard reported this test failing; its full diagnostic is retained separately. This receipt does not claim all native session tests or all general shards passed.",
+    "The isolated runner sets a disposable PAPERCLIP_HOME, PAPERCLIP_CONFIG and TMPDIR matching the official runner isolation contract. The helper/log/JSON are ignored local artifacts and may not be present in another checkout."
+  ]
+}

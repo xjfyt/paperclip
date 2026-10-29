@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, onTestFinished, vi } from "vitest";
 import { and, desc, eq, sql } from "drizzle-orm";
 import {
   agents,
@@ -346,20 +346,23 @@ describe("native workspace finalization recovery", () => {
       return stat(...args);
     });
     const first = resumeNativeWorkspaceFinalization({ db, runId: seeded.runId });
+    let second: ReturnType<typeof resumeNativeWorkspaceFinalization> | undefined;
+    const cleanup = async () => { release(); await Promise.allSettled([first, second]); spy.mockRestore(); };
+    onTestFinished(cleanup);
     try {
-      await started;
-      const second = resumeNativeWorkspaceFinalization({ db, runId: seeded.runId });
-      // A second invocation must return busy without waiting for or executing the slow I/O.
-      const outcome = await Promise.race([second, new Promise((resolve) => setTimeout(() => resolve("still-running"), 1_000))]);
-      release();
-      await Promise.all([first, second]);
-      expect(outcome).toBeNull();
+      await Promise.race([started, first.then(() => { throw new Error("Finalization completed before reaching the held I/O"); })]);
+      second = resumeNativeWorkspaceFinalization({ db, runId: seeded.runId });
+      // Prove ordering while the first call's real I/O remains held. A one-second
+      // host scheduling deadline is not part of the busy/recovery contract.
+      expect(await second).toBeNull();
       expect(calls).toBe(1);
+      release();
+      await first;
       const operations = await db.select().from(workspaceOperations).where(and(
         eq(workspaceOperations.heartbeatRunId, seeded.runId), eq(workspaceOperations.status, "succeeded"),
       ));
       expect(operations).toHaveLength(1);
-    } finally { release(); await first; spy.mockRestore(); }
+    } finally { await cleanup(); }
   });
 
   it("records directory-only recovery without inventing an execution-workspace foreign key", async () => {
