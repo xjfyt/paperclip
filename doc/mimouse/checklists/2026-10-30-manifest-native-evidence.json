@@ -1,0 +1,952 @@
+{
+  "schema": "paperclip.project-closure.manifest-native-verification.v1",
+  "recordedAt": "2026-10-29T19:24:53.399Z",
+  "headAtReceipt": "8e139ba3084dfcf7cd4d62073bd520fd8dc3a348",
+  "sourceCapture": {
+    "boundary": "Relevant source fingerprints captured after the targeted runs; this is not a whole-repository frozen-source test run.",
+    "current": [
+      {
+        "file": "packages/adapter-utils/src/workspace-manifest.ts",
+        "sha256": "a724ca7ac623b86081020cafdfa14e38d17f17e80d552b807f8b1348cc7d46ee"
+      },
+      {
+        "file": "packages/adapter-utils/src/workspace-manifest-file-safety.test.ts",
+        "sha256": "c1192579868a48dd73aae1b5acf9dc5317e6b1a67010a60a38ad666df9df9162"
+      },
+      {
+        "file": "packages/adapter-utils/src/workspace-restore-merge.ts",
+        "sha256": "28f568ad6c272b02cb9148faef7841782bffbeb919120d88dd4bb2bed56c12fa"
+      },
+      {
+        "file": "packages/adapter-utils/src/workspace-manifest.test.ts",
+        "sha256": "460ef89fe2064ca9bccfe8ed310affc14918bf706c0f3a7aba75919753101ec5"
+      },
+      {
+        "file": "packages/adapter-utils/src/workspace-restore-merge.test.ts",
+        "sha256": "b72148546b37d84af40dd8bef0ac6fe3baed159312ea387fc2ddd44f59ce7845"
+      },
+      {
+        "file": "packages/adapter-utils/src/workspace-restore-readonly.test.ts",
+        "sha256": "0cf40d34feebcd7ca209719aa528c5aa030baa61b4c903378cbe536ac62f37b7"
+      },
+      {
+        "file": "packages/adapter-utils/src/workspace-restore-teardown.test.ts",
+        "sha256": "127834eb99fc695dde62a6c2cd90195fb526674eb3ff4e91fd11d9f59eab1c28"
+      },
+      {
+        "file": "packages/adapter-utils/src/workspace-restore-result.test.ts",
+        "sha256": "b86e2955bb5a03f4bb3d14a8d14c821d35bb58d110c770b5213f9fba002f237c"
+      },
+      {
+        "file": "packages/adapter-utils/src/workspace-restore-diagnostics.test.ts",
+        "sha256": "0842e16c3e3fb32f60190be6200975efca5712af996b1740d8eafc6b00025f73"
+      },
+      {
+        "file": "server/src/services/native-runtime/native-workspace-sync.ts",
+        "sha256": "21d553e2356a43c92c606def1f767e8c9ed861de90298fd809d42fbe952cd0a3"
+      },
+      {
+        "file": "server/src/__tests__/native-workspace-sync.test.ts",
+        "sha256": "434fb505ed866d02f4a697130f9fa9c3fac7b8abc94b8f5964e93f9e46b17c2e"
+      },
+      {
+        "file": "server/src/__tests__/native-procedure-measurement.test.ts",
+        "sha256": "215804a2f35fad4fb078dc6aff3338ead92fbc922020362bbc556f944adb6883"
+      },
+      {
+        "file": "server/src/services/native-runtime/runner-bridge-tools.ts",
+        "sha256": "7da5ec1f7237d08f01dbae563bc6f0ff2c9ad359944a269c9bd2810c3d4b05f7"
+      },
+      {
+        "file": "server/src/services/native-runtime/runner-bridge-tools.test.ts",
+        "sha256": "f1ec1a515b4187643e1cd58f2304ecdc1d832dc03530df3df361ee25182d2e75"
+      },
+      {
+        "file": "server/src/services/native-runtime/runner-api-files.ts",
+        "sha256": "7110866f038dee6c9cfa53715c666f75923731ae2442a081aa21e6064097632f"
+      }
+    ],
+    "redProduction": {
+      "file": "packages/adapter-utils/src/workspace-manifest.ts",
+      "gitReference": "8e139ba3084dfcf7cd4d62073bd520fd8dc3a348:packages/adapter-utils/src/workspace-manifest.ts",
+      "sha256": "bdaad5d178012b7d48f56cd5a4b1525fc28008416d6e7b94ca5b2769cc7feb39",
+      "interpretation": "Unmodified HEAD implementation used for the red run. The new test file was identical for red and green."
+    }
+  },
+  "verification": [
+    {
+      "purpose": "Red baseline: stable real file passes; final symlink, entry replacement, late same-inode rewrite and high-bit inode identity each fail their refusal assertion.",
+      "evidence": {
+        "file": "test-results/project-closure-20261029/manifest-safety-red.json",
+        "sha256": "54aa5f5172a947842f6a850ed5f26b02e6080067f9bd07e75a972eb92b138e63"
+      },
+      "log": {
+        "file": "test-results/project-closure-20261029/manifest-safety-red.log",
+        "sha256": "27cd7a113137a3f967e24e02e1f7ef24a912e294625501f6cc1104e5b5f4fb4b"
+      },
+      "startedAt": "2026-10-29T19:21:23.367Z",
+      "passed": 1,
+      "failed": 4,
+      "pending": 0,
+      "suites": [
+        {
+          "file": "C:/Users/xjfyt/Desktop/Code/paperclip/packages/adapter-utils/src/workspace-manifest-file-safety.test.ts",
+          "status": "failed",
+          "cases": [
+            {
+              "name": "hashes a stable real regular file",
+              "status": "passed"
+            },
+            {
+              "name": "refuses a final symlink to identical real bytes",
+              "status": "failed"
+            },
+            {
+              "name": "refuses an entry replaced after opening its real descriptor",
+              "status": "failed"
+            },
+            {
+              "name": "refuses same-inode content changes after the final descriptor stat",
+              "status": "failed"
+            },
+            {
+              "name": "compares descriptor identity above MAX_SAFE_INTEGER without Number rounding",
+              "status": "failed"
+            }
+          ]
+        }
+      ],
+      "pendingInterpretation": "No skipped or filtered cases."
+    },
+    {
+      "purpose": "Green: all five real filesystem / deterministic hook cases pass.",
+      "evidence": {
+        "file": "test-results/project-closure-20261029/manifest-safety-green.json",
+        "sha256": "ac2738baf4c7c55aaa8d449f8e4ee055af99eaa15a245e39b757b40e4c92e902"
+      },
+      "log": {
+        "file": "test-results/project-closure-20261029/manifest-safety-green.log",
+        "sha256": "4e71602125cea36c9415b54e4c8bc3abafdac0f9cc6e3a2a83133ffa4d18e5e6"
+      },
+      "startedAt": "2026-10-29T19:21:37.231Z",
+      "passed": 5,
+      "failed": 0,
+      "pending": 0,
+      "suites": [
+        {
+          "file": "C:/Users/xjfyt/Desktop/Code/paperclip/packages/adapter-utils/src/workspace-manifest-file-safety.test.ts",
+          "status": "passed",
+          "cases": [
+            {
+              "name": "hashes a stable real regular file",
+              "status": "passed"
+            },
+            {
+              "name": "refuses a final symlink to identical real bytes",
+              "status": "passed"
+            },
+            {
+              "name": "refuses an entry replaced after opening its real descriptor",
+              "status": "passed"
+            },
+            {
+              "name": "refuses same-inode content changes after the final descriptor stat",
+              "status": "passed"
+            },
+            {
+              "name": "compares descriptor identity above MAX_SAFE_INTEGER without Number rounding",
+              "status": "passed"
+            }
+          ]
+        }
+      ],
+      "pendingInterpretation": "No skipped or filtered cases."
+    },
+    {
+      "purpose": "Seven complete manifest/restore files after the hash fix.",
+      "evidence": {
+        "file": "test-results/project-closure-20261029/manifest-restore-frozen.json",
+        "sha256": "a1340eaca020d61734056b332327dd06aefadff6d4c708e080bc9eeb5c8808a6"
+      },
+      "log": {
+        "file": "test-results/project-closure-20261029/manifest-restore-frozen.log",
+        "sha256": "54d26724077a046eda0455f42bede171f5e99ecc3d284adb327933ae646c3c02"
+      },
+      "startedAt": "2026-10-29T19:22:43.101Z",
+      "passed": 123,
+      "failed": 0,
+      "pending": 3,
+      "suites": [
+        {
+          "file": "C:/Users/xjfyt/Desktop/Code/paperclip/packages/adapter-utils/src/workspace-manifest-file-safety.test.ts",
+          "status": "passed",
+          "cases": [
+            {
+              "name": "hashes a stable real regular file",
+              "status": "passed"
+            },
+            {
+              "name": "refuses a final symlink to identical real bytes",
+              "status": "passed"
+            },
+            {
+              "name": "refuses an entry replaced after opening its real descriptor",
+              "status": "passed"
+            },
+            {
+              "name": "refuses same-inode content changes after the final descriptor stat",
+              "status": "passed"
+            },
+            {
+              "name": "compares descriptor identity above MAX_SAFE_INTEGER without Number rounding",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "C:/Users/xjfyt/Desktop/Code/paperclip/packages/adapter-utils/src/workspace-manifest.test.ts",
+          "status": "passed",
+          "cases": [
+            {
+              "name": "parses split UTF-8 and NUL records while rejecting truncation and oversized records",
+              "status": "passed"
+            },
+            {
+              "name": "deduplicates paths on disk and rejects incomplete manifest metadata",
+              "status": "passed"
+            },
+            {
+              "name": "refuses new manifests and fails ongoing writes when the disk reserve is exhausted",
+              "status": "passed"
+            },
+            {
+              "name": "admits each snapshot against current disk capacity and rejects growth at its page allowance",
+              "status": "passed"
+            },
+            {
+              "name": "fails a real Git scan at its disk allowance and removes the incomplete manifest",
+              "status": "passed"
+            },
+            {
+              "name": "settles a late producer before removing shared storage after another scan fails",
+              "status": "passed"
+            },
+            {
+              "name": "fails a malformed completed scan instead of publishing a partial snapshot",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "C:/Users/xjfyt/Desktop/Code/paperclip/packages/adapter-utils/src/workspace-restore-diagnostics.test.ts",
+          "status": "passed",
+          "cases": [
+            {
+              "name": "workspace restore diagnostics selects an unlabelled nested failure without retaining a later task's step (Error: shared nested failure)",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore diagnostics selects an unlabelled nested failure without retaining a later task's step (shared primitive failure)",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore diagnostics keeps logging when a diagnostic consumer fails",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore diagnostics retains a nested step and bounded Git fields across an existing wrapper without a cause",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore diagnostics attributes a reused error to the later failed retry step",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore diagnostics isolates concurrent steps even when their errors share identity",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore diagnostics starts a fresh scope for later work inherited from a completed async context",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore diagnostics leaves successful restores silent",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore diagnostics records bounded cause fields without copying messages or arbitrary codes",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore diagnostics omits unrecognized diagnostic values (null)",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore diagnostics omits unrecognized diagnostic values (\"private string\")",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore diagnostics omits unrecognized diagnostic values ({\"code\":\"token\",\"status\":\"401\",\"exitCode\":null})",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore diagnostics omits unrecognized diagnostic values ({\"status\":200,\"exitCode\":-1})",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore diagnostics bounds cause traversal even when it cycles",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore diagnostics preserves EACCES when logging fails",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore diagnostics preserves WORKSPACE_RESTORE_UNSAFE_ARCHIVE when logging fails",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore diagnostics keeps the restore error even if a provider diagnostic getter throws",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore diagnostics uses valid fallback statuses when preferred fields are invalid",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore diagnostics logs nested failures once while preserving independent concurrent and later diagnostics",
+              "status": "passed"
+            },
+            {
+              "name": "Git integration diagnostic privacy and attribution classifies only supported merge_tree evidence ({\"code\":1,\"stdout\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\nprivate-file\",\"stderr\":\"private-conflict-body\"})",
+              "status": "passed"
+            },
+            {
+              "name": "Git integration diagnostic privacy and attribution classifies only supported merge_tree evidence ({\"code\":1})",
+              "status": "passed"
+            },
+            {
+              "name": "Git integration diagnostic privacy and attribution classifies only supported merge_tree evidence ({\"code\":1,\"stderr\":\"merge-tree: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa - not something we can merge\\n\"})",
+              "status": "passed"
+            },
+            {
+              "name": "Git integration diagnostic privacy and attribution classifies only supported merge_tree evidence ({\"code\":1,\"signal\":\"SIGTERM\"})",
+              "status": "passed"
+            },
+            {
+              "name": "Git integration diagnostic privacy and attribution classifies only supported merge_tree evidence ({\"code\":1,\"killed\":true})",
+              "status": "passed"
+            },
+            {
+              "name": "Git integration diagnostic privacy and attribution classifies only supported merge_tree evidence ({\"code\":128,\"stderr\":\"fatal: Not a valid object name private-object\"})",
+              "status": "passed"
+            },
+            {
+              "name": "Git integration diagnostic privacy and attribution classifies only supported merge_tree evidence ({\"code\":128,\"stderr\":\"merge-tree: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa - not something we can merge\\n\"})",
+              "status": "passed"
+            },
+            {
+              "name": "Git integration diagnostic privacy and attribution classifies only supported merge_base evidence ({\"code\":128,\"stderr\":\"fatal: Not a valid commit name private-object\"})",
+              "status": "passed"
+            },
+            {
+              "name": "Git integration diagnostic privacy and attribution classifies only supported rev_parse evidence ({\"code\":128,\"stderr\":\"fatal: bad object private-object\"})",
+              "status": "passed"
+            },
+            {
+              "name": "Git integration diagnostic privacy and attribution classifies only supported update_ref evidence ({\"code\":128,\"stderr\":\"fatal: update_ref failed for ref 'private-ref': cannot lock ref 'private-ref': is at aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa but expected bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\\n\"})",
+              "status": "passed"
+            },
+            {
+              "name": "Git integration diagnostic privacy and attribution classifies only supported update_ref evidence ({\"code\":128,\"stderr\":\"fatal: Unable to create 'private-path.lock': File exists.\"})",
+              "status": "passed"
+            },
+            {
+              "name": "Git integration diagnostic privacy and attribution classifies only supported update_ref evidence ({\"code\":\"EACCES\",\"stderr\":\"private-path\"})",
+              "status": "passed"
+            },
+            {
+              "name": "Git integration diagnostic privacy and attribution classifies only supported commit_tree evidence ({\"code\":\"EPERM\"})",
+              "status": "passed"
+            },
+            {
+              "name": "Git integration diagnostic privacy and attribution classifies only supported commit_tree evidence ({\"code\":1,\"stderr\":\"Permission denied private-path\"})",
+              "status": "passed"
+            },
+            {
+              "name": "Git integration diagnostic privacy and attribution classifies only supported symbolic_ref evidence ({\"code\":1})",
+              "status": "passed"
+            },
+            {
+              "name": "Git integration diagnostic privacy and attribution classifies only supported merge_base evidence ({\"code\":1})",
+              "status": "passed"
+            },
+            {
+              "name": "Git integration diagnostic privacy and attribution classifies only supported log evidence ({\"code\":128,\"stderr\":\"localized or unrecognized private-text\"})",
+              "status": "passed"
+            },
+            {
+              "name": "Git integration diagnostic privacy and attribution classifies only supported log evidence ({\"code\":128,\"stderr\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\nfatal: bad object private-object\"})",
+              "status": "passed"
+            },
+            {
+              "name": "Git integration diagnostic privacy and attribution classifies only supported merge_tree evidence (\"private-string\")",
+              "status": "passed"
+            },
+            {
+              "name": "Git integration diagnostic privacy and attribution treats throwing stderr getters as unknown and never replaces the original error",
+              "status": "passed"
+            },
+            {
+              "name": "Git integration diagnostic privacy and attribution retains a nested command across wrappers and nested task diagnostics",
+              "status": "passed"
+            },
+            {
+              "name": "Git integration diagnostic privacy and attribution keeps a nested identity probe failure instead of relabelling it as its ref transaction",
+              "status": "passed"
+            },
+            {
+              "name": "Git integration diagnostic privacy and attribution does not retain a handled command's label on a later failed step or retry",
+              "status": "passed"
+            },
+            {
+              "name": "Git integration diagnostic privacy and attribution retains the selected parallel task's command when two errors share identity",
+              "status": "passed"
+            },
+            {
+              "name": "Git integration diagnostic privacy and attribution leaves successful or handled commands silent and preserves values",
+              "status": "passed"
+            },
+            {
+              "name": "Git integration diagnostic privacy and attribution does not decode Git metadata outside the closed integration contract ({\"phase\":\"asset\",\"step\":\"git_integration\",\"gitCommand\":\"merge_tree\"})",
+              "status": "passed"
+            },
+            {
+              "name": "Git integration diagnostic privacy and attribution does not decode Git metadata outside the closed integration contract ({\"phase\":\"workspace\",\"step\":\"index_reset\",\"gitCommand\":\"merge_tree\"})",
+              "status": "passed"
+            },
+            {
+              "name": "Git integration diagnostic privacy and attribution does not decode Git metadata outside the closed integration contract ({\"phase\":\"workspace\",\"step\":\"git_integration\",\"gitCommand\":\"private-command\"})",
+              "status": "passed"
+            },
+            {
+              "name": "Git integration diagnostic privacy and attribution revalidates persisted command and failure labels without copying extra fields",
+              "status": "passed"
+            },
+            {
+              "name": "isolates wrapped transfer evidence across settlements reusing a frozen error",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "C:/Users/xjfyt/Desktop/Code/paperclip/packages/adapter-utils/src/workspace-restore-merge.test.ts",
+          "status": "passed",
+          "cases": [
+            {
+              "name": "workspace restore merge round-trips a deterministic durable snapshot and rejects traversal",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore merge preserves sibling files when sequential stale-baseline restores create the same nested directory tree",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore merge preserves a host file replacing a deleted baseline directory and continues the restore",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore merge ignores non-file entries when capturing snapshots",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore merge classifyWorkspaceRestoreFailure holds the deterministic confinement refusal: Daytona syncOut refusing tarball with an unparseable entry listing: private listing",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore merge classifyWorkspaceRestoreFailure holds the deterministic confinement refusal: Daytona syncOut refusing unparseable or ambiguous symlink entry: private listing",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore merge classifyWorkspaceRestoreFailure holds the deterministic confinement refusal: Daytona syncOut refusing unparseable or ambiguous hardlink entry: private listing",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore merge classifyWorkspaceRestoreFailure holds the deterministic confinement refusal: Daytona syncOut refusing tarball member that escapes the extraction dir: ../private",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore merge classifyWorkspaceRestoreFailure holds the deterministic confinement refusal: Daytona syncOut refusing tarball link whose target escapes the extraction dir: link -> /private",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore merge classifyWorkspaceRestoreFailure holds the deterministic confinement refusal: Daytona sync source path is not a confined absolute path: ../private",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore merge classifyWorkspaceRestoreFailure holds the deterministic confinement refusal: Daytona sync source path escapes the workspace remote dir: /private",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore merge classifyWorkspaceRestoreFailure holds the deterministic confinement refusal: Daytona outbound symlink-escape guard command failed (exit 40): private detail",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore merge classifyWorkspaceRestoreFailure holds the deterministic confinement refusal: Daytona outbound symlink-escape guard command failed (exit 41): private detail",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore merge classifyWorkspaceRestoreFailure holds the deterministic confinement refusal: Daytona outbound symlink-escape guard command failed (exit 42): private detail",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore merge classifyWorkspaceRestoreFailure holds the deterministic confinement refusal: Daytona outbound symlink-escape guard command failed (exit 44): private detail",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore merge classifyWorkspaceRestoreFailure holds the deterministic confinement refusal: Daytona outbound symlink-escape guard command failed (exit 45): private detail",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore merge classifyWorkspaceRestoreFailure preserves the generic policy for other outbound command failures",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore merge classifyWorkspaceRestoreFailure maps an EACCES error to restore_permission_denied",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore merge classifyWorkspaceRestoreFailure maps an EPERM error to restore_permission_denied",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore merge classifyWorkspaceRestoreFailure maps the lock-timeout code to restore_lock_timeout",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore merge classifyWorkspaceRestoreFailure maps an unrecognized error, a string, and null to the default restore_failed code",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore merge describeWorkspaceRestoreFailure returns one fixed diagnostic line per allowlisted code, and no other text",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore merge describeWorkspaceRestoreFailure never reflects a sentinel host path or process id, however the caught error is classified",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore merge instance-scoped directory merge lock restores successfully when the parent directory of the target is not writable",
+              "status": "skipped"
+            },
+            {
+              "name": "workspace restore merge instance-scoped directory merge lock acquires the same lock for two alias paths that resolve to one canonical target",
+              "status": "skipped"
+            },
+            {
+              "name": "workspace restore merge instance-scoped directory merge lock rejects a lock root that already exists as a symlink",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore merge instance-scoped directory merge lock rejects a lock root that already exists as a non-directory",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore merge instance-scoped directory merge lock closes the create/validate TOCTOU window: rejects a lock root a racing writer swapped for a symlink during creation",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore merge instance-scoped directory merge lock keeps the private lock database and removes diagnostic ownership after release",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore merge instance-scoped directory merge lock classifies the real lock-timeout error by its stable code, never by the message text",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore merge instance-scoped directory merge lock reports a known live holder without releasing it when a contender times out",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore merge instance-scoped directory merge lock delivers the timeout when the diagnostic owner read stalls and ignores its late rejection",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore merge instance-scoped directory merge lock distinguishes malformed JSON in the diagnostic read",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore merge instance-scoped directory merge lock distinguishes a missing file in the diagnostic read",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore merge instance-scoped directory merge lock distinguishes an unreadable file in the diagnostic read",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore merge instance-scoped directory merge lock reports an owner older than this process without reclaiming a live PID",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore merge instance-scoped directory merge lock serializes two concurrent writers that address one target through different aliases",
+              "status": "skipped"
+            },
+            {
+              "name": "workspace restore merge caller-provided env for the lock root two callers that pass the same env with a temporary PAPERCLIP_HOME take the same lock under that home",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore merge caller-provided env for the lock root does not write a lock entry under process.env.PAPERCLIP_HOME when the caller passes its own env",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore merge caller-provided env for the lock root resolves the lock root under the default instance id when the caller env sets PAPERCLIP_HOME but not PAPERCLIP_INSTANCE_ID, ignoring process.env.PAPERCLIP_INSTANCE_ID",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore merge caller-provided env for the lock root does not read process.env.PAPERCLIP_HOME when the caller env sets neither variable",
+              "status": "passed"
+            },
+            {
+              "name": "conflict-preserving directory restore preflights competing edits before applying any other change and deduplicates replay",
+              "status": "passed"
+            },
+            {
+              "name": "conflict-preserving directory restore preserves a newly added child when another run removes or replaces its parent",
+              "status": "passed"
+            },
+            {
+              "name": "strict preflight preserves excluded descendants when a directory becomes a file",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "C:/Users/xjfyt/Desktop/Code/paperclip/packages/adapter-utils/src/workspace-restore-readonly.test.ts",
+          "status": "passed",
+          "cases": [
+            {
+              "name": "restores real read-only source bytes without widening the final mode or writing outside the target",
+              "status": "passed"
+            },
+            {
+              "name": "preserves the fsync failure, removes the read-only temp and leaves existing/outside bytes untouched",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "C:/Users/xjfyt/Desktop/Code/paperclip/packages/adapter-utils/src/workspace-restore-result.test.ts",
+          "status": "passed",
+          "cases": [
+            {
+              "name": "workspace restore settlement retains only the safe failed restore step alongside the original completed turn",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore settlement persists only bounded Git evidence without replacing the completed model result",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore settlement retains the completed result and safe member while excluding the unsafe target",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore settlement retains the previous execution failure and restore classification",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore settlement retains a thrown execution error when restore also fails",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore settlement keeps timeout evidence while making restore the terminal failure phase",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore settlement preserves the original result or thrown error after a clean restore",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore settlement omits unsafe member /tmp/private/file",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore settlement omits unsafe member ../escape",
+              "status": "passed"
+            },
+            {
+              "name": "workspace restore settlement omits unsafe member C:\\private\\file",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "C:/Users/xjfyt/Desktop/Code/paperclip/packages/adapter-utils/src/workspace-restore-teardown.test.ts",
+          "status": "passed",
+          "cases": [
+            {
+              "name": "createWorkspaceRestoreTeardown (claude-local) keeps concurrent settlements separate when a provider reuses an error",
+              "status": "passed"
+            },
+            {
+              "name": "createWorkspaceRestoreTeardown (claude-local) logs the start message to stdout and returns ok on a clean restore",
+              "status": "passed"
+            },
+            {
+              "name": "createWorkspaceRestoreTeardown (claude-local) classifies a thrown EACCES error and sanitizes the stderr line",
+              "status": "passed"
+            },
+            {
+              "name": "createWorkspaceRestoreTeardown (codex-local) keeps concurrent settlements separate when a provider reuses an error",
+              "status": "passed"
+            },
+            {
+              "name": "createWorkspaceRestoreTeardown (codex-local) logs the start message to stdout and returns ok on a clean restore",
+              "status": "passed"
+            },
+            {
+              "name": "createWorkspaceRestoreTeardown (codex-local) classifies a thrown EACCES error and sanitizes the stderr line",
+              "status": "passed"
+            },
+            {
+              "name": "createWorkspaceRestoreTeardown (gemini-local) keeps concurrent settlements separate when a provider reuses an error",
+              "status": "passed"
+            },
+            {
+              "name": "createWorkspaceRestoreTeardown (gemini-local) logs the start message to stdout and returns ok on a clean restore",
+              "status": "passed"
+            },
+            {
+              "name": "createWorkspaceRestoreTeardown (gemini-local) classifies a thrown EACCES error and sanitizes the stderr line",
+              "status": "passed"
+            }
+          ]
+        }
+      ],
+      "pendingInterpretation": "Three pre-existing platform skips in restore; no new skip in this group."
+    },
+    {
+      "purpose": "Two complete server files: original sync symlink recovery refusal plus corrected Windows JSON path comparison measurement.",
+      "evidence": {
+        "file": "test-results/project-closure-20261029/native-sync-measurement-final.json",
+        "sha256": "89489eea40fb590d822ea0288c009f2d09c7da3b94c661fe66dc96b209e6e1d0"
+      },
+      "log": {
+        "file": "test-results/project-closure-20261029/native-sync-measurement-final.log",
+        "sha256": "1d09ed64df89e1e2a1d7479c244fca68a224a03266885af9d0c96eabf76247c0"
+      },
+      "startedAt": "2026-10-29T19:21:41.443Z",
+      "passed": 16,
+      "failed": 0,
+      "pending": 0,
+      "suites": [
+        {
+          "file": "C:/Users/xjfyt/Desktop/Code/paperclip/server/src/__tests__/native-procedure-measurement.test.ts",
+          "status": "passed",
+          "cases": [
+            {
+              "name": "production native procedure instruction measurement retains delivered serialized bytes separately from path-normalized comparison",
+              "status": "passed"
+            },
+            {
+              "name": "production native procedure instruction measurement uses the real standard-mode authority, including optional and connection tools",
+              "status": "passed"
+            },
+            {
+              "name": "production native procedure instruction measurement captures the full codex start/resume/continuation payload",
+              "status": "passed"
+            },
+            {
+              "name": "production native procedure instruction measurement captures the full acpx start/resume/continuation payload",
+              "status": "passed"
+            },
+            {
+              "name": "production native procedure instruction measurement captures the full opencode start/resume/continuation payload",
+              "status": "passed"
+            },
+            {
+              "name": "production native procedure instruction measurement preserves the full catalog through the actual OpenCode MCP tools/list bridge",
+              "status": "passed"
+            }
+          ]
+        },
+        {
+          "file": "C:/Users/xjfyt/Desktop/Code/paperclip/server/src/__tests__/native-workspace-sync.test.ts",
+          "status": "passed",
+          "cases": [
+            {
+              "name": "native workspace sync durable metadata classifies fresh, warm, replacement, and same-run recovery inputs",
+              "status": "passed"
+            },
+            {
+              "name": "native workspace sync durable metadata refuses a different sandbox before preparing restart workspace sync",
+              "status": "passed"
+            },
+            {
+              "name": "native workspace sync durable metadata reads backward-compatible references and the resource disposition",
+              "status": "passed"
+            },
+            {
+              "name": "native workspace sync durable metadata rejects traversal before constructing a durable state path",
+              "status": "passed"
+            },
+            {
+              "name": "native workspace sync durable metadata persists compact v2 manifests and rejects corrupt recovery storage",
+              "status": "passed"
+            },
+            {
+              "name": "native workspace sync durable metadata persists compact v2 manifests and rejects symlink recovery storage",
+              "status": "passed"
+            },
+            {
+              "name": "native workspace sync durable metadata persists compact v2 manifests and rejects foreign recovery storage",
+              "status": "passed"
+            },
+            {
+              "name": "native workspace sync durable metadata writes one immutable descriptor when the same state is replayed (multiple repositories: false)",
+              "status": "passed"
+            },
+            {
+              "name": "native workspace sync durable metadata writes one immutable descriptor when the same state is replayed (multiple repositories: true)",
+              "status": "passed"
+            },
+            {
+              "name": "native workspace sync durable metadata repairs finalized remote and lease stamps after an interrupted commit",
+              "status": "passed"
+            }
+          ]
+        }
+      ],
+      "pendingInterpretation": "No skipped or filtered cases."
+    },
+    {
+      "purpose": "Complete Runner bridge test file, including five actual Windows refusal cases with existing file bytes/identity/mtime/ctime unchanged and no new file.",
+      "evidence": {
+        "file": "test-results/project-closure-20261029/runner-bridge-platform-final.json",
+        "sha256": "9dc6d59e024b38fd6522894379cc362cc4c5d9c9891f6471448dd7234f501eb0"
+      },
+      "log": {
+        "file": "test-results/project-closure-20261029/runner-bridge-platform-final.log",
+        "sha256": "99939f5c2b92254a4d7d6fded3b860ab53ddfcb09ef5eeb3c5a1470daecde5d7"
+      },
+      "startedAt": "2026-10-29T19:22:19.347Z",
+      "passed": 9,
+      "failed": 0,
+      "pending": 11,
+      "suites": [
+        {
+          "file": "C:/Users/xjfyt/Desktop/Code/paperclip/server/src/services/native-runtime/runner-bridge-tools.test.ts",
+          "status": "passed",
+          "cases": [
+            {
+              "name": "Runner workspace bridge POSIX confined opens guard new writes, existing content, traversal and symlinks",
+              "status": "skipped"
+            },
+            {
+              "name": "Runner workspace bridge POSIX confined opens preserve Unicode characters across workspace text pages",
+              "status": "skipped"
+            },
+            {
+              "name": "Runner workspace bridge POSIX confined opens preserve Unicode characters across skill text pages",
+              "status": "skipped"
+            },
+            {
+              "name": "Runner workspace bridge excludes instance state from workspace reads, writes, listings and upload reads",
+              "status": "passed"
+            },
+            {
+              "name": "Runner workspace bridge denies command access to instance keys while preserving ordinary workspace work",
+              "status": "skipped"
+            },
+            {
+              "name": "Runner workspace bridge does not expose or execute commands without descendant containment",
+              "status": "passed"
+            },
+            {
+              "name": "Runner workspace bridge terminates detached descendants on completion",
+              "status": "skipped"
+            },
+            {
+              "name": "Runner workspace bridge terminates detached descendants on timeout",
+              "status": "skipped"
+            },
+            {
+              "name": "Runner workspace bridge terminates detached descendants on revocation",
+              "status": "skipped"
+            },
+            {
+              "name": "Runner workspace bridge POSIX confined opens serialize overlapping writes so only one observed hash can commit",
+              "status": "skipped"
+            },
+            {
+              "name": "Runner workspace bridge runs useful commands but denies files outside the workspace and injected credentials",
+              "status": "skipped"
+            },
+            {
+              "name": "Runner workspace bridge stops its owned process on authority loss and bounds output",
+              "status": "skipped"
+            },
+            {
+              "name": "Runner workspace bridge POSIX confined opens read only a pinned skill file and detect tampering",
+              "status": "skipped"
+            },
+            {
+              "name": "Runner workspace bridge settles missing-file reads without disclosing host paths or leaving an unknown effect",
+              "status": "passed"
+            },
+            {
+              "name": "Runner workspace bridge advertises only available tools in the current work mode",
+              "status": "passed"
+            },
+            {
+              "name": "Runner workspace bridge Windows refuses confined read before changing file bytes",
+              "status": "passed"
+            },
+            {
+              "name": "Runner workspace bridge Windows refuses confined upload before changing file bytes",
+              "status": "passed"
+            },
+            {
+              "name": "Runner workspace bridge Windows refuses confined new-write before changing file bytes",
+              "status": "passed"
+            },
+            {
+              "name": "Runner workspace bridge Windows refuses confined existing-write before changing file bytes",
+              "status": "passed"
+            },
+            {
+              "name": "Runner workspace bridge Windows refuses confined skill before changing file bytes",
+              "status": "passed"
+            }
+          ]
+        }
+      ],
+      "pendingInterpretation": "Six existing Linux command-sandbox skips plus five newly explicit POSIX confined-open lifecycle skips on Windows; these are unsupported journeys, not successful Windows lifecycle tests."
+    }
+  ],
+  "checks": [
+    {
+      "file": "test-results/project-closure-20261029/manifest-safety-types.log",
+      "sha256": "44d5feaeb452fddf0d53efee74fad18f75de1eeb83fe7020ea9ea8aad20944fb",
+      "exitCode": 0
+    },
+    {
+      "file": "test-results/project-closure-20261029/manifest-safety-build.log",
+      "sha256": "8b173a7da9e1ed6ed0493b46165640c7633ab13c37ce274ac0c823bed527dc48",
+      "exitCode": 0
+    },
+    {
+      "file": "test-results/project-closure-20261029/native-small-types-final.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exitCode": 0
+    }
+  ],
+  "aggregation": "Do not sum overlapping targeted groups. Parent is running a separate complete adapter-utils suite against the frozen source.",
+  "safetyBoundary": [
+    "manifestFileSha256 rejects final symlinks and compares pre-open lstat, descriptor stat before/after reading and final lstat using bigint dev/ino/size/mtimeNs/ctimeNs.",
+    "Race hooks retain real file bytes and descriptors; only the precision case projects deterministic IDs above MAX_SAFE_INTEGER according to bigint stat options. No timing sleeps are used.",
+    "Subsequent SQLite consumers still open the verified manifest by pathname in openDatabase. This change does not close that separate pre-existing TOCTOU window and does not establish end-to-end descriptor-confined restore.",
+    "Windows Runner bridge confined file reads/writes remain unsupported by the existing production guard. No guard or production platform capability was relaxed."
+  ]
+}

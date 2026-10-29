@@ -207,11 +207,21 @@ export async function writeWorkspacePaths(paths: WorkspacePaths, target: string)
 }
 
 export async function manifestFileSha256(filePath: string): Promise<string> {
-  const file = await fs.open(filePath, constants.O_RDONLY | constants.O_NOFOLLOW);
+  // O_NOFOLLOW is not effective on Windows. Verify the exact entry and opened
+  // object around the read using integer identities and nanosecond metadata.
+  const before = await fs.lstat(filePath, { bigint: true });
+  if (!before.isFile() || before.isSymbolicLink()) throw new Error("Invalid workspace manifest file");
+  const unchanged = (value: import("node:fs").BigIntStats) => value.isFile() && !value.isSymbolicLink()
+    && value.dev === before.dev && value.ino === before.ino && value.size === before.size
+    && value.mtimeNs === before.mtimeNs && value.ctimeNs === before.ctimeNs;
+  const file = await fs.open(filePath, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
-    if (!(await file.stat()).isFile()) throw new Error("Invalid workspace manifest file");
+    if (!unchanged(await file.stat({ bigint: true }))) throw new Error("Workspace manifest changed while reading");
     const digest = createHash("sha256");
     for await (const chunk of file.createReadStream({ autoClose: false })) digest.update(chunk);
+    if (!unchanged(await file.stat({ bigint: true })) || !unchanged(await fs.lstat(filePath, { bigint: true }))) {
+      throw new Error("Workspace manifest changed while reading");
+    }
     return digest.digest("hex");
   } finally { await file.close(); }
 }

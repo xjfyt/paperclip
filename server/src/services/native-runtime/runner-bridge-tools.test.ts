@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { materializeAsset } from "./runtime-context.js";
 import { join } from "node:path";
@@ -9,8 +9,9 @@ const roots: string[] = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
 const root = async () => { const directory = await mkdtemp(join(tmpdir(), "dot-bridge-")); roots.push(directory); return directory; };
 const authorize = async () => {};
+const confinedFileTest = it.skipIf(process.platform !== "linux" && process.platform !== "darwin");
 describe("Runner workspace bridge", () => {
-  it("guards new writes, existing content, traversal and symlinks", async () => {
+  confinedFileTest("POSIX confined opens guard new writes, existing content, traversal and symlinks", async () => {
     const directory = await root(), outside = await root();
     const result = await executeWorkspaceTool(directory, "workspace_write", { path: "hello.txt", text: "hello 🌍", expectedSha256: null }, authorize) as any;
     expect(result.byteSize).toBe(Buffer.byteLength("hello 🌍"));
@@ -26,7 +27,7 @@ describe("Runner workspace bridge", () => {
     expect((await readWorkspaceUploadFile(directory, "hello.txt")).toString()).toBe("updated");
     await expect(executeWorkspaceTool(directory, "workspace_read", { path: "outside/private.txt" }, authorize)).rejects.toThrow("symlink");
   });
-  it.each(["workspace", "skill"])("preserves Unicode characters across %s text pages", async mode => {
+  confinedFileTest.each(["workspace", "skill"])("POSIX confined opens preserve Unicode characters across %s text pages", async mode => {
     const text = "a".repeat(5999) + "🌍" + "z".repeat(6000) + "🚀";
     const directory = await root();
     await writeFile(join(directory, "unicode.txt"), text);
@@ -128,7 +129,7 @@ if sys.argv[1] != "completion":
       expect(await readFile(join(directory, "ticks.txt"), "utf8")).toBe(final);
     });
 
-  it("serializes overlapping writes so only one observed hash can commit", async () => {
+  confinedFileTest("POSIX confined opens serialize overlapping writes so only one observed hash can commit", async () => {
     const directory = await root();
     const initial = await executeWorkspaceTool(directory, "workspace_write", { path: "shared.txt", text: "initial", expectedSha256: null }, authorize) as any;
     let entered!: () => void, release!: () => void, authorizations = 0;
@@ -165,7 +166,7 @@ if sys.argv[1] != "completion":
     const large = await executeWorkspaceTool(directory, "workspace_run", { program: "/bin/sh", args: ["-c", "yes x | head -c 50000"] }, authorize) as any;
     expect(large.truncated).toBe(true); expect(Buffer.byteLength(large.output)).toBeLessThanOrEqual(24000);
   });
-  it("reads only a pinned skill file and detects tampering", async () => {
+  confinedFileTest("POSIX confined opens read only a pinned skill file and detect tampering", async () => {
     const bundle = await materializeAsset([{ path: "SKILL.md", content: Buffer.from("# Assigned skill\nUse the pinned instructions."), mode: 0o444 }]);
     const context = { skills: [{ key: "assigned", runtimeName: "assigned", versionId: "version-1", bundle }] } as any;
     expect(await readAssignedSkill(context, { skill: "assigned" })).toMatchObject({ versionId: "version-1", text: "# Assigned skill\nUse the pinned instructions." });
@@ -187,5 +188,32 @@ if sys.argv[1] != "completion":
     const tools = runnerBridgeDefinitions({ workspace: false, skills: false, api: false, mode: "ask" }).map(tool => tool.name);
     expect(tools).toEqual(["get_identity", "list_people"]);
     expect(runnerBridgeDefinitions({ workspace: true, skills: true, api: true, mode: "planning" }).map(tool => tool.name)).not.toContain("workspace_run");
+  });
+
+  it.runIf(process.platform === "win32").each(["read", "upload", "new-write", "existing-write", "skill"] as const)("Windows refuses confined %s before changing file bytes", async (operation) => {
+    const directory = await root();
+    const existing = join(directory, "existing.txt");
+    const bytes = Buffer.from("preserve existing bytes 🌍");
+    await writeFile(existing, bytes);
+    const before = await stat(existing, { bigint: true });
+    let skillFile: string | undefined;
+    let invoke: () => Promise<unknown>;
+    if (operation === "read") invoke = () => executeWorkspaceTool(directory, "workspace_read", { path: "existing.txt" }, authorize);
+    else if (operation === "upload") invoke = () => readWorkspaceUploadFile(directory, "existing.txt");
+    else if (operation === "skill") {
+      const bundle = await materializeAsset([{ path: "SKILL.md", content: bytes, mode: 0o444 }]);
+      skillFile = join(bundle.rootPath, "SKILL.md");
+      const context = { skills: [{ key: "assigned", runtimeName: "assigned", versionId: "version-1", bundle }] } as any;
+      invoke = () => readAssignedSkill(context, { skill: "assigned" });
+    } else invoke = () => executeWorkspaceTool(directory, "workspace_write", {
+      path: operation === "new-write" ? "new.txt" : "existing.txt", text: "must not be written",
+      expectedSha256: operation === "new-write" ? null : createHash("sha256").update(bytes).digest("hex"),
+    }, authorize);
+    await expect(invoke()).rejects.toThrow("platform with confined file opens");
+    expect(await readdir(directory)).toEqual(["existing.txt"]);
+    expect(await readFile(existing)).toEqual(bytes);
+    const after = await stat(existing, { bigint: true });
+    expect([after.ino, after.size, after.mtimeNs, after.ctimeNs]).toEqual([before.ino, before.size, before.mtimeNs, before.ctimeNs]);
+    if (skillFile) expect(await readFile(skillFile)).toEqual(bytes);
   });
 });
