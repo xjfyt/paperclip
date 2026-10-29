@@ -196,6 +196,9 @@ export const authSessionSchema = z.object({
   session: z.object({
     id: z.string().min(1),
     userId: z.string().min(1),
+    // UI-only opaque scope copied from a response header, not an auth token.
+    // The server keeps its legacy get-session JSON shape unchanged.
+    scopeKey: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   }),
   user: currentUserProfileSchema,
   // The front-end Sentry DSN for the current instance, or `null` when the

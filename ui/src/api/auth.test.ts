@@ -11,6 +11,22 @@ afterEach(() => {
 });
 
 describe("authApi.getSession", () => {
+  const session = { session: { id: "paperclip:session:user", userId: "user" }, user: { id: "user", name: null, email: null, image: null }, sentryDsn: null };
+  it.each([false, true])("adds the opaque header after parsing the legacy JSON (nested=%s)", async nested => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(nested ? { data: session } : session, {
+      headers: { "X-Paperclip-Session-Scope": "a".repeat(64) },
+    })));
+    await expect(authApi.getSession()).resolves.toEqual({ ...session, session: { ...session.session, scopeKey: "a".repeat(64) } });
+  });
+  it.each([undefined, "", "raw-secret", "unknown"])("keeps legacy identity when no valid marker exists (%s)", async marker => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(session, { headers: marker === undefined ? {} : { "X-Paperclip-Session-Scope": marker } })));
+    await expect(authApi.getSession()).resolves.toEqual(session);
+  });
+  it("does not promote invalid JSON into an authenticated session using a marker", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(null, { headers: { "X-Paperclip-Session-Scope": "a".repeat(64) } })));
+    await expect(authApi.getSession()).resolves.toBeNull();
+  });
+
   it("returns null for an ordinary local 401", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ error: "unauthorized" }), {

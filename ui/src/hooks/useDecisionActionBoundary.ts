@@ -1,16 +1,12 @@
 import { useCallback, useLayoutEffect, useReducer, useRef, useSyncExternalStore } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { AuthSession } from "@paperclipai/shared";
+import { authSessionIdentity } from "@/lib/auth-session-scope";
 import { useLocation } from "@/lib/router";
 import { queryKeys } from "../lib/queryKeys";
 
 type Scope = { key: string; identity: string; active: boolean; pending: Map<string, object> };
 export type DecisionActionReceipt<T> = { readonly scope: Scope; readonly input: Readonly<T>; readonly slot: string };
-function identityOf(session: AuthSession | null | undefined) {
-  return session === undefined ? "unknown" : JSON.stringify([
-    session?.user?.id ?? session?.session?.userId ?? null, session?.session?.id ?? null,
-  ]);
-}
 
 /** UI receipts supplement (never replace) server permissions, CAS and idempotency. */
 export function useDecisionActionBoundary(companyId: string | null | undefined, targetKey: string, selectedCompanyId = companyId) {
@@ -19,7 +15,7 @@ export function useDecisionActionBoundary(companyId: string | null | undefined, 
   const scopeRef = useRef<Scope | null>(null);
   const revision = useRef(0);
   const [, render] = useReducer((value: number) => value + 1, 0);
-  const readIdentity = useCallback(() => identityOf(client.getQueryData<AuthSession | null>(queryKeys.auth.session)), [client]);
+  const readIdentity = useCallback(() => authSessionIdentity(client.getQueryData<AuthSession | null>(queryKeys.auth.session)), [client]);
   const subscribe = useCallback((notify: () => void) => {
     let previous = readIdentity();
     return client.getQueryCache().subscribe(() => {

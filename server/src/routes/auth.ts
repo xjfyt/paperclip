@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { Router } from "express";
 import { eq } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
@@ -39,11 +40,19 @@ export function authRoutes(db: Db) {
   const router = Router();
 
   router.get("/get-session", async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
     if (req.actor.type !== "board" || !req.actor.userId) {
       throw unauthorized("Board authentication required");
     }
 
     const user = await loadCurrentUserProfile(db, req.actor.userId);
+    // Public cache/receipt identity, never a credential. Keep the legacy JSON
+    // (including its source-classification id) compatible with older clients.
+    if (req.actor.source === "session" && req.actor.sessionId) {
+      res.setHeader("X-Paperclip-Session-Scope", createHash("sha256")
+        .update(JSON.stringify(["paperclip:session-scope:v1", req.actor.userId, req.actor.sessionId]))
+        .digest("hex"));
+    }
     res.json(authSessionSchema.parse({
       session: {
         id: `paperclip:${req.actor.source ?? "none"}:${req.actor.userId}`,

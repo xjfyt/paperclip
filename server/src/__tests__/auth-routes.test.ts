@@ -98,6 +98,28 @@ describe("auth routes", () => {
     });
   });
 
+  it("exposes only a stable opaque scope header for a real session, without changing JSON", async () => {
+    const actor = { type: "board", userId: baseUser.id, source: "session", sessionId: "private-session-id-not-a-cookie-token" } as const;
+    const read = (value: Express.Request["actor"] = actor) => request(createApp(value, baseUser)).get("/api/auth/get-session");
+    const first = await read(), same = await read();
+    const other = await read({ ...actor, sessionId: "another-private-session" });
+    expect(first.headers["cache-control"]).toBe("no-store");
+    expect(first.headers["x-paperclip-session-scope"]).toMatch(/^[a-f0-9]{64}$/);
+    expect(same.headers["x-paperclip-session-scope"]).toBe(first.headers["x-paperclip-session-scope"]);
+    expect(other.headers["x-paperclip-session-scope"]).not.toBe(first.headers["x-paperclip-session-scope"]);
+    expect(first.body.session).toEqual({ id: "paperclip:session:user-1", userId: "user-1" });
+    expect(other.body).toEqual(first.body);
+    expect(JSON.stringify({ headers: first.headers, body: first.body })).not.toContain(actor.sessionId);
+    expect(first.body.session).not.toHaveProperty("scopeKey");
+  });
+
+  it.each(["local_implicit", "cloud_tenant"] as const)("does not manufacture a real-session scope for %s", async source => {
+    const res = await request(createApp({ type: "board", userId: baseUser.id, source }, baseUser)).get("/api/auth/get-session");
+    expect(res.status).toBe(200);
+    expect(res.headers["cache-control"]).toBe("no-store");
+    expect(res.headers["x-paperclip-session-scope"]).toBeUndefined();
+  });
+
   it("sends sentryDsn for a board actor when SENTRY_DSN is set", async () => {
     process.env.SENTRY_DSN = "https://public@o0.ingest.sentry.io/1";
     const app = await createApp(

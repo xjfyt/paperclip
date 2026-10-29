@@ -46,12 +46,13 @@ describe("actual queue page exclusion boundary", () => {
     await act(async () => { submit.click(); submit.click(); });
     expect(state.remove).toHaveBeenCalledExactlyOnceWith("c1", "q1", "decision", "d1", "original reason");
   });
-  it.each(["company", "queue", "identity", "draft"])("keeps new reason and suppresses stale feedback after %s changes", async (kind) => {
+  it.each(["company", "queue", "identity", "scope", "draft"])("keeps new reason and suppresses stale feedback after %s changes", async (kind) => {
     let resolve!: () => void; state.remove.mockImplementation(() => new Promise<void>(yes => { resolve = yes; }));
     await render(); await act(async () => button("Exclude").click()); await type("old reason");
     await act(async () => button("Exclude", true).click());
     if (kind === "company") { state.companyId = "c2"; await render(); }
     if (kind === "queue") { state.queue = "q2"; await render(); }
+    if (kind === "scope") await act(async () => { client.setQueryData(queryKeys.auth.session, { user: { id: "viewer1" }, session: { id: "session1", scopeKey: "b".repeat(64) } }); });
     if (kind === "identity") await act(async () => { client.setQueryData(queryKeys.auth.session, { user: { id: "viewer2" }, session: { id: "session2" } }); });
     if (!document.querySelector("textarea")) await act(async () => button("Exclude").click());
     await type("new reason");

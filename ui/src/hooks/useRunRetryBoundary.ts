@@ -1,6 +1,7 @@
 import { useCallback, useLayoutEffect, useReducer, useRef, useSyncExternalStore } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { AuthSession } from "@paperclipai/shared";
+import { authSessionIdentity } from "@/lib/auth-session-scope";
 import { useLocation } from "@/lib/router";
 import { queryKeys } from "@/lib/queryKeys";
 
@@ -8,13 +9,6 @@ type RetryTarget = { runId: string; companyId: string };
 type RetryScope = { key: string; auth: string; active: boolean; attempts: Map<string, object> };
 export type RunRetryAttempt<T extends RetryTarget> = { readonly target: Readonly<T>; readonly scope: RetryScope };
 
-// Public identity only: a known null session is local_trusted, not an unknown cache.
-function sessionIdentity(session: AuthSession | null | undefined): string {
-  return session === undefined ? "unknown" : JSON.stringify([
-    session?.user?.id ?? session?.session?.userId ?? null,
-    session?.session?.id ?? null,
-  ]);
-}
 
 /** A receipt controls UI feedback only; leaving the page never cancels a server retry. */
 export function useRunRetryBoundary(companyId: string | null | undefined, targetKey = "", selectedCompanyId = companyId) {
@@ -23,7 +17,7 @@ export function useRunRetryBoundary(companyId: string | null | undefined, target
   const authRevision = useRef(0);
   const scopeRef = useRef<RetryScope | null>(null);
   const [, render] = useReducer((n: number) => n + 1, 0);
-  const readIdentity = useCallback(() => sessionIdentity(client.getQueryData<AuthSession | null>(queryKeys.auth.session)), [client]);
+  const readIdentity = useCallback(() => authSessionIdentity(client.getQueryData<AuthSession | null>(queryKeys.auth.session)), [client]);
   const subscribe = useCallback((notify: () => void) => {
     let previous = readIdentity();
     return client.getQueryCache().subscribe(() => {

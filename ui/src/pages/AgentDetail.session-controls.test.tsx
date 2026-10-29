@@ -351,8 +351,8 @@ function RetryRouterProbe() {
 async function renderRetryRun(run = makeRun()) {
   await mount(<><RetryRouterProbe /><RunDetail run={run} agentRouteId="original-route" adapterType="claude_local" adapterConfig={{}} /></>);
 }
-it.each(["company", "route", "same-path", "user", "session", "clear", "remove", "unmount"])("retry boundary ignores late RunDetail success after %s", async change => {
-  client.setQueryData(queryKeys.auth.session, { user: { id: "u1" }, session: { id: "s1", userId: "u1" } });
+it.each(["company", "route", "same-path", "user", "session", "scope", "clear", "remove", "unmount"])("retry boundary ignores late RunDetail success after %s", async change => {
+  client.setQueryData(queryKeys.auth.session, { user: { id: "u1" }, session: { id: "s1", userId: "u1", scopeKey: "a".repeat(64) } });
   const pending = deferred<Awaited<ReturnType<AgentsApi["retryFailedRun"]>>>(); api.retry.mockReturnValue(pending.promise);
   await renderRetryRun(); await click(i18n.t("workflow.retry"));
   if (change === "company") { retryCompany.id = "company-new"; await renderRetryRun(); }
@@ -360,6 +360,7 @@ it.each(["company", "route", "same-path", "user", "session", "clear", "remove", 
   if (change === "same-path") await act(async () => { await retryNavigate("/"); });
   if (change === "unmount") await mount(<RetryRouterProbe />);
   if (change === "user" || change === "session") client.setQueryData(queryKeys.auth.session, { user: { id: change === "user" ? "u2" : "u1" }, session: { id: "s2" } });
+  if (change === "scope") client.setQueryData(queryKeys.auth.session, { user: { id: "u1" }, session: { id: "s1", userId: "u1", scopeKey: "b".repeat(64) } });
   if (change === "clear") client.clear();
   if (change === "remove") client.removeQueries({ queryKey: queryKeys.auth.session, exact: true });
   const path = retryLocation;
@@ -401,11 +402,12 @@ it("retry boundary retains the original run cache and suppresses old inline erro
   expect(container.textContent).toContain("Current server error 原文");
 });
 
-it.each(["clear", "remove", "session"])("retry boundary rejects RunDetail clicks before auth %s commits", async change => {
+it.each(["clear", "remove", "session", "scope"])("retry boundary rejects RunDetail clicks before auth %s commits", async change => {
   client.setQueryData(queryKeys.auth.session, { user: { id: "u1" }, session: { id: "s1" } });
   api.retry.mockResolvedValue({ runId: "retry-successor", issueId: null });
   await renderRetryRun(); const retry = button(i18n.t("workflow.retry"));
   await act(async () => {
+    if (change === "scope") client.setQueryData(queryKeys.auth.session, { user: { id: "u1" }, session: { id: "s1", userId: "u1", scopeKey: "b".repeat(64) } });
     if (change === "clear") client.clear();
     if (change === "remove") client.removeQueries({ queryKey: queryKeys.auth.session, exact: true });
     if (change === "session") client.setQueryData(queryKeys.auth.session, { user: { id: "u1" }, session: { id: "s2" } });

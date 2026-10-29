@@ -181,10 +181,11 @@ export const authApi = {
       if (res.status === 401) return null;
       throw extractAuthError(payload as AuthErrorBody, res.status);
     }
-    const direct = toSession(payload);
-    if (direct) return direct;
-    const nested = payload && typeof payload === "object" ? toSession((payload as Record<string, unknown>).data) : null;
-    return nested;
+    const session = toSession(payload);
+    const scopeKey = res.headers.get("X-Paperclip-Session-Scope");
+    return session && scopeKey && /^[a-f0-9]{64}$/.test(scopeKey)
+      ? { ...session, session: { ...session.session, scopeKey } }
+      : session;
   },
 
   signInEmail: async (input: { email: string; password: string }) => {
