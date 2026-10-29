@@ -18,11 +18,12 @@ it("removes retired backups containing immutable skills without modifying live f
   chmodSync(join(retired, "claude", "skills"), 0o555);
   chmodSync(retired, 0o555);
   chmodSync(live, 0o555);
+  const liveDirectoryMode = lstatSync(live).mode;
   try {
     removeNativeHarnessBackup(retired);
     expect(existsSync(retired)).toBe(false);
     expect(readFileSync(join(live, "SKILL.md"), "utf8")).toBe("live instructions");
-    expect(lstatSync(live).mode & 0o777).toBe(0o555);
+    expect(lstatSync(live).mode).toBe(liveDirectoryMode);
     expect(lstatSync(join(live, "SKILL.md")).mode & 0o777).toBe(0o444);
     expect(() => removeNativeHarnessBackup(retired)).not.toThrow();
   } finally {
