@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { doctor } from "../commands/doctor.js";
 import { writeConfig } from "../config/store.js";
 import type { PaperclipConfig } from "../config/schema.js";
+import { secretsCheck } from "../checks/secrets-check.js";
+import { setFixtureAcl } from "./helpers/windows-private-acl.js";
 
 const ORIGINAL_ENV = { ...process.env };
 
@@ -111,4 +113,16 @@ describe("doctor", () => {
     expect(summary.warned).toBe(0);
     expect(process.env.PAPERCLIP_AGENT_JWT_SECRET).toBeTruthy();
   });
+  it.skipIf(process.platform !== "win32")("keeps an existing broad key ACL visible without rewriting key material", async () => {
+    const configPath = createTempConfig(await availablePort());
+    const config = JSON.parse(fs.readFileSync(configPath, "utf8")) as PaperclipConfig;
+    const initial = secretsCheck(config, configPath);
+    await initial.repair?.();
+    expect(secretsCheck(config, configPath).status).toBe("pass");
+    const key = config.secrets.localEncrypted.keyFilePath;
+    const original = fs.readFileSync(key);
+    setFixtureAcl(path.resolve(configPath, "../.."), key, true);
+    expect(secretsCheck(config, configPath).status).toBe("warn");
+    expect(fs.readFileSync(key)).toEqual(original);
+  }, 20000);
 });

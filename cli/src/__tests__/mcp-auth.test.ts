@@ -5,6 +5,8 @@ import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { credentialPath, mcpAccessToken, mcpResource, mcpRpc, replaceMcpCredential, withMcpCredentialLock } from "../client/mcp-auth.js";
+import { hasPrivatePermissions, protectNewPrivatePath } from "@paperclipai/shared/private-filesystem-permissions";
+import { setFixtureAcl } from "./helpers/windows-private-acl.js";
 
 const resource = "https://paperclip.example/mcp/paperclip";
 let home: string;
@@ -13,11 +15,13 @@ afterEach(async () => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.unstubAl
 async function seed(value: unknown, mode = 0o600) {
   const file = credentialPath(resource);
   await fs.mkdir(path.dirname(file), { mode: 0o700 });
+  protectNewPrivatePath(path.dirname(file));
   await fs.writeFile(file, typeof value === "string" ? value : JSON.stringify(value), { mode });
+  if (process.platform === "win32" && (mode & 0o077) !== 0) setFixtureAcl(home, file, true);
   return file;
 }
 const stored = () => ({ resource, issuer: "https://paperclip.example", clientId: "client", companyId: "company", accessToken: "private-access", refreshToken: "private-refresh", expiresAt: 0 });
-describe("MCP protected credential transport", () => {
+describe("MCP protected credential transport", { timeout: process.platform === "win32" ? 30000 : 5000 }, () => {
   it("rejects noncanonical resources and isolates credential files by resource", () => {
     for (const url of ["http://evil.example/mcp/paperclip", resource + "?token=secret", resource + "#x", "https://u:p@paperclip.example/mcp/paperclip", "https://paperclip.example/other"]) expect(() => mcpResource(url)).toThrow();
     expect(mcpResource("http://127.0.0.1:3100/mcp/paperclip")).toContain("127.0.0.1");
@@ -35,7 +39,7 @@ describe("MCP protected credential transport", () => {
     }));
     expect(await Promise.all([mcpAccessToken(resource), mcpAccessToken(resource)])).toEqual(["replacement-access", "replacement-access"]);
     expect(refreshes).toBe(1);
-    expect((await fs.stat(file)).mode & 0o077).toBe(0);
+    expect(hasPrivatePermissions(file, (await fs.stat(file)).mode)).toBe(true);
     expect(await fs.readFile(file, "utf8")).not.toContain("private-refresh");
   });
   it("never sends a stored credential to another issuer", async () => {
@@ -49,7 +53,9 @@ describe("MCP protected credential transport", () => {
   it("rejects readable or malformed credential files without echoing secrets", async () => {
     const file = await seed(stored(), 0o644);
     await expect(mcpAccessToken(resource)).rejects.toThrow("private");
-    await fs.chmod(file, 0o600); await fs.writeFile(file, '{private-secret');
+    if (process.platform === "win32") setFixtureAcl(home, file, false);
+    else await fs.chmod(file, 0o600);
+    await fs.writeFile(file, '{private-secret');
     await expect(mcpAccessToken(resource)).rejects.toThrow("Invalid MCP credential file. Sign in again.");
   });
   it("does not expose upstream response text in protocol errors or retry writes", async () => {

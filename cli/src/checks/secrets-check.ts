@@ -4,6 +4,7 @@ import path from "node:path";
 import type { PaperclipConfig } from "../config/schema.js";
 import type { CheckResult } from "./index.js";
 import { resolveRuntimeLikePath } from "./path-resolver.js";
+import { hasPrivatePermissions, protectNewPrivatePath } from "@paperclipai/shared/private-filesystem-permissions";
 
 const AWS_CREDENTIAL_SOURCE_HINT =
   "Provide AWS runtime credentials through the AWS SDK default credential chain: IAM role/workload identity, AWS_PROFILE/SSO/shared credentials, web identity, container/instance metadata, or short-lived shell credentials";
@@ -102,15 +103,12 @@ export function secretsCheck(config: PaperclipConfig, configPath?: string): Chec
         canRepair: true,
         repair: () => {
           fs.mkdirSync(path.dirname(keyFilePath), { recursive: true });
-          fs.writeFileSync(keyFilePath, randomBytes(32).toString("base64"), {
-            encoding: "utf8",
-            mode: 0o600,
-          });
+          const descriptor = fs.openSync(keyFilePath, "wx", 0o600);
           try {
-            fs.chmodSync(keyFilePath, 0o600);
-          } catch {
-            // best effort
-          }
+            protectNewPrivatePath(keyFilePath);
+            fs.writeFileSync(descriptor, randomBytes(32).toString("base64"), "utf8");
+            fs.fsyncSync(descriptor);
+          } finally { fs.closeSync(descriptor); }
         },
         repairHint: "Run with --repair to create a local encrypted secrets key file",
       },
@@ -143,8 +141,10 @@ export function secretsCheck(config: PaperclipConfig, configPath?: string): Chec
 
   const keyMode = fs.statSync(keyFilePath).mode & 0o777;
   const permissionWarning =
-    (keyMode & 0o077) !== 0
-      ? `; key file permissions are ${keyMode.toString(8)} (run chmod 600 ${keyFilePath})`
+    !hasPrivatePermissions(keyFilePath, keyMode)
+      ? process.platform === "win32"
+        ? "; key file Windows ACL could not be confirmed private to its owner and OS administrators"
+        : `; key file permissions are ${keyMode.toString(8)} (run chmod 600 ${keyFilePath})`
       : "";
 
   return withStrictModeNote(

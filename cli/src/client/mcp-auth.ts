@@ -6,6 +6,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
 import { PUBLIC_MCP_PATH, PUBLIC_MCP_SCOPES } from "@paperclipai/shared";
 import { resolvePaperclipHomeDir } from "../config/home.js";
+import { hasPrivatePermissions, protectNewPrivatePath } from "@paperclipai/shared/private-filesystem-permissions";
 
 const deviceGrant = "urn:ietf:params:oauth:grant-type:device_code";
 type Json = Record<string, unknown>;
@@ -24,14 +25,26 @@ export function credentialPath(resource: string) {
 }
 async function readCredential(file: string): Promise<McpCredential | null> {
   let handle;
-  try { handle = await fs.open(file, constants.O_RDONLY | constants.O_NOFOLLOW); }
+  let entry;
+  try {
+    entry = await fs.lstat(file, { bigint: true });
+    if (!entry.isFile() || entry.isSymbolicLink() || !hasPrivatePermissions(file, Number(entry.mode))) throw new Error("MCP credential file must be private (mode 0600 or a private Windows ACL).");
+    handle = await fs.open(file, constants.O_RDONLY | constants.O_NOFOLLOW);
+  }
   catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return null; throw error; }
   try {
-    const stat = await handle.stat();
-    if (!stat.isFile() || (stat.mode & 0o077) !== 0) throw new Error("MCP credential file must be private (mode 0600).");
+    const stat = await handle.stat({ bigint: true });
+    if (!stat.isFile() || stat.dev !== entry.dev || stat.ino !== entry.ino) throw new Error("MCP credential file changed while opening.");
     let value: McpCredential;
     try { value = JSON.parse(await handle.readFile("utf8")); }
     catch { throw new Error("Invalid MCP credential file. Sign in again."); }
+    const finalEntry = await fs.lstat(file, { bigint: true });
+    const after = await handle.stat({ bigint: true });
+    if (!finalEntry.isFile() || finalEntry.isSymbolicLink() || finalEntry.dev !== stat.dev || finalEntry.ino !== stat.ino ||
+        after.size !== stat.size || after.mtimeNs !== stat.mtimeNs || after.ctimeNs !== stat.ctimeNs ||
+        finalEntry.size !== after.size || finalEntry.mtimeNs !== after.mtimeNs || finalEntry.ctimeNs !== after.ctimeNs) {
+      throw new Error("MCP credential file changed while reading.");
+    }
     if (!value || typeof value !== "object" || ![value.resource, value.issuer, value.clientId, value.companyId, value.accessToken].every(v => typeof v === "string" && v.length > 0)
       || !Number.isFinite(value.expiresAt) || (value.refreshToken !== undefined && typeof value.refreshToken !== "string")) throw new Error("Invalid MCP credential file. Sign in again.");
     return value;
@@ -63,9 +76,13 @@ export async function withMcpCredentialLock<T>(file: string, work: () => Promise
 
 async function withMcpOsLock<T>(file: string, work: () => Promise<T>) {
   const directory = path.dirname(file);
-  await fs.mkdir(directory, { recursive: true, mode: 0o700 });
+  await fs.mkdir(path.dirname(directory), { recursive: true, mode: 0o700 });
+  try {
+    await fs.mkdir(directory, { mode: 0o700 });
+    protectNewPrivatePath(directory);
+  } catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
   const stat = await fs.lstat(directory);
-  if (!stat.isDirectory() || stat.isSymbolicLink() || (stat.mode & 0o077) !== 0) throw new Error("The MCP credential directory must be private (mode 0700).");
+  if (!stat.isDirectory() || stat.isSymbolicLink() || !hasPrivatePermissions(directory, stat.mode)) throw new Error("The MCP credential directory must be private (mode 0700 or a private Windows ACL).");
   // SQLite's OS lock is released when a process exits, including during acquisition.
   // No PID-file deletion or stale-lock takeover can race a new refresh owner.
   const lockPath = file + ".mutex.sqlite";
@@ -76,7 +93,7 @@ async function withMcpOsLock<T>(file: string, work: () => Promise<T>) {
     await fs.writeFile(lockPath, "", { flag: "wx", mode: 0o600 });
   } catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
   const lockStat = await fs.lstat(lockPath);
-  if (!lockStat.isFile() || lockStat.isSymbolicLink() || (lockStat.mode & 0o077) !== 0) throw new Error("The MCP mutex file must be private (mode 0600).");
+  if (!lockStat.isFile() || lockStat.isSymbolicLink() || !hasPrivatePermissions(lockPath, lockStat.mode)) throw new Error("The MCP mutex file must be private (mode 0600 or a private Windows ACL).");
   const lock = new DatabaseSync(lockPath);
   const deadline = Date.now() + 30_000;
   try {
