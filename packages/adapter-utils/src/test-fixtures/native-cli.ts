@@ -6,10 +6,13 @@ import path from "node:path";
 import { shellExecutable } from "./local-sandbox.js";
 
 let bridge: string | undefined;
+const bridgeRoots = new Set<string>();
+let cleanupRegistered = false;
 
 /** A real PE process for test CLI scripts, never a production launcher shim. */
 function nativeBridge(): string {
-  if (bridge) return bridge;
+  // Per-test TMP roots can be removed between cases in the same worker.
+  if (bridge && existsSync(bridge)) return bridge;
   const compiler = path.join(process.env.SystemRoot ?? "C:\\Windows", "Microsoft.NET", "Framework64", "v4.0.30319", "csc.exe");
   if (!existsSync(compiler)) throw new Error("Windows CLI fixture tests require the .NET Framework C# compiler (csc.exe)");
   const root = mkdtempSync(path.join(os.tmpdir(), "paperclip-native-cli-"));
@@ -48,7 +51,14 @@ class Bridge {
   try { execFileSync(compiler, ["/nologo", "/target:exe", `/out:${output}`, source], { stdio: "pipe" }); }
   catch (error) { rmSync(root, { recursive: true, force: true }); throw error; }
   bridge = output;
-  process.once("exit", () => rmSync(root, { recursive: true, force: true }));
+  for (const ownedRoot of bridgeRoots) if (!existsSync(ownedRoot)) bridgeRoots.delete(ownedRoot);
+  bridgeRoots.add(root);
+  if (!cleanupRegistered) {
+    cleanupRegistered = true;
+    process.once("exit", () => {
+      for (const ownedRoot of bridgeRoots) rmSync(ownedRoot, { recursive: true, force: true });
+    });
+  }
   return bridge;
 }
 

@@ -7,9 +7,16 @@ import { protectNewPrivatePath } from "@paperclipai/shared/private-filesystem-pe
 /** Keep adapter fixtures away from a developer's real homes and credentials.
  * Individual cases may still install explicit synthetic values after this hook.
  */
-export function installIsolatedHostFixture(): void {
+export function installIsolatedHostFixture(options: {
+  beforeCleanup?: () => Promise<void>;
+  cleanupTimeoutMs?: number;
+} = {}): void {
   let root: string | null = null;
+  let cleanupBlocked = false;
   beforeEach(async () => {
+    if (cleanupBlocked || options.beforeCleanup && root !== null) {
+      throw new Error("The previous isolated adapter run did not settle; its private home is preserved.");
+    }
     root = await mkdtemp(path.join(os.tmpdir(), "paperclip-adapter-test-host-"));
     protectNewPrivatePath(root);
     const home = path.join(root, "home");
@@ -31,8 +38,11 @@ export function installIsolatedHostFixture(): void {
     }
   });
   afterEach(async () => {
+    if (cleanupBlocked) throw new Error("Isolated adapter cleanup is blocked; preserving the active run's environment and files.");
+    try { await options.beforeCleanup?.(); }
+    catch (error) { cleanupBlocked = true; throw error; }
     vi.unstubAllEnvs();
     if (root) await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
     root = null;
-  });
+  }, options.cleanupTimeoutMs);
 }

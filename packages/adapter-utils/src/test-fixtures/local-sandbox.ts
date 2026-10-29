@@ -12,7 +12,8 @@ import { runChildProcess as hostRunChildProcess } from "../server-utils.js";
 export function sandboxPath(value: string): string {
   if (process.platform !== "win32") return value;
   if (!path.win32.isAbsolute(value) || value.startsWith("/")) return value;
-  if (path.parse(value).root.toLowerCase() !== path.parse(process.cwd()).root.toLowerCase()) {
+  const drive = (file: string) => path.win32.parse(file).root.replaceAll("\\", "/").toLowerCase();
+  if (drive(value) !== drive(process.cwd())) {
     throw new Error("The local sandbox fixture needs its temporary files on the current drive");
   }
   return value.slice(2).replaceAll("\\", "/");
@@ -77,16 +78,21 @@ function launch(command: string, args: readonly string[]) {
   if (process.platform === "win32" && /\.[cm]js$/.test(command) && existsSync(command)) {
     return { command: process.execPath, args: [command, ...args], cleanup: () => {} };
   }
-  // CreateProcess has a 32,767-character command-line limit even though the
-  // POSIX provider being simulated accepts larger scripts. Executing the
-  // exact script from a temporary file also leaves stdin free for file bytes.
+  // Git Bash's MSYS argv parser differs from libuv's Windows CRT quoting, even
+  // below CreateProcess's size limit. Keep shell source and positional values
+  // in owned files, leaving only a fixed short source wrapper in Windows argv.
   if (process.platform === "win32" && /(?:^|[\\/])(?:ba)?sh(?:\.exe)?$/.test(command)
-    && (args[0] === "-c" || args[0] === "-lc") && (args[1]?.length ?? 0) > 16_000) {
+    && (args[0] === "-c" || args[0] === "-lc") && args[1] !== undefined) {
+    if (args.some((arg) => arg.includes("\0"))) throw new TypeError("Shell fixture arguments must not contain NUL bytes");
     const directory = mkdtempSync(path.join(os.tmpdir(), "paperclip-test-shell-"));
     const script = path.join(directory, "command.sh");
+    const wrapper = path.join(directory, "arguments.sh");
     writeFileSync(script, args[1]!);
-    return { command, args: [...(args[0] === "-lc" ? ["-l"] : []),
-      `/${path.parse(script).root[0]!.toLowerCase()}${sandboxPath(script)}`, ...args.slice(2)],
+    const quote = (value: string) => `'${value.replaceAll("'", `'"'"'`)}'`;
+    const shellFile = (file: string) => `/${path.parse(file).root[0]!.toLowerCase()}${sandboxPath(file)}`;
+    const restoreZero = args[2] === undefined ? "" : `BASH_ARGV0=${quote(args[2])}\n[ "$0" = ${quote(args[2])} ] || exit 125\n`;
+    writeFileSync(wrapper, `${restoreZero}set -- ${args.slice(3).map(quote).join(" ")}\n. ${quote(shellFile(script))}\n`);
+    return { command, args: [args[0], `. ${quote(shellFile(wrapper))}`],
     cleanup: () => rmSync(directory, { recursive: true, force: true }) };
   }
   return { command, args: [...args], cleanup: () => {} };

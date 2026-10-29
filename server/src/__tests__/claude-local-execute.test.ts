@@ -1,17 +1,56 @@
+import { installIsolatedHostFixture } from "@paperclipai/adapter-utils/test-fixtures/isolated-host";
+import { writeCliFixture } from "@paperclipai/adapter-utils/test-fixtures/native-cli";
+installIsolatedHostFixture({ beforeCleanup: settleFixtureExecutions, cleanupTimeoutMs: 60_000 });
+async function writeNodeFixture(file: string, source: string, _encoding?: string) {
+  await writeCliFixture(process.platform === "win32" && file.endsWith(".exe") ? file.slice(0, -4) : file, source);
+}
 import { afterEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs/promises";
 import os from "node:os";
-import path from "node:path";
+import { fixturePath as path, sandboxPath, shellExecutable, shellArgs, shellEnvironment } from "@paperclipai/adapter-utils/test-fixtures/local-sandbox";
 import type { AdapterRuntimeMcpServer } from "@paperclipai/adapter-utils";
-import { runChildProcess } from "@paperclipai/adapter-utils/server-utils";
+import { runPosixSandboxProcess as runChildProcess } from "@paperclipai/adapter-utils/test-fixtures/portable-cli";
 import { buildPaperclipTaskMarkdown } from "../services/heartbeat.js";
 import {
   claudeCommandSupportsEffortFlag,
   claudeSessionCwdMatchesExecutionTarget,
-  execute,
+  execute as executeAdapter,
   resetClaudeCliCapabilitiesCacheForTests,
   sessionCodec,
 } from "@paperclipai/adapter-claude-local/server";
+
+const pendingFixtureExecutions = new Set<ReturnType<typeof executeAdapter>>();
+let fixtureController: AbortController | null = null;
+const fixtureOwnersByCwd = new Map<string, AbortController>();
+function execute(...args: Parameters<typeof executeAdapter>): ReturnType<typeof executeAdapter> {
+  const temporary = path.resolve(os.tmpdir());
+  const cwd = path.resolve(String(args[0].config.cwd ?? ""));
+  const relative = path.relative(temporary, cwd);
+  if (!path.basename(path.dirname(temporary)).startsWith("paperclip-adapter-test-host-") || relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    return Promise.reject(new Error("Fixture execution is outside its active isolated temporary home."));
+  }
+  const key = process.platform === "win32" ? cwd.toLowerCase() : cwd;
+  const controller = fixtureOwnersByCwd.get(key) ?? (fixtureController ??= new AbortController());
+  if (controller.signal.aborted) return Promise.reject(new Error("The owning fixture run was cancelled before another execution."));
+  fixtureOwnersByCwd.set(key, controller);
+  const owned = executeAdapter({ ...args[0], signal: args[0].signal ?? controller.signal });
+  const tracked = owned.finally(() => pendingFixtureExecutions.delete(tracked));
+  pendingFixtureExecutions.add(tracked);
+  return tracked;
+}
+async function settleFixtureExecutions(): Promise<void> {
+  // Legacy raw execute does not opt into ctx.signal cancellation. Abort only
+  // our fixture runner's future work, and await the actual adapter finally.
+  fixtureController?.abort();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      Promise.allSettled([...pendingFixtureExecutions]),
+      new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("Owned fixture execution did not settle within 45 seconds; preserving isolation.")), 45_000); }),
+    ]);
+    fixtureController = null;
+  } finally { if (timer) clearTimeout(timer); }
+}
 
 async function writeFailingClaudeCommand(
   commandPath: string,
@@ -23,8 +62,8 @@ async function writeFailingClaudeCommand(
 console.log(${JSON.stringify(payload)});
 process.exit(${exit});
 `;
-  await fs.writeFile(commandPath, script, "utf8");
-  await fs.chmod(commandPath, 0o755);
+  await writeNodeFixture(commandPath, script, "utf8");
+
 }
 
 async function writeTextFailingClaudeCommand(
@@ -41,8 +80,8 @@ if (${JSON.stringify(options.stderr ?? "")}) {
 }
 process.exit(${exit});
 `;
-  await fs.writeFile(commandPath, script, "utf8");
-  await fs.chmod(commandPath, 0o755);
+  await writeNodeFixture(commandPath, script, "utf8");
+
 }
 
 async function writeFakeClaudeCommand(commandPath: string): Promise<void> {
@@ -82,8 +121,8 @@ console.log(JSON.stringify({ type: "system", subtype: "init", session_id: "11111
 console.log(JSON.stringify({ type: "assistant", session_id: "11111111-1111-4111-8111-111111111111", message: { content: [{ type: "text", text: "hello" }] } }));
 console.log(JSON.stringify({ type: "result", session_id: "11111111-1111-4111-8111-111111111111", result: "hello", usage: { input_tokens: 1, cache_read_input_tokens: 0, output_tokens: 1 } }));
 `;
-  await fs.writeFile(commandPath, script, "utf8");
-  await fs.chmod(commandPath, 0o755);
+  await writeNodeFixture(commandPath, script, "utf8");
+
 }
 
 async function writeHelpWithoutEffortClaudeCommand(commandPath: string): Promise<void> {
@@ -120,8 +159,8 @@ console.log(JSON.stringify({ type: "system", subtype: "init", session_id: "33333
 console.log(JSON.stringify({ type: "assistant", session_id: "33333333-3333-4333-8333-333333333333", message: { content: [{ type: "text", text: "hello" }] } }));
 console.log(JSON.stringify({ type: "result", session_id: "33333333-3333-4333-8333-333333333333", result: "hello", usage: { input_tokens: 1, cache_read_input_tokens: 0, output_tokens: 1 } }));
 `;
-  await fs.writeFile(commandPath, script, "utf8");
-  await fs.chmod(commandPath, 0o755);
+  await writeNodeFixture(commandPath, script, "utf8");
+
 }
 
 async function writeHelpWithEffortClaudeCommand(commandPath: string): Promise<void> {
@@ -159,8 +198,8 @@ console.log(JSON.stringify({ type: "system", subtype: "init", session_id: "44444
 console.log(JSON.stringify({ type: "assistant", session_id: "44444444-4444-4444-8444-444444444444", message: { content: [{ type: "text", text: "hello" }] } }));
 console.log(JSON.stringify({ type: "result", session_id: "44444444-4444-4444-8444-444444444444", result: "hello", usage: { input_tokens: 1, cache_read_input_tokens: 0, output_tokens: 1 } }));
 `;
-  await fs.writeFile(commandPath, script, "utf8");
-  await fs.chmod(commandPath, 0o755);
+  await writeNodeFixture(commandPath, script, "utf8");
+
 }
 
 type CapturePayload = {
@@ -215,8 +254,8 @@ console.log(JSON.stringify({ type: "system", subtype: "init", session_id: "bbbbb
 console.log(JSON.stringify({ type: "assistant", session_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", message: { content: [{ type: "text", text: "hello" }] } }));
 console.log(JSON.stringify({ type: "result", session_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", result: "hello", usage: { input_tokens: 1, cache_read_input_tokens: 0, output_tokens: 1 } }));
 `;
-  await fs.writeFile(commandPath, script, "utf8");
-  await fs.chmod(commandPath, 0o755);
+  await writeNodeFixture(commandPath, script, "utf8");
+
 }
 
 async function writeAlwaysPoisonedMessageIdClaudeCommand(commandPath: string): Promise<void> {
@@ -245,8 +284,8 @@ console.log(JSON.stringify({
 }));
 process.exit(1);
 `;
-  await fs.writeFile(commandPath, script, "utf8");
-  await fs.chmod(commandPath, 0o755);
+  await writeNodeFixture(commandPath, script, "utf8");
+
 }
 
 async function writeRetryThenSucceedClaudeCommand(commandPath: string): Promise<void> {
@@ -286,8 +325,8 @@ console.log(JSON.stringify({ type: "system", subtype: "init", session_id: "22222
 console.log(JSON.stringify({ type: "assistant", session_id: "22222222-2222-4222-8222-222222222222", message: { content: [{ type: "text", text: "hello" }] } }));
 console.log(JSON.stringify({ type: "result", session_id: "22222222-2222-4222-8222-222222222222", result: "hello", usage: { input_tokens: 1, cache_read_input_tokens: 0, output_tokens: 1 } }));
 `;
-  await fs.writeFile(commandPath, script, "utf8");
-  await fs.chmod(commandPath, 0o755);
+  await writeNodeFixture(commandPath, script, "utf8");
+
 }
 
 async function setupExecuteEnv(
@@ -296,7 +335,7 @@ async function setupExecuteEnv(
 ) {
   const workspace = path.join(root, "workspace");
   const binDir = path.join(root, "bin");
-  const commandPath = path.join(binDir, "claude");
+  const commandPath = path.join(binDir, process.platform === "win32" ? "claude.exe" : "claude");
   const capturePath = path.join(root, "capture.json");
   const statePath = path.join(root, "state.txt");
   await fs.mkdir(workspace, { recursive: true });
@@ -305,6 +344,8 @@ async function setupExecuteEnv(
   const previousHome = process.env.HOME;
   const previousPath = process.env.PATH;
   process.env.HOME = root;
+  vi.stubEnv("USERPROFILE", root);
+  vi.stubEnv("CLAUDE_CONFIG_DIR", path.join(root, ".claude"));
   process.env.PATH = `${binDir}${path.delimiter}${process.env.PATH ?? ""}`;
   return {
     workspace, commandPath, capturePath, statePath,
@@ -318,6 +359,7 @@ async function setupExecuteEnv(
 }
 
 function createLocalSandboxRunner() {
+  const owner = fixtureController ??= new AbortController();
   let counter = 0;
   return {
     execute: async (input: {
@@ -330,14 +372,15 @@ function createLocalSandboxRunner() {
       onLog?: (stream: "stdout" | "stderr", chunk: string) => Promise<void>;
       onSpawn?: (meta: { pid: number; startedAt: string }) => Promise<void>;
     }) => {
+      if (owner.signal.aborted) throw new Error("Owned fixture execution was cancelled before starting another sandbox process.");
       counter += 1;
       return runChildProcess(
         `sandbox-run-${counter}`,
-        input.command,
-        input.args ?? [],
+        shellExecutable(input.command),
+        shellArgs(input.args),
         {
           cwd: input.cwd ?? process.cwd(),
-          env: input.env ?? {},
+          env: shellEnvironment(input.env),
           stdin: input.stdin,
           timeoutSec: Math.max(1, Math.ceil((input.timeoutMs ?? 30_000) / 1000)),
           graceSec: 5,
@@ -483,7 +526,7 @@ describe("claude execute", () => {
       expect(zero.argv).not.toContain("--strict-mcp-config");
       expect(zero.mcpConfigPath).toBeNull();
       expect(zero.mcpConfigContents).toBeNull();
-      expect(alpha.mcpConfigPath).toContain("/agents/agent-alpha/");
+      expect(alpha.mcpConfigPath).toContain(path.sep + path.join("agents", "agent-alpha") + path.sep);
     } finally {
       restore();
       await fs.rm(root, { recursive: true, force: true });
@@ -823,7 +866,7 @@ describe("claude execute", () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-claude-execute-meta-"));
     const workspace = path.join(root, "workspace");
     const binDir = path.join(root, "bin");
-    const commandPath = path.join(binDir, "claude");
+    const commandPath = path.join(binDir, process.platform === "win32" ? "claude.exe" : "claude");
     const capturePath = path.join(root, "capture.json");
     const claudeConfigDir = path.join(root, "claude-config");
     await fs.mkdir(workspace, { recursive: true });
@@ -835,6 +878,8 @@ describe("claude execute", () => {
     const previousPath = process.env.PATH;
     const previousClaudeConfigDir = process.env.CLAUDE_CONFIG_DIR;
     process.env.HOME = root;
+    vi.stubEnv("USERPROFILE", root);
+    vi.stubEnv("CLAUDE_CONFIG_DIR", path.join(root, ".claude"));
     process.env.PATH = `${binDir}${path.delimiter}${process.env.PATH ?? ""}`;
     process.env.CLAUDE_CONFIG_DIR = claudeConfigDir;
 
@@ -879,10 +924,10 @@ describe("claude execute", () => {
       expect(result.usage).toEqual({ inputTokens: 1, cachedInputTokens: 0, outputTokens: 1 });
       expect(result.usageBasis).toBe("per_run");
       expect(result.costUsd).toBeNull();
-      expect(loggedCommand).toBe(commandPath);
+      expect(await fs.realpath(String(loggedCommand))).toBe(await fs.realpath(commandPath));
       expect(loggedEnv.HOME).toBe(root);
       expect(loggedEnv.CLAUDE_CONFIG_DIR).toBe(claudeConfigDir);
-      expect(loggedEnv.PAPERCLIP_RESOLVED_COMMAND).toBe(commandPath);
+      expect(await fs.realpath(loggedEnv.PAPERCLIP_RESOLVED_COMMAND!)).toBe(await fs.realpath(commandPath));
     } finally {
       if (previousHome === undefined) delete process.env.HOME;
       else process.env.HOME = previousHome;
@@ -894,12 +939,12 @@ describe("claude execute", () => {
     }
   });
 
-  it("injects bridge env into sandbox-managed remote runs", async () => {
+  it("injects bridge env into sandbox-managed remote runs", { timeout: process.platform === "win32" ? 30_000 : 10_000 }, async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-claude-execute-sandbox-"));
     const localWorkspace = path.join(root, "workspace");
-    const remoteWorkspace = path.join(root, "sandbox-$HOME");
+    const remoteWorkspace = sandboxPath(path.join(root, "sandbox-$HOME"));
     const binDir = path.join(root, "bin");
-    const commandPath = path.join(binDir, "claude");
+    const commandPath = path.join(binDir, process.platform === "win32" ? "claude.exe" : "claude");
     const capturePath1 = path.join(remoteWorkspace, "capture-1.json");
     const claudeRoot = path.join(root, ".claude");
     const previousHome = process.env.HOME;
@@ -913,6 +958,8 @@ describe("claude execute", () => {
     await writeFakeClaudeCommand(commandPath);
 
     process.env.HOME = root;
+    vi.stubEnv("USERPROFILE", root);
+    vi.stubEnv("CLAUDE_CONFIG_DIR", path.join(root, ".claude"));
     process.env.PATH = `${binDir}${path.delimiter}${process.env.PATH ?? ""}`;
 
     try {
@@ -969,7 +1016,7 @@ describe("claude execute", () => {
       const capture = JSON.parse(await fs.readFile(capturePath1, "utf8")) as CapturePayload;
       expect(capture.argv).toContain("--dangerously-skip-permissions");
       expect(capture.argv).not.toContain("--allowedTools");
-      expect(capture.claudeConfigDir).toBe(path.join(remoteWorkspace, ".paperclip-runtime", "claude", "config"));
+      expect(sandboxPath(capture.claudeConfigDir!)).toBe(path.join(remoteWorkspace, ".paperclip-runtime", "claude", "config"));
       expect(capture.claudeConfigEntries).toContain("settings.json");
       expect(capture.paperclipApiUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
       expect(capture.paperclipApiKey).not.toBe("run-jwt-token");
@@ -981,14 +1028,14 @@ describe("claude execute", () => {
       else process.env.PATH = previousPath;
       await fs.rm(root, { recursive: true, force: true });
     }
-  }, 10_000);
+  });
 
-  it("omits --effort for sandbox-managed runs when the installed Claude CLI does not advertise it", async () => {
+  it("omits --effort for sandbox-managed runs when the installed Claude CLI does not advertise it", { timeout: process.platform === "win32" ? 30_000 : 10_000 }, async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-claude-execute-sandbox-effort-"));
     const { workspace, commandPath, capturePath, restore } = await setupExecuteEnv(root, {
       commandWriter: writeHelpWithoutEffortClaudeCommand,
     });
-    const remoteWorkspace = path.join(root, "sandbox-workspace");
+    const remoteWorkspace = sandboxPath(path.join(root, "sandbox-workspace"));
     await fs.mkdir(remoteWorkspace, { recursive: true });
 
     try {
@@ -1039,15 +1086,15 @@ describe("claude execute", () => {
       restore();
       await fs.rm(root, { recursive: true, force: true });
     }
-  }, 10_000);
+  });
 
-  it("passes through --effort and reuses the sandbox capability probe across sandbox leases when the installed Claude CLI advertises it", async () => {
+  it("passes through --effort and reuses the sandbox capability probe across sandbox leases when the installed Claude CLI advertises it", { timeout: process.platform === "win32" ? 30_000 : 10_000 }, async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-claude-execute-sandbox-effort-supported-"));
     const { workspace, commandPath, capturePath, restore } = await setupExecuteEnv(root, {
       commandWriter: writeHelpWithEffortClaudeCommand,
     });
     const helpCountPath = path.join(root, "help-count.txt");
-    const remoteWorkspace = path.join(root, "sandbox-workspace");
+    const remoteWorkspace = sandboxPath(path.join(root, "sandbox-workspace"));
     await fs.mkdir(remoteWorkspace, { recursive: true });
 
     const baseInput = {
@@ -1114,7 +1161,7 @@ describe("claude execute", () => {
       restore();
       await fs.rm(root, { recursive: true, force: true });
     }
-  }, 10_000);
+  });
 
   it("degrades to the conservative fallback (returns null) when the sandbox probe throws, and retries on the next lease", async () => {
     let calls = 0;
@@ -1174,7 +1221,7 @@ describe("claude execute", () => {
   it.each(["unchanged", "added", "removed"])("resumes a stable Claude prompt bundle with %s MCP tools", async (change) => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-claude-execute-bundle-"));
     const workspace = path.join(root, "workspace");
-    const commandPath = path.join(root, "claude");
+    const commandPath = path.join(root, process.platform === "win32" ? "claude.exe" : "claude");
     const capturePath1 = path.join(root, "capture-1.json");
     const capturePath2 = path.join(root, "capture-2.json");
     const instructionsPath = path.join(root, "AGENTS.md");
@@ -1187,6 +1234,8 @@ describe("claude execute", () => {
     const previousPaperclipHome = process.env.PAPERCLIP_HOME;
     const previousPaperclipInstanceId = process.env.PAPERCLIP_INSTANCE_ID;
     process.env.HOME = root;
+    vi.stubEnv("USERPROFILE", root);
+    vi.stubEnv("CLAUDE_CONFIG_DIR", path.join(root, ".claude"));
     process.env.PAPERCLIP_HOME = paperclipHome;
     delete process.env.PAPERCLIP_INSTANCE_ID;
 
@@ -1368,7 +1417,7 @@ describe("claude execute", () => {
   it("resumes across per-run instruction copies and refreshes their location", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-claude-working-copy-"));
     const workspace = path.join(root, "workspace");
-    const commandPath = path.join(root, "claude");
+    const commandPath = path.join(root, process.platform === "win32" ? "claude.exe" : "claude");
     const capturePath = path.join(root, "capture.json");
     const skillDir = path.join(root, "skill");
     await fs.mkdir(workspace, { recursive: true });
@@ -1443,7 +1492,7 @@ describe("claude execute", () => {
   it("starts a fresh Claude session when the stable prompt bundle changes", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-claude-execute-reset-"));
     const workspace = path.join(root, "workspace");
-    const commandPath = path.join(root, "claude");
+    const commandPath = path.join(root, process.platform === "win32" ? "claude.exe" : "claude");
     const capturePath1 = path.join(root, "capture-before.json");
     const capturePath2 = path.join(root, "capture-after.json");
     const instructionsPath = path.join(root, "AGENTS.md");
@@ -1457,6 +1506,8 @@ describe("claude execute", () => {
     const previousPaperclipHome = process.env.PAPERCLIP_HOME;
     const previousPaperclipInstanceId = process.env.PAPERCLIP_INSTANCE_ID;
     process.env.HOME = root;
+    vi.stubEnv("USERPROFILE", root);
+    vi.stubEnv("CLAUDE_CONFIG_DIR", path.join(root, ".claude"));
     process.env.PAPERCLIP_HOME = paperclipHome;
     delete process.env.PAPERCLIP_INSTANCE_ID;
 
@@ -1550,7 +1601,7 @@ describe("claude execute", () => {
   it("classifies Claude 'out of extra usage' failures as provider quota errors", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-claude-execute-transient-"));
     const workspace = path.join(root, "workspace");
-    const commandPath = path.join(root, "claude");
+    const commandPath = path.join(root, process.platform === "win32" ? "claude.exe" : "claude");
     await fs.mkdir(workspace, { recursive: true });
     await writeFailingClaudeCommand(commandPath, {
       resultEvent: {
@@ -1565,6 +1616,8 @@ describe("claude execute", () => {
 
     const previousHome = process.env.HOME;
     process.env.HOME = root;
+    vi.stubEnv("USERPROFILE", root);
+    vi.stubEnv("CLAUDE_CONFIG_DIR", path.join(root, ".claude"));
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 3, 22, 10, 15, 0));
 
@@ -1617,7 +1670,7 @@ describe("claude execute", () => {
   it("treats subtype=success results as successful even when the process exits nonzero", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-claude-execute-success-subtype-"));
     const workspace = path.join(root, "workspace");
-    const commandPath = path.join(root, "claude");
+    const commandPath = path.join(root, process.platform === "win32" ? "claude.exe" : "claude");
     await fs.mkdir(workspace, { recursive: true });
     await writeFailingClaudeCommand(commandPath, {
       exitCode: 1,
@@ -1633,6 +1686,8 @@ describe("claude execute", () => {
 
     const previousHome = process.env.HOME;
     process.env.HOME = root;
+    vi.stubEnv("USERPROFILE", root);
+    vi.stubEnv("CLAUDE_CONFIG_DIR", path.join(root, ".claude"));
 
     try {
       const result = await execute({
@@ -1675,7 +1730,7 @@ describe("claude execute", () => {
   it("classifies rate-limit / overloaded failures without reset metadata as transient", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-claude-execute-rate-limit-"));
     const workspace = path.join(root, "workspace");
-    const commandPath = path.join(root, "claude");
+    const commandPath = path.join(root, process.platform === "win32" ? "claude.exe" : "claude");
     await fs.mkdir(workspace, { recursive: true });
     await writeFailingClaudeCommand(commandPath, {
       resultEvent: {
@@ -1690,6 +1745,8 @@ describe("claude execute", () => {
 
     const previousHome = process.env.HOME;
     process.env.HOME = root;
+    vi.stubEnv("USERPROFILE", root);
+    vi.stubEnv("CLAUDE_CONFIG_DIR", path.join(root, ".claude"));
 
     try {
       const result = await execute({
@@ -1734,7 +1791,7 @@ describe("claude execute", () => {
   it("does not reclassify deterministic Claude failures (auth, max turns) as transient", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-claude-execute-max-turns-"));
     const workspace = path.join(root, "workspace");
-    const commandPath = path.join(root, "claude");
+    const commandPath = path.join(root, process.platform === "win32" ? "claude.exe" : "claude");
     await fs.mkdir(workspace, { recursive: true });
     await writeFailingClaudeCommand(commandPath, {
       resultEvent: {
@@ -1748,6 +1805,8 @@ describe("claude execute", () => {
 
     const previousHome = process.env.HOME;
     process.env.HOME = root;
+    vi.stubEnv("USERPROFILE", root);
+    vi.stubEnv("CLAUDE_CONFIG_DIR", path.join(root, ".claude"));
 
     try {
       const result = await execute({

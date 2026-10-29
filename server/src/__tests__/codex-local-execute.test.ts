@@ -1,11 +1,50 @@
+import { installIsolatedHostFixture } from "@paperclipai/adapter-utils/test-fixtures/isolated-host";
+import { writeCliFixture } from "@paperclipai/adapter-utils/test-fixtures/native-cli";
+installIsolatedHostFixture({ beforeCleanup: settleFixtureExecutions, cleanupTimeoutMs: 60_000 });
+async function writeNodeFixture(file: string, source: string, _encoding?: string) {
+  await writeCliFixture(process.platform === "win32" && file.endsWith(".exe") ? file.slice(0, -4) : file, source);
+}
 import { afterEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs/promises";
 import os from "node:os";
-import path from "node:path";
-import { runChildProcess } from "@paperclipai/adapter-utils/server-utils";
-import { execute } from "@paperclipai/adapter-codex-local/server";
+import { fixturePath as path, sandboxPath, shellExecutable, shellArgs, shellEnvironment } from "@paperclipai/adapter-utils/test-fixtures/local-sandbox";
+import { runPosixSandboxProcess as runChildProcess } from "@paperclipai/adapter-utils/test-fixtures/portable-cli";
+import { execute as executeAdapter } from "@paperclipai/adapter-codex-local/server";
 import { buildPaperclipTaskMarkdown } from "../services/heartbeat.js";
 import { AGENT_CHAT_DIRECTIVE } from "../services/agent-conversations.js";
+
+const pendingFixtureExecutions = new Set<ReturnType<typeof executeAdapter>>();
+let fixtureController: AbortController | null = null;
+const fixtureOwnersByCwd = new Map<string, AbortController>();
+function execute(...args: Parameters<typeof executeAdapter>): ReturnType<typeof executeAdapter> {
+  const temporary = path.resolve(os.tmpdir());
+  const cwd = path.resolve(String(args[0].config.cwd ?? ""));
+  const relative = path.relative(temporary, cwd);
+  if (!path.basename(path.dirname(temporary)).startsWith("paperclip-adapter-test-host-") || relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    return Promise.reject(new Error("Fixture execution is outside its active isolated temporary home."));
+  }
+  const key = process.platform === "win32" ? cwd.toLowerCase() : cwd;
+  const controller = fixtureOwnersByCwd.get(key) ?? (fixtureController ??= new AbortController());
+  if (controller.signal.aborted) return Promise.reject(new Error("The owning fixture run was cancelled before another execution."));
+  fixtureOwnersByCwd.set(key, controller);
+  const owned = executeAdapter({ ...args[0], signal: args[0].signal ?? controller.signal });
+  const tracked = owned.finally(() => pendingFixtureExecutions.delete(tracked));
+  pendingFixtureExecutions.add(tracked);
+  return tracked;
+}
+async function settleFixtureExecutions(): Promise<void> {
+  // Legacy raw execute does not opt into ctx.signal cancellation. Abort only
+  // our fixture runner's future work, and await the actual adapter finally.
+  fixtureController?.abort();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      Promise.allSettled([...pendingFixtureExecutions]),
+      new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("Owned fixture execution did not settle within 45 seconds; preserving isolation.")), 45_000); }),
+    ]);
+    fixtureController = null;
+  } finally { if (timer) clearTimeout(timer); }
+}
 
 async function writeFakeCodexCommand(commandPath: string): Promise<void> {
   const script = `#!/usr/bin/env node
@@ -34,8 +73,8 @@ console.log(JSON.stringify({ type: "thread.started", thread_id: "codex-session-1
 console.log(JSON.stringify({ type: "item.completed", item: { type: "agent_message", text: "hello" } }));
 console.log(JSON.stringify({ type: "turn.completed", usage: { input_tokens: 1, cached_input_tokens: 0, output_tokens: 1 } }));
 `;
-  await fs.writeFile(commandPath, script, "utf8");
-  await fs.chmod(commandPath, 0o755);
+  await writeNodeFixture(commandPath, script, "utf8");
+
 }
 
 async function writeFailingCodexCommand(commandPath: string, errorMessage: string): Promise<void> {
@@ -43,8 +82,8 @@ async function writeFailingCodexCommand(commandPath: string, errorMessage: strin
 console.log(JSON.stringify({ type: "error", message: ${JSON.stringify(errorMessage)} }));
 process.exit(1);
 `;
-  await fs.writeFile(commandPath, script, "utf8");
-  await fs.chmod(commandPath, 0o755);
+  await writeNodeFixture(commandPath, script, "utf8");
+
 }
 
 type CapturePayload = {
@@ -85,6 +124,7 @@ async function seedSharedCodexAuth(homeRoot: string): Promise<void> {
 }
 
 function createLocalSandboxRunner() {
+  const owner = fixtureController ??= new AbortController();
   let counter = 0;
   return {
     execute: async (input: {
@@ -97,14 +137,15 @@ function createLocalSandboxRunner() {
       onLog?: (stream: "stdout" | "stderr", chunk: string) => Promise<void>;
       onSpawn?: (meta: { pid: number; startedAt: string }) => Promise<void>;
     }) => {
+      if (owner.signal.aborted) throw new Error("Owned fixture execution was cancelled before starting another sandbox process.");
       counter += 1;
       return runChildProcess(
         `sandbox-run-${counter}`,
-        input.command,
-        input.args ?? [],
+        shellExecutable(input.command),
+        shellArgs(input.args),
         {
           cwd: input.cwd ?? process.cwd(),
-          env: input.env ?? {},
+          env: shellEnvironment(input.env),
           stdin: input.stdin,
           timeoutSec: Math.max(1, Math.ceil((input.timeoutMs ?? 30_000) / 1000)),
           graceSec: 5,
@@ -122,7 +163,7 @@ describe("codex execute", () => {
   it("uses a Paperclip-managed CODEX_HOME outside worktree mode while preserving shared auth and config", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-execute-default-"));
     const workspace = path.join(root, "workspace");
-    const commandPath = path.join(root, "codex");
+    const commandPath = path.join(root, process.platform === "win32" ? "codex.exe" : "codex");
     const capturePath = path.join(root, "capture.json");
     const sharedCodexHome = path.join(root, "shared-codex-home");
     const paperclipHome = path.join(root, "paperclip-home");
@@ -224,7 +265,7 @@ describe("codex execute", () => {
   it("writes managed MCP gateways into Codex config and warns on overlapping direct entries without logging tokens", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-managed-mcp-"));
     const workspace = path.join(root, "workspace");
-    const commandPath = path.join(root, "codex");
+    const commandPath = path.join(root, process.platform === "win32" ? "codex.exe" : "codex");
     const capturePath = path.join(root, "capture.json");
     const sharedCodexHome = path.join(root, "shared-codex-home");
     const paperclipHome = path.join(root, "paperclip-home");
@@ -341,7 +382,7 @@ describe("codex execute", () => {
   it("emits a command note that Codex auto-applies repo-scoped AGENTS.md files", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-execute-notes-"));
     const workspace = path.join(root, "workspace");
-    const commandPath = path.join(root, "codex");
+    const commandPath = path.join(root, process.platform === "win32" ? "codex.exe" : "codex");
     const capturePath = path.join(root, "capture.json");
     await fs.mkdir(workspace, { recursive: true });
     await writeFakeCodexCommand(commandPath);
@@ -400,7 +441,7 @@ describe("codex execute", () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-execute-meta-"));
     const workspace = path.join(root, "workspace");
     const binDir = path.join(root, "bin");
-    const commandPath = path.join(binDir, "codex");
+    const commandPath = path.join(binDir, process.platform === "win32" ? "codex.exe" : "codex");
     const capturePath = path.join(root, "capture.json");
     await fs.mkdir(workspace, { recursive: true });
     await fs.mkdir(binDir, { recursive: true });
@@ -450,9 +491,9 @@ describe("codex execute", () => {
 
       expect(result.exitCode).toBe(0);
       expect(result.errorMessage).toBeNull();
-      expect(loggedCommand).toBe(commandPath);
+      expect(await fs.realpath(String(loggedCommand))).toBe(await fs.realpath(commandPath));
       expect(loggedEnv.HOME).toBe(root);
-      expect(loggedEnv.PAPERCLIP_RESOLVED_COMMAND).toBe(commandPath);
+      expect(await fs.realpath(loggedEnv.PAPERCLIP_RESOLVED_COMMAND!)).toBe(await fs.realpath(commandPath));
     } finally {
       if (previousHome === undefined) delete process.env.HOME;
       else process.env.HOME = previousHome;
@@ -465,9 +506,9 @@ describe("codex execute", () => {
   it("injects bridge env into sandbox-managed remote runs", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-execute-sandbox-"));
     const localWorkspace = path.join(root, "workspace");
-    const remoteWorkspace = path.join(root, "sandbox");
+    const remoteWorkspace = sandboxPath(path.join(root, "sandbox"));
     const binDir = path.join(root, "bin");
-    const commandPath = path.join(binDir, "codex");
+    const commandPath = path.join(binDir, process.platform === "win32" ? "codex.exe" : "codex");
     const capturePath = path.join(remoteWorkspace, "capture.json");
     const previousHome = process.env.HOME;
     const previousPath = process.env.PATH;
@@ -525,7 +566,7 @@ describe("codex execute", () => {
       expect(result.errorMessage).toBeNull();
 
       const capture = JSON.parse(await fs.readFile(capturePath, "utf8")) as CapturePayload;
-      expect(capture.codexHome).toBe(path.join(remoteWorkspace, ".paperclip-runtime", "codex", "home"));
+      expect(sandboxPath(capture.codexHome!)).toBe(path.join(remoteWorkspace, ".paperclip-runtime", "codex", "home"));
       expect(capture.paperclipApiUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
       expect(capture.paperclipApiKey).not.toBe("run-jwt-token");
       expect(capture.paperclipApiBridgeMode).toBe("queue_v1");
@@ -541,7 +582,7 @@ describe("codex execute", () => {
   it.each([false, true])("delivers oversized wake context through stdin (sandbox=%s)", async (sandbox) => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-execute-wake-"));
     const workspace = path.join(root, "workspace");
-    const commandPath = path.join(root, "codex");
+    const commandPath = path.join(root, process.platform === "win32" ? "codex.exe" : "codex");
     const capturePath = path.join(root, "capture.json");
     await fs.mkdir(workspace, { recursive: true });
     await writeFakeCodexCommand(commandPath);
@@ -628,7 +669,7 @@ describe("codex execute", () => {
           providerKey: "test",
           environmentId: "env-1",
           leaseId: "lease-1",
-          remoteCwd: workspace,
+          remoteCwd: sandboxPath(workspace),
           timeoutMs: 30_000,
           runner: createLocalSandboxRunner(),
         } : undefined,
@@ -662,10 +703,11 @@ describe("codex execute", () => {
   it("keeps real assignment markdown and current wake events single-owned at the CLI boundary", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-context-owner-"));
     const workspace = path.join(root, "workspace");
-    const commandPath = path.join(root, "codex");
+    const commandPath = path.join(root, process.platform === "win32" ? "codex.exe" : "codex");
     const capturePath = path.join(root, "capture.json");
     await fs.mkdir(workspace, { recursive: true });
     await writeFakeCodexCommand(commandPath);
+    await seedSharedCodexAuth(root);
     const markdown = buildPaperclipTaskMarkdown({
       issue: { id: "issue-1", identifier: "PAP-900", title: "Repeat phrase Repeat phrase", description: "Repeat phrase Repeat phrase" },
       wakeComments: [
@@ -740,7 +782,7 @@ describe("codex execute", () => {
   it("classifies remote-compaction high-demand failures as retryable transient upstream errors", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-execute-transient-"));
     const workspace = path.join(root, "workspace");
-    const commandPath = path.join(root, "codex");
+    const commandPath = path.join(root, process.platform === "win32" ? "codex.exe" : "codex");
     await fs.mkdir(workspace, { recursive: true });
     await writeFailingCodexCommand(
       commandPath,
@@ -791,10 +833,10 @@ describe("codex execute", () => {
 
   it.each([true, false])("retries missing resume only before a session starts (started=%s)", async (started) => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-resume-stop-"));
-    const commandPath = path.join(root, "codex");
+    const commandPath = path.join(root, process.platform === "win32" ? "codex.exe" : "codex");
     const attemptsPath = path.join(root, "attempts");
     await seedSharedCodexAuth(root);
-    await fs.writeFile(commandPath, `#!/usr/bin/env node
+    await writeNodeFixture(commandPath, `#!/usr/bin/env node
 const fs = require("node:fs");
 fs.appendFileSync(${JSON.stringify(attemptsPath)}, "attempt\\n");
 if (process.argv.includes("resume")) {
@@ -806,7 +848,7 @@ if (process.argv.includes("resume")) {
   console.log(JSON.stringify({ type: "turn.completed", usage: { input_tokens: 1, output_tokens: 1 } }));
 }
 `, "utf8");
-    await fs.chmod(commandPath, 0o755);
+
     try {
       const result = await execute({
         runId: `resume-stop-${started}`,
@@ -825,7 +867,7 @@ if (process.argv.includes("resume")) {
   it("classifies mid-turn harness crashes as retryable transient upstream errors", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-execute-harness-crash-"));
     const workspace = path.join(root, "workspace");
-    const commandPath = path.join(root, "codex");
+    const commandPath = path.join(root, process.platform === "win32" ? "codex.exe" : "codex");
     await fs.mkdir(workspace, { recursive: true });
     // Faithful to the observed MCP transport crash: the protocol stream starts,
     // then the process dies with only a harness tracing line on stderr — no
@@ -836,8 +878,8 @@ console.log(JSON.stringify({ type: "item.completed", item: { type: "agent_messag
 console.error("2026-07-23T22:58:56.007042Z ERROR rmcp::transport::worker: worker quit with fatal: Transport channel closed, when UnexpectedContentType(Some(\\"text/plain\\"))");
 process.exit(1);
 `;
-    await fs.writeFile(commandPath, script, "utf8");
-    await fs.chmod(commandPath, 0o755);
+    await writeNodeFixture(commandPath, script, "utf8");
+
 
     const previousHome = process.env.HOME;
     process.env.HOME = root;
@@ -887,7 +929,7 @@ process.exit(1);
   it("persists retry-not-before metadata for codex provider quota failures", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-execute-usage-limit-"));
     const workspace = path.join(root, "workspace");
-    const commandPath = path.join(root, "codex");
+    const commandPath = path.join(root, process.platform === "win32" ? "codex.exe" : "codex");
     await fs.mkdir(workspace, { recursive: true });
     await writeFailingCodexCommand(
       commandPath,
@@ -952,7 +994,7 @@ process.exit(1);
   it("classifies Codex refresh-token auth failures without credential telemetry", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-execute-refresh-token-"));
     const workspace = path.join(root, "workspace");
-    const commandPath = path.join(root, "codex");
+    const commandPath = path.join(root, process.platform === "win32" ? "codex.exe" : "codex");
     await fs.mkdir(workspace, { recursive: true });
     await writeFailingCodexCommand(commandPath, "OAuth failed: refresh_token_reused");
 
@@ -1002,7 +1044,7 @@ process.exit(1);
   it("uses safer invocation settings and a fresh-session handoff for codex transient fallback retries", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-execute-fallback-"));
     const workspace = path.join(root, "workspace");
-    const commandPath = path.join(root, "codex");
+    const commandPath = path.join(root, process.platform === "win32" ? "codex.exe" : "codex");
     const capturePath = path.join(root, "capture.json");
     await fs.mkdir(workspace, { recursive: true });
     await writeFakeCodexCommand(commandPath);
@@ -1080,7 +1122,7 @@ process.exit(1);
   it("renders execution-stage wake instructions for reviewer and executor roles", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-execute-stage-wake-"));
     const workspace = path.join(root, "workspace");
-    const commandPath = path.join(root, "codex");
+    const commandPath = path.join(root, process.platform === "win32" ? "codex.exe" : "codex");
     const capturePath = path.join(root, "capture.json");
     await fs.mkdir(workspace, { recursive: true });
     await writeFakeCodexCommand(commandPath);
@@ -1237,7 +1279,7 @@ process.exit(1);
   it("renders an issue-scoped wake prompt even when the wake has no comments yet", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-execute-issue-wake-"));
     const workspace = path.join(root, "workspace");
-    const commandPath = path.join(root, "codex");
+    const commandPath = path.join(root, process.platform === "win32" ? "codex.exe" : "codex");
     const capturePath = path.join(root, "capture.json");
     await fs.mkdir(workspace, { recursive: true });
     await writeFakeCodexCommand(commandPath);
@@ -1326,7 +1368,7 @@ process.exit(1);
   it.each([{ conversationMode: false, resumedSession: true }, { conversationMode: true, resumedSession: true }, { conversationMode: true, resumedSession: false }])("retains current task policy (conversation=$conversationMode, resumed=$resumedSession)", async ({ conversationMode, resumedSession }) => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-execute-resume-wake-"));
     const workspace = path.join(root, "workspace");
-    const commandPath = path.join(root, "codex");
+    const commandPath = path.join(root, process.platform === "win32" ? "codex.exe" : "codex");
     const capturePath = path.join(root, "capture.json");
     const instructionsPath = path.join(root, "AGENTS.md");
     await fs.mkdir(workspace, { recursive: true });
@@ -1465,7 +1507,7 @@ process.exit(1);
   it("uses a worktree-isolated CODEX_HOME and mounts the operational skill by default", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-execute-"));
     const workspace = path.join(root, "workspace");
-    const commandPath = path.join(root, "codex");
+    const commandPath = path.join(root, process.platform === "win32" ? "codex.exe" : "codex");
     const capturePath = path.join(root, "capture.json");
     const sharedCodexHome = path.join(root, "shared-codex-home");
     const paperclipHome = path.join(root, "paperclip-home");
@@ -1580,10 +1622,10 @@ process.exit(1);
     }
   });
 
-  it("isolates connector skills by agent and revision without changing the selected model identity", async () => {
+  it("isolates connector skills by agent and revision without changing the selected model identity", { timeout: process.platform === "win32" ? 40_000 : 15_000 }, async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-connector-codex-"));
     const workspace = path.join(root, "workspace");
-    const command = path.join(root, "codex");
+    const command = path.join(root, process.platform === "win32" ? "codex.exe" : "codex");
     const capture = path.join(root, "capture.json");
     const sourceHome = path.join(root, "selected-account");
     const skillSource = path.join(root, "skill-v1");
@@ -1617,7 +1659,7 @@ process.exit(1);
     };
     try {
       const first = await invoke("agent-1", "a".repeat(64));
-      expect(first.codexHome).toContain("connector-runtimes/agent-1/");
+      expect(first.codexHome).toContain(path.sep + path.join("connector-runtimes", "agent-1") + path.sep);
       expect(await fs.realpath(path.join(first.codexHome!, "auth.json"))).toBe(await fs.realpath(path.join(sourceHome, "auth.json")));
       expect(await fs.readFile(path.join(first.codexHome!, "skills/agentmail/SKILL.md"), "utf8")).toContain("inbox one");
       await expect(fs.stat(path.join(sourceHome, "skills/agentmail"))).rejects.toMatchObject({ code: "ENOENT" });
@@ -1645,7 +1687,7 @@ process.exit(1);
   it("respects an explicit CODEX_HOME config override even in worktree mode", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-execute-explicit-"));
     const workspace = path.join(root, "workspace");
-    const commandPath = path.join(root, "codex");
+    const commandPath = path.join(root, process.platform === "win32" ? "codex.exe" : "codex");
     const capturePath = path.join(root, "capture.json");
     const sharedCodexHome = path.join(root, "shared-codex-home");
     const explicitCodexHome = path.join(root, "explicit-codex-home");
