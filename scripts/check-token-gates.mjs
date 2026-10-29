@@ -90,7 +90,7 @@ function loadAllowlist(cssPath) {
   const css = readFileSync(cssPath, "utf8");
   const entries = [];
   const lineRe = /^\s*\*\s*allow\s+(\S+)\s+(?:—|-{1,2})\s*(.*)$/;
-  for (const rawLine of css.split("\n")) {
+  for (const rawLine of css.split(/\r?\n/)) {
     const m = rawLine.match(lineRe);
     if (m) {
       entries.push({ path: m[1], reason: m[2].trim() });
@@ -332,8 +332,8 @@ function main() {
   process.exitCode = 0;
 }
 
-// Windows path separators never appear in this repo's CI, but keep relative
-// paths POSIX-style for allowlist substring matching regardless of platform.
+// Keep relative paths POSIX-style for allowlist substring matching on both
+// Windows and Unix checkouts.
 function relPathToPosix(filePath) {
   return ("ui/src/" + relative(UI_SRC, filePath)).split("\\").join("/");
 }

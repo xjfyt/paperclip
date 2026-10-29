@@ -9,7 +9,9 @@ import { skillFrontmatterSchema } from "../src/frontmatter.ts";
 
 // Keep the standalone mock on the production parser and schema without adding
 // a runtime dependency on a Paperclip workspace package.
-const source = await readFile(new URL("../src/frontmatter.ts", import.meta.url), "utf8");
+// The generated Runner module has canonical LF bytes even when the source was
+// checked out as CRLF. Content comparisons below remain strict.
+const source = (await readFile(new URL("../src/frontmatter.ts", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 function section(start: string, end?: string) {
   const from = source.indexOf(start);
   const to = end ? source.indexOf(end, from + start.length) : source.length;

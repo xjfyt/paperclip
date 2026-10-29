@@ -37,8 +37,8 @@ const walk = directory => fs.readdirSync(directory, { withFileTypes: true }).fla
 });
 const excluded = args.filter(arg => arg.startsWith('--exclude=')).map(arg => arg.slice(10).replace(/\\\\(.)/gs, '$1'));
 const files = walk('src').filter(file => /\\.(?:test|spec)\\.[cm]?[jt]sx?$/.test(file))
-  .filter(file => filters.some(filter => file.toLocaleLowerCase().includes(filter.toLocaleLowerCase())))
-  .filter(file => mode === 'ignore-excludes' || !excluded.includes(file));
+  .filter(file => filters.some(filter => file.split(path.sep).join('/').toLocaleLowerCase().includes(filter.toLocaleLowerCase())))
+  .filter(file => mode === 'ignore-excludes' || !excluded.includes(file.split(path.sep).join('/')));
 if (mode === 'exit') process.exit(3);
 if (mode === 'drift') fs.appendFileSync('src/00.test.ts', '// drift');
 const testResults = files.map(file => ({ name: path.resolve(file), status: 'passed', assertionResults: [{ status: mode === 'skip' ? 'pending' : 'passed' }] }));

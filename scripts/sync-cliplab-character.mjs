@@ -20,7 +20,7 @@ export const PAPERCLIP_CHARACTER: Definition = ${JSON.stringify(definition, null
 if (process.argv.includes("--check")) {
   let current = "";
   try { current = readFileSync(target, "utf8"); } catch { /* missing counts as drift */ }
-  if (current !== body) { console.error(`packages/shared/src/cliplab/character.ts is out of date; run node scripts/sync-cliplab-character.mjs`); process.exit(1); }
+  if (current.replace(/\r\n/g, "\n") !== body.replace(/\r\n/g, "\n")) { console.error(`packages/shared/src/cliplab/character.ts is out of date; run node scripts/sync-cliplab-character.mjs`); process.exit(1); }
   console.log("cliplab character in sync");
 } else {
   writeFileSync(target, body);

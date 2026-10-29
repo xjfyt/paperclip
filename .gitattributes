@@ -1,1 +1,14 @@
 patches/*.patch whitespace=-space-before-tab
+# Stable text for the maintained entrypoint and reproducible dependency graph.
+/README.md text eol=lf
+/pnpm-lock.yaml text eol=lf
+# Runner manifests attest source bytes and its generated modules compare exact
+# text. Keep those bytes stable across Windows and Unix checkouts; binary
+# fixtures remain binary through text=auto.
+packages/paperclip-runner/** text=auto eol=lf
+# Catalog manifests also record the exact bytes of bundled Markdown resources.
+packages/skills-catalog/catalog/** text=auto eol=lf
+packages/teams-catalog/catalog/** text=auto eol=lf
+# Deployed migration receipts attest original SQL bytes. Preserve those hashes
+# across Windows checkouts instead of inventing platform-dependent receipts.
+packages/db/src/migrations/** text=auto eol=lf

@@ -1096,6 +1096,9 @@ importers:
         specifier: 1.0.88
         version: 1.0.88
     devDependencies:
+      '@paperclipai/paperclip-eval-kernel':
+        specifier: workspace:*
+        version: link:../packages/paperclip-eval-kernel
       '@paperclipai/paperclip-runner':
         specifier: workspace:*
         version: link:../packages/paperclip-runner
