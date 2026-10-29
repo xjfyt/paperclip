@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createAgentHireSchema, createIssueThreadInteractionSchema, updateIssueSchema } from "@paperclipai/shared";
 import { runnerApiReference } from "../services/native-runtime/runner-api-reference.js";
 
-const reference = readFileSync(new URL("../../../skills/paperclip/references/api-reference.md", import.meta.url), "utf8");
+const reference = readFileSync(new URL("../../../skills/paperclip/references/api-reference.md", import.meta.url), "utf8").replaceAll("\r\n", "\n");
 const uuid = "11111111-1111-4111-8111-111111111111";
 const examples = [...reference.matchAll(/^(POST|PATCH) (\/api\/[^\s]+)\n(\{[^\n]*\}|\{\n[\s\S]*?\n\})/gm)]
   .flatMap((match) => {
@@ -30,7 +30,7 @@ describe("published hiring and human-input examples", () => {
   });
 
   it("includes a complete valid text-field recipe in the skill itself", () => {
-    const skill = readFileSync(new URL("../../../skills/paperclip/SKILL.md", import.meta.url), "utf8");
+    const skill = readFileSync(new URL("../../../skills/paperclip/SKILL.md", import.meta.url), "utf8").replaceAll("\r\n", "\n");
     const section = skill.split('<a id="asking-for-human-input"></a>')[1]!;
     const body = JSON.parse(section.match(/```json\n([\s\S]*?)\n```/)![1]);
     const normalized = createIssueThreadInteractionSchema.parse(substituteIds(body));
