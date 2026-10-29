@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AdapterExecutionTarget } from "@paperclipai/adapter-utils/execution-target";
+import { protectNewPrivatePath } from "@paperclipai/shared/private-filesystem-permissions";
 
 const {
   ensureAdapterExecutionTargetDirectory,
@@ -77,6 +78,7 @@ const {
       // Return a real managed home seeded with credentials so the probe's
       // minimal-home copy step (auth.json/config.toml) has something to read.
       const dir = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-managed-codex-home-"));
+      protectNewPrivatePath(dir);
       await fs.writeFile(`${dir}/auth.json`, JSON.stringify({ OPENAI_API_KEY: "sk-managed" }));
       await fs.writeFile(`${dir}/config.toml`, "model = \"gpt-5\"\n");
       return dir;
@@ -116,6 +118,7 @@ describe("codex remote environment diagnostics", () => {
 
   async function makeScratchDir(prefix: string): Promise<string> {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
+    protectNewPrivatePath(dir);
     scratchDirs.push(dir);
     return dir;
   }

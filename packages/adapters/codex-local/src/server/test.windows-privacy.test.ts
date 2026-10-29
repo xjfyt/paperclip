@@ -6,6 +6,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { hasPrivatePermissions } from "@paperclipai/shared/private-filesystem-permissions";
 import { installIsolatedHostFixture } from "@paperclipai/adapter-utils/test-fixtures/isolated-host";
 import { writeCliFixture } from "@paperclipai/adapter-utils/test-fixtures/native-cli";
+import { setFixtureAcl } from "@paperclipai/adapter-utils/test-fixtures/windows-private-acl";
+import { fixtureAcl } from "./__test-fixtures__/private-permissions.js";
 
 const observation = vi.hoisted(() => ({
   writes: [] as string[], roots: [] as string[], failProtection: false, remoteExecutions: 0,
@@ -74,6 +76,36 @@ beforeEach(() => {
   vi.stubEnv("OPENAI_API_KEY", undefined);
 });
 describe.skipIf(process.platform !== "win32")("Windows private Codex probe storage", () => {
+  for (const file of ["auth.json", "config.toml"]) {
+    it.each(["broad", "symlink"] as const)(`refuses an existing ${file} %s source without copying, changing bytes or repairing ACL`, async (kind) => {
+      const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-source-fixture-"));
+      const home = path.join(root, "external-home");
+      await fs.mkdir(home);
+      await fs.writeFile(path.join(home, "auth.json"), '{"tokens":{"access_token":"fixture-source-secret"}}');
+      await fs.writeFile(path.join(home, "config.toml"), 'model = "fixture"\n');
+      const source = path.join(home, file);
+      let target = source;
+      if (kind === "symlink") {
+        target = path.join(root, `original-${file}`);
+        await fs.rename(source, target);
+        await fs.symlink(target, source, "file");
+      } else setFixtureAcl(root, source, true);
+      const beforeBytes = await fs.readFile(target);
+      const beforeAcl = fixtureAcl(target);
+      await expect(testEnvironment({ companyId: "company", adapterType: "codex_local",
+        config: { engine: "cli", command: "codex", cwd: root, env: { CODEX_HOME: home } },
+        executionTarget: { kind: "remote", transport: "sandbox", remoteCwd: "/remote/workspace", runner: { execute: async () => { throw new Error("unexpected transport"); } } },
+      })).rejects.toMatchObject({ code: "EACCES" });
+      expect(observation.writes).toEqual([]);
+      expect(observation.remoteExecutions).toBe(0);
+      expect(observation.roots).toHaveLength(1);
+      expect(existsSync(observation.roots[0]!)).toBe(false);
+      expect(await fs.readFile(target)).toEqual(beforeBytes);
+      expect(fixtureAcl(target)).toBe(beforeAcl);
+      expect((await fs.lstat(source)).isSymbolicLink()).toBe(kind === "symlink");
+      expect((await fs.readdir(home)).sort()).toEqual(["auth.json", "config.toml"]);
+    });
+  }
   for (const remote of [false, true]) {
     for (const failProtection of [false, true]) {
       it(`${remote ? "remote upload" : "local executable"} ${failProtection ? "refuses unavailable protection before writing or execution" : "protects real storage before its first credential write"}`, async () => {

@@ -39,6 +39,7 @@ import {
 import { resolveCodexExecutionEngineForRun, testCodexAcpEnvironment } from "./acp.js";
 import { ADAPTER_AUTH_MISSING_CHECK_CODE } from "./auth-check.js";
 import { checkCodexCliVersionForModel, codexHelloProbeModelRejectionCheck } from "./cli-version.js";
+import { assertExistingPrivateAuthFile } from "./codex-auth-seed-write.js";
 
 function summarizeStatus(checks: AdapterEnvironmentCheck[]): AdapterEnvironmentTestResult["status"] {
   if (checks.some((check) => check.level === "error")) return "fail";
@@ -160,16 +161,23 @@ async function prepareCodexHelloProbe(input: {
     catch (error) { await cleanup(); throw error; }
     let seededAuth = false;
     let seededConfig = false;
-    for (const file of ["auth.json", "config.toml"]) {
-      // `fs.readFile` follows the home's `auth.json` symlink into the host's
-      // `~/.codex`, so we copy the resolved bytes as a plain file.
-      const contents = await fs.readFile(path.join(effectiveHome, file)).catch(() => null);
-      if (contents) {
-        await fs.writeFile(path.join(probeHomeLocalDir, file), contents);
-        if (file === "auth.json") seededAuth = true;
-        if (file === "config.toml") seededConfig = true;
+    try {
+      // Match the run's Windows source policy before copying either file.
+      // Existing broad files or links are refused, never repaired or seeded.
+      for (const file of ["auth.json", "config.toml"]) {
+        await assertExistingPrivateAuthFile(path.join(effectiveHome, file));
       }
-    }
+      for (const file of ["auth.json", "config.toml"]) {
+        // POSIX source symlinks retain their existing dereference contract;
+        // the Windows validation above refuses links before either copy.
+        const contents = await fs.readFile(path.join(effectiveHome, file)).catch(() => null);
+        if (contents) {
+          await fs.writeFile(path.join(probeHomeLocalDir, file), contents);
+          if (file === "auth.json") seededAuth = true;
+          if (file === "config.toml") seededConfig = true;
+        }
+      }
+    } catch (error) { await cleanup(); throw error; }
 
     // When the host has no Codex credentials to seed, don't override CODEX_HOME.
     // Pointing Codex at an empty uploaded home would mask any login already
