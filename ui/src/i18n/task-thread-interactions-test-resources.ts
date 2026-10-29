@@ -1,4 +1,5 @@
 // Test only: integration composes contributions into runtime locales.
+import "./task-thread-receipts-test-resources";
 import { i18n } from "./index";
 import en from "./contributions/taskThreadInteractionsUi/en.json";
 import zh from "./contributions/taskThreadInteractionsUi/zh-CN.json";
