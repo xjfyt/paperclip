@@ -1,0 +1,17 @@
+{
+  "bypassSandbox": "サンドボックスを回避",
+  "bypassSandboxHelp": "サンドボックスの制限なしで Codex を実行します。ファイルシステムとネットワークへのアクセスに必要です。",
+  "enableSearch": "検索を有効化",
+  "enableSearchHelp": "実行中の Codex のウェブ検索機能を有効にします。",
+  "fastMode": "高速モード",
+  "fastModeHelp": "Codex の高速モードを有効にします。クレジットとトークンの消費が大幅に速くなります。GPT-6、GPT-5.6、GPT-5.5、GPT-5.4、および手動入力した Codex モデル ID に対応しています。",
+  "fastModeManual": "手動入力したこのモデルに高速モードの設定をそのまま渡します。Codex が拒否する場合は、スイッチをオフにしてください。",
+  "fastModeCredits": "高速モードは通常の Codex 実行よりもクレジットとトークンを大幅に速く消費します。",
+  "fastModeUnsupported": "高速モードは現在、{{models}} または手動入力したモデル ID でのみ動作します。モデルを切り替えるまで、Paperclip はこのスイッチを無視します。",
+  "enableChrome": "Chrome を有効化",
+  "enableChromeHelp": "--chrome を渡して Claude の Chrome 連携を有効にします。",
+  "skipPermissions": "権限確認をスキップ",
+  "skipPermissionsHelp": "対応している場合、アダプターの権限確認を自動承認して無人で実行します。",
+  "maxTurnsPerRun": "実行ごとの最大ターン数",
+  "maxTurnsPerRunHelp": "ハートビート実行ごとのエージェントターン（ツール呼び出し）の最大数。"
+}

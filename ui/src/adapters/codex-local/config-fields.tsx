@@ -1,4 +1,5 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
+import { useTranslation } from "../../i18n";
 import { AdapterMark } from "../../components/AdapterMark";
 import { DotRunnerConnection } from "../../components/DotRunnerConnection";
 import { configFieldsForSection } from "../config-sections";
@@ -8,7 +9,6 @@ import {
   ToggleField,
   DraftInput,
   DraftNumberInput,
-  help,
 } from "../../components/agent-config-primitives";
 import { ChoosePathButton } from "../../components/PathInstructionsModal";
 import { LocalWorkspaceRuntimeFields } from "../local-workspace-runtime-fields";
@@ -63,6 +63,7 @@ export function CodexLocalConfigFields({
   hideInstructionsFile,
   managedSandboxOnly,
 }: AdapterConfigFieldsProps) {
+  const { t } = useTranslation();
   const runnerManaged = adapterType === "paperclip_runner";
   // The execution engine picks which binary runs on the execution host, and the
   // ACP sub-fields below name host paths. The platform-managed environment owns
@@ -164,10 +165,10 @@ export function CodexLocalConfigFields({
   const supportedModelsLabel =
     CODEX_LOCAL_FAST_MODE_SUPPORTED_MODELS.join(", ");
   const fastModeMessage = fastModeManualModel
-    ? "Fast mode will be passed through for this manual model. If Codex rejects it, turn the toggle off."
+    ? t("agentRuntimeFieldsUi.fastModeManual")
     : fastModeSupported
-      ? "Fast mode consumes credits/tokens much faster than standard Codex runs."
-      : `Fast mode currently only works on ${supportedModelsLabel} or manual model IDs. Paperclip will ignore this toggle until the model is switched.`;
+      ? t("agentRuntimeFieldsUi.fastModeCredits")
+      : t("agentRuntimeFieldsUi.fastModeUnsupported", { models: supportedModelsLabel });
 
   return configFieldsForSection(section, (
     <>
@@ -748,8 +749,8 @@ export function CodexLocalConfigFields({
       {!runnerManaged && (
         <>
           <ToggleField
-            label="Bypass sandbox"
-            hint={help.dangerouslyBypassSandbox}
+            label={t("agentRuntimeFieldsUi.bypassSandbox")}
+            hint={t("agentRuntimeFieldsUi.bypassSandboxHelp")}
             checked={
               isCreate
                 ? values!.dangerouslyBypassSandbox
@@ -770,8 +771,8 @@ export function CodexLocalConfigFields({
             }
           />
           <ToggleField
-            label="Enable search"
-            hint={help.search}
+            label={t("agentRuntimeFieldsUi.enableSearch")}
+            hint={t("agentRuntimeFieldsUi.enableSearchHelp")}
             checked={
               isCreate
                 ? values!.search
@@ -784,8 +785,8 @@ export function CodexLocalConfigFields({
             }
           />
           <ToggleField
-            label="Fast mode"
-            hint={help.fastMode}
+            label={t("agentRuntimeFieldsUi.fastMode")}
+            hint={t("agentRuntimeFieldsUi.fastModeHelp")}
             checked={fastModeEnabled}
             onChange={(v) =>
               isCreate

@@ -1,0 +1,17 @@
+{
+  "bypassSandbox": "Bypass sandbox",
+  "bypassSandboxHelp": "Run Codex without sandbox restrictions. Required for filesystem/network access.",
+  "enableSearch": "Enable search",
+  "enableSearchHelp": "Enable Codex web search capability during runs.",
+  "fastMode": "Fast mode",
+  "fastModeHelp": "Enable Codex Fast mode. This burns credits/tokens much faster and is supported on GPT-6, GPT-5.6, GPT-5.5, GPT-5.4, and manual Codex model IDs.",
+  "fastModeManual": "Fast mode will be passed through for this manual model. If Codex rejects it, turn the toggle off.",
+  "fastModeCredits": "Fast mode consumes credits/tokens much faster than standard Codex runs.",
+  "fastModeUnsupported": "Fast mode currently only works on {{models}} or manual model IDs. Paperclip will ignore this toggle until the model is switched.",
+  "enableChrome": "Enable Chrome",
+  "enableChromeHelp": "Enable Claude's Chrome integration by passing --chrome.",
+  "skipPermissions": "Skip permissions",
+  "skipPermissionsHelp": "Run unattended by auto-approving adapter permission prompts when supported.",
+  "maxTurnsPerRun": "Max turns per run",
+  "maxTurnsPerRunHelp": "Maximum number of agentic turns (tool calls) per heartbeat run."
+}

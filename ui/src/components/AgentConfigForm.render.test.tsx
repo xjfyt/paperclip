@@ -3,6 +3,7 @@
 import "@/i18n/agent-setup-test-resources";
 import "@/i18n/agent-setup-login-test-resources";
 import { i18n } from "@/i18n";
+import { agentRuntimeFieldsMessages } from "@/i18n/agent-runtime-fields-test-resources";
 import { agentConfigurationMessages } from "@/i18n/agent-configuration-test-resources";
 import { useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -21,6 +22,7 @@ import { defaultCreateValues } from "./agent-config-defaults";
 import { buildNewAgentHirePayload } from "../lib/new-agent-hire-payload";
 import { ApiError } from "../api/client";
 import { aiConnectionsApi } from "../api/ai-connections";
+import { ClaudeLocalConfigFields } from "../adapters/claude-local/config-fields";
 import { CodexLocalConfigFields } from "../adapters/codex-local/config-fields";
 import type { AdapterConfigFieldsProps } from "../adapters/types";
 import { DEFAULT_CODEX_LOCAL_MODEL } from "@paperclipai/adapter-codex-local";
@@ -108,6 +110,7 @@ vi.mock("../context/CompanyContext", () => ({
   }),
 }));
 
+const actualLocalFields = vi.hoisted(() => ({ enabled: false }));
 vi.mock("../adapters", () => ({
   getUIAdapter: (type: string) => ({
     type,
@@ -116,7 +119,8 @@ vi.mock("../adapters", () => ({
     // adapter, so a test can assert the plumbing without rendering a real
     // adapter's fields.
     ConfigFields: (props: AdapterConfigFieldsProps) => {
-      if (type === "paperclip_runner") return <CodexLocalConfigFields {...props} />;
+      if (type === "paperclip_runner" || (actualLocalFields.enabled && type === "codex_local")) return <CodexLocalConfigFields {...props} />;
+      if (actualLocalFields.enabled && type === "claude_local") return <ClaudeLocalConfigFields {...props} />;
       const { adapterType, hideInstructionsFile, managedSandboxOnly } = props;
       return adapterType === "hermes_gateway"
         ? <div data-testid="hermes-gateway-config-fields">Hermes Gateway fields</div>
@@ -663,6 +667,7 @@ describe("AgentConfigForm environment selector", () => {
   let roots: Root[] = [];
 
   beforeEach(() => {
+    actualLocalFields.enabled = false;
     mockAgentsApi.adapterModels.mockResolvedValue([]);
     mockAgentsApi.detectModel.mockResolvedValue(null);
     mockAgentsApi.list.mockResolvedValue([]);
@@ -751,6 +756,55 @@ describe("AgentConfigForm environment selector", () => {
     document.body.innerHTML = "";
     vi.clearAllMocks();
   });
+
+  it.each((["en", "zh-CN", "es", "ja"] as const).flatMap(locale =>
+    (["codex_local", "claude_local"] as const).map(adapterType => ({ locale, adapterType }))))(
+    "mounts real $adapterType runtime fields with pending/error feedback and original payload in $locale",
+    async ({ locale, adapterType }) => {
+      actualLocalFields.enabled = true;
+      const isCodex = adapterType === "codex_local";
+      const config = { model: "customer/model-原文", instructionsFilePath: "/customer/AGENTS.md",
+        dangerouslyBypassApprovalsAndSandbox: false, search: false, fastMode: true,
+        chrome: false, dangerouslySkipPermissions: false, maxTurnsPerRun: 37,
+        env: { CUSTOMER_KEY: { type: "secret_ref", secretId: "secret-wire-id", version: "latest" } } };
+      let rejectTest!: (reason: unknown) => void;
+      // Every API call here is mocked; this renders configuration, not an agent run.
+      mockAgentsApi.testEnvironment.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectTest = reject; }));
+      const result = await renderForm([], { adapterType, defaultEnvironmentId: "environment-wire-id", adapterConfig: config }, { showAdapterTestEnvironmentButton: true });
+      roots.push(result.root);
+      const controls = result.container.querySelector('[data-config-section="configuration"]')!;
+      const originalLabel = isCodex ? "Enable search" : "Enable Chrome";
+      const toggle = controls.querySelector<HTMLButtonElement>(`[role="switch"][aria-label="${originalLabel}"]`)!;
+      expect(toggle.getAttribute("aria-checked")).toBe("false");
+      await clickByText(result.container, "Test"); await flushReact();
+      const testButton = findButton(result.container, "Testing…")!;
+      const originalCall = structuredClone(mockAgentsApi.testEnvironment.mock.calls[0]);
+      toggle.focus();
+      await act(async () => { await i18n.changeLanguage(locale); }); await flushReact();
+      const messages = agentRuntimeFieldsMessages[locale];
+      expect(toggle.getAttribute("aria-label")).toBe(isCodex ? messages.enableSearch : messages.enableChrome);
+      expect(document.activeElement).toBe(toggle); expect(toggle.getAttribute("aria-checked")).toBe("false");
+      expect(testButton.textContent).toBe(agentConfigurationMessages[locale].testPending); expect(testButton.disabled).toBe(true);
+      expect(mockAgentsApi.testEnvironment).toHaveBeenCalledOnce(); expect(mockAgentsApi.testEnvironment.mock.calls[0]).toEqual(originalCall);
+      expect(result.onSave).not.toHaveBeenCalled();
+      if (isCodex) expect(controls.textContent).toContain(messages.fastModeManual);
+      else {
+        expect(controls.textContent).toContain(messages.maxTurnsPerRun);
+        expect(controls.querySelector<HTMLInputElement>('input[type="number"]')?.value).toBe("37");
+      }
+      await act(async () => rejectTest(new Error("Provider diagnostic --raw 原文"))); await flushReact();
+      expect(result.container.textContent).toContain("Provider diagnostic --raw 原文");
+      expect(testButton.disabled).toBe(false); expect(testButton.textContent).toBe(agentConfigurationMessages[locale].test);
+      await clickElement(toggle);
+      await clickByText(result.container, i18n.t("common.save"));
+      expect(result.onSave).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+        adapterConfig: { ...config, [isCodex ? "search" : "chrome"]: true },
+      }));
+      expect(mockAgentsApi.testEnvironment).toHaveBeenCalledOnce();
+      expect(mockAgentsApi.startAdapterAuthLogin).not.toHaveBeenCalled();
+      expect(mockAgentsApi.startClaudeSetupTokenLogin).not.toHaveBeenCalled();
+    },
+  );
 
   it.each(["en", "zh-CN", "es", "ja"] as const)("preserves actual configuration drafts, focus, selections and save payload across %s switch", async locale => {
     const environment = makeEnvironment({ id: "sandbox-raw-id", name: "Customer environment 原文", driver: "sandbox", config: { provider: "daytona" } });

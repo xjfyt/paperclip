@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n";
 import { configFieldsForSection } from "../config-sections";
 import type { AdapterConfigFieldsProps } from "../types";
 import {
@@ -5,7 +6,6 @@ import {
   ToggleField,
   DraftInput,
   DraftNumberInput,
-  help,
 } from "../../components/agent-config-primitives";
 import { ChoosePathButton } from "../../components/PathInstructionsModal";
 import { LocalWorkspaceRuntimeFields } from "../local-workspace-runtime-fields";
@@ -82,6 +82,7 @@ export function ClaudeLocalAdvancedFields({
   mark,
   managedSandboxOnly,
 }: AdapterConfigFieldsProps) {
+  const { t } = useTranslation();
   const rawEngine = isCreate
     ? values!.claudeEngine ?? "auto"
     : eff("adapterConfig", "engine", String(config.engine ?? "auto"));
@@ -229,8 +230,8 @@ export function ClaudeLocalAdvancedFields({
         </>
       )}
       <ToggleField
-        label="Enable Chrome"
-        hint={help.chrome}
+        label={t("agentRuntimeFieldsUi.enableChrome")}
+        hint={t("agentRuntimeFieldsUi.enableChromeHelp")}
         checked={
           isCreate
             ? values!.chrome
@@ -243,8 +244,8 @@ export function ClaudeLocalAdvancedFields({
         }
       />
       <ToggleField
-        label="Skip permissions"
-        hint={help.dangerouslySkipPermissions}
+        label={t("agentRuntimeFieldsUi.skipPermissions")}
+        hint={t("agentRuntimeFieldsUi.skipPermissionsHelp")}
         checked={
           isCreate
             ? values!.dangerouslySkipPermissions
@@ -260,7 +261,7 @@ export function ClaudeLocalAdvancedFields({
             : mark("adapterConfig", "dangerouslySkipPermissions", v)
         }
       />
-      <Field label="Max turns per run" hint={help.maxTurnsPerRun}>
+      <Field label={t("agentRuntimeFieldsUi.maxTurnsPerRun")} hint={t("agentRuntimeFieldsUi.maxTurnsPerRunHelp")}>
         {isCreate ? (
           <input
             type="number"

@@ -1,0 +1,17 @@
+{
+  "bypassSandbox": "绕过沙箱",
+  "bypassSandboxHelp": "运行 Codex 时不受沙箱限制。访问文件系统和网络需要启用此项。",
+  "enableSearch": "启用搜索",
+  "enableSearchHelp": "启用 Codex 在运行期间的网页搜索功能。",
+  "fastMode": "快速模式",
+  "fastModeHelp": "启用 Codex 快速模式。这会大幅加快额度和 token 的消耗，支持 GPT-6、GPT-5.6、GPT-5.5、GPT-5.4 及手动输入的 Codex 模型 ID。",
+  "fastModeManual": "此手动输入的模型将直接使用快速模式设置。如果 Codex 拒绝此设置，请关闭开关。",
+  "fastModeCredits": "快速模式消耗额度和 token 的速度远高于标准 Codex 运行。",
+  "fastModeUnsupported": "快速模式目前仅支持 {{models}} 或手动输入的模型 ID。切换模型之前，Paperclip 将忽略此开关。",
+  "enableChrome": "启用 Chrome",
+  "enableChromeHelp": "通过传入 --chrome 启用 Claude 的 Chrome 集成。",
+  "skipPermissions": "跳过权限确认",
+  "skipPermissionsHelp": "在适配器支持时自动批准权限提示，以便无人值守运行。",
+  "maxTurnsPerRun": "每次运行的最大轮数",
+  "maxTurnsPerRunHelp": "每次心跳运行中智能体轮次（工具调用）的最大数量。"
+}
