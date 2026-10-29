@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import "@/i18n/inline-editor-test-resources";
 
 import { act, forwardRef, useImperativeHandle, useRef, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";

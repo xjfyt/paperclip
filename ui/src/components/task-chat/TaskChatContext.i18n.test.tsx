@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import "@/i18n/inline-editor-test-resources";
 import { act, forwardRef, useImperativeHandle, useRef, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
