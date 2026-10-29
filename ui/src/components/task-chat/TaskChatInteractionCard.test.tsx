@@ -17,6 +17,7 @@ import {
   pendingRequestCheckboxConfirmationInteraction,
   pendingRequestItemVerdictsInteraction,
 } from "@/fixtures/issueThreadInteractionFixtures";
+import "@/i18n/task-thread-interactions-test-resources";
 import { TaskChatInteractionCard } from "./TaskChatInteractionCard";
 import { TaskChatThreadView } from "./TaskChatThreadView";
 import type { TaskChatInteractionItem } from "./task-chat-model";
