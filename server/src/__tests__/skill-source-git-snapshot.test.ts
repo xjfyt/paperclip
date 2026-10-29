@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { chmod, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -12,7 +13,7 @@ vi.mock('node:child_process', async importOriginal => {
     interception.commands.push({ args, cwd: String(options.cwd), env: options.env! });
     if (interception.hang && args.includes('fetch')) return actual.spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], options);
     // Exercise real Git objects/processes without depending on the network in CI.
-    const localArgs = args.map(arg => arg === 'https://github.com/acme/skills.git' ? `file://${interception.remote}` : arg);
+    const localArgs = args.map(arg => arg === 'https://github.com/acme/skills.git' ? pathToFileURL(interception.remote).href : arg);
     if (args.includes('fetch')) localArgs.unshift('-c', 'protocol.file.allow=always');
     const child = actual.spawn(command, localArgs, options);
     if (args.includes('fetch')) child.once('close', () => { interception.closedFetches++; });
@@ -28,6 +29,8 @@ beforeAll(async () => {
   directory = await mkdtemp(path.join(os.tmpdir(), 'paperclip-snapshot-fixture-'));
   interception.remote = directory;
   await git('init', '-b', 'feature/skills');
+  await git('config', 'core.autocrlf', 'false');
+  await git('config', 'core.symlinks', 'true');
   await mkdir(path.join(directory, '.agents/deep/scripts'), { recursive: true });
   await writeFile(path.join(directory, '.agents/deep/SKILL.md'), '---\nname: skill\ndescription: Useful\n---\nInstructions');
   await writeFile(path.join(directory, '.agents/deep/scripts/run.sh'), '#!/bin/sh\ntouch SHOULD_NOT_RUN\n');
@@ -35,7 +38,10 @@ beforeAll(async () => {
   await writeFile(path.join(directory, '.agents/deep/asset.bin'), Buffer.from([0, 255, 137, 13, 10]));
   await writeFile(path.join(directory, '.gitattributes'), '.agents/deep/asset.bin export-ignore\n*.md export-subst\n');
   await symlink('/etc/passwd', path.join(directory, '.agents/deep/link'));
-  await git('add', '.'); await git('commit', '-m', 'Fixture');
+  await git('add', '.');
+  // The fixture models a Git executable bit, which NTFS chmod cannot encode.
+  await git('update-index', '--chmod=+x', '.agents/deep/scripts/run.sh');
+  await git('commit', '-m', 'Fixture');
   commit = (await git('rev-parse', 'HEAD')).stdout.trim();
   await git('update-index', '--add', '--cacheinfo', `160000,${commit},external/submodule`);
   await git('commit', '-m', 'Gitlink');
