@@ -178,3 +178,14 @@ it("clears a locally returned promotion receipt when authorization is subsequent
   expect(host.querySelector('a[href="/issues/created-task"]')).toBeNull();
   expect(host.textContent).not.toContain(receipt.requestId);
 });
+it("does not let an old manual import overwrite newer input or duplicate same-tick submissions", async () => {
+  let resolve!: (value: unknown) => void; calls.post.mockReturnValue(new Promise(done => { resolve = done; }));
+  await mount(); const form = host.querySelector("form")!;
+  await setField(form, "title", "First draft"); await setField(form, "product", "App"); await setField(form, "text", "First text");
+  await act(async () => { form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
+  expect(calls.post).toHaveBeenCalledTimes(1);
+  await setField(form, "title", "New draft"); await act(async () => resolve({ item: source, duplicate: false })); await flush();
+  expect([...host.querySelectorAll("input")].some(input => input.value === "New draft")).toBe(true);
+  expect(host.textContent).not.toContain(i18n.t("feedbackUi.imported"));
+  expect(host.querySelectorAll("form")).toHaveLength(1);
+});

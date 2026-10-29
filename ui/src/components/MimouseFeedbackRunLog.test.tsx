@@ -3,10 +3,10 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { i18n, runLogMessages } from "@/i18n/feedback-run-log-test-resources";
-import { MimouseFeedbackRunLog } from "./MimouseFeedbackRunLog";
-const calls = vi.hoisted(() => ({ post: vi.fn(), imported: vi.fn() }));
+import { MimouseFeedbackRunLog, MimouseFeedbackRunLogSource } from "./MimouseFeedbackRunLog";
+const calls = vi.hoisted(() => ({ post: vi.fn(), get: vi.fn(), imported: vi.fn() }));
 vi.mock("@/api/client", () => ({ api: { post: calls.post } }));
-vi.mock("@/api/private-feedback", () => ({ privateFeedbackGet: vi.fn() }));
+vi.mock("@/api/private-feedback", () => ({ privateFeedbackGet: calls.get }));
 vi.mock("@/components/ui/dialog", () => ({ Dialog: ({ open, children }: { open: boolean; children: ReactNode }) => open ? <div role="dialog">{children}</div> : null,
   DialogContent: ({ children }: { children: ReactNode }) => <div>{children}</div>, DialogHeader: ({ children }: { children: ReactNode }) => <div>{children}</div>, DialogTitle: ({ children }: { children: ReactNode }) => <h2>{children}</h2>, DialogDescription: ({ children }: { children: ReactNode }) => <p>{children}</p> }));
 const runId = "11111111-1111-4111-8111-111111111111";
@@ -48,4 +48,15 @@ it("freezes same-attempt retries, prevents same-tick duplicates and ignores late
 it("keeps raw identifiers while changing only local copy in all four languages", async () => {
   await render(); await select(); await confirm();
   for (const [locale, messages] of Object.entries(runLogMessages)) { await act(async () => { await i18n.changeLanguage(locale); }); expect(host.textContent).toContain(messages.boundary); expect(host.textContent).toContain(runId); expect(host.textContent).toContain(messages.notReproduced); expect((host.querySelector('input[type="checkbox"]') as HTMLInputElement).checked).toBe(true); }
+});
+
+it("checks source access explicitly and fences old identity receipts", async () => {
+  const item = { id: "source-a", sourceKind: "application_log", sourceInstance: "internal.run-log.v1", text: JSON.stringify({ ...reference, companyId: runId }) } as import("@paperclipai/shared").FeedbackInboxItem;
+  let resolve!: (value: unknown) => void; calls.get.mockReturnValue(new Promise(done => { resolve = done; }));
+  await act(async () => root.render(<MimouseFeedbackRunLogSource companyId="company-a" userId="one" sessionId="one" item={item} />));
+  expect(calls.get).not.toHaveBeenCalled(); await click(button("verifySource")); expect(calls.get).toHaveBeenCalledWith("/companies/company-a/feedback-inbox/source-a/run-log-source", expect.any(AbortSignal));
+  const signal = calls.get.mock.calls[0][1] as AbortSignal;
+  await act(async () => root.render(<MimouseFeedbackRunLogSource companyId="company-a" userId="two" sessionId="two" item={item} />)); expect(signal.aborted).toBe(true);
+  await act(async () => resolve({ reference })); await flush(); expect(host.textContent).not.toContain(i18n.t("feedbackRunLogUi.sourceVerified"));
+  calls.get.mockRejectedValue(new Error("PRIVATE_ORIGINAL_ERROR")); await click(button("verifySource")); expect(host.textContent).toContain(i18n.t("feedbackRunLogUi.sourceUnavailable")); expect(host.textContent).not.toContain("PRIVATE_ORIGINAL_ERROR");
 });

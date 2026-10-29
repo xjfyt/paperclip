@@ -19,5 +19,6 @@
   "importError": "No se confirmó la importación. Reintenta la misma solicitud o cancela y vuelve a previsualizar.",
   "verifySource": "Comprobar acceso al origen",
   "sourceVerified": "Acceso e identidad del origen verificados ahora. No se cargó contenido del registro.",
-  "sourceUnavailable": "El origen no está disponible o cambió. Ver esta referencia no concede acceso."
+  "sourceUnavailable": "El origen no está disponible o cambió. Ver esta referencia no concede acceso.",
+  "unknown": "Desconocido"
 }

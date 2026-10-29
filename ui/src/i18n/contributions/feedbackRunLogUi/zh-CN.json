@@ -19,5 +19,6 @@
   "importError": "尚未确认导入成功。可重试同一请求，或取消后重新预览。",
   "verifySource": "检查原来源访问权限",
   "sourceVerified": "已重新验证原来源权限与身份，未加载日志内容。",
-  "sourceUnavailable": "原来源不可用或已变化。查看此引用不会授予来源访问权限。"
+  "sourceUnavailable": "原来源不可用或已变化。查看此引用不会授予来源访问权限。",
+  "unknown": "未知"
 }

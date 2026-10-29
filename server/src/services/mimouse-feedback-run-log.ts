@@ -17,7 +17,7 @@ export function runLogPreviewDigest(reference: FeedbackRunLogReference, actor: A
 }
 async function reviewer(tx: Tx, companyId: string, actor: AuthorizationActor) {
   if (actor.type !== "board" || actor.source !== "session" || !actor.userId || !actor.sessionId) throw forbidden("A signed-in human must review run-log references");
-  const [session] = await tx.select({ id: authSessions.id }).from(authSessions).where(and(eq(authSessions.id, actor.sessionId), eq(authSessions.userId, actor.userId), gt(authSessions.expiresAt, sql`now()`))).for("share");
+  const [session] = await tx.select({ id: authSessions.id }).from(authSessions).where(and(eq(authSessions.id, actor.sessionId), eq(authSessions.userId, actor.userId), gt(authSessions.expiresAt, sql`clock_timestamp()`))).for("share");
   if (!session) throw forbidden("A current signed-in session is required");
   await assertFeedbackReviewer(tx, companyId, actor.userId);
 }
@@ -67,6 +67,7 @@ export function feedbackRunLogService(db: Db) {
         const [prior] = await tx.select({ id: inbox.id, contentDigest: inbox.contentDigest }).from(inbox).where(and(eq(inbox.companyId, companyId), eq(inbox.sourceKind, "application_log"), eq(inbox.sourceInstance, RUN_LOG_SOURCE_INSTANCE), eq(inbox.externalId, externalId))).for("share");
         // Recheck original visibility even for a duplicate. A candidate is never
         // a grant to the source, and changed metadata is not a second event.
+        await reviewer(tx, companyId, actor);
         if (!await allowed()) throw unavailable();
         if (prior) {
           if (prior.contentDigest !== reference.referenceDigest) throw conflict("Run-log source identity changed");

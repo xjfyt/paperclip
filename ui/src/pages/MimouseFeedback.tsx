@@ -35,7 +35,7 @@ function FeedbackCompany({ companyId, userId, sessionId, privateSessionReady }: 
   const { t } = useTranslation(), client = useQueryClient(), active = useActive();
   const [beforeId, setBeforeId] = useState<string>(), [selectedId, setSelectedId] = useState<string | null>(null), [form, setFormDraft] = useState(blankImport), [notice, setNotice] = useState("");
   const importAttempt = useRef(0), importBusy = useRef(false);
-  function setForm(value: ReturnType<typeof blankImport>) { importAttempt.current++; setFormDraft(value); setNotice(""); }
+  function setForm(value: ReturnType<typeof blankImport>) { importAttempt.current++; setFormDraft(value); setNotice(""); mutation.reset(); }
   const root = `/companies/${companyId}/feedback-inbox`, key = ["mimouse-feedback", companyId, userId, sessionId];
   const query = useQuery({ queryKey: [...key, "list", beforeId], gcTime: 0, staleTime: 0, queryFn: ({ signal }) => privateFeedbackGet<FeedbackInboxPage>(`${root}${beforeId ? `?beforeId=${encodeURIComponent(beforeId)}` : ""}`, signal), retry: false });
   const mutation = useMutation({ mutationFn: ({ input }: { input: FeedbackImportInput; attempt: number }) => api.post<{ item: FeedbackInboxItem; duplicate: boolean }>(root, input),
@@ -64,7 +64,7 @@ function FeedbackCompany({ companyId, userId, sessionId, privateSessionReady }: 
     <section className="space-y-3" aria-label={t("feedbackUi.records")}>
       <h2 className="font-medium">{t("feedbackUi.records")}</h2>
       {!query.data.items.length && <p>{t("feedbackUi.empty")}</p>}
-      <div className="space-y-2">{query.data.items.map(item => <Button key={item.id} variant="outline" className="h-auto w-full justify-start whitespace-normal text-left" onClick={() => setSelectedId(item.id)}>{isRunLogCandidate(item) ? t("feedbackRunLogUi.title") : item.title} · {item.product} · {item.softwareVersion}</Button>)}</div>
+      <div className="space-y-2">{query.data.items.map(item => <Button key={item.id} variant="outline" className="h-auto w-full justify-start whitespace-normal text-left" onClick={() => setSelectedId(item.id)}>{isRunLogCandidate(item) ? t("feedbackRunLogUi.title") : item.title} · {item.product} · {isRunLogCandidate(item) ? t("feedbackRunLogUi.unknown") : item.softwareVersion}</Button>)}</div>
       <div className="flex gap-2">{beforeId && <Button variant="outline" onClick={() => setBeforeId(undefined)}>{t("feedbackUi.latest")}</Button>}{query.data.nextBeforeId && <Button variant="outline" onClick={() => setBeforeId(query.data.nextBeforeId!)}>{t("feedbackUi.older")}</Button>}</div>
     </section>
     {selectedId && <FeedbackDetail key={selectedId} companyId={companyId} userId={userId} sessionId={sessionId} id={selectedId} onSelect={setSelectedId} />}
@@ -82,7 +82,7 @@ function FeedbackDetail({ companyId, userId, sessionId, id, onSelect }: { compan
     {source.data.sourceUrl && <p className="break-all text-xs">{t("feedbackUi.sourceUrl")}: {source.data.sourceUrl}</p>}
     {isRunLogCandidate(source.data) ? <MimouseFeedbackRunLogSource companyId={companyId} userId={userId} sessionId={sessionId} item={source.data} /> : <pre className="whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-sm">{source.data.text}</pre>}
     <h3 className="font-medium">{t("feedbackUi.candidates")}</h3><p className="text-xs text-muted-foreground">{t("feedbackUi.candidateBoundary")}</p>
-    {candidates.isPending || candidates.isFetching ? <p>{t("common.loading")}</p> : candidates.isError ? <p role="alert">{t("feedbackUi.readError")}</p> : candidates.data.items.length ? candidates.data.items.map(item => <Button key={item.id} variant="outline" className="h-auto whitespace-normal" onClick={() => onSelect(item.id)}>{item.title} · {item.sourceInstance}</Button>) : <p>{t("feedbackUi.noCandidates")}</p>}
+    {candidates.isPending || candidates.isFetching ? <p>{t("common.loading")}</p> : candidates.isError ? <p role="alert">{t("feedbackUi.readError")}</p> : candidates.data.items.length ? candidates.data.items.map(item => <Button key={item.id} variant="outline" className="h-auto whitespace-normal" onClick={() => onSelect(item.id)}>{isRunLogCandidate(item) ? t("feedbackRunLogUi.title") : item.title} · {item.sourceInstance}</Button>) : <p>{t("feedbackUi.noCandidates")}</p>}
     {!candidates.isError && !candidates.isFetching && candidates.data?.hasMore && <p>{t("feedbackUi.moreCandidates")}</p>}
     <MimouseFeedbackEvidence key={id} companyId={companyId} userId={userId} sessionId={sessionId} id={id} onSelect={onSelect} />
     <FeedbackReview companyId={companyId} userId={userId} sessionId={sessionId} item={source.data} />
@@ -92,7 +92,7 @@ function FeedbackReview({ companyId, userId, sessionId, item }: { companyId: str
   const { t } = useTranslation(), active = useActive(), client = useQueryClient();
   const root = `/companies/${companyId}/feedback-inbox/${item.id}`, key = ["mimouse-feedback", companyId, userId, sessionId, item.id, "promotion"];
   const status = useQuery({ queryKey: key, gcTime: 0, staleTime: 0, queryFn: ({ signal }) => privateFeedbackGet<PromotionStatus>(`${root}/promotion`, signal), enabled: userId !== "local-board", retry: false });
-  const [draft, setDraft] = useState({ title: item.title, reproduction: "", expectedBehavior: "", fixProposal: "", acceptanceCriteria: "" });
+  const [draft, setDraft] = useState({ title: isRunLogCandidate(item) ? t("feedbackRunLogUi.title") : item.title, reproduction: "", expectedBehavior: "", fixProposal: "", acceptanceCriteria: "" });
   const [confirmed, setConfirmed] = useState(false), [attempt, setAttempt] = useState<FeedbackPromotionInput | null>(null), [receipt, setReceipt] = useState<FeedbackPromotionReceipt | null>(null);
   const mutation = useMutation({ mutationFn: (payload: FeedbackPromotionInput) => api.post<FeedbackPromotionReceipt>(`${root}/promote`, payload),
     onSuccess: result => { void client.invalidateQueries({ queryKey: key }); if (active.current) setReceipt(result); },

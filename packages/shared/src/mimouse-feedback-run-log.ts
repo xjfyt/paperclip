@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { FeedbackInboxItem } from "./mimouse-feedback.js";
 export const RUN_LOG_SOURCE_INSTANCE = "internal.run-log.v1";
 export const feedbackRunLogSelectionSchema = z.object({
-  runId: z.string().uuid(), eventSeq: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  runId: z.string().uuid().transform(value => value.toLowerCase()), eventSeq: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
 }).strict();
 export const feedbackRunLogImportSchema = feedbackRunLogSelectionSchema.extend({
   previewDigest: z.string().regex(/^[a-f0-9]{64}$/), confirm: z.literal(true),

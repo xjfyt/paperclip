@@ -19,5 +19,6 @@
   "importError": "Import was not confirmed. Retry the same request or cancel and preview again.",
   "verifySource": "Check original source access",
   "sourceVerified": "Original source access and identity verified now. No log content was loaded.",
-  "sourceUnavailable": "Original source is unavailable or changed. Viewing this reference does not grant access."
+  "sourceUnavailable": "Original source is unavailable or changed. Viewing this reference does not grant access.",
+  "unknown": "Unknown"
 }
