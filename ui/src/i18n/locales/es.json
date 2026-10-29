@@ -174,7 +174,19 @@
     "changePrimaryFailed": "No se pudo cambiar tu agente principal.",
     "createSecretOrganization": "Selecciona una organización para crear secretos",
     "uploadImageOrganization": "Selecciona una organización para subir imágenes",
-    "detectModelOrganization": "Selecciona una organización para detectar el modelo"
+    "detectModelOrganization": "Selecciona una organización para detectar el modelo",
+    "secretAccessEnv": "Variable de entorno",
+    "secretAccessApi": "Acceso por API",
+    "secretAccessEmpty": "Este agente aún no tiene secretos vinculados.",
+    "secretAccessProposed": "Acceso propuesto",
+    "secretAccessProposedBy": "propuesto por {{name}}",
+    "secretAccessApiOnly": "Acceso por API (sin variable de entorno)",
+    "secretAccessAlias": "Alias de acceso",
+    "secretAccessRemove": "Eliminar acceso por API",
+    "secretAccessInvalidAlias": "Alias no válido: usa letras, dígitos y _",
+    "secretAccessDuplicateAlias": "Alias duplicado",
+    "secretAccessAdd": "Añadir acceso por API",
+    "secretAccessDescription": "Se obtienen bajo demanda mediante la API del agente vinculada a la ejecución. Nunca se escriben en el entorno. El agente los lee por alias mediante <0>{{path}}</0>."
   },
   "agentDetailConfirmUi": {
     "pauseTitle": "¿Pausar {{name}}?",
@@ -5217,6 +5229,27 @@
     "submitAnswers": "Enviar respuestas",
     "next": "Siguiente"
   },
+  "recentTaskActionsUi": {
+    "rename": "Cambiar nombre",
+    "archive": "Archivar",
+    "pauseRestart": "Pausar/Reiniciar",
+    "renameTitle": "Cambiar nombre de la tarea",
+    "renameDescription": "Elige un nombre breve y claro para esta tarea.",
+    "taskName": "Nombre de la tarea",
+    "renamed": "Nombre de la tarea actualizado",
+    "renameFailed": "No se pudo cambiar el nombre de la tarea",
+    "renameError": "No se puede cambiar el nombre de esta tarea.",
+    "archived": "Tarea archivada de la bandeja de entrada",
+    "archiveFailed": "No se pudo archivar la tarea",
+    "archiveError": "No se puede archivar esta tarea de la bandeja de entrada.",
+    "wakeSkipped": "Se omitió la activación del agente asignado.",
+    "restarted": "Tarea reiniciada",
+    "parentPause": "Esta tarea está pausada por una tarea superior. Reiníciala desde la tarea raíz de la pausa.",
+    "paused": "Tarea pausada",
+    "pauseFailed": "No se pudo actualizar la pausa de la tarea",
+    "pauseError": "No se puede pausar o reiniciar esta tarea.",
+    "idle": "Inactiva"
+  },
   "remoteMcpFormUi": {
     "helpWith": "Ayuda con {{label}}",
     "serverUrl": "URL del servidor MCP",
@@ -6468,6 +6501,31 @@
     "unconfirmed_one": "{{count}} identidad de cuenta sin confirmar",
     "unconfirmed_other": "{{count}} identidades de cuenta sin confirmar"
   },
+  "taskBrowserPanelUi": {
+    "disconnected": "La vista en directo se desconectó. Usa Reconectar la vista en Opciones del navegador para reintentar.",
+    "actionFailed": "La acción del navegador falló. Inténtalo de nuevo.",
+    "accessDenied": "Ya no tienes acceso a este navegador.",
+    "accessUnavailable": "Acceso al navegador no disponible",
+    "starting": "Iniciando el navegador…",
+    "closing": "Cerrando el navegador…",
+    "closed": "Navegador cerrado",
+    "startFailed": "No se pudo iniciar el navegador",
+    "disconnectedTitle": "Vista en directo desconectada",
+    "connecting": "Conectando con el navegador…",
+    "noneOpen": "No hay ningún navegador abierto",
+    "frameTitle": "Navegador de Browser Use en directo",
+    "loadTimeout": "La vista en directo no se cargó",
+    "loadTimeoutDescription": "Reconecta la vista o abre esta tarea en otro navegador. El navegador remoto sigue funcionando.",
+    "reconnect": "Reconectar la vista",
+    "anotherOpen": "Hay otro navegador abierto en esta tarea.",
+    "askAnother": "Envía un mensaje en la tarea para pedir al agente que abra otro navegador.",
+    "waitingReady": "La vista en directo aparecerá aquí cuando esté lista.",
+    "waitingShutdown": "Esperando a que Browser Use confirme el cierre.",
+    "askBrowse": "Pide al agente que visite un sitio web mediante un mensaje en la tarea.",
+    "openActive": "Abrir el navegador activo",
+    "presenceFailed": "No se pudo mantener abierto este navegador. Comprueba tu conexión antes de que termine la cuenta atrás.",
+    "resizeFailed": "No se pudo cambiar el tamaño del navegador. Elige un tamaño en Opciones del navegador para reintentar."
+  },
   "taskComposerErrorsUi": {
     "goalExtraArguments": "{{command}} no acepta argumentos adicionales.",
     "createFailed": "No se pudo crear la tarea. Inténtalo de nuevo.",
@@ -6627,6 +6685,57 @@
     "changedFiles": "Archivos modificados",
     "binaryDiffUnavailable": "Archivo binario; las diferencias de texto no están disponibles.",
     "noInlinePatch": "No se registró ningún parche en línea para este archivo."
+  },
+  "taskRecoveryControlsUi": {
+    "skill": {
+      "loading": "Cargando habilidad…",
+      "unavailable": "La habilidad ya no está disponible.",
+      "forbidden": "No tienes acceso a esta habilidad.",
+      "loadFailed": "No se pudo cargar la habilidad.",
+      "retrying": "Reintentando…",
+      "retry": "Reintentar",
+      "openStudio": "Abrir en el estudio de habilidades",
+      "revision": "Revisión {{revision}}",
+      "currentVersion": "Versión actual",
+      "instructions": "Instrucciones de la habilidad",
+      "emptyInstructions": "Las instrucciones de la habilidad están vacías."
+    },
+    "browser": {
+      "session": "Sesión del navegador",
+      "closesIn": "Se cierra en <0>{{countdown}}</0>",
+      "closing": "Cerrando…",
+      "controlledElsewhere": "El tamaño sigue a otro espectador",
+      "resizing": "Cambiando el tamaño…",
+      "browsing": "Navegando",
+      "keepBrowsing": "Seguir navegando",
+      "keepBrowsingDescription": "Mantener este navegador abierto hasta {{minutes}} minutos más.",
+      "stopBrowsing": "Detener la navegación",
+      "stopDescription": "Detener el trabajo del agente en el navegador y dejarlo abierto.",
+      "options": "Opciones del navegador",
+      "size": "Tamaño del navegador",
+      "fit": "Ajustar al panel",
+      "default": "Predeterminado",
+      "fitHere": "Ajustar a este panel en su lugar",
+      "browserDefault": "Tamaño predeterminado del navegador",
+      "presets": {
+        "phone": "Teléfono",
+        "tablet": "Tableta",
+        "laptop": "Portátil",
+        "desktop": "Escritorio"
+      },
+      "reconnect": "Reconectar la vista",
+      "reconnectDescription": "Recargar la vista en directo. El trabajo del navegador continúa.",
+      "keepOpen": "Mantener el navegador abierto",
+      "keepOpenDescription": "Mantenerlo abierto hasta {{minutes}} minutos más.",
+      "close": "Cerrar el navegador",
+      "closeDescription": "Finalizar este navegador y detener toda la navegación."
+    },
+    "route": {
+      "title": "Se produjo un error en esta página",
+      "description": "Algo salió mal al mostrar esta página. Puedes volver e intentarlo de nuevo o recargarla.",
+      "goBack": "Volver",
+      "reload": "Recargar la página"
+    }
   },
   "taskRichInputUi": {
     "uploadUnavailable": "La carga de imágenes no está disponible.",

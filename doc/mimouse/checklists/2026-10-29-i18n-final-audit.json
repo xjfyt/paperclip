@@ -1,6 +1,6 @@
 {
   "schemaVersion": 5,
-  "generatedAt": "2026-10-29T05:26:14.789Z",
+  "generatedAt": "2026-10-29T06:03:12.676Z",
   "parserVersion": "7.29.8",
   "method": "Bounded Babel AST inventory: JSX text/display attributes (including message and ariaLabel), direct/conditional/template literals, pushToast/toast display fields, setSecretMessage.title and direct window.confirm/window.prompt/window.alert first-argument messages. Dynamic display expressions are separate needs_manual_review locations, not untranslated strings.",
   "baseline": {
@@ -520,6 +520,7 @@
       "ui/src/App.tsx",
       "ui/src/components/AgentConfigForm.tsx",
       "ui/src/components/AgentLifecycleStatus.tsx",
+      "ui/src/components/AgentSecretAccessEditor.tsx",
       "ui/src/components/AttentionQueueRow.tsx",
       "ui/src/components/BlockedInboxView.tsx",
       "ui/src/components/DecisionCard.tsx",
@@ -545,7 +546,9 @@
       "ui/src/components/MimouseCodingProjects.tsx",
       "ui/src/components/OnboardingWizard.tsx",
       "ui/src/components/OnboardingWizardVariant.tsx",
+      "ui/src/components/RouteErrorBoundary.tsx",
       "ui/src/components/SearchableSelect.tsx",
+      "ui/src/components/SidebarRecentTasks.tsx",
       "ui/src/components/TaskChatThread.tsx",
       "ui/src/components/TrustPresetSection.tsx",
       "ui/src/components/WorkspaceFileBrowser.tsx",
@@ -581,8 +584,11 @@
       "ui/src/components/task-chat/TaskChatTurnStatusIsland.tsx",
       "ui/src/components/task-chat/TaskMessageScroller.tsx",
       "ui/src/components/task-side-panel/TaskAttachmentPanel.tsx",
+      "ui/src/components/task-side-panel/TaskBrowserFooter.tsx",
+      "ui/src/components/task-side-panel/TaskBrowserPanel.tsx",
       "ui/src/components/task-side-panel/TaskDocumentPanel.tsx",
       "ui/src/components/task-side-panel/TaskSidePanel.tsx",
+      "ui/src/components/task-side-panel/TaskSkillPanel.tsx",
       "ui/src/components/task-side-panel/TaskWorkspaceFilePanel.tsx",
       "ui/src/pages/AgentDetail.tsx",
       "ui/src/pages/CompanyConnections.tsx",
@@ -601,10 +607,10 @@
       "ui/src/pages/audit/AuditRuns.tsx",
       "ui/src/pages/audit/CompanyActivity.tsx"
     ],
-    "matchedFiles": 83,
+    "matchedFiles": 89,
     "missingFiles": [],
-    "pathSetSha256": "54f598366d3bba467140f96d73059e885aae0f2b49e29f05c50f7dedd8c686c0",
-    "sourceSha256": "32e710879ee77fde4882c872bd6af7a8280fbc311d5cdff08ec807944c1039ee",
+    "pathSetSha256": "eaba9641fc58b1692d9575fc40e475aff9a0cc2dbcb946545011b0c3dc36adc5",
+    "sourceSha256": "81cadfaf3a3ac9af13e8d5e80050a5cc6445e47002493c3a21282ac634794b13",
     "evidence": [
       {
         "file": "ui/src/App.tsx",
@@ -617,6 +623,10 @@
       {
         "file": "ui/src/components/AgentLifecycleStatus.tsx",
         "sourceSha256": "45b0968f7899e9bec30796b6dfcdd5fb7eb1c11a056f7b44bf499618772cd547"
+      },
+      {
+        "file": "ui/src/components/AgentSecretAccessEditor.tsx",
+        "sourceSha256": "7e2b6d6c9fdda66d67b02a7c73811da4d3234b1cc2fad2a13f05fa0a8c9c9c0b"
       },
       {
         "file": "ui/src/components/AttentionQueueRow.tsx",
@@ -719,8 +729,16 @@
         "sourceSha256": "1505d2c73ffc0cf4a3e84bfb6f6d3a829832104337e50ac3e560c03ec0490dd6"
       },
       {
+        "file": "ui/src/components/RouteErrorBoundary.tsx",
+        "sourceSha256": "366a8bacfc178860305c9fd0bb8b9e77968a5af97fda6db43dcafd0e869d0b53"
+      },
+      {
         "file": "ui/src/components/SearchableSelect.tsx",
         "sourceSha256": "df7beba6dec1afe6c58090a9e1c204f582933a7d263c7a4d8dd2688034ec6df9"
+      },
+      {
+        "file": "ui/src/components/SidebarRecentTasks.tsx",
+        "sourceSha256": "245694fa8cdce16a065d4ae9f186fe0a8179124ab089a3da41ffd3c5a42985e9"
       },
       {
         "file": "ui/src/components/TaskChatThread.tsx",
@@ -863,12 +881,24 @@
         "sourceSha256": "c0cb3d337753e3a3517ccb442d7bd9b00eaeecb9a5ae23d714e8c36ada5566ca"
       },
       {
+        "file": "ui/src/components/task-side-panel/TaskBrowserFooter.tsx",
+        "sourceSha256": "a4302063c9fe47e2151cec66d1079ed9fe4d5df30603e537cdb4a27c838cd397"
+      },
+      {
+        "file": "ui/src/components/task-side-panel/TaskBrowserPanel.tsx",
+        "sourceSha256": "7162e74ad3e6dfdcba37303f873cb1f5f62a641ec77f2b930ae0b49e5dc4280a"
+      },
+      {
         "file": "ui/src/components/task-side-panel/TaskDocumentPanel.tsx",
         "sourceSha256": "ec6c50b05a56132a8af4aa90b5607ef937d4b5632042540d70dea794b3bfce66"
       },
       {
         "file": "ui/src/components/task-side-panel/TaskSidePanel.tsx",
         "sourceSha256": "8743f08647f5e41e73bdd7a3db3341d443de0fda0c89db5bfb79794b88f0a52c"
+      },
+      {
+        "file": "ui/src/components/task-side-panel/TaskSkillPanel.tsx",
+        "sourceSha256": "340fe79c818296fde40fbd3c3f7ff7e2db21efdd40dc0c34d0fd1b3a404f0ba0"
       },
       {
         "file": "ui/src/components/task-side-panel/TaskWorkspaceFilePanel.tsx",
@@ -942,6 +972,7 @@
   },
   "manualScope": {
     "requestedFiles": [
+      "ui/src/hooks/useBrowserViewport.ts",
       "ui/src/hooks/useDocumentAnnotationMutations.ts",
       "ui/src/i18n/attention-row-display.ts",
       "ui/src/i18n/blocked-inbox-display.ts",
@@ -963,11 +994,17 @@
       "ui/src/pages/agent-skills/agent-skill-source.ts",
       "ui/src/pages/audit/audit-navigation.ts"
     ],
-    "matchedFiles": 20,
+    "matchedFiles": 21,
     "missingFiles": [],
-    "pathSetSha256": "ca2b4a1bbae367f18dfd9fcb6d72f7d41c8de18a71b94a3efc764ed945439f55",
-    "sourceSha256": "ada5d13d794ec5dbda67825a13949f058db765e811deb1cf4a2cb1e8995c5bac",
+    "pathSetSha256": "bec9115bb85e888e65a3eceff717708e1137c66b5993f3f24c4cecc95c6f620c",
+    "sourceSha256": "2e2c31bcc74431f0564b2677d859872e40f4dbdab46c1cf1f5e70ac6bccd725c",
     "evidence": [
+      {
+        "file": "ui/src/hooks/useBrowserViewport.ts",
+        "sourceSha256": "3ebe7a5de6289d6d8c375c16d27602613856892cca092388feb9cb8ed78ee5c9",
+        "method": "source-hash-only",
+        "classification": "needs_manual_review"
+      },
       {
         "file": "ui/src/hooks/useDocumentAnnotationMutations.ts",
         "sourceSha256": "f58e5fa97872f447bc8a483de227249a5fa4e81ce9a401362bfa142ba9c0e92b",
@@ -1108,8 +1145,10 @@
       "ui/src/components/IssueDocumentAnnotations.tsx",
       "ui/src/components/IssueDocumentsSection.tsx",
       "ui/src/components/IssueThreadInteractionCard.tsx",
+      "ui/src/components/Layout.tsx",
       "ui/src/components/NewIssueDialog.tsx",
       "ui/src/components/OnboardingWizardVariant.tsx",
+      "ui/src/components/Sidebar.tsx",
       "ui/src/components/TaskChatThread.tsx",
       "ui/src/components/artifacts/IssueArtifactCard.tsx",
       "ui/src/components/issue-properties/IssuePropertiesArtifactsTab.tsx",
@@ -1124,6 +1163,7 @@
       "ui/src/components/task-chat/TaskChatSystemNotice.tsx",
       "ui/src/components/task-chat/TaskChatThreadView.tsx",
       "ui/src/components/task-side-panel/TaskAttachmentPanel.tsx",
+      "ui/src/components/task-side-panel/TaskBrowserPanel.tsx",
       "ui/src/components/task-side-panel/TaskDocumentPanel.tsx",
       "ui/src/components/task-side-panel/TaskSidePanel.tsx",
       "ui/src/components/task-side-panel/index.ts",
@@ -1145,10 +1185,10 @@
       "ui/src/pages/audit/AuditHub.tsx",
       "ui/src/pages/audit/CompanyActivity.tsx"
     ],
-    "matchedFiles": 51,
+    "matchedFiles": 54,
     "missingFiles": [],
-    "pathSetSha256": "0d3093b8522df6c5e4dd3c83ec25462f3bacda35062f0819f6da8a772a3a0f06",
-    "sourceSha256": "cc6715a55ce460de397b46b9ad7717c41a55059671e5691f23bdf001472021d2",
+    "pathSetSha256": "bda66950ae49a18e6dddf8040d9354b7beab9799ad0ccc0713ae8bf6dd96b087",
+    "sourceSha256": "3bf313f95903a386a7bb9ab307e4daf225c81c504d59823f4ccf38750168f88c",
     "evidence": [
       {
         "file": "ui/src/App.tsx",
@@ -1211,12 +1251,20 @@
         "sourceSha256": "b76d2fb42e3073461a92a2b860b4817772b10da9c7ac9cd565a859e88d9becfc"
       },
       {
+        "file": "ui/src/components/Layout.tsx",
+        "sourceSha256": "418505a8da45a0cf97ec0e7811491fbdd2448cc4057fbb606d6a4f035332c7e4"
+      },
+      {
         "file": "ui/src/components/NewIssueDialog.tsx",
         "sourceSha256": "7d51ef9e695992d8c77721ba96faa390a4001ef492148baf4d1eae062d793064"
       },
       {
         "file": "ui/src/components/OnboardingWizardVariant.tsx",
         "sourceSha256": "1505d2c73ffc0cf4a3e84bfb6f6d3a829832104337e50ac3e560c03ec0490dd6"
+      },
+      {
+        "file": "ui/src/components/Sidebar.tsx",
+        "sourceSha256": "5d9f9ba0392a61c3ceb55ead71c111f3ec5263978381e150f6d8f042a6f47ef0"
       },
       {
         "file": "ui/src/components/TaskChatThread.tsx",
@@ -1273,6 +1321,10 @@
       {
         "file": "ui/src/components/task-side-panel/TaskAttachmentPanel.tsx",
         "sourceSha256": "c0cb3d337753e3a3517ccb442d7bd9b00eaeecb9a5ae23d714e8c36ada5566ca"
+      },
+      {
+        "file": "ui/src/components/task-side-panel/TaskBrowserPanel.tsx",
+        "sourceSha256": "7162e74ad3e6dfdcba37303f873cb1f5f62a641ec77f2b930ae0b49e5dc4280a"
       },
       {
         "file": "ui/src/components/task-side-panel/TaskDocumentPanel.tsx",
@@ -1372,6 +1424,7 @@
         "ui/src/components/InviteAuthMethods.tsx",
         "ui/src/components/OnboardingWizard.tsx",
         "ui/src/components/OnboardingWizardVariant.tsx",
+        "ui/src/components/RouteErrorBoundary.tsx",
         "ui/src/components/Sidebar.production.tsx",
         "ui/src/components/Sidebar.tsx",
         "ui/src/components/SidebarAccountMenu.production.tsx",
@@ -1379,6 +1432,7 @@
         "ui/src/components/SidebarAgents.production.tsx",
         "ui/src/components/SidebarAgents.tsx",
         "ui/src/components/SidebarProjects.tsx",
+        "ui/src/components/SidebarRecentTasks.tsx",
         "ui/src/components/ThemeToggle.tsx",
         "ui/src/pages/Auth.tsx",
         "ui/src/pages/Companies.tsx",
@@ -1387,10 +1441,10 @@
         "ui/src/pages/InviteLanding.tsx",
         "ui/src/pages/ProfileSettings.tsx"
       ],
-      "matchedFiles": 25,
+      "matchedFiles": 27,
       "missingFiles": [],
-      "pathSetSha256": "8c079b90237d5331cccb247d12c53cc6df13dd6c7a616ee6271dfca46aaafab5",
-      "sourceSha256": "b967b8ff5001714d069e840a925b508ae7733ac5d4e08af8f57b19accedbd6cd",
+      "pathSetSha256": "1ec131bce30106808e4d2d795a74ce828c95821f4113235b035dc5fa7a460a44",
+      "sourceSha256": "90cfde92c5bfbc9d9ff68ff50194f846e338230cecd8bb18cf00075724cdf430",
       "evidence": [
         {
           "file": "ui/src/App.tsx",
@@ -1437,6 +1491,10 @@
           "sourceSha256": "1505d2c73ffc0cf4a3e84bfb6f6d3a829832104337e50ac3e560c03ec0490dd6"
         },
         {
+          "file": "ui/src/components/RouteErrorBoundary.tsx",
+          "sourceSha256": "366a8bacfc178860305c9fd0bb8b9e77968a5af97fda6db43dcafd0e869d0b53"
+        },
+        {
           "file": "ui/src/components/Sidebar.production.tsx",
           "sourceSha256": "d0e268b69bc66226b9b0b1ab28e10c13a7864682b5891e52d883958e0087acd2"
         },
@@ -1463,6 +1521,10 @@
         {
           "file": "ui/src/components/SidebarProjects.tsx",
           "sourceSha256": "42dc7eae7cc34788a8794b06a15dd9a151042c991255a6a94dab43fac3881e69"
+        },
+        {
+          "file": "ui/src/components/SidebarRecentTasks.tsx",
+          "sourceSha256": "245694fa8cdce16a065d4ae9f186fe0a8179124ab089a3da41ffd3c5a42985e9"
         },
         {
           "file": "ui/src/components/ThemeToggle.tsx",
@@ -1560,8 +1622,11 @@
         "ui/src/components/task-chat/TaskChatTurnStatusIsland.tsx",
         "ui/src/components/task-chat/TaskMessageScroller.tsx",
         "ui/src/components/task-side-panel/TaskAttachmentPanel.tsx",
+        "ui/src/components/task-side-panel/TaskBrowserFooter.tsx",
+        "ui/src/components/task-side-panel/TaskBrowserPanel.tsx",
         "ui/src/components/task-side-panel/TaskDocumentPanel.tsx",
         "ui/src/components/task-side-panel/TaskSidePanel.tsx",
+        "ui/src/components/task-side-panel/TaskSkillPanel.tsx",
         "ui/src/components/task-side-panel/TaskWorkspaceFilePanel.tsx",
         "ui/src/pages/DecisionQueuePage.tsx",
         "ui/src/pages/Inbox.tsx",
@@ -1570,10 +1635,10 @@
         "ui/src/pages/LegacyInbox.tsx",
         "ui/src/pages/WhatNeedsMe.tsx"
       ],
-      "matchedFiles": 72,
+      "matchedFiles": 75,
       "missingFiles": [],
-      "pathSetSha256": "2b177d78b76e9fd24425fef20658defaee451dbd17d94a8b6dae736a00e0e212",
-      "sourceSha256": "166e5a06445dffa4e3f43ff709a512f33bd715999f314a9621d6468202aa7410",
+      "pathSetSha256": "b8e86f57e8176b231cb2a44a6049ce60f7f03edc0b2d1bc83af1ba3736f4cb96",
+      "sourceSha256": "cf3936415906f4d6ef7fc73c34026debc626b7558b636c373c9adc8a851f551c",
       "evidence": [
         {
           "file": "ui/src/components/AgentMultiSelect.tsx",
@@ -1828,12 +1893,24 @@
           "sourceSha256": "c0cb3d337753e3a3517ccb442d7bd9b00eaeecb9a5ae23d714e8c36ada5566ca"
         },
         {
+          "file": "ui/src/components/task-side-panel/TaskBrowserFooter.tsx",
+          "sourceSha256": "a4302063c9fe47e2151cec66d1079ed9fe4d5df30603e537cdb4a27c838cd397"
+        },
+        {
+          "file": "ui/src/components/task-side-panel/TaskBrowserPanel.tsx",
+          "sourceSha256": "7162e74ad3e6dfdcba37303f873cb1f5f62a641ec77f2b930ae0b49e5dc4280a"
+        },
+        {
           "file": "ui/src/components/task-side-panel/TaskDocumentPanel.tsx",
           "sourceSha256": "ec6c50b05a56132a8af4aa90b5607ef937d4b5632042540d70dea794b3bfce66"
         },
         {
           "file": "ui/src/components/task-side-panel/TaskSidePanel.tsx",
           "sourceSha256": "8743f08647f5e41e73bdd7a3db3341d443de0fda0c89db5bfb79794b88f0a52c"
+        },
+        {
+          "file": "ui/src/components/task-side-panel/TaskSkillPanel.tsx",
+          "sourceSha256": "340fe79c818296fde40fbd3c3f7ff7e2db21efdd40dc0c34d0fd1b3a404f0ba0"
         },
         {
           "file": "ui/src/components/task-side-panel/TaskWorkspaceFilePanel.tsx",
@@ -1870,6 +1947,7 @@
       "requestedFiles": [
         "ui/src/components/AgentConfigForm.tsx",
         "ui/src/components/AgentLifecycleStatus.tsx",
+        "ui/src/components/AgentSecretAccessEditor.tsx",
         "ui/src/components/InstructionHistory.tsx",
         "ui/src/components/TrustPresetSection.tsx",
         "ui/src/components/agent-config-primitives.tsx",
@@ -1883,10 +1961,10 @@
         "ui/src/pages/agent-skills/AgentSkillRow.tsx",
         "ui/src/pages/agent-skills/AgentSkillsTab.tsx"
       ],
-      "matchedFiles": 14,
+      "matchedFiles": 15,
       "missingFiles": [],
-      "pathSetSha256": "76f10ac94d2a89e7fe7bda60dd65df6b94a0b4646f17110b71c4c781732b3347",
-      "sourceSha256": "223ed089bcca6799259b6623a878a427d12c6c2a3dee2b832742efe54f5f36dd",
+      "pathSetSha256": "41920a515a89e00343d03357d711a67e3d70fcf0b4c8743e0c8a56db14ff7d0a",
+      "sourceSha256": "fba915ed64f44de9f71ae60e92d60272253f211e34262df0df9544c5449a583d",
       "evidence": [
         {
           "file": "ui/src/components/AgentConfigForm.tsx",
@@ -1895,6 +1973,10 @@
         {
           "file": "ui/src/components/AgentLifecycleStatus.tsx",
           "sourceSha256": "45b0968f7899e9bec30796b6dfcdd5fb7eb1c11a056f7b44bf499618772cd547"
+        },
+        {
+          "file": "ui/src/components/AgentSecretAccessEditor.tsx",
+          "sourceSha256": "7e2b6d6c9fdda66d67b02a7c73811da4d3234b1cc2fad2a13f05fa0a8c9c9c0b"
         },
         {
           "file": "ui/src/components/InstructionHistory.tsx",
@@ -2218,6 +2300,7 @@
     "ui/src/App.tsx",
     "ui/src/components/AgentConfigForm.tsx",
     "ui/src/components/AgentLifecycleStatus.tsx",
+    "ui/src/components/AgentSecretAccessEditor.tsx",
     "ui/src/components/AttentionQueueRow.tsx",
     "ui/src/components/BlockedInboxView.tsx",
     "ui/src/components/DecisionCard.tsx",
@@ -2243,7 +2326,9 @@
     "ui/src/components/MimouseCodingProjects.tsx",
     "ui/src/components/OnboardingWizard.tsx",
     "ui/src/components/OnboardingWizardVariant.tsx",
+    "ui/src/components/RouteErrorBoundary.tsx",
     "ui/src/components/SearchableSelect.tsx",
+    "ui/src/components/SidebarRecentTasks.tsx",
     "ui/src/components/TaskChatThread.tsx",
     "ui/src/components/TrustPresetSection.tsx",
     "ui/src/components/WorkspaceFileBrowser.tsx",
@@ -2279,8 +2364,11 @@
     "ui/src/components/task-chat/TaskChatTurnStatusIsland.tsx",
     "ui/src/components/task-chat/TaskMessageScroller.tsx",
     "ui/src/components/task-side-panel/TaskAttachmentPanel.tsx",
+    "ui/src/components/task-side-panel/TaskBrowserFooter.tsx",
+    "ui/src/components/task-side-panel/TaskBrowserPanel.tsx",
     "ui/src/components/task-side-panel/TaskDocumentPanel.tsx",
     "ui/src/components/task-side-panel/TaskSidePanel.tsx",
+    "ui/src/components/task-side-panel/TaskSkillPanel.tsx",
     "ui/src/components/task-side-panel/TaskWorkspaceFilePanel.tsx",
     "ui/src/pages/AgentDetail.tsx",
     "ui/src/pages/CompanyConnections.tsx",
@@ -2973,6 +3061,54 @@
       "symbol": "MimouseCodingProjects",
       "importSource": "@/components/MimouseCodingProjects",
       "usage": "jsx"
+    },
+    {
+      "domain": "entry-navigation",
+      "file": "ui/src/components/SidebarRecentTasks.tsx",
+      "host": "ui/src/components/Sidebar.tsx",
+      "symbol": "SidebarRecentTasks",
+      "importSource": "./SidebarRecentTasks",
+      "usage": "jsx"
+    },
+    {
+      "domain": "entry-navigation",
+      "file": "ui/src/components/RouteErrorBoundary.tsx",
+      "host": "ui/src/components/Layout.tsx",
+      "symbol": "RouteErrorBoundary",
+      "importSource": "./RouteErrorBoundary",
+      "usage": "jsx"
+    },
+    {
+      "domain": "agents-runs",
+      "file": "ui/src/components/AgentSecretAccessEditor.tsx",
+      "host": "ui/src/components/AgentConfigForm.tsx",
+      "symbol": "AgentSecretAccessEditor",
+      "importSource": "./AgentSecretAccessEditor",
+      "usage": "jsx"
+    },
+    {
+      "domain": "tasks",
+      "file": "ui/src/components/task-side-panel/TaskSkillPanel.tsx",
+      "host": "ui/src/components/task-side-panel/TaskSidePanel.tsx",
+      "symbol": "TaskSkillPanel",
+      "importSource": "./TaskSkillPanel",
+      "usage": "jsx"
+    },
+    {
+      "domain": "tasks",
+      "file": "ui/src/components/task-side-panel/TaskBrowserPanel.tsx",
+      "host": "ui/src/components/task-side-panel/TaskSidePanel.tsx",
+      "symbol": "TaskBrowserPanel",
+      "importSource": "./TaskBrowserPanel",
+      "usage": "jsx"
+    },
+    {
+      "domain": "tasks",
+      "file": "ui/src/components/task-side-panel/TaskBrowserFooter.tsx",
+      "host": "ui/src/components/task-side-panel/TaskBrowserPanel.tsx",
+      "symbol": "TaskBrowserFooter",
+      "importSource": "./TaskBrowserFooter",
+      "usage": "jsx"
     }
   ],
   "manualScopeEdges": [
@@ -3287,6 +3423,14 @@
       "symbol": "buildAgentSkillSourceMeta",
       "importSource": "./agent-skill-source",
       "usage": "call"
+    },
+    {
+      "domain": "tasks",
+      "file": "ui/src/hooks/useBrowserViewport.ts",
+      "host": "ui/src/components/task-side-panel/TaskBrowserPanel.tsx",
+      "symbol": "useBrowserViewport",
+      "importSource": "@/hooks/useBrowserViewport",
+      "usage": "call"
     }
   ],
   "integratedDisplayHelperFiles": [
@@ -3302,12 +3446,23 @@
     "ui/src/lib/system-notice-humanizer.ts",
     "ui/src/pages/agent-skills/agent-skill-source.ts"
   ],
+  "visibleRecoveryScopeFiles": [
+    "ui/src/components/AgentSecretAccessEditor.tsx",
+    "ui/src/components/RouteErrorBoundary.tsx",
+    "ui/src/components/SidebarRecentTasks.tsx",
+    "ui/src/components/task-side-panel/TaskBrowserFooter.tsx",
+    "ui/src/components/task-side-panel/TaskBrowserPanel.tsx",
+    "ui/src/components/task-side-panel/TaskSkillPanel.tsx"
+  ],
+  "viewportErrorSourceFile": "ui/src/hooks/useBrowserViewport.ts",
+  "visibleRecoveryRenderBoundary": "SidebarRecentTasks is mounted in the streamlined sidebar; AgentSecretAccessEditor in edit-mode secrets settings. TaskSkillPanel and TaskBrowserPanel are conditional task side-panel tabs; TaskBrowserFooter needs a browser without an access error and renders only running/idle sessions. Layout wraps its routed Outlet with RouteErrorBoundary. useBrowserViewport produces local resize guidance consumed by TaskBrowserPanel; its source is hash-only, not JSX coverage. These checks do not prove live browser/session availability, every branch, translation coverage, or preservation of runtime data.",
   "limits": [
     "Schema 5 freezes the prior 82-path schema-4 list and baseline JSON SHA. New exact high-frequency paths, evidence-only helpers and hosts have separate path-set/content hashes. Five-domain denominators count reviewed source paths, never completed translations or all reachable UI.",
     "Scope changes are not translation progress: do not subtract old/new totals or treat literal/dynamic candidate totals as defect totals. Historical source SHA is retained; current legacy source SHA is recomputed independently.",
     "Explicit host/import/JSX/call/reference checks are syntax evidence, not binding analysis or runtime reachability. Missing paths, hosts, re-export barrels or consumer edges fail closed. Evidence hosts never recursively enlarge the AST inventory.",
     "Default chat-style TaskSidePanel artifacts are included; Classic conditional surfaces remain separately described, not inferred unreachable from names. Pure helper manualScope sources are hash-only and require provenance review; their returns are not AST candidates.",
-    "Post-integration manualScope retains the original nine sources and adds eleven exact display/provenance helpers (eight new helpers plus three changed display opt-ins). Their explicit consumers are evidence-only unless already selected; this does not enlarge the 160-path AST denominator. Canonical labels, local-error provenance, unknown diagnostics and actor-provided values still require manual classification.",
+    "Post-integration manualScope retains the original nine sources and eleven display/provenance helpers (eight new helpers plus three changed display opt-ins), plus the exact useBrowserViewport local resize-error producer. Their calls are evidence-only, not returned-string candidates. Canonical labels, local-error provenance, unknown diagnostics and actor-provided values still require manual classification.",
+    "The visible-recovery slice explicitly expands the 160-path AST inventory to 166 paths; it does not improve a measured translation coverage percentage. Six files are deduplicated across domains and scope metadata. Scope expansion and added candidates must not be described as translation progress or new confirmed defects.",
     "Not a complete route/call graph, data-flow analysis, rendered-text count or translation coverage percentage.",
     "scope.unscannedTsxFiles lists eligible source paths outside the bounded AST inventory; scope.evidenceOnlyTsxFiles identifies hash-only consumers among them. Neither list classifies untranslated copy or establishes runtime reachability.",
     "Schema 4 adds four exact protocol-display TSX files as a separate scope; earlier scopes and candidate meanings are unchanged. Expanded totals are not directly comparable with schema 3. Original sourceSha256 covers only AST-inventoried files; manualSourceSha256 is separate.",
@@ -3322,7 +3477,7 @@
     "Technical identifiers and canonical labels translated by child wrappers may remain candidates; needs_manual_review does not mean untranslated. Template interpolation records source syntax only, never user values.",
     "Known t/mimouseT/i18n.t/mimouseI18n.t calls are omitted, not verified as translated. Dynamic snippets are source syntax truncated to 240 characters, never runtime data."
   ],
-  "sourceSha256": "db7022ebcea84cd32b8bd8c00f1eb82eb4c0831a587943f4f53b47e896cbc6d1",
+  "sourceSha256": "47747b5b448e04ebfa5109c3998fbb3dd33765346e649709426b1dce3074c943",
   "requestedBasenames": [
     "Auth",
     "InviteLanding",
@@ -3367,7 +3522,7 @@
     "InboxAgentPolicyControl",
     "AgentMultiSelect"
   ],
-  "matchedFiles": 160,
+  "matchedFiles": 166,
   "unmatchedBasenames": [],
   "requestedRoutedFiles": [
     "ui/src/pages/RoutineDetail.tsx",
@@ -3596,7 +3751,6 @@
       "ui/src/components/AgentIconPicker.tsx",
       "ui/src/components/AgentIdentity.tsx",
       "ui/src/components/AgentProperties.tsx",
-      "ui/src/components/AgentSecretAccessEditor.tsx",
       "ui/src/components/AnimatedDialogContent.tsx",
       "ui/src/components/AnimatedPaperclipIcon.tsx",
       "ui/src/components/AnnouncementCard.tsx",
@@ -3776,7 +3930,6 @@
       "ui/src/components/ResourceStatusChip.tsx",
       "ui/src/components/ResponsibleUserDenialNotice.tsx",
       "ui/src/components/ReusableExecutionWorkspaceSelect.tsx",
-      "ui/src/components/RouteErrorBoundary.tsx",
       "ui/src/components/RoutineContextualSidebar.tsx",
       "ui/src/components/RoutineHistoryTab.tsx",
       "ui/src/components/RoutineOverview.tsx",
@@ -3803,7 +3956,6 @@
       "ui/src/components/SidebarCompanyMenu.tsx",
       "ui/src/components/SidebarNavItem.production.tsx",
       "ui/src/components/SidebarNavItem.tsx",
-      "ui/src/components/SidebarRecentTasks.tsx",
       "ui/src/components/SidebarSection.tsx",
       "ui/src/components/SidebarServerInfo.tsx",
       "ui/src/components/SidebarShell.production.tsx",
@@ -3938,9 +4090,6 @@
       "ui/src/components/task-detail/TaskDetailRelationsPanel.tsx",
       "ui/src/components/task-detail/TaskDetailTasksPanel.tsx",
       "ui/src/components/task-side-panel/TaskBrowserActivity.tsx",
-      "ui/src/components/task-side-panel/TaskBrowserFooter.tsx",
-      "ui/src/components/task-side-panel/TaskBrowserPanel.tsx",
-      "ui/src/components/task-side-panel/TaskSkillPanel.tsx",
       "ui/src/components/timeline/WorkTimelineChart.tsx",
       "ui/src/components/ui/alert-dialog.tsx",
       "ui/src/components/ui/attachment.tsx",
@@ -4182,6 +4331,7 @@
     "evidenceOnlyTsxFiles": [
       "ui/src/components/BlockedReasonChip.tsx",
       "ui/src/components/InteractionAudienceLine.tsx",
+      "ui/src/components/Layout.tsx",
       "ui/src/components/task-chat/RunnerGoalWidget.tsx",
       "ui/src/main.tsx"
     ],
@@ -4403,8 +4553,8 @@
     ],
     "routeSourceSha256": "184601b85f73084e2a29c9edb73f19a88239f76d0878b8701efb66e772610eb2"
   },
-  "totalLiteralCandidates": 710,
-  "totalDynamicCandidates": 3355,
+  "totalLiteralCandidates": 711,
+  "totalDynamicCandidates": 3382,
   "files": [
     {
       "file": "ui/src/App.tsx",
@@ -4430,6 +4580,11 @@
       "file": "ui/src/components/AgentMultiSelect.tsx",
       "literalCandidates": 0,
       "dynamicCandidates": 16
+    },
+    {
+      "file": "ui/src/components/AgentSecretAccessEditor.tsx",
+      "literalCandidates": 1,
+      "dynamicCandidates": 11
     },
     {
       "file": "ui/src/components/AgentSetupPrompt.tsx",
@@ -4662,6 +4817,11 @@
       "dynamicCandidates": 15
     },
     {
+      "file": "ui/src/components/RouteErrorBoundary.tsx",
+      "literalCandidates": 0,
+      "dynamicCandidates": 2
+    },
+    {
       "file": "ui/src/components/RoutineActivityRow.tsx",
       "literalCandidates": 0,
       "dynamicCandidates": 6
@@ -4710,6 +4870,11 @@
       "file": "ui/src/components/SidebarProjects.tsx",
       "literalCandidates": 0,
       "dynamicCandidates": 7
+    },
+    {
+      "file": "ui/src/components/SidebarRecentTasks.tsx",
+      "literalCandidates": 0,
+      "dynamicCandidates": 2
     },
     {
       "file": "ui/src/components/SubscriptionCostCard.tsx",
@@ -5007,6 +5172,16 @@
       "dynamicCandidates": 8
     },
     {
+      "file": "ui/src/components/task-side-panel/TaskBrowserFooter.tsx",
+      "literalCandidates": 0,
+      "dynamicCandidates": 4
+    },
+    {
+      "file": "ui/src/components/task-side-panel/TaskBrowserPanel.tsx",
+      "literalCandidates": 0,
+      "dynamicCandidates": 4
+    },
+    {
       "file": "ui/src/components/task-side-panel/TaskDocumentPanel.tsx",
       "literalCandidates": 0,
       "dynamicCandidates": 3
@@ -5015,6 +5190,11 @@
       "file": "ui/src/components/task-side-panel/TaskSidePanel.tsx",
       "literalCandidates": 1,
       "dynamicCandidates": 6
+    },
+    {
+      "file": "ui/src/components/task-side-panel/TaskSkillPanel.tsx",
+      "literalCandidates": 0,
+      "dynamicCandidates": 4
     },
     {
       "file": "ui/src/components/task-side-panel/TaskWorkspaceFilePanel.tsx",
@@ -5215,6 +5395,14 @@
       "kind": "jsx-attribute",
       "classification": "needs_manual_review",
       "text": "/path/to/project"
+    },
+    {
+      "file": "ui/src/components/AgentSecretAccessEditor.tsx",
+      "line": 362,
+      "column": 37,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "ALIAS"
     },
     {
       "file": "ui/src/components/CommentThread.tsx",
@@ -11777,6 +11965,94 @@
       "kind": "jsx-dynamic",
       "classification": "needs_manual_review",
       "expression": "agent.name"
+    },
+    {
+      "file": "ui/src/components/AgentSecretAccessEditor.tsx",
+      "line": 272,
+      "column": 12,
+      "kind": "jsx-dynamic",
+      "classification": "needs_manual_review",
+      "expression": "summaries.map((summary) => ( <div key={summary.secretId} className=\"flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-border bg-muted/30 px-2.5 py-1.5 text-xs\" > <KeyRound className=\"size-3.5 shrink-0 text-muted-foregroun"
+    },
+    {
+      "file": "ui/src/components/AgentSecretAccessEditor.tsx",
+      "line": 278,
+      "column": 46,
+      "kind": "jsx-dynamic",
+      "classification": "needs_manual_review",
+      "expression": "secretName(summary.secretId)"
+    },
+    {
+      "file": "ui/src/components/AgentSecretAccessEditor.tsx",
+      "line": 282,
+      "column": 18,
+      "kind": "jsx-dynamic",
+      "classification": "needs_manual_review",
+      "expression": "[ ...summary.envKeys.map((key) => `${ENV_CONFIG_PATH_PREFIX}${key}`), ...summary.apiAliases.map((alias) => `${AGENT_ACCESS_CONFIG_PATH_PREFIX}${alias}`), ].join(\" · \")"
+    },
+    {
+      "file": "ui/src/components/AgentSecretAccessEditor.tsx",
+      "line": 300,
+      "column": 12,
+      "kind": "jsx-dynamic",
+      "classification": "needs_manual_review",
+      "expression": "bindingProposals.map((proposal) => { const secret = bindingSecretLabel(proposal); const envKey = bindingEnvKey(proposal); return ( <div key={proposal.id} className=\"flex flex-col gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px"
+    },
+    {
+      "file": "ui/src/components/AgentSecretAccessEditor.tsx",
+      "line": 311,
+      "column": 50,
+      "kind": "jsx-dynamic",
+      "classification": "needs_manual_review",
+      "expression": "envKey"
+    },
+    {
+      "file": "ui/src/components/AgentSecretAccessEditor.tsx",
+      "line": 311,
+      "column": 60,
+      "kind": "jsx-dynamic",
+      "classification": "needs_manual_review",
+      "expression": "proposal.configPath"
+    },
+    {
+      "file": "ui/src/components/AgentSecretAccessEditor.tsx",
+      "line": 314,
+      "column": 52,
+      "kind": "jsx-dynamic",
+      "classification": "needs_manual_review",
+      "expression": "secret.name"
+    },
+    {
+      "file": "ui/src/components/AgentSecretAccessEditor.tsx",
+      "line": 320,
+      "column": 57,
+      "kind": "jsx-dynamic",
+      "classification": "needs_manual_review",
+      "expression": "proposal.justification"
+    },
+    {
+      "file": "ui/src/components/AgentSecretAccessEditor.tsx",
+      "line": 343,
+      "column": 14,
+      "kind": "jsx-dynamic",
+      "classification": "needs_manual_review",
+      "expression": "rows.map((row) => { const trimmedAlias = row.alias.trim(); const aliasInvalid = Boolean(trimmedAlias) && !SECRET_ALIAS_RE.test(trimmedAlias); const aliasDuplicate = Boolean(trimmedAlias) && (aliasCounts.get(trimmedAlias) ?? 0) > 1; const se"
+    },
+    {
+      "file": "ui/src/components/AgentSecretAccessEditor.tsx",
+      "line": 460,
+      "column": 29,
+      "kind": "jsx-dynamic",
+      "classification": "needs_manual_review",
+      "expression": "Array.from({ length: Math.max(0, selectedSecret.latestVersion) }, (_, index) => { const version = selectedSecret.latestVersion - index; if (version <= 0) return null; return ( <option key={version} value={version}> v{version} </option> ); }"
+    },
+    {
+      "file": "ui/src/components/AgentSecretAccessEditor.tsx",
+      "line": 465,
+      "column": 37,
+      "kind": "jsx-dynamic",
+      "classification": "needs_manual_review",
+      "expression": "version"
     },
     {
       "file": "ui/src/components/AgentSetupPrompt.tsx",
@@ -18843,6 +19119,22 @@
       "expression": "Array.from({ length: 3 }).map((_, index) => ( <div key={index} className=\"border border-border px-3.5 py-3\" > <div className=\"flex items-start justify-between gap-3\"> <div className=\"min-w-0 space-y-2\"> <Skeleton className=\"h-4 w-32\" /> <Sk"
     },
     {
+      "file": "ui/src/components/RouteErrorBoundary.tsx",
+      "line": 54,
+      "column": 12,
+      "kind": "jsx-dynamic",
+      "classification": "needs_manual_review",
+      "expression": "error.message"
+    },
+    {
+      "file": "ui/src/components/RouteErrorBoundary.tsx",
+      "line": 77,
+      "column": 8,
+      "kind": "jsx-dynamic",
+      "classification": "needs_manual_review",
+      "expression": "children"
+    },
+    {
       "file": "ui/src/components/RoutineActivityRow.tsx",
       "line": 87,
       "column": 12,
@@ -19761,6 +20053,22 @@
       "kind": "jsx-dynamic",
       "classification": "needs_manual_review",
       "expression": "sortedProjects.map((project: Project) => renderProject(project))"
+    },
+    {
+      "file": "ui/src/components/SidebarRecentTasks.tsx",
+      "line": 255,
+      "column": 10,
+      "kind": "jsx-dynamic",
+      "classification": "needs_manual_review",
+      "expression": "entries.map((entry) => ( <div key={entry.id} className=\"sidebar-action-row group/recent-task relative\"> <SidebarNavItem to={`/issues/${entry.id}`} label={entry.title} trailing={entry.status === \"in_review\" && entry.externalConversationState"
+    },
+    {
+      "file": "ui/src/components/SidebarRecentTasks.tsx",
+      "line": 259,
+      "column": 22,
+      "kind": "jsx-dynamic",
+      "classification": "needs_manual_review",
+      "expression": "entry.title"
     },
     {
       "file": "ui/src/components/SubscriptionCostCard.tsx",
@@ -27875,6 +28183,70 @@
       "expression": "attachment.id"
     },
     {
+      "file": "ui/src/components/task-side-panel/TaskBrowserFooter.tsx",
+      "line": 175,
+      "column": 22,
+      "kind": "jsx-dynamic",
+      "classification": "needs_manual_review",
+      "expression": "sizeLabel"
+    },
+    {
+      "file": "ui/src/components/task-side-panel/TaskBrowserFooter.tsx",
+      "line": 205,
+      "column": 22,
+      "kind": "jsx-dynamic",
+      "classification": "needs_manual_review",
+      "expression": "BROWSER_USE_VIEWPORT_PRESETS.map((preset) => ( <DropdownMenuRadioItem key={preset.id} value={preset.id} > <span>{t(`taskRecoveryControlsUi.browser.presets.${preset.id}`)}</span> <span className=\"ml-auto font-mono text-xs tabular-nums text-m"
+    },
+    {
+      "file": "ui/src/components/task-side-panel/TaskBrowserFooter.tsx",
+      "line": 212,
+      "column": 28,
+      "kind": "jsx-dynamic",
+      "classification": "needs_manual_review",
+      "expression": "preset.width"
+    },
+    {
+      "file": "ui/src/components/task-side-panel/TaskBrowserFooter.tsx",
+      "line": 212,
+      "column": 45,
+      "kind": "jsx-dynamic",
+      "classification": "needs_manual_review",
+      "expression": "preset.height"
+    },
+    {
+      "file": "ui/src/components/task-side-panel/TaskBrowserPanel.tsx",
+      "line": 246,
+      "column": 49,
+      "kind": "jsx-dynamic",
+      "classification": "needs_manual_review",
+      "expression": "heading"
+    },
+    {
+      "file": "ui/src/components/task-side-panel/TaskBrowserPanel.tsx",
+      "line": 248,
+      "column": 16,
+      "kind": "jsx-dynamic",
+      "classification": "needs_manual_review",
+      "expression": "message"
+    },
+    {
+      "file": "ui/src/components/task-side-panel/TaskBrowserPanel.tsx",
+      "line": 271,
+      "column": 12,
+      "kind": "jsx-dynamic",
+      "classification": "needs_manual_review",
+      "expression": "message"
+    },
+    {
+      "file": "ui/src/components/task-side-panel/TaskBrowserPanel.tsx",
+      "line": 281,
+      "column": 12,
+      "kind": "jsx-dynamic",
+      "classification": "needs_manual_review",
+      "expression": "viewport.error"
+    },
+    {
       "file": "ui/src/components/task-side-panel/TaskDocumentPanel.tsx",
       "line": 72,
       "column": 8,
@@ -27945,6 +28317,38 @@
       "kind": "jsx-dynamic",
       "classification": "needs_manual_review",
       "expression": "content"
+    },
+    {
+      "file": "ui/src/components/task-side-panel/TaskSkillPanel.tsx",
+      "line": 58,
+      "column": 52,
+      "kind": "jsx-dynamic",
+      "classification": "needs_manual_review",
+      "expression": "skill.name"
+    },
+    {
+      "file": "ui/src/components/task-side-panel/TaskSkillPanel.tsx",
+      "line": 70,
+      "column": 12,
+      "kind": "jsx-dynamic",
+      "classification": "needs_manual_review",
+      "expression": "skill.slug"
+    },
+    {
+      "file": "ui/src/components/task-side-panel/TaskSkillPanel.tsx",
+      "line": 75,
+      "column": 74,
+      "kind": "jsx-dynamic",
+      "classification": "needs_manual_review",
+      "expression": "skill.description"
+    },
+    {
+      "file": "ui/src/components/task-side-panel/TaskSkillPanel.tsx",
+      "line": 81,
+      "column": 24,
+      "kind": "jsx-dynamic",
+      "classification": "needs_manual_review",
+      "expression": "previewMarkdown"
     },
     {
       "file": "ui/src/components/task-side-panel/TaskWorkspaceFilePanel.tsx",

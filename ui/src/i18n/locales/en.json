@@ -174,7 +174,19 @@
     "changePrimaryFailed": "Couldn't change your primary agent.",
     "createSecretOrganization": "Select an organization to create secrets",
     "uploadImageOrganization": "Select an organization to upload images",
-    "detectModelOrganization": "Select an organization to detect the model"
+    "detectModelOrganization": "Select an organization to detect the model",
+    "secretAccessEnv": "Env var",
+    "secretAccessApi": "API access",
+    "secretAccessEmpty": "No secrets are bound to this agent yet.",
+    "secretAccessProposed": "Proposed access",
+    "secretAccessProposedBy": "proposed by {{name}}",
+    "secretAccessApiOnly": "API access (no env var)",
+    "secretAccessAlias": "Access alias",
+    "secretAccessRemove": "Remove API access",
+    "secretAccessInvalidAlias": "Invalid alias — use letters, digits and _",
+    "secretAccessDuplicateAlias": "Duplicate alias",
+    "secretAccessAdd": "Add API access",
+    "secretAccessDescription": "Fetched on demand via the run-bound agent API. Never written to the environment. The agent reads them by alias through <0>{{path}}</0>."
   },
   "agentDetailConfirmUi": {
     "pauseTitle": "Pause the {{name}}?",
@@ -5217,6 +5229,27 @@
     "submitAnswers": "Submit answers",
     "next": "Next"
   },
+  "recentTaskActionsUi": {
+    "rename": "Rename",
+    "archive": "Archive",
+    "pauseRestart": "Pause/Restart",
+    "renameTitle": "Rename task",
+    "renameDescription": "Choose a short, clear name for this task.",
+    "taskName": "Task name",
+    "renamed": "Task renamed",
+    "renameFailed": "Task rename failed",
+    "renameError": "Unable to rename this task.",
+    "archived": "Task archived from inbox",
+    "archiveFailed": "Task archive failed",
+    "archiveError": "Unable to archive this task from the inbox.",
+    "wakeSkipped": "The assignee wake was skipped.",
+    "restarted": "Task restarted",
+    "parentPause": "This task is paused by a parent task. Restart it from the pause root.",
+    "paused": "Task paused",
+    "pauseFailed": "Task pause update failed",
+    "pauseError": "Unable to pause or restart this task.",
+    "idle": "Idle"
+  },
   "remoteMcpFormUi": {
     "helpWith": "Help with {{label}}",
     "serverUrl": "MCP server URL",
@@ -6468,6 +6501,31 @@
     "unconfirmed_one": "{{count}} unconfirmed account identity",
     "unconfirmed_other": "{{count}} unconfirmed account identities"
   },
+  "taskBrowserPanelUi": {
+    "disconnected": "The live view disconnected. Use Reconnect view in Browser options to try again.",
+    "actionFailed": "The browser action failed. Try again.",
+    "accessDenied": "You no longer have access to this browser.",
+    "accessUnavailable": "Browser access unavailable",
+    "starting": "Starting browser…",
+    "closing": "Closing browser…",
+    "closed": "Browser closed",
+    "startFailed": "Browser could not start",
+    "disconnectedTitle": "Live view disconnected",
+    "connecting": "Connecting to browser…",
+    "noneOpen": "No browser open",
+    "frameTitle": "Live Browser Use browser",
+    "loadTimeout": "The live view did not load",
+    "loadTimeoutDescription": "Reconnect the view or open this task in another browser. The remote browser is still running.",
+    "reconnect": "Reconnect view",
+    "anotherOpen": "Another browser is still open on this task.",
+    "askAnother": "Send a task message to ask the agent to open another browser.",
+    "waitingReady": "The live view will appear here when it is ready.",
+    "waitingShutdown": "Waiting for Browser Use to confirm shutdown.",
+    "askBrowse": "Ask the agent to browse a website in a task message.",
+    "openActive": "Open active browser",
+    "presenceFailed": "Could not keep this browser open. Check your connection before the timer runs out.",
+    "resizeFailed": "Browser size could not be changed. Choose a size in Browser options to try again."
+  },
   "taskComposerErrorsUi": {
     "goalExtraArguments": "{{command}} does not accept extra arguments.",
     "createFailed": "Failed to create task. Try again.",
@@ -6627,6 +6685,57 @@
     "changedFiles": "Changed files",
     "binaryDiffUnavailable": "Binary file; text diff is unavailable.",
     "noInlinePatch": "No inline patch was recorded for this file."
+  },
+  "taskRecoveryControlsUi": {
+    "skill": {
+      "loading": "Loading skill…",
+      "unavailable": "Skill no longer available.",
+      "forbidden": "You do not have access to this skill.",
+      "loadFailed": "The skill could not be loaded.",
+      "retrying": "Retrying…",
+      "retry": "Retry",
+      "openStudio": "Open in Skill Studio",
+      "revision": "Revision {{revision}}",
+      "currentVersion": "Current version",
+      "instructions": "Skill instructions",
+      "emptyInstructions": "Skill instructions are empty."
+    },
+    "browser": {
+      "session": "Browser session",
+      "closesIn": "Closes in <0>{{countdown}}</0>",
+      "closing": "Closing…",
+      "controlledElsewhere": "Size follows another viewer",
+      "resizing": "Resizing…",
+      "browsing": "Browsing",
+      "keepBrowsing": "Keep browsing",
+      "keepBrowsingDescription": "Keep this browser open for up to {{minutes}} more minutes.",
+      "stopBrowsing": "Stop browsing",
+      "stopDescription": "Stop the agent’s browser work and leave the browser open.",
+      "options": "Browser options",
+      "size": "Browser size",
+      "fit": "Fit to pane",
+      "default": "Default",
+      "fitHere": "Fit to this pane instead",
+      "browserDefault": "Browser default",
+      "presets": {
+        "phone": "Phone",
+        "tablet": "Tablet",
+        "laptop": "Laptop",
+        "desktop": "Desktop"
+      },
+      "reconnect": "Reconnect view",
+      "reconnectDescription": "Reload the live view. Browser work keeps running.",
+      "keepOpen": "Keep browser open",
+      "keepOpenDescription": "Keep it open for up to {{minutes}} more minutes.",
+      "close": "Close browser",
+      "closeDescription": "End this browser and stop any browsing."
+    },
+    "route": {
+      "title": "This page hit an error",
+      "description": "Something went wrong while rendering this page. You can go back and try again, or reload.",
+      "goBack": "Go back",
+      "reload": "Reload page"
+    }
   },
   "taskRichInputUi": {
     "uploadUnavailable": "Image uploads are unavailable.",
