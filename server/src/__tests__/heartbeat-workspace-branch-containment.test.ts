@@ -137,7 +137,7 @@ async function readGit(cwd: string, args: string[]) {
 async function createGitRepo() {
   // realpath: on macOS os.tmpdir() is a symlink (/tmp -> /private/tmp) and the
   // runtime persists resolved worktree paths, so unresolved fixtures never match.
-  const repoRoot = await realpath(await mkdtemp(path.join(os.tmpdir(), "paperclip-branch-containment-repo-")));
+  const repoRoot = await realpath(await mkdtemp(path.join(os.tmpdir(), "pc-branch-repo-")));
   await runGit(repoRoot, ["init"]);
   await runGit(repoRoot, ["config", "user.email", "paperclip-test@example.com"]);
   await runGit(repoRoot, ["config", "user.name", "Paperclip Test"]);
@@ -600,7 +600,9 @@ async function expectContainedWorkspaceBranchFailure(input: {
   expectedBranch: string;
   actualBranch: string;
 }) {
-  const finishedRun = await waitForRunToFinish(input.heartbeat, input.runId, 10_000);
+  // Real Git inspection/reconciliation is still in flight after 10s under
+  // concurrent Windows suites. Keep a bounded wait inside the 30s case budget.
+  const finishedRun = await waitForRunToFinish(input.heartbeat, input.runId, 20_000);
   expect(finishedRun).toMatchObject({
     status: "failed",
     errorCode: "workspace_validation_failed",
@@ -729,7 +731,9 @@ async function expectForwardBranchReconciled(input: {
   expectsExistingRecordUpdate: boolean;
   expectedResolvedRecoveryActionFingerprint?: string | null;
 }) {
-  const finishedRun = await waitForRunToFinish(input.heartbeat, input.runId, 10_000);
+  // Real Git inspection/reconciliation is still in flight after 10s under
+  // concurrent Windows suites. Keep a bounded wait inside the 30s case budget.
+  const finishedRun = await waitForRunToFinish(input.heartbeat, input.runId, 20_000);
   expect(finishedRun).toMatchObject({
     status: "succeeded",
     errorCode: null,
@@ -938,7 +942,9 @@ describeEmbeddedPostgres("heartbeat workspace branch containment", () => {
   }, 60_000);
 
   async function seedRetainedSourceRun(kind: "deleted" | "explicit_conflict" | "foreign_project" | "foreign_company" | "unproven") {
-    const home = await realpath(await mkdtemp(path.join(os.tmpdir(), "paperclip-retained-source-home-")));
+    // Keep the fixture below Git for Windows' worktree administrative path
+    // limit; managed company/project UUIDs and source authorization stay real.
+    const home = await realpath(await mkdtemp(path.join(os.tmpdir(), "pc-retained-")));
     tempRoots.push(home);
     vi.stubEnv("PAPERCLIP_HOME", home);
     const original = await createGitRepo();
@@ -1029,7 +1035,9 @@ describeEmbeddedPostgres("heartbeat workspace branch containment", () => {
     expect(await readFile(path.join(seeded.worktree, "retained.txt"), "utf8")).toBe("unexported original task edits\n");
     expect(await readFile(path.join(seeded.replacement, "replacement.txt"), "utf8")).toBe("replacement source must stay untouched\n");
     expect(await readGit(seeded.worktree, ["branch", "--show-current"])).toBe(seeded.branch);
-    expect(await readGit(seeded.owner, ["worktree", "list", "--porcelain"])).toContain(`worktree ${seeded.worktree}`);
+    const registeredWorktrees = (await readGit(seeded.owner, ["worktree", "list", "--porcelain"]))
+      .split("\n").filter(line => line.startsWith("worktree ")).map(line => path.resolve(line.slice("worktree ".length)));
+    expect(registeredWorktrees).toContain(path.resolve(seeded.worktree));
   });
 
   it.each(["explicit_conflict", "foreign_project", "foreign_company", "unproven"] as const)(
