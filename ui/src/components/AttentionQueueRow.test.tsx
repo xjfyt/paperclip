@@ -2,6 +2,7 @@
 import "../i18n/attention-row-test-resources";
 import "../i18n/interaction-audience-test-resources";
 
+import { queryKeys } from "../lib/queryKeys";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { useState, type AnchorHTMLAttributes, type ReactElement } from "react";
@@ -15,7 +16,9 @@ import { ToastViewport } from "./ToastViewport";
 import { ToastProvider } from "../context/ToastContext";
 import { AttentionQueueRow } from "./AttentionQueueRow";
 
+vi.mock("../context/CompanyContext", () => ({ useCompany: () => ({ selectedCompanyId: "c1" }) }));
 vi.mock("@/lib/router", () => ({
+  useLocation: () => ({ pathname: "/decisions", key: "route1" }),
   Link: ({ children, to, ...props }: AnchorHTMLAttributes<HTMLAnchorElement> & { to: string }) => (
     <a href={to} {...props}>{children}</a>
   ),
@@ -71,6 +74,7 @@ function render(element: ReactElement) {
   document.body.appendChild(container);
   root = createRoot(container);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client.setQueryData(queryKeys.auth.session, null);
   act(() =>
     root?.render(
       <ToastProvider>

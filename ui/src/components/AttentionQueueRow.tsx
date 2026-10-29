@@ -18,6 +18,8 @@ import { Link } from "@/lib/router";
 import { accessApi } from "../api/access";
 import { approvalsApi } from "../api/approvals";
 import { issuesApi } from "../api/issues";
+import { useCompany } from "../context/CompanyContext";
+import { useDecisionActionBoundary, type DecisionActionReceipt } from "../hooks/useDecisionActionBoundary";
 import { useToastActions } from "../context/ToastContext";
 import { queryKeys } from "../lib/queryKeys";
 import type { InteractionAudienceDescription } from "../lib/interaction-audience";
@@ -490,47 +492,53 @@ function CompactDecisionActions({
   useTranslation();
   const actions = collectCompactActions(item);
 
-  const decision = useMutation<unknown, Error, CompactDecisionAction>({
-    mutationFn: (action: CompactDecisionAction) => {
-      if (item.sourceKind === "approval") {
-        if (action === "approve") return approvalsApi.approve(item.subject.id);
-        if (action === "reject") return approvalsApi.reject(item.subject.id);
-        return approvalsApi.requestRevision(item.subject.id);
+  const { selectedCompanyId } = useCompany();
+  const linkedIssueId = item.subject.metadata?.issueId;
+  const issueId = typeof linkedIssueId === "string" ? linkedIssueId : null;
+  const boundary = useDecisionActionBoundary(item.companyId, JSON.stringify([item.id, item.sourceKind, item.subject.id, issueId]), selectedCompanyId);
+  type CompactInput = { companyId: string; sourceKind: AttentionItem["sourceKind"]; subjectId: string; issueId: string | null; action: CompactDecisionAction };
+  const decision = useMutation<unknown, Error, DecisionActionReceipt<CompactInput>>({
+    mutationFn: (receipt) => {
+      if (!boundary.isCurrent(receipt)) throw new DOMException("Decision context changed", "AbortError");
+      const { sourceKind, subjectId, issueId: targetIssueId, companyId: targetCompanyId, action } = receipt.input;
+      if (sourceKind === "approval") {
+        if (action === "approve") return approvalsApi.approve(subjectId);
+        if (action === "reject") return approvalsApi.reject(subjectId);
+        return approvalsApi.requestRevision(subjectId);
       }
-      if (item.sourceKind === "join_request") {
+      if (sourceKind === "join_request") {
         return action === "approve"
-          ? accessApi.approveJoinRequest(companyId, item.subject.id)
-          : accessApi.rejectJoinRequest(companyId, item.subject.id);
+          ? accessApi.approveJoinRequest(targetCompanyId, subjectId)
+          : accessApi.rejectJoinRequest(targetCompanyId, subjectId);
       }
-      if (item.sourceKind === "issue_thread_interaction") {
-        const issueId = item.subject.metadata?.issueId;
-        if (typeof issueId !== "string") throw new Error(t("attentionRowUi.missingIssue"));
-        if (action === "accept") return issuesApi.acceptInteraction(issueId, item.subject.id);
-        return issuesApi.rejectInteraction(issueId, item.subject.id);
+      if (sourceKind === "issue_thread_interaction") {
+        if (!targetIssueId) throw new Error(t("attentionRowUi.missingIssue"));
+        if (action === "accept") return issuesApi.acceptInteraction(targetIssueId, subjectId);
+        return issuesApi.rejectInteraction(targetIssueId, subjectId);
       }
       throw new Error(t("attentionRowUi.detailRequired"));
     },
-    onSuccess: (_result, action) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.attention(companyId) });
-      if (item.sourceKind === "approval") {
-        queryClient.invalidateQueries({ queryKey: queryKeys.approvals.list(companyId) });
+    onSuccess: (_result, receipt) => {
+      if (!boundary.isCurrent(receipt)) return;
+      const { companyId: targetCompanyId, sourceKind, action } = receipt.input;
+      queryClient.invalidateQueries({ queryKey: queryKeys.attention(targetCompanyId) });
+      if (sourceKind === "approval") {
+        queryClient.invalidateQueries({ queryKey: queryKeys.approvals.list(targetCompanyId) });
       } else {
-        queryClient.invalidateQueries({ queryKey: queryKeys.access.joinRequests(companyId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.access.joinRequests(targetCompanyId) });
       }
-      pushToast({
-        title: compactDecisionSuccessLabel(item.sourceKind, action),
-        tone: "success",
-      });
+      pushToast({ title: compactDecisionSuccessLabel(sourceKind, action), tone: "success" });
     },
-    onError: (error, action) => {
-      // A policy denial is permanent, so it keeps the server's reason and names
-      // the real responder instead of asking for a retry that will fail again.
+    onError: (error, receipt) => {
+      if (!boundary.isCurrent(receipt)) return;
+      // A denial keeps the raw server reason and names the actual responder.
       pushToast({
-        title: t(`attentionRowUi.error.${action}`),
+        title: t(`attentionRowUi.error.${receipt.input.action}`),
         body: taskInteractionError(error, audience ?? { isOpen: true, shortSummary: "" }),
         tone: "error",
       });
     },
+    onSettled: (_data, _error, receipt) => boundary.finish(receipt),
   });
 
   if (actions.length === 0) return null;
@@ -544,17 +552,19 @@ function CompactDecisionActions({
           variant={decisionVerbVariant({ id, label, description })}
           size="xs"
           className={cn(ACTION_BTN, "min-w-0 flex-1 @xl:flex-none")}
-          disabled={decision.isPending}
+          disabled={boundary.pending || item.companyId !== companyId || companyId !== selectedCompanyId}
           onClick={(event) => {
             event.stopPropagation();
             if (item.sourceKind === "issue_thread_interaction" && action === "reject") {
               onOpen();
               return;
             }
-            decision.mutate(action);
+            if (item.companyId !== companyId) return;
+            const receipt = boundary.begin<CompactInput>({ companyId, sourceKind: item.sourceKind, subjectId: item.subject.id, issueId, action });
+            if (receipt) decision.mutate(receipt);
           }}
         >
-          {decision.isPending && decision.variables === action && <Loader2 className="h-3 w-3 animate-spin" />}
+          {boundary.pending && boundary.isCurrent(decision.variables) && decision.variables?.input.action === action && <Loader2 className="h-3 w-3 animate-spin" />}
           {item.sourceKind === "issue_thread_interaction" ? label : t(`attentionRowUi.action.${action}`)}
         </Button>
       ))}

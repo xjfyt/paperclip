@@ -12,21 +12,23 @@ import { attentionRowMessages, i18n } from "../i18n/attention-row-test-resources
 import { decisionDeskMessages } from "../i18n/decision-desk-test-resources";
 import { validateLocaleMessages } from "../i18n/locale-validation";
 import { attentionDetailDisplay } from "../i18n/attention-row-display";
+import { queryKeys } from "../lib/queryKeys";
 import { formatNumber } from "../lib/utils";
 const state = vi.hoisted(() => ({ approve: vi.fn(), reject: vi.fn(), revise: vi.fn(), snooze: vi.fn(), accept: vi.fn(), toast: vi.fn() }));
 vi.mock("../api/approvals", () => ({ approvalsApi: { approve: state.approve, reject: state.reject, requestRevision: state.revise } }));
 vi.mock("../context/ToastContext", () => ({ useToastActions: () => ({ pushToast: state.toast }) }));
 vi.mock("../api/issues", () => ({ issuesApi: { acceptInteraction: state.accept } }));
+vi.mock("../context/CompanyContext", () => ({ useCompany: () => ({ selectedCompanyId: "c1" }) }));
 vi.mock("@/lib/router", async () => {
   const { forwardRef } = await import("react");
-  return { Link: forwardRef<HTMLAnchorElement, React.AnchorHTMLAttributes<HTMLAnchorElement> & { to: string }>(({ children, to, ...props }, ref) => <a {...props} ref={ref} href={to}>{children}</a>) };
+  return { useLocation: () => ({ pathname: "/decisions", key: "route1" }), Link: forwardRef<HTMLAnchorElement, React.AnchorHTMLAttributes<HTMLAnchorElement> & { to: string }>(({ children, to, ...props }, ref) => <a {...props} ref={ref} href={to}>{children}</a>) };
 });
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 let host: HTMLDivElement, root: Root, client: QueryClient;
 const item = { id: "row1", companyId: "c1", sourceKind: "approval", subject: { id: "a1", kind: "approval", title: "Raw title <b> Ω", href: "/PAP/approvals/a1" }, decisionVerbs: [{ id: "approve", label: "Approve", description: "raw description" }], whyNow: "Raw why", inlineResolvable: true, severity: "medium", activityAt: "2026-10-29T00:00:00Z", decideBy: "today", decideByAttribution: { type: "agent", agentName: "Raw agent" }, detail: { kind: "questions", questionCount: 1234, firstQuestionText: "Raw provider <b>", images: [] } } as unknown as AttentionItem;
 const language = async (locale: string) => { await act(async () => { await i18n.changeLanguage(locale); }); };
 async function render(expanded = false, next = item) { await act(async () => root.render(<QueryClientProvider client={client}><AttentionQueueRow item={next} companyId="c1" expanded={expanded} onToggleExpand={vi.fn()} onDismiss={vi.fn()} onSnooze={state.snooze} /></QueryClientProvider>)); }
-beforeEach(() => { host = document.createElement("div"); document.body.append(host); root = createRoot(host); client = new QueryClient(); vi.clearAllMocks(); });
+beforeEach(() => { host = document.createElement("div"); document.body.append(host); root = createRoot(host); client = new QueryClient(); client.setQueryData(queryKeys.auth.session, null); vi.clearAllMocks(); });
 afterEach(async () => { await act(async () => root.unmount()); client.clear(); host.remove(); await language("en"); });
 describe.each(Object.entries(attentionRowMessages))("actual attention row %s", (locale, strings) => {
   it("localizes system chrome and structured counts while preserving raw content", async () => {
