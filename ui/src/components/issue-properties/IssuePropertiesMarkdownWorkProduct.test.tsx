@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import "@/i18n/artifact-test-resources";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -10,6 +11,8 @@ import { IssuePropertiesArtifactsTab } from "./IssuePropertiesArtifactsTab";
 import { ApiError } from "@/api/client";
 import { TextAttachmentContext } from "@/context/TextAttachmentContext";
 import { RichWorkProductCard } from "@/components/task-chat/RichWorkProductCard";
+import { i18n } from "@/i18n";
+import { artifactMessages } from "@/i18n/artifact-test-resources";
 
 const mockIssuesApi = vi.hoisted(() => ({
   listAttachments: vi.fn(async (): Promise<unknown[]> => []),
@@ -163,7 +166,8 @@ describe("markdown work product review row", () => {
   let root: Root | null = null;
   const openText = vi.fn();
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await i18n.changeLanguage("en");
     vi.clearAllMocks();
     container = document.createElement("div");
     document.body.appendChild(container);
@@ -182,6 +186,7 @@ describe("markdown work product review row", () => {
       root = null;
     }
     container.remove();
+    await i18n.changeLanguage("en");
   });
 
   async function renderTab(
@@ -261,7 +266,7 @@ describe("markdown work product review row", () => {
     mockUseIssueDocuments.mockReturnValue({ data: [makeReviewDocument({ latestRevisionNumber: 3 })] });
     await renderTab();
 
-    expect(container.textContent).toContain("revision 3");
+    expect(container.textContent).toContain("Revision 3");
     expect(container.querySelector(`[data-testid="annotation-count-${REVIEW_KEY}"]`)).not.toBeNull();
     const open = container.querySelector('button[aria-label="Open in tab: Verification report"]') as HTMLButtonElement;
     expect(open).not.toBeNull();
@@ -303,30 +308,42 @@ describe("markdown work product review row", () => {
     expect(mockIssuesApi.ensureWorkProductReviewDocument).toHaveBeenCalledTimes(1);
   });
 
-  it("shows an unsupported state without retry for typed rejections", async () => {
+  it.each([413, 415, 422])("shows an unsupported state without retry for a typed %s rejection", async (status) => {
     mockIssuesApi.ensureWorkProductReviewDocument.mockRejectedValue(
-      new ApiError("Work product attachment is not Markdown", 415, {}),
+      new ApiError("Work product preview rejected", status, {}),
     );
     await renderTab();
 
     await act(async () => expandButton().click());
     await waitForAssertion(() => {
-      expect(container.textContent).toContain("can't be previewed as Markdown");
+      expect(container.querySelector("p")?.textContent).toBe(artifactMessages.en.previewUnsupported);
     });
-    expect(container.textContent).not.toContain("Retry");
+    expect(Array.from(container.querySelectorAll("button")).some((button) => button.textContent === "Retry")).toBe(false);
+    expect(container.querySelector('a[title="Open raw"]')?.getAttribute("href")).toBe(`/api/attachments/${ATTACHMENT_ID}/content`);
+    expect(container.querySelector('a[title="Download"]')?.getAttribute("href")).toBe(`/api/attachments/${ATTACHMENT_ID}/content?download=1`);
+
+    await act(async () => expandButton().click());
+    await act(async () => expandButton().click());
+    await flush();
+    expect(container.querySelector("p")?.textContent).toBe(artifactMessages.en.previewUnsupported);
+    expect(mockIssuesApi.ensureWorkProductReviewDocument).toHaveBeenCalledTimes(1);
   });
 
-  it("offers an explicit retry for recoverable errors", async () => {
+  it.each([403, 404, 500])("offers only an explicit retry for a non-unsupported %s error", async (status) => {
     mockIssuesApi.ensureWorkProductReviewDocument.mockRejectedValue(
-      new ApiError("Internal error", 500, {}),
+      new ApiError("Original provider diagnostic 用户 / model_id", status, {}),
     );
     await renderTab();
 
     await act(async () => expandButton().click());
     await waitForAssertion(() => {
-      expect(container.textContent).toContain("Preview failed to load.");
+      expect(container.querySelector("p")?.textContent).toBe(artifactMessages.en.previewFailed);
     });
 
+    await act(async () => expandButton().click());
+    await act(async () => expandButton().click());
+    await flush();
+    expect(mockIssuesApi.ensureWorkProductReviewDocument).toHaveBeenCalledTimes(1);
     const retry = Array.from(container.querySelectorAll("button")).find(
       (button) => button.textContent === "Retry",
     );
