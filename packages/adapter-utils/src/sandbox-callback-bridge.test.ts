@@ -36,6 +36,12 @@ describe("sandbox callback bridge", () => {
   const cleanupDirs: string[] = [];
   const cleanupFns: Array<() => Promise<void>> = [];
 
+  function deferred<T>() {
+    let resolve!: (value: T | PromiseLike<T>) => void;
+    const promise = new Promise<T>(done => { resolve = done; });
+    return { promise, resolve };
+  }
+
   function createExecRunner() {
     return {
       execute: async (input: {
@@ -932,7 +938,47 @@ describe("sandbox callback bridge", () => {
     await mkdir(remoteWorkspaceDir, { recursive: true });
     await writeFile(path.join(localWorkspaceDir, "README.md"), "bridge response lock test\n", "utf8");
 
-    const runner = createExecRunner();
+    const realRunner = createExecRunner();
+    const gates = sandboxPath(path.join(rootDir, "write-gates"));
+    await mkdir(gates);
+    const stopHasLock = path.posix.join(gates, "stop-has-lock");
+    const lateContended = path.posix.join(gates, "late-contended");
+    const allowStop = path.posix.join(gates, "allow-stop");
+    const allowStopUnlock = path.posix.join(gates, "allow-stop-unlock");
+    const quote = (value: string) => `'${value.replaceAll("'", `'"'"'`)}'`;
+    // Pause only at real remote mutex boundaries. Both production writers,
+    // their request checks, publication, and shell cleanup still execute.
+    const runner: typeof realRunner = { execute: async input => {
+      const script = input.args?.[1];
+      if (!input.stdin || !script?.includes("consume_request_path=")) return realRunner.execute(input);
+      const status = JSON.parse(input.stdin).status;
+      let scheduled = script;
+      if (status === 503) {
+        const point = 'if [ -n "$request_path" ] && [ ! -f "$request_path" ]; then';
+        expect(script).toContain(point);
+        scheduled = script.replace(point, `: > ${quote(stopHasLock)}\nwhile [ ! -f ${quote(allowStop)} ]; do sleep 0.01; done\n${point}`);
+        const published = script.split("\n").find(line => line.includes('"wrote":true'));
+        expect(published).toBeDefined();
+        // Keep the winning lock until the real gateway has consumed the 503.
+        // An unfenced late writer must then expose a second publication.
+        scheduled = scheduled.replace(published!, `while [ ! -f ${quote(allowStopUnlock)} ]; do sleep 0.01; done\n${published}`);
+      } else if (status === 200) {
+        const point = 'while ! mkdir "$lock_dir" 2>/dev/null; do';
+        expect(script).toContain(point);
+        scheduled = script.replace(point, `${point}\n  : > ${quote(lateContended)}`);
+      }
+      return realRunner.execute({ ...input, args: [input.args![0]!, scheduled, ...input.args!.slice(2)] });
+    } };
+    const entered = deferred<void>();
+    const releaseHandler = deferred<void>();
+    async function waitForGate(filename: string) {
+      const deadline = Date.now() + 10_000;
+      while (Date.now() < deadline) {
+        if (await fs.stat(filename).catch(() => null)) return;
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      throw new Error(`Real callback mutex gate was not reached: ${path.posix.basename(filename)}`);
+    }
     const bridgeAsset = await createSandboxCallbackBridgeAsset();
     cleanupFns.push(bridgeAsset.cleanup);
     const prepared = await prepareCommandManagedRuntime({
@@ -951,17 +997,32 @@ describe("sandbox callback bridge", () => {
     const bridgeToken = createSandboxCallbackBridgeToken();
     const seenRequestIds: string[] = [];
 
+    const client = createCommandManagedSandboxCallbackBridgeQueueClient({ runner, remoteCwd: remoteWorkspaceDir, timeoutMs: 30_000 });
+    const realWriteResponse = client.writeResponseFile!.bind(client);
+    const lateWrite = deferred<{ wrote: boolean }>();
+    const writes: Array<{ status: number; wrote: boolean }> = [];
+    const realRemove = client.remove.bind(client);
+    client.remove = async remotePath => {
+      // Preserve the dangerous interleaving: out-of-lock request cleanup must
+      // not be what prevents a late writer. The real write must consume it.
+      if (path.posix.dirname(remotePath) === directories.requestsDir) await lateWrite.promise;
+      await realRemove(remotePath);
+    };
+    client.writeResponseFile = async (...args) => {
+      const status = JSON.parse(args[1]).status as number;
+      const result = await realWriteResponse(...args);
+      writes.push({ status, wrote: result.wrote });
+      if (status === 200) lateWrite.resolve(result);
+      return result;
+    };
     const worker = await startSandboxCallbackBridgeWorker({
-      client: createCommandManagedSandboxCallbackBridgeQueueClient({
-        runner,
-        remoteCwd: remoteWorkspaceDir,
-        timeoutMs: 30_000,
-      }),
+      client,
       queueDir,
       authorizeRequest: async () => null,
       handleRequest: async (request) => {
         seenRequestIds.push(request.id);
-        await new Promise((resolve) => setTimeout(resolve, 250));
+        entered.resolve();
+        await releaseHandler.promise;
         return {
           status: 200,
           headers: { "content-type": "application/json" },
@@ -991,27 +1052,176 @@ describe("sandbox callback bridge", () => {
       },
     });
 
-    for (let attempt = 0; attempt < 50 && seenRequestIds.length === 0; attempt += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 5));
-    }
-
+    cleanupFns.push(async () => {
+      releaseHandler.resolve();
+      await writeFile(allowStop, "release\n");
+      await writeFile(allowStopUnlock, "release\n");
+    });
+    await entered.promise;
     expect(seenRequestIds).toHaveLength(1);
-    await worker.stop({ drainTimeoutMs: 10 });
+    // Both stops enumerate the still-pending request before the winning write.
+    const stopping = Promise.all([worker.stop({ drainTimeoutMs: 10 }), worker.stop({ drainTimeoutMs: 10 })]);
+    await waitForGate(stopHasLock);
+    releaseHandler.resolve();
+    await waitForGate(lateContended);
+    await writeFile(allowStop, "release\n");
 
     const response = await responsePromise;
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toEqual({
       error: "Bridge worker stopped before request could be handled.",
     });
+    await writeFile(allowStopUnlock, "release\n");
+    await stopping;
 
-    await new Promise((resolve) => setTimeout(resolve, 300));
-
+    // The late handler genuinely contended on the 503 writer's remote lock.
+    // Wait for its full real shell command (including trap cleanup), not a timer.
+    await expect(lateWrite.promise).resolves.toEqual({ wrote: false });
+    expect(writes.filter(write => write.wrote)).toEqual([{ status: 503, wrote: true }]);
+    expect(writes.filter(write => write.status === 503).map(write => write.wrote).sort()).toEqual([false, true]);
+    expect(writes.filter(write => write.status === 200)).toEqual([{ status: 200, wrote: false }]);
+    await worker.stop();
     await expect(readdir(directories.responsesDir)).resolves.toEqual([]);
     await expect(
       readdir(directories.responsesDir).then((entries) =>
         entries.filter((entry) => entry.endsWith(".tmp") || entry.includes(".paperclip-write.lock")),
       ),
     ).resolves.toEqual([]);
+  });
+
+  describe.each(["filesystem", "command"] as const)("response delivery fence (%s client)", backend => {
+    async function fixture(fault?: "claim" | "publish" | "cleanup") {
+      const root = sandboxPath(await mkdtemp(path.join(os.tmpdir(), "bridge-delivery-fence-")));
+      cleanupDirs.push(root);
+      const dirs = sandboxCallbackBridgeDirectories(path.posix.join(root, "queue"));
+      await mkdir(dirs.requestsDir, { recursive: true });
+      await mkdir(dirs.responsesDir, { recursive: true });
+      const request = path.posix.join(dirs.requestsDir, "request.json");
+      const response = path.posix.join(dirs.responsesDir, "request.json");
+      const claim = `${response}.paperclip-delivery-unknown`;
+      const bytes = JSON.stringify({ id: "request", method: "POST", path: "/fixture", body: "synthetic bytes" });
+      await writeFile(request, bytes);
+      let inject = Boolean(fault);
+      const realRename = fs.rename.bind(fs), realRemove = fs.rm.bind(fs);
+      let renameSpy: ReturnType<typeof vi.spyOn> | undefined, removeSpy: ReturnType<typeof vi.spyOn> | undefined;
+      if (backend === "filesystem") {
+        renameSpy = vi.spyOn(fs, "rename").mockImplementation(async (from, to) => {
+          if (inject && ((fault === "claim" && String(from) === request && String(to) === claim) ||
+            (fault === "publish" && String(from) === `${response}.tmp` && String(to) === response))) {
+            throw new Error(`injected ${fault} failure`);
+          }
+          return realRename(from, to);
+        });
+        removeSpy = vi.spyOn(fs, "rm").mockImplementation(async (name, options) => {
+          if (inject && fault === "cleanup" && String(name) === claim) throw new Error("injected cleanup failure");
+          return realRemove(name, options);
+        });
+      }
+      const realRunner = createExecRunner();
+      const runner: typeof realRunner = { execute: async input => {
+        if (!inject || !input.stdin || !input.args?.[1]?.includes("consume_request_path=")) return realRunner.execute(input);
+        // Only the selected real filesystem operation fails. All locks, shell
+        // commands, publication, and trap cleanup continue to execute normally.
+        const condition = fault === "claim"
+          ? '[ "$1" = "$consume_request_path" ] && [ "$2" = "$delivery_claim_path" ]'
+          : '[ "$1" = "$temp_path" ] && [ "$2" = "$response_path" ]';
+        const failure = fault === "cleanup"
+          ? 'rm() { if [ "$#" -eq 2 ] && [ "$1" = "-f" ] && [ "$2" = "$delivery_claim_path" ]; then echo "injected cleanup failure" >&2; return 1; fi; command rm "$@"; }'
+          : `mv() { if ${condition}; then echo "injected ${fault} failure" >&2; return 1; fi; command mv "$@"; }`;
+        return realRunner.execute({ ...input, args: [input.args[0]!, `${failure}\n${input.args[1]}`, ...input.args.slice(2)] });
+      } };
+      const client = () => backend === "filesystem" ? createFileSystemSandboxCallbackBridgeQueueClient()
+        : createCommandManagedSandboxCallbackBridgeQueueClient({ runner, remoteCwd: root, timeoutMs: 30_000 });
+      return { dirs, request, response, claim, bytes, client, disableFault: () => { inject = false; }, restore: () => {
+        renameSpy?.mockRestore(); removeSpy?.mockRestore();
+      } };
+    }
+
+    it("allows one unconditional writer across separate clients and rejects later stop/backstop publication", async () => {
+      const f = await fixture();
+      try {
+        const results = await Promise.all([200, 503].map(status => f.client().writeResponseFile!(f.response,
+          JSON.stringify({ id: "request", status, body: "ok" }), { consumeRequestPath: f.request })));
+        expect(results.map(result => result.wrote).sort()).toEqual([false, true]);
+        expect([200, 503]).toContain(JSON.parse(await readFile(f.response, "utf8")).status);
+        await rm(f.response); // Actual gateway consumption.
+        await expect(f.client().writeResponseFile!(f.response, "late", { consumeRequestPath: f.request })).resolves.toEqual({ wrote: false });
+        expect(await readdir(f.dirs.requestsDir)).toEqual([]);
+        expect(await readdir(f.dirs.responsesDir)).toEqual([]);
+      } finally { f.restore(); }
+    });
+
+    if (backend === "filesystem") it("keeps a real live lock while its owner has not published the PID yet", async () => {
+      const f = await fixture();
+      const beforePid = deferred<void>(), publishPid = deferred<void>(), missingPidRead = deferred<void>();
+      const realWrite = fs.writeFile.bind(fs), realRead = fs.readFile.bind(fs);
+      const pidFile = `${f.response}.paperclip-write.lock/pid`;
+      let withheld = false;
+      const writeSpy = vi.spyOn(fs, "writeFile").mockImplementation(async (...args) => {
+        if (String(args[0]) === pidFile && !withheld) {
+          withheld = true;
+          beforePid.resolve();
+          await publishPid.promise;
+        }
+        return realWrite(...args);
+      });
+      const readSpy = vi.spyOn(fs, "readFile").mockImplementation((async (...args: Parameters<typeof fs.readFile>) => {
+        try { return await realRead(...args); }
+        catch (error) {
+          if (String(args[0]) === pidFile) missingPidRead.resolve();
+          throw error;
+        }
+      }) as typeof fs.readFile);
+      let second: Promise<{ wrote: boolean }> | undefined;
+      const first = f.client().writeResponseFile!(f.response, "first", { consumeRequestPath: f.request });
+      try {
+        await beforePid.promise;
+        second = f.client().writeResponseFile!(f.response, "second", { consumeRequestPath: f.request });
+        await missingPidRead.promise;
+        expect((await fs.stat(`${f.response}.paperclip-write.lock`)).isDirectory()).toBe(true);
+        expect(await readFile(f.request, "utf8")).toBe(f.bytes);
+        publishPid.resolve();
+        expect(await Promise.all([first, second])).toEqual([{ wrote: true }, { wrote: false }]);
+        expect(await readFile(f.response, "utf8")).toBe("first");
+      } finally {
+        publishPid.resolve();
+        await Promise.allSettled([first, ...(second ? [second] : [])]);
+        writeSpy.mockRestore(); readSpy.mockRestore(); f.restore();
+      }
+    });
+
+    it.each(["claim", "publish", "cleanup"] as const)("fails closed when the real %s boundary reports failure", async fault => {
+      const f = await fixture(fault);
+      try {
+        await expect(f.client().writeResponseFile!(f.response, "first response", { consumeRequestPath: f.request }))
+          .rejects.toThrow(`injected ${fault} failure`);
+        f.disableFault();
+        if (fault === "claim") {
+          // Publication has not begun. A failed consume cannot leave an orphan.
+          expect(await readFile(f.request, "utf8")).toBe(f.bytes);
+          expect(await readdir(f.dirs.responsesDir)).toEqual([]);
+          await expect(f.client().writeResponseFile!(f.response, "retry", { consumeRequestPath: f.request })).resolves.toEqual({ wrote: true });
+          expect(await readFile(f.response, "utf8")).toBe("retry");
+          expect(await readdir(f.dirs.requestsDir)).toEqual([]);
+          await expect(fs.access(f.claim)).rejects.toMatchObject({ code: "ENOENT" });
+        } else {
+          // The request was claimed before publication. Keep its actual bytes
+          // as an unknown outcome; neither a new client nor require:false can
+          // turn it into another response or a runnable JSON request.
+          expect(await readFile(f.claim, "utf8")).toBe(f.bytes);
+          expect(await f.client().listJsonFiles(f.dirs.requestsDir)).toEqual([]);
+          if (fault === "cleanup") {
+            expect(await readFile(f.response, "utf8")).toBe("first response");
+            await rm(f.response);
+          } else await expect(fs.access(f.response)).rejects.toMatchObject({ code: "ENOENT" });
+          const later = await Promise.all([503, 504].map(status => f.client().writeResponseFile!(f.response,
+            JSON.stringify({ status }), { consumeRequestPath: f.request })));
+          expect(later).toEqual([{ wrote: false }, { wrote: false }]);
+          expect(await readdir(f.dirs.responsesDir)).toEqual([path.posix.basename(f.claim)]);
+          expect(await readFile(f.claim, "utf8")).toBe(f.bytes);
+        }
+      } finally { f.restore(); }
+    });
   });
 
   it("rejects non-JSON request bodies and full queues at the bridge server", async () => {

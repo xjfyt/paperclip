@@ -284,6 +284,10 @@ export interface SandboxCallbackBridgeQueueClient {
     body: string,
     options?: {
       requestPath?: string | null;
+      // Delivery fence: prepare the response, claim this request under the
+      // response lock, then publish. A failed publication retains the claim as
+      // an unknown outcome; stop/backstop writers must not republish it.
+      consumeRequestPath?: string | null;
     },
   ): Promise<{ wrote: boolean }>;
   rename(fromPath: string, toPath: string): Promise<void>;
@@ -575,6 +579,7 @@ export function createFileSystemSandboxCallbackBridgeQueueClient(): SandboxCallb
       const tempPath = `${responsePath}.tmp`;
       const lockDir = `${responsePath}.paperclip-write.lock`;
       const lockPidFile = `${lockDir}/pid`;
+      const deliveryClaimPath = `${responsePath}.paperclip-delivery-unknown`;
       if (options.requestPath) {
         const requestExists = await pathExists(options.requestPath);
         if (!requestExists) {
@@ -602,18 +607,18 @@ export function createFileSystemSandboxCallbackBridgeQueueClient(): SandboxCallb
             const parsed = Number.parseInt(raw.trim(), 10);
             if (Number.isFinite(parsed) && parsed > 0) holderPid = parsed;
           } catch {
-            // pid file missing or unreadable — treat as stale lock
+            // The owner may be between mkdir and publishing its PID. Missing
+            // or unreadable ownership is not proof that this lock is stale.
           }
-          let holderAlive = false;
+          let holderProvenDead = false;
           if (holderPid !== null) {
             try {
               process.kill(holderPid, 0);
-              holderAlive = true;
-            } catch {
-              holderAlive = false;
+            } catch (error) {
+              holderProvenDead = (error as NodeJS.ErrnoException).code === "ESRCH";
             }
           }
-          if (!holderAlive) {
+          if (holderProvenDead) {
             await fs.rm(lockDir, { recursive: true, force: true }).catch(() => undefined);
             continue;
           }
@@ -626,6 +631,9 @@ export function createFileSystemSandboxCallbackBridgeQueueClient(): SandboxCallb
       }
 
       try {
+        if (options.consumeRequestPath && (await pathExists(deliveryClaimPath) || !await pathExists(options.consumeRequestPath))) {
+          return { wrote: false };
+        }
         if (options.requestPath) {
           const requestExists = await pathExists(options.requestPath);
           if (!requestExists) {
@@ -634,10 +642,18 @@ export function createFileSystemSandboxCallbackBridgeQueueClient(): SandboxCallb
         }
         const responseExists = await pathExists(responsePath);
         if (responseExists) {
+          if (options.consumeRequestPath) {
+            await fs.rename(options.consumeRequestPath, deliveryClaimPath);
+            await fs.rm(deliveryClaimPath, { force: true });
+          }
           return { wrote: false };
         }
         await fs.writeFile(tempPath, body, "utf8");
+        // Claim only after the entire response is prepared. Never restore the
+        // original after this point: publication may have been observed already.
+        if (options.consumeRequestPath) await fs.rename(options.consumeRequestPath, deliveryClaimPath);
         await fs.rename(tempPath, responsePath);
+        if (options.consumeRequestPath) await fs.rm(deliveryClaimPath, { force: true });
         return { wrote: true };
       } finally {
         await fs.rm(tempPath, { force: true }).catch(() => undefined);
@@ -759,6 +775,8 @@ export function createCommandManagedSandboxCallbackBridgeQueueClient(input: {
       const tempPath = `${responsePath}.tmp`;
       const lockDir = `${responsePath}.paperclip-write.lock`;
       const requestPath = options.requestPath?.trim() || "";
+      const consumeRequestPath = options.consumeRequestPath?.trim() || "";
+      const deliveryClaimPath = `${responsePath}.paperclip-delivery-unknown`;
       const result = await runShell(
         input.runner,
         input.remoteCwd,
@@ -769,21 +787,30 @@ export function createCommandManagedSandboxCallbackBridgeQueueClient(input: {
           `temp_path=${shellQuote(tempPath)}`,
           `lock_dir=${shellQuote(lockDir)}`,
           `request_path=${shellQuote(requestPath)}`,
+          `consume_request_path=${shellQuote(consumeRequestPath)}`,
+          `delivery_claim_path=${shellQuote(deliveryClaimPath)}`,
           "mkdir -p \"$response_dir\"",
           ...buildRemotePidLockAcquireScript("\"$lock_dir\"", "Timed out acquiring sandbox callback bridge response lock."),
           ...buildRemotePidLockCleanupScript("\"$lock_dir\"", [
             "rm -f \"$temp_path\"",
           ]),
+          "if [ -n \"$consume_request_path\" ] && { [ -e \"$delivery_claim_path\" ] || [ ! -f \"$consume_request_path\" ]; }; then",
+          "  printf '{\"wrote\":false}\\n'",
+          "  exit 0",
+          "fi",
           "if [ -n \"$request_path\" ] && [ ! -f \"$request_path\" ]; then",
           "  printf '{\"wrote\":false}\\n'",
           "  exit 0",
           "fi",
           "if [ -f \"$response_path\" ]; then",
+          "  if [ -n \"$consume_request_path\" ]; then mv \"$consume_request_path\" \"$delivery_claim_path\"; rm -f \"$delivery_claim_path\"; fi",
           "  printf '{\"wrote\":false}\\n'",
           "  exit 0",
           "fi",
           "cat > \"$temp_path\"",
+          "if [ -n \"$consume_request_path\" ]; then mv \"$consume_request_path\" \"$delivery_claim_path\"; fi",
           "mv \"$temp_path\" \"$response_path\"",
+          "if [ -n \"$consume_request_path\" ]; then rm -f \"$delivery_claim_path\"; fi",
           "printf '{\"wrote\":true}\\n'",
         ].join("\n"),
         timeoutMs,
@@ -822,7 +849,10 @@ async function writeBridgeResponse(
 ) {
   const body = `${JSON.stringify(response)}\n`;
   if (client.writeResponseFile) {
-    await client.writeResponseFile(responsePath, body, options.requireRequestPath === false ? {} : { requestPath });
+    await client.writeResponseFile(responsePath, body, {
+      ...(options.requireRequestPath === false ? {} : { requestPath }),
+      consumeRequestPath: requestPath,
+    });
     return;
   }
   const tempPath = `${responsePath}.tmp`;

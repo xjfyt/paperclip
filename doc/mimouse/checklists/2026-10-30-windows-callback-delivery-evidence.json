@@ -1,0 +1,118 @@
+{
+  "schema": "mimouse.local-verification.v1",
+  "recordedAt": "2026-10-30T02:59:03.219039+08:00",
+  "platform": "native Windows x64; actual filesystem, Git Bash processes and loopback HTTP gateway; no remote provider",
+  "changes": [
+    "All worker handler/stop/backstop responses supply a trusted consumeRequestPath fence to both built-in queue clients.",
+    "Under the existing real response mutex, prepare all response bytes, atomically rename the request to a non-JSON .paperclip-delivery-unknown claim, then publish. Delete the claim only after publication. Failed publication or claim cleanup retains the unknown claim; late unconditional writers cannot republish it.",
+    "A missing/unreadable lock PID is not stale proof. The filesystem client waits, matching the command client, and reaps only a valid PID proven absent with ESRCH.",
+    "Replace elapsed handler/cleanup sleeps with actual handler entry, held remote mutex, competing late writer, real HTTP consumption, and completed response-command gates. Two stops enumerate concurrently; out-of-lock request cleanup is deliberately held until the late writer finishes."
+  ],
+  "verification": [
+    {
+      "label": "Complete frozen callback file: 78 pass, no skips. Includes nine new applicable fault/concurrency cases and the strengthened existing late-writer regression.",
+      "passed": 78,
+      "failed": 0,
+      "pending": 0,
+      "command": "cd packages/adapter-utils; node ../../node_modules/vitest/vitest.mjs run src/sandbox-callback-bridge.test.ts --reporter=default --reporter=json --outputFile=../../test-results/project-audit-windows-closure/callback-full-frozen.json",
+      "log": {
+        "path": "test-results/project-audit-windows-closure/callback-full-frozen.log",
+        "sha256": "1f67511f5c896ebff63d4d8e17e27e26cd96f33972c170eee883925ef00c5d6b"
+      },
+      "json": {
+        "path": "test-results/project-audit-windows-closure/callback-full-frozen.json",
+        "sha256": "464301e31f1d90f046a0743a03fe010e3fa8ab69cd55e856b659a4f1bd05a224"
+      }
+    },
+    {
+      "label": "Intentional red: only remove the worker consume option in Vitest transform. With identical real lock/gateway gates, the late 200 writer actually writes true; no workspace source is reverted. The 77 pending cases are name-filtered.",
+      "passed": 0,
+      "failed": 1,
+      "pending": 77,
+      "command": "cd packages/adapter-utils; node ../../node_modules/vitest/vitest.mjs run src/sandbox-callback-bridge.test.ts -t \"serializes remote response writes\" --config ../../test-results/project-audit-windows-closure/callback-response-before-fix.vitest.mjs --reporter=default --reporter=json --outputFile=../../test-results/project-audit-windows-closure/callback-response-gated-red.json",
+      "log": {
+        "path": "test-results/project-audit-windows-closure/callback-response-gated-red.log",
+        "sha256": "251d6ef7cf8a79df2b3ac20477e6566ee5bd4240a32461eb7e8ed9186d7634a6"
+      },
+      "json": {
+        "path": "test-results/project-audit-windows-closure/callback-response-gated-red.json",
+        "sha256": "61641c3cf8b60b93085e604da84790584f046b0d3966ddfd0036aa2b4b2463e3"
+      }
+    }
+  ],
+  "faultCoverage": {
+    "builtInClients": [
+      "filesystem",
+      "command-managed real shell"
+    ],
+    "boundaries": [
+      "request claim rename failure: no published response, original bytes intact, subsequent delivery may retry",
+      "response publication rename failure: original request absent, unknown claim retains original bytes, new clients cannot publish 503/504",
+      "claim cleanup unlink failure after publication: gateway consumption is simulated by reading/removing the real response, then new unconditional clients still cannot republish"
+    ],
+    "concurrency": [
+      "actual remote 503 holds the mutex while the late handler genuinely contends",
+      "actual gateway consumes winning 503 before releasing the mutex",
+      "parallel stops with old pending-request enumerations",
+      "separate client objects compete for one response",
+      "real filesystem owner paused between lock-directory creation and PID publication"
+    ]
+  },
+  "history": [
+    {
+      "label": "Original timing retained plus awaited real write completion: both 503 and 200 returned wrote:true; the remaining entry was an actual orphan JSON, not unfinished lock cleanup.",
+      "passed": 0,
+      "failed": 1,
+      "pending": 68,
+      "command": "cd packages/adapter-utils; node ../../node_modules/vitest/vitest.mjs run src/sandbox-callback-bridge.test.ts -t \"serializes remote response writes\"",
+      "log": {
+        "path": "test-results/project-audit-windows-closure/callback-response-lock-diagnostic.log",
+        "sha256": "0a3d934f7437f63bdac17810c7bacd3aa079ca2d8eaf32dbc562273a776e41bd"
+      },
+      "json": {
+        "path": "test-results/project-audit-windows-closure/callback-response-lock-diagnostic.json",
+        "sha256": "c429a6457eba5859e8ee3d473ae0db922a9b2f4b6c118e4fcf128784822c0fc3"
+      }
+    },
+    {
+      "label": "First new matrix found the pre-existing filesystem lock race: a missing PID was treated as stale, letting two live clients enter. Eight cases passed; the real concurrent claim failed ENOENT.",
+      "passed": 8,
+      "failed": 1,
+      "pending": 68,
+      "command": "cd packages/adapter-utils; node ../../node_modules/vitest/vitest.mjs run src/sandbox-callback-bridge.test.ts -t \"serializes remote response writes|response delivery fence\"",
+      "log": {
+        "path": "test-results/project-audit-windows-closure/callback-response-fence-first.log",
+        "sha256": "10fffaecaac9fac5d0aeb753a6189cc777914fc9d4f01db7c5d2070c76166eb5"
+      },
+      "json": {
+        "path": "test-results/project-audit-windows-closure/callback-response-fence-first.json",
+        "sha256": "38aa55ce6ccba57d7657c04d68ff4fe85ddb5a42e65b4451744525fa7411112c"
+      }
+    }
+  ],
+  "typecheck": {
+    "command": "pnpm --filter @paperclipai/adapter-utils exec tsc --noEmit",
+    "exitCode": 0,
+    "log": {
+      "path": "test-results/project-audit-windows-closure/callback-response-types-frozen.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "sources": [
+    {
+      "path": "packages/adapter-utils/src/sandbox-callback-bridge.ts",
+      "sha256": "38cdf46ca68977374ee8467d77232f59e33cd7263c96c9dff05d5bb7e3d2125a"
+    },
+    {
+      "path": "packages/adapter-utils/src/sandbox-callback-bridge.test.ts",
+      "sha256": "255cab30c84193f7e3614aace63115f9da26d7f941496c732e5dbccba9aa4287"
+    }
+  ],
+  "limits": [
+    "This proves the tested live-process concurrency and explicit IO failure boundaries, not a two-file power-loss transaction or globally exactly-once host mutations.",
+    "Unknown claims are retained in responses with a non-JSON suffix. Built-in pending-request enumerators never list them, and ordinary shutdown/remove only targets the original request; no automatic restoration/replay is added.",
+    "Claim failure before rename may retry publication; claim/publication uncertainty after the rename fails closed. The existing gateway classifies a dispatched unsafe missing receipt as 409 indeterminate; that mapping is retained, not newly claimed as a separately injected end-to-end HTTP fault test.",
+    "The optional consume fence is implemented and verified by the two shipped built-in clients. Older third-party clients that ignore the new option are not qualified by this receipt.",
+    "Negative-path tests deliberately emit expected fault diagnostics; the complete suite has zero failed tests. No secrets or real user data are contained in this receipt."
+  ]
+}
