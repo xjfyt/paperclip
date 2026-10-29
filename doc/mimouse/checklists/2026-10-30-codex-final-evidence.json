@@ -1,0 +1,188 @@
+{
+  "schema": "mimouse.local-verification.v1",
+  "recordedAt": "2026-10-29T20:07:51.147Z",
+  "headAtReceipt": "7feb4ff663dcc12a68ecba51ae090548391e6f15",
+  "scope": "Codex local adapter complete verification after private Windows probe staging and source-policy fixes; offline CLI fixtures only.",
+  "inputs": [
+    {
+      "path": "packages/adapters/codex-local/src/server/test.ts",
+      "sha256": "7c5db7b09dd7bdfb7c2967bb279b88f379a0b7b80bb91555f319c40ded1e3694"
+    },
+    {
+      "path": "packages/adapters/codex-local/src/server/test.remote.test.ts",
+      "sha256": "343c573b1f25fc003fb9a9eecf2de0c5b9d12c931b40597d41ff0b4f9065b0a8"
+    },
+    {
+      "path": "packages/adapters/codex-local/src/server/test.windows-privacy.test.ts",
+      "sha256": "1a2698582195b90be30f25b77c0813be736df7d2edac619bfa095c3d593a7703"
+    }
+  ],
+  "inputHashBoundary": "SHA256 of the current raw workspace bytes captured after the test run; not normalized Git blobs. No claim of a whole-repository frozen-source test run.",
+  "changes": [
+    "Windows local API-key probes create an exclusive temporary directory, establish its private DACL before writing a new empty auth file, and invoke the selected native executable/batch entry through the existing shared launcher. POSIX/remote shell semantics are preserved.",
+    "Remote probe upload staging establishes a private DACL while the new local directory is empty.",
+    "Validate both auth.json and config.toml using the existing private-source validator before copying either file. Windows broad files and symlinks fail closed without changing their contents or DACL; POSIX source symlink dereference remains supported.",
+    "Protection/source-admission failures remove the newly owned probe directory and do not execute the hello probe. No production timeout was raised."
+  ],
+  "verification": [
+    {
+      "command": "pnpm exec vitest run --project @paperclipai/adapter-codex-local --maxWorkers 1 --reporter=json --outputFile=test-results/project-closure-20261029/codex-complete-source-policy-final.json",
+      "interpretation": "Final complete package: all 34 source test files, 563 pass, zero failures, one existing Linux-only process-group CPU activity case skipped on native Windows.",
+      "result": {
+        "files": 34,
+        "passed": 563,
+        "failed": 0,
+        "pending": 1
+      },
+      "pendingCases": [
+        "codex inactivity monitor (integration: real subprocess) allows a long silent build while the child process group is consuming CPU"
+      ],
+      "json": {
+        "path": "test-results/project-closure-20261029/codex-complete-source-policy-final.json",
+        "sha256": "9893a8faf84f7c73deba0e4bb68e1cb5c20263849f8b993b10b064e126305a0b"
+      },
+      "log": {
+        "path": "test-results/project-closure-20261029/codex-complete-source-policy-final.log",
+        "sha256": "0761f043c8f92ba880fb4fdd549abee7cf698e153d7db7537ec00cf6567bb5d7"
+      }
+    },
+    {
+      "command": "pnpm exec vitest run --project @paperclipai/adapter-codex-local packages/adapters/codex-local/src/server/test.windows-privacy.test.ts packages/adapters/codex-local/src/server/test.remote.test.ts --reporter=json --outputFile=test-results/project-closure-20261029/codex-probe-source-policy-final.json",
+      "interpretation": "Final two complete probe files: eight Windows privacy cases plus ten existing remote cases, all 18 pass.",
+      "result": {
+        "files": 2,
+        "passed": 18,
+        "failed": 0,
+        "pending": 0
+      },
+      "pendingCases": [],
+      "json": {
+        "path": "test-results/project-closure-20261029/codex-probe-source-policy-final.json",
+        "sha256": "5418d3a061d23f908d34fb4f45e5debb4bef4e2ef522851cda155bb432cbaf35"
+      },
+      "log": {
+        "path": "test-results/project-closure-20261029/codex-probe-source-policy-final.log",
+        "sha256": "f87b6a18b8341c07da19a1b58cd280308b854bbc121fea97330b4df12c892e2c"
+      }
+    },
+    {
+      "command": "pnpm exec vitest run --project @paperclipai/server server/src/__tests__/codex-local-adapter-environment.test.ts --reporter=json --outputFile=test-results/project-closure-20261029/codex-environment-source-policy-final.json",
+      "interpretation": "Complete server environment file: 8 pass, one genuine POSIX rm cleanup-failure fixture skipped. Four old shebang-only skips now execute and pass on Windows.",
+      "result": {
+        "files": 1,
+        "passed": 8,
+        "failed": 0,
+        "pending": 1
+      },
+      "pendingCases": [
+        "codex_local environment diagnostics preserves a successful hello when probe cleanup races a background writer"
+      ],
+      "json": {
+        "path": "test-results/project-closure-20261029/codex-environment-source-policy-final.json",
+        "sha256": "9dbad30a69f1fa4635115444201de2b8e6e8a8442fb0b3d784164acaa29c9b02"
+      },
+      "log": {
+        "path": "test-results/project-closure-20261029/codex-environment-source-policy-final.log",
+        "sha256": "b5aced74498860bfb736b23372770804271f9dd75c04d59066afd31fea10c160"
+      }
+    }
+  ],
+  "fourSourceRefusalCases": [
+    {
+      "kind": "auth.json broad DACL",
+      "proof": "Real owned NTFS file/link, actual SDDL before/after unchanged, bytes unchanged, no upload copy or remote hello execution, newly owned private probe directory removed."
+    },
+    {
+      "kind": "auth.json symlink",
+      "proof": "Real owned NTFS file/link, actual SDDL before/after unchanged, bytes unchanged, no upload copy or remote hello execution, newly owned private probe directory removed."
+    },
+    {
+      "kind": "config.toml broad DACL",
+      "proof": "Real owned NTFS file/link, actual SDDL before/after unchanged, bytes unchanged, no upload copy or remote hello execution, newly owned private probe directory removed."
+    },
+    {
+      "kind": "config.toml symlink",
+      "proof": "Real owned NTFS file/link, actual SDDL before/after unchanged, bytes unchanged, no upload copy or remote hello execution, newly owned private probe directory removed."
+    }
+  ],
+  "historicalEvidence": [
+    {
+      "command": "pnpm exec vitest run --project @paperclipai/adapter-codex-local --maxWorkers 1 --reporter=json --outputFile=test-results/project-closure-20261029/codex-complete-final4.json",
+      "interpretation": "Historical earlier credential-lifecycle input: 555 pass / one existing skip. Does not include the new probe privacy fixes.",
+      "result": {
+        "files": 33,
+        "passed": 555,
+        "failed": 0,
+        "pending": 1
+      },
+      "pendingCases": [
+        "codex inactivity monitor (integration: real subprocess) allows a long silent build while the child process group is consuming CPU"
+      ],
+      "json": {
+        "path": "test-results/project-closure-20261029/codex-complete-final4.json",
+        "sha256": "55bc2db7dc6dc16f8cbb929e637b32720f797ef9dfdb72ccf5d11fab7ad9fa33"
+      },
+      "log": {
+        "path": "test-results/project-closure-20261029/codex-complete-final4.log",
+        "sha256": "f86d98c271d50cd762e585302554e19ad8bd0ce85cb2dfc0da09f576e28bada5"
+      }
+    },
+    {
+      "command": "pnpm exec vitest run --project @paperclipai/adapter-codex-local --maxWorkers 1 --reporter=json --outputFile=test-results/project-closure-20261029/codex-complete-probe-frozen.json",
+      "interpretation": "Historical intermediate input: 559 pass / one existing skip, local/remote destination privacy fixed but before source-admission guard. Not final proof.",
+      "result": {
+        "files": 34,
+        "passed": 559,
+        "failed": 0,
+        "pending": 1
+      },
+      "pendingCases": [
+        "codex inactivity monitor (integration: real subprocess) allows a long silent build while the child process group is consuming CPU"
+      ],
+      "json": {
+        "path": "test-results/project-closure-20261029/codex-complete-probe-frozen.json",
+        "sha256": "e9f32c95f6fc3b00283e04821aeb92e31d423e7d55813b623a18d53622c0f1dd"
+      },
+      "log": {
+        "path": "test-results/project-closure-20261029/codex-complete-probe-frozen.log",
+        "sha256": "0c1cbf4fe79f4bad4f8c06f947bc22ba2c049da34fd079b01db82056f5f3f0c7"
+      }
+    },
+    {
+      "command": "pnpm exec vitest run --project @paperclipai/adapter-codex-local packages/adapters/codex-local/src/server/test.windows-privacy.test.ts packages/adapters/codex-local/src/server/test.remote.test.ts --reporter=json --outputFile=test-results/project-closure-20261029/codex-probe-privacy-final2.json",
+      "interpretation": "Historical intermediate targeted input: 14 pass before adding four source-refusal cases. Superseded by final targeted 18 pass.",
+      "result": {
+        "files": 2,
+        "passed": 14,
+        "failed": 0,
+        "pending": 0
+      },
+      "pendingCases": [],
+      "json": {
+        "path": "test-results/project-closure-20261029/codex-probe-privacy-final2.json",
+        "sha256": "f3a5b88dd712e0d82d4ea25e8c9438b40e25fe26d45992817db7eeca8ba796d5"
+      },
+      "log": {
+        "path": "test-results/project-closure-20261029/codex-probe-privacy-final2.log",
+        "sha256": "b6ac4532be3863008c6b32e51ebb3748b9c7ed681e7b95890e8d6cf3176a18ae"
+      }
+    }
+  ],
+  "checks": [
+    {
+      "path": "test-results/project-closure-20261029/codex-probe-source-types-final.log",
+      "sha256": "7a2ac743e91e4b3819a05f4a74e782e71249331c6864c029e4f883749921eddd",
+      "exitCode": 0
+    },
+    {
+      "path": "test-results/project-closure-20261029/codex-probe-source-build-final.log",
+      "sha256": "f4100e7bb530c127ac8838e099062e0c38685d0ae1d79f5629a445b500909981",
+      "exitCode": 0
+    }
+  ],
+  "boundaries": [
+    "Windows uses real PE/Node and Git Bash fixture processes; no provider account, paid model, external login or network GitHub CLI is used.",
+    "Keep each verification group separate. Overlapping full and targeted counts must not be added.",
+    "Existing wide or linked Windows credential sources are refused; no migration or automatic DACL repair is claimed."
+  ]
+}
