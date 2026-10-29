@@ -9,6 +9,7 @@ import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embed
 import { researchRoutineHistory } from "./history.js";
 import { prepareResearchReport } from "./evidence.js";
 import { accessService } from "../access.js";
+import { canActorReadIssuePrivacy } from "../authorization.js";
 import { mimouseResearchRoutineRoutes } from "../../routes/mimouse-research-routines.js";
 import { errorHandler } from "../../middleware/error-handler.js";
 let temporary: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>;
@@ -58,7 +59,7 @@ it("pages exact PostgreSQL microseconds through invisible rows and rechecks curs
   const f = await fixture(), visible: string[] = [];
   for (let i = 0; i < 25; i++) visible.push((await f.receipt(i < 23 ? "2026-10-29T00:00:00.000654Z" : "2026-10-29T00:00:00.000321Z")).row.id);
   const hidden = await f.receipt("2026-10-29T00:00:00.000655Z", true);
-  await db.update(issues).set({ visibility: "private", privacyOwnerUserId: f.userId }).where(eq(issues.id, hidden.issue!.id));
+  await db.update(issues).set({ visibility: "private", createdByUserId: f.userId, responsibleUserId: f.userId }).where(eq(issues.id, hidden.issue!.id));
   let page = await f.read(3); const ids = page.items.map(row => row.id);
   const newer = await f.receipt("2026-10-29T00:00:01.000001Z");
   while (page.nextBeforeId) { page = await f.read(3, page.nextBeforeId); ids.push(...page.items.map(row => row.id)); }
@@ -88,7 +89,7 @@ it("marks duplicate provenance identities and truncated attempts needs_review", 
 });
 it("checks full structural/privacy ancestors and canonical run permissions", async () => {
   const f = await fixture(), original = await f.receipt(undefined, true);
-  const [parent] = await db.insert(issues).values({ companyId: f.companyId, title: "Private ancestor", visibility: "private", privacyOwnerUserId: f.userId }).returning();
+  const [parent] = await db.insert(issues).values({ companyId: f.companyId, title: "Private ancestor", visibility: "private", createdByUserId: f.userId, responsibleUserId: f.userId }).returning();
   for (const field of ["parentId", "privacyParentIssueId", "privacyRootIssueId"] as const) {
     await db.update(issues).set({ [field]: parent.id }).where(eq(issues.id, original.issue!.id));
     expect((await f.read()).items).toEqual([]);
@@ -113,7 +114,7 @@ it("real HTTP GET is no-store, strict, read-only and denies revoked access", asy
 });
 it("returns 503, never false empty, when invisible scanning exceeds its budget", async () => {
   const f = await fixture();
-  const [hidden] = await db.insert(issues).values({ companyId: f.companyId, title: "Hidden history", visibility: "private", privacyOwnerUserId: f.userId }).returning();
+  const [hidden] = await db.insert(issues).values({ companyId: f.companyId, title: "Hidden history", visibility: "private", createdByUserId: f.userId, responsibleUserId: f.userId }).returning();
   await db.insert(routineRuns).values(Array.from({ length: 1001 }, () => ({ companyId: f.companyId, routineId: f.routine.id, source: "schedule", status: "issue_created", linkedIssueId: hidden.id })));
   await expect(f.read()).rejects.toMatchObject({ status: 503 });
 });
@@ -133,7 +134,7 @@ it("fails closed on oversized provenance and does not hide traversal exhaustion 
   expect((await f.read()).items[0]).toMatchObject({ reportState: "needs_review", reports: [] });
   let parentId: string | null = null;
   for (let i = 0; i < 129; i++) {
-    const [ancestor] = await db.insert(issues).values({ companyId: f.companyId, title: "Open ancestor", parentId, visibility: "open" }).returning();
+    const [ancestor]: Array<Pick<typeof issues.$inferSelect, "id">> = await db.insert(issues).values({ companyId: f.companyId, title: "Open ancestor", parentId, visibility: "open" }).returning({ id: issues.id });
     parentId = ancestor.id;
   }
   await db.update(issues).set({ parentId }).where(eq(issues.id, original.issue!.id));
@@ -145,11 +146,16 @@ it.each(["actor_flag", "database_role", "privacy_mode_off"])("does not treat %s 
   if (mode === "database_role") await db.insert(instanceUserRoles).values({ userId: f.userId, role: "instance_admin" });
   if (mode === "privacy_mode_off") vi.stubEnv("PAPERCLIP_ISSUE_PRIVACY_MODE", "off");
   try {
-    await db.update(issues).set({ visibility: "private", privacyOwnerUserId: f.userId }).where(eq(issues.id, original.issue!.id));
+    await db.update(issues).set({ visibility: "private", createdByUserId: f.userId, responsibleUserId: f.userId }).where(eq(issues.id, original.issue!.id));
+    const [privateSource] = await db.select().from(issues).where(eq(issues.id, original.issue!.id));
+    expect(privateSource).toMatchObject({ visibility: "private", createdByUserId: f.userId, responsibleUserId: f.userId });
+    // The actual owner can read the private task. That still cannot authorize
+    // company-open research history, even with an instance-admin bypass input.
+    expect(await canActorReadIssuePrivacy(db, f.actor, privateSource)).toBe(true);
     expect((await f.read()).items).toEqual([]);
     await expect(f.read(1, original.row.id)).rejects.toMatchObject({ status: 404 });
-    await db.update(issues).set({ visibility: "open", privacyOwnerUserId: null }).where(eq(issues.id, original.issue!.id));
-    const [parent] = await db.insert(issues).values({ companyId: f.companyId, title: "Private ancestor", visibility: "private", privacyOwnerUserId: f.userId }).returning();
+    await db.update(issues).set({ visibility: "open" }).where(eq(issues.id, original.issue!.id));
+    const [parent] = await db.insert(issues).values({ companyId: f.companyId, title: "Private ancestor", visibility: "private", createdByUserId: f.userId, responsibleUserId: f.userId }).returning();
     await db.update(issues).set({ privacyParentIssueId: parent.id }).where(eq(issues.id, original.issue!.id));
     expect((await f.read()).items).toEqual([]);
     await db.update(projects).set({ visibility: "private", privacyOwnerUserId: f.userId }).where(eq(projects.id, f.project.id));
