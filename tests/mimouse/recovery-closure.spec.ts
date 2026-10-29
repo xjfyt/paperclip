@@ -166,7 +166,8 @@ test("compiled research history reads paused receipts without dispatch and rejec
   await db.update(routineRuns).set({ linkedIssueId: privateIssue.id }).where(eq(routineRuns.id, hidden.id));
   const [run] = await db.insert(heartbeatRuns).values({ companyId, agentId: agent.id, scopeKind: "issue", issueId: issue.id, status: "failed", stdoutExcerpt: "RUNTIME_SENTINEL" }).returning();
   const [report] = await db.insert(candidates).values({ companyId, requestId: run.id, requestDigest: "a".repeat(64), actorId: `agent:${agent.id}`, evidenceHash: "b".repeat(64), evidence: {
-    title: "REPORT_SENTINEL", product: "MiWork", currentState: "Manual", proposedState: "Review", recommendation: "Human review", sources: [],
+    title: "REPORT_SENTINEL", product: "MiWork", currentState: "Manual", proposedState: "Review", recommendation: "Human review",
+    sources: [{ url: "https://example.invalid/not-fetched", retrievedAt: "2026-10-28T00:00:00Z", evidence: "SOURCE_SENTINEL", product: "MiWork", gap: "Fixture", suggestion: "Review" }],
     redacted: false, redactionVersion: 1, evidenceMode: "agent_report", provenance: { companyId, routineId: routine.id, routineRunId: receipt.id, issueId: issue.id, runId: run.id, agentId: agent.id,
       bindingUpdatedAt: new Date().toISOString(), reportBodyHash: "c".repeat(64), sourceVerification: "agent_report", disposition: "quarantined" },
   } }).returning();
