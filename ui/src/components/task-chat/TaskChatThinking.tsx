@@ -1,3 +1,4 @@
+import { useTranslation } from "@/i18n";
 import { useState } from "react";
 import { Brain, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -20,13 +21,14 @@ export function TaskChatThinking({
   /** Whether this reasoning block is the runner's current activity. */
   active?: boolean;
 }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(defaultOpen ?? false);
   const body = item.lines.join("\n").trim();
   const preview = flattenSelfTalk(body);
-  const baseLabel = item.channel === "detail" ? "Reasoning detail" : "Reasoning";
+  const baseLabel = t(item.channel === "detail" ? "taskThreadChromeUi.reasoningDetail" : "taskThreadChromeUi.reasoning");
   const label = active
-    ? body ? `${baseLabel}…` : "Thinking…"
-    : item.summaryLabel ?? (body ? baseLabel : "Thought");
+    ? body ? `${baseLabel}…` : t("taskThreadChromeUi.thinking")
+    : item.summaryLabel ?? (body ? baseLabel : t("taskThreadChromeUi.thought"));
 
   if (body && !active) {
     return (
@@ -68,7 +70,7 @@ export function TaskChatThinking({
       <button
         type="button"
         aria-expanded={open}
-        aria-label={`${open ? "Collapse" : "Expand"} ${baseLabel.toLowerCase()}: ${preview}`}
+        aria-label={t(open ? "taskThreadChromeUi.collapseReasoning" : "taskThreadChromeUi.expandReasoning", { label: baseLabel.toLowerCase(), preview })}
         onClick={() => setOpen((value) => !value)}
         className={cn("group/thinking -mx-1.5 flex w-full min-w-0 max-w-full items-center gap-2 overflow-hidden rounded-sm px-1.5 py-0.5 text-left font-normal text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", rowClassName)}
       >

@@ -1,3 +1,4 @@
+import { formatNumber, t, useTranslation } from "@/i18n";
 import { useEffect, useRef, useState } from "react";
 import {
   CheckCircle2,
@@ -115,10 +116,11 @@ function checklistIcon(step: TaskChatProtocolStep) {
 }
 
 function fileCountLabel(files: number): string {
-  return `${files} ${files === 1 ? "file" : "files"} changed`;
+  return t("taskThreadChromeUi.filesChanged", { count: files, number: formatNumber(files) });
 }
 
 function IslandBody({ model }: { model: TaskChatTurnStatusModel }) {
+  useTranslation();
   const plan = model.segments.find(
     (segment): segment is Extract<TaskChatTurnStatusSegment, { kind: "plan" }> => segment.kind === "plan",
   );
@@ -131,7 +133,7 @@ function IslandBody({ model }: { model: TaskChatTurnStatusModel }) {
         <span className="flex shrink-0 items-center gap-2">
           {planIcon(plan)}
           <span className="font-mono text-sm tabular-nums" aria-live="polite" aria-atomic="true">
-            Step {plan.currentStepIndex + 1} / {plan.steps.length}
+            {t("taskThreadChromeUi.step", { step: formatNumber(plan.currentStepIndex + 1), total: formatNumber(plan.steps.length) })}
             <span className="sr-only">: {plan.steps[plan.currentStepIndex]?.label}</span>
           </span>
         </span>
@@ -144,12 +146,12 @@ function IslandBody({ model }: { model: TaskChatTurnStatusModel }) {
           </span>
           {workspace.additions != null ? (
             <span className="shrink-0 font-mono text-sm tabular-nums text-(--status-task-icon-done)">
-              +{workspace.additions}
+              +{formatNumber(workspace.additions)}
             </span>
           ) : null}
           {workspace.deletions != null ? (
             <span className="shrink-0 font-mono text-sm tabular-nums text-(--status-task-icon-blocked)">
-              −{workspace.deletions}
+              −{formatNumber(workspace.deletions)}
             </span>
           ) : null}
         </span>
@@ -163,11 +165,11 @@ function islandLabel(model: TaskChatTurnStatusModel): string {
   for (const segment of model.segments) {
     if (segment.kind === "plan") {
       const step = segment.steps[segment.currentStepIndex];
-      parts.push(`Step ${segment.currentStepIndex + 1} of ${segment.steps.length}${step ? `: ${step.label}` : ""}`);
+      parts.push(`${t("taskThreadChromeUi.stepLabel", { step: formatNumber(segment.currentStepIndex + 1), total: formatNumber(segment.steps.length) })}${step ? `: ${step.label}` : ""}`);
     } else {
       parts.push(fileCountLabel(segment.files));
-      if (segment.additions != null) parts.push(`${segment.additions} additions`);
-      if (segment.deletions != null) parts.push(`${segment.deletions} deletions`);
+      if (segment.additions != null) parts.push(t("taskThreadChromeUi.additions", { number: formatNumber(segment.additions) }));
+      if (segment.deletions != null) parts.push(t("taskThreadChromeUi.deletions", { number: formatNumber(segment.deletions) }));
     }
   }
   return parts.join(", ");
@@ -178,12 +180,14 @@ const ISLAND_CLASS_NAME = "mx-auto flex min-h-10 max-w-(--sz-turn-status-island)
 const HOVER_CLOSE_GRACE_MS = 100;
 
 export function TaskChatTurnStatusIsland({ model }: { model: TaskChatTurnStatusModel }) {
+  useTranslation();
   const plan = model.segments.find(
     (segment): segment is Extract<TaskChatTurnStatusSegment, { kind: "plan" }> => segment.kind === "plan",
   );
   const [open, setOpen] = useState(false);
   const [pinned, setPinned] = useState(false);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const suppressRestoredFocus = useRef(false);
 
   useEffect(() => () => {
     if (closeTimer.current) clearTimeout(closeTimer.current);
@@ -232,7 +236,7 @@ export function TaskChatTurnStatusIsland({ model }: { model: TaskChatTurnStatusM
           onPointerLeave={(event) => {
             if (event.pointerType === "mouse") scheduleClose();
           }}
-          onFocus={() => setOpen(true)}
+          onFocus={() => { if (!suppressRestoredFocus.current) setOpen(true); }}
           onClick={(event) => {
             event.preventDefault();
             const nextPinned = !pinned;
@@ -248,17 +252,23 @@ export function TaskChatTurnStatusIsland({ model }: { model: TaskChatTurnStatusM
         align="center"
         sideOffset={8}
         className="w-(--sz-turn-status-popover) p-2"
-        aria-label="Turn plan"
+        aria-label={t("taskThreadChromeUi.turnPlan")}
         onPointerEnter={(event) => {
           if (event.pointerType === "mouse") cancelClose();
         }}
         onPointerLeave={(event) => {
           if (event.pointerType === "mouse") scheduleClose();
         }}
+        onCloseAutoFocus={() => {
+          // Escape/outside dismissal returns focus to the trigger, but that
+          // restoration is not a request to reopen. Later keyboard focus is.
+          suppressRestoredFocus.current = true;
+          queueMicrotask(() => { suppressRestoredFocus.current = false; });
+        }}
         onEscapeKeyDown={() => setPinned(false)}
         onInteractOutside={() => setPinned(false)}
       >
-        <ol className="flex flex-col gap-1" aria-label="Within-turn checklist">
+        <ol className="flex flex-col gap-1" aria-label={t("taskThreadChromeUi.turnChecklist")}>
           {plan.steps.map((step, index) => (
             <li
               key={step.id}

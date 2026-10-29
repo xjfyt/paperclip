@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import "@/i18n/task-thread-chrome-test-resources";
+import "@/i18n/task-thread-interactions-test-resources";
 
 import { taskComposerFileTypeMessages } from "../../i18n/task-composer-file-types-test-resources";
 import { fileKindForName } from "./task-chat-attachments";

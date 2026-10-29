@@ -1,3 +1,4 @@
+import { useTranslation } from "@/i18n";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { readThreadScrollAnchor, threadScrollAnchorDelta, type ThreadScrollAnchor } from "./scroll-anchor";
 import { cn } from "@/lib/utils";
@@ -49,6 +50,7 @@ export function TaskMessageScroller({ children, contentKey, className }: TaskMes
   const navigation = useTaskChatScrollNavigation();
   const initialPositionApplied = useRef(false);
   const appliedNavigation = useRef({ key: navigation.key, hash: navigation.hash });
+  const { t } = useTranslation();
   const ref = useRef<HTMLDivElement>(null);
   const anchorRef = useRef<ThreadScrollAnchor | null>(null);
   const pinnedRef = useRef(true);
@@ -283,7 +285,7 @@ export function TaskMessageScroller({ children, contentKey, className }: TaskMes
       {pillPhase !== "hidden" ? (
         <button
           type="button"
-          aria-label="Scroll to latest"
+          aria-label={t("taskThreadChromeUi.scrollLatest")}
           onClick={handleJumpToLatest}
           onAnimationEnd={() => {
             if (pillPhase === "out") setPillPhase("hidden");

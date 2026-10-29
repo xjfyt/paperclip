@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import "@/i18n/task-thread-chrome-test-resources";
 
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
