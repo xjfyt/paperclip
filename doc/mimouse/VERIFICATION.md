@@ -1,5 +1,40 @@
 # 本地集成验证记录
 
+## 2026-10-29 重建候选：当前证据与未完成检查
+
+记录截至 **2026-10-29 05:29 UTC**。本次从远端 `mimouse` 的 `e2bab5dcec32b09fa5aba852774a1039b12c9997` 重建，当前核对源码为 `9e9b02eab952da86fdd37cd13e2765d3108c76b9`。前一环境的未推送 `c5af04fa690622ad5e51c230b24691c8edf25787` 源码/日志没有找回；本批是逐片重新实现与验证，**不是找回旧工作树**。旧852/914项定向结果以及下方10月27日的类型、API、全UI和浏览器记录均为历史，不证明本批通过。
+
+### 本批实际代码范围
+
+- 四个真实失败运行入口（`Inbox`、`LegacyInbox`、`IssueDetail`、`AgentDetail`）及决策工作台/队列：同步预留防重、固定原目标、页面/公司/用户/会话变更后的晚到回执隔离。`AgentDetail.production` 的静态合同不冒充实际挂载证明。
+- 默认文档、批注、成果/文件、任务互动、Agent配置、成本/指令历史、引导、审计及决策路径按实际宿主补四语；读取失败不再伪装空态，保留草稿、原始用户/供应商内容、技术ID与错误来源。具体覆盖仍是有界审计，不以键数宣称全站翻译完毕。
+- 编码交付在分页 limit 之前执行原权限过滤，校验可读游标和项目筛选，仅汇总当前授权页；产物摘要通过同一文件描述符检查和读取，保留文件身份/替换竞态拒绝。
+- 新增内部运行日志的**内容无关引用**预览/人工确认：只选元数据，不读取/复制日志正文；真实 session、原运行隐私、不可伪造内部命名空间和事务幂等均保留。引用不授予源访问，也不证明缺陷已复现。
+- 新增调研例行**只读运行历史**：当前成员/session、完整来源公开边界、canonical run权限、可读游标和有界查询；暂停公司可读但不派发。历史入口不是新增调度器，不证明真实来源采集已完成。这两项是已有反馈/调研机制的增量，不应把原计划相关能力倒写为此前全部缺失。
+- `/api/auth/get-session` 保留既有 JSON `session.id`、cookie和服务端授权；真实 session 附加域分离SHA-256 `X-Paperclip-Session-Scope`，响应及客户端读取为 `no-store`。标记没有认证能力，只作前端缓存/回执身份；`scopeKey`缺失按旧身份兼容，未知缓存与已知null本地会话分开。私有回调在认证缓存事件发生时同步失效，而非等React后续提交；没有把标记当成新访问权限。
+
+新增有界i18n审计在`a0b4015`/`9e9b02e`纠正3条旧消费边并补充11个helper；[审计报告](checklists/2026-10-29-i18n-final-audit.json)当前160个AST文件、710个literal候选、3355个dynamic位置，另20个manual helper、51个host、123条消费边，全仓共有780个eligible TSX，其中620个不在此AST扫描内（其中4个仅作host/helper证据，不算AST扫描）。候选数不是漏翻数，160不是全仓覆盖分母；原§4.2高频切片补齐不等于全仓100%翻译。
+
+### 可核验检查表
+
+| 检查 | 当前结果 | 证据与边界 |
+|---|---|---|
+| 标准完整 server 构建 | **通过** | `/tmp/rebuild-server-final-20261029.log`，05:20:44 UTC退出0；实际`server/dist/build-info.json`印章为`8b590bf8f1e0c8752d98dd4c02fd32bab8214d12`。包含runner/eval准备、类型检查/emit和资源阶段；Rust既有7条warning保留。核对该印章到`9e9b02e`的server/packages/cli/external-adapters差异为0。 |
+| 首次 server 构建 | **失败后修复** | `/tmp/rebuild-server-standard-20261029.log`的7条research测试类型错误由`024c288`按真实任务归属字段修复，随后标准完整构建重新通过；不是删除断言或放宽产品类型。 |
+| 最终完整 UI 类型 | **修复后通过** | 首次`/tmp/rebuild-ui-types-final-20261029.log`于05:22:12 UTC退出1，`auth-session-boundaries.test.tsx:32/48`联合函数签名TS2349；`d69be2d`只修正强类型fixture，保留检查。完整重跑`/tmp/rebuild-ui-types-fixed-final-20261029.log`于05:26:55 UTC退出0。此前`00cbb95`检查点结果不代替本次。 |
+| 最终标准 UI 构建 | **通过** | `/tmp/rebuild-ui-build-final-20261029.log`于05:22:52 UTC退出0，12.46秒；保留大chunk/无效动态导入提示。该构建后仅类型fixture/审计和文档调整，类型另按修复后的完整重跑记录。 |
+| i18n审计脚本 | **49/49通过** | `/tmp/i18n-audit-final-20261029.log`，05:26:24 UTC退出0，零失败/跳过/todo；这是有界清单/消费证据工具检查，不证明所有候选已人工判定或翻译完成。 |
+| 最终完整 UI 严格聚合 | **待完成** | `9e9b02e`下911文件、92批正在执行，尚无总通过结论。需最终同输入的新inventory/manifest/聚合证据；不能复用10月27日分片或旧852/914项定向结果。 |
+| 编译 server 入口完整164项 API | **164/164通过** | 新标记隔离库，`/tmp/mimouse-compiled-final-20261029.log`，1.3分钟，05:25:27 UTC退出0。此为新运行，不借旧164项结果；编译入口仍有workspace TS依赖与源码fixtures，不是all-dist安装。 |
+| 新认证 recovery API smoke（4项） | **4/4通过** | `/tmp/recovery-compiled-final-20261029.log`，18秒，05:23:44 UTC退出0。独立新HOME、authenticated/private/static UI、真实BetterAuth cookie/session与编译注册路由；包含同用户两个真实session的header隔离。入口`pnpm test:mimouse:recovery-api`检查stamp/后端差异/UI产物。DB合成数据，workspace包仍TS，不是all-dist安装、浏览器或真实Casdoor。 |
+| 根级全工作区检查/独立安装 | **未取得本批整体结果** | 分包server/UI类型构建与MiMouse API不等于根`pnpm -r typecheck`、`pnpm test:run`、`pnpm build`整体通过；本批独立all-dist安装与既有数据升级恢复尚待专门验收。 |
+| 本批实际浏览器、OS输入法及跨平台 | **待完成/需指定环境** | 组件/jsdom与Playwright APIRequestContext均不代替实际浏览器；真实IME、供应商、六平台证据独立验收。 |
+| 阶段推送与远端 CI | **代码已推送；CI待核验** | 05:29 UTC推送`mimouse`后，`git ls-remote`核对远端为完整SHA`9e9b02eab952da86fdd37cd13e2765d3108c76b9`（[提交](https://github.com/xjfyt/paperclip/commit/9e9b02eab952da86fdd37cd13e2765d3108c76b9)）。这是已验证切片的阶段发布，不是完整验收；本次文档为其后续变更，提交/推送另核对。该SHA的CI尚无结论。 |
+
+运行中的检查待取得完整终态后再更新本节。日志路径是当前执行环境的证据定位，不是用户机器上保证存在的文件。用户复验步骤及尚需提供的合同见[用户验收](USER-ACCEPTANCE.md#2026-10-29-重建候选验收入口)与[剩余项](REMAINING.md#2026-10-29-当前阻塞与明确代码边界)。当前**不能宣称全计划完成、最终全量通过或生产就绪**。
+
+## 历史记录（以下均按原日期与冻结输入解读）
+
 ## 5500键协议显示与运行时问答草稿修复（2026-10-27，已本地验证）
 
 - 本批冻结`122be536a9aa67d91ad57c514924c987f9795990`，范围和逐步手测见[协议界面与草稿清单](checklists/PROTOCOL-UI-RUNTIME-DRAFT-20261027.md)。补齐工具display API、活动摘要、workspace/runtime卡、QuestionForm/RichInput、本地Thread默认值，并追加Inspector独立可达卡片。canonical分类/去重/排序和原始provider内容保留；同文raw来源不由英语字符串反推翻译。
