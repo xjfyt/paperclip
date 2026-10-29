@@ -1,4 +1,14 @@
 import { connectionIntentService } from "../services/connection-intents.js";
+const managedHomeWrites = vi.hoisted(() => ({
+  beforeWrite: null as null | ((args: Parameters<typeof import("node:fs/promises").writeFile>) => Promise<void>),
+}));
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs/promises")>();
+  return { ...actual, writeFile: async (...args: Parameters<typeof actual.writeFile>) => {
+    await managedHomeWrites.beforeWrite?.(args);
+    return actual.writeFile(...args);
+  } };
+});
 import { connectionIntentDeliveryService } from "../services/connection-intent-delivery.js";
 import { issueRecoveryActionService } from "../services/issue-recovery-actions.js";
 import { localAiLoginService } from "../services/local-ai-login.js";
@@ -14,6 +24,8 @@ import { promises as fs } from "node:fs";
 import { mkdtemp, realpath, rm, access, readFile, writeFile, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { hasPrivatePermissions, protectNewPrivatePath } from "@paperclipai/shared/private-filesystem-permissions";
+import { writePosixCliFixture } from "@paperclipai/adapter-utils/test-fixtures/portable-cli";
 import { and, eq, sql } from "drizzle-orm";
 import { createDb, companies, agents, agentTaskSessions, heartbeatRuns, companyMemberships, connectionGrants, toolApplications, connectionGrantDelegations, connectionGrantMembers, toolConnections, toolConnectionInstalls, aiConnectionDefaults, aiProviderDefaults, adapterAuthSessions, environments, issues, issueThreadInteractions, issueRecoveryActions, connectionIntentDeliveries, agentWakeupRequests, companySecrets, companySecretVersions, userSecretDefinitions, principalPermissionGrants } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "@paperclipai/db/test-embedded-postgres";
@@ -52,6 +64,7 @@ const create = (userId: string, name: string, ownership: "personal" | "shared" =
 
 beforeAll(async () => {
   home = await realpath(await mkdtemp(path.join(os.tmpdir(), "paperclip-ai-tests-")));
+  protectNewPrivatePath(home);
   vi.stubEnv("PAPERCLIP_HOME", home);
   vi.stubEnv("PAPERCLIP_INSTANCE_ID", "ai-connection-fixture");
   database = await startEmbeddedPostgresTestDatabase("paperclip-ai-db-");
@@ -83,7 +96,7 @@ describe("managed AI connections", () => {
     await expectSelectionFailure(service.select({ ...input, userId: owner }), "ai_connection_unavailable");
   });
 
-  it("persists first-time recovery directories before consuming a single-use token", async () => {
+  it("flushes first-time recovery storage before consuming a single-use token", async () => {
     const owner = "quota-durable-path";
     await db.insert(companyMemberships).values({ companyId, principalId: owner, principalType: "user", status: "active", membershipRole: "member" });
     const original = JSON.stringify({ tokens: { account_id: owner, access_token: "expired", refresh_token: "single-use" } });
@@ -94,23 +107,31 @@ describe("managed AI connections", () => {
     await expect(access(recoveryRoot)).rejects.toMatchObject({ code: "ENOENT" });
     const synced: string[] = [];
     let rejectRoot = true;
+    const isDurabilityBarrier = (file: unknown) => process.platform === "win32"
+      ? String(file).startsWith(`${quotaCredentialRecoveryPath(companyId, row.grant.id)}.`) && String(file).endsWith(".tmp")
+      : file === recoveryRoot;
     const realOpen = fs.open.bind(fs);
     const open = vi.spyOn(fs, "open").mockImplementation(async (...args: Parameters<typeof fs.open>) => {
       const handle = await realOpen(...args);
       const sync = handle.sync.bind(handle);
       vi.spyOn(handle, "sync").mockImplementation(async () => {
-        if (rejectRoot && args[0] === recoveryRoot) throw new Error("Injected recovery directory flush failure");
+        if (rejectRoot && isDurabilityBarrier(args[0])) throw new Error("Injected recovery flush failure");
         await sync(); synced.push(String(args[0]));
       });
       return handle;
     });
     const request = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
-      expect(synced).toContain(recoveryRoot);
-      expect(synced).toContain(path.dirname(recoveryRoot));
+      // Node cannot flush a directory handle on Windows. Its supported barrier
+      // is the actual encrypted probe file; POSIX also flushes the ancestry.
+      if (process.platform === "win32") expect(synced.some(isDurabilityBarrier)).toBe(true);
+      else {
+        expect(synced).toContain(recoveryRoot);
+        expect(synced).toContain(path.dirname(recoveryRoot));
+      }
       return Response.json({ access_token: "fresh-durable", refresh_token: "replacement-durable" });
     });
     try {
-      await expect(service.refreshQuotaCredential(row, original, new AbortController().signal)).rejects.toThrow("Injected recovery directory flush failure");
+      await expect(service.refreshQuotaCredential(row, original, new AbortController().signal)).rejects.toThrow("Injected recovery flush failure");
       expect(request).not.toHaveBeenCalled();
       expect(await service.credential(row)).toBe(original);
       rejectRoot = false;
@@ -762,10 +783,44 @@ describe("managed AI connections", () => {
       await expect(access(transcript)).rejects.toMatchObject({ code: "ENOENT" });
     } finally { await Promise.all([resumed.cleanup(), peer.cleanup()]); }
   });
+  it("protects a fresh managed home before its first credential write", async () => {
+    const owner = "private-managed-home";
+    await db.insert(companyMemberships).values({ companyId, principalId: owner, principalType: "user", status: "active", membershipRole: "member" });
+    const credential = JSON.stringify({ tokens: { account_id: owner, access_token: "fixture-access", refresh_token: "fixture-refresh" } });
+    await service.save(companyId, owner, { provider: "openai", method: "subscription", ownership: "personal", name: owner, loginSessionId: "fixture", agentIds: [], allAgents: true }, credential);
+    let observed = false;
+    managedHomeWrites.beforeWrite = async (args) => {
+      if (String(args[0]).endsWith(`${path.sep}provider${path.sep}auth.json`)) {
+        const file = String(args[0]);
+        const provider = path.dirname(file);
+        const freshHome = path.dirname(provider);
+        expect(JSON.parse(String(args[1])).tokens.refresh_token).toBe("fixture-refresh");
+        await expect(access(file)).rejects.toMatchObject({ code: "ENOENT" });
+        expect(hasPrivatePermissions(freshHome, (await stat(freshHome)).mode)).toBe(true);
+        expect(hasPrivatePermissions(provider, (await stat(provider)).mode)).toBe(true);
+        observed = true;
+      }
+    };
+    let runtime: Awaited<ReturnType<typeof prepareManagedAiRuntime>> | undefined;
+    try {
+      runtime = await prepareManagedAiRuntime(db, {
+        companyId, agentId, responsibleUserId: owner, adapterType: "codex_local",
+        binding: { provider: "openai", method: "subscription", mode: "responsible_user" }, config: {},
+      });
+      expect(observed).toBe(true);
+      const file = path.join(runtime.home!, "provider", "auth.json");
+      expect(JSON.parse(await readFile(file, "utf8"))).toMatchObject(JSON.parse(credential));
+      expect(hasPrivatePermissions(file, (await stat(file)).mode)).toBe(true);
+    } finally {
+      managedHomeWrites.beforeWrite = null;
+      await runtime?.cleanup();
+    }
+  });
+
   it("authenticates local Gemini probes and runs with the saved key in an isolated home", async () => {
     const root = await mkdtemp(path.join(home, "gemini-auth-"));
-    const command = path.join(root, "gemini");
-    await writeFile(command, `#!/usr/bin/env node
+    const script = path.join(root, "gemini.cjs");
+    await writeFile(script, `
 const fs = require("node:fs");
 const path = require("node:path");
 const settings = JSON.parse(fs.readFileSync(path.join(process.env.HOME, ".gemini/settings.json"), "utf8"));
@@ -777,6 +832,8 @@ console.log(JSON.stringify({ type: "system", subtype: "init", session_id: "gemin
 console.log(JSON.stringify({ type: "assistant", message: { content: [{ type: "output_text", text: "hello" }] } }));
 console.log(JSON.stringify({ type: "result", subtype: "success", result: "hello", session_id: "gemini-managed" }));
 `, { mode: 0o700 });
+    const quote = (value: string) => `'${value.replaceAll("'", `'"'"'`)}'`;
+    const command = await writePosixCliFixture(path.join(root, "gemini"), `#!/bin/sh\nexec ${quote(process.execPath)} ${quote(script)} "$@"\n`);
     const saved = await service.save(companyId, "alice", {
       provider: "google", method: "api_key", ownership: "personal", name: "Saved Google",
       apiKey: "fixture", allAgents: true, agentIds: [],
@@ -791,7 +848,8 @@ console.log(JSON.stringify({ type: "result", subtype: "success", result: "hello"
       expect(runtime.home).not.toBe(os.homedir());
       const settingsFile = path.join(runtime.home!, ".gemini/settings.json");
       expect(await readFile(settingsFile, "utf8")).not.toContain("saved-google-key");
-      expect((await stat(settingsFile)).mode & 0o777).toBe(0o600);
+      expect(hasPrivatePermissions(settingsFile, (await stat(settingsFile)).mode)).toBe(true);
+      if (process.platform !== "win32") expect((await stat(settingsFile)).mode & 0o777).toBe(0o600);
       const probe = await testGeminiEnvironment({ companyId, adapterType: "gemini_local", config: runtime.config });
       expect(probe.status).toBe("pass");
       expect(probe.checks).toContainEqual(expect.objectContaining({ code: "gemini_hello_probe_passed" }));

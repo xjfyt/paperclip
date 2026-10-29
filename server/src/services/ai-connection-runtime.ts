@@ -3,6 +3,7 @@ import { HttpError, unprocessable } from "../errors.js";
 import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { protectNewPrivatePath } from "@paperclipai/shared/private-filesystem-permissions";
 import { and, eq } from "drizzle-orm";
 import { type Db, companySecrets, connectionGrants } from "@paperclipai/db";
 import {
@@ -305,6 +306,9 @@ export async function prepareManagedAiRuntime(
         `paperclip-ai-${input.companyId}-${selection.grant.id}-`,
       ),
     );
+    // Protect the exclusively created, still-empty root before any credential
+    // can be written. Children inherit its restricted Windows DACL.
+    protectNewPrivatePath(home);
     const providerHome = path.join(home, "provider");
     await mkdir(providerHome, { mode: 0o700 });
     const env: Record<string, unknown> = {

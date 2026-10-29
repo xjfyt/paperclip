@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -9,6 +9,7 @@ import {
   agentWakeupRequests,
   agents,
   approvals,
+  assets,
   chatActions,
   chatConversations,
   chatDeliveries,
@@ -27,6 +28,7 @@ import {
   heartbeatRuns,
   issueComments,
   issueAttachments,
+  issueWorkProducts,
   issueApprovals,
   issueThreadInteractions,
   issueQuestionResponseDeliveries,
@@ -1234,7 +1236,9 @@ describe("native external-chat response wait", () => {
         | Awaited<ReturnType<typeof seedAnsweredChatTurn>>
         | Awaited<ReturnType<typeof seedGitHubBoardAnsweredTurn>>;
       invoke: () => Promise<unknown>;
+      storage: ReturnType<typeof createStorageService>;
     }) => Promise<void>,
+    localOnly = false,
   ) {
     const fixture =
       provider === "github"
@@ -1255,6 +1259,19 @@ describe("native external-chat response wait", () => {
         ...fixture,
         workspaceRoot,
         storage,
+        // The Windows controller cannot prove an opened local descriptor's
+        // canonical path. Exercise the existing server-bound remote reader for
+        // these authority/receipt tests; the local fail-closed case is below.
+        ...(process.platform === "win32" && !localOnly ? {
+          executionTargetKind: "remote" as const,
+          readRemoteWorkspaceFile: async (input: { contentRef: string; byteSize: number; sha256: string }) => {
+            expect(input.contentRef).toBe(filename);
+            const bytes = await readFile(path.join(workspaceRoot, filename));
+            expect(bytes.length).toBe(input.byteSize);
+            expect(createHash("sha256").update(bytes).digest("hex")).toBe(input.sha256);
+            return bytes;
+          },
+        } : {}),
       });
       let sourceAttachmentId: string | null = null;
       if (tool === "reuse_chat_attachment") {
@@ -1280,6 +1297,7 @@ describe("native external-chat response wait", () => {
       }
       await check({
         fixture,
+        storage,
         invoke: () =>
           runner.execute({
             tool,
@@ -1435,6 +1453,25 @@ describe("native external-chat response wait", () => {
       ).resolves.toBe(false);
     },
   );
+
+  it.runIf(process.platform === "win32")("rejects an unverifiable local file descriptor before any delivery effects", async () => {
+    await withAnsweredFileTool("telegram", "register_deliverable", async ({ fixture, invoke, storage }) => {
+      const state = async () => ({
+        attachments: await db.select().from(issueAttachments).where(eq(issueAttachments.issueId, fixture.issueId)),
+        products: await db.select().from(issueWorkProducts).where(eq(issueWorkProducts.issueId, fixture.issueId)),
+        comments: await db.select().from(issueComments).where(eq(issueComments.issueId, fixture.issueId)),
+        assets: await db.select().from(assets).where(eq(assets.companyId, fixture.companyId)),
+        run: await db.select({ resultJson: heartbeatRuns.resultJson }).from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId)),
+      });
+      const before = await state();
+      const put = vi.spyOn(storage, "putFile");
+      try {
+        await expect(invoke()).rejects.toThrow("paperclip_runner_file_handoff_descriptor_unverifiable");
+        expect(put).not.toHaveBeenCalled();
+        expect(await state()).toEqual(before);
+      } finally { put.mockRestore(); }
+    }, true);
+  });
 
   it("attests a genuine Slack mixed-question modal answer for its native continuation", async () => {
     const fixture = await seedAnsweredChatTurn("slack", undefined, "form");

@@ -106,6 +106,7 @@ import {
   type PersistedExposureRowSnapshot,
 } from "./runtime-exposure/port-reservation.js";
 import { resolveTailscaleDnsName } from "./runtime-exposure/tailscale-hostname.js";
+import { workspaceShellInvocation } from "./workspace-shell.js";
 
 export function resolveShell(): string {
   const fallback = process.platform === "win32" ? "sh" : "/bin/sh";
@@ -113,6 +114,15 @@ export function resolveShell(): string {
   if (!shell) return fallback;
   if (path.isAbsolute(shell) && !existsSync(shell)) return fallback;
   return shell;
+}
+
+function assertLocalRuntimeServicePlatformSupported() {
+  if (process.platform === "win32") {
+    throw unprocessable(
+      "Long-running local workspace services require a supported POSIX service host; Windows process ownership and complete shutdown cannot currently be verified.",
+      { code: "workspace_runtime_service_platform_unsupported" },
+    );
+  }
 }
 
 /**
@@ -873,6 +883,7 @@ async function executeProcess(input: {
   env?: NodeJS.ProcessEnv;
   maxStdoutBytes?: number;
   maxStderrBytes?: number;
+  windowsVerbatimArguments?: boolean;
 }): Promise<{
   stdout: string;
   stderr: string;
@@ -891,6 +902,7 @@ async function executeProcess(input: {
       cwd: input.cwd,
       stdio: ["ignore", "pipe", "pipe"],
       env: input.env ?? process.env,
+      windowsVerbatimArguments: input.windowsVerbatimArguments,
     });
     const stdout = createProcessOutputCapture(input.maxStdoutBytes ?? DEFAULT_EXECUTE_PROCESS_OUTPUT_BYTES);
     const stderr = createProcessOutputCapture(input.maxStderrBytes ?? DEFAULT_EXECUTE_PROCESS_OUTPUT_BYTES);
@@ -3078,8 +3090,7 @@ async function runWorkspaceCommand(input: {
 }) {
   const shell = resolveShell();
   const proc = await executeProcess({
-    command: shell,
-    args: ["-c", input.resolvedCommand ?? input.command],
+    ...workspaceShellInvocation(shell, input.resolvedCommand ?? input.command),
     cwd: input.cwd,
     env: input.env,
   });
@@ -3188,8 +3199,7 @@ async function recordWorkspaceCommandOperation(
     run: async () => {
       const shell = resolveShell();
       const result = await executeProcess({
-        command: shell,
-        args: ["-c", input.resolvedCommand ?? input.command],
+        ...workspaceShellInvocation(shell, input.resolvedCommand ?? input.command),
         cwd: input.cwd,
         env: input.env,
       });
@@ -6540,10 +6550,12 @@ async function spawnLocalRuntimeService(input: StartLocalRuntimeServiceInput): P
   const serviceLog = await openLocalServiceLogFile(serviceKey);
   let child: ChildProcess;
   try {
-    child = spawn(shell, ["-lc", command], {
+    const invocation = workspaceShellInvocation(shell, command, { login: true });
+    child = spawn(invocation.command, invocation.args, {
       cwd: serviceCwd,
       env,
       detached: process.platform !== "win32",
+      windowsVerbatimArguments: invocation.windowsVerbatimArguments,
       // The service receives duplicate append-only file descriptors. Closing
       // Paperclip (or this parent handle below) cannot strand a request logger
       // on an orphaned socketpair during startup reconciliation.
@@ -6899,6 +6911,7 @@ async function startLocalRuntimeService(
   input: StartLocalRuntimeServiceInput,
   options?: { deferReadiness?: boolean },
 ): Promise<LocalRuntimeServiceStart> {
+  assertLocalRuntimeServicePlatformSupported();
   const runtimeProvisionCommand = asString(input.runtimeProvisionCommand, "").trim();
   const provisioningRecord = input.preparedProvisioningRecord === undefined
     ? await prepareRuntimeProvisioning(input)
@@ -7449,6 +7462,7 @@ async function ensureRuntimeServicesForRunInvocation(
     defaultDesiredState: readDesiredRuntimeState(input.config.desiredState) ?? "running",
     serviceStates: readConfiguredServiceStates(input.config),
   });
+  if (rawServices.length > 0) assertLocalRuntimeServicePlatformSupported();
   const acquiredServiceIds: string[] = [];
   const refs: RuntimeServiceRef[] = [];
   const runtimeProvision = resolveRuntimeProvision(input);
@@ -7853,6 +7867,7 @@ async function startRuntimeServicesForWorkspaceControlInvocation(
     defaultDesiredState: readDesiredRuntimeState(input.config.desiredState) ?? "stopped",
     serviceStates: readConfiguredServiceStates(input.config),
   });
+  if (rawServices.length > 0) assertLocalRuntimeServicePlatformSupported();
   const invocationId = input.invocationId ?? randomUUID();
   const runtimeProvision = resolveRuntimeProvision(input);
   const runtimeProvisionCommand = runtimeProvision.command;

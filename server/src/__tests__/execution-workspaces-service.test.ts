@@ -44,6 +44,14 @@ import {
   stopRuntimeServicesForExecutionWorkspace,
 } from "../services/workspace-runtime.ts";
 import { workspaceGitOperationScheduler } from "../services/workspace-git-operation-scheduler.ts";
+const runtimeProcessSpawns = vi.hoisted(() => vi.fn());
+vi.mock("node:child_process", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:child_process")>();
+  return { ...actual, spawn: (...args: Parameters<typeof actual.spawn>) => {
+    runtimeProcessSpawns(args[0]);
+    return actual.spawn(...args);
+  } };
+});
 
 const execFileAsync = promisify(execFile);
 
@@ -3702,10 +3710,21 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
       "}, 600);",
       "setInterval(() => {}, 1000);",
     ].join(" ");
-    const command = `${JSON.stringify(process.execPath)} -e ${JSON.stringify(serverScript)}`;
+    const serverFile = path.join(repoRoot, "runtime fixture.cjs");
+    await fs.writeFile(serverFile, serverScript);
+    const quotePosix = (value: string) => `'${value.replaceAll("'", `'"'"'`)}'`;
+    const quotePowerShell = (value: string) => `'${value.replaceAll("'", "''")}'`;
+    const command = process.platform === "win32"
+      ? `& ${quotePowerShell(process.execPath)} ${quotePowerShell(serverFile)}`
+      : `${quotePosix(process.execPath)} ${quotePosix(serverFile)}`;
+    // This fixture uses the platform's declared shell syntax, independent of
+    // the developer's SHELL setting. The production helper selects its flags.
+    const previousShell = process.env.SHELL;
+    if (process.platform === "win32") process.env.SHELL = path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
 
     let startedServices: Awaited<ReturnType<typeof startRuntimeServicesForWorkspaceControl>> = [];
     try {
+      runtimeProcessSpawns.mockClear();
       const startPromise = startRuntimeServicesForWorkspaceControl({
         db,
         invocationId: randomUUID(),
@@ -3751,6 +3770,14 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
         },
         adapterEnv: {},
       });
+
+      if (process.platform === "win32") {
+        await expect(startPromise).rejects.toMatchObject({ status: 422, details: { code: "workspace_runtime_service_platform_unsupported" } });
+        expect(runtimeProcessSpawns).not.toHaveBeenCalled();
+        expect(await db.select().from(workspaceRuntimeServices).where(eq(workspaceRuntimeServices.executionWorkspaceId, executionWorkspaceId))).toEqual([]);
+        await expect(fs.access(runtimeStartedMarker)).rejects.toMatchObject({ code: "ENOENT" });
+        return;
+      }
 
       await Promise.race([
         waitForPath(runtimeStartedMarker),
@@ -3800,6 +3827,8 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
         },
       });
     } finally {
+      if (previousShell === undefined) delete process.env.SHELL;
+      else process.env.SHELL = previousShell;
       await stopRuntimeServicesForExecutionWorkspace({
         db,
         executionWorkspaceId,
