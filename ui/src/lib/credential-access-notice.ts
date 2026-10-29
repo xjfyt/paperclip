@@ -11,6 +11,7 @@ export function credentialAccessNotice(
   run: IssueChatLinkedRun | undefined,
   currentUserId: string | null | undefined,
   userLabels?: ReadonlyMap<string, string> | null,
+  options: { includeDisplaySource?: boolean } = {},
 ): TaskChatMarkerItem["credentialAccess"] | undefined {
   if (!run || run.status !== "failed") return undefined;
   const configuration = object(run.resultJson?.configurationIncomplete);
@@ -26,5 +27,10 @@ export function credentialAccessNotice(
     deniedUser: responsibleUserId && responsibleUserId === currentUserId
       ? "you" : responsibleUserId ? userLabels?.get(responsibleUserId) || "the person this task runs for" : "the person this task runs for",
     settingsHref: `/agents/${encodeURIComponent(run.agentId)}/runtime`,
+    ...(options.includeDisplaySource ? { displaySource: {
+      agentNameMissing: !run.agentName?.trim(),
+      deniedUserKind: responsibleUserId && responsibleUserId === currentUserId ? "self" as const
+        : responsibleUserId && userLabels?.get(responsibleUserId) ? "named" as const : "responsible" as const,
+    } } : {}),
   };
 }

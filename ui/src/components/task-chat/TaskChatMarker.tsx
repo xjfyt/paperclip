@@ -1,3 +1,4 @@
+import { useTranslation } from "@/i18n";
 import { useId, useState } from "react";
 import { cn } from "@/lib/utils";
 import { ChevronDown, CircleDot, OctagonX, Square, Flag, KeyRound } from "lucide-react";
@@ -27,6 +28,7 @@ export function TaskChatMarker({
   onTryAgain?: () => Promise<void> | void;
   tryAgainPending?: boolean;
 }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const detailsId = useId();
   const streamlined = useStreamlinedTaskChatPresentation();
@@ -41,22 +43,28 @@ export function TaskChatMarker({
   };
 
   if (item.credentialAccess) {
-    const { agentName, credentialName, deniedUser, settingsHref } = item.credentialAccess;
+    const { agentName, credentialName, deniedUser, settingsHref, displaySource } = item.credentialAccess;
+    const displayAgent = displaySource?.agentNameMissing ? t("taskThreadContextUi.thisAgent") : agentName;
+    const displayDenied = displaySource?.deniedUserKind === "self" ? t("taskThreadContextUi.you")
+      : displaySource?.deniedUserKind === "responsible" ? t("taskThreadContextUi.responsibleUser") : deniedUser;
+    const credentialValues = { agent: displayAgent, credential: credentialName || t("taskThreadContextUi.aiCredential"), user: displayDenied };
     return (
       <div role="alert" data-testid="task-chat-credential-access-notice"
         className="tc-enter-marker flex w-full items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm">
         <KeyRound className="mt-0.5 size-5 shrink-0 text-destructive" aria-hidden />
         <div className="flex min-w-0 flex-1 flex-col gap-2">
-          <p className="font-semibold text-destructive">{agentName} couldn’t start</p>
+          <p className="font-semibold text-destructive">{t("taskThreadContextUi.couldNotStart", { agent: displayAgent })}</p>
           <p className="break-words font-medium text-foreground">
-            {agentName} is configured to use {credentialName || "an AI credential"}, but {deniedUser === "you" ? "you don’t" : `${deniedUser} doesn’t`} have access to that credential.
+            {displaySource ? t(displaySource.deniedUserKind === "self" ? "taskThreadContextUi.credentialSelf" : "taskThreadContextUi.credentialUser", credentialValues)
+              : <>{agentName} is configured to use {credentialName || "an AI credential"}, but {deniedUser === "you" ? "you don’t" : `${deniedUser} doesn’t`} have access to that credential.</>}
           </p>
           <p className="text-muted-foreground">
-            Choose an AI connection {deniedUser === "you" ? "you can" : `${deniedUser} can`} use, or ask an administrator to update {agentName}’s connection. Then try again.
+            {displaySource ? t(displaySource.deniedUserKind === "self" ? "taskThreadContextUi.connectionSelf" : "taskThreadContextUi.connectionUser", credentialValues)
+              : <>Choose an AI connection {deniedUser === "you" ? "you can" : `${deniedUser} can`} use, or ask an administrator to update {agentName}’s connection. Then try again.</>}
           </p>
           <div className="flex flex-wrap items-center gap-2 pt-1">
-            <Button asChild variant="outline" size="sm"><Link to={settingsHref}>Change AI connection</Link></Button>
-            {item.runHref && <Button asChild variant="ghost" size="sm"><Link to={item.runHref}>View run</Link></Button>}
+            <Button asChild variant="outline" size="sm"><Link to={settingsHref}>{t("taskThreadContextUi.changeConnection")}</Link></Button>
+            {item.runHref && <Button asChild variant="ghost" size="sm"><Link to={item.runHref}>{t("taskThreadContextUi.viewRun")}</Link></Button>}
           </div>
         </div>
       </div>
@@ -105,7 +113,7 @@ export function TaskChatMarker({
               disabled={tryAgainPending}
               data-testid="task-chat-run-failed-try-again"
             >
-              {tryAgainPending ? "Trying again..." : "Try again"}
+              {t(tryAgainPending ? "taskThreadChromeUi.tryingAgain" : "taskThreadChromeUi.tryAgain")}
             </Button>
           ) : null}
         </div>
@@ -124,12 +132,12 @@ export function TaskChatMarker({
               <div className="flex items-center justify-end gap-2 border-t border-border/70 bg-background/50 px-3 py-2 dark:bg-background/30">
                 {item.planHref ? (
                   <Button asChild variant="ghost" size="xs">
-                    <Link to={item.planHref}>View saved plan</Link>
+                    <Link to={item.planHref}>{t("taskThreadContextUi.viewPlan")}</Link>
                   </Button>
                 ) : null}
                 {item.runHref ? (
                   <Button asChild variant="ghost" size="xs">
-                    <Link to={item.runHref}>View run</Link>
+                    <Link to={item.runHref}>{t("taskThreadContextUi.viewRun")}</Link>
                   </Button>
                 ) : null}
                 {onTryAgain ? (
@@ -140,7 +148,7 @@ export function TaskChatMarker({
                     disabled={tryAgainPending}
                     data-testid="task-chat-run-failed-try-again"
                   >
-                    {tryAgainPending ? "Trying again..." : "Try again"}
+                    {t(tryAgainPending ? "taskThreadChromeUi.tryingAgain" : "taskThreadChromeUi.tryAgain")}
                   </Button>
                 ) : null}
               </div>
@@ -185,7 +193,7 @@ export function TaskChatMarker({
             disabled={tryAgainPending}
             data-testid="task-chat-run-failed-try-again"
           >
-            {tryAgainPending ? "Trying again..." : "Try again"}
+            {t(tryAgainPending ? "taskThreadChromeUi.tryingAgain" : "taskThreadChromeUi.tryAgain")}
           </Button>
         ) : null}
       </span>

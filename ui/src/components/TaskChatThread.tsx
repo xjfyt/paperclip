@@ -1518,7 +1518,7 @@ export function TaskChatThread(props: TaskChatThreadProps) {
       const credentialAccess = credentialAccessNotice(meta ? {
         ...meta,
         agentName: meta.agentName || agentMap?.get(meta.agentId)?.name,
-      } : undefined, currentUserId, userLabelMap);
+      } : undefined, currentUserId, userLabelMap, { includeDisplaySource: true });
       const historical = statusRelevance.isHistoricalRun(source.id);
       // A workspace admission attempt never started provider work. Its live
       // successor owns the waiting indicator; retain this attempt in the run log.

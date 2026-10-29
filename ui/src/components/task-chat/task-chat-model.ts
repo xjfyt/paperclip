@@ -268,6 +268,8 @@ export interface TaskChatMarkerItem {
     credentialName?: string;
     deniedUser: string;
     settingsHref: string;
+    /** Local-only opt-in provenance; never infer display defaults from actor names. */
+    displaySource?: { agentNameMissing: boolean; deniedUserKind: "self" | "named" | "responsible" };
   };
 }
 

@@ -1,3 +1,4 @@
+import { useTranslation, formatNumber } from "@/i18n";
 import type {
   IssueBlockerAttentionIssueSummary,
   IssueRelationIssueSummary,
@@ -130,7 +131,8 @@ function BlockerRow({
 }
 
 function LiveWorkGlyph({ status }: { status: WaitingBlockerStatus }) {
-  const label = status === "done" ? "Done" : status === "running" ? "Running" : "Waiting";
+  const { t } = useTranslation();
+  const label = t(status === "done" ? "taskThreadContextUi.done" : status === "running" ? "taskThreadContextUi.running" : "taskThreadContextUi.waiting");
   if (status === "done") {
     return (
       <CheckCircle2
@@ -193,13 +195,14 @@ export function TaskChatBlockerLinks({
   placement: "top" | "bottom";
 }) {
   const streamlined = useStreamlinedTaskChatPresentation();
-  const directLabel = streamlined && placement === "bottom" ? "Still blocked by" : "Blocked by";
-  const rootLabel = streamlined
-    ? placement === "bottom" ? "Root blocker remains" : "Root blocker"
-    : "Ultimately blocked by";
+  const { t } = useTranslation();
+  const directLabel = t(streamlined && placement === "bottom" ? "taskThreadContextUi.stillBlocked" : "taskThreadContextUi.blocked");
+  const rootLabel = t(streamlined
+    ? placement === "bottom" ? "taskThreadContextUi.rootRemains" : "taskThreadContextUi.root"
+    : "taskThreadContextUi.ultimatelyBlocked");
   return (
     <div
-      aria-label="Task blockers"
+      aria-label={t("taskThreadContextUi.blockers")}
       data-placement={placement}
       data-testid="task-chat-blocker-links"
       className="flex min-w-0 flex-col gap-1 overflow-hidden text-(length:--text-micro) leading-4 text-amber-700 dark:text-amber-300"
@@ -220,10 +223,11 @@ export function TaskChatLiveWorkLinks({
   placement: "top" | "bottom";
 }) {
   const streamlined = useStreamlinedTaskChatPresentation();
-  const heading = streamlined && placement === "bottom" ? "Still waiting on live work" : "Waiting on live work";
+  const { t } = useTranslation();
+  const heading = t(streamlined && placement === "bottom" ? "taskThreadContextUi.stillWaitingLive" : "taskThreadContextUi.waitingLive");
   return (
     <div
-      aria-label="Tasks waiting on live work"
+      aria-label={t("taskThreadContextUi.tasksWaitingLive")}
       data-placement={placement}
       data-testid="task-chat-live-work-links"
       className="flex min-w-0 flex-col gap-1.5 overflow-hidden text-(length:--text-micro) leading-4 text-blue-700 dark:text-blue-300"
@@ -244,7 +248,7 @@ export function TaskChatLiveWorkLinks({
             {!streamlined ? (
               <>
                 <span className="w-4 shrink-0 text-right font-mono text-blue-500/80" aria-hidden>
-                  {index + 1}.
+                  {formatNumber(index + 1)}.
                 </span>
                 <LiveWorkGlyph status={status} />
               </>
@@ -254,10 +258,10 @@ export function TaskChatLiveWorkLinks({
         ))}
       </ol>
       {liveWork.nowRunning.map((blocker) => streamlined ? (
-        <LiveWorkLink key={blocker.id} blocker={blocker} status="running" label="Now running" />
+        <LiveWorkLink key={blocker.id} blocker={blocker} status="running" label={t("taskThreadContextUi.nowRunning")} />
       ) : (
         <div key={blocker.id} className="flex min-w-0 items-center gap-1.5 whitespace-nowrap">
-          <span className="shrink-0 font-medium">Now running</span>
+          <span className="shrink-0 font-medium">{t("taskThreadContextUi.nowRunning")}</span>
           <LiveWorkLink blocker={blocker} status="running" />
         </div>
       ))}

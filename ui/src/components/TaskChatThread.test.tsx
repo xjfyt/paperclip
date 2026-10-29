@@ -1,4 +1,9 @@
 // @vitest-environment jsdom
+import { taskThreadContextMessages } from "@/i18n/task-thread-context-test-resources";
+import "@/i18n/task-thread-interactions-test-resources";
+import "@/i18n/task-thread-composer-test-resources";
+import "@/i18n/task-thread-queue-test-resources";
+import "@/i18n/searchable-select-test-resources";
 import "@/i18n/question-form-test-resources";
 import { i18n, taskProtocolRuntimeMessages } from "@/i18n/task-protocol-runtime-test-resources";
 import { taskThreadResourceMessages } from "@/i18n/task-thread-resource-test-resources";
@@ -4889,5 +4894,23 @@ describe("runtime to durable question draft handoff", () => {
     expect(loadDraft(draftKey)).toBe(latestDraft);
     expect(container.textContent).toContain("New durable answer Ω"); expect(container.textContent).not.toContain("Old runtime diagnostic");
     expect(resolve).toHaveBeenCalledTimes(1); expect(onSubmitInteractionAnswers).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("credential source display in the real task host", () => {
+  afterEach(async () => { await act(async () => { await i18n.changeLanguage("en"); }); });
+  it.each((["en", "zh-CN", "es", "ja"] as const).flatMap(locale => (["legacy", "native"] as const).map(runtimeMode => ({ locale, runtimeMode }))))("keeps $runtimeMode credential identity and actions through $locale hot-switch", async ({ locale, runtimeMode }) => {
+    await act(async () => { await i18n.changeLanguage(locale); });
+    const denied = { runId: "credential-raw", runtimeMode, status: "failed", errorCode: "configuration_incomplete", agentId: "agent-raw", agentName: "This agent", adapterType: runtimeMode === "native" ? "paperclip_runner" : "codex_local", responsibleUserId: "user-raw", createdAt: "2026-08-25T18:00:00Z", startedAt: null, finishedAt: "2026-08-25T18:00:02Z", resultJson: { configurationIncomplete: { selectionFailure: "ai_connection_credential_not_shared", credentialAccess: { connectionName: "an AI credential" } } } };
+    const onRetryFailedRun = vi.fn(); const onAdd = vi.fn(); const before = JSON.stringify(denied);
+    render(<TaskChatThread comments={[]} onAdd={onAdd} issueStatus="blocked" currentUserId="user-raw" onRetryFailedRun={onRetryFailedRun} linkedRuns={[denied]} />);
+    const alert = container.querySelector('[data-testid="task-chat-credential-access-notice"]')!;
+    expect(alert.textContent).toContain(taskThreadContextMessages[locale].credentialSelf.replace("{{agent}}", "This agent").replace("{{credential}}", "an AI credential"));
+    const next = locale === "ja" ? "es" : "ja"; await act(async () => { await i18n.changeLanguage(next); });
+    expect(container.querySelector('[data-testid="task-chat-credential-access-notice"]')).toBe(alert);
+    expect(alert.textContent).toContain(taskThreadContextMessages[next].credentialSelf.replace("{{agent}}", "This agent").replace("{{credential}}", "an AI credential"));
+    expect(alert.querySelector('a[href="/agents/agent-raw/runtime"]')).not.toBeNull(); expect(alert.querySelector('a[href*="/runs/credential-raw"]')).not.toBeNull();
+    expect(onRetryFailedRun).not.toHaveBeenCalled(); expect(onAdd).not.toHaveBeenCalled(); expect(JSON.stringify(denied)).toBe(before);
   });
 });
