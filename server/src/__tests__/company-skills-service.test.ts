@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { promises as fs } from "node:fs";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import {
   agents,
   authUsers,
@@ -1849,6 +1849,49 @@ describeEmbeddedPostgres("companySkillService.list", () => {
       detectedAt: (marker as Record<string, unknown>).detectedAt,
       sourceLocator: missingSkillDir,
     });
+  });
+
+  it("reconciles a missing skill whose database timestamp contains sub-millisecond precision", async () => {
+    const companyId = randomUUID();
+    const skillId = randomUUID();
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-skill-microseconds-"));
+    cleanupDirs.add(root);
+    await db.insert(companies).values({ id: companyId, name: "Timestamp precision", issuePrefix: `T${companyId.slice(0, 6)}` });
+    await db.insert(companySkills).values({ id: skillId, companyId, key: `company/${companyId}/missing`, slug: "missing", name: "Missing",
+      markdown: "# Missing", sourceType: "local_path", sourceLocator: path.join(root, "missing"), trustLevel: "markdown_only", compatibility: "compatible",
+      fileInventory: [{ path: "SKILL.md", kind: "skill" }], metadata: { sourceKind: "local_path" } });
+    await db.execute(sql`update ${companySkills} set updated_at = '2026-10-29T12:00:00.123456Z'::timestamptz where ${companySkills.id} = ${skillId}`);
+    const [before] = await db.select({ updatedAt: companySkills.updatedAt }).from(companySkills).where(eq(companySkills.id, skillId));
+    expect(before.updatedAt.toISOString()).toBe("2026-10-29T12:00:00.123Z");
+    await svc.list(companyId);
+    expect(await db.select().from(companySkills).where(eq(companySkills.id, skillId))).toEqual([]);
+  });
+
+  it("keeps a concurrent reconciliation write within the same millisecond instead of overwriting it", async () => {
+    const companyId = randomUUID();
+    const skillId = randomUUID();
+    const source = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-skill-cas-precision-"));
+    cleanupDirs.add(source);
+    await fs.mkdir(path.join(source, "references"));
+    await fs.writeFile(path.join(source, "SKILL.md"), "# Concurrent skill");
+    await fs.writeFile(path.join(source, "references", "new.md"), "# New reference");
+    await db.insert(companies).values({ id: companyId, name: "Precise concurrent writer", issuePrefix: `T${companyId.slice(0, 6)}` });
+    await db.insert(companySkills).values({ id: skillId, companyId, key: `company/${companyId}/concurrent`, slug: "concurrent", name: "Concurrent",
+      markdown: "# Concurrent skill", sourceType: "local_path", sourceLocator: source, trustLevel: "markdown_only", compatibility: "compatible",
+      fileInventory: [{ path: "SKILL.md", kind: "skill" }], metadata: { sourceKind: "local_path" } });
+    await db.execute(sql`update ${companySkills} set updated_at = '2026-10-29T12:00:00.123456Z'::timestamptz where ${companySkills.id} = ${skillId}`);
+    let intercepted = false;
+    const concurrent = companySkillService(db, { beforeReconcilePersist: async id => {
+      if (id !== skillId || intercepted) return;
+      intercepted = true;
+      await db.execute(sql`update ${companySkills} set metadata = '{"sourceKind":"local_path","concurrentWriter":true}'::jsonb,
+        updated_at = '2026-10-29T12:00:00.123789Z'::timestamptz where ${companySkills.id} = ${skillId}`);
+    } });
+    await concurrent.list(companyId);
+    expect(intercepted).toBe(true);
+    const [saved] = await db.select().from(companySkills).where(eq(companySkills.id, skillId));
+    expect(saved.metadata).toEqual({ sourceKind: "local_path", concurrentWriter: true });
+    expect(saved.fileInventory).toEqual([{ path: "SKILL.md", kind: "skill" }]);
   });
 
   it("continues pruning missing local-path skills that no active agent desires", async () => {

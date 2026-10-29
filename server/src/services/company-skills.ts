@@ -3133,6 +3133,9 @@ export function companySkillService(db: Db, testHooks: { beforeAuditPersist?: ()
       .select({
         id: companySkills.id,
         updatedAt: companySkills.updatedAt,
+        // Date truncates PostgreSQL microseconds. Keep the exact snapshot for
+        // compare-and-swap instead of weakening the fence to milliseconds.
+        updatedAtSnapshot: sql<string>`to_char(${companySkills.updatedAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
         currentVersionId: companySkills.currentVersionId,
         key: companySkills.key,
         slug: companySkills.slug,
@@ -3158,7 +3161,7 @@ export function companySkillService(db: Db, testHooks: { beforeAuditPersist?: ()
       if (skill.sourceType !== "local_path") continue;
       if (isPaperclipBundledSkillKey(skill.key) || asString(skill.metadata?.sourceKind) === "paperclip_bundled") continue;
 
-      const unchanged = and(eq(companySkills.id, skill.id), eq(companySkills.updatedAt, skill.updatedAt),
+      const unchanged = and(eq(companySkills.id, skill.id), sql`${companySkills.updatedAt} = ${skill.updatedAtSnapshot}::timestamptz`,
         sql`${companySkills.currentVersionId} is not distinct from ${skill.currentVersionId}`,
         sql`${companySkills.metadata}->>'mimouseRestorePending' is null`);
       if (!missingIds.has(skill.id)) {
