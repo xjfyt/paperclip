@@ -1,0 +1,32 @@
+{
+  "expires": "Vence {{time}}",
+  "when": "Cuándo decidir",
+  "pickDate": "Elegir fecha",
+  "queues": "Colas",
+  "remove": "Eliminar de {{queue}}",
+  "snoozedUntil": "Pospuesta hasta {{time}}",
+  "clear": "Borrar",
+  "snooze": "Posponer",
+  "noTask": "No hay una tarea vinculada sobre la que preguntar",
+  "asked": "Se pidió una recomendación a {{agent}}",
+  "ask": "Pedir una recomendación a un agente",
+  "queue": "Cola",
+  "createError": "No se pudo crear la cola",
+  "tryAgain": "Inténtalo de nuevo.",
+  "name": "Nombre de la nueva cola…",
+  "cancel": "Cancelar",
+  "create": "Crear",
+  "none": "Aún no hay otras colas.",
+  "newQueue": "Nueva cola…",
+  "oneHour": "1 hora",
+  "fourHours": "4 horas",
+  "tomorrow": "Mañana",
+  "nextWeek": "La próxima semana",
+  "error": {
+    "decideBy": "No se pudo establecer cuándo decidir",
+    "snooze": "No se pudo posponer",
+    "add": "No se pudo añadir a la cola",
+    "remove": "No se pudo eliminar de la cola",
+    "route": "No se pudo pedir una recomendación a ese agente"
+  }
+}

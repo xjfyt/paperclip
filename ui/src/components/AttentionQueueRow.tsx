@@ -685,7 +685,7 @@ function SnoozeSubmenu({ onSnooze }: { onSnooze: (snoozedUntil: string) => void 
       </DropdownMenuSubTrigger>
       <DropdownMenuSubContent>
         {SNOOZE_PRESETS.map((preset) => (
-          <DropdownMenuItem key={t(`attentionRowUi.${preset.label}`)} onClick={() => onSnooze(preset.resolve())}>
+          <DropdownMenuItem key={preset.label} onClick={() => onSnooze(preset.resolve())}>
             {t(`attentionRowUi.${preset.label}`)}
           </DropdownMenuItem>
         ))}

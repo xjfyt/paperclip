@@ -1,0 +1,32 @@
+{
+  "expires": "{{time}}过期",
+  "when": "何时决策",
+  "pickDate": "选择日期",
+  "queues": "队列",
+  "remove": "从 {{queue}} 移除",
+  "snoozedUntil": "稍后处理至 {{time}}",
+  "clear": "清除",
+  "snooze": "稍后处理",
+  "noTask": "没有可询问的关联任务",
+  "asked": "已请 {{agent}} 提供建议",
+  "ask": "请智能体提供建议",
+  "queue": "队列",
+  "createError": "无法创建队列",
+  "tryAgain": "请重试。",
+  "name": "新队列名称…",
+  "cancel": "取消",
+  "create": "创建",
+  "none": "暂无其他队列。",
+  "newQueue": "新建队列…",
+  "oneHour": "1 小时",
+  "fourHours": "4 小时",
+  "tomorrow": "明天",
+  "nextWeek": "下周",
+  "error": {
+    "decideBy": "无法设置决策时间",
+    "snooze": "无法稍后处理",
+    "add": "无法加入队列",
+    "remove": "无法从队列移除",
+    "route": "无法请该智能体提供建议"
+  }
+}

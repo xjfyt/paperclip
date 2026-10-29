@@ -10,7 +10,7 @@ import { decisionDeskMessages } from "../i18n/decision-desk-test-resources";
 import { validateLocaleMessages } from "../i18n/locale-validation";
 import { attentionDetailDisplay } from "../i18n/attention-row-display";
 import { formatNumber } from "../lib/utils";
-const state = vi.hoisted(() => ({ approve: vi.fn(), reject: vi.fn(), revise: vi.fn() }));
+const state = vi.hoisted(() => ({ approve: vi.fn(), reject: vi.fn(), revise: vi.fn(), snooze: vi.fn() }));
 vi.mock("../api/approvals", () => ({ approvalsApi: { approve: state.approve, reject: state.reject, requestRevision: state.revise } }));
 vi.mock("../context/ToastContext", () => ({ useToastActions: () => ({ pushToast: vi.fn() }) }));
 vi.mock("@/lib/router", async () => {
@@ -21,7 +21,7 @@ vi.mock("@/lib/router", async () => {
 let host: HTMLDivElement, root: Root, client: QueryClient;
 const item = { id: "row1", companyId: "c1", sourceKind: "approval", subject: { id: "a1", kind: "approval", title: "Raw title <b> Ω", href: "/PAP/approvals/a1" }, decisionVerbs: [{ id: "approve", label: "Approve", description: "raw description" }], whyNow: "Raw why", inlineResolvable: true, severity: "medium", activityAt: "2026-10-29T00:00:00Z", decideBy: "today", decideByAttribution: { type: "agent", agentName: "Raw agent" }, detail: { kind: "questions", questionCount: 1234, firstQuestionText: "Raw provider <b>", images: [] } } as unknown as AttentionItem;
 const language = async (locale: string) => { await act(async () => { await i18n.changeLanguage(locale); }); };
-async function render(expanded = false, next = item) { await act(async () => root.render(<QueryClientProvider client={client}><AttentionQueueRow item={next} companyId="c1" expanded={expanded} onToggleExpand={vi.fn()} onDismiss={vi.fn()} onSnooze={vi.fn()} /></QueryClientProvider>)); }
+async function render(expanded = false, next = item) { await act(async () => root.render(<QueryClientProvider client={client}><AttentionQueueRow item={next} companyId="c1" expanded={expanded} onToggleExpand={vi.fn()} onDismiss={vi.fn()} onSnooze={state.snooze} /></QueryClientProvider>)); }
 beforeEach(() => { host = document.createElement("div"); document.body.append(host); root = createRoot(host); client = new QueryClient(); vi.clearAllMocks(); });
 afterEach(async () => { await act(async () => root.unmount()); client.clear(); host.remove(); await language("en"); });
 describe.each(Object.entries(attentionRowMessages))("actual attention row %s", (locale, strings) => {
@@ -62,4 +62,26 @@ it("hot-switches an open real row menu without remounting it or activating an ac
     expect(trigger.getAttribute("aria-label")).toBe(strings.rowActions);
     expect(state.approve).not.toHaveBeenCalled();
   }
+});
+
+it("preserves focused snooze submenu items and the custom datetime draft on hot switch", async () => {
+  await render();
+  await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Row actions"]')!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+  const submenu = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(node => node.textContent === "Snooze")!;
+  await act(async () => submenu.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })));
+  const first = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(node => node.textContent === "1 hour")!;
+  const field = document.querySelector<HTMLInputElement>('input[type="datetime-local"]')!;
+  expect(first).toBeDefined(); expect(field).not.toBeNull();
+  await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(field, "2026-11-01T09:30"); field.dispatchEvent(new Event("input", { bubbles: true })); });
+  field.focus();
+  for (const [locale, strings] of Object.entries(attentionRowMessages)) {
+    await language(locale);
+    expect([...document.querySelectorAll('[role="menuitem"]')].find(node => node.textContent === strings.oneHour)).toBe(first);
+    expect(document.querySelector('input[type="datetime-local"]')).toBe(field);
+    expect(field.value).toBe("2026-11-01T09:30"); expect(document.activeElement).toBe(field);
+    expect(state.snooze).not.toHaveBeenCalled();
+  }
+  const apply = [...document.querySelectorAll("button")].find(node => node.textContent === attentionRowMessages.ja.snoozeUntil)!;
+  await act(async () => apply.click());
+  expect(state.snooze).toHaveBeenCalledExactlyOnceWith(item, new Date("2026-11-01T09:30").toISOString());
 });

@@ -3,7 +3,8 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import "../i18n/decision-desk-test-resources";
+import { decisionTriageMessages, i18n } from "../i18n/decision-triage-test-resources";
+import { validateLocaleMessages } from "../i18n/locale-validation";
 import { AgingItemRow } from "./DecisionShelf";
 import { DecisionTriageStrip } from "./DecisionTriageStrip";
 import { queryKeys } from "../lib/queryKeys";
@@ -31,7 +32,7 @@ beforeEach(() => {
   client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   client.setQueryData(queryKeys.auth.session, { user: { id: "viewer1" }, session: { id: "session1" } });
 });
-afterEach(async () => { await act(async () => root.unmount()); client.clear(); host.remove(); });
+afterEach(async () => { await act(async () => root.unmount()); client.clear(); host.remove(); await i18n.changeLanguage("en"); });
 describe("actual triage queue creation boundary", () => {
   it("does not repeat decide-by mutations in the same event turn", async () => {
     state.triage.mockImplementation(() => new Promise(() => {})); await render();
@@ -82,4 +83,45 @@ it("keeps aging actions single-flight and suppresses old-company feedback", asyn
   state.companyId = "c2"; await draw();
   await act(async () => resolve({})); await flush();
   expect(state.toast).not.toHaveBeenCalled();
+});
+
+describe.each(Object.entries(decisionTriageMessages))("actual triage %s", (locale, strings) => {
+  it("localizes real controls and creation while retaining the user's queue name", async () => {
+    expect(validateLocaleMessages(strings, decisionTriageMessages.en)).toEqual([]);
+    await i18n.changeLanguage(locale); await render();
+    for (const label of [strings.when, strings.queues, strings.snooze, strings.ask, strings.pickDate]) expect(host.textContent).toContain(label);
+    await act(async () => button(strings.queue).click()); await flush();
+    expect(document.body.textContent).toContain(strings.none);
+    await act(async () => button(strings.newQueue).click()); await type("Custom title Ω");
+    expect(document.querySelector("input")?.getAttribute("placeholder")).toBe(strings.name);
+    expect(document.querySelector("input")?.value).toBe("Custom title Ω");
+    expect(document.body.textContent).not.toContain("decisionTriageUi.");
+  });
+});
+it("hot-switches the actual queue creation draft/menu without refetching or creating", async () => {
+  await render(); await act(async () => button("Queue").click()); await flush();
+  await act(async () => button("New queue…").click()); await type("Queue title Ω");
+  const field = document.querySelector("input")!; field.focus(); field.setSelectionRange(2, 5);
+  const panel = document.querySelector('[data-slot="popover-content"]'); const reads = state.list.mock.calls.length;
+  for (const [locale, strings] of Object.entries(decisionTriageMessages)) {
+    await act(async () => { await i18n.changeLanguage(locale); });
+    expect(document.querySelector("input")).toBe(field); expect(field.value).toBe("Queue title Ω");
+    expect(field.placeholder).toBe(strings.name); expect(document.activeElement).toBe(field);
+    expect([field.selectionStart, field.selectionEnd]).toEqual([2, 5]);
+    expect(document.querySelector('[data-slot="popover-content"]')).toBe(panel);
+    expect(state.list).toHaveBeenCalledTimes(reads);
+    expect(state.create).not.toHaveBeenCalled(); expect(state.triage).not.toHaveBeenCalled();
+  }
+});
+it("keeps the focused snooze preset DOM identity across languages", async () => {
+  await render();
+  await act(async () => button("Snooze").dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+  const first = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(node => node.textContent === "1 hour")!;
+  expect(first).toBeDefined(); first.focus();
+  for (const [locale, strings] of Object.entries(decisionTriageMessages)) {
+    await act(async () => { await i18n.changeLanguage(locale); });
+    expect([...document.querySelectorAll('[role="menuitem"]')].find(node => node.textContent === strings.oneHour)).toBe(first);
+    expect(document.activeElement).toBe(first);
+    expect(state.triage).not.toHaveBeenCalled();
+  }
 });

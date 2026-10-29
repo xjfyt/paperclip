@@ -1,0 +1,32 @@
+{
+  "expires": "Expires {{time}}",
+  "when": "When to decide",
+  "pickDate": "Pick date",
+  "queues": "Queues",
+  "remove": "Remove from {{queue}}",
+  "snoozedUntil": "Snoozed until {{time}}",
+  "clear": "Clear",
+  "snooze": "Snooze",
+  "noTask": "No linked task to ask about",
+  "asked": "Asked {{agent}} for a recommendation",
+  "ask": "Ask agent for recommendation",
+  "queue": "Queue",
+  "createError": "Could not create queue",
+  "tryAgain": "Please try again.",
+  "name": "New queue name…",
+  "cancel": "Cancel",
+  "create": "Create",
+  "none": "No other queues yet.",
+  "newQueue": "New queue…",
+  "oneHour": "1 hour",
+  "fourHours": "4 hours",
+  "tomorrow": "Tomorrow",
+  "nextWeek": "Next week",
+  "error": {
+    "decideBy": "Could not set when to decide",
+    "snooze": "Could not snooze",
+    "add": "Could not add to queue",
+    "remove": "Could not remove from queue",
+    "route": "Could not ask that agent for a recommendation"
+  }
+}

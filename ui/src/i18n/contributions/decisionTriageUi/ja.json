@@ -1,0 +1,32 @@
+{
+  "expires": "有効期限：{{time}}",
+  "when": "決定する時期",
+  "pickDate": "日付を選択",
+  "queues": "キュー",
+  "remove": "{{queue}} から除外",
+  "snoozedUntil": "{{time}} までスヌーズ",
+  "clear": "クリア",
+  "snooze": "スヌーズ",
+  "noTask": "質問できる関連タスクがありません",
+  "asked": "{{agent}} に提案を依頼しました",
+  "ask": "エージェントに提案を依頼",
+  "queue": "キュー",
+  "createError": "キューを作成できませんでした",
+  "tryAgain": "もう一度お試しください。",
+  "name": "新しいキュー名…",
+  "cancel": "キャンセル",
+  "create": "作成",
+  "none": "他のキューはまだありません。",
+  "newQueue": "新しいキュー…",
+  "oneHour": "1時間",
+  "fourHours": "4時間",
+  "tomorrow": "明日",
+  "nextWeek": "来週",
+  "error": {
+    "decideBy": "決定時期を設定できませんでした",
+    "snooze": "スヌーズできませんでした",
+    "add": "キューに追加できませんでした",
+    "remove": "キューから除外できませんでした",
+    "route": "そのエージェントに提案を依頼できませんでした"
+  }
+}
