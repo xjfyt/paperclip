@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { i18n } from "../i18n/decision-card-test-resources";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -7,8 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DecisionResolver } from "./DecisionResolver";
 import { queryKeys } from "../lib/queryKeys";
 import type { DecisionOutcome } from "../api/decisions";
-const state = vi.hoisted(() => ({ companyId: "c1", decide: vi.fn(), dismiss: vi.fn(), get: vi.fn() }));
-vi.mock("../api/decisions", () => ({ decisionsApi: { decide: state.decide, dismiss: state.dismiss, list: async () => [], get: state.get } }));
+const state = vi.hoisted(() => ({ companyId: "c1", decide: vi.fn(), dismiss: vi.fn(), get: vi.fn(), list: vi.fn() }));
+vi.mock("../api/decisions", () => ({ decisionsApi: { decide: state.decide, dismiss: state.dismiss, list: state.list, get: state.get } }));
 vi.mock("../context/CompanyContext", () => ({ useCompany: () => ({ selectedCompanyId: state.companyId, selectedCompany: { issuePrefix: "PAP" } }) }));
 vi.mock("@/lib/router", async () => await import("react-router-dom"));
 vi.mock("./MarkdownBody", () => ({ MarkdownBody: ({ children }: { children: string }) => <p>{children}</p> }));
@@ -24,12 +25,12 @@ async function render(id = "d1", onResolved = vi.fn()) {
   await flush();
 }
 beforeEach(() => {
-  state.companyId = "c1"; state.decide.mockReset(); state.dismiss.mockReset(); state.get.mockResolvedValue(fixture());
+  state.companyId = "c1"; state.decide.mockReset(); state.dismiss.mockReset(); state.get.mockReset().mockResolvedValue(fixture()); state.list.mockReset().mockResolvedValue([]);
   host = document.createElement("div"); document.body.append(host); root = createRoot(host);
   client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity }, mutations: { retry: false } } });
   client.setQueryData(queryKeys.auth.session, { user: { id: "viewer-1" }, session: { id: "session-1" } });
 });
-afterEach(async () => { await act(async () => root.unmount()); client.clear(); host.remove(); vi.useRealTimers(); });
+afterEach(async () => { await act(async () => root.unmount()); client.clear(); host.remove(); vi.useRealTimers(); await i18n.changeLanguage("en"); });
 describe("DecisionResolver actual host action boundary", () => {
   it("reserves decide synchronously before TanStack reports pending", async () => {
     state.decide.mockImplementation(() => new Promise(() => {}));
@@ -39,6 +40,26 @@ describe("DecisionResolver actual host action boundary", () => {
     expect(state.decide).toHaveBeenCalledTimes(1);
     expect(state.decide.mock.calls[0]?.[0]).toBe("d1");
     expect(state.decide.mock.calls[0]?.[1]).toMatchObject({ optionId: "yes", inputValues: {}, idempotencyKey: expect.any(String) });
+  });
+  it("hot-switches the real resolver without rereading, submitting, or replacing its focused draft", async () => {
+    await render();
+    const field = host.querySelector("textarea")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(field, "raw draft Ω");
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    field.focus(); field.setSelectionRange(1, 5);
+    const reads = state.list.mock.calls.length;
+    for (const locale of ["zh-CN", "es", "ja", "en"]) {
+      await act(async () => { await i18n.changeLanguage(locale); });
+      expect(host.querySelector("textarea")).toBe(field);
+      expect(field.value).toBe("raw draft Ω");
+      expect(document.activeElement).toBe(field);
+      expect([field.selectionStart, field.selectionEnd]).toEqual([1, 5]);
+      expect(state.list).toHaveBeenCalledTimes(reads);
+      expect(state.decide).not.toHaveBeenCalled();
+      expect(state.get).not.toHaveBeenCalled();
+    }
   });
   it("retries with the same idempotency key and captured payload while the scope stays current", async () => {
     state.decide.mockRejectedValueOnce(new Error("temporary"));

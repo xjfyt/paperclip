@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import "../i18n/decision-card-test-resources";
 
 import { act as reactAct, type ComponentProps, type ReactNode } from "react";
 import { flushSync } from "react-dom";
@@ -272,7 +273,7 @@ describe("DecisionCard", () => {
     });
     expect(el.textContent).toContain("Decided");
     expect(el.textContent).toContain("Created PAP-999");
-    expect(el.textContent).toContain("Set PAP-456 to done");
+    expect(el.textContent).toContain("Set PAP-456 to Done");
     expect([...el.querySelectorAll("a")].some((a) => a.getAttribute("href") === "/PAP/issues/PAP-999")).toBe(true);
     // No option buttons on a terminal decision.
     expect([...el.querySelectorAll("button")].length).toBe(0);
