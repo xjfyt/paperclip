@@ -82,14 +82,21 @@ export function baseWorkspaceDeclaresInstanceConfig(baseWorkspaceCwd: string): b
   // there also reports ENOENT. Only an absent or traversable `.paperclip` lets the caller
   // name another source; a link that hides whatever it points at is malformed, not empty.
   const configDirEntry = inspectDeclaredEntry(configDir, configPath, " on its .paperclip entry");
+  let resolvedConfigDir = configDirEntry;
   if (configDirEntry?.isSymbolicLink()) {
     try {
-      statSync(configDir);
+      resolvedConfigDir = statSync(configDir);
     } catch (error) {
       throw new Error(
         `Registered base project workspace Paperclip config at ${configPath} cannot be inspected (${errorCode(error)} on its .paperclip symlink target).`,
       );
     }
+  }
+  // Windows reports ENOENT for <regular-file>/config.json where POSIX reports
+  // ENOTDIR. An existing non-directory is malformed on either platform; it
+  // must never authorize fallback to an unrelated explicitly named instance.
+  if (resolvedConfigDir && !resolvedConfigDir.isDirectory()) {
+    throw new Error(`Registered base project workspace Paperclip config at ${configPath} cannot be inspected (ENOTDIR).`);
   }
   return false;
 }

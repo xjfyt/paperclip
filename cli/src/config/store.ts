@@ -129,7 +129,9 @@ function durableCopyFile(sourcePath: string, destinationPath: string, flags = 0)
   fs.copyFileSync(sourcePath, destinationPath, flags);
   fs.chmodSync(destinationPath, 0o600);
 
-  const backupDescriptor = fs.openSync(destinationPath, "r");
+  // FlushFileBuffers requires a write-capable handle on Windows. The private
+  // backup is owned and writable; preserve the same durable file flush.
+  const backupDescriptor = fs.openSync(destinationPath, "r+");
   try {
     fs.fsyncSync(backupDescriptor);
   } finally {

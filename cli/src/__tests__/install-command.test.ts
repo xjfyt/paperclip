@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type CommandRunner,
+  assertManagedInstallPlatform,
   installCommand,
   installGitPayload,
   resolveGitHubRef,
@@ -62,6 +63,22 @@ describe("managed install commands", () => {
     expect(() => resolveNpmInstallRequest({ version: "latest" })).toThrow();
   });
 
+  it("allows only the documented POSIX managed-install platforms", () => {
+    expect(() => assertManagedInstallPlatform("linux")).not.toThrow();
+    expect(() => assertManagedInstallPlatform("darwin")).not.toThrow();
+    expect(() => assertManagedInstallPlatform("win32")).toThrow(/macOS, Linux, or WSL2/);
+  });
+
+  it.runIf(process.platform === "win32")("rejects native Windows before downloads or store writes", async () => {
+    const runCommand = vi.fn<CommandRunner>();
+    const before = fs.readdirSync(process.env.HOME!);
+    await expect(installCommand({ yes: true }, { runCommand })).rejects.toThrow(/Native Windows/);
+    await expect(installCommand({ yes: true, ref: "main" }, { runCommand })).rejects.toThrow(/Native Windows/);
+    expect(runCommand).not.toHaveBeenCalled();
+    expect(fs.readdirSync(process.env.HOME!)).toEqual(before);
+    expect(fs.existsSync(process.env.PAPERCLIP_HOME!)).toBe(false);
+  });
+
   it("resolves branch, tag, full SHA, and short SHA refs through GitHub", async () => {
     const sha = "a".repeat(40);
     const runCommand = vi.fn(async (_file: string, _args: string[]) => ({ stdout: JSON.stringify({ sha }), stderr: "" }));
@@ -82,7 +99,7 @@ describe("managed install commands", () => {
     expect(() => resolveGitInstallRequest({ repo: "HenkDz/paperclip" })).toThrow("requires --ref");
   });
 
-  it("requires explicit non-interactive consent before resolving git refs", async () => {
+  it.skipIf(process.platform === "win32")("requires explicit non-interactive consent before resolving git refs", async () => {
     const runCommand = vi.fn();
 
     await expect(installCommand({ ref: "master", repo: "HenkDz/paperclip" }, { runCommand }))
@@ -151,7 +168,7 @@ describe("managed install commands", () => {
       throw new Error(`Unexpected command: ${file} ${args.join(" ")}`);
     });
 
-  it("installs a GitHub branch through codeload and reuses the resolved SHA", async () => {
+  it.skipIf(process.platform === "win32")("installs a GitHub branch through codeload and reuses the resolved SHA", async () => {
     const sha = "c".repeat(40);
     const runCommand = createGitCheckoutRunCommand(sha);
     await installCommand({ ref: "master", repo: "HenkDz/paperclip", yes: true }, { runCommand });
@@ -214,7 +231,7 @@ describe("managed install commands", () => {
       .rejects.toThrow("unsupported workspace dependency");
   });
 
-  it("installs through the shim, reports provenance, and uninstalls without deleting user data", async () => {
+  it.skipIf(process.platform === "win32")("installs through the shim, reports provenance, and uninstalls without deleting user data", async () => {
     const version = "2026.720.0";
     const runCommand = vi.fn(async (file: string, args: string[], _options?: unknown) => {
       if (file === "npm" && args[0] === "view") return { stdout: JSON.stringify(version), stderr: "" };
@@ -324,8 +341,8 @@ describe("managed install commands", () => {
     fs.symlinkSync(outside, paths.installsRoot, "dir");
     const runCommand = vi.fn(async () => ({ stdout: JSON.stringify("2026.720.0"), stderr: "" }));
 
-    await expect(installCommand({}, { runCommand })).rejects.toThrow("non-directory install-store path");
-    expect(runCommand).toHaveBeenCalledTimes(1);
+    await expect(installCommand({}, { runCommand })).rejects.toThrow(process.platform === "win32" ? "Native Windows" : "non-directory install-store path");
+    expect(runCommand).toHaveBeenCalledTimes(process.platform === "win32" ? 0 : 1);
     expect(fs.readdirSync(outside)).toEqual([]);
   });
 

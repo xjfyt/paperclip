@@ -131,6 +131,23 @@ describe("resolveCanonicalWorktreeSeedSource", () => {
     })).toThrow(/cannot be inspected \(ENOENT on its \.paperclip symlink target\)/);
   });
 
+  it("rejects a .paperclip symlink to a regular file instead of choosing another instance", () => {
+    const baseCwd = makePlainCheckout();
+    const file = path.join(baseCwd, "not-a-directory");
+    fs.writeFileSync(file, "malformed config root\n");
+    fs.symlinkSync(file, path.join(baseCwd, ".paperclip"));
+    const source = makeInstanceRoot("default");
+    const target = makeInstance("paperclip-seed-file-link-target-", "target-instance");
+    expect(() => resolveCanonicalWorktreeSeedSource({
+      registeredBaseWorkspaceCwd: baseCwd,
+      explicitSourceConfigPath: source.configPath,
+      targetConfigPath: target.configPath,
+      expectedTargetInstanceId: target.instanceId,
+      manifestSource: { configPath: source.configPath, instanceId: source.instanceId },
+      manifestTargetInstanceId: target.instanceId,
+    })).toThrow(/cannot be inspected \(ENOTDIR/);
+  });
+
   it("takes the named source when .paperclip is a symlink to a directory with no config", () => {
     const baseCwd = makePlainCheckout();
     const linked = path.join(baseCwd, "linked-config-dir");

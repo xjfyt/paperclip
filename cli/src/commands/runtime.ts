@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { lstat, readFile, realpath } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { Command } from "commander";
 
@@ -9,7 +9,7 @@ export async function resolvePiProvisioner(serverUrl: string): Promise<string> {
   const url = new URL(serverUrl);
   if (url.protocol !== "file:" || url.search || url.hash) throw new Error("Pi setup requires an installed Paperclip server");
   const entry = await realpath(fileURLToPath(url));
-  if (!entry.endsWith("/dist/index.js")) throw new Error("Pi setup requires the published server layout");
+  if (basename(entry) !== "index.js" || basename(dirname(entry)) !== "dist") throw new Error("Pi setup requires the published server layout");
   const root = resolve(dirname(entry), "..");
   const manifest = join(root, "package.json");
   const info = await lstat(manifest);
@@ -63,7 +63,7 @@ export async function resolveCursorProvisioner(serverUrl: string): Promise<strin
   const url = new URL(serverUrl);
   if (url.protocol !== "file:" || url.search || url.hash) throw new Error("Cursor setup requires an installed Paperclip server");
   const entry = await realpath(fileURLToPath(url));
-  if (!entry.endsWith("/dist/index.js")) throw new Error("Cursor setup requires the published server layout");
+  if (basename(entry) !== "index.js" || basename(dirname(entry)) !== "dist") throw new Error("Cursor setup requires the published server layout");
   const root = resolve(dirname(entry), "..");
   const manifest = join(root, "package.json");
   const info = await lstat(manifest);

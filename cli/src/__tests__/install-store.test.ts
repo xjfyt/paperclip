@@ -67,7 +67,7 @@ describe("managed install store", () => {
     };
     writeInstallManifestAtomic(manifest, paths);
     expect(readInstallManifest(paths)).toEqual(manifest);
-    expect(fs.statSync(paths.manifestPath).mode & 0o777).toBe(0o600);
+    if (process.platform !== "win32") expect(fs.statSync(paths.manifestPath).mode & 0o777).toBe(0o600);
   });
 
   it("leaves the old current payload working when interrupted before rename", () => {
@@ -111,7 +111,7 @@ describe("managed install store", () => {
     expect(shim).toContain(process.execPath);
     expect(shim).toContain(paths.currentPath);
     expect(shim).not.toContain("PAPERCLIP_HOME");
-    expect(fs.statSync(paths.shimPath).mode & 0o777).toBe(0o755);
+    if (process.platform !== "win32") expect(fs.statSync(paths.shimPath).mode & 0o777).toBe(0o755);
 
     const rcPath = path.join(root, "home", ".bashrc");
     expect(addManagedPathBlock(rcPath)).toBe(true);
@@ -119,10 +119,11 @@ describe("managed install store", () => {
     fs.chmodSync(rcPath, 0o640);
     expect(removeManagedPathBlock(rcPath)).toBe(true);
     expect(fs.readFileSync(rcPath, "utf8")).not.toContain("paperclipai managed PATH");
-    expect(fs.statSync(rcPath).mode & 0o777).toBe(0o640);
+    if (process.platform !== "win32") expect(fs.statSync(rcPath).mode & 0o777).toBe(0o640);
   });
 
-  it("uses the pinned Node for child tools even with an older node first on the service PATH", () => {
+  // The managed shim is a POSIX shell script (doc/INSTALLING.md).
+  it.skipIf(process.platform === "win32")("uses the pinned Node for child tools even with an older node first on the service PATH", () => {
     const entrypoint = path.join(paths.currentPath, "node_modules", "paperclipai", "dist", "index.js");
     fs.mkdirSync(path.dirname(entrypoint), { recursive: true });
     fs.writeFileSync(entrypoint, `console.log(require("node:child_process").execFileSync("node", ["-p", "process.execPath"], {encoding: "utf8"}).trim())`);

@@ -90,6 +90,12 @@ export function assertSupportedNodeVersion(): void {
   }
 }
 
+export function assertManagedInstallPlatform(platform: NodeJS.Platform = process.platform): void {
+  if (platform !== "darwin" && platform !== "linux") {
+    throw new Error("Managed Paperclip installs require macOS, Linux, or WSL2. Native Windows does not support this POSIX shim and atomic symlink install contract; use a source checkout or WSL2 instead.");
+  }
+}
+
 export function resolveNpmInstallRequest(options: InstallOptions): {
   spec: string;
   channel: InstallChannel;
@@ -360,6 +366,7 @@ export async function installCommand(
   dependencies: { runCommand?: CommandRunner; now?: () => Date } = {},
 ): Promise<void> {
   assertSupportedNodeVersion();
+  assertManagedInstallPlatform();
   const runCommand = dependencies.runCommand ?? runCommandWithDiagnostics;
   const gitRequest = resolveGitInstallRequest(options);
   if (gitRequest) {

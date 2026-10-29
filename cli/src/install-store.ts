@@ -160,7 +160,9 @@ export async function withInstallStoreLock<T>(
     }
   };
   const acquire = (): void => {
-    const temporaryPath = `${paths.lockPath}.${token}.tmp`;
+    // Keep the owner token's existing wire format, but never use its colons in
+    // a Windows filename (where they name alternate streams or are invalid).
+    const temporaryPath = `${paths.lockPath}.${token.replaceAll(":", "-")}.tmp`;
     try {
       fs.writeFileSync(temporaryPath, `${token}\n`, { mode: 0o600, flag: "wx" });
       try {

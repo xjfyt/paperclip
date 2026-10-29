@@ -64,6 +64,7 @@ import {
   createEmbeddedPostgresLogBuffer,
   formatEmbeddedPostgresError,
   loadWithoutEmbeddedPostgresExitHooks,
+  loadEmbeddedPostgres,
   prepareEmbeddedPostgresNativeRuntime,
 } from "@paperclipai/db";
 import type { Command } from "commander";
@@ -1107,10 +1108,9 @@ export async function ensureEmbeddedPostgres(
   preferredPort: number,
   options: { allowExisting?: boolean } = {},
 ): Promise<EmbeddedPostgresHandle> {
-  const moduleName = "embedded-postgres";
   let EmbeddedPostgres: EmbeddedPostgresCtor;
   try {
-    const mod = await loadWithoutEmbeddedPostgresExitHooks(() => import(moduleName));
+    const mod = await loadWithoutEmbeddedPostgresExitHooks(loadEmbeddedPostgres);
     EmbeddedPostgres = mod.default as EmbeddedPostgresCtor;
   } catch {
     throw new Error(

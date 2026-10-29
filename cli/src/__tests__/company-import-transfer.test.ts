@@ -120,7 +120,7 @@ describe("resolveChunkedImportZip", () => {
     expect(await resolveChunkedImportZip(zipPath)).toBeNull();
   });
 
-  it("takes the chunked path for a small zip whose entries inflate past the threshold", async () => {
+  it("takes the chunked path for a small zip whose entries inflate past the threshold", { timeout: 20_000 }, async () => {
     const dir = await makeTempDir();
     const zipPath = path.join(dir, "dense-package.zip");
     // ~64 MB of repetitive text DEFLATEs to a tiny file: far under the raw

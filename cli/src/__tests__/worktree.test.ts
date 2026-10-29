@@ -7,6 +7,7 @@ import { createServer } from "node:net";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
+import { loadEmbeddedPostgres } from "@paperclipai/db";
 import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import {
   agents,
@@ -1636,7 +1637,7 @@ describe("worktree helpers", () => {
         phase: "complete",
       });
 
-      const { default: EmbeddedPostgres } = await import("embedded-postgres");
+      const { default: EmbeddedPostgres } = await loadEmbeddedPostgres();
       let targetPgLogs = Buffer.alloc(0);
       let targetPgStartupResolved = false;
       const captureTargetPgLog = (message: unknown) => {
@@ -1833,7 +1834,7 @@ describe("worktree helpers", () => {
       expect(manifestText).toContain(`Validated migration ${sourceMigrationRevision}`);
       expect(manifestText).not.toContain("fixture-password-hash");
       expect(manifestText).not.toContain("source-master-key");
-      const { default: EmbeddedPostgres } = await import("embedded-postgres");
+      const { default: EmbeddedPostgres } = await loadEmbeddedPostgres();
       const targetPg = new EmbeddedPostgres({
         databaseDir: targetConfig.database.embeddedPostgresDataDir,
         user: "paperclip",
@@ -2093,7 +2094,7 @@ describe("worktree helpers", () => {
         }),
       ).toMatchObject({
         cwd: worktreeRoot,
-        homeDir: "/tmp/paperclip-worktrees",
+        homeDir: path.resolve("/tmp/paperclip-worktrees"),
         instanceId: "pap-1132-chat",
       });
     } finally {
@@ -2319,7 +2320,7 @@ describe("worktree helpers", () => {
         targetRepoRoot: "/Users/example/paperclip-pr-432",
         workspaceCwd: "/Users/example/paperclip",
       }),
-    ).toBe("/Users/example/paperclip-pr-432");
+    ).toBe(path.resolve("/Users/example/paperclip-pr-432"));
 
     expect(
       rebindWorkspaceCwd({
@@ -2327,7 +2328,7 @@ describe("worktree helpers", () => {
         targetRepoRoot: "/Users/example/paperclip-pr-432",
         workspaceCwd: "/Users/example/paperclip/packages/db",
       }),
-    ).toBe("/Users/example/paperclip-pr-432/packages/db");
+    ).toBe(path.resolve("/Users/example/paperclip-pr-432/packages/db"));
   });
 
   it("does not rebind paths outside the source repo root", () => {
@@ -2380,7 +2381,7 @@ describe("worktree helpers", () => {
         copied: true,
       });
       expect(fs.readFileSync(targetHookPath, "utf8")).toBe("#!/usr/bin/env bash\nexit 0\n");
-      expect(fs.statSync(targetHookPath).mode & 0o111).not.toBe(0);
+      if (process.platform !== "win32") expect(fs.statSync(targetHookPath).mode & 0o111).not.toBe(0);
       expect(fs.readFileSync(targetTokensPath, "utf8")).toBe("secret-token\n");
     } finally {
       execFileSync("git", ["worktree", "remove", "--force", worktreePath], { cwd: repoRoot, stdio: "ignore" });

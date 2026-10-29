@@ -21,6 +21,8 @@ describe("Git worktree detection", () => {
     const linked = path.join(root, "linked");
     fs.mkdirSync(primary);
     execFileSync("git", ["init"], { cwd: primary, stdio: "ignore" });
+    // Fixture bytes must not inherit the contributor's global autocrlf policy.
+    execFileSync("git", ["config", "core.autocrlf", "false"], { cwd: primary });
     execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: primary });
     execFileSync("git", ["config", "user.name", "Paperclip Test"], { cwd: primary });
     fs.writeFileSync(path.join(primary, "README.md"), "test\n");

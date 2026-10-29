@@ -36,6 +36,29 @@ afterEach(() => {
 });
 
 describe("update command", () => {
+  // Managed payload activation requires the POSIX atomic-symlink contract in
+  // doc/INSTALLING.md. Native Windows must reject before any mutation instead.
+  it.runIf(process.platform === "win32")("rejects managed update and rollback before any side effects", async () => {
+    const paths = resolveInstallStorePaths(); initializeInstallStore(paths);
+    const payload = payloadPathFor(paths, "npm", "1.0.0");
+    const executablePath = createPayload(payload, "1.0.0");
+    flipCurrentAtomic(payload, paths);
+    const manifest: InstallManifest = { schemaVersion: 1, ...record(payload, "1.0.0"), previous: [record(payload, "0.9.0")] };
+    writeInstallManifestAtomic(manifest, paths);
+    const runCommand = vi.fn<CommandRunner>();
+    const backup = vi.fn();
+    const restartActiveService = vi.fn();
+    const before = fs.readdirSync(paths.cliRoot).sort();
+    for (const options of [{ yes: true }, { rollback: true }]) {
+      await expect(updateCommand(options, { paths, executablePath, runCommand, backup, restartActiveService })).rejects.toThrow(/Native Windows/);
+      expect(readInstallManifest(paths)).toEqual(manifest);
+      expect(fs.realpathSync(paths.currentPath)).toBe(fs.realpathSync(payload));
+      expect(fs.readdirSync(paths.cliRoot).sort()).toEqual(before);
+    }
+    expect(runCommand).not.toHaveBeenCalled();
+    expect(backup).not.toHaveBeenCalled();
+    expect(restartActiveService).not.toHaveBeenCalled();
+  });
   it.each(["npm", "git", "global-npm"] as const)("rejects %s updates on unsupported Node before any update work", async (source) => {
     const paths = resolveInstallStorePaths(); initializeInstallStore(paths);
     const payload = payloadPathFor(paths, "npm", "1.0.0");
@@ -78,9 +101,15 @@ describe("update command", () => {
       await updateCommand({ check: true }, { paths, executablePath, runCommand });
       await updateCommand({ dryRun: true }, { paths, executablePath, runCommand });
       expect(readInstallManifest(paths)?.version).toBe("2.0.0");
-      await updateCommand({ rollback: true }, { paths, executablePath, restartActiveService });
-      expect(readInstallManifest(paths)?.version).toBe("1.0.0");
-      expect(restartActiveService).toHaveBeenCalledWith("1.0.0");
+      if (process.platform === "win32") {
+        await expect(updateCommand({ rollback: true }, { paths, executablePath, restartActiveService })).rejects.toThrow(/Native Windows/);
+        expect(readInstallManifest(paths)?.version).toBe("2.0.0");
+        expect(restartActiveService).not.toHaveBeenCalled();
+      } else {
+        await updateCommand({ rollback: true }, { paths, executablePath, restartActiveService });
+        expect(readInstallManifest(paths)?.version).toBe("1.0.0");
+        expect(restartActiveService).toHaveBeenCalledWith("1.0.0");
+      }
     } finally {
       Object.defineProperty(process.versions, "node", nodeVersion);
     }
@@ -111,7 +140,7 @@ describe("update command", () => {
     expect(() => resolveUpdateRequest(manifest, { latest: true, canary: true })).toThrow("only one");
   });
 
-  it("re-resolves a moving git branch and activates the new SHA payload", async () => {
+  it.skipIf(process.platform === "win32")("re-resolves a moving git branch and activates the new SHA payload", async () => {
     const paths = resolveInstallStorePaths(); initializeInstallStore(paths);
     const oldSha = "1".repeat(40); const newSha = "2".repeat(40);
     const oldPayload = payloadPathFor(paths, "git", oldSha.slice(0, 12));
@@ -148,7 +177,7 @@ describe("update command", () => {
     expect(runCommand).not.toHaveBeenCalled();
   });
 
-  it("requires explicit confirmation before downgrading", async () => {
+  it.skipIf(process.platform === "win32")("requires explicit confirmation before downgrading", async () => {
     const paths = resolveInstallStorePaths(); initializeInstallStore(paths);
     const payload = payloadPathFor(paths, "npm", "2.0.0"); const entrypoint = createPayload(payload, "2.0.0"); flipCurrentAtomic(payload, paths);
     writeInstallManifestAtomic({ schemaVersion: 1, ...record(payload, "2.0.0"), previous: [] }, paths);
@@ -184,7 +213,7 @@ describe("update command", () => {
     expect(runCommand).toHaveBeenCalledTimes(2);
   });
 
-  it("backs up, installs side-by-side, flips, and rolls back instantly", async () => {
+  it.skipIf(process.platform === "win32")("backs up, installs side-by-side, flips, and rolls back instantly", async () => {
     const paths = resolveInstallStorePaths(); initializeInstallStore(paths);
     const oldPayload = payloadPathFor(paths, "npm", "1.0.0"); const executable = createPayload(oldPayload, "1.0.0"); flipCurrentAtomic(oldPayload, paths);
     writeInstallManifestAtomic({ schemaVersion: 1, ...record(oldPayload, "1.0.0"), previous: [] }, paths);
@@ -209,7 +238,7 @@ describe("update command", () => {
     expect(fs.realpathSync(paths.currentPath)).toBe(fs.realpathSync(oldPayload));
   });
 
-  it("explains how to recover when the pre-update database is unreachable", async () => {
+  it.skipIf(process.platform === "win32")("explains how to recover when the pre-update database is unreachable", async () => {
     const paths = resolveInstallStorePaths(); initializeInstallStore(paths);
     const oldPayload = payloadPathFor(paths, "npm", "1.0.0"); const executable = createPayload(oldPayload, "1.0.0"); flipCurrentAtomic(oldPayload, paths);
     writeInstallManifestAtomic({ schemaVersion: 1, ...record(oldPayload, "1.0.0"), previous: [] }, paths);
@@ -224,7 +253,7 @@ describe("update command", () => {
     expect(readInstallManifest(paths)?.version).toBe("1.0.0");
   });
 
-  it("skips the pre-update backup when there is no onboarded instance data", async () => {
+  it.skipIf(process.platform === "win32")("skips the pre-update backup when there is no onboarded instance data", async () => {
     const paths = resolveInstallStorePaths(); initializeInstallStore(paths);
     const oldPayload = payloadPathFor(paths, "npm", "1.0.0"); const executable = createPayload(oldPayload, "1.0.0"); flipCurrentAtomic(oldPayload, paths);
     writeInstallManifestAtomic({ schemaVersion: 1, ...record(oldPayload, "1.0.0"), previous: [] }, paths);
@@ -253,7 +282,7 @@ describe("update command", () => {
     expect(runCommand).toHaveBeenCalledWith("npm", expect.arrayContaining(["view", "paperclipai@latest"]), expect.anything());
   });
 
-  it("rolls back the active payload when restart validation fails", async () => {
+  it.skipIf(process.platform === "win32")("rolls back the active payload when restart validation fails", async () => {
     const paths = resolveInstallStorePaths(); initializeInstallStore(paths);
     const oldPayload = payloadPathFor(paths, "npm", "1.0.0"); const executable = createPayload(oldPayload, "1.0.0"); flipCurrentAtomic(oldPayload, paths);
     writeInstallManifestAtomic({ schemaVersion: 1, ...record(oldPayload, "1.0.0"), previous: [] }, paths);
@@ -269,7 +298,7 @@ describe("update command", () => {
     expect(restartActiveService).toHaveBeenLastCalledWith("1.0.0");
   });
 
-  it("surfaces a failure to restart the rolled-back payload", async () => {
+  it.skipIf(process.platform === "win32")("surfaces a failure to restart the rolled-back payload", async () => {
     const paths = resolveInstallStorePaths(); initializeInstallStore(paths);
     const oldPayload = payloadPathFor(paths, "npm", "1.0.0"); const executable = createPayload(oldPayload, "1.0.0"); flipCurrentAtomic(oldPayload, paths);
     writeInstallManifestAtomic({ schemaVersion: 1, ...record(oldPayload, "1.0.0"), previous: [] }, paths);

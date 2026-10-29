@@ -159,7 +159,8 @@ describe("isExecutableFile", () => {
     fs.writeFileSync(plain, "data", { mode: 0o644 });
 
     await expect(isExecutableFile(executable)).resolves.toBe(true);
-    await expect(isExecutableFile(plain)).resolves.toBe(false);
+    // X_OK has no executable mode-bit distinction on native Windows.
+    await expect(isExecutableFile(plain)).resolves.toBe(process.platform === "win32");
     await expect(isExecutableFile(dir)).resolves.toBe(false);
     await expect(isExecutableFile(path.join(dir, "missing"))).resolves.toBe(false);
   });
