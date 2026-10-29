@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,6 +18,25 @@ const workspaceDiffReprojectionPath = fileURLToPath(
   new URL("../services/provider-trace-workspace-diff-reprojection.ts", import.meta.url),
 );
 
+function withBuildCopyFixture(check: (root: string, execute: () => void) => void) {
+  const root = mkdtempSync(path.join(tmpdir(), "paperclip-server-build-copy-"));
+  try {
+    const helper = path.join(root, "server/scripts/copy-build-assets.mjs");
+    mkdirSync(path.dirname(helper), { recursive: true });
+    // Run exactly the build's authored bytes at the same relative layout, with
+    // isolated source/output trees. Do not read or modify the real dist/.
+    copyFileSync(path.join(path.dirname(packageJsonPath), "scripts/copy-build-assets.mjs"), helper);
+    for (const directory of ["onboarding-assets", "built-ins", "services/scripts"]) {
+      const source = path.join(root, "server/src", directory, "nested/fixture.txt");
+      mkdirSync(path.dirname(source), { recursive: true });
+      writeFileSync(source, directory);
+    }
+    mkdirSync(path.join(root, "packages/paperclip-runner/dist"), { recursive: true });
+    writeFileSync(path.join(root, "packages/paperclip-runner/dist/index.js"), "export const fixture = true;\n");
+    check(root, () => execFileSync(process.execPath, [helper], { cwd: root, stdio: "pipe" }));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+}
+
 describe("server package build script", () => {
   it("builds the compiled package entry during prepack", () => {
     const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
@@ -35,13 +54,13 @@ describe("server package build script", () => {
     };
     const buildScript = packageJson.scripts?.build ?? "";
 
-    expect(buildScript).toContain(
-      "mkdir -p dist/onboarding-assets dist/built-ins",
-    );
-    expect(buildScript).toContain(
-      "cp -R src/onboarding-assets/. dist/onboarding-assets/",
-    );
-    expect(buildScript).toContain("cp -R src/built-ins/. dist/built-ins/");
+    expect(buildScript.split(" && ")).toContain("node scripts/copy-build-assets.mjs");
+    withBuildCopyFixture((root, execute) => {
+      execute();
+      for (const directory of ["onboarding-assets", "built-ins", "services/scripts"]) {
+        expect(readFileSync(path.join(root, "server/dist", directory, "nested/fixture.txt"), "utf8")).toBe(directory);
+      }
+    });
   });
 
   it("vendors the private runner runtime without a production workspace dependency", () => {
@@ -60,19 +79,17 @@ describe("server package build script", () => {
     expect(packageJson.scripts?.["prepare:runner-vendor"]).toBe(
       "pnpm --filter @paperclipai/paperclip-runner build",
     );
-    expect(packageJson.scripts?.build).toContain(
-      "cp -Rf ../packages/paperclip-runner/dist/. dist/vendor/paperclip-runner/",
-    );
+    expect(packageJson.scripts?.build?.split(" && ")).toContain("node scripts/copy-build-assets.mjs");
+    withBuildCopyFixture((root, execute) => {
+      execute();
+      expect(readFileSync(path.join(root, "server/dist/vendor/paperclip-runner/index.js"), "utf8")).toBe("export const fixture = true;\n");
+    });
   });
 
   it("replaces an existing read-only image manifest with the build's copy step", () => {
     const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
-    const step = packageJson.scripts.build.split(" && ").find((command: string) =>
-      command.includes("../packages/paperclip-runner/dist/."));
-    expect(step).toBeDefined();
-    const [command, ...args] = step.split(" ");
-    const root = mkdtempSync(path.join(tmpdir(), "runner-vendor-copy-"));
-    try {
+    expect(packageJson.scripts.build.split(" && ")).toContain("node scripts/copy-build-assets.mjs");
+    withBuildCopyFixture((root, execute) => {
       const relative = "remote-provider-packs/linux-x64/provider-pack.json";
       const source = path.join(root, "packages/paperclip-runner/dist", relative);
       const destination = path.join(root, "server/dist/vendor/paperclip-runner", relative);
@@ -80,11 +97,12 @@ describe("server package build script", () => {
       mkdirSync(path.dirname(destination), { recursive: true });
       writeFileSync(source, "qualified image identity", { mode: 0o444 });
       writeFileSync(destination, "previous image identity", { mode: 0o444 });
-      execFileSync(command, args, { cwd: path.join(root, "server") });
+      const unrelated = path.join(path.dirname(destination), "unrelated-output.txt");
+      writeFileSync(unrelated, "preserve unrelated bytes", { mode: 0o444 });
+      execute();
       expect(readFileSync(destination, "utf8")).toBe("qualified image identity");
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
+      expect(readFileSync(unrelated, "utf8")).toBe("preserve unrelated bytes");
+    });
   });
 
   it("verifies vendored runner dependencies are mirrored before building", () => {

@@ -145,7 +145,7 @@ describe("orphan-reaping probe", () => {
     // Re-parenting lags the leader's exit, so a single sample reads a slow
     // leader as a failure and flakes the Docker publish workflow.
     expect(reapingProbe).toContain('if [ "$ppid" = "1" ]; then');
-    expect(reapingProbe).toMatch(/while :; do\n\s+ppid=/);
+    expect(reapingProbe).toMatch(/while :; do\r?\n\s+ppid=/);
   });
 
   it("asserts on the reaped pid rather than on PID 1's name alone", () => {
