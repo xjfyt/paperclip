@@ -51,6 +51,7 @@ import type { PluginToolDispatcher } from "./plugin-tool-dispatcher.js";
 import type { PluginLifecycleManager } from "./plugin-lifecycle.js";
 import { pluginDatabaseService } from "./plugin-database.js";
 import { resolveBundledCatalogRoot } from "./bundled-plugins.js";
+import { resolvePnpmInvocation } from "./pnpm-invocation.js";
 
 const execFileAsync = promisify(execFile);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -901,7 +902,10 @@ export async function ensureLocalPluginBuilt(
   const manualBuildCommand = buildLocalPluginRecoveryCommand(packageRoot, pkgJson, { repoRoot: options.repoRoot });
   if (typeof packageName !== "string" || packageName.trim().length === 0 || !manualBuildCommand) return;
 
-  const runExecFileAsync = options.execFileAsyncImpl ?? execFileAsync;
+  const runExecFileAsync = options.execFileAsyncImpl ?? ((file, args, execOptions) => {
+    const invocation = file === "pnpm" ? resolvePnpmInvocation(processEnv) : { file, args: [] };
+    return execFileAsync(invocation.file, [...invocation.args, ...args], execOptions);
+  });
   const buildCommands = buildLocalPluginBuildCommands(packageRoot, pkgJson, {
     repoRoot: options.repoRoot,
     needsBuild: missingEntrypoints.length > 0,

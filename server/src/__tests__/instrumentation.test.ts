@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createRequire } from "node:module";
+import path from "node:path";
 
 /**
  * Tests for the opt-in OpenTelemetry bootstrap. The @opentelemetry/* packages
@@ -179,7 +180,7 @@ describe("bootstrapOtel post-gate load failure", () => {
     // for real — the packages are not actually installed in this test run.
     // That forces the one path the catch block now must describe: a package
     // that passed the gate but failed to load.
-    const FAKE_ROOT = "/fake-otel-pkg";
+    const FAKE_ROOT = path.resolve("/fake-otel-pkg");
     const require = createRequire(import.meta.url);
     const peerDependencies = (
       require("../../package.json") as { peerDependencies?: Record<string, string> }
@@ -192,15 +193,13 @@ describe("bootstrapOtel post-gate load failure", () => {
         ...actual,
         existsSync: (path: unknown) =>
           String(path).startsWith(FAKE_ROOT) ? true : actual.existsSync(path as never),
-        readFileSync: (path: unknown, options?: unknown) => {
-          const asString = String(path);
+        readFileSync: (file: unknown, options?: unknown) => {
+          const asString = String(file);
           if (asString.startsWith(FAKE_ROOT) && asString.endsWith("package.json")) {
-            const name = decodeURIComponent(
-              asString.slice(FAKE_ROOT.length + 1, -"/package.json".length),
-            );
+            const name = decodeURIComponent(path.basename(path.dirname(asString)));
             return JSON.stringify({ name, version: peerDependencies[name] });
           }
-          return actual.readFileSync(path as never, options as never);
+          return actual.readFileSync(file as never, options as never);
         },
       };
     });
@@ -213,7 +212,7 @@ describe("bootstrapOtel post-gate load failure", () => {
           const fake = ((id: string) => real(id)) as typeof real;
           fake.resolve = ((id: string, options?: unknown) =>
             id in peerDependencies
-              ? `${FAKE_ROOT}/${encodeURIComponent(id)}/index.js`
+              ? path.join(FAKE_ROOT, encodeURIComponent(id), "index.js")
               : real.resolve(id, options as never)) as typeof real.resolve;
           return fake;
         },
@@ -229,7 +228,7 @@ describe("bootstrapOtel post-gate load failure", () => {
     }
 
     for (const call of warn.mock.calls) {
-      expect(String(call[0])).not.toContain("packages are not installed");
+      expect(String(call[0]), String(call[0])).not.toContain("packages are not installed");
       expect(String(call[0])).not.toContain("Install @opentelemetry/sdk-node");
     }
     expect(warn).toHaveBeenCalledWith(
