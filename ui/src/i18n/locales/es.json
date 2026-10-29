@@ -1641,6 +1641,61 @@
     "allTime": "Todo el período",
     "custom": "Personalizado"
   },
+  "costHistoryUi": {
+    "emptyDecisions": "No hay solicitudes de decisión en este período. <0>Configura un modelo de decisión</0> para ejecutar una prueba.",
+    "emptyFast": "No hay respuestas rápidas en este período. <0>Configura la respuesta rápida</0> para ejecutar una prueba.",
+    "emptyFastDisabled": "No hay respuestas rápidas en este período. <0>Activa las respuestas rápidas experimentales</0> para ejecutar una prueba.",
+    "privacy": "Solicitudes recientes. No se conservan las entradas.",
+    "fastResponses": "Respuestas rápidas",
+    "decisions": "Solicitudes de decisión",
+    "setupTest": "Prueba de configuración",
+    "services": "Servicios de Paperclip",
+    "board": "Administración",
+    "formerUser": "Antiguo usuario",
+    "viewTask": "Ver tarea",
+    "removedConnection": "Conexión eliminada",
+    "unknownCost": "Desconocido",
+    "loadingDecisions": "Cargando solicitudes de decisión…",
+    "failedDecisions": "No se pudieron cargar las solicitudes de decisión.",
+    "retry": "Reintentar",
+    "columns": {
+      "whenFeature": "Fecha / función",
+      "responsible": "Responsable",
+      "task": "Tarea",
+      "connection": "Conexión",
+      "model": "Modelo",
+      "status": "Estado",
+      "duration": "Duración",
+      "tokens": "Tokens de entrada / salida",
+      "cost": "Coste"
+    },
+    "status": {
+      "succeeded": "Correcto",
+      "running": "En ejecución",
+      "unknown": "Sin resolver",
+      "skipped": "Omitido",
+      "pending": "Pendiente",
+      "failed": "Fallido"
+    },
+    "publication": {
+      "pending": "Publicación pendiente",
+      "streaming": "Transmitiendo",
+      "retry": "Reintentando publicación",
+      "published": "Publicado",
+      "suppressed": "Suprimido",
+      "test": "Prueba",
+      "failed": "Publicación fallida",
+      "cancelled": "Publicación cancelada",
+      "delivery_unknown": "Entrega desconocida",
+      "awaiting_consent": "Esperando consentimiento"
+    },
+    "cost": {
+      "estimated": "Estimado",
+      "reported": "Reportado"
+    },
+    "loadingFast": "Cargando respuestas rápidas…",
+    "failedFast": "No se pudieron cargar las respuestas rápidas."
+  },
   "costOps": {
     "refunds": "Reembolsos, compensaciones y devoluciones de crédito",
     "netHelp": "Débitos menos créditos del período seleccionado",
