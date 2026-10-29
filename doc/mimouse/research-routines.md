@@ -77,3 +77,9 @@ in-flight 去重。身份切换会卸载旧界面并取消历史读取；旧创�
 `history-budget.test.ts`、`ResearchRoutineHistory.test.tsx`、
 `ResearchRoutinePanel.test.tsx` 和 `research-private.test.ts`。HTTP fixture 注入 actor
 并在数据库验证 session/member，不冒充生产登录或真实联网调研。
+
+安全复核补充：canonical source/run 检查使用同一已验证 session/user、刚读取的
+公司成员身份，并显式禁用 actor/数据库 instance-admin 旁路；公开图检查不受
+privacy-mode-off 影响。具名 PG 反例覆盖三种旁路输入下的私有源、祖先、项目和
+cursor。来源查询只投影权限与关联元数据；超长 provenance（超过 2048 字节）
+按 needs_review 处理，不加载隐藏的附加文本。祖先遍历超限返回 503，而非假空。

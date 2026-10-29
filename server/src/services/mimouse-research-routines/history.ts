@@ -3,7 +3,7 @@ import { authSessions, authUsers, companies, companyMemberships, heartbeatRuns, 
   mimouseResearchCandidates as candidates, type Db } from "@paperclipai/db";
 import { researchHistoryQuerySchema, type ResearchHistoryItem, type ResearchHistoryPage, type ResearchHistoryQuery } from "@paperclipai/shared/mimouse-research-history";
 import { forbidden, notFound } from "../../errors.js";
-import { canActorReadIssuePrivacy, canActorReadProjectPrivacy } from "../authorization.js";
+import { canActorReadIssuePrivacy, canActorReadProjectPrivacy, type AuthorizationActor } from "../authorization.js";
 import { canActorReadHeartbeatRun } from "../heartbeat-run-privacy.js";
 import { accessService } from "../access.js";
 import { isCompanyOpenResearchBoundary } from "./public-boundary.js";
@@ -26,21 +26,33 @@ export async function researchRoutineHistory(db: Db, companyId: string, routineI
       eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, actor.userId!), eq(companyMemberships.status, "active")));
     const [company] = await tx.select({ status: companies.status }).from(companies).where(eq(companies.id, companyId));
     if (!session || !member || !["owner", "admin"].includes(member.role ?? "") || !company || !["active", "paused"].includes(company.status)) throw forbidden("Active company administrator required");
-    const issueCache = new Map<string, typeof issues.$inferSelect | null>(), projectCache = new Map<string, typeof projects.$inferSelect | null>();
+    // Same verified principal, not a dummy publicness probe. Neither caller flags
+    // nor a DB instance-admin role may bypass canonical source/run authorization.
+    const sourceActor: AuthorizationActor = { type: "board", source: "session", userId: actor.userId, sessionId: actor.sessionId,
+      companyIds: [companyId], memberships: [{ companyId, membershipRole: member.role, status: "active" }],
+      isInstanceAdmin: false, ignoreInstanceAdmin: true };
+    // Public-boundary checks need identities, not private task descriptions or project configuration.
+    const issueFields = { id: issues.id, companyId: issues.companyId, visibility: issues.visibility, projectId: issues.projectId,
+      parentId: issues.parentId, privacyParentIssueId: issues.privacyParentIssueId, privacyRootIssueId: issues.privacyRootIssueId,
+      responsibleUserId: issues.responsibleUserId, createdByUserId: issues.createdByUserId, assigneeUserId: issues.assigneeUserId,
+      assigneeAgentId: issues.assigneeAgentId, status: issues.status, originKind: issues.originKind, originId: issues.originId, originRunId: issues.originRunId };
+    const projectFields = { id: projects.id, companyId: projects.companyId, visibility: projects.visibility };
+    const issueCache = new Map<string, Pick<typeof issues.$inferSelect, keyof typeof issueFields> | null>();
+    const projectCache = new Map<string, Pick<typeof projects.$inferSelect, keyof typeof projectFields> | null>();
     const issue = async (id: string) => {
-      if (!issueCache.has(id)) issueCache.set(id, (await tx.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, id))).limit(1))[0] ?? null);
+      if (!issueCache.has(id)) issueCache.set(id, (await tx.select(issueFields).from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, id))).limit(1))[0] ?? null);
       return issueCache.get(id)!;
     };
     const boundary = async (source: { projectId?: string | null; issueId?: string | null; parentIssueId?: string | null }) => isCompanyOpenResearchBoundary({ companyId, ...source }, {
       onTraversalLimit: () => { throw historyUnavailable(); },
       issue, project: async id => {
-        if (!projectCache.has(id)) projectCache.set(id, (await tx.select().from(projects).where(and(eq(projects.companyId, companyId), eq(projects.id, id))).limit(1))[0] ?? null);
+        if (!projectCache.has(id)) projectCache.set(id, (await tx.select(projectFields).from(projects).where(and(eq(projects.companyId, companyId), eq(projects.id, id))).limit(1))[0] ?? null);
         return projectCache.get(id)!;
       },
-      canReadIssue: async row => await canActorReadIssuePrivacy(tx, actor, row) && (await access.decide({ actor, action: "issue:read", resource: {
+      canReadIssue: async row => await canActorReadIssuePrivacy(tx, sourceActor, row) && (await access.decide({ actor: sourceActor, action: "issue:read", resource: {
         type: "issue", companyId, issueId: row.id, projectId: row.projectId, parentIssueId: row.parentId, assigneeAgentId: row.assigneeAgentId, assigneeUserId: row.assigneeUserId, status: row.status,
       } })).allowed,
-      canReadProject: async row => await canActorReadProjectPrivacy(tx, actor, row) && (await access.decide({ actor, action: "project:read", resource: { type: "project", companyId, projectId: row.id } })).allowed,
+      canReadProject: async row => await canActorReadProjectPrivacy(tx, sourceActor, row) && (await access.decide({ actor: sourceActor, action: "project:read", resource: { type: "project", companyId, projectId: row.id } })).allowed,
     });
     const [routine] = await tx.select({ projectId: routines.projectId, parentIssueId: routines.parentIssueId }).from(routines).where(and(eq(routines.companyId, companyId), eq(routines.id, routineId))).limit(1);
     if (!routine || !await boundary(routine)) throw notFound("Research history unavailable");
@@ -58,10 +70,10 @@ export async function researchRoutineHistory(db: Db, companyId: string, routineI
         .where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.issueId, source.id)))
         .orderBy(desc(heartbeatRuns.createdAt), desc(heartbeatRuns.id)).limit(101) : [];
       if (attempts.length > 100) needsReview = true;
-      for (const run of attempts) if (!await canActorReadHeartbeatRun(tx, access, actor, run)) return null;
+      for (const run of attempts) if (!await canActorReadHeartbeatRun(tx, access, sourceActor, run)) return null;
       const reportRows = await tx.select({ id: candidates.id, requestId: candidates.requestId, actorId: candidates.actorId, createdAt: candidates.createdAt,
         evidenceHash: candidates.evidenceHash, mode: sql<string>`${candidates.evidence}->>'evidenceMode'`,
-        provenance: sql<unknown>`${candidates.evidence}->'provenance'` }).from(candidates).where(and(eq(candidates.companyId, companyId),
+        provenance: sql<unknown>`case when octet_length((${candidates.evidence}->'provenance')::text) <= 2048 then ${candidates.evidence}->'provenance' else null end` }).from(candidates).where(and(eq(candidates.companyId, companyId),
           or(sql`${candidates.evidence}->'provenance'->>'routineRunId' = ${row.id}`,
             ...(attempts.length ? [inArray(candidates.requestId, attempts.map(run => run.id))] : []))))
         .orderBy(desc(candidates.createdAt), desc(candidates.id)).limit(101);
@@ -73,7 +85,7 @@ export async function researchRoutineHistory(db: Db, companyId: string, routineI
         // Even malformed metadata must not disclose a private linked source.
         if (uuid(p.issueId) && !await boundary({ issueId: p.issueId })) return null;
         const run = attempts.find(attempt => attempt.id === p.runId);
-        const valid = report.mode === "agent_report" && p.companyId === companyId && p.routineId === routineId && p.routineRunId === row.id
+        const valid = /^[a-f0-9]{64}$/.test(report.evidenceHash) && report.mode === "agent_report" && p.companyId === companyId && p.routineId === routineId && p.routineRunId === row.id
           && p.issueId === row.linkedIssueId && run && p.agentId === run.agentId && p.runId === report.requestId && report.actorId === `agent:${run.agentId}`
           && run.scopeKind === "issue" && p.sourceVerification === "agent_report" && p.disposition === "quarantined"
           && typeof p.reportBodyHash === "string" && /^[a-f0-9]{64}$/.test(p.reportBodyHash)

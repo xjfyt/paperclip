@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, expect, it } from "vitest";
+import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import express from "express";
 import request from "supertest";
-import { activityLog, agents, authSessions, authUsers, companies, companyMemberships, createDb, heartbeatRuns, issues, projects, routines, routineRuns,
+import { activityLog, agents, authSessions, authUsers, companies, companyMemberships, createDb, heartbeatRuns, instanceUserRoles, issues, projects, routines, routineRuns,
   mimouseResearchCandidates as candidates } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 import { researchRoutineHistory } from "./history.js";
@@ -126,4 +126,33 @@ it("a blocked PostgreSQL read gets a bounded 503 and no partial HTTP response", 
   await acquired;
   try { await expect(f.read()).rejects.toMatchObject({ status: 503 }); } finally { release(); await transaction; }
   expect((await f.read()).items).toHaveLength(1);
+});
+it("fails closed on oversized provenance and does not hide traversal exhaustion as an empty page", async () => {
+  const f = await fixture(), original = await f.receipt(undefined, true);
+  await db.update(candidates).set({ evidence: { ...original.report!.evidence, provenance: { ...original.report!.evidence.provenance!, extra: "x".repeat(3000) } } as NonNullable<typeof original.report>["evidence"] }).where(eq(candidates.id, original.report!.id));
+  expect((await f.read()).items[0]).toMatchObject({ reportState: "needs_review", reports: [] });
+  let parentId: string | null = null;
+  for (let i = 0; i < 129; i++) {
+    const [ancestor] = await db.insert(issues).values({ companyId: f.companyId, title: "Open ancestor", parentId, visibility: "open" }).returning();
+    parentId = ancestor.id;
+  }
+  await db.update(issues).set({ parentId }).where(eq(issues.id, original.issue!.id));
+  await expect(f.read()).rejects.toMatchObject({ status: 503 });
+});
+it.each(["actor_flag", "database_role", "privacy_mode_off"])("does not treat %s as authority to disclose private source runs or cursors", async mode => {
+  const f = await fixture(), original = await f.receipt(undefined, true);
+  if (mode === "actor_flag") f.actor.isInstanceAdmin = true;
+  if (mode === "database_role") await db.insert(instanceUserRoles).values({ userId: f.userId, role: "instance_admin" });
+  if (mode === "privacy_mode_off") vi.stubEnv("PAPERCLIP_ISSUE_PRIVACY_MODE", "off");
+  try {
+    await db.update(issues).set({ visibility: "private", privacyOwnerUserId: f.userId }).where(eq(issues.id, original.issue!.id));
+    expect((await f.read()).items).toEqual([]);
+    await expect(f.read(1, original.row.id)).rejects.toMatchObject({ status: 404 });
+    await db.update(issues).set({ visibility: "open", privacyOwnerUserId: null }).where(eq(issues.id, original.issue!.id));
+    const [parent] = await db.insert(issues).values({ companyId: f.companyId, title: "Private ancestor", visibility: "private", privacyOwnerUserId: f.userId }).returning();
+    await db.update(issues).set({ privacyParentIssueId: parent.id }).where(eq(issues.id, original.issue!.id));
+    expect((await f.read()).items).toEqual([]);
+    await db.update(projects).set({ visibility: "private", privacyOwnerUserId: f.userId }).where(eq(projects.id, f.project.id));
+    await expect(f.read()).rejects.toMatchObject({ status: 404 });
+  } finally { vi.unstubAllEnvs(); }
 });
