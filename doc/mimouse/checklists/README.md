@@ -20,10 +20,11 @@
 | [Windows GitHub launcher](2026-10-30-windows-github-launcher-evidence.json) | 真实本机 Git/PATHEXT、受控无网络 Node/EXE 夹具及 argv、token 剥离、篡改拒绝。Linux inotify 原有跳过单列；不是 GitHub 账号或网络验收。 |
 | [Windows Codex 凭据](2026-10-30-windows-codex-credentials-evidence.json) | 真实 NTFS DACL 与新空暂存目录，合成凭据、复制/刷新/回写拒绝和保全回归；保留早期失败。不证明真实登录、刷新 grant 或远端执行可用。 |
 | [Windows 服务恢复夹具](2026-10-30-windows-server-recovery-evidence.json) | Git/私密 HOME/实际 Node 退出及精确缓存容量回归。两个原有 POSIX 孤儿进程组用例仍跳过，不放宽 Windows 生产停止证明。 |
+| [决策签名密钥与启动接线](2026-10-30-decision-signing-evidence.json) | 真实 NTFS 的首字节前保护、既有宽 ACL/链接拒绝及原字节/DACL 保全；原子发布赢家与临时路径碰撞；启动测试逐项正常关闭，真实 PG 决策流程另列。不证明其它秘密路径或非 Windows 实机验收。 |
 
 ## 三、摘要核对与后续输入
 
-整理时核对了上述五份 JSON 内共 132 个明确的文件/摘要对：127 个与当前本地字节一致，5 个测试或测试 helper 已在收据之后修改；没有缺失文件，引用的日志和截图摘要均一致。该核对只检查收据完整性，不重新执行用例，不把文件存在当作业务通过。
+02:28 整理时核对了当时五份 JSON 内共 132 个明确的文件/摘要对：127 个与当前本地字节一致，5 个测试或测试 helper 已在收据之后修改；没有缺失文件，引用的日志和截图摘要均一致。随后新增的决策签名收据有独立冻结输入、日志和实测结果；不纳入前述历史统计。摘要核对只检查收据完整性，不重新执行用例，不把文件存在当作业务通过。
 
 后续变化涉及 Codex 的 `codex-auth-cache.test.ts`、`codex-auth-copyback.test.ts`、`execute.test.ts`，以及 adapter-utils 的 `test-fixtures/native-cli.ts`、`test-fixtures/local-sandbox.ts`。对应旧收据仍证明其原输入下的观察，不能改写旧 hash 让它看似匹配当前输入；最终源码结论需引用冻结后相应检查及当前收口报告。新修复继续遵循相同规则。
 

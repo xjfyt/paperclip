@@ -1,6 +1,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { chmodSync, linkSync, lstatSync, mkdirSync, readFileSync, type Stats, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, closeSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, type Stats, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { hasPrivatePermissions, protectNewPrivatePath } from "@paperclipai/shared/private-filesystem-permissions";
 import { resolveDefaultSecretsKeyFilePath } from "../home-paths.js";
 
 const VERSION = "decision-spec-v1";
@@ -25,7 +26,10 @@ function enforceKeyFilePermissions(keyPath: string) {
     throw new Error(`Decision signing key at ${keyPath} must be a regular file`);
   }
   assertOwnedByCurrentUser(stats, `Decision signing key at ${keyPath}`);
-  if (process.platform === "win32") return;
+  if (process.platform === "win32") {
+    if (!hasPrivatePermissions(keyPath, stats.mode)) throw new Error("Decision signing key must have verified private Windows permissions");
+    return;
+  }
 
   const mode = stats.mode & 0o777;
   if ((mode & 0o077) !== 0) {
@@ -47,7 +51,10 @@ function enforceSecretsDirectoryPermissions(directoryPath: string) {
     throw new Error(`Decision signing secrets directory at ${directoryPath} must be a directory`);
   }
   assertOwnedByCurrentUser(stats, `Decision signing secrets directory at ${directoryPath}`);
-  if (process.platform === "win32") return;
+  if (process.platform === "win32") {
+    if (!hasPrivatePermissions(directoryPath, stats.mode)) throw new Error("Decision signing secrets directory must have verified private Windows permissions");
+    return;
+  }
 
   const mode = stats.mode & 0o777;
   if ((mode & 0o077) !== 0) {
@@ -82,6 +89,23 @@ function isNotFound(error: unknown) {
   return (error as NodeJS.ErrnoException).code === "ENOENT";
 }
 
+function ensureSecretsDirectory(directory: string) {
+  if (process.platform !== "win32") {
+    mkdirSync(directory, { recursive: true, mode: 0o700 });
+  } else {
+    // Only the exclusively created, still-empty secrets directory may receive
+    // a new DACL. Existing directories are validated without changing access.
+    mkdirSync(path.dirname(directory), { recursive: true, mode: 0o700 });
+    try {
+      mkdirSync(directory, { mode: 0o700 });
+      protectNewPrivatePath(directory);
+    } catch (error) {
+      if (!isAlreadyExists(error)) throw error;
+    }
+  }
+  enforceSecretsDirectoryPermissions(directory);
+}
+
 function loadOrCreateGeneratedSecret(): string {
   const keyPath = resolveGeneratedSecretFilePath();
   const secretsDirectoryPath = path.dirname(keyPath);
@@ -92,13 +116,19 @@ function loadOrCreateGeneratedSecret(): string {
     if (!isNotFound(error)) throw error;
   }
 
-  mkdirSync(secretsDirectoryPath, { recursive: true, mode: 0o700 });
-  enforceSecretsDirectoryPermissions(secretsDirectoryPath);
+  ensureSecretsDirectory(secretsDirectoryPath);
   const generated = randomBytes(32).toString("base64");
   const temporaryPath = `${keyPath}.${process.pid}.${randomBytes(8).toString("hex")}.tmp`;
+  let temporaryCreated = false;
 
   try {
-    writeFileSync(temporaryPath, generated, { encoding: "utf8", mode: 0o600, flag: "wx" });
+    const descriptor = openSync(temporaryPath, "wx", 0o600);
+    temporaryCreated = true;
+    try {
+      if (process.platform === "win32") protectNewPrivatePath(temporaryPath);
+      enforceKeyFilePermissions(temporaryPath);
+      writeFileSync(descriptor, generated, { encoding: "utf8" });
+    } finally { closeSync(descriptor); }
     enforceKeyFilePermissions(temporaryPath);
 
     try {
@@ -113,7 +143,7 @@ function loadOrCreateGeneratedSecret(): string {
     }
   } finally {
     try {
-      unlinkSync(temporaryPath);
+      if (temporaryCreated) unlinkSync(temporaryPath);
     } catch (error) {
       if (!isNotFound(error)) throw error;
     }

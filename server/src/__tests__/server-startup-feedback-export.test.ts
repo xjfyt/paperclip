@@ -4,6 +4,12 @@ import * as idleLocalWork from "../services/idle-local-work.js";
 import { idleBackupWakeMarker, markIdleBackupWakeRequired } from "../services/idle-database-backup.js";
 import { reconcileBuiltInAgentsOnStartup, reconcileCodexLocalManagedHomesOnStartup, reconcilePersistedRuntimeServicesOnStartup } from "../services/index.js";
 import { runDatabaseBackup } from "@paperclipai/db";
+import { startCodingRepairWorker } from "../services/mimouse-coding/repair-worker.js";
+import { startCodingPollWorker } from "../services/mimouse-coding/poller.js";
+import { startNotificationWorker } from "../services/mimouse-notifications/outbox.js";
+import { startWecomWorker } from "../services/mimouse-wecom/worker.js";
+import { hasPrivatePermissions, protectNewPrivatePath } from "@paperclipai/shared/private-filesystem-permissions";
+import { setFixtureAcl } from "@paperclipai/adapter-utils/test-fixtures/windows-private-acl";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { gzipSync } from "node:zlib";
@@ -71,6 +77,7 @@ const {
     reason: null,
   }));
   const heartbeatServiceMock = {
+    drainActiveRunExecutions: vi.fn(async () => {}),
     reconcileCostAccounting: vi.fn(async () => ({ scanned: 0, accounted: 0 })),
     resolveSchedulingSuppression: resolveHeartbeatSchedulingSuppressionMock,
     recoverNativeRunsAfterRestart: vi.fn(async () => ({
@@ -232,7 +239,10 @@ vi.mock("detect-port", () => ({
   default: detectPortMock,
 }));
 
-vi.mock("@paperclipai/db", () => ({
+vi.mock("@paperclipai/db", async (importOriginal) => ({
+  // Startup imports services with real schema metadata. Keep that contract and
+  // replace only database I/O; empty table doubles break module collection.
+  ...await importOriginal<typeof import("@paperclipai/db")>(),
   createDb: createDbMock,
   ensurePostgresDatabase: vi.fn(),
   getPostgresDataDirectory: vi.fn(),
@@ -241,14 +251,26 @@ vi.mock("@paperclipai/db", () => ({
   reconcilePendingMigrationHistory: vi.fn(async () => ({ repairedMigrations: [] })),
   formatDatabaseBackupResult: vi.fn(() => "ok"),
   runDatabaseBackup: vi.fn(),
-  authUsers: {},
-  companies: {},
-  companyMemberships: {},
-  instanceUserRoles: {},
 }));
 
 vi.mock("../app.js", () => ({
   createApp: createAppMock,
+}));
+
+// This startup wiring suite owns no provider workers or their DB scans. Keep
+// their entry/stop contracts explicit; lifecycle behavior has dedicated suites.
+vi.mock("../services/mimouse-coding/repair-worker.js", () => ({
+  startCodingRepairWorker: vi.fn(() => ({ stop: vi.fn(async () => {}) })),
+}));
+vi.mock("../services/mimouse-coding/poller.js", () => ({
+  startCodingPollWorker: vi.fn(() => ({ stop: vi.fn(async () => {}) })),
+}));
+vi.mock("../services/mimouse-notifications/outbox.js", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../services/mimouse-notifications/outbox.js")>(),
+  startNotificationWorker: vi.fn(() => ({ stop: vi.fn(async () => {}) })),
+}));
+vi.mock("../services/mimouse-wecom/worker.js", () => ({
+  startWecomWorker: vi.fn(() => ({ reconcile: vi.fn(async () => {}), stop: vi.fn(async () => ({ drained: true })) })),
 }));
 
 vi.mock("../services/native-runtime/native-session-executor.js", () => ({
@@ -371,7 +393,10 @@ vi.mock("../services/index.js", () => ({
   })),
 }));
 
-vi.mock("../services/chat-completion-delivery.js", () => ({ chatCompletionDeliveryService: () => ({ hasPending: vi.fn(async () => false), sweepPending: completionSweepMock }) }));
+vi.mock("../services/chat-completion-delivery.js", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../services/chat-completion-delivery.js")>(),
+  chatCompletionDeliveryService: () => ({ hasPending: vi.fn(async () => false), sweepPending: completionSweepMock }),
+}));
 
 vi.mock("../services/connection-intent-delivery.js", () => ({
   connectionIntentDeliveryService: vi.fn(() => ({
@@ -435,9 +460,21 @@ vi.mock("../auth/better-auth.js", () => ({
   resolveBetterAuthSessionFromHeaders: vi.fn(async () => null),
 }));
 
-import { startServer } from "../index.ts";
+import { startServer as startServerImplementation } from "../index.ts";
 import { reconcileSafeNativeReplacements } from "../services/native-runtime/native-safe-replacement.js";
 import { EXECUTION_RECONCILIATION_INTERVAL_MS } from "../services/execution-control-deadline.js";
+
+const startedServers: Array<Awaited<ReturnType<typeof startServerImplementation>>> = [];
+async function startServer() {
+  const started = await startServerImplementation();
+  startedServers.push(started);
+  return started;
+}
+afterEach(async () => {
+  // Exercise programmatic teardown rather than leaking real process signal
+  // listeners/intervals across independent startup cases or raising the limit.
+  for (const started of startedServers.splice(0)) await started.shutdown();
+});
 
 describe("startServer feedback export wiring", () => {
   beforeEach(() => {
@@ -591,6 +628,9 @@ describe("startServer feedback export wiring", () => {
       if (process.platform !== "win32") {
         expect(statSync(path.dirname(keyPath)).mode & 0o777).toBe(0o700);
         expect(statSync(keyPath).mode & 0o777).toBe(0o600);
+      } else {
+        expect(hasPrivatePermissions(path.dirname(keyPath), statSync(path.dirname(keyPath)).mode)).toBe(true);
+        expect(hasPrivatePermissions(keyPath, statSync(keyPath).mode)).toBe(true);
       }
     } finally {
       if (originalHome === undefined) delete process.env.PAPERCLIP_HOME;
@@ -601,7 +641,7 @@ describe("startServer feedback export wiring", () => {
     }
   });
 
-  it("repairs permissive permissions on an existing generated decision signing key", async () => {
+  it("repairs permissive POSIX key modes and refuses existing broad Windows ACLs", async () => {
     const originalHome = process.env.PAPERCLIP_HOME;
     const originalInstanceId = process.env.PAPERCLIP_INSTANCE_ID;
     const tempHome = mkdtempSync(path.join(tmpdir(), "paperclip-decision-key-mode-"));
@@ -611,12 +651,18 @@ describe("startServer feedback export wiring", () => {
     chmodSync(path.dirname(keyPath), 0o777);
     writeFileSync(keyPath, existingKey, { encoding: "utf8", mode: 0o644 });
     chmodSync(keyPath, 0o644);
+    if (process.platform === "win32") setFixtureAcl(tempHome, path.dirname(keyPath), true);
     process.env.PAPERCLIP_HOME = tempHome;
     process.env.PAPERCLIP_INSTANCE_ID = "default";
     delete process.env.PAPERCLIP_DECISION_SIGNING_SECRET;
     try {
-      const started = await startServer();
-      expect(started.server).toBe(fakeServer);
+      if (process.platform === "win32") {
+        await expect(startServer()).rejects.toThrow("verified private Windows permissions");
+        expect(hasPrivatePermissions(path.dirname(keyPath), statSync(path.dirname(keyPath)).mode)).toBe(false);
+      } else {
+        const started = await startServer();
+        expect(started.server).toBe(fakeServer);
+      }
       expect(readFileSync(keyPath, "utf8")).toBe(existingKey);
       if (process.platform !== "win32") {
         expect(statSync(path.dirname(keyPath)).mode & 0o777).toBe(0o700);
@@ -632,8 +678,6 @@ describe("startServer feedback export wiring", () => {
   });
 
   it("refuses a symlink planted as the generated decision signing key", async () => {
-    if (process.platform === "win32") return;
-
     const originalHome = process.env.PAPERCLIP_HOME;
     const originalInstanceId = process.env.PAPERCLIP_INSTANCE_ID;
     const tempHome = mkdtempSync(path.join(tmpdir(), "paperclip-decision-key-symlink-"));
@@ -642,6 +686,7 @@ describe("startServer feedback export wiring", () => {
     const plantedKey = Buffer.alloc(32, 9).toString("base64");
     mkdirSync(path.dirname(keyPath), { recursive: true, mode: 0o777 });
     chmodSync(path.dirname(keyPath), 0o777);
+    if (process.platform === "win32") protectNewPrivatePath(path.dirname(keyPath));
     writeFileSync(plantedTarget, plantedKey, { encoding: "utf8", mode: 0o600 });
     symlinkSync(plantedTarget, keyPath);
     process.env.PAPERCLIP_HOME = tempHome;
@@ -670,6 +715,10 @@ describe("startServer feedback export wiring", () => {
 
     expect(started.server).toBe(fakeServer);
     expect(feedbackServiceFactoryMock).toHaveBeenCalledTimes(1);
+    for (const worker of [startCodingRepairWorker, startCodingPollWorker, startNotificationWorker, startWecomWorker]) {
+      expect(worker).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(worker).mock.calls[0]?.[0]).toBe(createDbMock.mock.results[0]?.value);
+    }
     expect(createAppMock).toHaveBeenCalledTimes(1);
     expect(createAppMock.mock.calls[0]?.[1]).toMatchObject({
       feedbackExportService: feedbackExportServiceMock,
@@ -680,7 +729,6 @@ describe("startServer feedback export wiring", () => {
 
   it("keeps startup available when completion delivery recovery fails", async () => {
     completionSweepMock.mockRejectedValueOnce(new Error("temporary delivery failure"));
-    const { startServer } = await import("../index.js");
     await expect(startServer()).resolves.toBeDefined();
     expect(completionSweepMock).toHaveBeenCalled();
   });

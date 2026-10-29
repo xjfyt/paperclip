@@ -1,6 +1,6 @@
 # 本地凭据与私密文件权限
 
-> **对应代码** — `packages/shared/src/private-filesystem-permissions.ts`、`cli/src/client/mcp-auth.ts`、`cli/src/checks/secrets-check.ts`、`packages/plugins/sandbox-providers/daytona/src/private-filesystem-permissions.ts`
+> **对应代码** — `packages/shared/src/private-filesystem-permissions.ts`、`cli/src/client/mcp-auth.ts`、`cli/src/checks/secrets-check.ts`、`server/src/services/decision-signing.ts`、`packages/plugins/sandbox-providers/daytona/src/private-filesystem-permissions.ts`
 > **维护提示** — 凭据写入顺序、ACL 探针、允许主体、既有目录处理或受控副本变化时更新
 > **最后验证** — 2026-10-30（对照本轮实现与真实 NTFS 拒绝/保全回归；不代表所有秘密存储路径或发行平台已验收）
 
@@ -24,6 +24,8 @@ Windows 探针使用固定系统路径下的 Windows PowerShell 与 .NET ACL API
 
 ## 四、模块与验证范围
 
-MCP 凭据、CLI 本地主密钥检查和独立 Daytona host 暂存分别按各自入口执行上述策略，不能据此推断所有适配器和供应商路径均已完成权限验收。Daytona 的受控 helper 副本以源码一致性测试跟踪 canonical shared 实现，保持独立包的运行时依赖边界；私密提取暂存、保留普通工作区目录 ACL、宿主链接拒绝及成员路径验证规则见[插件说明](../../packages/plugins/sandbox-providers/daytona/README.md#native-windows-host-transfers)。
+MCP 凭据、CLI 本地主密钥检查、决策签名密钥和独立 Daytona host 暂存分别按各自入口执行上述策略，不能据此推断所有适配器和供应商路径均已完成权限验收。Daytona 的受控 helper 副本以源码一致性测试跟踪 canonical shared 实现，保持独立包的运行时依赖边界；私密提取暂存、保留普通工作区目录 ACL、宿主链接拒绝及成员路径验证规则见[插件说明](../../packages/plugins/sandbox-providers/daytona/README.md#native-windows-host-transfers)。
+
+决策签名使用实例 `secrets/decision-signing.key`，或受控配置的 `PAPERCLIP_DECISION_SIGNING_SECRET`。Windows 新目录与新空临时文件先保护再写入，完整临时 key 通过原子 hard link 发布；并发已有胜者时读取已验证的胜者，不覆盖它。旧 Windows secrets 目录或 key 若有宽 ACL、链接或无法验证权限，启动会拒绝，原字节和旧 ACL 保留。升级前保全同一签名密钥，由授权运维核对 owner、精确路径和 DACL 后处理；不要删除 key 自动重建或复制到宽权限目录，这会改变决策签名身份。POSIX 的既有 mode 修复合同保持独立，不能拿它替代 NTFS 证明。
 
 回归需要覆盖新空路径保护、子文件继承、真实宽 ACL 拒绝、旧路径不被修改、链接拒绝及探针不可用时拒绝。mock、POSIX mode 断言与原生 NTFS 测试分别记录。凭据文件权限通过也不证明远端认证、公司授权或业务写入已经成功；部署、备份与实际集成仍按对应[配置](01-configuration.md)、[备份升级](../05-maintenance/04-backup-upgrade.md)和[集成合同](../04-modules/01-integration-boundaries.md)验证。

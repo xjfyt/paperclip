@@ -1,0 +1,72 @@
+{
+  "recordedOn": "2026-10-30",
+  "recordedAt": "2026-10-29T18:44:55.024Z",
+  "platform": "native Windows; real NTFS DACLs, disposable PostgreSQL and synthetic local keys",
+  "scope": "Decision signing private path creation, validation and atomic publication; startup test mock contracts and actual programmatic teardown. No provider/network account accessed.",
+  "results": {
+    "files": 3,
+    "passed": 80,
+    "failed": 0,
+    "skipped": 0,
+    "perFile": [
+      {
+        "file": "src/__tests__/decision-signing-security.test.ts",
+        "passed": 10,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "src/__tests__/decisions-service.test.ts",
+        "passed": 34,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "src/__tests__/server-startup-feedback-export.test.ts",
+        "passed": 36,
+        "failed": 0,
+        "skipped": 0
+      }
+    ]
+  },
+  "regressions": [
+    "Empty new secrets directory and exclusive temporary file have real private DACL before any key payload byte is written",
+    "Existing Everyone-readable directory and file rejected with exact SDDL and original bytes unchanged",
+    "Key symlink, directory junction and unavailable fixed-system ACL probe fail closed",
+    "Complete atomic hard-link publication preserves an independently created winner",
+    "Exclusive temporary path collision preserves independently owned bytes",
+    "Windows startup symlink case now executes rather than returning without assertions",
+    "Startup suite retains actual schema and completion constants, isolates unrelated provider workers, verifies their entry wiring and uses real programmatic shutdown rather than leaking SIGINT/SIGTERM listeners"
+  ],
+  "typecheck": {
+    "command": "node node_modules/typescript/bin/tsc --noEmit -p server/tsconfig.json",
+    "exitCode": 0,
+    "log": "test-results/project-closure-20261029/decision-signing-typecheck.log"
+  },
+  "command": "node node_modules/vitest/vitest.mjs run --project @paperclipai/server server/src/__tests__/decision-signing-security.test.ts server/src/__tests__/server-startup-feedback-export.test.ts server/src/__tests__/decisions-service.test.ts --maxWorkers=1 --no-file-parallelism --exclude **/dist/** --reporter=default --reporter=json --outputFile=test-results/project-closure-20261029/decision-signing-final.json",
+  "diagnostics": {
+    "frameworkWarnings": 0,
+    "unhandledErrors": 0,
+    "applicationWarnLines": 3,
+    "applicationWarnScope": "Existing negative decision authorization fixtures intentionally exercise missing grant/membership denial; raw logs preserved.",
+    "logReading": "UTF-8 with ANSI SGR stripped for diagnostic counts; raw bytes/hash retained"
+  },
+  "inputs": {
+    "server/src/services/decision-signing.ts": "3f8d05e35faa83285e5f474ec7b3c2664d3fbab8e09b9cc6b44f7e9986bb4533",
+    "server/src/__tests__/decision-signing-security.test.ts": "f978a61f74bd124b025c8276de2c8407568994535a83eabaaa9298f8b4e0b016",
+    "server/src/__tests__/server-startup-feedback-export.test.ts": "89ce10a1b5cd0cd8e03faddcc5d2dba03eb36ced3d95be987fbebce27d323e4e",
+    "server/src/__tests__/decisions-service.test.ts": "550a6423ef7cb307ae0c6e682def1ca9fd38730e0d8cefccaa5b5b46a80a8514",
+    "packages/shared/src/private-filesystem-permissions.ts": "5760605ae7d8139a6529b006ac777e21a8985c0140b0ed9faf07209771519c1a",
+    "packages/adapter-utils/src/test-fixtures/windows-private-acl.ts": "d471d6080095eb364150a7b18cc0f3752f1a8e18e2cd7ff23df633ddb629d72d"
+  },
+  "logs": {
+    "test-results/project-closure-20261029/decision-signing-final.log": "02405dcbb50ec875584eda45646137b49f6961eb5c883c0c466ae4b39157b519",
+    "test-results/project-closure-20261029/decision-signing-final.json": "44a62365cc022093ba9bd2f0ae9f3bf2d60bfc262a7f2c2707cc93089f2116f2",
+    "test-results/project-closure-20261029/decision-signing-typecheck.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "limitations": [
+    "POSIX mode repair and signature version are preserved in source; no Linux/macOS host run is claimed",
+    "An old broad Windows secrets/key DACL now blocks startup; preserve the same key for explicit authorized permission remediation, never silently rewrite old ACLs or regenerate signing identity",
+    "This proves only these private file paths and scoped fixtures, not all secret stores, final package installs or real external acceptance"
+  ]
+}
