@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
-import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, delimiter } from "node:path";
+import { writeCliFixture } from "@paperclipai/adapter-utils/test-fixtures/native-cli";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createNativeSshCommandRunner } from "./native-ssh-command-runner.js";
 import { MAX_REMOTE_DELIVERABLE_BYTES, readVerifiedRemoteWorkspaceFile } from "./remote-deliverable-file.js";
@@ -13,9 +14,8 @@ describe("native SSH deliverable output budget", () => {
     // Exercise the real SSH command adapter and its execFile output limit,
     // replacing only the network executable with a deterministic byte source.
     const executable = join(root, "ssh");
-    await writeFile(executable, `#!${process.execPath}\nprocess.stdout.write(require('node:fs').readFileSync(${JSON.stringify(join(root, "response"))}));\n`);
-    await chmod(executable, 0o700);
-    vi.stubEnv("PATH", `${root}:${process.env.PATH}`);
+    await writeCliFixture(executable, `#!${process.execPath}\nprocess.stdout.write(require('node:fs').readFileSync(${JSON.stringify(join(root, "response"))}));\n`);
+    vi.stubEnv("PATH", `${root}${delimiter}${process.env.PATH}`);
   });
   afterEach(async () => {
     vi.unstubAllEnvs();
