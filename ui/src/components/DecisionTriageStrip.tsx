@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ComponentProps } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlarmClock, CalendarClock, ChevronDown, Loader2, Plus, UserPlus, X } from "lucide-react";
 import { buildAgentMentionHref, type Agent, type AttentionItem, type AttentionSourceKind } from "@paperclipai/shared";
@@ -275,26 +275,21 @@ export function DecisionTriageStrip({ item, companyId, agents }: DecisionTriageS
 
 function SegmentButton({
   active,
-  disabled,
-  onClick,
+  className,
   children,
-}: {
-  active: boolean;
-  disabled?: boolean;
-  onClick?: () => void;
-  children: React.ReactNode;
-}) {
+  ...props
+}: ComponentProps<"button"> & { active: boolean }) {
   return (
     <button
       type="button"
-      disabled={disabled}
-      onClick={onClick}
+      {...props}
       aria-pressed={active}
       className={cn(
         "inline-flex items-center gap-1 rounded-sm border px-2 py-1 text-xs transition-colors disabled:opacity-50",
         active
           ? "border-primary bg-primary/10 font-medium text-primary"
           : "border-border text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+        className,
       )}
     >
       {children}

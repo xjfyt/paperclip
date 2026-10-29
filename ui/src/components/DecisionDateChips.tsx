@@ -1,4 +1,4 @@
-import { cloneElement, isValidElement, useState } from "react";
+import { useState, type ComponentProps } from "react";
 import { CalendarRange } from "lucide-react";
 import {
   ATTENTION_DATE_RANGE_OPTIONS,
@@ -37,13 +37,11 @@ export function DecisionDateChips({ value, custom, onChange }: DecisionDateChips
       ))}
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <ChipButton active={value === "custom"} asChild>
-            <button type="button">
+          <ChipButton active={value === "custom"}>
               <CalendarRange className="h-3.5 w-3.5" />
               {value === "custom" && (custom.from || custom.to)
                 ? `${custom.from ?? "…"} → ${custom.to ?? "…"}`
                 : "Custom"}
-            </button>
           </ChipButton>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-auto space-y-2 p-3">
@@ -90,37 +88,20 @@ export function DecisionDateChips({ value, custom, onChange }: DecisionDateChips
   );
 }
 
-function ChipButton({
-  active,
-  onClick,
-  asChild,
-  children,
-}: {
-  active: boolean;
-  onClick?: () => void;
-  asChild?: boolean;
-  children: React.ReactNode;
-}) {
-  const className = cn(
-    "inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-    active
-      ? "border-primary bg-primary/10 text-primary"
-      : "border-border text-muted-foreground hover:bg-accent/50 hover:text-foreground",
-  );
-  if (asChild) {
-    // The child is a real <button>; merge the chip class straight onto it so the
-    // flex layout (icon + label inline) lands on the button, not a wrapper span.
-    // A bare wrapper span left the button unstyled → its icon stacked above the
-    // label and the chip grew taller than its siblings.
-    if (isValidElement<{ className?: string }>(children)) {
-      return cloneElement(children, {
-        className: cn(className, children.props.className),
-      });
-    }
-    return <span className={className}>{children}</span>;
-  }
+function ChipButton({ active, className, children, ...props }: ComponentProps<"button"> & { active: boolean }) {
   return (
-    <button type="button" className={className} onClick={onClick} aria-pressed={active}>
+    <button
+      type="button"
+      {...props}
+      aria-pressed={active}
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+        active
+          ? "border-primary bg-primary/10 text-primary"
+          : "border-border text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+        className,
+      )}
+    >
       {children}
     </button>
   );

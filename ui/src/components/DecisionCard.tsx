@@ -268,7 +268,9 @@ export function DecisionCard({
           ? "success"
           : decision.executionStatus === "partial"
             ? "partial"
-            : "failed";
+            : decision.executionStatus === "failed"
+              ? "failed"
+              : "neutral";
 
   const badgeLabel = open
     ? "Pending"
@@ -282,20 +284,40 @@ export function DecisionCard({
             ? "Decided"
             : decision.executionStatus === "partial"
               ? "Partial"
-              : "Failed";
+              : decision.executionStatus === "failed"
+                ? "Failed"
+                : decision.executionStatus === "running"
+                  ? "Running"
+                  : decision.executionStatus == null ? "Decided" : "Unknown";
 
   const requiredUnmet = (decision.inputs ?? []).some(
     (field) => field.required && !(inputValues[field.id] ?? "").trim(),
   );
 
+  const blockedByStaleTarget = (option: DecisionOption) => option.effects.some(
+    (effect) => effect.staleness === "strict" && decisionEffectTargetIssueIds(effect).some((id) => staleTargetIdSet.has(id)),
+  );
+  const canSubmit = (option: DecisionOption) => open && !busy && !requiredUnmet && !blockedByStaleTarget(option);
+  const confirmationToken = (option: DecisionOption) => {
+    const effect = cancelTreeEffect(option);
+    const ref = effect ? resolveIssue(effect.targetIssueId) : null;
+    return ref?.identifier ?? ref?.id ?? effect?.targetIssueId ?? "";
+  };
   const runOption = (option: DecisionOption) => {
-    if (busy) return;
-    const cancelTree = cancelTreeEffect(option);
-    if (cancelTree && confirmOptionId !== option.id) {
-      setConfirmOptionId(option.id);
-      setConfirmText("");
+    if (!canSubmit(option)) return;
+    if (cancelTreeEffect(option)) {
+      // Option selection only opens the gate; it can never confirm it.
+      if (confirmOptionId !== option.id) {
+        setConfirmOptionId(option.id);
+        setConfirmText("");
+      }
       return;
     }
+    onDecide?.(option.id, inputValues);
+  };
+  const confirmOption = (option: DecisionOption) => {
+    if (!canSubmit(option) || confirmOptionId !== option.id || !confirmationToken(option)
+      || confirmText.trim() !== confirmationToken(option)) return;
     onDecide?.(option.id, inputValues);
   };
 
@@ -438,9 +460,7 @@ export function DecisionCard({
         <div className="mt-3 space-y-2">
           {decision.options.map((option) => {
             const destructive = isDestructiveOption(option);
-            const blockedStale = option.effects.some(
-              (effect) => effect.staleness === "strict" && decisionEffectTargetIssueIds(effect).some((id) => staleTargetIdSet.has(id)),
-            );
+            const blockedStale = blockedByStaleTarget(option);
             const disabled = busy || requiredUnmet || blockedStale;
             const cancelTree = cancelTreeEffect(option);
             const confirming = confirmOptionId === option.id;
@@ -545,8 +565,8 @@ export function DecisionCard({
                       <Button
                         variant="destructive"
                         size="sm"
-                        disabled={busy || confirmText.trim() !== confirmToken}
-                        onClick={() => onDecide?.(option.id, inputValues)}
+                        disabled={disabled || !confirmToken || confirmText.trim() !== confirmToken}
+                        onClick={() => confirmOption(option)}
                       >
                         {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                         {previewRows ? `Cancel ${pluralize(previewRows.length, "issue")}` : "Cancel tree"}
@@ -613,7 +633,7 @@ export function DecisionCard({
                   );
                 })}
               </ul>
-              {decision.executionStatus !== "succeeded" && (
+              {(decision.executionStatus === "partial" || decision.executionStatus === "failed") && (
                 <p className="text-xs text-muted-foreground">
                   Some effects may already have been applied. Review the results before asking the proposer to re-propose.
                 </p>
