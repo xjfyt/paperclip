@@ -338,7 +338,7 @@ it.each(Object.entries(metadataCopy))("localizes real RunDetail operation badges
   await act(async () => { retry.click(); retry.click(); });
   await waitFor(() => expect(api.retry).toHaveBeenCalled());
   expect(api.retry).toHaveBeenCalledExactlyOnceWith("agent-original", "run-original", "company-original");
-  await act(async () => pending.resolve({ runId: null, issueId: null })); await flush();
+  await act(async () => pending.resolve({ runId: "retry-successor", issueId: null })); await flush();
 });
 
 let retryNavigate: ReturnType<typeof useNavigate>;
@@ -403,7 +403,7 @@ it("retry boundary retains the original run cache and suppresses old inline erro
 
 it.each(["clear", "remove", "session"])("retry boundary rejects RunDetail clicks before auth %s commits", async change => {
   client.setQueryData(queryKeys.auth.session, { user: { id: "u1" }, session: { id: "s1" } });
-  api.retry.mockResolvedValue({ runId: null, issueId: null });
+  api.retry.mockResolvedValue({ runId: "retry-successor", issueId: null });
   await renderRetryRun(); const retry = button(i18n.t("workflow.retry"));
   await act(async () => {
     if (change === "clear") client.clear();
