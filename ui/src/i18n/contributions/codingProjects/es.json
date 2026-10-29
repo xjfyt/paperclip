@@ -1,0 +1,14 @@
+{
+  "title": "Página de entregas del proyecto",
+  "scope": "Los recuentos solo incluyen las entregas autorizadas de esta página, no el historial completo del proyecto.",
+  "boundary": "Los hashes locales no verifican plataformas, pruebas ni firmas. Los seis destinos de compilación confiable y la carga de artefactos siguen bloqueados.",
+  "unavailable": "El resumen de la página no está disponible. Actualiza para leer la evidencia actual.",
+  "empty": "No hay entregas autorizadas que coincidan con esta página.",
+  "counts": "Entregas: {{deliveries}} · Candidatos de código: {{candidates}} · Bloqueadas: {{blocked}} · Archivos locales: {{artifacts}}",
+  "filterProject": "Ver este proyecto",
+  "filterTask": "Filtrar por esta tarea",
+  "reset": "Borrar filtros",
+  "first": "Volver a la primera página",
+  "next": "Siguiente página autorizada",
+  "staleEvidence": "La evidencia remota ha caducado, falta o es desconocida. Sincroniza antes de confiar en la validación del código."
+}

@@ -1,0 +1,14 @@
+{
+  "title": "项目交付分页",
+  "scope": "统计仅涵盖当前页中已授权可见的交付，不代表项目完整历史。",
+  "boundary": "本地哈希不证明平台、测试或签名。六平台可信构建准入与产物上传仍被阻止。",
+  "unavailable": "当前页摘要不可用，请刷新以读取最新证据。",
+  "empty": "当前页没有匹配且已授权可见的交付。",
+  "counts": "交付：{{deliveries}} · 代码候选：{{candidates}} · 阻塞：{{blocked}} · 本地文件：{{artifacts}}",
+  "filterProject": "查看此项目",
+  "filterTask": "按此任务筛选",
+  "reset": "清除筛选",
+  "first": "返回第一页",
+  "next": "下一授权页",
+  "staleEvidence": "远端证据已过期、缺失或未知。依赖代码门禁前请先同步。"
+}

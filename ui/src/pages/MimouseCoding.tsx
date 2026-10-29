@@ -1,3 +1,5 @@
+import { MimouseCodingProjects } from "@/components/MimouseCodingProjects";
+import type { MimouseCodingListPagination, MimouseCodingProjectSummary } from "@paperclipai/shared/mimouse-coding-summary";
 import { MimouseCodingGoal } from "@/components/MimouseCodingGoal";
 import { MimouseCodingDiffReview } from "@/components/MimouseCodingDiffReview";
 import { MimouseCodingArtifacts } from "@/components/MimouseCodingArtifacts";
@@ -34,25 +36,37 @@ export function MimouseCoding() {
   return <CodingCompany companyId={selectedCompanyId} userId={userId} sessionId={sessionId} authEpoch={authEpoch} key={`${selectedCompanyId}:${userId}:${sessionId}:${authEpoch}:${pageSearch.toString()}`} />;
 }
 function CodingCompany({ companyId, userId, sessionId, authEpoch }: { companyId: string; userId: string; sessionId: string; authEpoch: number }) {
-  const { t } = useTranslation(); const [search] = useSearchParams(); const client = useQueryClient(); const root = `/companies/${companyId}/coding`; const key = ["mimouse-coding", companyId, userId, sessionId, authEpoch];
-  const query = useQuery({ queryKey: key, queryFn: ({ signal }) => readCodingEvidence<{ deliveries: Delivery[]; publishEnabled: boolean }>(root, signal), retry: false, gcTime: 0 });
+  const { t } = useTranslation(); const [search, setSearch] = useSearchParams(); const client = useQueryClient(); const root = `/companies/${companyId}/coding`; const filters = new URLSearchParams();
+  for (const field of ["issueId", "gitlabOrigin", "projectId", "after"] as const) { const value = search.get(field); if (value) filters.set(field, value); }
+  const queryString = filters.toString(); const key = ["mimouse-coding", companyId, userId, sessionId, authEpoch, queryString];
+  const navigateFilter = (patch: Record<string, string | null>) => {
+    const next = new URLSearchParams(search); for (const [field, value] of Object.entries(patch)) { if (value) next.set(field, value); else next.delete(field); }
+    setSearch(next);
+  };
+  const query = useQuery({ queryKey: key, queryFn: ({ signal }) => readCodingEvidence<{ deliveries: Delivery[]; publishEnabled: boolean; projectSummary?: MimouseCodingProjectSummary; pagination?: MimouseCodingListPagination }>(queryString ? `${root}?${queryString}` : root, signal), retry: false, gcTime: 0 });
   const [form, setForm] = useState({ issueId: search.get("issueId") ?? "", workspaceId: search.get("workspaceId") ?? "", gitlabOrigin: "", projectId: "", secretRef: "", baseSha: "", headSha: "", targetBranch: "main" });
   const [confirmation, setConfirmation] = useState<{ id: string; headSha: string; action: string } | null>(null);
   const [evidence, setEvidence] = useState("[]");
   const mutation = useMutation({ mutationFn: (action: () => Promise<unknown>) => action(), onSuccess: async () => { await client.invalidateQueries({ queryKey: key }); setConfirmation(null); } });
   if (query.isPending || !query.isFetchedAfterMount) return <p>{t("common.loading")}</p>;
-  if (query.isError) return <p role="alert">{t("coding.error")}</p>;
+  if (query.isError) return <div className="space-y-3"><p role="alert">{t("coding.error")}</p><Button variant="outline" onClick={() => navigateFilter({ issueId: null, gitlabOrigin: null, projectId: null, after: null })}>{t("codingProjects.reset")}</Button></div>;
   return <div className="max-w-4xl space-y-5">
     <h1 className="text-xl font-semibold">{t("coding.title")}</h1><p>{t("coding.boundary")}</p>
     {(query.error || mutation.error) && <p role="alert">{t("coding.error")}</p>}
+    <MimouseCodingProjects summary={query.data?.projectSummary} pagination={query.data?.pagination}
+      filtered={Boolean(filters.get("issueId") || filters.get("gitlabOrigin"))} after={filters.has("after")}
+      onProject={(gitlabOrigin, projectId) => navigateFilter({ gitlabOrigin, projectId: String(projectId), issueId: null, after: null })}
+      onNext={after => navigateFilter({ after })} onFirst={() => navigateFilter({ after: null })}
+      onReset={() => navigateFilter({ issueId: null, gitlabOrigin: null, projectId: null, after: null })} />
     <div className="space-y-1"><label htmlFor="coding-issueId">{t("coding.issueId")}</label><Input id="coding-issueId" value={form.issueId} onChange={event => setForm({ ...form, issueId: event.target.value })} /></div>
+    <Button variant="outline" disabled={!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(form.issueId)} onClick={() => navigateFilter({ issueId: form.issueId, gitlabOrigin: null, projectId: null, after: null })}>{t("codingProjects.filterTask")}</Button>
     <MimouseCodingGoal companyId={companyId} userId={userId} sessionId={sessionId} authEpoch={authEpoch} issueId={form.issueId} />
     <form className="rounded-lg border border-border p-4 space-y-2" onSubmit={event => { event.preventDefault(); mutation.mutate(() => api.post(root, { ...form, projectId: Number(form.projectId) })); }}>
       <h2 className="font-medium">{t("coding.register")}</h2>
       {(Object.keys(form) as Array<keyof typeof form>).filter(field => field !== "issueId").map(field => <div key={field} className="space-y-1"><label htmlFor={`coding-${field}`}>{t(`coding.${field}`)}</label><Input id={`coding-${field}`} value={form[field]} onChange={event => setForm({ ...form, [field]: event.target.value })} required /></div>)}
       <p className="text-sm text-muted-foreground">{t("coding.cleanWorkspace")}</p><div className="flex justify-end"><Button disabled={mutation.isPending || !form.issueId}>{t("common.save")}</Button></div>
     </form>
-    {query.data?.deliveries.filter(row => !form.issueId || row.issueId === form.issueId).map(row => <section key={row.id} className="rounded-lg border border-border p-4 space-y-3">
+    {query.data?.deliveries.map(row => <section key={row.id} className="rounded-lg border border-border p-4 space-y-3">
       <p className="font-mono text-sm break-all">{row.headSha}</p><p>{t("coding.operationState")}: {row.operationState}</p>
       <MimouseCodingDiffReview companyId={companyId} userId={userId} sessionId={sessionId} authEpoch={authEpoch} deliveryId={row.id} headSha={row.headSha} onReviewed={() => client.invalidateQueries({ queryKey: key })} />
       <MimouseCodingRepair key={`${row.id}:${row.headSha}`} companyId={companyId} userId={userId} sessionId={sessionId} authEpoch={authEpoch} issueId={row.issueId} deliveryId={row.id} headSha={row.headSha} />
@@ -65,7 +79,7 @@ function CodingCompany({ companyId, userId, sessionId, authEpoch }: { companyId:
       <MimouseBuildObservations companyId={companyId} userId={userId} sessionId={sessionId} authEpoch={authEpoch} deliveryId={row.id} headSha={row.headSha} />
       <p className="text-xs text-muted-foreground">{t("buildMatrixUi.codeGate")}</p>
       <p>{row.gate.readyForReleaseCandidate ? t("coding.candidate") : t("coding.notReady")}</p>
-      {row.gate.blockers.map(blocker => <p key={blocker} className="text-sm">{t(`coding.${blocker}`, { defaultValue: blocker })}</p>)}
+      {row.gate.blockers.map(blocker => <p key={blocker} className="text-sm">{blocker === "remote_evidence_stale_or_unknown" ? t("codingProjects.staleEvidence") : t(`coding.${blocker}`, { defaultValue: blocker })}</p>)}
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" disabled={mutation.isPending} onClick={() => mutation.mutate(() => api.post(`${root}/${row.id}/sync`, {}))}>{t("coding.sync")}</Button>
         {["merge-request", "evidence", ...(query.data!.publishEnabled ? ["publish"] : [])].map(action => <Button key={action} variant="outline" disabled={mutation.isPending} onClick={() => { setConfirmation({ id: row.id, headSha: row.headSha, action }); setEvidence("[]"); }}>{t(`coding.${action}`)}</Button>)}
