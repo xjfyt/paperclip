@@ -9,7 +9,7 @@ export interface PublicResearchProject { id: string; companyId: string; visibili
 export async function isCompanyOpenResearchBoundary<I extends PublicResearchIssue, P extends PublicResearchProject>(
   input: { companyId: string; projectId?: string | null; issueId?: string | null; parentIssueId?: string | null },
   reader: { issue(id: string): Promise<I | null>; project(id: string): Promise<P | null>;
-    canReadIssue(issue: I): Promise<boolean>; canReadProject(project: P): Promise<boolean> },
+    onTraversalLimit?(): void; canReadIssue(issue: I): Promise<boolean>; canReadProject(project: P): Promise<boolean> },
 ): Promise<boolean> {
   const checkedIssues = new Set<string>(), checkedProjects = new Set<string>();
   let visited = 0;
@@ -23,7 +23,7 @@ export async function isCompanyOpenResearchBoundary<I extends PublicResearchIssu
     if (!id) return true;
     if (path.has(id)) return false; // Historical cycle is not evidence of a public boundary.
     if (checkedIssues.has(id)) return true;
-    if (++visited > 128) return false;
+    if (++visited > 128) { reader.onTraversalLimit?.(); return false; }
     const row = await reader.issue(id);
     if (!row || row.id !== id || row.companyId !== input.companyId || row.visibility !== "open"
       || row.privacyRootIssueId !== null || !await reader.canReadIssue(row) || !await project(row.projectId)) return false;

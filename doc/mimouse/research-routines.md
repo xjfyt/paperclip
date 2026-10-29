@@ -44,3 +44,36 @@ Agent 能读写私有任务，不等于它能把任务派生内容发布给所�
 ## 公司暂停时只读
 
 真实 session 的 active owner/admin 在公司 active 或 paused 时仍可读取绑定和安全过滤后的可选 Routine，以检查暂停前的配置。缺失、归档公司以及普通成员、失效成员、其他公司或非 session 来源仍拒绝。绑定更新和报告接收继续要求公司 active；只读查询不会恢复公司、启用 Routine 或派发执行。来源隐私与权限边界不因公司暂停而放宽。
+
+## 只读运行历史（2026-10-29）
+
+`GET /api/companies/:companyId/research-routines/:routineId/history` 增量重建现有
+`routine_runs`、issue-scope `heartbeat_runs` 与报告 provenance；未新增调度器、
+attempt 表或数据库列。`limit` 为 1–20，默认 10；`beforeId` 必须是本公司、
+本 Routine 当前仍可见的 UUID。隐藏、跨公司、删除的 cursor 均返回相同 404。
+
+必须为真实未过期 session 的 active owner/admin（公司 active/paused 均可读）；
+不接受 local_implicit，也不因 instance admin 绕过成员要求。每页重新检查 Routine
+范围、历史源任务的完整公开祖先/项目边界与真实 actor 权限，并使用 canonical
+heartbeat run 读取授权。历史源变为私有后，该行及 cursor 不再可见。
+
+`received` 仅说明报告接收；执行可能仍失败。报告保持 quarantined/agent_report，
+`externalSourcesVerified=false`、`agentDispatched=false`。关联身份不一致、丢失、
+重复或每行超过 100 个 attempt/report 时显示 needs_review，不伪造成功。
+coalesced 不借其他 routineRun 的报告充当本次回执。响应只含状态、时间、ID 和
+摘要；不复制报告正文、触发载荷、错误文本或 runtime 输出。
+
+单页采用 repeatable-read/read-only 事务，约 5 秒总 deadline（含连接等待），
+statement_timeout 1500ms、lock_timeout 500ms，最多扫描 1000 行、关联读取预算
+4096 行；预算耗尽返回 503，不返回 partial 或假空。cursor 比较在 PostgreSQL
+原始 `created_at,id` 元组完成，避免 JS Date 丢失微秒。前后页不是全局快照；
+新插入行可在返回最新页后看到。GET 不写数据库，不启动 Agent、外部检索或通知。
+
+前端以公司/用户/session/Routine 隔离查询和游标，私有 GET 不使用 URL-only
+in-flight 去重。身份切换会卸载旧界面并取消历史读取；旧创建结果不得继续绑定。
+切语言仅更新四语文案，不重读或派发。报告链接只导航已有候选，不自动抓取来源。
+
+验证文件：`history.integration.test.ts`（隔离真实 PostgreSQL 与 HTTP router）、
+`history-budget.test.ts`、`ResearchRoutineHistory.test.tsx`、
+`ResearchRoutinePanel.test.tsx` 和 `research-private.test.ts`。HTTP fixture 注入 actor
+并在数据库验证 session/member，不冒充生产登录或真实联网调研。

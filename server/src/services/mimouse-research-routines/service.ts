@@ -9,6 +9,7 @@ import { accessService } from "../access.js";
 import { prepareResearchReport } from "./evidence.js";
 import { researchDigest } from "../mimouse-research/evidence.js";
 import { assertResearchReportIdentity } from "./policy.js";
+import { researchRoutineHistory } from "./history.js";
 type Actor = Express.Request["actor"];
 export function researchRoutineService(db: Db) {
   async function publicBoundary(tx: Db, companyId: string, actor: Actor, source: { projectId?: string | null; issueId?: string | null; parentIssueId?: string | null }) {
@@ -33,6 +34,7 @@ export function researchRoutineService(db: Db) {
     return actor.userId;
   }
   return {
+    history: (companyId: string, routineId: string, actor: Actor, query: Parameters<typeof researchRoutineHistory>[4]) => researchRoutineHistory(db, companyId, routineId, actor, query),
     async available(companyId: string, actor: Actor) {
       return db.transaction(async tx => {
         await assertAdmin(tx as unknown as Db, companyId, actor, "read");
