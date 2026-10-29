@@ -276,6 +276,23 @@
     "skipped": "omitido",
     "responsibleUser": "la persona responsable"
   },
+  "agentRuntimeFieldsUi": {
+    "bypassSandbox": "Omitir el aislamiento",
+    "bypassSandboxHelp": "Ejecuta Codex sin restricciones de aislamiento. Es necesario para acceder al sistema de archivos y a la red.",
+    "enableSearch": "Activar búsqueda",
+    "enableSearchHelp": "Activa la búsqueda web de Codex durante las ejecuciones.",
+    "fastMode": "Modo rápido",
+    "fastModeHelp": "Activa el modo rápido de Codex. Consume créditos y tokens mucho más deprisa y es compatible con GPT-6, GPT-5.6, GPT-5.5, GPT-5.4 y los ID de modelos de Codex introducidos manualmente.",
+    "fastModeManual": "Se enviará la opción de modo rápido para este modelo introducido manualmente. Si Codex la rechaza, desactiva el interruptor.",
+    "fastModeCredits": "El modo rápido consume créditos y tokens mucho más deprisa que las ejecuciones estándar de Codex.",
+    "fastModeUnsupported": "El modo rápido solo funciona actualmente con {{models}} o con ID de modelos introducidos manualmente. Paperclip ignorará este interruptor hasta que cambies de modelo.",
+    "enableChrome": "Activar Chrome",
+    "enableChromeHelp": "Activa la integración de Chrome de Claude mediante --chrome.",
+    "skipPermissions": "Omitir confirmaciones de permisos",
+    "skipPermissionsHelp": "Ejecuta sin supervisión aprobando automáticamente las solicitudes de permisos del adaptador cuando sea compatible.",
+    "maxTurnsPerRun": "Máximo de turnos por ejecución",
+    "maxTurnsPerRunHelp": "Número máximo de turnos del agente (llamadas a herramientas) por ejecución de latido."
+  },
   "agentSelect": {
     "placeholder": "Seleccionar Agent…",
     "empty": "Todavía no hay Agents.",
