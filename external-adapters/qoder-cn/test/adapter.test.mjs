@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { commandArgs, execute, sessionIdentity, sessionCodec, createServerAdapter } from "../index.mjs";
 import { resultAccounting, parseEvent } from "../parse.mjs";
+const posixTest = (name, run) => test(name, { skip: process.platform === "win32" ? "Qoder execution is explicitly unsupported on Windows; POSIX process-group and permission contract required." : false }, run);
 
 async function fixture(script) {
   const root = await mkdtemp(path.join(os.tmpdir(), "qoder-fixture-"));
@@ -37,40 +38,47 @@ test("missing credits are unknown and cumulative credits never become USD", () =
   assert.equal(resultAccounting({ usage: { input_tokens: 10, output_tokens: 2 } }).usage, undefined);
   assert.equal(parseEvent("bad json"), null);
 });
-test("real child streaming preserves Unicode, session and spawn receipt", async () => {
+posixTest("real child streaming preserves Unicode, session and spawn receipt", async () => {
   const f = await fixture(`console.log(JSON.stringify({type:"system",session_id:"s1"})); console.log(JSON.stringify({type:"result",session_id:"s1",result:"完成中文任务",total_credits:2}));`);
   const result = await execute(f.ctx);
   assert.equal(result.exitCode, 0); assert.equal(result.summary, "完成中文任务");
   assert.equal(result.sessionParams.sessionId, "s1"); assert.equal(f.spawned.length, 1); assert.equal(f.stopped.length, 1);
   assert.ok(f.logs.some(([,line]) => line.includes("完成中文任务")));
 });
-test("session reuse rejects a changed account before dispatch", async () => {
+posixTest("session reuse rejects a changed account before dispatch", async () => {
   const f = await fixture(`console.log(JSON.stringify({type:"result",session_id:"s",result:"ok"}));`);
   const first = await execute(f.ctx); f.ctx.runtime.sessionParams = first.sessionParams; f.ctx.config.accountId = "another";
   const result = await execute(f.ctx); assert.equal(result.errorCode, "qoder_session_identity_mismatch"); assert.equal(f.spawned.length, 1);
 });
-test("pre-abort never dispatches", async () => {
+posixTest("pre-abort never dispatches", async () => {
   const f = await fixture("process.exit(0)"); f.ctx.signal = AbortSignal.abort();
   assert.equal((await execute(f.ctx)).errorCode, "qoder_cancelled_before_dispatch"); assert.equal(f.spawned.length, 0);
 });
-test("timeout terminates a real process and is never success", async () => {
+posixTest("timeout terminates a real process and is never success", async () => {
   const f = await fixture("setInterval(()=>{},100)"); f.ctx.config.timeoutSec = .1;
   const result = await execute(f.ctx); assert.equal(result.timedOut, true); assert.notEqual(result.exitCode, 0); assert.equal(f.stopped.length, 1);
 });
-test("split stderr secrets are redacted before logging", async () => {
+posixTest("split stderr secrets are redacted before logging", async () => {
   const f = await fixture(`process.stderr.write("test-sec"); setTimeout(()=>{process.stderr.write("ret\\n");console.log(JSON.stringify({type:"result",result:"ok"}));},20)`);
   f.ctx.config.env = { QODERCN_PERSONAL_ACCESS_TOKEN: "test-secret" };
   await execute(f.ctx); const text = f.logs.map(([,s])=>s).join(""); assert.ok(!text.includes("test-secret")); assert.ok(text.includes("[REDACTED]"));
 });
-test("missing terminal receipt cannot be success", async () => {
+posixTest("missing terminal receipt cannot be success", async () => {
   const f = await fixture("console.log('just text')"); assert.notEqual((await execute(f.ctx)).exitCode, 0);
 });
 test("factory exposes config and test-environment protocol", async () => {
   const f = await fixture(`console.log(process.argv.includes("--version")?"fixture 1":"--output-format --config-dir --settings --max-turns --resume")`);
   const module = createServerAdapter(); assert.equal(module.type, "qoder_cn"); assert.ok(module.getConfigSchema().fields.length);
-  assert.equal((await module.testEnvironment({config:f.ctx.config})).status, "warn");
+  const readiness = await module.testEnvironment({config:f.ctx.config});
+  assert.equal(readiness.status, process.platform === "win32" ? "fail" : "warn");
+  if (process.platform === "win32") {
+    assert.deepEqual(readiness.checks.map(check => check.code), ["qoder_platform_unverified"]);
+    assert.equal((await execute(f.ctx)).errorCode, "qoder_platform_unverified");
+    assert.equal(f.spawned.length, 0); assert.equal(f.logs.length, 0); assert.equal(f.stopped.length, 0);
+    await assert.rejects(stat(f.ctx.config.configRoot), { code: "ENOENT" });
+  }
 });
-test("missing task identity refuses dispatch and issue context is a stable fallback", async () => {
+posixTest("missing task identity refuses dispatch and issue context is a stable fallback", async () => {
   const f = await fixture(`console.log(JSON.stringify({type:"result",session_id:"s",result:"ok"}));`);
   f.ctx.runtime.taskKey = null;
   assert.equal((await execute(f.ctx)).errorCode, "qoder_task_context_required"); assert.equal(f.spawned.length, 0);
@@ -79,34 +87,34 @@ test("missing task identity refuses dispatch and issue context is a stable fallb
   assert.equal((await execute(f.ctx)).errorCode, "qoder_session_identity_mismatch"); assert.equal(f.spawned.length, 1);
 });
 
-test("diagnostics recognize the official hidden turn limit without running a task", async () => {
+posixTest("diagnostics recognize the official hidden turn limit without running a task", async () => {
   const f = await fixture(`if(process.argv.includes("paperclip-invalid-limit")){console.error("error: option '--max-turns <count>' argument 'paperclip-invalid-limit' is invalid. --max-turns must be a non-negative integer (0 disables the limit)");process.exit(1)}console.log(process.argv.includes("--version")?"fixture 1":"--output-format --config-dir --settings --resume")`);
   assert.equal((await createServerAdapter().testEnvironment({ config: f.ctx.config })).status, "warn"); assert.equal(f.spawned.length, 0);
 });
-test("timeout stops a real descendant process group before releasing its session", async () => {
+posixTest("timeout stops a real descendant process group before releasing its session", async () => {
   const f = await fixture(`const {spawn}=await import("node:child_process");const {writeFileSync}=await import("node:fs");let stopping=false;const child=spawn(process.execPath,["-e","setInterval(()=>{},100)"],{stdio:"ignore"});child.on("exit",()=>{writeFileSync("child-stopped","yes");if(stopping)process.exit(0)});process.on("SIGTERM",()=>{stopping=true;if(child.exitCode!==null||child.signalCode!==null)process.exit(0)});setInterval(()=>{},100);`);
   f.ctx.config.timeoutSec = .2; const result = await execute(f.ctx);
   assert.equal(result.timedOut, true); assert.notEqual(result.exitCode, 0); assert.equal(result.resultJson.providerStopped, true); assert.equal(await readFile(path.join(f.root,"child-stopped"),"utf8"), "yes");
 });
-test("an opt-in hello probe earns readiness only after a bounded nonce response", async () => {
+posixTest("an opt-in hello probe earns readiness only after a bounded nonce response", async () => {
   const f = await fixture(`if(process.argv.includes("--version")){console.log("fixture 1");process.exit(0)}if(process.argv.includes("--help")){console.log("--output-format --config-dir --settings --max-turns --resume");process.exit(0)}const nonce=process.argv.at(-1).match(/PAPERCLIP_QODER_[a-zA-Z0-9_]+/)[0];console.log(JSON.stringify({type:"result",result:nonce}));`);
   const result = await createServerAdapter().testEnvironment({ companyId: "company", config: { ...f.ctx.config, allowHelloProbe: true } });
   assert.ok(result.checks.some(check => check.code === "qoder_hello_probe_passed")); assert.equal(result.status, "warn");
   const args = commandArgs({maxTurns:1}, null, "probe", true); assert.equal(args[args.indexOf("--tools")+1], ""); assert.ok(args.includes("--strict-mcp-config")); assert.ok(args.includes("--no-session-persistence"));
 });
-test("changing a PAT fences session reuse even if its account label is unchanged", async () => {
+posixTest("changing a PAT fences session reuse even if its account label is unchanged", async () => {
   const f = await fixture(`console.log(JSON.stringify({type:"result",session_id:"s",result:"ok"}));`); f.ctx.config.env = { QODERCN_PERSONAL_ACCESS_TOKEN: "fixture-one" };
   const first = await execute(f.ctx); f.ctx.runtime.sessionParams = first.sessionParams; f.ctx.config.env.QODERCN_PERSONAL_ACCESS_TOKEN = "fixture-two";
   assert.equal((await execute(f.ctx)).errorCode, "qoder_session_identity_mismatch"); assert.equal(f.spawned.length, 1);
 });
 
-test("new account configuration directories are owner-only", async () => {
+posixTest("new account configuration directories are owner-only", async () => {
   const f = await fixture(`console.log(JSON.stringify({type:"result",session_id:"s",result:"ok"}));`);
   const result = await execute(f.ctx); assert.equal(result.exitCode, 0);
   const folder = path.join(f.ctx.config.configRoot, result.sessionParams.identity);
   assert.equal((await stat(folder)).mode & 0o077, 0);
 });
-test("shared or symlinked account directories refuse dispatch without changing permissions", async () => {
+posixTest("shared or symlinked account directories refuse dispatch without changing permissions", async () => {
   for (const variant of ["shared", "symlink"]) {
     const f = await fixture(`process.exit(99)`);
     const identity = sessionIdentity({companyId:"company", agentId:"agent", cwd:f.root, accountId:"user", taskKey:"task"});

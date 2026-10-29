@@ -58,6 +58,7 @@ type Fixture = Awaited<ReturnType<typeof fixture>>;
 const recover = (f: Fixture, receipt: Awaited<ReturnType<Fixture["pending"]>>, resolution: "apply" | "compensate") => f.service.recover(f.companyId, receipt.id, f.userId, { expectedOperationHash: receipt.operationHash, resolution, confirm: true });
 
 test("managed activation and receipt-linked rollback restore actual inventory, modes, deletions and identity", async ({ request }) => {
+  test.skip(process.platform === "win32", "Managed restore intentionally requires POSIX file identity and modes; Windows refusal is tested separately.");
   const f = await fixture(request); try {
     const result = await f.service.create(f.companyId, f.userId, f.body); expect(result.item.status).toBe("applied");
     await f.assertTree(f.candidate.fileInventory); expect((await f.row()).currentVersionId).toBe(f.candidate.id);
@@ -74,6 +75,7 @@ test("managed activation and receipt-linked rollback restore actual inventory, m
 });
 
 for (const phase of ["before_moved", "before_database_commit"]) test(`durable recovery after ${phase}, including process replacement`, async ({ request }) => {
+  test.skip(process.platform === "win32", "Managed restore is POSIX-only; this success/recovery scenario requires a supported filesystem.");
   const f = await fixture(request); try {
     const interrupted = await evaluationRestoreService(f.db, { checkpoint: async actual => { if (actual === phase) throw Error("fixture interruption"); } }).create(f.companyId, f.userId, f.body);
     expect(interrupted.item.status).toBe("prepared"); expect((await f.row()).metadata?.mimouseRestorePending).toBe(interrupted.item.id);
@@ -89,6 +91,7 @@ for (const phase of ["before_moved", "before_database_commit"]) test(`durable re
 });
 
 for (const completed of [false, true]) for (const writer of ["audit", "version", "inventory"] as const) test(`${writer} started before restore cannot overwrite ${completed ? "completed activation" : "pending recovery"}`, async ({ request }) => {
+  test.skip(process.platform === "win32", "Managed restore is POSIX-only; concurrency during successful restoration requires a supported filesystem.");
   const f = await fixture(request), pause = gate(); try {
     if (writer === "inventory") await f.db.update(companySkills).set({ fileInventory: [] }).where(eq(companySkills.id, f.skill.id));
     const skills = companySkillService(f.db, { beforeAuditPersist: writer === "audit" ? pause.pause : undefined, beforeVersionPersist: writer === "version" ? pause.pause : undefined,
@@ -106,6 +109,7 @@ for (const completed of [false, true]) for (const writer of ["audit", "version",
 });
 
 test("attachment winning company lock prevents restore; pending direct assignment is rejected and detach permits recovery", async ({ request }) => {
+  test.skip(process.platform === "win32", "Managed restore is POSIX-only; pending recovery is not created on Windows.");
   const f = await fixture(request), pause = gate(); try {
     const attached = writePaperclipSkillSyncPreference({}, [f.skill.key]);
     // Hold the same company lock as lifecycle configuration; restoration must
@@ -128,6 +132,34 @@ test("attachment winning company lock prevents restore; pending direct assignmen
     await expect(recover(f, receipt, "apply")).rejects.toMatchObject({ status: 409 });
     await agentSvc.update(f.agent.id, { adapterConfig: {} }); expect((await recover(f, receipt, "compensate")).status).toBe("compensated");
   } finally { pause.release(); await f.db.$client.end({ timeout: 1 }); }
+});
+
+test("Windows restore reports unsupported and refuses API/filesystem mutation without receipts", async ({ request }) => {
+  test.skip(process.platform !== "win32", "Exercises the real Windows platform refusal; POSIX recovery is tested separately.");
+  const f = await fixture(request); try {
+    const readiness = await f.service.readiness(f.companyId, f.comparison.id, f.userId);
+    expect(readiness.blockers).toContain("restore_platform_unsupported");
+    expect(readiness.filesystemVerified).toBe(false);
+    const beforeNames = (await fs.readdir(f.root)).sort();
+    const beforeFiles = (await fs.readdir(f.directory, { recursive: true })).sort();
+    const beforeContents = await Promise.all(["SKILL.md", "obsolete.txt"].map(file => fs.readFile(path.join(f.directory, file))));
+    const beforeAudit = await f.db.select().from(activityLog).where(eq(activityLog.companyId, f.companyId));
+    await expect(readRestoreTree(f.root, f.directory)).rejects.toThrow("restore_platform_unsupported");
+    // This route uses a declared fixture session actor, not a real SSO login.
+    const app = express(); app.use(express.json());
+    app.use((req, _res, next) => { req.actor = { type: "board", source: "session", userId: f.userId, companyIds: [f.companyId], memberships: [{ companyId: f.companyId, membershipRole: "owner", status: "active" }] } as Express.Request["actor"]; next(); });
+    app.use(mimouseEvaluationRestoreRoutes(f.db));
+    app.use((error: unknown, _req: import("express").Request, res: import("express").Response, _next: import("express").NextFunction) => res.status(error instanceof HttpError ? error.status : 500).json({ error: error instanceof Error ? error.message : "unexpected" }));
+    const denied = await supertest(app).post(`/companies/${f.companyId}/skill-evaluations/restores`).send(f.body);
+    expect(denied.status).toBe(422); expect(denied.body.error).toBe("restore_platform_unsupported");
+    expect((await fs.readdir(f.root)).sort()).toEqual(beforeNames);
+    expect((await fs.readdir(f.directory, { recursive: true })).sort()).toEqual(beforeFiles);
+    expect(await Promise.all(["SKILL.md", "obsolete.txt"].map(file => fs.readFile(path.join(f.directory, file))))).toEqual(beforeContents);
+    expect((await f.row()).currentVersionId).toBe(f.baseline.id);
+    expect((await f.row()).metadata?.mimouseRestorePending).toBeUndefined();
+    expect(await f.db.select().from(restores).where(eq(restores.companyId, f.companyId))).toHaveLength(0);
+    expect(await f.db.select().from(activityLog).where(eq(activityLog.companyId, f.companyId))).toEqual(beforeAudit);
+  } finally { await f.db.$client.end({ timeout: 1 }); }
 });
 
 test("paused company authenticated API remains reachable, rejects implicit authority and rechecks live membership", async ({ request }) => {

@@ -3,6 +3,7 @@
 import { createRequire } from "node:module";
 import { access, appendFile, readFile } from "node:fs/promises";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 const home = process.env.PAPERCLIP_MIMOUSE_TEST_HOME;
 if (!home || !path.isAbsolute(home)) throw Error("Absolute disposable fixture home required");
 if ((await readFile(path.join(home, ".mimouse-test-fixture"), "utf8")).trim() !== "paperclip-mimouse-disposable-fixture-v1") throw Error("Disposable fixture marker required");
@@ -11,7 +12,7 @@ for (const file of ["instances/default/config.json", "instances/default/.env", "
   throw Error(`Refusing to overwrite existing fixture state: ${file}`);
 }
 const require = createRequire(new URL("../../packages/db/package.json", import.meta.url));
-const { default: EmbeddedPostgres } = await import(require.resolve("embedded-postgres"));
+const { default: EmbeddedPostgres } = await import(pathToFileURL(require.resolve("embedded-postgres")).href);
 const databaseDir = path.join(home, "instances/default/db");
 const pg = new EmbeddedPostgres({ databaseDir, user: "paperclip", password: "paperclip", port: 54329, persistent: true,
   initdbFlags: ["--encoding=UTF8", "--locale=C", "--lc-messages=C"], onLog: () => {}, onError: () => {} });

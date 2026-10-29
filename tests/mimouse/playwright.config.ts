@@ -23,23 +23,11 @@ Object.assign(process.env, {
 });
 export default defineConfig({
   testDir: ".", testMatch: "*.spec.ts", workers: 1, timeout: 60000,
+  globalSetup: path.resolve(import.meta.dirname, "global-setup.mjs"),
   use: {
     baseURL: "http://127.0.0.1:3100", headless: true,
     launchOptions: process.env.PAPERCLIP_TEST_CHROMIUM ? { executablePath: process.env.PAPERCLIP_TEST_CHROMIUM } : {},
     screenshot: "only-on-failure", trace: "retain-on-failure",
-  },
-  webServer: {
-    stdout: "pipe", stderr: "pipe",
-    // The server entry is compiled; workspace package exports still point at TS.
-    // A published/staged all-dist package requires a separate release smoke.
-    command: process.env.PAPERCLIP_MIMOUSE_TEST_COMPILED === "true" ? "node --import tsx dist/index.js" : "node --import tsx src/index.ts", cwd: path.resolve(import.meta.dirname, "../../server"),
-    url: "http://127.0.0.1:3100/api/health", reuseExistingServer: false, timeout: 120000,
-    env: { ...process.env, PAPERCLIP_HOME: fixtureHome, PAPERCLIP_CONFIG: fixtureConfig, PAPERCLIP_INSTANCE_ID: "default",
-      DATABASE_URL: "", DATABASE_MIGRATION_URL: "", PAPERCLIP_DISABLE_CWD_ENV_FILE: "true",
-      PAPERCLIP_OIDC_ENABLED: "false", PAPERCLIP_WORKBUDDY_ENABLED: "false", PAPERCLIP_GITLAB_PUBLISH_ENABLED: "false", PAPERCLIP_GITLAB_POLL_ENABLED: "false", PAPERCLIP_CODING_REPAIR_ENABLED: "false",
-      PAPERCLIP_NOTIFICATIONS_ENABLED: "true", PAPERCLIP_NOTIFICATIONS_WORKER_ENABLED: "false",
-      PAPERCLIP_OPEN_ON_LISTEN: "false", PAPERCLIP_TELEMETRY_DISABLED: "1", DO_NOT_TRACK: "1",
-      PAPERCLIP_BIND: "loopback", PAPERCLIP_DEPLOYMENT_MODE: process.env.PAPERCLIP_MIMOUSE_TEST_AUTHENTICATED === "true" ? "authenticated" : "local_trusted", PAPERCLIP_UI_DEV_MIDDLEWARE: "false" },
   },
   outputDir: "../../test-results/mimouse", reporter: [["list"]],
 });

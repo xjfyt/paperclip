@@ -214,12 +214,14 @@ function buildAdapterInfo(adapter: ServerAdapterModule, externalRecord: AdapterP
 }
 
 /**
- * Normalize a local path that may be a Windows path into a WSL-compatible path.
+ * Preserve native host paths, translating Windows paths for a non-Windows host.
  *
- * - Windows paths (e.g., "C:\\Users\\...") are converted via `wslpath -u`.
+ * - Native Windows hosts use their Windows paths directly.
+ * - Other hosts try `wslpath -u` for received Windows paths (e.g., "C:\\Users\\...").
  * - Paths already starting with `/mnt/` or `/` are returned as-is.
  */
 async function normalizeLocalPath(rawPath: string): Promise<string> {
+  if (process.platform === "win32") return rawPath;
   // Already a POSIX path (WSL or native Linux)
   if (rawPath.startsWith("/")) {
     return rawPath;

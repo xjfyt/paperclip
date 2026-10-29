@@ -34,13 +34,16 @@ it("isolates listener errors and delivers a stable listener snapshot", () => {
   stopTaskDrain(); expect(peer).toHaveBeenCalledTimes(1);
 });
 it("root lifecycle wiring gates startup and aborts before awaiting unrelated shutdown without booting root", () => {
-  const source = readFileSync(new URL("../index.ts", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../index.ts", import.meta.url), "utf8").replace(/\r\n/g, "\n");
   expect(source).toContain("startWecomWorker(db, () => !heartbeatSchedulerStopped && !isWarmStandby() && !isIdleTaskDrainActive())");
   expect(source).toContain('process.env.MIMOUSE_WECOM_WORKER_ENABLED === "true"\n    ? subscribeTaskDrainChanges');
-  const shutdown = source.slice(source.indexOf("  const shutdown = async ("));
-  expect(shutdown.indexOf("heartbeatSchedulerStopped = true")).toBeLessThan(shutdown.indexOf("void mimouseWecomWorker.reconcile()"));
-  expect(shutdown.indexOf("void mimouseWecomWorker.reconcile()")).toBeLessThan(shutdown.indexOf("await systemdNotify"));
-  expect(shutdown.indexOf("unsubscribeWecomTaskDrain()")).toBeLessThan(shutdown.indexOf("await mimouseWecomWorker.stop()"));
-  expect(shutdown.indexOf("await mimouseWecomWorker.stop()")).toBeLessThan(shutdown.indexOf("await deliveryWork.stop()"));
+  const start = source.indexOf("  const shutdown = createCoordinatedServerShutdown({");
+  expect(start).toBeGreaterThanOrEqual(0);
+  const shutdown = source.slice(start);
+  const position = (fragment: string) => { const index = shutdown.indexOf(fragment); expect(index, fragment).toBeGreaterThanOrEqual(0); return index; };
+  expect(position("heartbeatSchedulerStopped = true")).toBeLessThan(position("void mimouseWecomWorker.reconcile()"));
+  expect(position("void mimouseWecomWorker.reconcile()")).toBeLessThan(position("await systemdNotify"));
+  expect(position("unsubscribeWecomTaskDrain()")).toBeLessThan(position("await mimouseWecomWorker.stop()"));
+  expect(position("await mimouseWecomWorker.stop()")).toBeLessThan(position("await deliveryWork.stop()"));
   expect(shutdown).toContain('if (!wecomDrain.drained) logger.warn({ event: "wecom_shutdown_drain_timeout" }');
 });

@@ -3,7 +3,7 @@ import { realpath } from "node:fs/promises";
 import { createDb } from "../../packages/db/src/index.js";
 
 /** Never mutate a database just because the fixed fixture port accepts our
- * credentials. Verify the server-owned data directory before returning it. */
+ * credentials. Verify the harness-owned data directory before returning it. */
 export async function createFixtureDb() {
   const home = process.env.PAPERCLIP_MIMOUSE_TEST_HOME;
   if (!home || !path.isAbsolute(home)) throw Error("An absolute isolated PAPERCLIP_MIMOUSE_TEST_HOME is required");

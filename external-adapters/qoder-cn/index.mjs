@@ -160,6 +160,7 @@ export async function execute(ctx, diagnostic = false) {
 }
 export async function testEnvironment(ctx) {
   const checks = [];
+  if (process.platform === "win32") return { adapterType: type, status: "fail", testedAt: new Date().toISOString(), checks: [{ code: "qoder_platform_unverified", level: "error", message: "Windows process-tree cancellation is not qualified; use a Linux worker." }] };
   if (ctx.executionTarget && ctx.executionTarget.kind !== "local") return { adapterType: type, status: "fail", testedAt: new Date().toISOString(), checks: [{ code: "qoder_remote_unsupported", level: "error", message: "Qoder CN readiness is only qualified for the local execution target." }] };
   try {
     const command = nonempty(ctx.config.executablePath) || "qodercn";
