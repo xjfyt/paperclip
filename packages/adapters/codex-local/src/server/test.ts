@@ -20,6 +20,7 @@ import {
 import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
+import { protectNewPrivatePath } from "@paperclipai/shared/private-filesystem-permissions";
 import { parseCodexJsonl } from "./parse.js";
 import { SANDBOX_INSTALL_COMMAND } from "../index.js";
 import { codexHomeDir, readCodexAuthInfo } from "./quota.js";
@@ -155,6 +156,8 @@ async function prepareCodexHelloProbe(input: {
     probeHomeLocalDir = await fs.mkdtemp(
       path.join(os.tmpdir(), `paperclip-codex-probe-home-${input.runId}-`),
     );
+    try { protectNewPrivatePath(probeHomeLocalDir); }
+    catch (error) { await cleanup(); throw error; }
     let seededAuth = false;
     let seededConfig = false;
     for (const file of ["auth.json", "config.toml"]) {
@@ -218,6 +221,19 @@ async function prepareCodexHelloProbe(input: {
   }
 
   if (input.probeApiKey) {
+    if (process.platform === "win32" && !input.targetIsRemote) {
+      probeHomeLocalDir = await fs.mkdtemp(path.join(os.tmpdir(), `paperclip-codex-probe-${input.runId}-`));
+      try {
+        protectNewPrivatePath(probeHomeLocalDir);
+        // New exclusive file inherits the private, empty directory's DACL.
+        // Run the original executable through the shared Windows launcher;
+        // a POSIX shell cannot discover or execute Windows .cmd wrappers.
+        const auth = await fs.open(path.join(probeHomeLocalDir, "auth.json"), "wx", 0o600);
+        try { await auth.writeFile(JSON.stringify({ OPENAI_API_KEY: input.probeApiKey })); }
+        finally { await auth.close(); }
+        return { command: input.command, args: input.args, env: { ...input.env, CODEX_HOME: probeHomeLocalDir }, cleanup };
+      } catch (error) { await cleanup(); throw error; }
+    }
     const probeHome = input.targetIsRemote
       ? path.posix.join(input.cwd, ".paperclip-runtime", "codex", `probe-home-${input.runId}`)
       : path.join(os.tmpdir(), `paperclip-codex-probe-${input.runId}`);

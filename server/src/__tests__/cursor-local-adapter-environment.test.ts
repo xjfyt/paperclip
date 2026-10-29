@@ -1,8 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs/promises";
 import os from "node:os";
-import path from "node:path";
-import { runChildProcess } from "@paperclipai/adapter-utils/server-utils";
+import { fixturePath as path, sandboxPath, shellExecutable, shellArgs, shellEnvironment, shellScript } from "@paperclipai/adapter-utils/test-fixtures/local-sandbox";
+import { runPosixSandboxProcess as runChildProcess } from "@paperclipai/adapter-utils/test-fixtures/portable-cli";
+import { writeCliFixture } from "@paperclipai/adapter-utils/test-fixtures/native-cli";
+import { installIsolatedHostFixture } from "@paperclipai/adapter-utils/test-fixtures/isolated-host";
+installIsolatedHostFixture();
 import { testEnvironment } from "@paperclipai/adapter-cursor-local/server";
 
 async function writeFakeAgentCommand(binDir: string, argsCapturePath: string): Promise<string> {
@@ -23,8 +26,7 @@ console.log(JSON.stringify({
   result: "hello",
 }));
 `;
-  await fs.writeFile(commandPath, script, "utf8");
-  await fs.chmod(commandPath, 0o755);
+  await writeCliFixture(commandPath, script);
   return commandPath;
 }
 
@@ -50,8 +52,7 @@ console.log(JSON.stringify({
 }));
 `;
   await fs.mkdir(path.dirname(commandPath), { recursive: true });
-  await fs.writeFile(commandPath, script, "utf8");
-  await fs.chmod(commandPath, 0o755);
+  await writeCliFixture(commandPath, script);
 }
 
 function createLocalSandboxRunner() {
@@ -68,9 +69,19 @@ function createLocalSandboxRunner() {
       onSpawn?: (meta: { pid: number; startedAt: string }) => Promise<void>;
     }) => {
       counter += 1;
-      return await runChildProcess(`cursor-sandbox-env-${counter}`, input.command, input.args ?? [], {
+      if (input.args?.some(arg => arg.includes("curl https://cursor.com/install"))) throw new Error("Sandbox fixture did not discover its preinstalled offline Cursor CLI");
+      const env = shellEnvironment(input.env);
+      if (process.platform === "win32") {
+        const msysDirectory = (file: string) => {
+          const directory = path.dirname(file).replaceAll("\\", "/");
+          return `/${directory[0]!.toLowerCase()}${directory.slice(2)}`;
+        };
+        if (input.env?.PATH) env.PATH = `${shellScript(input.env.PATH)}:${msysDirectory(shellExecutable("bash"))}`;
+        env.PATH += `:${msysDirectory(process.execPath)}`;
+      }
+      return await runChildProcess(`cursor-sandbox-env-${counter}`, shellExecutable(input.command), shellArgs(input.args), {
         cwd: input.cwd ?? process.cwd(),
-        env: input.env ?? {},
+        env,
         stdin: input.stdin,
         timeoutSec: Math.max(1, Math.ceil((input.timeoutMs ?? 30_000) / 1000)),
         graceSec: 5,
@@ -193,7 +204,7 @@ describe("cursor environment diagnostics", () => {
     await writeFakeCursorAgentCommand(cursorAgentPath);
 
     const previousHome = process.env.HOME;
-    process.env.HOME = homeDir;
+    process.env.HOME = sandboxPath(homeDir);
 
     try {
       const result = await testEnvironment({
@@ -202,13 +213,13 @@ describe("cursor environment diagnostics", () => {
         executionTarget: {
           kind: "remote",
           transport: "sandbox",
-          remoteCwd,
+          remoteCwd: sandboxPath(remoteCwd),
           runner: createLocalSandboxRunner(),
           timeoutMs: 30_000,
         },
         config: {
           command: "agent",
-          cwd: remoteCwd,
+          cwd: sandboxPath(remoteCwd),
           env: {
             CURSOR_API_KEY: "test-key",
             PAPERCLIP_TEST_ARGS_PATH: argsCapturePath,
@@ -222,8 +233,9 @@ describe("cursor environment diagnostics", () => {
         argv: string[];
         path: string;
       };
-      expect(capture.command).toBe(cursorAgentPath);
-      expect(capture.path.split(":")[0]).toBe(path.join(homeDir, ".local", "bin"));
+      expect(await fs.realpath(capture.command)).toBe(await fs.realpath(cursorAgentPath));
+      expect(await fs.realpath(capture.path.split(process.platform === "win32" ? ";" : ":")[0]!))
+        .toBe(await fs.realpath(path.join(homeDir, ".local", "bin")));
     } finally {
       if (previousHome === undefined) delete process.env.HOME;
       else process.env.HOME = previousHome;
