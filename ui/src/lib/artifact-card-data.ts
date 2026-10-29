@@ -1,5 +1,3 @@
-import { formatNumber } from "@/i18n";
-
 /** Optional producer metadata must never become invented facts in an artifact card. */
 export function artifactText(
   metadata: Record<string, unknown> | null,
@@ -42,11 +40,15 @@ export function artifactPreviewUrl(value: string): string {
     : "";
 }
 
-export function artifactFileSize(bytes: number | null): string {
+/** Canonical formatting is stable unless a display consumer opts into a locale. */
+export function artifactFileSize(bytes: number | null, locale?: string): string {
   if (bytes === null) return "";
-  if (bytes < 1024) return `${formatNumber(bytes)} B`;
-  if (bytes < 1024 * 1024) return `${formatNumber(bytes / 1024, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} KB`;
-  return `${formatNumber(bytes / (1024 * 1024), { minimumFractionDigits: 1, maximumFractionDigits: 1 })} MB`;
+  const display = (value: number, fractionDigits = 0) => locale
+    ? new Intl.NumberFormat(locale, { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits }).format(value)
+    : fractionDigits ? value.toFixed(fractionDigits) : String(value);
+  if (bytes < 1024) return `${display(bytes)} B`;
+  if (bytes < 1024 * 1024) return `${display(bytes / 1024, 1)} KB`;
+  return `${display(bytes / (1024 * 1024), 1)} MB`;
 }
 
 export const CSV_PREVIEW_MAX_BYTES = 1024 * 1024;

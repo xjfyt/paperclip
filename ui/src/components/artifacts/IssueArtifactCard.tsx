@@ -1,4 +1,4 @@
-import { t, useTranslation } from "@/i18n";
+import { i18n, t, useTranslation } from "@/i18n";
 import { useContext, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -158,7 +158,7 @@ export function IssueArtifactFile(props: IssueArtifactFileProps) {
     <div className="flex flex-col gap-2">
       <FileCard
         {...props}
-        fileSize={artifactFileSize(props.byteSize)}
+        fileSize={artifactFileSize(props.byteSize, i18n.language)}
         entries={[]}
         downloadUrl={downloadPath}
         openUrl={artifactUrl(props.openPath) || contentPath}

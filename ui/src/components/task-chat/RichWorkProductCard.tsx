@@ -1,4 +1,4 @@
-import { t, formatNumber, useTranslation } from "@/i18n";
+import { i18n, t, formatNumber, useTranslation } from "@/i18n";
 import { artifactFileSize } from "@/lib/artifact-card-data";
 import { TextAttachmentContext } from "@/context/TextAttachmentContext";
 import { isTextAttachment } from "@/lib/issue-attachments";
@@ -167,7 +167,7 @@ export function RichWorkProductCard({ workProduct, href, variant = "card" }: Ric
     case "artifact": {
       Icon = isImage ? Image : isVideo ? Film : File;
       const size = numberMeta(metadata, "byteSize", "size");
-      meta = [isImage ? t("artifactUi.image") : isVideo ? t("artifactUi.video") : stringMeta(metadata, "kind", "fileType") ?? t("artifactUi.file"), size === null ? null : artifactFileSize(size)];
+      meta = [isImage ? t("artifactUi.image") : isVideo ? t("artifactUi.video") : stringMeta(metadata, "kind", "fileType") ?? t("artifactUi.file"), size === null ? null : artifactFileSize(size, i18n.language)];
       action = isImage || isVideo ? t("artifactUi.openGallery") : t("artifactUi.download");
       break;
     }
