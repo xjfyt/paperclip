@@ -1,6 +1,6 @@
 {
   "schemaVersion": 5,
-  "generatedAt": "2026-10-29T06:03:12.676Z",
+  "generatedAt": "2026-10-29T06:40:27.841Z",
   "parserVersion": "7.29.8",
   "method": "Bounded Babel AST inventory: JSX text/display attributes (including message and ariaLabel), direct/conditional/template literals, pushToast/toast display fields, setSecretMessage.title and direct window.confirm/window.prompt/window.alert first-argument messages. Dynamic display expressions are separate needs_manual_review locations, not untranslated strings.",
   "baseline": {
@@ -518,6 +518,8 @@
   "expandedScope": {
     "requestedFiles": [
       "ui/src/App.tsx",
+      "ui/src/adapters/claude-local/config-fields.tsx",
+      "ui/src/adapters/codex-local/config-fields.tsx",
       "ui/src/components/AgentConfigForm.tsx",
       "ui/src/components/AgentLifecycleStatus.tsx",
       "ui/src/components/AgentSecretAccessEditor.tsx",
@@ -607,14 +609,22 @@
       "ui/src/pages/audit/AuditRuns.tsx",
       "ui/src/pages/audit/CompanyActivity.tsx"
     ],
-    "matchedFiles": 89,
+    "matchedFiles": 91,
     "missingFiles": [],
-    "pathSetSha256": "eaba9641fc58b1692d9575fc40e475aff9a0cc2dbcb946545011b0c3dc36adc5",
-    "sourceSha256": "81cadfaf3a3ac9af13e8d5e80050a5cc6445e47002493c3a21282ac634794b13",
+    "pathSetSha256": "1c7f99f86790457e94c64b4d029e9d8f660fdcc8c1241b74dd5590390894cf0e",
+    "sourceSha256": "07f0f68ae15a36719c3a70f50311467974686e228e96bf0fc521277c23f2b2bd",
     "evidence": [
       {
         "file": "ui/src/App.tsx",
         "sourceSha256": "184601b85f73084e2a29c9edb73f19a88239f76d0878b8701efb66e772610eb2"
+      },
+      {
+        "file": "ui/src/adapters/claude-local/config-fields.tsx",
+        "sourceSha256": "7dbb7ba71d577a0969db3a884c4a3598569be18d34aba84feb7a99e7dd0d30d8"
+      },
+      {
+        "file": "ui/src/adapters/codex-local/config-fields.tsx",
+        "sourceSha256": "4b6d1279b12ee8319273d312742881a0e6edd5806d5d87495b3d4937e3334f05"
       },
       {
         "file": "ui/src/components/AgentConfigForm.tsx",
@@ -1131,6 +1141,8 @@
   "hostEvidence": {
     "requestedFiles": [
       "ui/src/App.tsx",
+      "ui/src/adapters/codex-local/index.ts",
+      "ui/src/adapters/registry.ts",
       "ui/src/components/AgentConfigForm.tsx",
       "ui/src/components/AttentionQueueRow.tsx",
       "ui/src/components/BlockedInboxView.tsx",
@@ -1185,14 +1197,22 @@
       "ui/src/pages/audit/AuditHub.tsx",
       "ui/src/pages/audit/CompanyActivity.tsx"
     ],
-    "matchedFiles": 54,
+    "matchedFiles": 56,
     "missingFiles": [],
-    "pathSetSha256": "bda66950ae49a18e6dddf8040d9354b7beab9799ad0ccc0713ae8bf6dd96b087",
-    "sourceSha256": "3bf313f95903a386a7bb9ab307e4daf225c81c504d59823f4ccf38750168f88c",
+    "pathSetSha256": "5de90f6099ff67dc8c50e77a1f5d1684d67aa9dbe274968f2015d86e018c31a8",
+    "sourceSha256": "b13d22260473b2155257d31e5853f28237dee80c6eda5150cb8964566e101bcb",
     "evidence": [
       {
         "file": "ui/src/App.tsx",
         "sourceSha256": "184601b85f73084e2a29c9edb73f19a88239f76d0878b8701efb66e772610eb2"
+      },
+      {
+        "file": "ui/src/adapters/codex-local/index.ts",
+        "sourceSha256": "ee29bbb0beea12b2ec10f81d5d11073db3de03a6d3dea674fae9d4f764525910"
+      },
+      {
+        "file": "ui/src/adapters/registry.ts",
+        "sourceSha256": "864901743fce81bbfd00aaceb2b50253424f7e0649a6b5b67b9f09efa943911b"
       },
       {
         "file": "ui/src/components/AgentConfigForm.tsx",
@@ -1945,6 +1965,8 @@
     {
       "domain": "agents-runs",
       "requestedFiles": [
+        "ui/src/adapters/claude-local/config-fields.tsx",
+        "ui/src/adapters/codex-local/config-fields.tsx",
         "ui/src/components/AgentConfigForm.tsx",
         "ui/src/components/AgentLifecycleStatus.tsx",
         "ui/src/components/AgentSecretAccessEditor.tsx",
@@ -1961,11 +1983,19 @@
         "ui/src/pages/agent-skills/AgentSkillRow.tsx",
         "ui/src/pages/agent-skills/AgentSkillsTab.tsx"
       ],
-      "matchedFiles": 15,
+      "matchedFiles": 17,
       "missingFiles": [],
-      "pathSetSha256": "41920a515a89e00343d03357d711a67e3d70fcf0b4c8743e0c8a56db14ff7d0a",
-      "sourceSha256": "fba915ed64f44de9f71ae60e92d60272253f211e34262df0df9544c5449a583d",
+      "pathSetSha256": "b3ab0cf2100ae05c600cde5e4676257aff3fef04e1aecc819ded341fd9537afb",
+      "sourceSha256": "c4ddb0290091d6bbbe418b5a03f091f90533af2cf19e4c47d4eb74f379999a06",
       "evidence": [
+        {
+          "file": "ui/src/adapters/claude-local/config-fields.tsx",
+          "sourceSha256": "7dbb7ba71d577a0969db3a884c4a3598569be18d34aba84feb7a99e7dd0d30d8"
+        },
+        {
+          "file": "ui/src/adapters/codex-local/config-fields.tsx",
+          "sourceSha256": "4b6d1279b12ee8319273d312742881a0e6edd5806d5d87495b3d4937e3334f05"
+        },
         {
           "file": "ui/src/components/AgentConfigForm.tsx",
           "sourceSha256": "5ffb6823d89ac055d916e2ba9dd26991ba580b6c4e2c728d6a13bcad3fa9f15d"
@@ -2298,6 +2328,8 @@
   ],
   "requestedExpandedScopeFiles": [
     "ui/src/App.tsx",
+    "ui/src/adapters/claude-local/config-fields.tsx",
+    "ui/src/adapters/codex-local/config-fields.tsx",
     "ui/src/components/AgentConfigForm.tsx",
     "ui/src/components/AgentLifecycleStatus.tsx",
     "ui/src/components/AgentSecretAccessEditor.tsx",
@@ -3109,6 +3141,22 @@
       "symbol": "TaskBrowserFooter",
       "importSource": "./TaskBrowserFooter",
       "usage": "jsx"
+    },
+    {
+      "domain": "agents-runs",
+      "file": "ui/src/adapters/claude-local/config-fields.tsx",
+      "host": "ui/src/components/AgentConfigForm.tsx",
+      "symbol": "ClaudeLocalAdvancedFields",
+      "importSource": "../adapters/claude-local/config-fields",
+      "usage": "jsx"
+    },
+    {
+      "domain": "agents-runs",
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "host": "ui/src/adapters/codex-local/index.ts",
+      "symbol": "CodexLocalConfigFields",
+      "importSource": "./config-fields",
+      "usage": "reference"
     }
   ],
   "manualScopeEdges": [
@@ -3456,13 +3504,37 @@
   ],
   "viewportErrorSourceFile": "ui/src/hooks/useBrowserViewport.ts",
   "visibleRecoveryRenderBoundary": "SidebarRecentTasks is mounted in the streamlined sidebar; AgentSecretAccessEditor in edit-mode secrets settings. TaskSkillPanel and TaskBrowserPanel are conditional task side-panel tabs; TaskBrowserFooter needs a browser without an access error and renders only running/idle sessions. Layout wraps its routed Outlet with RouteErrorBoundary. useBrowserViewport produces local resize guidance consumed by TaskBrowserPanel; its source is hash-only, not JSX coverage. These checks do not prove live browser/session availability, every branch, translation coverage, or preservation of runtime data.",
+  "adapterConfigurationScopeEdges": [
+    {
+      "domain": "agents-runs",
+      "file": "ui/src/adapters/claude-local/config-fields.tsx",
+      "host": "ui/src/components/AgentConfigForm.tsx",
+      "symbol": "ClaudeLocalAdvancedFields",
+      "importSource": "../adapters/claude-local/config-fields",
+      "usage": "jsx"
+    },
+    {
+      "domain": "agents-runs",
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "host": "ui/src/adapters/codex-local/index.ts",
+      "symbol": "CodexLocalConfigFields",
+      "importSource": "./config-fields",
+      "usage": "reference"
+    }
+  ],
+  "adapterConfigurationDispatch": {
+    "registryFile": "ui/src/adapters/registry.ts",
+    "moduleFile": "ui/src/adapters/codex-local/index.ts",
+    "hostFile": "ui/src/components/AgentConfigForm.tsx",
+    "boundary": "CLI checks exact named import/reference or JSX edges and hashes registry/module/host sources. Tests separately parse the codex_local ConfigFields mapping, built-in registration list and AgentConfigForm dynamic configuration dispatcher. This is bounded syntax evidence, not binding/data-flow analysis or proof an external adapter override cannot replace the built-in. Ordinary Claude advanced fields use direct JSX; no direct Codex JSX mount is claimed."
+  },
   "limits": [
     "Schema 5 freezes the prior 82-path schema-4 list and baseline JSON SHA. New exact high-frequency paths, evidence-only helpers and hosts have separate path-set/content hashes. Five-domain denominators count reviewed source paths, never completed translations or all reachable UI.",
     "Scope changes are not translation progress: do not subtract old/new totals or treat literal/dynamic candidate totals as defect totals. Historical source SHA is retained; current legacy source SHA is recomputed independently.",
     "Explicit host/import/JSX/call/reference checks are syntax evidence, not binding analysis or runtime reachability. Missing paths, hosts, re-export barrels or consumer edges fail closed. Evidence hosts never recursively enlarge the AST inventory.",
     "Default chat-style TaskSidePanel artifacts are included; Classic conditional surfaces remain separately described, not inferred unreachable from names. Pure helper manualScope sources are hash-only and require provenance review; their returns are not AST candidates.",
     "Post-integration manualScope retains the original nine sources and eleven display/provenance helpers (eight new helpers plus three changed display opt-ins), plus the exact useBrowserViewport local resize-error producer. Their calls are evidence-only, not returned-string candidates. Canonical labels, local-error provenance, unknown diagnostics and actor-provided values still require manual classification.",
-    "The visible-recovery slice explicitly expands the 160-path AST inventory to 166 paths; it does not improve a measured translation coverage percentage. Six files are deduplicated across domains and scope metadata. Scope expansion and added candidates must not be described as translation progress or new confirmed defects.",
+    "The visible-recovery slice adds six exact paths to the prior 160-path AST inventory; two ordinary Claude/Codex configuration files then bring it to 168. Paths are deduplicated across domains and metadata. This scope expansion is not a measured translation coverage improvement, translation progress or new confirmed defects; dynamic registry dispatch remains bounded syntax evidence.",
     "Not a complete route/call graph, data-flow analysis, rendered-text count or translation coverage percentage.",
     "scope.unscannedTsxFiles lists eligible source paths outside the bounded AST inventory; scope.evidenceOnlyTsxFiles identifies hash-only consumers among them. Neither list classifies untranslated copy or establishes runtime reachability.",
     "Schema 4 adds four exact protocol-display TSX files as a separate scope; earlier scopes and candidate meanings are unchanged. Expanded totals are not directly comparable with schema 3. Original sourceSha256 covers only AST-inventoried files; manualSourceSha256 is separate.",
@@ -3477,7 +3549,7 @@
     "Technical identifiers and canonical labels translated by child wrappers may remain candidates; needs_manual_review does not mean untranslated. Template interpolation records source syntax only, never user values.",
     "Known t/mimouseT/i18n.t/mimouseI18n.t calls are omitted, not verified as translated. Dynamic snippets are source syntax truncated to 240 characters, never runtime data."
   ],
-  "sourceSha256": "47747b5b448e04ebfa5109c3998fbb3dd33765346e649709426b1dce3074c943",
+  "sourceSha256": "a526e22bee2e91c812d43845048a2a86d48a387a86a1e7109e830a65c30e4ae2",
   "requestedBasenames": [
     "Auth",
     "InviteLanding",
@@ -3522,7 +3594,7 @@
     "InboxAgentPolicyControl",
     "AgentMultiSelect"
   ],
-  "matchedFiles": 166,
+  "matchedFiles": 168,
   "unmatchedBasenames": [],
   "requestedRoutedFiles": [
     "ui/src/pages/RoutineDetail.tsx",
@@ -3713,8 +3785,6 @@
   "scope": {
     "eligibleTsxFiles": 780,
     "unscannedTsxFiles": [
-      "ui/src/adapters/claude-local/config-fields.tsx",
-      "ui/src/adapters/codex-local/config-fields.tsx",
       "ui/src/adapters/config-sections.tsx",
       "ui/src/adapters/cursor/config-fields.tsx",
       "ui/src/adapters/gemini-local/config-fields.tsx",
@@ -4553,13 +4623,23 @@
     ],
     "routeSourceSha256": "184601b85f73084e2a29c9edb73f19a88239f76d0878b8701efb66e772610eb2"
   },
-  "totalLiteralCandidates": 711,
-  "totalDynamicCandidates": 3382,
+  "totalLiteralCandidates": 787,
+  "totalDynamicCandidates": 3390,
   "files": [
     {
       "file": "ui/src/App.tsx",
       "literalCandidates": 0,
       "dynamicCandidates": 6
+    },
+    {
+      "file": "ui/src/adapters/claude-local/config-fields.tsx",
+      "literalCandidates": 17,
+      "dynamicCandidates": 0
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "literalCandidates": 59,
+      "dynamicCandidates": 8
     },
     {
       "file": "ui/src/components/AccountQuotaPanels.tsx",
@@ -5388,6 +5468,614 @@
     }
   ],
   "candidates": [
+    {
+      "file": "ui/src/adapters/claude-local/config-fields.tsx",
+      "line": 35,
+      "column": 22,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "Agent instructions file"
+    },
+    {
+      "file": "ui/src/adapters/claude-local/config-fields.tsx",
+      "line": 54,
+      "column": 27,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "/absolute/path/to/AGENTS.md"
+    },
+    {
+      "file": "ui/src/adapters/claude-local/config-fields.tsx",
+      "line": 100,
+      "column": 44,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "Execution engine"
+    },
+    {
+      "file": "ui/src/adapters/claude-local/config-fields.tsx",
+      "line": 111,
+      "column": 32,
+      "kind": "jsx-text",
+      "classification": "needs_manual_review",
+      "text": "Default (ACP)"
+    },
+    {
+      "file": "ui/src/adapters/claude-local/config-fields.tsx",
+      "line": 112,
+      "column": 31,
+      "kind": "jsx-text",
+      "classification": "needs_manual_review",
+      "text": "Claude CLI"
+    },
+    {
+      "file": "ui/src/adapters/claude-local/config-fields.tsx",
+      "line": 113,
+      "column": 31,
+      "kind": "jsx-text",
+      "classification": "needs_manual_review",
+      "text": "ACP"
+    },
+    {
+      "file": "ui/src/adapters/claude-local/config-fields.tsx",
+      "line": 120,
+      "column": 21,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "ACP server command"
+    },
+    {
+      "file": "ui/src/adapters/claude-local/config-fields.tsx",
+      "line": 136,
+      "column": 29,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "claude-agent-acp"
+    },
+    {
+      "file": "ui/src/adapters/claude-local/config-fields.tsx",
+      "line": 140,
+      "column": 50,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "ACP session mode"
+    },
+    {
+      "file": "ui/src/adapters/claude-local/config-fields.tsx",
+      "line": 155,
+      "column": 42,
+      "kind": "jsx-text",
+      "classification": "needs_manual_review",
+      "text": "Persistent"
+    },
+    {
+      "file": "ui/src/adapters/claude-local/config-fields.tsx",
+      "line": 156,
+      "column": 39,
+      "kind": "jsx-text",
+      "classification": "needs_manual_review",
+      "text": "One-shot"
+    },
+    {
+      "file": "ui/src/adapters/claude-local/config-fields.tsx",
+      "line": 160,
+      "column": 19,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "ACP non-interactive permissions"
+    },
+    {
+      "file": "ui/src/adapters/claude-local/config-fields.tsx",
+      "line": 177,
+      "column": 36,
+      "kind": "jsx-text",
+      "classification": "needs_manual_review",
+      "text": "Deny"
+    },
+    {
+      "file": "ui/src/adapters/claude-local/config-fields.tsx",
+      "line": 178,
+      "column": 36,
+      "kind": "jsx-text",
+      "classification": "needs_manual_review",
+      "text": "Fail"
+    },
+    {
+      "file": "ui/src/adapters/claude-local/config-fields.tsx",
+      "line": 183,
+      "column": 21,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "ACP state directory"
+    },
+    {
+      "file": "ui/src/adapters/claude-local/config-fields.tsx",
+      "line": 200,
+      "column": 31,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "/path/to/acp-state"
+    },
+    {
+      "file": "ui/src/adapters/claude-local/config-fields.tsx",
+      "line": 207,
+      "column": 19,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "ACP warm process idle ms"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 177,
+      "column": 17,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "Execution engine"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 199,
+      "column": 34,
+      "kind": "jsx-text",
+      "classification": "needs_manual_review",
+      "text": "Default (ACP)"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 200,
+      "column": 33,
+      "kind": "jsx-text",
+      "classification": "needs_manual_review",
+      "text": "Codex CLI"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 201,
+      "column": 33,
+      "kind": "jsx-text",
+      "classification": "needs_manual_review",
+      "text": "ACP"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 207,
+      "column": 17,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "Harness"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 255,
+      "column": 58,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "Harness"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 268,
+      "column": 46,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "Dot connection"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 271,
+      "column": 28,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "Read task attachments"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 273,
+      "column": 28,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "Workspace files and commands"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 275,
+      "column": 28,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "Allow externally billed provider"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 279,
+      "column": 46,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "ACP agent"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 291,
+      "column": 58,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "ACP agent"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 296,
+      "column": 60,
+      "kind": "jsx-expression",
+      "classification": "needs_manual_review",
+      "text": "— qualification pending"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 304,
+      "column": 46,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "Cursor mode"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 305,
+      "column": 53,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "Cursor mode"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 309,
+      "column": 94,
+      "kind": "jsx-text",
+      "classification": "needs_manual_review",
+      "text": "Unsupported saved mode — select Agent, Plan, or Ask"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 311,
+      "column": 35,
+      "kind": "jsx-text",
+      "classification": "needs_manual_review",
+      "text": "Agent"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 312,
+      "column": 34,
+      "kind": "jsx-text",
+      "classification": "needs_manual_review",
+      "text": "Plan"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 313,
+      "column": 33,
+      "kind": "jsx-text",
+      "classification": "needs_manual_review",
+      "text": "Ask"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 318,
+      "column": 46,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "Pi thinking level"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 319,
+      "column": 53,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "Pi thinking level"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 321,
+      "column": 187,
+      "kind": "jsx-text",
+      "classification": "needs_manual_review",
+      "text": "Unsupported saved thinking level"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 322,
+      "column": 33,
+      "kind": "jsx-text",
+      "classification": "needs_manual_review",
+      "text": "Off"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 322,
+      "column": 65,
+      "kind": "jsx-text",
+      "classification": "needs_manual_review",
+      "text": "Low"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 322,
+      "column": 98,
+      "kind": "jsx-text",
+      "classification": "needs_manual_review",
+      "text": "High"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 322,
+      "column": 131,
+      "kind": "jsx-text",
+      "classification": "needs_manual_review",
+      "text": "Max"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 329,
+      "column": 19,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "Managed Agent profile"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 339,
+      "column": 27,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "managed-primary"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 343,
+      "column": 19,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "Session spend ceiling (USD)"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 357,
+      "column": 19,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "Acknowledge managed retention"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 375,
+      "column": 19,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "AgentCore profile"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 385,
+      "column": 27,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "agentcore-primary"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 389,
+      "column": 19,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "Estimated session ceiling (USD)"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 403,
+      "column": 19,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "Maximum iterations"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 418,
+      "column": 19,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "Maximum output tokens"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 433,
+      "column": 19,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "Invocation timeout (seconds)"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 448,
+      "column": 19,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "Acknowledge 90-day Memory retention"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 462,
+      "column": 17,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "Permission mode"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 492,
+      "column": 39,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "Permission mode"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 495,
+      "column": 21,
+      "kind": "jsx-expression",
+      "classification": "needs_manual_review",
+      "text": "Unsupported saved mode — select a qualified mode"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 501,
+      "column": 62,
+      "kind": "jsx-text",
+      "classification": "needs_manual_review",
+      "text": "Unsupported saved mode — select a qualified mode"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 513,
+      "column": 71,
+      "kind": "jsx-text",
+      "classification": "needs_manual_review",
+      "text": "This saved Codex mode cannot start or recover a Paperclip Runner run. Select Automatic (isolated) to remediate it."
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 522,
+      "column": 17,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "Runner lifecycle"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 535,
+      "column": 38,
+      "kind": "jsx-text",
+      "classification": "needs_manual_review",
+      "text": "Turn by turn"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 536,
+      "column": 34,
+      "kind": "jsx-text",
+      "classification": "needs_manual_review",
+      "text": "Warm session"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 542,
+      "column": 17,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "Warm idle timeout (ms)"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 583,
+      "column": 21,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "ACP server command"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 603,
+      "column": 29,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "codex-acp"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 608,
+      "column": 19,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "ACP session mode"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 630,
+      "column": 42,
+      "kind": "jsx-text",
+      "classification": "needs_manual_review",
+      "text": "Persistent"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 631,
+      "column": 39,
+      "kind": "jsx-text",
+      "classification": "needs_manual_review",
+      "text": "One-shot"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 635,
+      "column": 19,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "ACP non-interactive permissions"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 656,
+      "column": 36,
+      "kind": "jsx-text",
+      "classification": "needs_manual_review",
+      "text": "Deny"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 657,
+      "column": 36,
+      "kind": "jsx-text",
+      "classification": "needs_manual_review",
+      "text": "Fail"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 662,
+      "column": 21,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "ACP state directory"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 683,
+      "column": 31,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "/path/to/acp-state"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 690,
+      "column": 19,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "ACP warm process idle ms"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 720,
+      "column": 22,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "Agent instructions file"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 743,
+      "column": 27,
+      "kind": "jsx-attribute",
+      "classification": "needs_manual_review",
+      "text": "/absolute/path/to/AGENTS.md"
+    },
     {
       "file": "ui/src/components/AgentConfigForm.tsx",
       "line": 1734,
@@ -11125,6 +11813,70 @@
       "kind": "jsx-dynamic",
       "classification": "needs_manual_review",
       "expression": "boardRoutes(streamlinedUiEnabled, combinedInboxTasksEnabled)"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 257,
+      "column": 16,
+      "kind": "jsx-dynamic",
+      "classification": "needs_manual_review",
+      "expression": "runnerHarnessOptions.map((option) => ( <SelectItem key={option.value} value={option.value}> <AdapterMark type={option.adapter} className=\"size-4\" /> {option.label} </SelectItem> ))"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 260,
+      "column": 20,
+      "kind": "jsx-dynamic",
+      "classification": "needs_manual_review",
+      "expression": "option.label"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 293,
+      "column": 16,
+      "kind": "jsx-dynamic",
+      "classification": "needs_manual_review",
+      "expression": "PAPERCLIP_RUNNER_ACPX_PROFILES.map(profile => ( <SelectItem key={profile.value} value={profile.value} disabled={!profile.qualified}> <AdapterMark type={profile.value === \"cursor\" ? \"cursor\" : `${profile.value}_local`} className=\"size-4\" /> "
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 296,
+      "column": 20,
+      "kind": "jsx-dynamic",
+      "classification": "needs_manual_review",
+      "expression": "profile.label"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 496,
+      "column": 21,
+      "kind": "jsx-dynamic",
+      "classification": "needs_manual_review",
+      "expression": "runnerPermissionCapability.options.find((option) => option.value === runnerPermissionMode)?.label"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 505,
+      "column": 16,
+      "kind": "jsx-dynamic",
+      "classification": "needs_manual_review",
+      "expression": "runnerPermissionCapability.options.map((option) => ( <SelectItem key={option.value} value={option.value}> {option.label} </SelectItem> ))"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 507,
+      "column": 20,
+      "kind": "jsx-dynamic",
+      "classification": "needs_manual_review",
+      "expression": "option.label"
+    },
+    {
+      "file": "ui/src/adapters/codex-local/config-fields.tsx",
+      "line": 799,
+      "column": 16,
+      "kind": "jsx-dynamic",
+      "classification": "needs_manual_review",
+      "expression": "fastModeMessage"
     },
     {
       "file": "ui/src/components/AccountQuotaPanels.tsx",
