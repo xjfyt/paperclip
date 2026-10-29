@@ -6,6 +6,7 @@ import { decisionsApi, type DecisionOutcome } from "../api/decisions";
 import { issuesApi } from "../api/issues";
 import { queryKeys } from "../lib/queryKeys";
 import { useCompany } from "../context/CompanyContext";
+import { useDecisionActionBoundary, type DecisionActionReceipt } from "../hooks/useDecisionActionBoundary";
 import { DecisionCard, type DecisionIssueRef } from "./DecisionCard";
 
 interface DecisionResolverProps {
@@ -42,7 +43,8 @@ export function signedCancelTreePreviewIds(targetIssueId: string, snapshot: { de
  */
 export function DecisionResolver({ companyId, decisionId, originIssue, agentMap, initialDecision, onResolved }: DecisionResolverProps) {
   const queryClient = useQueryClient();
-  const { selectedCompany } = useCompany();
+  const { selectedCompany, selectedCompanyId } = useCompany();
+  const boundary = useDecisionActionBoundary(companyId, decisionId, selectedCompanyId === undefined ? companyId : selectedCompanyId);
   const prefix = selectedCompany?.issuePrefix ?? "";
   const issueHref = useCallback(
     (idOrIdentifier: string) => (prefix ? `/${prefix}/issues/${idOrIdentifier}` : `/issues/${idOrIdentifier}`),
@@ -133,35 +135,46 @@ export function DecisionResolver({ companyId, decisionId, originIssue, agentMap,
     return refs.every((ref): ref is DecisionIssueRef => ref !== null) ? refs : null;
   }, [decision?.targetSnapshots, resolveIssue]);
 
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: queryKeys.decisions.detail(decisionId) });
-    queryClient.invalidateQueries({ queryKey: queryKeys.decisions.list(companyId, "open") });
-    queryClient.invalidateQueries({ queryKey: queryKeys.decisions.list(companyId, "decided") });
-    queryClient.invalidateQueries({ queryKey: queryKeys.attention(companyId) });
-    for (const id of Object.keys(decision?.targetSnapshots ?? {})) {
-      queryClient.invalidateQueries({ queryKey: queryKeys.decisions.forTargetIssue(companyId, id) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.issues.detail(id) });
-    }
-    onResolved?.();
+  type Action = { companyId: string; decisionId: string; targetIds: string[] } & (
+    { kind: "decide"; optionId: string; inputValues: Record<string, string>; idempotencyKey: string }
+    | { kind: "dismiss"; reason?: string }
+  );
+  const mutationOptions = {
+    mutationFn: (receipt: DecisionActionReceipt<Action>) => {
+      // Do not replay an old intent with the next viewer's ambient credentials.
+      if (!boundary.isCurrent(receipt)) throw new DOMException("Decision context changed", "AbortError");
+      const { input } = receipt;
+      return input.kind === "decide"
+        ? decisionsApi.decide(input.decisionId, { optionId: input.optionId, inputValues: input.inputValues, idempotencyKey: input.idempotencyKey })
+        : decisionsApi.dismiss(input.decisionId, input.reason);
+    },
+    onSuccess: (data: DecisionOutcome, receipt: DecisionActionReceipt<Action>) => {
+      if (!boundary.isCurrent(receipt)) return;
+      const { companyId: company, decisionId: id, targetIds } = receipt.input;
+      queryClient.setQueryData(queryKeys.decisions.detail(id), data);
+      queryClient.invalidateQueries({ queryKey: queryKeys.decisions.detail(id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.decisions.list(company, "open") });
+      queryClient.invalidateQueries({ queryKey: queryKeys.decisions.list(company, "decided") });
+      queryClient.invalidateQueries({ queryKey: queryKeys.attention(company) });
+      for (const targetId of targetIds) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.decisions.forTargetIssue(company, targetId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.issues.detail(targetId) });
+      }
+      onResolved?.();
+    },
+    onSettled: (_data: DecisionOutcome | undefined, _error: Error | null, receipt: DecisionActionReceipt<Action>) => boundary.finish(receipt),
   };
-
-  const decideMutation = useMutation({
-    mutationFn: (input: { optionId: string; inputValues: Record<string, string>; idempotencyKey?: string | null }) =>
-      decisionsApi.decide(decisionId, input),
-    retry: 2,
-    onSuccess: (data) => {
-      queryClient.setQueryData(queryKeys.decisions.detail(decisionId), data);
-      invalidate();
-    },
-  });
-
-  const dismissMutation = useMutation({
-    mutationFn: (reason: string | undefined) => decisionsApi.dismiss(decisionId, reason),
-    onSuccess: (data) => {
-      queryClient.setQueryData(queryKeys.decisions.detail(decisionId), data);
-      invalidate();
-    },
-  });
+  // Retries reuse this receipt's idempotency key, never a new intent.
+  const decideMutation = useMutation({ ...mutationOptions, retry: (count, error) => error.name !== "AbortError" && count < 2 });
+  const dismissMutation = useMutation(mutationOptions);
+  const submit = (action: { kind: "decide"; optionId: string; inputValues: Record<string, string> } | { kind: "dismiss"; reason?: string }) => {
+    if (!decision || decision.status !== "open" || decision.companyId !== companyId) return;
+    const receipt = boundary.begin<Action>({
+      ...action, companyId, decisionId, targetIds: Object.keys(decision.targetSnapshots ?? {}),
+      ...(action.kind === "decide" ? { inputValues: { ...action.inputValues }, idempotencyKey: crypto.randomUUID() } : {}),
+    } as Action);
+    if (receipt) (action.kind === "decide" ? decideMutation : dismissMutation).mutate(receipt);
+  };
 
   if (detail.isLoading) {
     return (
@@ -171,7 +184,7 @@ export function DecisionResolver({ companyId, decisionId, originIssue, agentMap,
     );
   }
 
-  if (detail.error || !decision) {
+  if (detail.error || !decision || decision.companyId !== companyId) {
     return (
       <p className="py-3 text-xs text-muted-foreground">
         This decision is no longer available — it may have been resolved elsewhere.
@@ -179,14 +192,12 @@ export function DecisionResolver({ companyId, decisionId, originIssue, agentMap,
     );
   }
 
-  const busy = decideMutation.isPending || dismissMutation.isPending;
-  const errorMessage =
-    (decideMutation.error instanceof Error && decideMutation.error.message) ||
-    (dismissMutation.error instanceof Error && dismissMutation.error.message) ||
-    null;
+  const busy = boundary.pending;
+  const errorMessage = [decideMutation, dismissMutation].find((mutation) => boundary.isCurrent(mutation.variables) && mutation.error instanceof Error)?.error?.message ?? null;
 
   return (
     <DecisionCard
+      key={`${companyId}:${decisionId}`}
       decision={decision}
       executions={decision.executions}
       targetChanged={targetChanged}
@@ -206,8 +217,8 @@ export function DecisionResolver({ companyId, decisionId, originIssue, agentMap,
       }
       busy={busy}
       errorMessage={errorMessage}
-      onDecide={(optionId, inputValues) => decideMutation.mutate({ optionId, inputValues, idempotencyKey: crypto.randomUUID() })}
-      onDismiss={(reason) => dismissMutation.mutate(reason)}
+      onDecide={(optionId, inputValues) => submit({ kind: "decide", optionId, inputValues })}
+      onDismiss={(reason) => submit({ kind: "dismiss", reason })}
     />
   );
 }

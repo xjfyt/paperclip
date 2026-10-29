@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Loader2, Settings2, X } from "lucide-react";
 import type { Agent, AttentionItem } from "@paperclipai/shared";
@@ -11,6 +11,7 @@ import { useCompany } from "../context/CompanyContext";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
 import { useToastActions } from "../context/ToastContext";
 import { useInboxDismissals } from "../hooks/useInboxBadge";
+import { useDecisionActionBoundary, type DecisionActionReceipt } from "../hooks/useDecisionActionBoundary";
 import { queryKeys } from "../lib/queryKeys";
 import {
   ATTENTION_AGING_DAYS,
@@ -65,6 +66,7 @@ export function DecisionQueuePage() {
   const queryClient = useQueryClient();
   const params = useParams<{ key: string }>();
   const queueKey = params.key ?? "";
+  const seedBoundary = useDecisionActionBoundary(selectedCompanyId, queueKey);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const { dismiss, snooze } = useInboxDismissals(selectedCompanyId);
 
@@ -200,15 +202,19 @@ export function DecisionQueuePage() {
   };
 
   const toggleSeedRules = useMutation({
-    mutationFn: (enabled: boolean) =>
-      decisionQueuesApi.update(selectedCompanyId!, queueKey, { seedRulesEnabled: enabled }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.decisionQueues.list(selectedCompanyId!) }),
-    onError: (err) =>
-      pushToast({
-        title: "Could not update seeding",
-        body: err instanceof Error ? err.message : "Please try again.",
-        tone: "error",
-      }),
+    mutationFn: (receipt: DecisionActionReceipt<{ companyId: string; queueKey: string; enabled: boolean }>) => {
+      if (!seedBoundary.isCurrent(receipt)) throw new DOMException("Decision context changed", "AbortError");
+      const { input } = receipt;
+      return decisionQueuesApi.update(input.companyId, input.queueKey, { seedRulesEnabled: input.enabled });
+    },
+    onSuccess: (_data, receipt) => {
+      if (seedBoundary.isCurrent(receipt)) queryClient.invalidateQueries({ queryKey: queryKeys.decisionQueues.list(receipt.input.companyId) });
+    },
+    onError: (err, receipt) => {
+      if (!seedBoundary.isCurrent(receipt)) return;
+      pushToast({ title: "Could not update seeding", body: err instanceof Error ? err.message : "Please try again.", tone: "error" });
+    },
+    onSettled: (_data, _error, receipt) => seedBoundary.finish(receipt),
   });
 
   if (!selectedCompanyId) {
@@ -255,8 +261,11 @@ export function DecisionQueuePage() {
         <SeedRulesCard
           enabled={queue.seedRulesEnabled}
           rules={queue.seedRules.map((rule) => rule.description)}
-          pending={toggleSeedRules.isPending}
-          onToggle={() => toggleSeedRules.mutate(!queue.seedRulesEnabled)}
+          pending={seedBoundary.pending}
+          onToggle={() => {
+            const receipt = seedBoundary.begin({ companyId: selectedCompanyId, queueKey, enabled: !queue.seedRulesEnabled });
+            if (receipt) toggleSeedRules.mutate(receipt);
+          }}
         />
       )}
 
@@ -432,34 +441,35 @@ function QueueItemRow({
   const { pushToast } = useToastActions();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
+  const { selectedCompanyId } = useCompany();
+  const boundary = useDecisionActionBoundary(companyId, JSON.stringify([queueKey, item.id, item.sourceKind, item.subject.id]), selectedCompanyId);
+  const draftRevision = useRef(0);
+  const changeOpen = (value: boolean) => { draftRevision.current++; setOpen(value); };
+  type Exclusion = { companyId: string; queueKey: string; sourceKind: AttentionItem["sourceKind"]; sourceId: string; reason: string; title: string | null; revision: number };
   const exclude = useMutation({
-    mutationFn: async () => {
-      await decisionQueuesApi.removeItem(
-        companyId,
-        queueKey,
-        item.sourceKind,
-        item.subject.id,
-        reason.trim() || undefined,
-      );
+    mutationFn: (receipt: DecisionActionReceipt<Exclusion>) => {
+      if (!boundary.isCurrent(receipt)) throw new DOMException("Decision context changed", "AbortError");
+      const { input } = receipt;
+      return decisionQueuesApi.removeItem(input.companyId, input.queueKey, input.sourceKind, input.sourceId, input.reason.trim() || undefined);
     },
-    onSuccess: () => {
+    onSuccess: (_data, receipt) => {
+      if (!boundary.isCurrent(receipt) || draftRevision.current !== receipt.input.revision) return;
       setOpen(false);
       setReason("");
-      pushToast({ title: "Removed from queue", body: item.subject.title ?? undefined, tone: "info" });
+      pushToast({ title: "Removed from queue", body: receipt.input.title ?? undefined, tone: "info" });
       onExcluded();
     },
-    onError: (err) =>
-      pushToast({
-        title: "Could not exclude",
-        body: err instanceof Error ? err.message : "Please try again.",
-        tone: "error",
-      }),
+    onError: (err, receipt) => {
+      if (!boundary.isCurrent(receipt) || draftRevision.current !== receipt.input.revision) return;
+      pushToast({ title: "Could not exclude", body: err instanceof Error ? err.message : "Please try again.", tone: "error" });
+    },
+    onSettled: (_data, _error, receipt) => boundary.finish(receipt),
   });
 
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-end px-1">
-        <Popover open={open} onOpenChange={setOpen}>
+        <Popover open={open} onOpenChange={changeOpen}>
           <PopoverTrigger asChild>
             <Button type="button" variant="ghost" size="xs" className="h-7 gap-1 text-muted-foreground">
               <X className="h-3.5 w-3.5" />
@@ -470,22 +480,25 @@ function QueueItemRow({
             <p className="text-xs font-medium text-foreground">Remove from this queue</p>
             <textarea
               value={reason}
-              onChange={(event) => setReason(event.target.value)}
+              onChange={(event) => { draftRevision.current++; setReason(event.target.value); }}
               placeholder="Reason (optional)…"
               className="min-h-16 w-full rounded-sm border border-border bg-background px-2 py-1 text-xs"
             />
             <div className="flex justify-end gap-1">
-              <Button type="button" variant="ghost" size="xs" onClick={() => setOpen(false)}>
+              <Button type="button" variant="ghost" size="xs" onClick={() => changeOpen(false)}>
                 Cancel
               </Button>
               <Button
                 type="button"
                 size="xs"
-                className={cn(exclude.isPending && "opacity-80")}
-                disabled={exclude.isPending}
-                onClick={() => exclude.mutate()}
+                className={cn(boundary.pending && "opacity-80")}
+                disabled={boundary.pending}
+                onClick={() => {
+                  const receipt = boundary.begin<Exclusion>({ companyId, queueKey, sourceKind: item.sourceKind, sourceId: item.subject.id, reason, title: item.subject.title, revision: draftRevision.current });
+                  if (receipt) exclude.mutate(receipt);
+                }}
               >
-                {exclude.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
+                {boundary.pending && <Loader2 className="h-3 w-3 animate-spin" />}
                 Exclude
               </Button>
             </div>

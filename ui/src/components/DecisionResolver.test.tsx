@@ -53,6 +53,8 @@ vi.mock("@tanstack/react-query", () => ({
   },
 }));
 
+vi.mock("../hooks/useDecisionActionBoundary", () => ({ useDecisionActionBoundary: () => ({ pending: false, isCurrent: () => false }) }));
+
 vi.mock("../context/CompanyContext", () => ({
   useCompany: () => ({ selectedCompany: { issuePrefix: "PAP" } }),
 }));
