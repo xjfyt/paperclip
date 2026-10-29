@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { installIsolatedHostFixture } from "@paperclipai/adapter-utils/test-fixtures/isolated-host";
+import { writeCliFixture } from "@paperclipai/adapter-utils/test-fixtures/native-cli";
+installIsolatedHostFixture();
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -22,9 +25,8 @@ console.log(JSON.stringify({
   result: "hello",
 }));
 `;
-  await fs.writeFile(commandPath, script, "utf8");
-  await fs.chmod(commandPath, 0o755);
-  return commandPath;
+  await writeCliFixture(commandPath, script);
+  return commandPath + (process.platform === "win32" ? ".exe" : "");
 }
 
 async function writeQuotaGeminiCommand(binDir: string): Promise<string> {
@@ -36,9 +38,8 @@ if (process.argv.includes("--help")) {
 console.error("429 RESOURCE_EXHAUSTED: You exceeded your current quota and billing details.");
 process.exit(1);
 `;
-  await fs.writeFile(commandPath, script, "utf8");
-  await fs.chmod(commandPath, 0o755);
-  return commandPath;
+  await writeCliFixture(commandPath, script);
+  return commandPath + (process.platform === "win32" ? ".exe" : "");
 }
 
 describe("gemini_local environment diagnostics", () => {
