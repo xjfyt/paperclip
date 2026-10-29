@@ -1,9 +1,11 @@
 import { execFile, type ExecFileOptions } from "node:child_process";
 import fs from "node:fs/promises";
+import { writeSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
+import { sandboxPath, shellEnvironment, shellExecutable, runLocalSandboxProcess } from "@paperclipai/adapter-utils/test-fixtures/local-sandbox";
 import { disposeGitWorkspaceSnapshot, readGitWorkspaceSnapshot, runLocalGit, setExpensiveWorkspaceGitExecutor, type GitWorkspaceSnapshot } from "@paperclipai/adapter-utils/git-workspace-sync";
 import { isPathManifest, workspacePaths } from "@paperclipai/adapter-utils/workspace-manifest";
 import { prepareSandboxManagedRuntime, type PreparedSandboxManagedRuntime, type SandboxManagedRuntimeClient } from "@paperclipai/adapter-utils/sandbox-managed-runtime";
@@ -11,7 +13,14 @@ import { createWorkspaceGitOperationScheduler } from "./workspace-git-operation-
 
 const exec = promisify(execFile);
 async function execute(command: string, args: string[], options: ExecFileOptions = {}): Promise<void> {
-  try { await exec(command, args, options); }
+  try {
+    if (process.platform === "win32" && command === "sh") {
+      const result = await runLocalSandboxProcess("streaming-git-fixture", shellExecutable(command), args, {
+        cwd: process.cwd(), env: shellEnvironment(), timeoutSec: Math.ceil((options.timeout ?? 120_000) / 1000), graceSec: 1, onLog: async () => {},
+      });
+      if (result.exitCode !== 0 || result.timedOut) throw new Error(`Sandbox fixture exit=${result.exitCode} timedOut=${result.timedOut}: ${result.stderr}`);
+    } else await exec(command, args, options);
+  }
   catch (error) {
     const stderr = String((error as { stderr?: unknown }).stderr ?? "");
     throw new Error(`Fixture command failed: ${String(error)}\n${stderr.slice(-8192)}`, { cause: error });
@@ -20,7 +29,12 @@ async function execute(command: string, args: string[], options: ExecFileOptions
 const directories: string[] = [];
 const snapshots: GitWorkspaceSnapshot[] = [];
 const runtimes: PreparedSandboxManagedRuntime[] = [];
+const remotePath = (file: string) => process.platform === "win32"
+  ? `/${path.parse(file).root[0]!.toLowerCase()}${sandboxPath(file)}` : file;
+const hostPath = (file: string) => process.platform === "win32" && /^\/[a-z]\//i.test(file)
+  ? `${file[1]}:${file.slice(2)}` : file;
 afterEach(async () => {
+  vi.unstubAllEnvs();
   setExpensiveWorkspaceGitExecutor(null);
   for (const runtime of runtimes.splice(0)) await runtime.cleanupWorkspaceSnapshot();
   for (const snapshot of snapshots.splice(0)) await disposeGitWorkspaceSnapshot(snapshot);
@@ -29,21 +43,21 @@ afterEach(async () => {
 
 function localClient(commands: string[]): SandboxManagedRuntimeClient {
   return {
-    makeDir: async (dir) => { await fs.mkdir(dir, { recursive: true }); },
-    writeFile: async (file, bytes) => { await fs.writeFile(file, Buffer.from(bytes)); },
-    readFile: async (file) => fs.readFile(file),
-    listFiles: async (dir) => fs.readdir(dir),
-    remove: async (file) => { await fs.rm(file, { recursive: true, force: true }); },
-    run: async (command) => { await execute("sh", ["-c", command]); },
+    makeDir: async (dir) => { await fs.mkdir(hostPath(dir), { recursive: true }); },
+    writeFile: async (file, bytes) => { await fs.writeFile(hostPath(file), Buffer.from(bytes)); },
+    readFile: async (file) => fs.readFile(hostPath(file)),
+    listFiles: async (dir) => fs.readdir(hostPath(dir)),
+    remove: async (file) => { await fs.rm(hostPath(file), { recursive: true, force: true }); },
+    run: async (command, options) => { await execute("sh", ["-c", command], { timeout: options.timeoutMs }); },
     syncIn: async (operations) => {
       for (const operation of operations) {
         for (const mapping of operation.files) {
-          await fs.mkdir(path.dirname(mapping.targetPath), { recursive: true });
-          await fs.copyFile(mapping.sourcePath, mapping.targetPath);
+          await fs.mkdir(path.dirname(hostPath(mapping.targetPath)), { recursive: true });
+          await fs.copyFile(mapping.sourcePath, hostPath(mapping.targetPath));
         }
         for (const command of operation.postUploadCommands ?? []) {
           commands.push(command.command);
-          await execute("sh", ["-c", command.command], { maxBuffer: 64 * 1024 });
+          await execute("sh", ["-c", command.command], { timeout: command.timeoutMs, maxBuffer: 64 * 1024 });
         }
       }
       return { operations: [] };
@@ -51,16 +65,34 @@ function localClient(commands: string[]): SandboxManagedRuntimeClient {
   };
 }
 
-// macOS adds per-file process and filesystem overhead to the real deletion lane.
-const realGitTimeoutMs = process.platform === "darwin" ? 300_000 : 180_000;
+// The real 40,000-file lanes include verified archive IO and a second staging
+// pass. Native NTFS performs hundreds of thousands of metadata operations,
+// including two real tar transfers; allow concurrent CI load without changing
+// the file counts, 32 MiB boundary or streaming/memory assertions.
+const realGitTimeoutMs = process.platform === "win32" ? 1_800_000 : process.platform === "darwin" ? 300_000 : 180_000;
+// Honor the actual per-command contract in the local provider. In particular,
+// 40,000 long-path NTFS ancestor checks/deletions exceed the old hidden 120s cap.
+const transferTimeoutMs = process.platform === "win32" ? 600_000 : 120_000;
 it("streams and stages all four real Git filename lanes above 32 MiB through the shared scheduler", async () => {
+  // This stress fixture deliberately exceeds Win32's legacy path length in
+  // both the source and disposable shallow clones. Scope Git's long-path
+  // setting to these children; never change the operator's global Git config.
+  if (process.platform === "win32") {
+    vi.stubEnv("GIT_CONFIG_COUNT", "1");
+    vi.stubEnv("GIT_CONFIG_KEY_0", "core.longpaths");
+    vi.stubEnv("GIT_CONFIG_VALUE_0", "true");
+  }
   const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "pc-stream-git-")));
+  const startedAt = Date.now();
+  const checkpoint = (phase: string) => writeSync(2, `[git-streaming-fixture] ${phase}: ${Date.now() - startedAt}ms\n`);
   directories.push(root);
   const repo = path.join(root, "repo");
   await fs.mkdir(repo);
   const env = { ...process.env, GIT_AUTHOR_NAME: "Test", GIT_COMMITTER_NAME: "Test", GIT_AUTHOR_EMAIL: "test@example.test", GIT_COMMITTER_EMAIL: "test@example.test" };
   const git = (args: string[]) => runLocalGit(repo, args, { env, timeout: 120_000, maxBuffer: 64 * 1024 });
   await git(["init"]);
+  if (process.platform === "win32") await git(["config", "core.longpaths", "true"]);
+  await git(["config", "core.autocrlf", "false"]);
   await git(["commit", "--allow-empty", "-qm", "fixture"]);
   // Leave room for the fixture/staging root below macOS's 1,024-byte path
   // limit while keeping each 40,000-name Git lane above the 32 MiB boundary.
@@ -73,7 +105,12 @@ it("streams and stages all four real Git filename lanes above 32 MiB through the
     }
   };
   await writeFiles("base");
-  const unusual = [" space ", "line\nbreak", "-option", "雪-💾", "wild[?]*"];
+  checkpoint("created 40000 files");
+  // NTFS rejects control characters, wildcard names and trailing spaces. Keep
+  // their POSIX coverage, while exercising legal odd names on the real host.
+  const unusual = process.platform === "win32"
+    ? [" space name", "line-break", "-option", "雪-💾", "wild[brackets]"]
+    : [" space ", "line\nbreak", "-option", "雪-💾", "wild[?]*"];
   for (const name of unusual) await fs.writeFile(path.join(repo, name), name);
   const scheduler = createWorkspaceGitOperationScheduler({ concurrency: 2, queueCapacity: 8 });
   const bindScheduler = () => setExpensiveWorkspaceGitExecutor((input) => scheduler.run({
@@ -107,18 +144,20 @@ it("streams and stages all four real Git filename lanes above 32 MiB through the
   bindScheduler();
   const snapshot = await scan();
   checkLargeLane(snapshot.overlayPaths);
+  checkpoint("scanned standalone and scheduled lanes");
   await fs.writeFile(path.join(parent, "late.js"), "must not stage");
   const commands: string[] = [];
   const remote = path.join(root, "remote");
   const stage = async (gitSnapshot: GitWorkspaceSnapshot) => {
     const runtime = await prepareSandboxManagedRuntime({
-      spec: { transport: "sandbox", provider: "test", sandboxId: "test", remoteCwd: remote, timeoutMs: 120_000, apiKey: null },
+      spec: { transport: "sandbox", provider: "test", sandboxId: "test", remoteCwd: remotePath(remote), timeoutMs: transferTimeoutMs, apiKey: null },
       client: localClient(commands), adapterKey: "stream-test", workspaceLocalDir: repo, workspaceGitSnapshot: gitSnapshot,
     });
     runtimes.push(runtime);
     return runtime;
   };
   const runtime = await stage(snapshot);
+  checkpoint("staged snapshot");
   const remoteParent = path.join(remote, path.relative(repo, parent));
   let stagedCount = 0;
   for await (const entry of await fs.opendir(remoteParent)) {
@@ -126,6 +165,7 @@ it("streams and stages all four real Git filename lanes above 32 MiB through the
     stagedCount++;
   }
   expect(stagedCount).toBe(40_000);
+  checkpoint("verified 40000 staged byte payloads");
   for (const name of unusual) expect(await fs.readFile(path.join(remote, name), "utf8")).toBe(name);
   const manifestFile = isPathManifest(snapshot.overlayPaths) ? snapshot.overlayPaths.filePath : "";
   await runtime.cleanupWorkspaceSnapshot();
@@ -139,14 +179,17 @@ it("streams and stages all four real Git filename lanes above 32 MiB through the
   await fs.rm(path.join(repo, ".gitignore"));
   await git(["add", "--", "."]);
   await git(["commit", "-qm", "track generated files"]);
+  checkpoint("tracked 40000 files");
   await writeFiles("changed");
   const changed = await scan();
   checkLargeLane(changed.overlayPaths);
+  checkpoint("verified changed lane");
   await disposeGitWorkspaceSnapshot(changed);
   await fs.rm(parent, { recursive: true });
   const deleted = await scan();
   checkLargeLane(deleted.deletedPaths);
   await stage(deleted);
+  checkpoint("staged deleted lane");
   let remaining = 0;
   for await (const _entry of await fs.opendir(remoteParent)) remaining++;
   expect(remaining).toBe(0);

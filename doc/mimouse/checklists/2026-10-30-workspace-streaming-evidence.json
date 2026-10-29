@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "scope": "Real Windows 40000-path Git filename streaming and sandbox staging workload",
+  "recordedAt": "2026-10-29T21:34:23.931Z",
+  "platform": "win32",
+  "command": "pnpm exec vitest run --project '@paperclipai/server' server/src/services/workspace-git-snapshot-streaming.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=test-results/project-closure-20261029/workspace-streaming-final6.json",
+  "result": {
+    "path": "test-results/project-closure-20261029/workspace-streaming-final6.json",
+    "sha256": "4cb67c7008cb51c5af83d794433fad3c248ac6041bf3ea4ca8979f54a6f18bfa",
+    "passed": 1,
+    "failed": 0,
+    "pending": 0
+  },
+  "checkpoints": [
+    "[git-streaming-fixture] created 40000 files: 34993ms",
+    "[git-streaming-fixture] scanned standalone and scheduled lanes: 39672ms",
+    "[git-streaming-fixture] staged snapshot: 858737ms",
+    "[git-streaming-fixture] verified 40000 staged byte payloads: 899734ms",
+    "[git-streaming-fixture] tracked 40000 files: 985213ms",
+    "[git-streaming-fixture] verified changed lane: 1031645ms",
+    "[git-streaming-fixture] staged deleted lane: 1660628ms"
+  ],
+  "assertions": [
+    "All four filename lanes retain 40000 actual file entries and 34988890 NUL-delimited bytes, above 32 MiB.",
+    "Standalone and scheduled snapshots use streaming manifests; metadata remains below 4096 bytes.",
+    "All 40000 staged payloads and legal Windows special names are byte-checked; late-added file is excluded.",
+    "A real shallow Git baseline and second staging delete all 40000 paths; generated shell commands stay below 16 KiB and scheduler active/queued/inflight/cache counts drain to zero.",
+    "Fixture honors provider timeoutMs: Windows total 30 minutes, per-transfer command 10 minutes; POSIX test/transfer budgets remain unchanged."
+  ],
+  "history": [
+    {
+      "path": "test-results/project-closure-20261029/workspace-streaming-final5.json",
+      "sha256": "f680af4e253574f031ae389603d5a897abdae000935ee99561aaeede86572db8",
+      "passed": 0,
+      "failed": 1,
+      "pending": 0,
+      "cause": "The local fixture ignored post-upload timeoutMs and imposed a hidden 120-second shell deadline. The real xargs child finished naturally before test cleanup; the failed parent result was retained."
+    }
+  ],
+  "sources": [
+    {
+      "path": "server/src/services/workspace-git-snapshot-streaming.test.ts",
+      "sha256": "faa544f38b9ab17f9072976dab0de0163d11b29c70b5c9b8efa2798ccd01c067"
+    },
+    {
+      "path": "packages/adapter-utils/src/git-workspace-sync.ts",
+      "sha256": "ad496c80b6feb79912df64823d88d6f9417192f4e337d7b20662c82cd71e690d"
+    },
+    {
+      "path": "packages/adapter-utils/src/sandbox-managed-runtime.ts",
+      "sha256": "2dd483c7d04207337371e71db36581a14ded91ed703a9a37f9aba3a4e10795c7"
+    },
+    {
+      "path": "doc/DEVELOPING.md",
+      "sha256": "be451a56d89c536f691f386bf8fad5743255126709bf7fbb062d5fd061f46b37"
+    }
+  ],
+  "limits": [
+    "Actual Git Bash/GNU tar on NTFS, with local simulated provider transport; not a live cloud provider or production deployment.",
+    "Long-path Git and autocrlf settings are scoped to disposable fixtures; no global Git configuration was changed.",
+    "Windows-inexpressible newline/wildcard/trailing-space filenames retain their POSIX branch but were not executed on this host.",
+    "Ancestor guards do not claim descriptor-atomic containment against concurrent namespace changes.",
+    "Earlier timeout and Unicode/exclusion failures remain historical diagnostics; this pass does not erase them.",
+    "Raw ignored logs/JSON may not be present in another checkout."
+  ]
+}
