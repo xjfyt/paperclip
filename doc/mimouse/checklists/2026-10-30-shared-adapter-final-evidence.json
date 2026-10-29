@@ -1,0 +1,363 @@
+{
+  "schema": "mimouse.shared-adapter-complete-final.v1",
+  "recordedAt": "2026-10-29T23:26:08.732271+00:00",
+  "platform": "Windows win32/x64, Node v24.16.0, Vitest5.0.3",
+  "scope": "Independent complete package invocations; results are not summed across historical runs or merged into a single source-freeze claim. No source/test/lockfile edits by this verifier.",
+  "runner": {
+    "path": "test-results/project-closure-20261029/run-isolated-package.mjs",
+    "sha256": "d5a78588c0a4ac0e61476416d5ab0fc04daec437dbe9c61c4a2f39e61252c4e5"
+  },
+  "isolation": "Equivalent official fresh canonical PAPERCLIP_HOME/CONFIG/INSTANCE_ID/TMPDIR, NODE_ENV=test, inherited test-host-home contract; maxWorkers1, no name filter, dist excluded. No provider credential/environment-key bypass.",
+  "baseline": {
+    "shared": {
+      "log": {
+        "path": "test-results/project-closure-20261029/workspaces-b-fixed.log",
+        "sha256": "e5f64e52b310985ff3d5d2a889dffad1a853591e5ee759e91966ed96fe72f4d8"
+      },
+      "sectionLines": [
+        2,
+        15
+      ],
+      "files": 93,
+      "passed": 987,
+      "failed": 0,
+      "pending": 0,
+      "limit": "Only shared section of combined historical log. No JSON/inventory/source manifest; later skills-catalog failure remains separate."
+    },
+    "adapterPreparation": {
+      "path": "test-results/project-closure-20261029/shared-adapter-final-preparation.json",
+      "sha256": "b4ddb9b6f146a70b6c49b42e86c9a90f166e5ff784703eca38607af5658fc9f4"
+    }
+  },
+  "runs": [
+    {
+      "name": "shared-complete-final",
+      "project": "@paperclipai/shared",
+      "status": "PASS_AT_DECLARED_INPUT",
+      "command": "node test-results/project-closure-20261029/run-isolated-package.mjs shared-complete-final @paperclipai/shared",
+      "invokedVitest": "node node_modules/vitest/vitest.mjs run --project @paperclipai/shared --maxWorkers=1 --exclude **/dist/** --reporter=default --reporter=json --outputFile=<declared local result>",
+      "headAtStart": "cbcf42a741f25eaf38c6bbbf6906d1a64715d728",
+      "headAtEnd": "cbcf42a741f25eaf38c6bbbf6906d1a64715d728",
+      "exitCode": 0,
+      "files": 94,
+      "passed": 997,
+      "failed": 0,
+      "pending": 0,
+      "completeLogDurationSeconds": 48.95,
+      "frameworkWarnings": 0,
+      "frameworkUnhandledErrors": 0,
+      "taggedApplicationWarnLines": 0,
+      "expectedNegativeFixtureConsoleWarnings": {
+        "telemetryTerminalBatchDropCount": 4,
+        "meaning": "Existing fake HTTP400/413 terminal-response contract cases deliberately call console.warn; output retained, not framework warnings, not live telemetry network qualification."
+      },
+      "skipComparison": {
+        "baseline": "shared segment in workspaces-b-fixed.log987/987 implies zero pending; no historical per-test JSON",
+        "expected": 0,
+        "actual": 0,
+        "added": [],
+        "removed": [],
+        "unchanged": true,
+        "pendingSet": []
+      },
+      "input": {
+        "count": 11468,
+        "startedAt": "2026-10-29T23:08:06.063215+00:00",
+        "endedAt": "2026-10-29T23:08:57.326993+00:00",
+        "snapshotIntervalSeconds": 51.263,
+        "scope": "All tracked plus unignored untracked Git-visible repository files; byte SHA256 or link-target SHA256 only. Includes docs/tests and user lockfile; excludes ignored generated outputs, installed dependencies, binaries outside Git visibility and environment values.",
+        "changed": [
+          {
+            "path": "doc/mimouse/checklists/2026-10-30-project-closure.md",
+            "before": "267acdead08de99cbc18d1f729f1be9ffeb19f7303778706f77eb0bc898767d5",
+            "after": "9624c391efe99805bd11ec004e4e1c089be73598e1653a0fb47f7dd70e4ef804",
+            "kind": "documentation"
+          }
+        ],
+        "packageInputChanges": []
+      },
+      "evidence": [
+        {
+          "path": "test-results/project-closure-20261029/shared-complete-final.log",
+          "sha256": "0a7a3d1cb30d972915e6d12c2b63d1d8b4e9e73618316c3eee44476923f2acf9"
+        },
+        {
+          "path": "test-results/project-closure-20261029/shared-complete-final.json",
+          "sha256": "77dff8c97fab011be170d1ea0c7b28cda10bb2312a91b2ae9bf6ce5c197c980f"
+        },
+        {
+          "path": "test-results/project-closure-20261029/shared-complete-final.exit",
+          "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
+        },
+        {
+          "path": "test-results/project-closure-20261029/shared-complete-final-invocation.json",
+          "sha256": "13d5b4165da87e8b3fc965098ab33de4a53e2c3f80e7048a9512ed71a32cd406"
+        },
+        {
+          "path": "test-results/project-closure-20261029/shared-complete-final-before.json",
+          "sha256": "6218a184d68dbb9a81a8978b6180c5e6f35e4da74ceb378e08607b15ef6e4a19"
+        },
+        {
+          "path": "test-results/project-closure-20261029/shared-complete-final-after.json",
+          "sha256": "73ffd40b25663b13a8b365abbdc3f849a9580b92ebba156e740755ba12044bdb"
+        },
+        {
+          "path": "test-results/project-closure-20261029/shared-complete-final-after-comparison.json",
+          "sha256": "9775cd5b5a241240760878a407a5bf89a0e425a2ca2f1b123f9106755edf9d47"
+        },
+        {
+          "path": "test-results/project-closure-20261029/shared-complete-final-summary.json",
+          "sha256": "ca3f92803e0b318054d785cc593f95fccf832cc09f0100c132dd0770478c0c1b"
+        }
+      ]
+    },
+    {
+      "name": "adapter-complete-final10",
+      "project": "@paperclipai/adapter-utils",
+      "status": "PASS_WITH_UNCHANGED_EXPLICIT_CONDITIONS",
+      "command": "node test-results/project-closure-20261029/run-isolated-package.mjs adapter-complete-final10 @paperclipai/adapter-utils",
+      "invokedVitest": "node node_modules/vitest/vitest.mjs run --project @paperclipai/adapter-utils --maxWorkers=1 --exclude **/dist/** --reporter=default --reporter=json --outputFile=<declared local result>",
+      "headAtStart": "cbcf42a741f25eaf38c6bbbf6906d1a64715d728",
+      "headAtEnd": "e79f986a4e80b16cbf84bc44c82c3da19eefaefe",
+      "exitCode": 0,
+      "files": 80,
+      "total": 1776,
+      "passed": 1725,
+      "failed": 0,
+      "pending": 51,
+      "completeLogDurationSeconds": 810.7,
+      "frameworkWarnings": 0,
+      "frameworkUnhandledErrors": 0,
+      "taggedApplicationWarnLines": 0,
+      "expectedNegativeFixtureStderr": {
+        "sections": 38,
+        "sandboxCallbackFailureAbortRetryBackstopSections": 35,
+        "remoteAdditionalProjectIsolationSections": 3,
+        "literalCurrentRunStderrFixtureLines": 1,
+        "meaning": "Expected injected remote polling/write/abort/backstop errors, unsafe additional-project isolation and literal fake child stderr were retained. These application diagnostics are distinct from Node/Vitest warnings or unhandled rejections."
+      },
+      "skipComparison": {
+        "expected": 51,
+        "actual": 51,
+        "added": [],
+        "removed": [],
+        "unchanged": true,
+        "expectedSet": {
+          "path": "test-results/project-closure-20261029/shared-adapter-final-preparation.json",
+          "sha256": "b4ddb9b6f146a70b6c49b42e86c9a90f166e5ff784703eca38607af5658fc9f4"
+        },
+        "actualSet": {
+          "path": "test-results/project-closure-20261029/adapter-complete-final10-summary.json",
+          "sha256": "99413b13f7e5a7e041e64fbc0879b0646021912fbd2beed246fd96d91df4fb31"
+        },
+        "canonicalSetSha256": "76fa671edd70c6d96370f09e70f0f4f633a2afe2729ac6656fa98f464f256bc2",
+        "baselineCanonicalSetSha256": "76fa671edd70c6d96370f09e70f0f4f633a2afe2729ac6656fa98f464f256bc2",
+        "canonicalMethod": "UTF8 JSON of file/name objects, sorted by file then name; object keys sorted, ensure_ascii=false, compact separators. All51 pending names must match; they are not successful tests.",
+        "baselineCompleteReports": [
+          {
+            "name": "adapter-complete-final6",
+            "report": {
+              "path": "test-results/project-closure-20261029/adapter-complete-final6.json",
+              "sha256": "8e22ca4891be3629b2abcd5abc308ee0aeba00936734f6b1141584087eeed079"
+            },
+            "files": 78,
+            "pass": 1711,
+            "fail": 0,
+            "pending": 51,
+            "sameSkipSetAsFinal9": true
+          },
+          {
+            "name": "adapter-complete-final7",
+            "report": {
+              "path": "test-results/project-closure-20261029/adapter-complete-final7.json",
+              "sha256": "b393b49712e50fab82ea50f322381b3c30f7408a2587acce6e8a9144e4345842"
+            },
+            "files": 79,
+            "pass": 1716,
+            "fail": 0,
+            "pending": 51,
+            "sameSkipSetAsFinal9": true
+          },
+          {
+            "name": "adapter-complete-final8",
+            "report": {
+              "path": "test-results/project-closure-20261029/adapter-complete-final8.json",
+              "sha256": "2469e38ef54d1013c70574b97c51d64a87376def1b31021aea133313ab5f0675"
+            },
+            "files": 79,
+            "pass": 1718,
+            "fail": 1,
+            "pending": 51,
+            "sameSkipSetAsFinal9": true
+          },
+          {
+            "name": "adapter-complete-final9",
+            "report": {
+              "path": "test-results/project-closure-20261029/adapter-complete-final9.json",
+              "sha256": "47a5c9c1e902ddd2f82fa6234b70835764185e1b8000d749c00e6c1a9d9bdd09"
+            },
+            "files": 80,
+            "pass": 1722,
+            "fail": 3,
+            "pending": 51,
+            "sameSkipSetAsFinal9": true
+          }
+        ],
+        "sourceGuardGroups": [
+          {
+            "files": [
+              "src/acpx-engine/execute.test.ts",
+              "src/acpx-engine/filesystem-protocol.test.ts",
+              "src/directory-merge-lock.test.ts",
+              "src/git-workspace-sync.test.ts",
+              "src/server-utils.test.ts",
+              "src/ssh-fixture.test.ts",
+              "src/workspace-restore-merge.test.ts"
+            ],
+            "reason": "Existing explicit skipIf(process.platform === win32) POSIX/link/permission/process-group/sshd fixture cases; preserve source guards.",
+            "count": 39
+          },
+          {
+            "files": [
+              "src/github-launcher-environment.test.ts"
+            ],
+            "reason": "Existing runIf(linux) inotify/runtime namespace case.",
+            "count": 1
+          },
+          {
+            "files": [
+              "src/local-process-sandbox.test.ts"
+            ],
+            "reason": "Seven runIf(linux) unit cases and four existing opt-in real BWRAP/SANDBOX_BUILD cases; no opt-in is enabled by this verification.",
+            "count": 11
+          }
+        ]
+      },
+      "input": {
+        "count": 11469,
+        "startedAt": "2026-10-29T23:10:24.218012+00:00",
+        "endedAt": "2026-10-29T23:23:57.611906+00:00",
+        "snapshotIntervalSeconds": 813.393,
+        "scope": "All tracked plus unignored untracked Git-visible repository files; byte SHA256 or link-target SHA256 only. Includes docs/tests and user lockfile; excludes ignored generated outputs, installed dependencies, binaries outside Git visibility and environment values.",
+        "changed": [
+          {
+            "path": "doc/mimouse/REMAINING.md",
+            "before": "b4d5ab9139879c5abed38430517ca327a9c2cff4b514b7d121580b7f5d96bc07",
+            "after": "19fbc88f8373ae8a1be06f5b37b1f33819ba461090d2f1c41ba3843a905e8997",
+            "kind": "documentation"
+          },
+          {
+            "path": "doc/mimouse/USER-ACCEPTANCE.md",
+            "before": "0283591b92f4f16c3f905be62d1b619c5cd531508b0d135fe17816adbce5b669",
+            "after": "a65a912edf0b0cd12527ba433b6a85891618cccdc481855b9c1b5185ba7a998f",
+            "kind": "documentation"
+          },
+          {
+            "path": "doc/mimouse/VERIFICATION.md",
+            "before": "3c650979d629ac6eeddd59daec69ed6042dfe3a99589777b7ff7ef662920567f",
+            "after": "a9bdac4ebfc53b479f9f14be4f0e6731336e414faf19c27c93feb7fc7634d088",
+            "kind": "documentation"
+          },
+          {
+            "path": "doc/mimouse/checklists/2026-10-30-project-closure.md",
+            "before": "4b0dcf1ac05737ea24c9fd7d7f3c01197d0f610b2d1a77858855b6281f61f706",
+            "after": "9fa7f6133f0677247d1830e34f0b316ad9813efcc23dde2526dddc0f16e10dab",
+            "kind": "documentation"
+          },
+          {
+            "path": "doc/mimouse/checklists/2026-10-30-test-lifecycle-evidence.json",
+            "before": "2533394a16df349bfcd9ac78ed3d4a3bd713f450b345b614c0b8cfc8518db856",
+            "after": "b692db223a13a4a5cdb1baaa8d74aa92fda1a444dd0352a18c45e1f7b7adf8f8",
+            "kind": "documentation"
+          },
+          {
+            "path": "doc/mimouse/checklists/README.md",
+            "before": "08ecb18f8d2203410faa49d086f4ca20d50a45cee3c9de82324431ee0c120e70",
+            "after": "b14d3859a47e978b8d8ae8c1caa6bbf1a5415f4b99d9dcb75d9def92bbae9442",
+            "kind": "documentation"
+          }
+        ],
+        "packageInputChanges": []
+      },
+      "evidence": [
+        {
+          "path": "test-results/project-closure-20261029/adapter-complete-final10.log",
+          "sha256": "0ad0524a08f0ea1abcec42dc3464e225673e93648947e5673600bd22df590bc8"
+        },
+        {
+          "path": "test-results/project-closure-20261029/adapter-complete-final10.json",
+          "sha256": "5a34939b87f7046f78cd9976274471f21ca62e65d49d0f76e0a4c257e768b729"
+        },
+        {
+          "path": "test-results/project-closure-20261029/adapter-complete-final10.exit",
+          "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
+        },
+        {
+          "path": "test-results/project-closure-20261029/adapter-complete-final10-invocation.json",
+          "sha256": "b675558ce076b5a52382713a39449d2b47254f81a2e85296074f02451b046f9c"
+        },
+        {
+          "path": "test-results/project-closure-20261029/adapter-complete-final10-before.json",
+          "sha256": "96628ed1965dbd7e5643e94d083eaf10d13ebbbf55485384ecd001daac4f1f6d"
+        },
+        {
+          "path": "test-results/project-closure-20261029/adapter-complete-final10-after.json",
+          "sha256": "d627f71897028c9664bcace0d51955abd274223899fe5b5299314d685e884e9c"
+        },
+        {
+          "path": "test-results/project-closure-20261029/adapter-complete-final10-after-comparison.json",
+          "sha256": "fa28ec0bb0ecef708495cdea0dfa46d02ceb4c3f1fe65745c5c9889474bafa1c"
+        },
+        {
+          "path": "test-results/project-closure-20261029/adapter-complete-final10-summary.json",
+          "sha256": "99413b13f7e5a7e041e64fbc0879b0646021912fbd2beed246fd96d91df4fb31"
+        },
+        {
+          "path": "test-results/project-closure-20261029/adapter-complete-final10-owner-exit.json",
+          "sha256": "b797daef79001e70a3503857710cc1acd9b0a280821561874b5e974305d5c4e6"
+        }
+      ],
+      "closedPriorFailuresAtThisInput": {
+        "src/sandbox-managed-runtime.test.ts": "107/107; includes original literal ignored path exclusion regression.",
+        "src/git-workspace-sync.test.ts": "61pass+one original Windows symlink condition; original fetch/checkout/reset snapshot-budget assertion now passes.",
+        "src/acpx-engine/settlement-characterization.test.ts": "19/19; original phase_reporting and close_error_reporting deadline/cleanup failures retained in final9 history."
+      },
+      "adapterStressScope": {
+        "file": "packages/adapter-utils/src/git-workspace-sync.test.ts",
+        "case": "snapshots a generated directory with more than 1 MiB of filenames",
+        "status": "passed",
+        "caseDurationMs": 23568.5016,
+        "originalCaseBudgetMs": 60000,
+        "scope": "40000 actual empty filesystem files and >32MiB streamed NUL filename bytes, exact count and <4096-character snapshot metadata; does not include server four-lane archive/staging payload stress."
+      }
+    }
+  ],
+  "adapterState": "COMPLETE",
+  "interpretation": [
+    "Shared adds the10 Windows registry cases relative to its historical93-file987-test log; all94 current files and997 current assertions pass without skips.",
+    "Only doc/mimouse/checklists/2026-10-30-project-closure.md changed during shared execution. Source/test/package/user-lockfile bytes were unchanged in the11468-item declared Git-visible scope.",
+    "Raw ignored input manifests are referenced by path/SHA256; installed dependencies, ignored build outputs and external binaries are outside those source lists.",
+    "This result does not cover the server-only four-lane40k-file archive/staging workflow, browser journeys or real external-provider operations.",
+    "Adapter final10 is a new complete80-file result, not a rewrite of failed final8/final9. Counts are not added across overlapping package runs.",
+    "During adapter only six documentation files changed. The independently captured11469-item input has no runtime-code/test/user-lockfile changes.",
+    "Owned wrapper was absent after normal exec exit0; spawnSync awaited Vitest child completion. This is not an all-machine orphan-process audit.",
+    "The separate server/src/services/workspace-git-snapshot-streaming.test.ts1665.97s four-lane result remains outside these two --project invocations."
+  ],
+  "sharedRunInvariant": {
+    "canonicalRunSha256BeforeAppend": "2b0dbd8c43c411a6e9cdce076d0a7c99a8734827abe488215390651e19f46572",
+    "canonicalRunSha256AfterAppend": "2b0dbd8c43c411a6e9cdce076d0a7c99a8734827abe488215390651e19f46572",
+    "unchanged": true,
+    "canonicalMethod": "UTF8 JSON, sorted object keys, ensure_ascii=false, compact separators.",
+    "earlierSharedOnlyReceipt": {
+      "path": "test-results/project-closure-20261029/shared-adapter-shared-only-receipt.json",
+      "sha256": "90a20ff66a8b6140c1037f9089dec59b734b9f08bdcba741b0f24d89eccdf514"
+    }
+  },
+  "warningPolicyObservation": {
+    "observedDuringAdapterRunAt": "2026-10-30T07:17:58.8892418+08:00",
+    "nodeNoWarningsEnv": false,
+    "nodeOptionsSuppressWarnings": false,
+    "nodeOptionsSuppressDeprecations": false,
+    "scope": "Read-only caller environment observation and inspected runner inheritance; verifier introduced no warning suppression and retained complete stderr."
+  }
+}
