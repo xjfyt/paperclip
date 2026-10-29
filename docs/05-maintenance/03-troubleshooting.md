@@ -64,6 +64,10 @@ Windows 托管嵌套 Git clone 使用任务 anchor 内的短临时路径和同�
 
 `paperclip-skill-utils.test.ts` 的 shell helper 旅程需要真实 Bash 和 jq。Windows 使用已安装的 Git Bash；jq 可由系统提供，或显式设置绝对 `PAPERCLIP_TEST_JQ` 指向真实 jq 可执行文件。测试不会下载依赖；指定文件会复制到当次临时 bin，Windows 用 jq 的 `--binary` 输出保持 POSIX 换行。夹具在执行前按文件身份核对 `curl` 是当次自建假客户端，拒绝落回宿主真实网络客户端。最终检查需记录 jq 版本、摘要、显式环境和源码版本；不要把本轮忽略目录中的临时工具路径写成全局安装前提。
 
+`file-delivery-bridges.test.ts` 与 `paperclip-issue-update-helper.test.ts` 也需要 Git Bash 和真实 jq，可显式设置绝对 `PAPERCLIP_TEST_JQ`，夹具不会联网安装工具。文件交付的真实本机 HTTP/multipart 回归还需要支持 Unicode 文件名的原生 curl，默认检查固定 `%SystemRoot%\System32\curl.exe`，可用绝对 `PAPERCLIP_TEST_CURL` 指向经 `--version` 验证具备 Unicode 特性的真实程序；缺失时明确失败，不用假 HTTP 或跳过替代。Git 自带 curl 不必然支持 Windows Unicode 文件名，不能据此认定服务端 UTF-8 解析失败；夹具自行选择 Git Bash，不依赖临时修改全局 PATH。
+
+Windows 本地工作区归档需要真实 GNU tar；可使用 PATH 中的 GNU `tar.exe`，或安装包含 `usr/bin/tar.exe` 的 Git for Windows，由入口解析为固定绝对程序并以 `shell:false` 执行。系统 bsdtar 不作为该路径的兼容 fallback：本机 Unicode/NUL 文件清单的受控回归已出现路径字符转换错误，设置 locale 不能提供正确性证明。缺 GNU tar 时返回 `windows_workspace_archive_requires_gnu_tar`，不会自动安装或改锁文件；POSIX 归档合同保持独立。
+
 凭据或主密钥报 private permission/ACL 错误时，按[私密文件政策](../03-config/02-private-filesystem.md)检查精确路径：新空路径先建立 owner DACL 再写秘密，既有宽 ACL、链接和不可验证权限保持拒绝；SYSTEM/Administrators 属操作系统特权主体。探针使用固定系统 Windows PowerShell/.NET，无 profile 或模块依赖，探针不可用仍拒绝。不要自动修改旧目录权限或关闭校验。
 
 Windows 的长期工作区服务、Runner 本地文件交付/入站附件和 Grok 订阅凭据读取有明确的拒绝边界，见[平台能力表](../04-modules/01-integration-boundaries.md#五原生-windows-的明确执行边界)。不要把换 shell、只检查路径或放松权限作为处理方式。

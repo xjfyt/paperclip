@@ -1,6 +1,6 @@
 # 本地凭据与私密文件权限
 
-> **对应代码** — `packages/shared/src/private-filesystem-permissions.ts`、`cli/src/client/mcp-auth.ts`、`cli/src/checks/secrets-check.ts`、`server/src/services/decision-signing.ts`、`packages/plugins/sandbox-providers/daytona/src/private-filesystem-permissions.ts`
+> **对应代码** — `packages/shared/src/private-filesystem-permissions.ts`、`packages/shared/src/private-windows-master-key.ts`、`cli/src/client/mcp-auth.ts`、`cli/src/checks/secrets-check.ts`、`cli/src/commands/worktree.ts`、`scripts/provision-worktree.sh`、`server/src/services/decision-signing.ts`、`server/src/secrets/local-encrypted-provider.ts`、`packages/plugins/sandbox-providers/daytona/src/private-filesystem-permissions.ts`
 > **维护提示** — 凭据写入顺序、ACL 探针、允许主体、既有目录处理或受控副本变化时更新
 > **最后验证** — 2026-10-30（对照本轮实现与真实 NTFS 拒绝/保全回归；不代表所有秘密存储路径或发行平台已验收）
 
@@ -28,6 +28,10 @@ MCP 凭据、CLI 本地主密钥检查、决策签名密钥和独立 Daytona hos
 
 决策签名使用实例 `secrets/decision-signing.key`，或受控配置的 `PAPERCLIP_DECISION_SIGNING_SECRET`。Windows 新目录与新空临时文件先保护再写入，完整临时 key 通过原子 hard link 发布；并发已有胜者时读取已验证的胜者，不覆盖它。旧 Windows secrets 目录或 key 若有宽 ACL、链接或无法验证权限，启动会拒绝，原字节和旧 ACL 保留。升级前保全同一签名密钥，由授权运维核对 owner、精确路径和 DACL 后处理；不要删除 key 自动重建或复制到宽权限目录，这会改变决策签名身份。POSIX 的既有 mode 修复合同保持独立，不能拿它替代 NTFS 证明。
 
+默认 `local_encrypted` provider 的文件主密钥在 Windows 同样必须处于已验证的私密目录；新空目录先保护后原子发布，新空临时 key 先保护后写，完整 key 才通过 hard link 发布。读取期间已观察到 key 存在后发生丢失或身份变化会拒绝，不能当作首次缺失自动生成另一把 AES key。health 使用真实 DACL：私密文件不因 Windows mode 显示 `666` 而误报；宽 ACL、链接、坏 key 或读取验证失败为 error，只有真正尚未初始化才给缺失提示。升级遇到旧宽权限目录时保全同一主密钥和数据库备份，授权核对原 owner/路径/DACL 后处理，不自动改旧 ACL，也不删 key 重建；数据库密文需要原 key 才能恢复。
+
 回归需要覆盖新空路径保护、子文件继承、真实宽 ACL 拒绝、旧路径不被修改、链接拒绝及探针不可用时拒绝。mock、POSIX mode 断言与原生 NTFS 测试分别记录。凭据文件权限通过也不证明远端认证、公司授权或业务写入已经成功；部署、备份与实际集成仍按对应[配置](01-configuration.md)、[备份升级](../05-maintenance/04-backup-upgrade.md)和[集成合同](../04-modules/01-integration-boundaries.md)验证。
 
-尚未安装 CLI 的工作树 provision fallback 无法安全加载共享私密 writer 时，Windows 遇到需要复制或写入源主密钥会在首个目标秘密字节前拒绝，保留源材料及已有目标配置。此时可在受支持的 POSIX 宿主使用 CLI worktree init，或另行验明平台上的私密存储流程；普通 Windows CLI 命令通过不证明 seeded-secret 迁移的 DACL 已满足合同。不以 `chmod` 代替 DACL，也不删掉源密钥来绕过检查。没有待迁移秘密的普通依赖准备不受该拒绝影响。
+尚未安装 CLI 的工作树 provision fallback 无法安全加载共享私密 writer 时，Windows 遇到需要复制或写入源主密钥会在首个目标秘密字节前拒绝，保留源材料及已有目标配置。此时可使用本仓当前修订安装/构建的 CLI worktree init：其 Windows seeded-key 迁移、doctor 与初始化入口已采用私密存储检查，按下述来源和目标合同执行。受支持的 POSIX 宿主仍是可选路径；不以 `chmod` 代替 DACL，也不删掉源密钥来绕过检查。无 CLI 的 fallback 拒绝保持独立，没有待迁移秘密的普通依赖准备不受该拒绝影响。
+
+CLI 的 `copySeededSecretsKey` 在 Windows 对文件来源检查私密父目录与文件 DACL，并用 bigint 文件身份核对打开前、读取后仍为同一普通文件；新目标目录和独占空临时文件先保护再写入。完整临时 key 通过不覆盖目标的原子 hard link 发布：既有私密目标若与源 key 字节一致，则保留原字节、inode 和 ACL；字节不同、宽 ACL 或链接则拒绝，不能依赖强制重建 worktree 覆盖旧身份。临时路径碰撞或被替换时保留不属于本次创建的字节；POSIX 原有复制与 mode 合同保持独立。
