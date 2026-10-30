@@ -151,7 +151,7 @@ Co-Authored-By: <实际协作者>
 | 验证 | 行为改动必填测试命令与结果；纯文档可写 `pnpm docs:check`；未运行时如实写明 |
 | Co-Authored-By | 按实际参与本次改动的 AI 填写；多人协作可写多行；纯人工提交可省略。禁止固定写死为某一种工具 |
 
-`type` 与事项类型对齐：`feat` / `fix` / `hotfix` / `refactor` / `arch` / `perf` / `security` / `docs` / `ops` / `infra` / `chore` / `research` / `ai` / `revert`。`test` / `build` 只作同一事项的附属提交。禁止弱标题：`update`、无对象的 `fix`、`wip`、`tmp`、`修改`、`更新`、`调整`、`优化`、`完善`。
+`type` 与事项类型对齐：`feat` / `fix` / `hotfix` / `refactor` / `arch` / `perf` / `security` / `docs` / `ops` / `infra` / `chore` / `research` / `ai` / `test` / `build` / `revert`。其中 `test` / `build` 仍须落到同一事项，不得用它们包装无对应行为或构建变更的提交。禁止弱标题：`update`、无对象的 `fix`、`wip`、`tmp`、`修改`、`更新`、`调整`、`优化`、`完善`。
 
 `Merge` / `Revert` / `fixup!` / `squash!` 开头的提交不套用上述正文要求。
 
