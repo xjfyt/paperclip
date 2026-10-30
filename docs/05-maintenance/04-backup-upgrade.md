@@ -1,6 +1,6 @@
 # 备份、升级与回退
 
-> **对应代码** — `cli/src/commands/db-backup.ts`、`cli/src/index.ts`、`server/src/config.ts`、`server/src/services/idle-database-backup.ts`、`packages/db/src/migrations/`
+> **对应代码** — `cli/src/commands/db-backup.ts`、`cli/src/index.ts`、`server/src/config.ts`、`server/src/services/idle-database-backup.ts`、`packages/db/src/migrations/`、`packages/db/src/repair-migration-line-endings.ts`
 > **维护提示** — 备份命令、目录、迁移、秘密、存储或回退约束变化时更新
 > **最后验证** — 2026-10-30（对照 CLI、迁移换行守卫与持久化回归；未声明既有生产数据恢复演练通过）
 
@@ -49,6 +49,8 @@ Windows 的 idle 停机备份门禁必须完成 gzip 全量读取、文件字节
 迁移源文件按 `.gitattributes` 固定为 LF；2026-10-30 的本机修复只恢复换行字节，没有修改 SQL 内容或已发布的摘要常量。旧 Windows 检出可能曾以 CRLF 字节创建迁移 receipt。新检出规则不证明这些既有数据库能直接升级。
 
 升级前保全原程序/迁移文件、数据库备份与原 journal，在隔离恢复副本先运行只读的 `inspectMigrations` 并比对 receipt hash、迁移文件原字节和对应 schema。当前入口发现未匹配 LF 文件、但精确匹配其 CRLF 版本的 receipt 时，会在检查、协调历史和自动迁移前报 `Migration line-ending mismatch` 并阻断，不自动补写历史。其它部分 hash 匹配和不支持的 statement 仍无法完整证明旧历史；schema 中存在同名表也不能证明数据迁移已完成。若已执行迁移被列为 pending、出现 journal drift 或 hash 无法对应，应停止升级，保留证据并人工评估。不要直接执行 `db:migrate` 试错，不删除 journal、不改已部署 hash、不自动重放，也不通过重新生成空库替代既有数据恢复验收。
+
+在**已完成数据库备份并确认可在隔离副本恢复**、且所有待改写 receipt 都精确等于对应迁移文件 `LF→CRLF` 摘要时，可运行 `pnpm db:repair-line-endings --confirm-backup` 仅把 receipt 的 `hash` 改回规范 LF 摘要。该入口在事务中逐条校验旧值，发现不匹配、重复或无法归类即回滚并中止，不执行迁移 SQL；没有 `--confirm-backup` 时以退出码 2 拒绝运行。其它 hash 偏移仍按上段停止升级处理。
 
 ## 四、回退与未知操作
 

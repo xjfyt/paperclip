@@ -868,7 +868,7 @@ async function loadAppliedMigrations(
         if (!content.includes("\n") || content.includes("\r")) continue;
         const crlfHash = createHash("sha256").update(content.replaceAll("\n", "\r\n")).digest("hex");
         if (unresolvedHashes.has(crlfHash)) {
-          throw new Error(`Migration line-ending mismatch: ${migrationFile} has an exact legacy CRLF receipt but the current SQL is LF. Migration is blocked without changing history or replaying SQL. Preserve the original files and journal, back up the database, and inspect an isolated restore before upgrading.`);
+          throw new Error(`Migration line-ending mismatch: ${migrationFile} has an exact legacy CRLF receipt but the current SQL is LF. Migration is blocked without changing history or replaying SQL. Preserve the original files and journal, back up the database, and inspect an isolated restore before upgrading. For a local instance with an exact CRLF/LF match, back up the database and run \`pnpm db:repair-line-endings --confirm-backup\`.`);
         }
       }
     }
@@ -1011,6 +1011,99 @@ export async function reconcilePendingMigrationHistory(
     remainingMigrations:
       refreshed.status === "needsMigrations" ? refreshed.pendingMigrations : [],
   };
+}
+
+export type LegacyCrlfMigrationRepairResult = {
+  repairedMigrations: string[];
+  canonicalMigrations: number;
+};
+
+/**
+ * Normalize legacy Windows CRLF migration receipts to canonical LF hashes.
+ * Only an exact CRLF/LF pair for an unchanged migration is accepted; any other
+ * unresolved hash, duplicate receipt, or mixed history aborts the repair.
+ * Callers must take a backup first and pass explicit confirmation.
+ */
+export async function repairLegacyCrlfMigrationReceipts(
+  url: string,
+  options: { backupConfirmed?: boolean } = {},
+): Promise<LegacyCrlfMigrationRepairResult> {
+  if (options.backupConfirmed !== true) {
+    throw new Error(
+      "Refusing to rewrite migration receipts without backup confirmation. Back up the database first, then pass backupConfirmed: true.",
+    );
+  }
+
+  const sql = createUtilitySql(url);
+  try {
+    const migrationTableSchema = await discoverMigrationTableSchema(sql);
+    if (!migrationTableSchema) throw new Error("Migration history table was not found; nothing to repair.");
+    const columnNames = await getMigrationTableColumnNames(sql, migrationTableSchema);
+    if (!columnNames.has("hash")) throw new Error("Migration history has no hash column; refusing to guess.");
+    const qualifiedTable = `${quoteIdentifier(migrationTableSchema)}.${quoteIdentifier(DRIZZLE_MIGRATIONS_TABLE)}`;
+    const availableMigrations = await orderMigrationsByJournal(await listMigrationFiles());
+    const canonicalByHash = await mapHashesToMigrationFiles(availableMigrations);
+
+    const legacyByHash = new Map<string, { file: string; canonicalHash: string }>();
+    for (const migrationFile of availableMigrations) {
+      const content = await readMigrationFileContent(migrationFile);
+      if (content.includes("\r")) continue;
+      legacyByHash.set(
+        createHash("sha256").update(content.replaceAll("\n", "\r\n")).digest("hex"),
+        { file: migrationFile, canonicalHash: createHash("sha256").update(content).digest("hex") },
+      );
+    }
+
+    const rows = await sql.unsafe<{ id: number; hash: string }[]>(
+      `SELECT id, hash FROM ${qualifiedTable} ORDER BY id`,
+    );
+    const currentHashes = new Set(rows.map((row) => row.hash));
+    const repairs: { id: number; from: string; to: string; file: string }[] = [];
+    const unresolved: string[] = [];
+    for (const row of rows) {
+      if (canonicalByHash.has(row.hash)) continue;
+      const legacy = legacyByHash.get(row.hash);
+      if (!legacy) {
+        unresolved.push(row.hash);
+        continue;
+      }
+      if (currentHashes.has(legacy.canonicalHash)) {
+        throw new Error(
+          `Migration ${legacy.file} has both a legacy CRLF receipt and a canonical LF receipt; refusing to merge duplicate history.`,
+        );
+      }
+      if (repairs.some((repair) => repair.to === legacy.canonicalHash)) {
+        throw new Error(`Migration ${legacy.file} has more than one legacy receipt; refusing to collapse duplicate history.`);
+      }
+      repairs.push({ id: row.id, from: row.hash, to: legacy.canonicalHash, file: legacy.file });
+    }
+    if (unresolved.length > 0) {
+      throw new Error(
+        `Cannot repair ${unresolved.length} migration receipt(s) that match neither the canonical SQL nor its exact CRLF form. Restore a backup and inspect the history manually.`,
+      );
+    }
+    if (repairs.length === 0) return { repairedMigrations: [], canonicalMigrations: rows.length };
+
+    await runInTransaction(sql, async () => {
+      for (const repair of repairs) {
+        const updated = await sql.unsafe<{ id: number }[]>(
+          `UPDATE ${qualifiedTable} SET hash = ${quoteLiteral(repair.to)} WHERE id = ${repair.id} AND hash = ${quoteLiteral(repair.from)} RETURNING id`,
+        );
+        if (updated.length !== 1) throw new Error(`Migration receipt ${repair.file} changed during repair; rolling back.`);
+      }
+      const after = await sql.unsafe<{ hash: string }[]>(`SELECT hash FROM ${qualifiedTable}`);
+      if (after.some((row) => !canonicalByHash.has(row.hash))) {
+        throw new Error("Migration receipts still do not match canonical LF history; rolling back.");
+      }
+    });
+
+    return {
+      repairedMigrations: repairs.map((repair) => repair.file).sort(),
+      canonicalMigrations: rows.length,
+    };
+  } finally {
+    await sql.end();
+  }
 }
 
 async function discoverMigrationTableSchema(sql: ReturnType<typeof postgres>): Promise<string | null> {
