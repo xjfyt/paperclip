@@ -2089,6 +2089,32 @@ function versionInventorySnapshotEqual(
   return normalize(left) === normalize(right);
 }
 
+/**
+ * Legacy Windows checkouts seeded these frozen releases from CRLF files before
+ * `.gitattributes` forced LF. Accept that byte difference only when every path,
+ * kind, executable bit, encoding, and LF-normalized content still matches, and
+ * report whether a repair is needed.
+ */
+function legacyCrlfInventoryMatches(
+  existing: CompanySkillVersionFileInventoryEntry[],
+  canonical: CompanySkillVersionFileInventoryEntry[],
+) {
+  if (existing.length !== canonical.length) return false;
+  const byPath = new Map(existing.map((entry) => [entry.path, entry]));
+  let sawCrlf = false;
+  for (const expected of canonical) {
+    const actual = byPath.get(expected.path);
+    if (!actual || actual.kind !== expected.kind) return false;
+    if (Boolean(actual.executable) !== Boolean(expected.executable)) return false;
+    if ((actual.encoding ?? "utf8") !== (expected.encoding ?? "utf8")) return false;
+    if (actual.content === expected.content) continue;
+    if (actual.encoding === "base64" || !actual.content.includes("\r")) return false;
+    if (actual.content.replaceAll("\r\n", "\n") !== expected.content) return false;
+    sawCrlf = true;
+  }
+  return sawCrlf;
+}
+
 function getSkillMeta(skill: Pick<CompanySkill, "metadata">): SkillSourceMeta {
   return isPlainRecord(skill.metadata) ? skill.metadata as SkillSourceMeta : {};
 }
@@ -3081,7 +3107,17 @@ export function companySkillService(db: Db, testHooks: { beforeAuditPersist?: ()
           sha256: sha256Buffer(entry.content),
         })));
         if (existingHash !== registryHash) {
-          throw new Error(`Bundled skill release ${release.id} does not match its seeded snapshot.`);
+          if (!legacyCrlfInventoryMatches(existingInventory, fileInventory)) {
+            throw new Error(`Bundled skill release ${release.id} does not match its seeded snapshot.`);
+          }
+          await db
+            .update(companySkillVersions)
+            .set({ fileInventory })
+            .where(eq(companySkillVersions.id, existing.id));
+          logger.warn(
+            { companyId, skillId: paperclipSkill.id, releaseId: release.id },
+            "Normalized legacy CRLF bundled skill release snapshot to canonical LF bytes",
+          );
         }
         continue;
       }

@@ -843,6 +843,64 @@ describeEmbeddedPostgres("companySkillService.list", () => {
     expect(materializedHashes).not.toHaveProperty("EDITS.md");
   });
 
+  it("normalizes a legacy CRLF release snapshot instead of failing the list refresh", async () => {
+    const companyId = randomUUID();
+    await db.insert(companies).values({
+      id: companyId,
+      name: "Paperclip",
+      issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
+      requireBoardApprovalForNewAgents: false,
+    });
+    const paperclipSkill = (await svc.list(companyId)).find((skill) => skill.key === "paperclipai/paperclip/paperclip");
+    if (!paperclipSkill) throw new Error("Expected bundled Paperclip skill");
+    const champion = (await svc.listVersions(companyId, paperclipSkill.id))
+      .find((version) => version.releaseId === "v7-roster");
+    if (!champion) throw new Error("Expected v7-roster release");
+
+    // A legacy Windows checkout seeded this frozen release from CRLF bytes.
+    const legacyInventory = champion.fileInventory.map((entry) => ({
+      ...entry,
+      ...(entry.encoding === "base64" ? {} : { content: entry.content.replaceAll("\n", "\r\n") }),
+    }));
+    const stored = await db
+      .update(companySkillVersions)
+      .set({ fileInventory: legacyInventory })
+      .where(eq(companySkillVersions.id, champion.id))
+      .returning({ fileInventory: companySkillVersions.fileInventory });
+    expect(stored[0]?.fileInventory).toEqual(legacyInventory);
+
+    await svc.list(companyId);
+
+    const normalized = (await svc.listVersions(companyId, paperclipSkill.id))
+      .find((version) => version.releaseId === "v7-roster");
+    expect(normalized?.fileInventory).toEqual(champion.fileInventory);
+  });
+
+  it("still rejects a bundled release snapshot that diverges beyond line endings", async () => {
+    const companyId = randomUUID();
+    await db.insert(companies).values({
+      id: companyId,
+      name: "Paperclip",
+      issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
+      requireBoardApprovalForNewAgents: false,
+    });
+    const paperclipSkill = (await svc.list(companyId)).find((skill) => skill.key === "paperclipai/paperclip/paperclip");
+    if (!paperclipSkill) throw new Error("Expected bundled Paperclip skill");
+    const champion = (await svc.listVersions(companyId, paperclipSkill.id))
+      .find((version) => version.releaseId === "v7-roster");
+    if (!champion) throw new Error("Expected v7-roster release");
+    const tampered = champion.fileInventory.map((entry) =>
+      entry.path === "SKILL.md" ? { ...entry, content: `${entry.content}\n<!-- tampered -->\n` } : entry);
+    await db
+      .update(companySkillVersions)
+      .set({ fileInventory: tampered })
+      .where(eq(companySkillVersions.id, champion.id));
+
+    await expect(svc.list(companyId)).rejects.toThrow(
+      /Bundled skill release v7-roster does not match its seeded snapshot/,
+    );
+  });
+
   it("repairs a squatted bundled root during bundled-skill list refresh", async () => {
     const companyId = randomUUID();
     await db.insert(companies).values({
