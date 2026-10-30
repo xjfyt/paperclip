@@ -4,6 +4,17 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const requiredFiles = ["README.md", "docs/README.md", "docs/00-doc-rules.md"];
 const scopedDirectories = ["docs/01-overview", "docs/02-getting-started", "docs/03-config", "docs/04-modules", "docs/05-maintenance"];
+// The fork's stable topic pages predate the NN-kebab formal-document layout.
+// They still get existence, single-H1 and link-integrity checks; the numbered
+// heading and maintenance-metadata rules apply only to docs/NN-* pages.
+const supplementaryDocuments = [
+  "doc/mimouse/README.md",
+  "doc/mimouse/VERIFICATION.md",
+  "doc/mimouse/REMAINING.md",
+  "doc/mimouse/USER-ACCEPTANCE.md",
+  "doc/mimouse/PLAN-TRACEABILITY.md",
+  "doc/mimouse/FEEDBACK-EVALUATION-LINEAGE.md",
+];
 const topicName = /^\d{2}-[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const portable = value => value.split(path.sep).join("/");
 const blank = value => value.replace(/[^\n]/g, " ");
@@ -93,7 +104,7 @@ export function checkProjectDocs(root) {
   const files = [];
   const issues = [];
   const addIssue = (file, line, code, message) => issues.push({ file: portable(file), line, code, message });
-  for (const file of requiredFiles) {
+  for (const file of [...requiredFiles, ...supplementaryDocuments]) {
     if (!fs.existsSync(path.join(root, file)) || !fs.statSync(path.join(root, file)).isFile()) addIssue(file, 1, "missing-document", "Required project document is missing");
     else files.push(file);
   }
@@ -120,13 +131,15 @@ export function checkProjectDocs(root) {
     const prose = withoutFences(fs.readFileSync(path.join(root, file), "utf8"));
     const headings = headingsIn(prose);
     if (headings.filter(heading => heading.level === 1).length !== 1) addIssue(file, 1, "h1-count", "Document must contain exactly one H1");
-    for (const heading of headings) {
-      if (heading.level === 2 && !/^[一二三四五六七八九十百]+、\S/.test(heading.title)) addIssue(file, heading.line, "h2-number", "Use a Chinese numbered H2, such as 一、主题");
-      if (heading.level === 3 && !/^\d+、\S/.test(heading.title)) addIssue(file, heading.line, "h3-number", "Use a numbered H3, such as 1、主题");
-    }
-    if (file !== "README.md") {
-      if (!/^>\s*\*\*维护提示\*\*[^\n]*\S/m.test(prose)) addIssue(file, 1, "maintenance-metadata", "Missing 维护提示 metadata");
-      if (!/^>\s*\*\*最后验证\*\*[^\n]*\d{4}-\d{2}-\d{2}/m.test(prose)) addIssue(file, 1, "verification-metadata", "Missing dated 最后验证 metadata");
+    if (!supplementaryDocuments.includes(file)) {
+      for (const heading of headings) {
+        if (heading.level === 2 && !/^[一二三四五六七八九十百]+、\S/.test(heading.title)) addIssue(file, heading.line, "h2-number", "Use a Chinese numbered H2, such as 一、主题");
+        if (heading.level === 3 && !/^\d+、\S/.test(heading.title)) addIssue(file, heading.line, "h3-number", "Use a numbered H3, such as 1、主题");
+      }
+      if (file !== "README.md") {
+        if (!/^>\s*\*\*维护提示\*\*[^\n]*\S/m.test(prose)) addIssue(file, 1, "maintenance-metadata", "Missing 维护提示 metadata");
+        if (!/^>\s*\*\*最后验证\*\*[^\n]*\d{4}-\d{2}-\d{2}/m.test(prose)) addIssue(file, 1, "verification-metadata", "Missing dated 最后验证 metadata");
+      }
     }
     for (const link of linksIn(prose)) {
       const href = link.href;
@@ -152,7 +165,12 @@ export function checkProjectDocs(root) {
       if (!anchorCache.get(resolved).has(anchor)) addIssue(file, link.line, "missing-anchor", `Anchor does not exist: ${href}`);
     }
   }
-  return { files: files.length, localLinks, issues, scope: [...requiredFiles, ...scopedDirectories.map(directory => `${directory}/**/*.md`)] };
+  return {
+    files: files.length,
+    localLinks,
+    issues,
+    scope: [...requiredFiles, ...supplementaryDocuments, ...scopedDirectories.map(directory => `${directory}/**/*.md`)],
+  };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {

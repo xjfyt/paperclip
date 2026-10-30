@@ -15,6 +15,7 @@ function fixture(t) {
     fs.writeFileSync(destination, source);
   };
   for (const file of ["README.md", "docs/README.md", "docs/00-doc-rules.md", "docs/01-overview/01-introduction.md", "docs/02-getting-started/01-development.md", "docs/03-config/01-configuration.md", "docs/04-modules/01-integrations.md", "docs/05-maintenance/01-verification.md"]) write(file, formal);
+  for (const file of ["doc/mimouse/README.md", "doc/mimouse/VERIFICATION.md", "doc/mimouse/REMAINING.md", "doc/mimouse/USER-ACCEPTANCE.md", "doc/mimouse/PLAN-TRACEABILITY.md", "doc/mimouse/FEEDBACK-EVALUATION-LINEAGE.md"]) write(file, "# 补充文档\n");
   return { root, write, check: () => checkProjectDocs(root) };
 }
 
@@ -27,7 +28,7 @@ test("accepts Chinese/duplicate anchors, references, titles, encoded paths, HTML
   const result = check();
   assert.equal(result.issues.length, 0, JSON.stringify(result.issues));
   assert.equal(result.localLinks, 7);
-  assert.equal(result.files, 8);
+  assert.equal(result.files, 14);
 });
 
 test("ignores fenced examples, inline-code links and malformed headings outside the declared scope", t => {
@@ -64,6 +65,14 @@ test("rejects absolute, malformed encoded and repository-escaping local links", 
   const { write, check } = fixture(t);
   write("README.md", "# Root\n\n[absolute](/docs/README.md)\n[encoding](bad%ZZ.md)\n[outside](../)\n[external](https://example.invalid/a)\n");
   assert.deepEqual(check().issues.map(issue => issue.code), ["link-not-relative", "link-encoding", "link-outside-root"]);
+});
+
+test("checks supplementary topic pages for links and one H1 but not formal numbering metadata", t => {
+  const { write, check } = fixture(t);
+  write("doc/mimouse/README.md", "# 二开导航\n\n## 验证分级\n\n[missing](absent.md)\n");
+  assert.deepEqual(check().issues.map(({ code, line }) => ({ code, line })), [{ code: "missing-link", line: 5 }]);
+  write("doc/mimouse/README.md", "# 二开导航\n# 第二个标题\n");
+  assert.deepEqual(check().issues.map(issue => issue.code), ["h1-count"]);
 });
 
 test("does not turn headings inside code fences into valid target anchors", t => {
