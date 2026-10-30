@@ -1227,7 +1227,7 @@ export async function createApp(
         // current MagicDNS hostname through the broker's HTTPS listener.
         host: opts.bindHost,
         middlewareMode: true,
-        hmr: {
+        ws: {
           server: hmrServer,
           ...(hmrHost ? { host: hmrHost } : {}),
           ...(hmrProtocol ? { protocol: hmrProtocol } : {}),
@@ -1237,6 +1237,13 @@ export async function createApp(
         allowedHosts: privateHostnameGateEnabled
           ? Array.from(privateHostnameAllowSet)
           : undefined,
+        // The UI has one eager entry that statically reaches every route, so a
+        // cold dev request otherwise waits for hundreds of sequential module
+        // transforms (measured ~15s before the first paint). Warming from the
+        // entry lets Vite pre-transform that graph in the background while the
+        // server finishes booting. Vite recurses into static imports, so one
+        // entry is enough.
+        warmup: { clientFiles: ["src/main.tsx"] },
       },
     });
     try {
