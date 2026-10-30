@@ -170,6 +170,11 @@ const serveBuiltUiForManagedRuntime = managedRuntimeExposure && explicitUiDevMid
 const env: NodeJS.ProcessEnv = {
   ...process.env,
   PAPERCLIP_UI_DEV_MIDDLEWARE: explicitUiDevMiddleware ?? (serveBuiltUiForManagedRuntime ? "false" : "true"),
+  // The announcement feed is a hosted Paperclip Cloud surface. Dev machines
+  // frequently have no route to it, which logs a WARN every cooldown and adds
+  // nothing to local work. Set PAPERCLIP_ANNOUNCEMENTS_ENABLED=true to exercise
+  // the feed while developing it.
+  PAPERCLIP_ANNOUNCEMENTS_ENABLED: process.env.PAPERCLIP_ANNOUNCEMENTS_ENABLED ?? "false",
 };
 
 if (mode === "dev") {
@@ -368,17 +373,39 @@ async function updateDevServiceRecord(extra?: Record<string, unknown>) {
   });
 }
 
+function quoteWindowsShellArgument(value: string): string {
+  if (value.length > 0 && !/[\s"&|<>^()%!]/.test(value)) return value;
+  return `"${value.replaceAll('"', '\\"')}"`;
+}
+
+/**
+ * `pnpm` on Windows is a `.cmd` shim, so it needs a shell. Passing an argument
+ * array with `shell: true` triggers DEP0190 because Node only concatenates the
+ * arguments. Build one quoted command line instead.
+ */
+function spawnPnpm(
+  commandArgs: string[],
+  options: { stdio?: "inherit" | ["ignore", "pipe", "pipe"]; env?: NodeJS.ProcessEnv; cwd?: string },
+) {
+  if (process.platform === "win32") {
+    return spawn(
+      [pnpmBin, ...commandArgs].map(quoteWindowsShellArgument).join(" "),
+      { ...options, shell: true },
+    );
+  }
+  return spawn(pnpmBin, commandArgs, { ...options, shell: false });
+}
+
 async function runPnpm(args: string[], options: {
   stdio?: "inherit" | ["ignore", "pipe", "pipe"];
   env?: NodeJS.ProcessEnv;
   cwd?: string;
 } = {}) {
   return await new Promise<{ code: number; signal: NodeJS.Signals | null; stdout: string; stderr: string }>((resolve, reject) => {
-    const spawned = spawn(pnpmBin, args, {
+    const spawned = spawnPnpm(args, {
       stdio: options.stdio ?? ["ignore", "pipe", "pipe"],
       env: options.env ?? process.env,
       cwd: options.cwd,
-      shell: process.platform === "win32",
     });
 
     const stdoutBuffer = createCapturedOutputBuffer();
@@ -711,10 +738,9 @@ async function startServerChild() {
   await buildPluginSdk();
 
   const serverScript = mode === "watch" ? "dev:watch" : "dev";
-  child = spawn(
-    pnpmBin,
+  child = spawnPnpm(
     ["--filter", "@paperclipai/server", serverScript, ...forwardedArgs],
-    { stdio: "inherit", env, shell: process.platform === "win32" },
+    { stdio: "inherit", env },
   );
 
   childExitPromise = new Promise((resolve, reject) => {
