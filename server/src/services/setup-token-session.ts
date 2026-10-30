@@ -225,6 +225,8 @@ export interface SetupTokenCleanupRecord {
   ownerUserId: string;
   adapterType: string;
   environmentId: string;
+  // Empty when the row holds no provider lease (`provider_lease_id` is null).
+  // The reaper then clears the record without a release.
   leaseId: string;
   deadline: number;
   state: SetupTokenSessionState;
@@ -319,7 +321,10 @@ export interface SetupTokenReapResult {
  * runs after a restart and on the scheduler interval, so it frees a lease that a
  * crash left behind (SR-4). A release failure stays retryable: the sweep leaves
  * the record for a later run. The standalone reaper and the in-flight session
- * service both call this function, so both flows use one reap convention.
+ * service both call this function, so both flows use one reap convention. A
+ * record without a lease id binds no sandbox, so the sweep clears it without a
+ * release; a null `provider_lease_id` reaches the store as an empty id, and a
+ * release call for it fails forever on the UUID lease column.
  */
 export async function reapSetupTokenLeases(
   deps: {
@@ -335,7 +340,7 @@ export async function reapSetupTokenLeases(
   let failed = 0;
   for (const record of records) {
     try {
-      await deps.leases.releaseById(record.leaseId);
+      if (record.leaseId) await deps.leases.releaseById(record.leaseId);
       await deps.store.remove({
         sessionId: record.sessionId,
         companyId: record.companyId,

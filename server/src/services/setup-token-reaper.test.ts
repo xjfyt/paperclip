@@ -124,6 +124,25 @@ describe("setup-token reaper", () => {
     expect(store.rows.size).toBe(0);
   });
 
+  it("clears a record with no lease id without a release, and clears it once", async () => {
+    // A legacy row can hold a null `provider_lease_id`, which the store maps to
+    // an empty id. There is no sandbox to tear down, and a release call for an
+    // empty id fails forever, so the sweep must clear the record directly.
+    const store = createMemoryStore();
+    store.seed({ sessionId: "orphan-no-lease", leaseId: "", state: "timed_out", deadline: 0 });
+    const leases = createFakeLeases();
+    const reaper = createSetupTokenReaper({ store, leases, now: () => NOW });
+
+    const first = await reaper.sweep();
+    expect(first.released).toBe(1);
+    expect(first.failed).toBe(0);
+    expect(leases.releaseByIdCalls).toHaveLength(0);
+    expect(store.rows.size).toBe(0);
+
+    const second = await reaper.sweep();
+    expect(second).toEqual({ released: 0, failed: 0 });
+  });
+
   it("reaps every reapable record in one sweep and stays idempotent on the next", async () => {
     const store = createMemoryStore();
     store.seed({ sessionId: "orphan-a", leaseId: "lease-a", state: "failed" });
