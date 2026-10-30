@@ -1,3 +1,4 @@
+import { ownedCaseWorkScope } from "./helpers/owned-case-work.js";
 import { registerChatActionWork, dueChatAction } from "../services/chat-action-work.js";
 import { createDeliveryWorkCoordinator } from "../services/delivery-work-coordinator.js";
 import { registerChatDeliveryWork } from "../services/chat-delivery-work.js";
@@ -61,7 +62,7 @@ import {
   or,
   sql,
 } from "drizzle-orm";
-import { afterAll, afterEach, beforeAll, describe, expect, it, onTestFinished, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import {
   agents,
   agentWakeupRequests,
@@ -1042,7 +1043,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     mkdirSync(secretsTmpDir, { recursive: true });
     process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE = path.join(
       secretsTmpDir,
-      "master.key",
+      "private-secrets", "master.key",
     );
     if (externalTestDatabaseUrl) {
       db = createDb(externalTestDatabaseUrl);
@@ -1054,28 +1055,38 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     }
   }, 90_000);
 
-  afterAll(async () => {
-    await tempDb?.cleanup();
-    if (previousKeyFile === undefined)
-      delete process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE;
-    else process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE = previousKeyFile;
-    rmSync(secretsTmpDir, { recursive: true, force: true });
-  });
-
-  // Services scan this file's shared database. Retire each case's fixtures
-  // after its assertions so another case (or shard order) cannot claim them.
+  const chatCaseWork = ownedCaseWorkScope();
   const fixtureCompanies = new Set<string>();
   const fixtureServices = new Set<ChatChannelService>();
-  afterEach(async () => {
-    try {
-      await Promise.all([...fixtureServices].map((service) => service.shutdown()));
-    } finally {
+  let cleanupWork: Promise<void> | null = null;
+  let cleanupFinished = true;
+  let cleanupFailed = false;
+  let cleanupFailure: unknown;
+
+  function runOwnedChatCase(body: () => Promise<void>) { return chatCaseWork.run(body); }
+  function chatCaseSignal() { return chatCaseWork.current().signal(); }
+  function trackChatWork<T>(work: Promise<T>) { return chatCaseWork.current().track(work); }
+  async function waitForChatSignal(signal: Promise<void>, producer: Promise<unknown>) {
+    await Promise.race([signal, producer.then(() => signal)]);
+  }
+
+  beforeEach(() => {
+    chatCaseWork.assertIdle();
+    if (!cleanupFinished || cleanupFailed) throw new Error("Previous chat fixture cleanup did not complete; refusing another case");
+    cleanupWork = null;
+  });
+
+  async function joinFixtureCleanup(finalRetry = false) {
+    if (cleanupFailed && !cleanupFinished && !finalRetry) throw cleanupFailure;
+    cleanupWork ??= (async () => {
+      cleanupFinished = false;
+      await chatCaseWork.drain();
+      const shutdowns = await Promise.allSettled([...fixtureServices].map(service => Promise.resolve().then(() => service.shutdown())));
+      const failed = shutdowns.find(result => result.status === "rejected");
+      if (failed?.status === "rejected") throw failed.reason;
       const companyIds = [...fixtureCompanies];
       await retireFixtureState(companyIds);
       if (companyIds.length > 0) {
-        // Pausing an endpoint does not remove its rows from global recovery
-        // selectors. After every assertion and worker shutdown, settle leftover
-        // fixture work so later cases cannot claim its leases or retry its I/O.
         await db.update(chatActions).set({ status: "cancelled" })
           .where(and(inArray(chatActions.companyId, companyIds), notInArray(chatActions.status, ["processed", "cancelled"])));
         await db.update(chatDeliveries).set({ state: "failed", nextAttemptAt: null })
@@ -1085,7 +1096,28 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
       }
       fixtureServices.clear();
       fixtureCompanies.clear();
-    }
+      cleanupFinished = true;
+    })();
+    // Observe the original cleanup immediately. A timeout never authorizes a
+    // later case or afterAll to delete resources still used by that promise.
+    void cleanupWork.catch(error => { cleanupFailed = true; cleanupFailure = error; });
+    let timer!: ReturnType<typeof setTimeout>;
+    try {
+      await Promise.race([cleanupWork, new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error("Chat fixture cleanup did not drain within 25000ms; preserving its resources")), 25_000);
+      })]);
+    } catch (error) { cleanupFailed = true; cleanupFailure = error; throw error; }
+    finally { clearTimeout(timer); }
+  }
+
+  afterEach(async () => { await joinFixtureCleanup(); });
+  afterAll(async () => {
+    await joinFixtureCleanup(true);
+    await tempDb?.cleanup();
+    if (previousKeyFile === undefined)
+      delete process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE;
+    else process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE = previousKeyFile;
+    rmSync(secretsTmpDir, { recursive: true, force: true });
   });
 
   async function retireFixtureState(companyIds: string[]) {
@@ -1499,7 +1531,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
         .where(eq(chatEndpoints.publicId, publicId))
         .then((rows) => rows[0]?.setup);
       expect(setup).toMatchObject({ webhookVerifiedAt: expect.any(String) });
-    });
+    }, { timeout: process.platform === "win32" ? 10_000 : 1_000 });
   }
 
   function signedGitHubWebhookRequest(input: {
@@ -5394,6 +5426,43 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
       }
     }
   });
+
+  async function waitForFixtureDiscordGatewayLeaseExpiry(companyId: string, endpointId: string, expectedToken: string) {
+    const condition = and(eq(chatEndpointLeases.companyId, companyId), eq(chatEndpointLeases.endpointId, endpointId),
+      eq(chatEndpointLeases.leaseKey, "discord_gateway_runtime"), eq(chatEndpointLeases.token, expectedToken));
+    const [owned] = await db.select().from(chatEndpointLeases).where(condition);
+    expect(owned).toBeDefined();
+    const closing = chatCaseSignal();
+    let timer!: ReturnType<typeof setTimeout>;
+    try {
+      // Keep the real clock: expiring only the SQL row would miss the cached
+      // ownership.expiresAt refresh branch this host-pause regression covers.
+      await Promise.race([closing.promise, new Promise<void>(resolve => {
+        timer = setTimeout(resolve, Math.max(0, owned!.expiresAt.getTime() - Date.now()) + 20);
+      })]);
+    } finally { clearTimeout(timer); }
+    const [expired] = await db.select().from(chatEndpointLeases).where(and(condition, eq(chatEndpointLeases.id, owned!.id)));
+    expect(expired).toBeDefined();
+    expect(expired!.token).toBe(expectedToken);
+    expect(expired!.expiresAt.getTime()).toBeLessThan(Date.now());
+  }
+
+  async function expireFixtureDiscordGatewayLease(companyId: string, endpointId: string, expectedToken?: string) {
+    const [owned] = await db.select().from(chatEndpointLeases).where(and(
+      eq(chatEndpointLeases.companyId, companyId), eq(chatEndpointLeases.endpointId, endpointId),
+      eq(chatEndpointLeases.leaseKey, "discord_gateway_runtime"),
+      expectedToken ? eq(chatEndpointLeases.token, expectedToken) : undefined,
+    ));
+    expect(owned).toBeDefined();
+    const expiredAt = new Date(Date.now() - 1_000);
+    const rows = await db.update(chatEndpointLeases).set({ expiresAt: expiredAt }).where(and(
+      eq(chatEndpointLeases.id, owned!.id), eq(chatEndpointLeases.companyId, companyId),
+      eq(chatEndpointLeases.endpointId, endpointId), eq(chatEndpointLeases.leaseKey, "discord_gateway_runtime"),
+      eq(chatEndpointLeases.token, owned!.token),
+    )).returning({ token: chatEndpointLeases.token, expiresAt: chatEndpointLeases.expiresAt });
+    expect(rows).toEqual([{ token: owned!.token, expiresAt: expiredAt }]);
+    expect(rows[0]!.expiresAt.getTime()).toBeLessThan(Date.now());
+  }
 
   async function configuredDiscordEndpoint(
     fixture: Awaited<ReturnType<typeof seedCompany>>,
@@ -11406,7 +11475,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     expect(runtime.endpoints.has(endpoint.id)).toBe(true);
   });
 
-  it("does not let GitHub lifecycle recovery undo a webhook-secret rotation", async () => {
+  it("does not let GitHub lifecycle recovery undo a webhook-secret rotation", () => runOwnedChatCase(async () => {
     const fixture = await seedCompany();
     const {
       endpoint,
@@ -11418,12 +11487,12 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     if (!providerRuntime) throw new Error("Expected GitHub runtime");
     let releaseWebhook!: () => void;
     let markWebhookEntered!: () => void;
-    const webhookEntered = new Promise<void>((resolve) => {
-      markWebhookEntered = resolve;
-    });
-    const webhookRelease = new Promise<void>((resolve) => {
-      releaseWebhook = resolve;
-    });
+    const webhookEnteredSignal = chatCaseSignal();
+    const webhookEntered = webhookEnteredSignal.promise;
+    markWebhookEntered = webhookEnteredSignal.resolve;
+    const webhookReleaseSignal = chatCaseSignal();
+    const webhookRelease = webhookReleaseSignal.promise;
+    releaseWebhook = webhookReleaseSignal.resolve;
     providerRuntime.webhookHook = async () => {
       markWebhookEntered();
       await webhookRelease;
@@ -11436,7 +11505,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
       .update(body)
       .digest("hex");
 
-    const staleCallback = service.handleWebhook(
+    const staleCallback = trackChatWork(service.handleWebhook(
       endpoint.publicId,
       "github",
       new Request("https://paperclip.example/github", {
@@ -11449,8 +11518,8 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
         },
         body,
       }),
-    );
-    await webhookEntered;
+    ));
+    await waitForChatSignal(webhookEntered, staleCallback);
     await service.generateSetupSecret(endpoint.id, "owner-user");
     releaseWebhook();
     await expect(staleCallback).resolves.toMatchObject({ status: 202 });
@@ -11486,9 +11555,9 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
       redactedError:
         "Provider lifecycle callback belonged to a superseded runtime",
     });
-  });
+  }));
 
-  it("does not let an obsolete GitHub webhook secret reopen a repository during rotation", async () => {
+  it("does not let an obsolete GitHub webhook secret reopen a repository during rotation", () => runOwnedChatCase(async () => {
     const fixture = await seedCompany();
     let blockWebhookAuthentication = false;
     let blockCredentialPersistence = false;
@@ -11496,18 +11565,18 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     let releaseWebhook!: () => void;
     let markRotationReady!: () => void;
     let releaseRotation!: () => void;
-    const webhookReady = new Promise<void>((resolve) => {
-      markWebhookReady = resolve;
-    });
-    const webhookRelease = new Promise<void>((resolve) => {
-      releaseWebhook = resolve;
-    });
-    const rotationReady = new Promise<void>((resolve) => {
-      markRotationReady = resolve;
-    });
-    const rotationRelease = new Promise<void>((resolve) => {
-      releaseRotation = resolve;
-    });
+    const webhookReadySignal = chatCaseSignal();
+    const webhookReady = webhookReadySignal.promise;
+    markWebhookReady = webhookReadySignal.resolve;
+    const webhookReleaseSignal = chatCaseSignal();
+    const webhookRelease = webhookReleaseSignal.promise;
+    releaseWebhook = webhookReleaseSignal.resolve;
+    const rotationReadySignal = chatCaseSignal();
+    const rotationReady = rotationReadySignal.promise;
+    markRotationReady = rotationReadySignal.resolve;
+    const rotationReleaseSignal = chatCaseSignal();
+    const rotationRelease = rotationReleaseSignal.promise;
+    releaseRotation = rotationReleaseSignal.resolve;
     const {
       endpoint,
       service,
@@ -11526,7 +11595,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     });
 
     blockWebhookAuthentication = true;
-    const staleCallback = service.handleWebhook(
+    const staleCallback = trackChatWork(service.handleWebhook(
       endpoint.publicId,
       "github",
       signedGitHubWebhookRequest({
@@ -11548,12 +11617,12 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
         },
         webhookSecret: oldWebhookSecret,
       }),
-    );
-    await webhookReady;
+    ));
+    await waitForChatSignal(webhookReady, staleCallback);
 
     blockCredentialPersistence = true;
-    const rotation = service.generateSetupSecret(endpoint.id, "owner-user");
-    await rotationReady;
+    const rotation = trackChatWork(service.generateSetupSecret(endpoint.id, "owner-user"));
+    await waitForChatSignal(rotationReady, rotation);
     releaseWebhook();
     releaseRotation();
 
@@ -11569,7 +11638,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
         }),
       ]),
     );
-  });
+  }));
 
   it("acknowledges GitHub lifecycle callbacks without changing a paused endpoint", async () => {
     const fixture = await seedCompany();
@@ -11935,52 +12004,60 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     });
   });
 
-  it("singleflights concurrent cold GitHub runtime initialization", async () => {
+  it("singleflights concurrent cold GitHub runtime initialization", () => runOwnedChatCase(async () => {
     const fixture = await seedCompany();
     const { endpoint, runtime, service, webhookSecret } =
       await configuredGitHubEndpoint(fixture);
+    await new Promise<void>(resolve => setImmediate(resolve));
+    await service.reconcileProviderRuntimes();
     await runtime.removeEndpoint(endpoint.id);
     const replacementsBeforeBurst = runtime.replaceCount;
     let releaseInitialization!: () => void;
-    const initializationGate = new Promise<void>((resolve) => {
-      releaseInitialization = resolve;
-    });
-    runtime.initializeHook = () => initializationGate;
-    const body = JSON.stringify({ installation: { id: 2468 } });
-    const signature = createHmac("sha256", webhookSecret)
-      .update(body)
-      .digest("hex");
-    const send = (delivery: string) =>
-      service.handleWebhook(
-        endpoint.publicId,
-        "github",
-        new Request("https://paperclip.example/github", {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-github-event": "installation_repositories",
-            "x-github-delivery": delivery,
-            "x-hub-signature-256": `sha256=${signature}`,
-          },
-          body,
-        }),
-      );
+    const initializationGateSignal = chatCaseSignal();
+    const initializationGate = initializationGateSignal.promise;
+    releaseInitialization = initializationGateSignal.resolve;
+    const initializationEntered = chatCaseSignal();
+    runtime.initializeHook = () => { initializationEntered.resolve(); return initializationGate; };
+    let requests: Promise<Response>[] = [];
+    try {
+      const body = JSON.stringify({ installation: { id: 2468 } });
+      const signature = createHmac("sha256", webhookSecret)
+        .update(body)
+        .digest("hex");
+      const send = (delivery: string) =>
+        service.handleWebhook(
+          endpoint.publicId,
+          "github",
+          new Request("https://paperclip.example/github", {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "x-github-event": "installation_repositories",
+              "x-github-delivery": delivery,
+              "x-hub-signature-256": `sha256=${signature}`,
+            },
+            body,
+          }),
+        );
 
-    const requests = [send("github-cold-1"), send("github-cold-2")];
-    await vi.waitFor(() => {
+      requests = [trackChatWork(send("github-cold-1")), trackChatWork(send("github-cold-2"))];
+      await waitForChatSignal(initializationEntered.promise, Promise.all(requests));
+      await vi.waitFor(() => {
+        expect(runtime.replaceCount).toBe(replacementsBeforeBurst + 1);
+      });
+      releaseInitialization();
+      const responses = await Promise.all(requests);
+
+      expect(responses.map((response) => response.status)).toEqual([202, 202]);
       expect(runtime.replaceCount).toBe(replacementsBeforeBurst + 1);
-    });
-    releaseInitialization();
-    const responses = await Promise.all(requests);
+      expect(
+        runtime.endpoints.get(endpoint.id)?.initialize,
+      ).toHaveBeenCalledTimes(1);
 
-    expect(responses.map((response) => response.status)).toEqual([202, 202]);
-    expect(runtime.replaceCount).toBe(replacementsBeforeBurst + 1);
-    expect(
-      runtime.endpoints.get(endpoint.id)?.initialize,
-    ).toHaveBeenCalledTimes(1);
-  });
+    } finally { releaseInitialization(); await Promise.allSettled(requests); }
+  }));
 
-  it("durably stages GitHub webhooks within budget before cold runtime initialization", async () => {
+  it("durably stages GitHub webhooks within budget before cold runtime initialization", () => runOwnedChatCase(async () => {
     const fixture = await seedCompany();
     const deferred: Array<() => void> = [];
     const { endpoint, runtime, service, webhookSecret } =
@@ -11998,79 +12075,84 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     await runtime.removeEndpoint(endpoint.id);
     const replacementsBeforeRequest = runtime.replaceCount;
     let releaseInitialization!: () => void;
-    const initializationGate = new Promise<void>((resolve) => {
-      releaseInitialization = resolve;
-    });
-    runtime.initializeHook = () => initializationGate;
+    const initializationGateSignal = chatCaseSignal();
+    const initializationGate = initializationGateSignal.promise;
+    releaseInitialization = initializationGateSignal.resolve;
+    const initializationEntered = chatCaseSignal();
+    runtime.initializeHook = () => { initializationEntered.resolve(); return initializationGate; };
+    try {
 
-    const startedAt = Date.now();
-    const response = await service.handleWebhook(
-      endpoint.publicId,
-      "github",
-      signedGitHubWebhookRequest({
-        delivery: "github-cold-budget",
-        event: "installation_repositories",
-        payload: { installation: { id: 2468 } },
-        webhookSecret,
-      }),
-    );
-    const elapsedMs = Date.now() - startedAt;
+      const startedAt = Date.now();
+      const response = await service.handleWebhook(
+        endpoint.publicId,
+        "github",
+        signedGitHubWebhookRequest({
+          delivery: "github-cold-budget",
+          event: "installation_repositories",
+          payload: { installation: { id: 2468 } },
+          webhookSecret,
+        }),
+      );
+      const elapsedMs = Date.now() - startedAt;
 
-    expect(response.status).toBe(202);
-    expect(elapsedMs).toBeLessThan(500);
-    // The durable response budget is intentionally independent of cold
-    // runtime startup. Under a loaded event loop the 202 can win the budget
-    // race before the background processor reaches replaceEndpoint, so wait
-    // for the explicit initialization boundary instead of assuming same-tick
-    // scheduling.
-    await vi.waitFor(() => {
-      expect(runtime.replaceCount).toBe(replacementsBeforeRequest + 1);
-    });
-    expect(deferred).toHaveLength(0);
-    await expect(
-      db
-        .select()
-        .from(chatActions)
-        .where(
-          and(
-            eq(chatActions.endpointId, endpoint.id),
-            eq(
-              chatActions.providerActionId,
-              "github_webhook_ingress:github-cold-budget",
+      expect(response.status).toBe(202);
+      expect(elapsedMs).toBeLessThan(500);
+      // The durable response budget is intentionally independent of cold
+      // runtime startup. Under a loaded event loop the 202 can win the budget
+      // race before the background processor reaches replaceEndpoint, so wait
+      // for the explicit initialization boundary instead of assuming same-tick
+      // scheduling.
+      await initializationEntered.promise;
+      await vi.waitFor(() => {
+        expect(runtime.replaceCount).toBe(replacementsBeforeRequest + 1);
+      });
+      expect(deferred).toHaveLength(0);
+      await expect(
+        db
+          .select()
+          .from(chatActions)
+          .where(
+            and(
+              eq(chatActions.endpointId, endpoint.id),
+              eq(
+                chatActions.providerActionId,
+                "github_webhook_ingress:github-cold-budget",
+              ),
             ),
-          ),
-        )
-        .then((rows) => rows[0]),
-    ).resolves.toMatchObject({ status: "processing" });
+          )
+          .then((rows) => rows[0]),
+      ).resolves.toMatchObject({ status: "processing" });
 
-    releaseInitialization();
-    await vi.waitFor(
-      () => {
-        expect(
-          runtime.endpoints.get(endpoint.id)?.webhookRequest,
-        ).not.toBeNull();
-      },
-      { timeout: 2_000 },
-    );
-    await vi.waitFor(async () => {
-      const action = await db
-        .select()
-        .from(chatActions)
-        .where(
-          and(
-            eq(chatActions.endpointId, endpoint.id),
-            eq(
-              chatActions.providerActionId,
-              "github_webhook_ingress:github-cold-budget",
+      releaseInitialization();
+      await vi.waitFor(
+        () => {
+          expect(
+            runtime.endpoints.get(endpoint.id)?.webhookRequest,
+          ).not.toBeNull();
+        },
+        { timeout: 2_000 },
+      );
+      await vi.waitFor(async () => {
+        const action = await db
+          .select()
+          .from(chatActions)
+          .where(
+            and(
+              eq(chatActions.endpointId, endpoint.id),
+              eq(
+                chatActions.providerActionId,
+                "github_webhook_ingress:github-cold-budget",
+              ),
             ),
-          ),
-        )
-        .then((rows) => rows[0]);
-      expect(action).toMatchObject({ status: "processed" });
-      expect(action?.payload).not.toHaveProperty("body");
-    });
-    await service.shutdown();
-  });
+          )
+          .then((rows) => rows[0]);
+        expect(action).toMatchObject({ status: "processed" });
+        expect(action?.payload).not.toHaveProperty("body");
+      });
+      await service.shutdown();
+
+    } finally { releaseInitialization(); }
+  }));
 
   it("durably stages GitHub webhooks while credential mutation owns the processing lease", async () => {
     const fixture = await seedCompany();
@@ -14019,12 +14101,12 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     ).resolves.toEqual([]);
   });
 
-  it("recovers buffered Discord messages and reactions after an unreclaimed host-pause lease expiry", async () => {
+  it("recovers buffered Discord messages and reactions after an unreclaimed host-pause lease expiry", () => runOwnedChatCase(async () => {
     const fixture = await seedCompany();
     const { callbacks, endpoint, runtime, service, wakeup } =
       await configuredDiscordEndpoint(fixture, {
         discordGatewayLeaseRenewalIntervalMs: 60_000,
-        discordGatewayLeaseTtlMs: 200,
+        discordGatewayLeaseTtlMs: process.platform === "win32" ? 15_000 : 200,
       });
     const ownedRuntime = runtime.endpoints.get(endpoint.id);
     if (!ownedRuntime)
@@ -14040,7 +14122,8 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
       );
     if (!leaseBeforePause) throw new Error("Expected Discord Gateway lease");
 
-    await new Promise((resolve) => setTimeout(resolve, 250));
+    if (process.platform === "win32") await waitForFixtureDiscordGatewayLeaseExpiry(fixture.companyId, endpoint.id, leaseBeforePause.token);
+    else await new Promise(resolve => setTimeout(resolve, 250));
     const messageId = "555555555555555601";
     const channel = makeThread({
       channelId: "333333333333333333",
@@ -14101,7 +14184,8 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
       .where(eq(issueComments.companyId, fixture.companyId))
       .then((rows) => rows.length);
     const wakeupCountBefore = wakeup.mock.calls.length;
-    await new Promise((resolve) => setTimeout(resolve, 250));
+    if (process.platform === "win32") await waitForFixtureDiscordGatewayLeaseExpiry(fixture.companyId, endpoint.id, leaseBeforePause.token);
+    else await new Promise(resolve => setTimeout(resolve, 250));
     const emoji = {
       name: "thumbsup",
       toJSON: () => "👍",
@@ -14161,7 +14245,9 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     expect(runtime.endpoints.get(endpoint.id)).toBe(ownedRuntime);
     expect(ownedRuntime.shutdown).not.toHaveBeenCalled();
     await service.shutdown();
-  });
+  // Windows reads real private credentials during initialization and then
+  // observes two genuine 15s Gateway lease expirations; POSIX keeps its 15s case.
+  }), process.platform === "win32" ? 60_000 : 15_000);
 
   it("stops a Discord Gateway on lease loss and lets a standby take over", async () => {
     const fixture = await seedCompany();
@@ -14174,7 +14260,6 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     const ownerRuntime = new FakeChatSdkRuntime();
     const owner = createService(ownerRuntime, providerFetch, {
       discordGatewayLeaseRenewalIntervalMs: 60_000,
-      discordGatewayLeaseTtlMs: 200,
     });
     const endpoint = await owner.service.create(
       fixture.companyId,
@@ -14204,7 +14289,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
 
     const standbyRuntime = new FakeChatSdkRuntime();
     const standby = createService(standbyRuntime, providerFetch);
-    await new Promise((resolve) => setTimeout(resolve, 250));
+    await expireFixtureDiscordGatewayLease(fixture.companyId, endpoint.id);
     const reconciled = await standby.service.reconcileProviderRuntimes();
     expect(reconciled).toMatchObject({ ownedElsewhere: 0, failed: 0 });
     expect(reconciled.local).toBe(reconciled.eligible);
@@ -14274,7 +14359,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     await Promise.all([owner.service.shutdown(), standby.service.shutdown()]);
   });
 
-  it("fences message and reaction callbacks that resume after Discord Gateway takeover", async () => {
+  it("fences message and reaction callbacks that resume after Discord Gateway takeover", () => runOwnedChatCase(async () => {
     const fixture = await seedCompany();
     const applicationId = uniqueDiscordApplicationId();
     const guildId = "1457808928258658549";
@@ -14283,15 +14368,15 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     let releaseOldCallbacks!: () => void;
     let messageAdmissionEntered!: () => void;
     let reactionAdmissionEntered!: () => void;
-    const oldCallbacksReleased = new Promise<void>((resolve) => {
-      releaseOldCallbacks = resolve;
-    });
-    const messageAdmissionReached = new Promise<void>((resolve) => {
-      messageAdmissionEntered = resolve;
-    });
-    const reactionAdmissionReached = new Promise<void>((resolve) => {
-      reactionAdmissionEntered = resolve;
-    });
+    const oldCallbacksReleasedSignal = chatCaseSignal();
+    const oldCallbacksReleased = oldCallbacksReleasedSignal.promise;
+    releaseOldCallbacks = oldCallbacksReleasedSignal.resolve;
+    const messageAdmissionReachedSignal = chatCaseSignal();
+    const messageAdmissionReached = messageAdmissionReachedSignal.promise;
+    messageAdmissionEntered = messageAdmissionReachedSignal.resolve;
+    const reactionAdmissionReachedSignal = chatCaseSignal();
+    const reactionAdmissionReached = reactionAdmissionReachedSignal.promise;
+    reactionAdmissionEntered = reactionAdmissionReachedSignal.resolve;
     const providerFetch = fakeDiscordFetch(
       applicationId,
       guildId,
@@ -14299,7 +14384,6 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     const ownerRuntime = new FakeChatSdkRuntime();
     const owner = createService(ownerRuntime, providerFetch, {
       discordGatewayLeaseRenewalIntervalMs: 60_000,
-      discordGatewayLeaseTtlMs: 200,
       discordGatewayMessageAdmissionBarrier: async () => {
         if (!holdOldCallbacks) return;
         messageAdmissionEntered();
@@ -14422,21 +14506,21 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
       .then((rows) => rows.length);
     const wakeupCountBefore = owner.wakeup.mock.calls.length;
     holdOldCallbacks = true;
-    const staleMessage = deliverMessage({
+    const staleMessage = trackChatWork(deliverMessage({
       callbacks: staleCallbacks,
       endpointId: endpoint.id,
       provider: "discord",
       thread: channel.thread,
       message: bufferedMessage,
       trigger: "subscribed_message",
-    });
-    const staleReaction = staleCallbacks.onReaction(reaction);
+    }));
+    const staleReaction = trackChatWork(staleCallbacks.onReaction(reaction));
     await Promise.all([messageAdmissionReached, reactionAdmissionReached]);
 
     const standbyRuntime = new FakeChatSdkRuntime();
     const standby = createService(standbyRuntime, providerFetch);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 250));
+      await expireFixtureDiscordGatewayLease(fixture.companyId, endpoint.id, leaseBeforeTakeover.token);
       const reconciled = await standby.service.reconcileProviderRuntimes();
       expect(reconciled).toMatchObject({ ownedElsewhere: 0, failed: 0 });
       const freshCallbacks = standbyRuntime.configurations.get(
@@ -14545,7 +14629,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
         standby.service.shutdown(),
       ]);
     }
-  });
+  }));
 
   it("releases Discord ownership when runtime construction fails", async () => {
     const fixture = await seedCompany();
@@ -16822,10 +16906,14 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     },
   );
 
-  it("persists Slack membership, uninstall, and same-bot reinstall lifecycle before acknowledging", async () => {
+  it("persists Slack membership, uninstall, and same-bot reinstall lifecycle before acknowledging", () => runOwnedChatCase(async () => {
     const fixture = await seedCompany();
+    const deferredWork = new Set<Promise<void>>();
     const { callbacks, endpoint, runtime, service } =
-      await configuredSlackEndpoint(fixture);
+      await configuredSlackEndpoint(fixture, { scheduleDeferredWork: task => {
+        const work = new Promise<void>((resolve, reject) => setImmediate(() => { Promise.resolve().then(task).then(() => resolve(), reject); }));
+        deferredWork.add(trackChatWork(work));
+      } });
     const configuredEndpoint = await service.get(endpoint.id);
     const send = (payload: unknown) =>
       service.handleWebhook(
@@ -16857,6 +16945,9 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
       availability: "available",
       enabled: true,
     });
+    // Join the actual deferred hydration work, including its credential read.
+    let observed: number;
+    do { observed = deferredWork.size; await Promise.all([...deferredWork]); } while (observed !== deferredWork.size);
     await vi.waitFor(async () => {
       await expect(service.listResources(endpoint.id)).resolves.toEqual([
         expect.objectContaining({ label: "#c-lifecycle" }),
@@ -17016,7 +17107,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
         label: "#c-lifecycle",
       }),
     ]);
-  });
+  }));
 
   it("orders Slack private-channel archive, unarchive, and rename lifecycle", async () => {
     const fixture = await seedCompany();
@@ -33422,18 +33513,22 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     }
   });
 
-  it("does not hide another endpoint behind a page of busy-bot conversation heads", async () => {
+  it("does not hide another endpoint behind a page of busy-bot conversation heads", () => runOwnedChatCase(async () => {
     const fixture = await publicationLaneFixture(2);
     const { service, lanes, enqueue } = fixture;
     let release!: () => void;
-    const held = new Promise<void>((resolve) => {
-      release = resolve;
-    });
+    const heldSignal = chatCaseSignal();
+    const held = heldSignal.promise;
+    release = heldSignal.resolve;
+    const publicationEntered = chatCaseSignal();
+    const readyPublicationEntered = chatCaseSignal();
     let entered = false;
     lanes[0]!.providerRuntime.postHook = async () => {
       entered = true;
+      publicationEntered.resolve();
       await held;
     };
+    lanes[1]!.providerRuntime.postHook = async () => { readyPublicationEntered.resolve(); };
     let drain: Promise<number> | undefined;
     try {
       const first = await enqueue(0, "First in conversation");
@@ -33464,6 +33559,8 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
       }
       const ready = await enqueue(1, "Unrelated final", 200);
       await service.schedulePendingPublications(25);
+      await publicationEntered.promise;
+      await readyPublicationEntered.promise;
       await vi.waitFor(async () => {
         expect(entered).toBe(true);
         expect(
@@ -33509,25 +33606,28 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
       await drain;
       await fixture.cleanup();
     }
-  });
+  }));
 
-  it("keeps an aged live publication owned across standby sweeps but quarantines only exact-lease orphans", async () => {
+  it("keeps an aged live publication owned across standby sweeps but quarantines only exact-lease orphans", () => runOwnedChatCase(async () => {
     const fixture = await publicationLaneFixture(2);
     const { service, lanes, enqueue } = fixture;
     const standby = createService();
     let release!: () => void;
-    const held = new Promise<void>((resolve) => {
-      release = resolve;
-    });
+    const heldSignal = chatCaseSignal();
+    const held = heldSignal.promise;
+    release = heldSignal.resolve;
+    const publicationEntered = chatCaseSignal();
     let entered = false;
     lanes[0]!.providerRuntime.postHook = async () => {
       entered = true;
+      publicationEntered.resolve();
       await held;
     };
     vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
     try {
       const live = await enqueue(0, "Long running provider send");
       await service.schedulePendingPublications(1);
+      await publicationEntered.promise;
       await vi.waitFor(() => expect(entered).toBe(true));
       const staleAt = new Date(Date.now() - 61_000);
       await db
@@ -33635,23 +33735,26 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
       await fixture.cleanup();
       vi.useRealTimers();
     }
-  });
+  }));
 
-  it("does not retry a provider-accepted publication after its exact attempt lease is lost", async () => {
+  it("does not retry a provider-accepted publication after its exact attempt lease is lost", () => runOwnedChatCase(async () => {
     const fixture = await publicationLaneFixture(1);
     const { service, lanes, enqueue } = fixture;
     let release!: () => void;
-    const held = new Promise<void>((resolve) => {
-      release = resolve;
-    });
+    const heldSignal = chatCaseSignal();
+    const held = heldSignal.promise;
+    release = heldSignal.resolve;
+    const publicationEntered = chatCaseSignal();
     let entered = false;
     lanes[0]!.providerRuntime.postHook = async () => {
       entered = true;
+      publicationEntered.resolve();
       await held;
     };
     try {
       const publication = await enqueue(0, "Accepted without lease authority");
       await service.schedulePendingPublications(1);
+      await publicationEntered.promise;
       await vi.waitFor(() => expect(entered).toBe(true));
       await db
         .update(chatEndpointLeases)
@@ -33698,18 +33801,20 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
       release();
       await fixture.cleanup();
     }
-  });
+  }));
 
-  it("does not resurrect publication ownership after waiting beyond expiry on a real lease row lock", async () => {
+  it("does not resurrect publication ownership after waiting beyond expiry on a real lease row lock", () => runOwnedChatCase(async () => {
     const fixture = await publicationLaneFixture(1);
     const { service, lanes, enqueue } = fixture;
     let release!: () => void;
-    const held = new Promise<void>((resolve) => {
-      release = resolve;
-    });
+    const heldSignal = chatCaseSignal();
+    const held = heldSignal.promise;
+    release = heldSignal.resolve;
+    const publicationEntered = chatCaseSignal();
     let entered = false;
     lanes[0]!.providerRuntime.postHook = async () => {
       entered = true;
+      publicationEntered.resolve();
       await held;
     };
     let drain: Promise<number> | undefined;
@@ -33721,6 +33826,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
         "Accepted while receipt ownership waits",
       );
       await service.schedulePendingPublications(1);
+      await publicationEntered.promise;
       await vi.waitFor(() => expect(entered).toBe(true));
       const leaseKey = `publication:${publication.id}:1`;
       await db
@@ -33786,7 +33892,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
       await fixture.cleanup();
       vi.useRealTimers();
     }
-  });
+  }));
 
   it("publishes equal-time Slack outbox rows once in stable order across concurrent drains", async () => {
     const fixture = await seedCompany();
@@ -65609,7 +65715,9 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     });
     expect(wakeup).toHaveBeenCalledTimes(4);
     await service.shutdown();
-  });
+    // Native Windows performs 106 real key reads across this finite eight-event
+    // journey (~25s measured); production deadlines and POSIX retain their limits.
+  }, process.platform === "win32" ? 45_000 : 15_000);
 
   it("retains content-free GitHub source invalidation after actor revocation and denies stale retry after regrant", async () => {
     const fixture = await seedCompany();
