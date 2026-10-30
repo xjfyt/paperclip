@@ -17,6 +17,38 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" crossorigin="use-credentials" />
     <script>
+      // Resolve the language before the first paint so the document never
+      // claims "en" while a Chinese/Spanish/Japanese UI is about to render.
+      // This mirrors resolveLocale() in ui/src/i18n/preferences.ts; keep the
+      // two in sync.
+      (() => {
+        const storageKey = "paperclip.locale";
+        const supported = ["en", "zh-CN", "es", "ja"];
+        const normalize = (value) => {
+          const locale = String(value ?? "").trim().replace(/_/g, "-").toLowerCase();
+          if (!locale) return null;
+          if (/^en(?:-|$)/.test(locale)) return "en";
+          if (/^es(?:-|$)/.test(locale)) return "es";
+          if (/^ja(?:-|$)/.test(locale)) return "ja";
+          if (/^zh-(?:cn|hans)(?:-|$)/.test(locale)) return "zh-CN";
+          return null;
+        };
+        let saved = null;
+        try { saved = window.localStorage.getItem(storageKey); } catch { /* Storage may be disabled. */ }
+        let locale = supported.includes(saved) ? saved : null;
+        if (!locale) {
+          const languages = Array.isArray(navigator.languages) && navigator.languages.length > 0
+            ? navigator.languages
+            : [navigator.language];
+          for (const candidate of languages) {
+            locale = normalize(candidate);
+            if (locale) break;
+          }
+        }
+        document.documentElement.lang = locale || "en";
+      })();
+    </script>
+    <script>
       (() => {
         const key = "paperclip.theme";
         const darkThemeColor = "#18181b";
@@ -70,6 +102,40 @@
         const title = document.getElementById("paperclip-startup-title");
         const message = document.getElementById("paperclip-startup-message");
         const reload = document.getElementById("paperclip-startup-reload");
+        const messages = {
+          en: {
+            failedTitle: "Paperclip couldn’t start",
+            failedMessage: "Part of the app failed to load. Check your connection and reload this page to try again.",
+            slowTitle: "Paperclip is taking longer to load",
+            slowMessage: "You can keep waiting, or reload this page to try again.",
+            reload: "Reload page",
+          },
+          "zh-CN": {
+            failedTitle: "Paperclip 未能启动",
+            failedMessage: "应用的一部分加载失败。请检查网络连接，然后重新加载此页面。",
+            slowTitle: "Paperclip 加载时间较长",
+            slowMessage: "你可以继续等待，或重新加载此页面再试一次。",
+            reload: "重新加载页面",
+          },
+          es: {
+            failedTitle: "Paperclip no pudo iniciarse",
+            failedMessage: "Parte de la aplicación no se cargó. Revisa tu conexión y recarga esta página para intentarlo de nuevo.",
+            slowTitle: "Paperclip está tardando más en cargar",
+            slowMessage: "Puedes seguir esperando o recargar esta página para intentarlo de nuevo.",
+            reload: "Recargar página",
+          },
+          ja: {
+            failedTitle: "Paperclip を起動できませんでした",
+            failedMessage: "アプリの一部を読み込めませんでした。接続を確認して、このページを再読み込みしてください。",
+            slowTitle: "Paperclip の読み込みに時間がかかっています",
+            slowMessage: "このまま待つか、このページを再読み込みしてください。",
+            reload: "ページを再読み込み",
+          },
+        };
+        const text = messages[document.documentElement.lang] || messages.en;
+        title.textContent = text.failedTitle;
+        message.textContent = text.failedMessage;
+        reload.textContent = text.reload;
         const retry = () => window.location.reload();
         const finished = () => root.childElementCount > 0;
         const cleanup = () => {
@@ -82,8 +148,8 @@
         };
         const onFailure = () => {
           if (finished()) return cleanup();
-          title.textContent = "Paperclip couldn’t start";
-          message.textContent = "Part of the app failed to load. Check your connection and reload this page to try again.";
+          title.textContent = text.failedTitle;
+          message.textContent = text.failedMessage;
           notice.hidden = false;
         };
         const onError = (event) => {
@@ -97,8 +163,8 @@
         const timer = setTimeout(() => {
           if (finished()) return cleanup();
           if (!notice.hidden) return;
-          title.textContent = "Paperclip is taking longer to load";
-          message.textContent = "You can keep waiting, or reload this page to try again.";
+          title.textContent = text.slowTitle;
+          message.textContent = text.slowMessage;
           notice.hidden = false;
         }, 30_000);
         window.addEventListener("error", onError, true);
