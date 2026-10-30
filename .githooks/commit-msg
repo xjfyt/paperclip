@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+# Enforce docs/00-doc-rules.md section 7 commit message format.
+set -e
+ROOT="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
+exec node "$ROOT/scripts/validate-commit-msg.mjs" "$1"

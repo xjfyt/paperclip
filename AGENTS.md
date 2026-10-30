@@ -236,6 +236,45 @@ A change is done when all are true:
 3. Contracts are synced across db/shared/server/ui
 4. Docs updated when behavior or commands change
 5. PR description follows the [PR template](.github/PULL_REQUEST_TEMPLATE.md) with all sections filled in (including Model Used)
+6. Commit messages follow the Chinese format in `docs/00-doc-rules.md` §七
+
+## 12. Commit Messages
+
+All new commits use the Chinese format defined in
+[docs/00-doc-rules.md](docs/00-doc-rules.md) §七. Do not use English-only
+subjects or one-line code commits.
+
+```text
+type(scope): 一句话概括
+
+原因：
+<problem, goal, and verifiable value>
+
+事项：
+<same work-item name across follow-up commits>
+
+关联：
+<Issue / PR / requirement ID, or 无>
+
+改动：
+- <area>: concrete behavior change
+
+验证：
+<commands and results, or an explicit not-run note>
+
+Co-Authored-By: <the AI that actually participated; omit for human-only work>
+```
+
+- Install the local commit-msg hook once per clone: `pnpm git:hooks:install`.
+- Check the pending message with `pnpm commit:check`, or validate a file with
+  `node scripts/validate-commit-msg.mjs <file>`.
+- `Merge`, `Revert`, `fixup!`, and `squash!` commits are exempt from the body
+  sections.
+- Split work into reviewable slices: one work item per commit, code and its
+  tests together, a new commit at roughly 1,000 effective lines. Do not commit
+  test output files or build artifacts.
+- The hook validates message text only; it does not replace typecheck, tests,
+  build, or docs gates.
 
 ## Design system
 
