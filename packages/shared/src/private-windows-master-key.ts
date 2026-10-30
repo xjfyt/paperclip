@@ -1,7 +1,7 @@
-import { closeSync, constants, fstatSync, fsyncSync, linkSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, renameSync, rmdirSync, unlinkSync, writeFileSync } from "node:fs";
+import { closeSync, constants, fstatSync, fsyncSync, linkSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, renameSync, rmdirSync, unlinkSync, writeFileSync, type BigIntStats } from "node:fs";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
-import { hasPrivatePermissions, protectNewPrivatePath } from "./private-filesystem-permissions.js";
+import { hasPrivatePermissionPair, hasPrivatePermissions, protectNewPrivatePath } from "./private-filesystem-permissions.js";
 
 function privateStorageError() {
   return new Error("Local encrypted master key requires verified private Windows storage; existing keys and ACLs are never repaired.");
@@ -15,10 +15,16 @@ function assertUnlinkedParents(file: string) {
     if (path.dirname(directory) === directory) break;
   }
 }
-function privateDirectory(directory: string) {
+function privateDirectoryEntry(directory: string) {
   assertUnlinkedParents(path.join(directory, "key"));
   const stat = lstatSync(directory, { bigint: true });
-  if (!stat.isDirectory() || stat.isSymbolicLink() || !hasPrivatePermissions(directory, Number(stat.mode))) throw privateStorageError();
+  if (!stat.isDirectory() || stat.isSymbolicLink()) throw privateStorageError();
+  return stat;
+}
+
+function privateDirectory(directory: string) {
+  const stat = privateDirectoryEntry(directory);
+  if (!hasPrivatePermissions(directory, Number(stat.mode))) throw privateStorageError();
   return stat;
 }
 
@@ -52,9 +58,18 @@ function ensurePrivateDirectory(directory: string) {
 }
 
 export function readPrivateWindowsMasterKey(file: string): string {
-  privateDirectory(path.dirname(file));
-  const entry = lstatSync(file, { bigint: true });
-  if (!entry.isFile() || entry.isSymbolicLink() || !hasPrivatePermissions(file, Number(entry.mode))) throw privateStorageError();
+  const directory = path.dirname(file);
+  const parent = privateDirectoryEntry(directory);
+  let entry: BigIntStats;
+  try { entry = lstatSync(file, { bigint: true }); }
+  catch (error) {
+    // Preserve parent-unsafe precedence over a missing/unreadable key. A
+    // private parent with a genuinely missing file still reports ENOENT.
+    if (!hasPrivatePermissions(directory, Number(parent.mode))) throw privateStorageError();
+    throw error;
+  }
+  if (!entry.isFile() || entry.isSymbolicLink()
+    || !hasPrivatePermissionPair(directory, Number(parent.mode), file, Number(entry.mode))) throw privateStorageError();
   let descriptor: number;
   try { descriptor = openSync(file, constants.O_RDONLY | constants.O_NOFOLLOW); }
   catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") throw privateStorageError(); throw error; }

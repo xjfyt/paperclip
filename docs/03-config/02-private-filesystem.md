@@ -30,6 +30,8 @@ MCP 凭据、CLI 本地主密钥检查、决策签名密钥和独立 Daytona hos
 
 默认 `local_encrypted` provider 的文件主密钥在 Windows 同样必须处于已验证的私密目录；新空目录先保护后原子发布，新空临时 key 先保护后写，完整 key 才通过 hard link 发布。读取期间已观察到 key 存在后发生丢失或身份变化会拒绝，不能当作首次缺失自动生成另一把 AES key。health 使用真实 DACL：私密文件不因 Windows mode 显示 `666` 而误报；宽 ACL、链接、坏 key 或读取验证失败为 error，只有真正尚未初始化才给缺失提示。升级遇到旧宽权限目录时保全同一主密钥和数据库备份，授权核对原 owner/路径/DACL 后处理，不自动改旧 ACL，也不删 key 重建；数据库密文需要原 key 才能恢复。
 
+Windows 每次读取已有主密钥都会重新验证父目录和文件的 DACL；两者在同一个有界 PowerShell 进程中顺序检查，以减少进程启动开销。不缓存权限结论，不修复旧 ACL；顺序检查并未消除所有 TOCTOU 竞态，也不改变新空路径先保护、再写首个秘密字节的规则。
+
 回归需要覆盖新空路径保护、子文件继承、真实宽 ACL 拒绝、旧路径不被修改、链接拒绝及探针不可用时拒绝。mock、POSIX mode 断言与原生 NTFS 测试分别记录。凭据文件权限通过也不证明远端认证、公司授权或业务写入已经成功；部署、备份与实际集成仍按对应[配置](01-configuration.md)、[备份升级](../05-maintenance/04-backup-upgrade.md)和[集成合同](../04-modules/01-integration-boundaries.md)验证。
 
 尚未安装 CLI 的工作树 provision fallback 无法安全加载共享私密 writer 时，Windows 遇到需要复制或写入源主密钥会在首个目标秘密字节前拒绝，保留源材料及已有目标配置。此时可使用本仓当前修订安装/构建的 CLI worktree init：其 Windows seeded-key 迁移、doctor 与初始化入口已采用私密存储检查，按下述来源和目标合同执行。受支持的 POSIX 宿主仍是可选路径；不以 `chmod` 代替 DACL，也不删掉源密钥来绕过检查。无 CLI 的 fallback 拒绝保持独立，没有待迁移秘密的普通依赖准备不受该拒绝影响。

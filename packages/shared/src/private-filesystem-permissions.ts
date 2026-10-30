@@ -4,10 +4,8 @@ import path from "node:path";
 // Windows mode bits do not describe NTFS access. Read the actual DACL instead;
 // never modify an existing ACL, use localized account names, or trust PATH.
 // Use built-in .NET ACL APIs; do not load modules from inherited PSModulePath.
-const aclProbe = `
-$ErrorActionPreference = 'Stop'
-try {
-  $target = $env:PAPERCLIP_PRIVATE_ACL_TARGET
+const privateAclValidation = `
+function Assert-PrivateAcl([string]$target) {
   $attributes = [IO.File]::GetAttributes($target)
   if (($attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'reparse point' }
   $isDirectory = ($attributes -band [IO.FileAttributes]::Directory) -ne 0
@@ -28,6 +26,24 @@ try {
     if ($sid -notin @($user, 'S-1-5-18', 'S-1-5-32-544') -and !($sid -eq 'S-1-3-0' -and $inheritOnly)) { throw 'broader access' }
   }
   if (!$ownerAllowed) { throw 'no owner access' }
+}
+`;
+
+const aclProbe = `
+$ErrorActionPreference = 'Stop'
+${privateAclValidation}
+try {
+  Assert-PrivateAcl $env:PAPERCLIP_PRIVATE_ACL_TARGET
+  [Console]::Out.Write('private')
+} catch { [Console]::Out.Write('unverified') }
+`;
+
+const aclPairProbe = `
+$ErrorActionPreference = 'Stop'
+${privateAclValidation}
+try {
+  Assert-PrivateAcl $env:PAPERCLIP_PRIVATE_ACL_TARGET
+  Assert-PrivateAcl $env:PAPERCLIP_PRIVATE_ACL_SECOND_TARGET
   [Console]::Out.Write('private')
 } catch { [Console]::Out.Write('unverified') }
 `;
@@ -51,10 +67,10 @@ try {
 } catch { [Console]::Out.Write('unverified') }
 `;
 
-function runAclCommand(script: string, file: string): string {
+function runAclCommand(script: string, file: string, secondFile = ""): string {
   const powershell = path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
   return execFileSync(powershell, ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")], {
-    env: { ...process.env, PAPERCLIP_PRIVATE_ACL_TARGET: file },
+    env: { ...process.env, PAPERCLIP_PRIVATE_ACL_TARGET: file, PAPERCLIP_PRIVATE_ACL_SECOND_TARGET: secondFile },
     encoding: "utf8", windowsHide: true, timeout: 10_000, maxBuffer: 4096,
     stdio: ["ignore", "pipe", "pipe"],
   }).trim();
@@ -81,4 +97,15 @@ export function hasPrivatePermissions(file: string, mode: number): boolean {
   try {
     return runAclCommand(aclProbe, file) === "private";
   } catch { return false; }
+}
+
+/** Validate both paths afresh, in order, using one bounded Windows process.
+ * All caller paths travel as environment data; an unsafe first path prevents
+ * inspection of the second. This does not cache permissions or repair ACLs.
+ */
+export function hasPrivatePermissionPair(first: string, firstMode: number, second: string, secondMode: number): boolean {
+  if (process.platform !== "win32") return (firstMode & 0o077) === 0 && (secondMode & 0o077) === 0;
+  if (!path.isAbsolute(first) || !path.isAbsolute(second)) return false;
+  try { return runAclCommand(aclPairProbe, first, second) === "private"; }
+  catch { return false; }
 }
